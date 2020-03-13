@@ -315,7 +315,7 @@ class TestCodecs(CodecsTestCase):
         # are correctly pickled within a DataSet.  In particular correct
         # preservation of the circuit's .str property
         pygsti.obj.Circuit.default_expand_subcircuits = False # so exponentiation => CircuitLabels
-        ds = pygsti.obj.DataSet(outcomeLabels=('0','1'))
+        ds = pygsti.obj.DataSet(outcome_labels=('0','1'))
         c0 = pygsti.obj.Circuit(None,stringrep="[Gx:0Gy:1]")
         c = c0**2
         self.assertTrue(isinstance(c.tup[0], CircuitLabel))

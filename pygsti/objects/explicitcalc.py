@@ -1,4 +1,4 @@
-""" Defines the ExplicitOpModel_Calc class and supporting functionality."""
+""" Defines the ExplicitOpModelCalc class and supporting functionality."""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -26,19 +26,19 @@ from . import spamvec as _sv
 P_RANK_TOL = 1e-7
 
 
-class ExplicitOpModel_Calc(object):
+class ExplicitOpModelCalc(object):
     """
     This class performs calculations with *simplified* objects (so don't
     need to worry abount POVMs or Instruments, just preps, ops, & effects),
     but, unlike fwd simulators, these calculations require knowledge of *all*
     of the possible operations in each category (not just the ones in a given
-    circuti).  As such, instances of `ExplicitOpModel_Calc` are almost always
+    circuti).  As such, instances of `ExplicitOpModelCalc` are almost always
     associated with an instance of `ExplicitOpModel`.
     """
 
-    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, Np):
+    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, np):
         """
-        Initialize a new ExplicitOpModel_Calc object.
+        Initialize a new ExplicitOpModelCalc object.
 
         Parameters
         ----------
@@ -50,7 +50,7 @@ class ExplicitOpModel_Calc(object):
             Dictionaries containing *all* the possible state preparations,
             layer operations, and POVM effects, respectively.
 
-        Np : int
+        np : int
             The total number of parameters in all the operators (the
             number of parameters of the associated :class:`ExplicitOpModel`).
         """
@@ -58,7 +58,7 @@ class ExplicitOpModel_Calc(object):
         self.preps = simplified_preps
         self.operations = simplified_ops
         self.effects = simplified_effects
-        self.Np = Np
+        self.Np = np
 
     def iter_objs(self):
         """
@@ -71,32 +71,32 @@ class ExplicitOpModel_Calc(object):
             yield (lbl, obj)
 
     def copy(self):
-        """ Return a shallow copy of this ExplicitOpModel_Calc """
-        return ExplicitOpModel_Calc(self.dim, self.preps, self.operations, self.effects, self.Np)
+        """ Return a shallow copy of this ExplicitOpModelCalc """
+        return ExplicitOpModelCalc(self.dim, self.preps, self.operations, self.effects, self.Np)
 
-    def frobeniusdist(self, otherCalc, transformMx=None,
-                      itemWeights=None, normalize=True):
+    def frobeniusdist(self, other_calc, transform_mx=None,
+                      item_weights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        calc object and `otherCalc`.  Differences in each corresponding gate
+        calc object and `other_calc`.  Differences in each corresponding gate
         matrix and spam vector element are squared, weighted (using
-        `itemWeights` as applicable), then summed.  The value returned is the
+        `item_weights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
         number of summands if normalize == True.
 
         Parameters
         ----------
-        otherCalc : ForwardSimulator
+        other_calc : ForwardSimulator
             the other gate calculator to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
-        itemWeights : dict, optional
+        item_weights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights are applied multiplicatively to the squared
            differences, i.e., (*before* the final square root is taken).  Keys
@@ -115,51 +115,51 @@ class ExplicitOpModel_Calc(object):
         -------
         float
         """
-        d = 0; T = transformMx
+        d = 0; T = transform_mx
         nSummands = 0.0
-        if itemWeights is None: itemWeights = {}
-        opWeight = itemWeights.get('gates', 1.0)
-        spamWeight = itemWeights.get('spam', 1.0)
+        if item_weights is None: item_weights = {}
+        opWeight = item_weights.get('gates', 1.0)
+        spamWeight = item_weights.get('spam', 1.0)
 
         if T is not None:
             Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
             for opLabel, gate in self.operations.items():
-                wt = itemWeights.get(opLabel, opWeight)
+                wt = item_weights.get(opLabel, opWeight)
                 d += wt * gate.frobeniusdist2(
-                    otherCalc.operations[opLabel], T, Ti)
+                    other_calc.operations[opLabel], T, Ti)
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                wt = item_weights.get(lbl, spamWeight)
+                d += wt * rhoV.frobeniusdist2(other_calc.preps[lbl],
                                               'prep', T, Ti)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl],
+                wt = item_weights.get(lbl, spamWeight)
+                d += wt * Evec.frobeniusdist2(other_calc.effects[lbl],
                                               'effect', T, Ti)
                 nSummands += wt * Evec.dim
 
         else:
             for opLabel, gate in self.operations.items():
-                wt = itemWeights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist2(otherCalc.operations[opLabel])
+                wt = item_weights.get(opLabel, opWeight)
+                d += wt * gate.frobeniusdist2(other_calc.operations[opLabel])
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist2(otherCalc.preps[lbl], 'prep')
+                wt = item_weights.get(lbl, spamWeight)
+                d += wt * rhoV.frobeniusdist2(other_calc.preps[lbl], 'prep')
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl], 'effect')
+                wt = item_weights.get(lbl, spamWeight)
+                d += wt * Evec.frobeniusdist2(other_calc.effects[lbl], 'effect')
                 nSummands += wt * Evec.dim
 
         #Temporary: check that this function can be computed by
         # calling residuals - replace with this later.
-        resids, chk_nSummands = self.residuals(otherCalc, transformMx, itemWeights)
+        resids, chk_nSummands = self.residuals(other_calc, transform_mx, item_weights)
         assert(_np.isclose(_np.sum(resids**2), d))
         assert(_np.isclose(chk_nSummands, nSummands))
 
@@ -168,24 +168,24 @@ class ExplicitOpModel_Calc(object):
         else:
             return _np.sqrt(d)
 
-    def residuals(self, otherCalc, transformMx=None, itemWeights=None):
+    def residuals(self, other_calc, transform_mx=None, item_weights=None):
         """
         Compute the weighted residuals between two models/calcs (the differences
         in corresponding operation matrix and spam vector elements).
 
         Parameters
         ----------
-        otherCalc : ForwardSimulator
+        other_calc : ForwardSimulator
             the other gate calculator to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
-        itemWeights : dict, optional
+        item_weights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights applied such that they act multiplicatively on
            the *squared* differences, so that the residuals themselves are
@@ -204,10 +204,10 @@ class ExplicitOpModel_Calc(object):
             The (weighted) number of elements accounted for by the residuals.
         """
         resids = []
-        T = transformMx
+        T = transform_mx
         nSummands = 0.0
-        if itemWeights is None: itemWeights = {}
-        sqrt_itemWeights = {k: _np.sqrt(v) for k, v in itemWeights.items()}
+        if item_weights is None: item_weights = {}
+        sqrt_itemWeights = {k: _np.sqrt(v) for k, v in item_weights.items()}
         opWeight = sqrt_itemWeights.get('gates', 1.0)
         spamWeight = sqrt_itemWeights.get('spam', 1.0)
 
@@ -217,20 +217,20 @@ class ExplicitOpModel_Calc(object):
                 wt = sqrt_itemWeights.get(opLabel, opWeight)
                 resids.append(
                     wt * gate.residuals(
-                        otherCalc.operations[opLabel], T, Ti))
+                        other_calc.operations[opLabel], T, Ti))
                 nSummands += wt**2 * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * rhoV.residuals(otherCalc.preps[lbl],
+                    wt * rhoV.residuals(other_calc.preps[lbl],
                                         'prep', T, Ti))
                 nSummands += wt**2 * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * Evec.residuals(otherCalc.effects[lbl],
+                    wt * Evec.residuals(other_calc.effects[lbl],
                                         'effect', T, Ti))
 
                 nSummands += wt**2 * Evec.dim
@@ -239,26 +239,26 @@ class ExplicitOpModel_Calc(object):
             for opLabel, gate in self.operations.items():
                 wt = sqrt_itemWeights.get(opLabel, opWeight)
                 resids.append(
-                    wt * gate.residuals(otherCalc.operations[opLabel]))
+                    wt * gate.residuals(other_calc.operations[opLabel]))
                 nSummands += wt**2 * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * rhoV.residuals(otherCalc.preps[lbl], 'prep'))
+                    wt * rhoV.residuals(other_calc.preps[lbl], 'prep'))
                 nSummands += wt**2 * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * Evec.residuals(otherCalc.effects[lbl], 'effect'))
+                    wt * Evec.residuals(other_calc.effects[lbl], 'effect'))
                 nSummands += wt**2 * Evec.dim
 
         resids = [r.flatten() for r in resids]
         resids = _np.concatenate(resids)
         return resids, nSummands
 
-    def jtracedist(self, otherCalc, transformMx=None, include_spam=True):
+    def jtracedist(self, other_calc, transform_mx=None, include_spam=True):
         """
         Compute the Jamiolkowski trace distance between two
         models/calcs, defined as the maximum of the trace distances
@@ -266,12 +266,12 @@ class ExplicitOpModel_Calc(object):
 
         Parameters
         ----------
-        otherCalc : ForwardSimulator
+        other_calc : ForwardSimulator
             the other model to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
@@ -284,49 +284,49 @@ class ExplicitOpModel_Calc(object):
         -------
         float
         """
-        T = transformMx
+        T = transform_mx
         d = 0  # spam difference
         nSummands = 0  # for spam terms
 
         if T is not None:
             Ti = _np.linalg.inv(T)
-            dists = [gate.jtracedist(otherCalc.operations[lbl], T, Ti)
+            dists = [gate.jtracedist(other_calc.operations[lbl], T, Ti)
                      for lbl, gate in self.operations.items()]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
                                              'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
                                              'effect', T, Ti)
                     nSummands += Evec.dim
 
         else:
-            dists = [gate.jtracedist(otherCalc.operations[lbl])
+            dists = [gate.jtracedist(other_calc.operations[lbl])
                      for lbl, gate in self.operations.items()]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
                                              'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
                                              'effect')
                     nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal
 
-    def diamonddist(self, otherCalc, transformMx=None, include_spam=True):
+    def diamonddist(self, other_calc, transform_mx=None, include_spam=True):
         """
         Compute the diamond-norm distance between two
         models/calcs, defined as the maximum
@@ -335,12 +335,12 @@ class ExplicitOpModel_Calc(object):
 
         Parameters
         ----------
-        otherCalc : ForwardSimulator
+        other_calc : ForwardSimulator
             the other gate calculator to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
@@ -353,42 +353,42 @@ class ExplicitOpModel_Calc(object):
         -------
         float
         """
-        T = transformMx
+        T = transform_mx
         d = 0  # spam difference
         nSummands = 0  # for spam terms
 
         if T is not None:
             Ti = _np.linalg.inv(T)
-            dists = [gate.diamonddist(otherCalc.operations[lbl], T, Ti)
+            dists = [gate.diamonddist(other_calc.operations[lbl], T, Ti)
                      for lbl, gate in self.operations.items()]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
                                              'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
                                              'effect', T, Ti)
                     nSummands += Evec.dim
 
         else:
-            dists = [gate.diamonddist(otherCalc.operations[lbl])
+            dists = [gate.diamonddist(other_calc.operations[lbl])
                      for lbl, gate in self.operations.items()]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
                                              'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
                                              'effect')
                     nSummands += Evec.dim
 
@@ -418,7 +418,7 @@ class ExplicitOpModel_Calc(object):
 
         return deriv
 
-    def _buildup_dPG(self):
+    def _buildup_dpg(self):
         """
         Helper function for building gauge/non-gauge projectors and
           for computing the number of gauge/non-gauge elements.
@@ -529,7 +529,7 @@ class ExplicitOpModel_Calc(object):
         dPG[:, 0:nParams] = self.deriv_wrt_params()
         return dPG
 
-    def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
+    def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
         Construct a projector onto the non-gauge parameter space, useful for
         isolating the gauge degrees of freedom from the non-gauge degrees of
@@ -537,7 +537,7 @@ class ExplicitOpModel_Calc(object):
 
         Parameters
         ----------
-        itemWeights : dict, optional
+        item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
             special strings "gates" or "spam" whic represent the entire set of gate
@@ -545,8 +545,8 @@ class ExplicitOpModel_Calc(object):
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.
 
-        nonGaugeMixMx : numpy array, optional
-            An array of shape (nNonGaugeParams,nGaugeParams) specifying how to
+        non_gauge_mix_mx : numpy array, optional
+            An array of shape (n_non_gauge_params,n_gauge_params) specifying how to
             mix the non-gauge degrees of freedom into the gauge degrees of
             freedom that are projected out by the returned object.  This argument
             essentially sets the off-diagonal block of the metric used for
@@ -626,7 +626,7 @@ class ExplicitOpModel_Calc(object):
         #   above to get the general case projector.
 
         nParams = self.Np
-        dPG = self._buildup_dPG()
+        dPG = self._buildup_dpg()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
         nullsp = _mt.nullspace_qr(dPG)  # columns are nullspace basis vectors
@@ -655,10 +655,10 @@ class ExplicitOpModel_Calc(object):
         #print "------------------------------"
         #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
 
-        if nonGaugeMixMx is not None:
-            msg = "You've set both nonGaugeMixMx and itemWeights, both of which"\
+        if non_gauge_mix_mx is not None:
+            msg = "You've set both non_gauge_mix_mx and item_weights, both of which"\
                 + " set the gauge metric... You probably don't want to do this."
-            assert(itemWeights is None), msg
+            assert(item_weights is None), msg
 
             # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
@@ -668,9 +668,9 @@ class ExplicitOpModel_Calc(object):
             #for each column of gen_dG, which is a gauge direction in model parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
             # numNonGaugeParams non-gauge directions.
-            gen_dG = gen_dG + _np.dot(nonGaugeDirections, nonGaugeMixMx)  # add non-gauge direction components in
-            # dims: (nParams,nGaugeParams) + (nParams,nNonGaugeParams) * (nNonGaugeParams,nGaugeParams)
-            # nonGaugeMixMx is a (nNonGaugeParams,nGaugeParams) matrix whose i-th column specifies the
+            gen_dG = gen_dG + _np.dot(nonGaugeDirections, non_gauge_mix_mx)  # add non-gauge direction components in
+            # dims: (nParams,n_gauge_params) + (nParams,n_non_gauge_params) * (n_non_gauge_params,n_gauge_params)
+            # non_gauge_mix_mx is a (n_non_gauge_params,n_gauge_params) matrix whose i-th column specifies the
             #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
             #  direction to project out (i.e. what were the pure gauge directions).
 
@@ -687,15 +687,15 @@ class ExplicitOpModel_Calc(object):
         #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
         # (This is instead of construction as I - gaugeSpaceProjector)
 
-        if itemWeights is not None:
+        if item_weights is not None:
             metric_diag = _np.ones(self.Np, 'd')
-            opWeight = itemWeights.get('gates', 1.0)
-            spamWeight = itemWeights.get('spam', 1.0)
+            opWeight = item_weights.get('gates', 1.0)
+            spamWeight = item_weights.get('spam', 1.0)
             for lbl, gate in self.operations.items():
-                metric_diag[gate.gpindices] = itemWeights.get(lbl, opWeight)
+                metric_diag[gate.gpindices] = item_weights.get(lbl, opWeight)
             for lbl, vec in _itertools.chain(iter(self.preps.items()),
                                              iter(self.effects.items())):
-                metric_diag[vec.gpindices] = itemWeights.get(lbl, spamWeight)
+                metric_diag[vec.gpindices] = item_weights.get(lbl, spamWeight)
             metric = _np.diag(metric_diag)
             #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
             gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T, metric))

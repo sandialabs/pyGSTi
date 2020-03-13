@@ -961,7 +961,7 @@ def add_badfit_estimates(results, base_estimate_label="default", estimate_types=
     if evaltree_cache is None: evaltree_cache = {}  # so tree gets cached
 
     if badFitThreshold is not None and \
-       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, use_accurate_Np=True, comm=comm) <= badFitThreshold:
+       base_estimate.misfit_sigma(evaltree_cache=evaltree_cache, use_accurate_np=True, comm=comm) <= badFitThreshold:
         return  # fit is good enough - no need to add any estimates
 
     objective = parameters.get('objective', 'logl')
@@ -1151,7 +1151,7 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evalt
         a = parameters.get('radius', 1e-4)
 
         loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
-                                                  poissonPicture=True, evaltree_cache=evaltree_cache,
+                                                  poisson_picture=True, evaltree_cache=evaltree_cache,
                                                   comm=comm)
         sqrt_dlogl_elements = loglFn.fn(model.to_vector())  # must evaluate loglFn before using it to init loglWCFn
         loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)

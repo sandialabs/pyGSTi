@@ -271,68 +271,68 @@ class Profiler(object):
                 print(msg)
         else: print(msg)
 
-    def format_times(self, sortBy="name"):
+    def format_times(self, sort_by="name"):
         """
         Formats a string to report the timer values recorded in this Profiler.
 
         Parameters
         ----------
-        sortBy : {"name","time"}
+        sort_by : {"name","time"}
             What to sort list of timers by.
 
         Returns
         -------
         str
         """
-        s = "---> Times (by %s): \n" % sortBy
-        if sortBy == "name":
+        s = "---> Times (by %s): \n" % sort_by
+        if sort_by == "name":
             timerNames = sorted(list(self.timers.keys()))
-        elif sortBy == "time":
+        elif sort_by == "time":
             timerNames = sorted(list(self.timers.keys()),
                                 key=lambda x: self.timers[x])
         else:
-            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+            raise ValueError("Invalid 'sort_by' argument: %s" % sort_by)
 
         for nm in timerNames:
             s += "  %s : %.1fs\n" % (nm, self.timers[nm])
         s += "\n"
         return s
 
-    def format_counts(self, sortBy="name"):
+    def format_counts(self, sort_by="name"):
         """
         Formats a string to report the counter values recorded in this Profiler.
 
         Parameters
         ----------
-        sortBy : {"name","count"}
+        sort_by : {"name","count"}
            What to sort list of counts by.
 
         Returns
         -------
         str
         """
-        s = "---> Counters (by %s): \n" % sortBy
-        if sortBy == "name":
+        s = "---> Counters (by %s): \n" % sort_by
+        if sort_by == "name":
             counterNames = sorted(list(self.counters.keys()))
-        elif sortBy == "count":
+        elif sort_by == "count":
             counterNames = sorted(list(self.counters.keys()),
                                   key=lambda x: self.counters[x])
         else:
-            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+            raise ValueError("Invalid 'sort_by' argument: %s" % sort_by)
 
         for nm in counterNames:
             s += "  %s : %d\n" % (nm, self.counters[nm])
         s += "\n"
         return s
 
-    def format_memory(self, sortBy="name"):
+    def format_memory(self, sort_by="name"):
         """
         Formats a string to report the memory usage checkpoints recorded
         in this Profiler.
 
         Parameters
         ----------
-        sortBy : {"name","usage","timestamp"}
+        sort_by : {"name","usage","timestamp"}
            What to sort list of counts by.
 
         Returns
@@ -349,22 +349,22 @@ class Profiler(object):
         max_memory = max([usage for timestamp, usage in
                           _itertools.chain(*self.mem_checkpoints.values())])
         s = "---> Max Memory usage = %.2fGB\n" % (max_memory * BtoGB)
-        s += "---> Memory usage (by %s): \n" % sortBy
+        s += "---> Memory usage (by %s): \n" % sort_by
 
-        if sortBy == "timestamp":
+        if sort_by == "timestamp":
             # special case in that we print each event, not just the average usage per checkpoint
             raise NotImplementedError("TODO")
 
         avg_usages = {k: _np.mean([u for t, u in infos]) for k, infos
                       in self.mem_checkpoints.items()}
 
-        if sortBy == "name":
+        if sort_by == "name":
             chkptNames = sorted(list(self.mem_checkpoints.keys()))
-        elif sortBy == "usage":
+        elif sort_by == "usage":
             chkptNames = sorted(list(avg_usages.keys()),
                                 key=lambda x: avg_usages[x])
         else:
-            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+            raise ValueError("Invalid 'sort_by' argument: %s" % sort_by)
 
         for nm in chkptNames:
             usages = [u for t, u in self.mem_checkpoints[nm]]
@@ -379,8 +379,8 @@ class Profiler(object):
         del to_pickle['comm']  # one *cannot* pickle Comm objects
         return to_pickle
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
         self.comm = None  # initialize to None upon unpickling
 
 

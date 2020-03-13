@@ -83,7 +83,7 @@ def evaluate(model_fn, cri=None, verbosity=0):
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
         df, f0 = cri.get_fn_confidence_interval(
-            model_fn, returnFnVal=True,
+            model_fn, return_fn_val=True,
             verbosity=verbosity)
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
     else:
@@ -111,7 +111,7 @@ def choi_matrix(gate, mx_basis):
     return _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
 
 
-Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, opLabel)
+Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, op_label)
 
 
 def choi_evals(gate, mx_basis):
@@ -121,7 +121,7 @@ def choi_evals(gate, mx_basis):
     return _np.array(sorted(choi_eigvals))
 
 
-Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, opLabel)
+Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, op_label)
 
 
 def choi_trace(gate, mx_basis):
@@ -130,7 +130,7 @@ def choi_trace(gate, mx_basis):
     return _np.trace(choi)
 
 
-Choi_trace = _modf.opfn_factory(choi_trace)  # init args == (model, opLabel)
+Choi_trace = _modf.opfn_factory(choi_trace)  # init args == (model, op_label)
 
 
 class GateEigenvalues(_modf.ModelFunction):
@@ -471,7 +471,7 @@ def upper_bound_fidelity(gate, mx_basis):
 
 
 Upper_bound_fidelity = _modf.opfn_factory(upper_bound_fidelity)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
 def closest_ujmx(gate, mx_basis):
@@ -481,7 +481,7 @@ def closest_ujmx(gate, mx_basis):
 
 
 Closest_ujmx = _modf.opfn_factory(closest_ujmx)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
 def maximum_fidelity(gate, mx_basis):
@@ -493,7 +493,7 @@ def maximum_fidelity(gate, mx_basis):
 
 
 Maximum_fidelity = _modf.opfn_factory(maximum_fidelity)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
 def maximum_trace_dist(gate, mx_basis):
@@ -505,7 +505,7 @@ def maximum_trace_dist(gate, mx_basis):
 
 
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
 def angles_btwn_rotn_axes(model):
@@ -554,7 +554,7 @@ def entanglement_fidelity(a, b, mx_basis):
 
 
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def entanglement_infidelity(a, b, mx_basis):
@@ -563,7 +563,7 @@ def entanglement_infidelity(a, b, mx_basis):
 
 
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -585,7 +585,7 @@ def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixe
 
 
 Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -594,7 +594,7 @@ def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 
 
 Fro_diff = _modf.opsfn_factory(fro_diff)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -603,14 +603,14 @@ def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 
 
 Jt_diff = _modf.opsfn_factory(jt_diff)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 if _CVXPY_AVAILABLE:
 
     class HalfDiamondNorm(_modf.ModelFunction):
-        """Half the diamond distance bewteen `model_a.operations[opLabel]` and
-           `model_b.operations[opLabel]` """
+        """Half the diamond distance bewteen `model_a.operations[op_label]` and
+           `model_b.operations[op_label]` """
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
@@ -638,7 +638,7 @@ if _CVXPY_AVAILABLE:
     def half_diamond_norm(a, b, mx_basis):
         return 0.5 * _tools.diamonddist(a, b, mx_basis)
     #HalfDiamondNorm = _modf.opsfn_factory(half_diamond_norm)
-    ## init args == (model1, model2, opLabel)
+    ## init args == (model1, model2, op_label)
 
 else:
     half_diamond_norm = None
@@ -667,7 +667,7 @@ def nonunitary_entanglement_infidelity(a, b, mx_basis):
 
 
 Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def nonunitary_avg_gate_infidelity(a, b, mx_basis):
@@ -679,7 +679,7 @@ def nonunitary_avg_gate_infidelity(a, b, mx_basis):
 
 
 Nonunitary_avg_gate_infidelity = _modf.opsfn_factory(nonunitary_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -689,7 +689,7 @@ def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis):
 
 
 Eigenvalue_nonunitary_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis):
@@ -700,7 +700,7 @@ def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis):
 
 
 Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_entanglement_infidelity(a, b, mx_basis):
@@ -715,7 +715,7 @@ def eigenvalue_entanglement_infidelity(a, b, mx_basis):
 
 
 Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
@@ -730,7 +730,7 @@ def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
 
 
 Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_diamondnorm(a, b, mx_basis):
@@ -743,7 +743,7 @@ def eigenvalue_diamondnorm(a, b, mx_basis):
 
 
 Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
@@ -756,7 +756,7 @@ def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
 
 
 Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_diamondnorm)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def avg_gate_infidelity(a, b, mx_basis):
@@ -765,7 +765,7 @@ def avg_gate_infidelity(a, b, mx_basis):
 
 
 Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
@@ -792,7 +792,7 @@ def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
 
 
 Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def rel_eigvals(a, b, mx_basis):
@@ -803,7 +803,7 @@ def rel_eigvals(a, b, mx_basis):
 
 
 Rel_eigvals = _modf.opsfn_factory(rel_eigvals)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def rel_log_tig_eigvals(a, b, mx_basis):
@@ -813,7 +813,7 @@ def rel_log_tig_eigvals(a, b, mx_basis):
 
 
 Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigvals)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def rel_log_gti_eigvals(a, b, mx_basis):
@@ -823,7 +823,7 @@ def rel_log_gti_eigvals(a, b, mx_basis):
 
 
 Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigvals)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def rel_log_diff_eigvals(a, b, mx_basis):
@@ -833,7 +833,7 @@ def rel_log_diff_eigvals(a, b, mx_basis):
 
 
 Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigvals)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigvals TODO
@@ -843,7 +843,7 @@ def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigvals TODO
 
 
 Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def errgen_and_projections(errgen, mx_basis):
@@ -897,7 +897,7 @@ def log_tig_and_projections(a, b, mx_basis):
 
 
 LogTiG_and_projections = _modf.opsfn_factory(log_tig_and_projections)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def log_gti_and_projections(a, b, mx_basis):
@@ -911,7 +911,7 @@ def log_gti_and_projections(a, b, mx_basis):
 
 
 LogGTi_and_projections = _modf.opsfn_factory(log_gti_and_projections)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def log_diff_and_projections(a, b, mx_basis):
@@ -925,7 +925,7 @@ def log_diff_and_projections(a, b, mx_basis):
 
 
 LogGmlogT_and_projections = _modf.opsfn_factory(log_diff_and_projections)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_strs):

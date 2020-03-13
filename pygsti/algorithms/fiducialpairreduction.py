@@ -149,12 +149,12 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
                 expGerm=expGerm, pp=prepovmTuples, order=('f0', 'f1', 'pp'))
 
             evTree, blkSz, _, lookup, _ = targetModel.bulk_evaltree_from_resources(
-                lst, memLimit=memLimit, distributeMethod="deriv",
+                lst, mem_limit=memLimit, distribute_method="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
             dP = _np.empty((evTree.num_final_elements(), targetModel.num_params()), 'd')
-            targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz)  # num_els x num_params
+            targetModel.bulk_fill_dprobs(dP, evTree, wrt_block_size=blkSz)  # num_els x num_params
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final operation sequence of evTree)
@@ -392,7 +392,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
                 order=('f0', 'f1', 'pp'))
 
             evTree, blkSz, _, lookup, _ = gsGerm.bulk_evaltree_from_resources(
-                lst, memLimit=memLimit, distributeMethod="deriv",
+                lst, mem_limit=memLimit, distribute_method="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
 
             elIndicesForPair = [[] for i in range(len(prepStrs) * len(effectStrs))]
@@ -403,7 +403,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
                     elIndicesForPair[k].extend(list(_slct.indices(lookup[o])))
 
             dPall = _np.empty((evTree.num_final_elements(), gsGerm.num_params()), 'd')
-            gsGerm.bulk_fill_dprobs(dPall, evTree, wrtBlockSize=blkSz)  # num_els x num_params
+            gsGerm.bulk_fill_dprobs(dPall, evTree, wrt_block_size=blkSz)  # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -563,13 +563,13 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
         circuits = _remove_duplicates(circuits)
 
         evTree, wrtSize, _, _, _ = targetModel.bulk_evaltree_from_resources(
-            circuits, memLimit=memLimit, distributeMethod="deriv",
+            circuits, mem_limit=memLimit, distribute_method="deriv",
             subcalls=['bulk_fill_dprobs'], verbosity=0)
 
         dP = _np.empty((evTree.num_final_elements(), nModelParams))
         #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|Circuit|AM>)/d(iGatesetParam)
 
-        targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
+        targetModel.bulk_fill_dprobs(dP, evTree, wrt_block_size=wrtSize)
         return dP
 
     def get_number_amplified(M0, M1, L0, L1):

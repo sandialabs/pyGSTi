@@ -47,7 +47,7 @@ class MapEvalTree(EvalTree):
 
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, num_sub_tree_comms=1, max_cache_size=None):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -60,7 +60,7 @@ class MapEvalTree(EvalTree):
               objects, specifying the operation sequences that
               should be present in the evaluation tree.
 
-          numSubTreeComms : int, optional
+          num_sub_tree_comms : int, optional
               The number of processor groups (communicators)
               to divide the subtrees of this EvalTree among
               when calling `distribute`.  By default, the
@@ -75,9 +75,9 @@ class MapEvalTree(EvalTree):
         # opLabels : A list of all the distinct operation labels found in
         #              simplified_circuit_list.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.opLabels = self._get_opLabels(simplified_circuit_list)
-        if numSubTreeComms is not None:
-            self.distribution['numSubtreeComms'] = numSubTreeComms
+        self.opLabels = self._get_op_labels(simplified_circuit_list)
+        if num_sub_tree_comms is not None:
+            self.distribution['numSubtreeComms'] = num_sub_tree_comms
 
         circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_list.keys()]
         self.simplified_circuit_elabels = list(simplified_circuit_list.values())
@@ -95,7 +95,7 @@ class MapEvalTree(EvalTree):
 
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        #UNNEEDED? self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
+        #UNNEEDED? self.recompute_spamtuple_indices(local=True)  # local shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -122,7 +122,7 @@ class MapEvalTree(EvalTree):
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
         #PASS1: figure out what's worth keeping in the cache:
-        if maxCacheSize is None or maxCacheSize > 0:
+        if max_cache_size is None or max_cache_size > 0:
             curCacheSize = 0
             cacheIndices = []  # indices into circuit_list/self of the strings to cache
             dummy_self = [None] * self.num_final_strs; cache_hits = {}
@@ -170,7 +170,7 @@ class MapEvalTree(EvalTree):
                 remaining = circuit[:]
 
             # if/where this string should get stored in the cache
-            if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr, 0) > 0:
+            if (max_cache_size is None or curCacheSize < max_cache_size) and cache_hits.get(iStr, 0) > 0:
                 cacheIndices.append(iStr)
                 iCache = curCacheSize
                 curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
@@ -250,22 +250,22 @@ class MapEvalTree(EvalTree):
 
         return all_elabels, eLbl_indices_per_circuit, final_indices_per_circuit
 
-    def squeeze(self, maxCacheSize):
+    def squeeze(self, max_cache_size):
         """
         Remove items from cache (if needed) so it contains less than or equal
-        to `maxCacheSize` elements.
+        to `max_cache_size` elements.
 
         Paramteters
         -----------
-        maxCacheSize : int
+        max_cache_size : int
 
         Returns
         -------
         None
         """
-        assert(maxCacheSize >= 0)
+        assert(max_cache_size >= 0)
 
-        if maxCacheSize == 0:  # special but common case
+        if max_cache_size == 0:  # special but common case
             curCacheSize = self.cache_size()
             cacheinds = [None] * curCacheSize
             for i in self.get_evaluation_order():
@@ -278,8 +278,8 @@ class MapEvalTree(EvalTree):
             self.cachesize = 0
             return
 
-        #Otherwise, if maxCacheSize > 0, remove cache elements one at a time:
-        while self.cache_size() > maxCacheSize:
+        #Otherwise, if max_cache_size > 0, remove cache elements one at a time:
+        while self.cache_size() > max_cache_size:
 
             #Figure out what's in cache and # of times each one is hit
             curCacheSize = self.cache_size()
@@ -323,23 +323,23 @@ class MapEvalTree(EvalTree):
         for hits, i in zip(hits, cacheinds):
             if hits == 0: self._remove_from_cache(i)
 
-    def _delete_els(self, elsToRemove):
+    def _delete_els(self, els_to_remove):
         """
-        Delete a self[i] for i in elsToRemove.
+        Delete a self[i] for i in els_to_remove.
         """
-        if len(elsToRemove) == 0: return
+        if len(els_to_remove) == 0: return
 
-        last = elsToRemove[0]
-        for i in elsToRemove[1:]:
-            assert(i > last), "elsToRemove *must* be sorted in ascending order!"
+        last = els_to_remove[0]
+        for i in els_to_remove[1:]:
+            assert(i > last), "els_to_remove *must* be sorted in ascending order!"
             last = i
 
         #remove from cache
-        for i in elsToRemove:
+        for i in els_to_remove:
             self._remove_from_cache(i)
 
         order = self.eval_order
-        for i in reversed(elsToRemove):
+        for i in reversed(els_to_remove):
             del self[i]  # remove from self
 
             #remove & update eval order
@@ -421,16 +421,16 @@ class MapEvalTree(EvalTree):
             ops += len(remainder)
         return ops
 
-    def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
+    def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
           maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either maxSubTreeSize
-          or numSubTrees.
+          or for using multiple cores).  Must specify either max_sub_tree_size
+          or num_sub_trees.
 
         Parameters
         ----------
-        elIndicesDict : dict
+        el_indices_dict : dict
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
@@ -439,12 +439,12 @@ class MapEvalTree(EvalTree):
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
 
-        maxSubTreeSize : int, optional
+        max_sub_tree_size : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
             If None, then there is no limit.
 
-        numSubTrees : int, optional
+        num_sub_trees : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
 
@@ -454,21 +454,21 @@ class MapEvalTree(EvalTree):
         Returns
         -------
         OrderedDict
-            A updated version of elIndicesDict
+            A updated version of el_indices_dict
         """
         #dbList = self.generate_circuit_list()
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        if (maxSubTreeSize is None and numSubTrees is None) or \
-           (maxSubTreeSize is not None and numSubTrees is not None):
-            raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
-        if numSubTrees is not None and numSubTrees <= 0:
-            raise ValueError("EvalTree split() error: numSubTrees must be > 0!")
+        if (max_sub_tree_size is None and num_sub_trees is None) or \
+           (max_sub_tree_size is not None and num_sub_trees is not None):
+            raise ValueError("Specify *either* max_sub_tree_size or num_sub_trees")
+        if num_sub_trees is not None and num_sub_trees <= 0:
+            raise ValueError("EvalTree split() error: num_sub_trees must be > 0!")
 
         #Don't split at all if it's unnecessary
-        if maxSubTreeSize is None or len(self) < maxSubTreeSize:
-            if numSubTrees is None or numSubTrees == 1: return elIndicesDict
+        if max_sub_tree_size is None or len(self) < max_sub_tree_size:
+            if num_sub_trees is None or num_sub_trees == 1: return el_indices_dict
 
         self.subTrees = []
         evalOrder = self.get_evaluation_order()
@@ -479,26 +479,26 @@ class MapEvalTree(EvalTree):
             """ A shortcut for special case when there is no cache so each
                 circuit can be evaluated independently """
             N = len(self)
-            subTrees = [set(range(i, N, numSubTrees)) for i in range(numSubTrees)]
+            subTrees = [set(range(i, N, num_sub_trees)) for i in range(num_sub_trees)]
             totalCost = N
             return subTrees, totalCost
 
-        def create_subtrees(maxCost, maxCostRate=0, costMetric="size"):
+        def create_subtrees(max_cost, max_cost_rate=0, cost_metric="size"):
             """
             Find a set of subtrees by iterating through the tree
             and placing "break" points when the cost of evaluating the
-            subtree exceeds some 'maxCost'.  This ensure ~ equal cost
+            subtree exceeds some 'max_cost'.  This ensure ~ equal cost
             trees, but doesn't ensure any particular number of them.
 
-            maxCostRate can be set to implement a varying maxCost
+            max_cost_rate can be set to implement a varying max_cost
             over the course of the iteration.
             """
 
-            if costMetric == "applys":
+            if cost_metric == "applys":
                 def cost_fn(rem): return len(rem)  # length of remainder = #-apply ops needed
-            elif costMetric == "size":
+            elif cost_metric == "size":
                 def cost_fn(rem): return 1  # everything costs 1 in size of tree
-            else: raise ValueError("Uknown cost metric: %s" % costMetric)
+            else: raise ValueError("Uknown cost metric: %s" % cost_metric)
 
             subTrees = []
             curSubTree = set([evalOrder[0]])
@@ -527,13 +527,13 @@ class MapEvalTree(EvalTree):
                         cost += cost_fn(self[iStr][1])  # remainder
                         j = self[iStr][0]  # iStart
 
-                if curTreeCost + cost < maxCost:
+                if curTreeCost + cost < max_cost:
                     #Just add current string to current tree
                     curTreeCost += cost
                     curSubTree.update(inds)
                 else:
                     #End the current tree and begin a new one
-                    #print("cost %d+%d exceeds %d" % (curTreeCost,cost,maxCost))
+                    #print("cost %d+%d exceeds %d" % (curTreeCost,cost,max_cost))
                     subTrees.append(curSubTree)
                     curSubTree = set([k])
 
@@ -547,7 +547,7 @@ class MapEvalTree(EvalTree):
                     curTreeCost = cost
                     #print("Added new tree w/initial cost %d" % (cost))
 
-                maxCost += maxCostRate
+                max_cost += max_cost_rate
 
             subTrees.append(curSubTree)
             totalCost += curTreeCost
@@ -557,30 +557,30 @@ class MapEvalTree(EvalTree):
         # Part I: find a list of where the current tree should be broken #
         ##################################################################
 
-        if numSubTrees is not None and self.cache_size() == 0:
+        if num_sub_trees is not None and self.cache_size() == 0:
             #print("Split: EQUAL SUBTREES!") #REMOVE
             subTreeSetList, totalCost = nocache_create_equal_size_subtrees()
             #printer.log("EvalTree.split PT1 %.1fs" %
             #            (_time.time()-tm)); tm = _time.time()  #REMOVE
 
-        elif numSubTrees is not None:
+        elif num_sub_trees is not None:
 
             #OLD METHOD: optimize max-cost to get the right number of trees
             # (but this can yield trees with unequal lengths or cache sizes,
             # which is what we're often after for memory reasons)
             costMet = "size"  # cost metric
             if costMet == "applies":
-                maxCost = self.get_num_applies() / numSubTrees
-            else: maxCost = len(self) / numSubTrees
+                maxCost = self.get_num_applies() / num_sub_trees
+            else: maxCost = len(self) / num_sub_trees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0
             #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
             #   though current -1,1 vals are probably overly conservative...
-            resultingSubtrees = numSubTrees + 1  # just to prime the loop
+            resultingSubtrees = num_sub_trees + 1  # just to prime the loop
             iteration = 0
 
             #Iterate until the desired number of subtrees have been found.
-            while resultingSubtrees != numSubTrees:
+            while resultingSubtrees != num_sub_trees:
                 subTreeSetList, totalCost = create_subtrees(maxCost, maxCostRate, costMet)
                 resultingSubtrees = len(subTreeSetList)
                 #print("DEBUG: resulting numTrees = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
@@ -599,19 +599,19 @@ class MapEvalTree(EvalTree):
                 if maxCostUpperBound is None or abs(maxCostLowerBound - maxCostUpperBound) > 1.0:
                     # coarse adjust => vary maxCost
                     last_maxCost = maxCost
-                    if resultingSubtrees <= numSubTrees:  # too few trees: reduce maxCost
+                    if resultingSubtrees <= num_sub_trees:  # too few trees: reduce maxCost
                         maxCost = (maxCost + maxCostLowerBound) / 2.0
                         maxCostUpperBound = last_maxCost
                     else:  # too many trees: raise maxCost
                         if maxCostUpperBound is None:
-                            maxCost = totalCost  # / numSubTrees
+                            maxCost = totalCost  # / num_sub_trees
                         else:
                             maxCost = (maxCost + maxCostUpperBound) / 2.0
                             maxCostLowerBound = last_maxCost
                 else:
                     # fine adjust => vary maxCostRate
                     last_maxRate = maxCostRate
-                    if resultingSubtrees <= numSubTrees:  # too few trees reduce maxCostRate
+                    if resultingSubtrees <= num_sub_trees:  # too few trees reduce maxCostRate
                         maxCostRate = (maxCostRate + rateLowerBound) / 2.0
                         rateUpperBound = last_maxRate
                     else:  # too many trees: increase maxCostRate
@@ -621,9 +621,9 @@ class MapEvalTree(EvalTree):
                 iteration += 1
                 assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
 
-        else:  # maxSubTreeSize is not None
+        else:  # max_sub_tree_size is not None
             subTreeSetList, totalCost = create_subtrees(
-                maxSubTreeSize, maxCostRate=0, costMetric="size")
+                max_sub_tree_size, max_cost_rate=0, cost_metric="size")
 
         ##########################################################
         # Part II: create subtrees from index sets
@@ -636,46 +636,46 @@ class MapEvalTree(EvalTree):
             #return (perm[el[0]] if (el[0] is not None) else None, el[1], el[2])
             return (el[0], el[1], el[2])  # no need to permute the cache element ([0])
 
-        def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
+        def create_subtree(parent_indices, num_final, full_eval_order, slice_into_parents_final_array, parent_tree):
             """
             Creates a subtree given requisite information:
 
             Parameters
             ----------
-            parentIndices : list
+            parent_indices : list
                 The ordered list of (parent-tree) indices to be included in
                 the created subtree.
 
-            numFinal : int
+            num_final : int
                 The number of "final" elements, i.e. those that are used to
                 construct the final array of results and not just an intermediate.
-                The first numFinal elemements of parentIndices are "final", and
-                'sliceIntoParentsFinalArray' tells you which final indices of
+                The first num_final elemements of parent_indices are "final", and
+                'slice_into_parents_final_array' tells you which final indices of
                 the parent they map to.
 
-            fullEvalOrder : list
-                A list of the integers between 0 and len(parentIndices)-1 which
+            full_eval_order : list
+                A list of the integers between 0 and len(parent_indices)-1 which
                 gives the evaluation order of the subtree *including* evaluation
                 of any initial elements.
 
-            sliceIntoParentsFinalArray : slice
+            slice_into_parents_final_array : slice
                 Described above - map between to-be-created subtree's final
                 elements and parent-tree indices.
 
-            parentTree : EvalTree
+            parent_tree : EvalTree
                 The parent tree itself.
             """
             #t0 = _time.time() #REMOVE
             subTree = MapEvalTree()
-            subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
-            subTree.num_final_strs = numFinal
-            subTree[:] = [None] * len(parentIndices)
+            subTree.myFinalToParentFinalMap = slice_into_parents_final_array
+            subTree.num_final_strs = num_final
+            subTree[:] = [None] * len(parent_indices)
 
             curCacheSize = 0
             subTreeCacheIndices = {}
 
-            for ik in fullEvalOrder:  # includes any initial indices
-                k = parentIndices[ik]  # original tree index
+            for ik in full_eval_order:  # includes any initial indices
+                k = parent_indices[ik]  # original tree index
 
                 oStart, remainder, oCache = self[k]  # original tree data
 
@@ -695,7 +695,7 @@ class MapEvalTree(EvalTree):
 
             #t1 = _time.time()  #REMOVE
             subTree.cachesize = curCacheSize
-            subTree.parentIndexMap = parentIndices  # parent index of each subtree index
+            subTree.parentIndexMap = parent_indices  # parent index of each subtree index
             subTree.simplified_circuit_elabels = [self.simplified_circuit_elabels[k]
                                                   for k in _slct.indices(subTree.myFinalToParentFinalMap)]
             subTree.simplified_circuit_nEls = list(map(len, subTree.simplified_circuit_elabels))
@@ -709,7 +709,7 @@ class MapEvalTree(EvalTree):
 
             #t2 = _time.time() #REMOVE
             final_el_startstops = []; i = 0
-            for nEls in parentTree.simplified_circuit_nEls:
+            for nEls in parent_tree.simplified_circuit_nEls:
                 final_el_startstops.append((i, i + nEls))
                 i += nEls
             #t3 = _time.time() #REMOVE
@@ -725,13 +725,13 @@ class MapEvalTree(EvalTree):
             #t4 = _time.time() #REMOVE
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_elabels])
             #t5 = _time.time() #REMOVE
-            #UNNEEDED? subTree.recompute_spamtuple_indices(bLocal=False) # REMOVE
+            #UNNEEDED? subTree.recompute_spamtuple_indices(local=False) # REMOVE
             #t6 = _time.time() #REMOVE
 
             subTree.trim_nonfinal_els()
             #t7 = _time.time() #REMOVE
             circuits = subTree.generate_circuit_list(permute=False)
-            subTree.opLabels = self._get_opLabels(
+            subTree.opLabels = self._get_op_labels(
                 {c: elbls for c, elbls in zip(circuits, subTree.simplified_circuit_elabels)})
 
             #t8 = _time.time() #REMOVE
@@ -743,7 +743,7 @@ class MapEvalTree(EvalTree):
 
         #printer.log("EvalTree.split PT2 %.1fs" %
         #            (_time.time()-tm)); tm = _time.time()  #REMOVE
-        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
+        updated_elIndices = self._finish_split(el_indices_dict, subTreeSetList,
                                                permute_parent_element, create_subtree,
                                                all_final=bool(self.cache_size() == 0))
 
@@ -759,7 +759,7 @@ class MapEvalTree(EvalTree):
         each circuit.
         """
         self.simplified_circuit_elabels, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_elabels,
+            self._permute_simplified_circuit_xs(self.simplified_circuit_elabels,
                                                 element_indices_dict, old_indices_in_new_order)
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
 
@@ -773,7 +773,7 @@ class MapEvalTree(EvalTree):
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
-        cpy = self._copyBase(MapEvalTree(self[:]))
+        cpy = self._copy_base(MapEvalTree(self[:]))
         cpy.cachesize = self.cachesize  # member specific to MapEvalTree
         cpy.opLabels = self.opLabels[:]
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)

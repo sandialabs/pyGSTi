@@ -69,7 +69,7 @@ class TestGateSetMethods(GateSetTestCase):
         p2 = np.dot( self.model['Gy'], np.dot( self.model['Gy'], self.model['Gx'] ))
 
         bulk_prods = self.model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[ 0 ],p1)
         self.assertArraysAlmostEqual(bulk_prods[ 1 ],p2)
@@ -79,7 +79,7 @@ class TestGateSetMethods(GateSetTestCase):
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
         PORIG = pygsti.objects.matrixforwardsim.PSMALL; pygsti.objects.matrixforwardsim.PSMALL = 10
-        bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, scale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
         pygsti.objects.matrixforwardsim.PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
@@ -105,7 +105,7 @@ class TestGateSetMethods(GateSetTestCase):
         dprobs_to_fill = np.empty( (nElements,nParams), 'd')
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
         self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill, evt,
-                              prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
+                              pr_mx_to_fill=probs_to_fill, deriv_mx_to_fill=dprobs_to_fill, check=True)
 
 
         nP = self.model.num_params()
@@ -284,7 +284,7 @@ class TestGateSetMethods(GateSetTestCase):
                     print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distributeMethod, memLimit))
                     try:
                         evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
                             circuits, memLimit=memLimit, distributeMethod=distributeMethod,
@@ -302,7 +302,7 @@ class TestGateSetMethods(GateSetTestCase):
         #balanced not implemented
         with self.assertRaises(NotImplementedError):
             evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                circuits, memLimit=memLimit, distributeMethod="balanced", subcalls=['bulk_fill_hprobs'])
+                circuits, mem_limit=memLimit, distribute_method="balanced", subcalls=['bulk_fill_hprobs'])
 
 
 
@@ -320,14 +320,14 @@ class TestGateSetMethods(GateSetTestCase):
         evtA,lookupA,outcome_lookupA = self.model.bulk_evaltree( circuits )
 
         evtB,lookupB,outcome_lookupB = self.model.bulk_evaltree( circuits )
-        lookupB = evtB.split(lookupB, maxSubTreeSize=4)
+        lookupB = evtB.split(lookupB, max_sub_tree_size=4)
 
         evtC,lookupC,outcome_lookupC = self.model.bulk_evaltree( circuits )
-        lookupC = evtC.split(lookupC, numSubTrees=3)
+        lookupC = evtC.split(lookupC, num_sub_trees=3)
 
         with self.assertRaises(ValueError):
             evtBad,lkup,_ = self.model.bulk_evaltree( circuits )
-            evtBad.split(lkup, numSubTrees=3, maxSubTreeSize=4) #can't specify both
+            evtBad.split(lkup, num_sub_trees=3, max_sub_tree_size=4) #can't specify both
 
         self.assertFalse(evtA.is_split())
         self.assertTrue(evtB.is_split())

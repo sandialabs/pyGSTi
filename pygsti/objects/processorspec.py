@@ -35,7 +35,7 @@ class ProcessorSpec(object):
 
     """
 
-    def __init__(self, nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+    def __init__(self, n_qubits, gate_names, nonstd_gate_unitaries={}, availability={},
                  qubit_labels=None, construct_models=('clifford', 'target'),
                  construct_clifford_compilations={'paulieq': ('1Qcliffords', 'allcnots'),
                                                   'absolute': ('paulis', '1Qcliffords')}, verbosity=0):
@@ -50,7 +50,7 @@ class ProcessorSpec(object):
 
         Parameters
         ----------
-        nQubits : int
+        n_qubits : int
             The number of qubits in the device.
 
         gate_names : list of strings
@@ -114,10 +114,10 @@ class ProcessorSpec(object):
         -------
         ProcessorSpec
         """
-        assert(type(nQubits) is int), "The number of qubits, n, should be an integer!"
+        assert(type(n_qubits) is int), "The number of qubits, n, should be an integer!"
 
         #Store inputs for adding models later
-        self.number_of_qubits = nQubits
+        self.number_of_qubits = n_qubits
         self.root_gate_names = gate_names[:]  # copy this list
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
         #self.root_gate_names += list(self.nonstd_gate_unitaries.keys())  # must specify all names in `gate_names`
@@ -135,11 +135,11 @@ class ProcessorSpec(object):
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-        # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.
+        # If no qubit labels are provided it defaults to integers from 0 to n_qubits-1.
         if qubit_labels is None:
-            self.qubit_labels = list(range(nQubits))
+            self.qubit_labels = list(range(n_qubits))
         else:
-            assert(len(qubit_labels) == nQubits)
+            assert(len(qubit_labels) == n_qubits)
             self.qubit_labels = list(qubit_labels)
 
         # A dictionary of models for the device (e.g., imperfect unitaries, process matrices etc).
@@ -240,7 +240,7 @@ class ProcessorSpec(object):
             self.clifford_ops_on_qubits = None
 
         # Adds in the 1-qubit gate algebra
-        self.add_oneQgate_relations()
+        self.add_one_q_gate_relations()
         # Records the inverses of gates that have an inverse in the model (only compares to gates of the same dimension)
         self.add_multiqubit_inversion_relations()
 
@@ -317,7 +317,7 @@ class ProcessorSpec(object):
         """
         self.models[model_name] = self.get_std_model(model_name, parameterization, sim_type)
 
-    def add_std_compilations(self, compile_type, oneQgates, twoQgates, add_nonlocal_twoQgates=False, verbosity=0):
+    def add_std_compilations(self, compile_type, one_q_gates, two_q_gates, add_nonlocal_two_q_gates=False, verbosity=0):
         """
         Constructions compilations for the requested standard gates, and stores them in
         a CompilationLibrary object in the dictionary self.compilations. The key for
@@ -331,7 +331,7 @@ class ProcessorSpec(object):
             generate the requested gates up to multiplication by Paulis. This latter option is useful
             for creating the building-blocks for efficient multi-qubit Clifford gate generation.
 
-        oneQgates : list
+        one_q_gates : list
             The "standard" 1-qubit gates to generate compilations for, as strings that correspond to
             built-in fixed (perfect) gates. The allowed strings in this list are:
 
@@ -342,13 +342,13 @@ class ProcessorSpec(object):
              Note that there is some overlap between these gates: there are multiple internal labels
              for some of the gates, used in different contexts.
 
-        twoQgates : list
+        two_q_gates : list
             The "standard" 2-qubit gates to generate compilations for, as strings that correspond to
             built-in fixed (perfect) gates. The allowed strings in this list are:
 
             - 'CNOT' : the CNOT gate.
 
-        add_nonlocal_twoQgates : bool, optional
+        add_nonlocal_two_q_gates : bool, optional
             Whether to add compilations for CNOT gates between non-neighbouring qubits.
 
         verbosity : int, optional
@@ -365,7 +365,7 @@ class ProcessorSpec(object):
         hardcoded_oneQgates = ['I', 'X', 'Y', 'Z', 'H', 'P', 'HP', 'PH', 'HPH'] + ['C' + str(i) for i in range(24)]
 
         # Currently we can only compile CNOT gates, although that should be fixed.
-        for gate in twoQgates:
+        for gate in two_q_gates:
             assert(gate == 'CNOT'), ("The only 2-qubit gate auto-generated compilations currently possible "
                                      "are for the CNOT gate (Gcnot)!")
 
@@ -377,7 +377,7 @@ class ProcessorSpec(object):
         # 1-qubit gate compilations. These must be complied "locally" - i.e., out of native gates which act only
         # on the target qubit of the gate being compiled, and they are stored in the compilation library.
         for q in self.qubit_labels:
-            for gname in oneQgates:
+            for gname in one_q_gates:
                 # Check that this is a gate that is defined in the code, so that we can try and compile it.
                 assert(gname in hardcoded_oneQgates), "{} is not an allowed hard-coded 1-qubit gate".format(gname)
                 if verbosity > 0:
@@ -391,7 +391,7 @@ class ProcessorSpec(object):
         # Manually add in the "obvious" compilations for CNOT gates as templates, so that we use the normal conversions
         # based on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations,
         # which might not give the "expected" compilations (even if the alternatives might be just as good).
-        if 'CNOT' in twoQgates:
+        if 'CNOT' in two_q_gates:
             # Look to see if we have a CNOT gate in the model (with any name).
             cnot_name = None
             for gn in self.root_gate_names:
@@ -452,12 +452,12 @@ class ProcessorSpec(object):
         # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
         # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
         # brute force.
-        for gate in twoQgates:
+        for gate in two_q_gates:
             not_locally_compilable = []
             for q1 in self.qubit_labels:
                 for q2 in self.qubit_labels:
                     if q1 == q2: continue  # 2Q gates must be on different qubits!
-                    for gname in twoQgates:
+                    for gname in two_q_gates:
                         if verbosity > 0:
                             print("Creating a circuit to implement {} {} on qubits {}...".format(
                                 gname, descs[compile_type], (q1, q2)))
@@ -469,14 +469,14 @@ class ProcessorSpec(object):
 
             # If requested, try to compile remaining 2Q gates that are `non-local` (not between neighbouring qubits)
             # using specific algorithms.
-            if add_nonlocal_twoQgates:
+            if add_nonlocal_two_q_gates:
                 for gname, q1, q2 in not_locally_compilable:
                     library.add_nonlocal_compilation_of(_Label(gname, (q1, q2)),
                                                         verbosity=verbosity)
 
         self.compilations[compile_type] = library
 
-    def add_oneQgate_relations(self):
+    def add_one_q_gate_relations(self):
         """
         Records the basic pair-wise relationships relationships between the gates.
 
@@ -532,7 +532,7 @@ class ProcessorSpec(object):
         self.gate_inverse[`name1`] = `name2` and self.gate_inverse[`name2`] = `name1`
 
         1-qubit gates are not added by this method, as they can be added by the method
-        add_oneQgate_relations().
+        add_one_q_gate_relations().
 
         Returns
         -------
@@ -582,21 +582,21 @@ class ProcessorSpec(object):
         """
         todo
         """
-        def F(neighbor_dict, k_max, X, Y, output_set):
+        def fn(neighbor_dict, k_max, x, y, output_set):
             vertices = neighbor_dict.keys()
-            if len(X) == k_max:
+            if len(x) == k_max:
                 return output_set
-            if X:
-                T = set(a for x in X for a in neighbor_dict[x] if a not in Y and a not in X)
+            if x:
+                T = set(a for x in x for a in neighbor_dict[x] if a not in y and a not in x)
             else:
                 T = vertices
-            Y1 = set(Y)
+            Y1 = set(y)
             for v in T:
-                X.add(v)
+                x.add(v)
 #                print (X)
-                output_set.add(frozenset(X))
-                F(neighbor_dict, k_max, X, Y1, output_set)
-                X.remove(v)
+                output_set.add(frozenset(x))
+                fn(neighbor_dict, k_max, x, Y1, output_set)
+                x.remove(v)
                 Y1.add(v)
 
         def addedge(a, b, neighbor_dict):
@@ -622,7 +622,7 @@ class ProcessorSpec(object):
             addedge(edge[0], edge[1], neighbor_dict)
         k_max = self.number_of_qubits
         output_set = set()
-        F(neighbor_dict, k_max, set(), set(), output_set)
+        fn(neighbor_dict, k_max, set(), set(), output_set)
         grouped_subgraphs = group_subgraphs(output_set)
         return grouped_subgraphs
 

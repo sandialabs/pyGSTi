@@ -593,7 +593,7 @@ class Benchmark(_proto.Protocol):
         names = ['success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities']
 
         def get_circuit_values(icirc, circ, dsrow, idealout):
-            ret = {'twoQgate_count': circ.twoQgate_count(),
+            ret = {'twoQgate_count': circ.two_q_gate_count(),
                    'depth': circ.depth(),
                    'target': idealout,
                    'circuit_index': icirc,

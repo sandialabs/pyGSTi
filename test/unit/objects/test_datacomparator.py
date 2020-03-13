@@ -38,36 +38,36 @@ class DataComparatorTester(BaseCase):
         comparator.implement(significance=0.05)
         # XXX do these need unit tests?  EGN: maybe not - could ask Kenny
         mdl = self.DS_0.keys()[10]
-        comparator.get_JSD(mdl)
-        comparator.get_JSD_pseudothreshold()
-        comparator.get_LLR(mdl)
-        comparator.get_LLR_pseudothreshold()
-        comparator.get_SSJSD(mdl)
-        comparator.get_SSTVD(mdl)
-        comparator.get_TVD(mdl)
-        comparator.get_aggregate_LLR()
-        comparator.get_aggregate_LLR_threshold()
+        comparator.get_jsd(mdl)
+        comparator.get_jsd_pseudothreshold()
+        comparator.get_llr(mdl)
+        comparator.get_llr_pseudothreshold()
+        comparator.get_ssjsd(mdl)
+        comparator.get_sstvd(mdl)
+        comparator.get_tvd(mdl)
+        comparator.get_aggregate_llr()
+        comparator.get_aggregate_llr_threshold()
         comparator.get_aggregate_nsigma()
         comparator.get_aggregate_pvalue()
         comparator.get_aggregate_pvalue_threshold()
-        comparator.get_maximum_SSTVD()
+        comparator.get_maximum_sstvd()
         comparator.get_pvalue(mdl)
         comparator.get_pvalue_pseudothreshold()
         comparator.get_worst_circuits(10)
         # TODO assert correctness for all of the above
 
     def test_implement_exclusive(self):
-        comparator = dc.DataComparator([self.DS_0, self.DS_1], op_exclusions=['Gx'], DS_names=['D0', 'D1'])
+        comparator = dc.DataComparator([self.DS_0, self.DS_1], op_exclusions=['Gx'], ds_names=['D0', 'D1'])
         comparator.implement(significance=0.05)
         # TODO assert correctness
 
     def test_implement_inclusive(self):
-        comparator = dc.DataComparator([self.DS_0, self.DS_1], op_inclusions=['Gi'], DS_names=['D0', 'D1'])
+        comparator = dc.DataComparator([self.DS_0, self.DS_1], op_inclusions=['Gi'], ds_names=['D0', 'D1'])
         comparator.implement(significance=0.05)
         # TODO assert correctness
 
     def test_implement_multidataset(self):
-        mds = MultiDataSet(outcomeLabels=[('0',),('1',)])
+        mds = MultiDataSet(outcome_labels=[('0',),('1',)])
         mds.add_dataset('D0', self.DS_0)
         mds.add_dataset('D1', self.DS_1)
         comparator = dc.DataComparator(mds)
@@ -78,17 +78,17 @@ class DataComparatorTester(BaseCase):
 
     def test_construction_raises_on_bad_ds_names(self):
         with self.assertRaises(ValueError):
-            dc.DataComparator([self.DS_0, self.DS_1], DS_names=["foobar"])
+            dc.DataComparator([self.DS_0, self.DS_1], ds_names=["foobar"])
 
     def test_construction_raises_on_outcome_label_mismatch(self):
-        DS_bad = DataSet(outcomeLabels=['1', '0'])  # bad order!
+        DS_bad = DataSet(outcome_labels=['1', '0'])  # bad order!
         DS_bad.add_count_dict(('Gx',), {'0': 10, '1': 90})
         DS_bad.done_adding_data()
         with self.assertRaises(ValueError):
             dc.DataComparator([self.DS_0, DS_bad])
 
     def test_construction_raises_on_op_sequence_mismatch(self):
-        DS_bad = DataSet(outcomeLabels=['0', '1'])  # order ok...
+        DS_bad = DataSet(outcome_labels=['0', '1'])  # order ok...
         DS_bad.add_count_dict(('Gx',), {'0': 10, '1': 90})
         DS_bad.done_adding_data()
         with self.assertRaises(ValueError):

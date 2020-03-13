@@ -26,7 +26,7 @@ class EstimateBase(object):
     def test_get_effective_dataset(self):
         # Get effective estimate dataset
         effds = self.est.get_effective_dataset()
-        effds, subMxs = self.est.get_effective_dataset(return_subMxs=True)
+        effds, subMxs = self.est.get_effective_dataset(return_submxs=True)
         # TODO assert correctness
 
     def test_view(self):

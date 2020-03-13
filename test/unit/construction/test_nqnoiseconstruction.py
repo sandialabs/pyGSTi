@@ -46,7 +46,7 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
 
     def test_upgrade_dataset(self):
         #Test upgrade of 2Q dataset
-        ds = DataSet(outcomeLabels=('00', '01', '10', '11'))
+        ds = DataSet(outcome_labels=('00', '01', '10', '11'))
         ds.get_outcome_labels()
         ds.add_count_dict(('Gix',), {'00': 90, '10': 10})
         ds.add_count_dict(('Giy',), {'00': 80, '10': 20})

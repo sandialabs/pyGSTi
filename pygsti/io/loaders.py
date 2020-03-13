@@ -71,7 +71,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved Dataset object is ok
-        ds = _objs.DataSet(fileToLoadFrom=filename)
+        ds = _objs.DataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -85,7 +85,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    ds = _objs.DataSet(fileToLoadFrom=cache_filename)
+                    ds = _objs.DataSet(file_to_load_from=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
@@ -159,7 +159,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
-        mds = _objs.MultiDataSet(fileToLoadFrom=filename)
+        mds = _objs.MultiDataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -173,7 +173,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
+                    mds = _objs.MultiDataSet(file_to_load_from=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:

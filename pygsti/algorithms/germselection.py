@@ -777,7 +777,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         #  gives indexes into products computed by evalTree.
 
     evalTree, lookup, _ = model.bulk_evaltree(circuits)
-    dProds, prods = model.bulk_dproduct(evalTree, flat=True, bReturnProds=True, comm=comm)
+    dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
     op_dim = model.get_dimension()
     fd = op_dim**2  # flattened gate dimension
 

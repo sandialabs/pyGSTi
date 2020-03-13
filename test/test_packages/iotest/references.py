@@ -34,7 +34,7 @@ class IOGen:
 
     @_memo
     def ds(self):
-        ds = pygsti.obj.DataSet(outcomeLabels=['0', '1'], comment="Hello")
+        ds = pygsti.obj.DataSet(outcome_labels=['0', '1'], comment="Hello")
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 40, '1': 60})
         ds.done_adding_data()

@@ -118,12 +118,12 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
     if isinstance(model_or_dataset, _ds.DataSet):
         dsGen = model_or_dataset
         gsGen = None
-        dataset = _ds.DataSet(collisionAction=collision_action,
-                              outcomeLabelIndices=dsGen.olIndex)  # keep same outcome labels
+        dataset = _ds.DataSet(collision_action=collision_action,
+                              outcome_label_indices=dsGen.olIndex)  # keep same outcome labels
     else:
         gsGen = model_or_dataset
         dsGen = None
-        dataset = _ds.DataSet(collisionAction=collision_action)
+        dataset = _ds.DataSet(collision_action=collision_action)
 
     if alias_dict:
         alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
@@ -135,7 +135,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
                                   for s in circuit_list]
         else:
             trans_circuit_list = circuit_list
-        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=mem_limit)
+        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, mem_limit=mem_limit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
     if comm is None or comm.Get_rank() == 0:  # only root rank computes
@@ -241,9 +241,9 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
 
             if times is None:
                 assert(len(counts_list) == 1)
-                dataset.add_count_dict(s, counts_list[0], recordZeroCnts=record_zero_counts)
+                dataset.add_count_dict(s, counts_list[0], record_zero_counts=record_zero_counts)
             else:
-                dataset.add_series_data(s, counts_list, times, recordZeroCnts=record_zero_counts)
+                dataset.add_series_data(s, counts_list, times, record_zero_counts=record_zero_counts)
 
         dataset.done_adding_data()
 
@@ -289,7 +289,7 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
                         for key, val in label_merge_dict.items()}
 
     new_outcomes = label_merge_dict.keys()
-    merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
+    merged_dataset = _ds.DataSet(outcome_labels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
     if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
         raise ValueError(

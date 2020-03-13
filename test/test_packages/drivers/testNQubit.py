@@ -53,7 +53,7 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map", verbosity=10)
         #                                    roughNoise=(1234,0.1))
 
-        #print("Constructed model with %d gates, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
+        #print("Constructed model with %d gates, dim=%d, and n_params=%d.  Norm(paramvec) = %g" %
         #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
     def test_sequential_sequenceselection(self):

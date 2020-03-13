@@ -108,7 +108,7 @@ class ForwardSimulator(object):
     def propagate(self, state, simplified_circuit, time=None):
         raise NotImplementedError()  # TODO - create an interface for running circuits
 
-    def probs(self, simplified_circuit, clipTo=None, time=None):
+    def probs(self, simplified_circuit, clip_to=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -121,7 +121,7 @@ class ForwardSimulator(object):
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
         time : float, optional
@@ -131,7 +131,7 @@ class ForwardSimulator(object):
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,circuit,clipTo)
+            probs[SL] = pr(SL,circuit,clip_to)
             for each spam label (string) SL.
         """
         probs = _ld.OutcomeLabelDict()
@@ -140,11 +140,11 @@ class ForwardSimulator(object):
 
         for raw_circuit, elabels in raw_dict.items():
             # evaluate spamTuples w/same rholabel together
-            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clipTo, False, time):
+            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
                 probs[outcomeLbls[iOut]] = pval; iOut += 1
         return probs
 
-    def dprobs(self, simplified_circuit, returnPr=False, clipTo=None):
+    def dprobs(self, simplified_circuit, return_pr=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -157,18 +157,18 @@ class ForwardSimulator(object):
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
             for each spam label (string) SL.
         """
         dprobs = {}
@@ -177,11 +177,11 @@ class ForwardSimulator(object):
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
                 dprobs[outcomeLbls[iOut]] = self.dpr(
-                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], return_pr, clip_to)
                 iOut += 1
         return dprobs
 
-    def hprobs(self, simplified_circuit, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, simplified_circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -194,22 +194,22 @@ class ForwardSimulator(object):
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        returnDeriv : bool, optional
+        return_deriv : bool, optional
           when set to True, additionally return the derivatives of the
           probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         hprobs : dictionary
             A dictionary such that
-            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,return_deriv,clip_to)
             for each spam label (string) SL.
         """
         hprobs = {}
@@ -218,12 +218,12 @@ class ForwardSimulator(object):
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
                 hprobs[outcomeLbls[iOut]] = self.hpr(
-                    (raw_circuit[0], elabel), raw_circuit[1:], returnPr, returnDeriv, clipTo)
+                    (raw_circuit[0], elabel), raw_circuit[1:], return_pr, return_deriv, clip_to)
                 iOut += 1
         return hprobs
 
-    def bulk_probs(self, circuits, evalTree, elIndices, outcomes,
-                   clipTo=None, check=False, comm=None, smartc=None):
+    def bulk_probs(self, circuits, eval_tree, el_indices, outcomes,
+                   clip_to=None, check=False, comm=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of operation sequences.
@@ -233,17 +233,17 @@ class ForwardSimulator(object):
         circuits : list of Circuits
             The list of (non-simplified) original operation sequences.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
-        elIndices : dict
+        el_indices : dict
             A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
             operation sequence.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -266,25 +266,25 @@ class ForwardSimulator(object):
             A dictionary such that `probs[opstr]` is an ordered dictionary of
             outcome probabilities whose keys are (tuples of) outcome labels.
         """
-        vp = _np.empty(evalTree.num_final_elements(), 'd')
+        vp = _np.empty(eval_tree.num_final_elements(), 'd')
         if smartc:
-            smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
-                                  clipTo, check, comm, _filledarrays=(0,))
+            smartc.cached_compute(self.bulk_fill_probs, vp, eval_tree,
+                                  clip_to, check, comm, _filledarrays=(0,))
         else:
-            self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
+            self.bulk_fill_probs(vp, eval_tree, clip_to, check, comm)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(elIndices[i]) \
-                if isinstance(elIndices[i], slice) else elIndices[i]
+            elInds = _slct.indices(el_indices[i]) \
+                if isinstance(el_indices[i], slice) else el_indices[i]
             ret[opstr] = _ld.OutcomeLabelDict(
                 [(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-    def bulk_dprobs(self, circuits, evalTree, elIndices, outcomes,
-                    returnPr=False, clipTo=None,
+    def bulk_dprobs(self, circuits, eval_tree, el_indices, outcomes,
+                    return_pr=False, clip_to=None,
                     check=False, comm=None,
-                    wrtFilter=None, wrtBlockSize=None):
+                    wrt_filter=None, wrt_block_size=None):
         """
         Construct a dictionary containing the probability-derivatives
         for an entire list of operation sequences.
@@ -294,22 +294,22 @@ class ForwardSimulator(object):
         circuits : list of Circuits
             The list of (non-simplified) original operation sequences.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
-        elIndices : dict
+        el_indices : dict
             A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
             operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -319,23 +319,23 @@ class ForwardSimulator(object):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter : list of ints, optional
+        wrt_filter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
           internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
+          in conjuction with wrt_block_size.
 
-        wrtBlockSize : int or float, optional
+        wrt_block_size : int or float, optional
           The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
+          at once.  The  minimum of wrt_block_size and the size that makes
           maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
+          This argument must be None if wrt_filter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
 
@@ -346,24 +346,24 @@ class ForwardSimulator(object):
             `(dp, p)` tuples whose keys are (tuples of) outcome labels,
             where `p` is the corresponding probability, and `dp` is an array
             containing the derivative of `p` with respect to each parameter.
-            If `returnPr` is False, then `p` is not included in the tuples
+            If `return_pr` is False, then `p` is not included in the tuples
             (so values are just `dp`).
         """
-        nElements = evalTree.num_final_elements()
+        nElements = eval_tree.num_final_elements()
         nDerivCols = self.Np
 
         vdp = _np.empty((nElements, nDerivCols), 'd')
-        vp = _np.empty(nElements, 'd') if returnPr else None
+        vp = _np.empty(nElements, 'd') if return_pr else None
 
-        self.bulk_fill_dprobs(vdp, evalTree,
-                              vp, clipTo, check, comm,
-                              wrtFilter, wrtBlockSize)
+        self.bulk_fill_dprobs(vdp, eval_tree,
+                              vp, clip_to, check, comm,
+                              wrt_filter, wrt_block_size)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(elIndices[i]) \
-                if isinstance(elIndices[i], slice) else elIndices[i]
-            if returnPr:
+            elInds = _slct.indices(el_indices[i]) \
+                if isinstance(el_indices[i], slice) else el_indices[i]
+            if return_pr:
                 ret[opstr] = _ld.OutcomeLabelDict(
                     [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
@@ -371,11 +371,11 @@ class ForwardSimulator(object):
                     [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-    def bulk_hprobs(self, circuits, evalTree, elIndices, outcomes,
-                    returnPr=False, returnDeriv=False, clipTo=None,
+    def bulk_hprobs(self, circuits, eval_tree, el_indices, outcomes,
+                    return_pr=False, return_deriv=False, clip_to=None,
                     check=False, comm=None,
-                    wrtFilter1=None, wrtFilter2=None,
-                    wrtBlockSize1=None, wrtBlockSize2=None):
+                    wrt_filter1=None, wrt_filter2=None,
+                    wrt_block_size1=None, wrt_block_size2=None):
         """
         Construct a dictionary containing the probability-Hessians
         for an entire list of operation sequences.
@@ -385,25 +385,25 @@ class ForwardSimulator(object):
         circuits : list of Circuits
             The list of (non-simplified) original operation sequences.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
-        elIndices : dict
+        el_indices : dict
             A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
             operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        returnDeriv : bool, optional
+        return_deriv : bool, optional
           when set to True, additionally return the probability derivatives.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -413,22 +413,22 @@ class ForwardSimulator(object):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter1, wrtFilter2 : list of ints, optional
+        wrt_filter1, wrt_filter2 : list of ints, optional
           If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+        wrt_block_size2, wrt_block_size2 : int or float, optional
           The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          rows or columns at once.  The  minimum of wrt_block_size and the size
           that makes maximal use of available processors is used as the final
           block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
+          wrt_filter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
 
@@ -440,49 +440,49 @@ class ForwardSimulator(object):
             where `p` is the corresponding probability, `dp` is an array
             containing the derivative of `p` with respect to each parameter,
             and `hp` is a 2D array containing the Hessian of `p` with respect
-            to each parameter.  If `returnPr` is False, then `p` is not
-            included in the tuples.  If `returnDeriv` if False, then `dp` is
+            to each parameter.  If `return_pr` is False, then `p` is not
+            included in the tuples.  If `return_deriv` if False, then `dp` is
             not included in the tuples (if both are false then values are
             just `hp`, and not a tuple).
         """
-        nElements = evalTree.num_final_elements()
-        nDerivCols1 = self.Np if (wrtFilter1 is None) \
-            else len(wrtFilter1)
-        nDerivCols2 = self.Np if (wrtFilter2 is None) \
-            else len(wrtFilter2)
+        nElements = eval_tree.num_final_elements()
+        nDerivCols1 = self.Np if (wrt_filter1 is None) \
+            else len(wrt_filter1)
+        nDerivCols2 = self.Np if (wrt_filter2 is None) \
+            else len(wrt_filter2)
 
         vhp = _np.empty((nElements, nDerivCols1, nDerivCols2), 'd')
         vdp1 = _np.empty((nElements, self.Np), 'd') \
-            if returnDeriv else None
-        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1 != wrtFilter2) else None
-        vp = _np.empty(nElements, 'd') if returnPr else None
+            if return_deriv else None
+        vdp2 = vdp1.copy() if (return_deriv and wrt_filter1 != wrt_filter2) else None
+        vp = _np.empty(nElements, 'd') if return_pr else None
 
-        self.bulk_fill_hprobs(vhp, evalTree,
-                              vp, vdp1, vdp2, clipTo, check, comm,
-                              wrtFilter1, wrtFilter1, wrtBlockSize1, wrtBlockSize2)
+        self.bulk_fill_hprobs(vhp, eval_tree,
+                              vp, vdp1, vdp2, clip_to, check, comm,
+                              wrt_filter1, wrt_filter1, wrt_block_size1, wrt_block_size2)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(elIndices[i]) \
-                if isinstance(elIndices[i], slice) else elIndices[i]
+            elInds = _slct.indices(el_indices[i]) \
+                if isinstance(el_indices[i], slice) else el_indices[i]
             outcomeQtys = _ld.OutcomeLabelDict()
             for ei, outLbl in zip(elInds, outcomes[i]):
-                if returnDeriv:
+                if return_deriv:
                     if vdp2 is None:
-                        if returnPr: t = (vhp[ei], vdp1[ei], vp[ei])
+                        if return_pr: t = (vhp[ei], vdp1[ei], vp[ei])
                         else: t = (vhp[ei], vdp1[ei])
                     else:
-                        if returnPr: t = (vhp[ei], vdp1[ei], vdp2[ei], vp[ei])
+                        if return_pr: t = (vhp[ei], vdp1[ei], vdp2[ei], vp[ei])
                         else: t = (vhp[ei], vdp1[ei], vdp2[ei])
                 else:
-                    if returnPr: t = (vhp[ei], vp[ei])
+                    if return_pr: t = (vhp[ei], vp[ei])
                     else: t = vhp[ei]
                 outcomeQtys[outLbl] = t
             ret[opstr] = outcomeQtys
 
         return ret
 
-    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, num_subtree_comms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -495,7 +495,7 @@ class ForwardSimulator(object):
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
 
-        numSubtreeComms : int
+        num_subtree_comms : int
             The number of processor groups that will be assigned to
             subtrees of the created tree.  This aids in the tree construction
             by giving the tree information it needs to distribute itself
@@ -507,18 +507,18 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")
 
-    def _setParamBlockSize(self, wrtFilter, wrtBlockSize, comm):
-        if wrtFilter is None:
-            blkSize = wrtBlockSize  # could be None
+    def _set_param_block_size(self, wrt_filter, wrt_block_size, comm):
+        if wrt_filter is None:
+            blkSize = wrt_block_size  # could be None
             if (comm is not None) and (comm.Get_size() > 1):
                 comm_blkSize = self.Np / comm.Get_size()
                 blkSize = comm_blkSize if (blkSize is None) \
                     else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
         else:
-            blkSize = None  # wrtFilter dictates block
+            blkSize = None  # wrt_filter dictates block
         return blkSize
 
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+    def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -527,47 +527,47 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
             The evaluation tree used to define a list of circuits and hold (cache)
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of `evalTree` (if it is split).
+           subtrees of `eval_tree` (if it is split).
 
-        memLimit : TODO: docstring
+        mem_limit : TODO: docstring
         """
         pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 
-    def bulk_fill_probs(self, mxToFill, evalTree,
-                        clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mx_to_fill, eval_tree,
+                        clip_to=None, check=False, comm=None):
         """
         Compute the outcome probabilities for an entire tree of operation sequences.
 
-        This routine fills a 1D array, `mxToFill` with the probabilities
+        This routine fills a 1D array, `mx_to_fill` with the probabilities
         corresponding to the *simplified* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
+        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
         must have length equal to the number of final elements (this can be
-        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings
         generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. evalTree.num_final_elements())
+          total number of computed elements (i.e. eval_tree.num_final_elements())
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -578,7 +578,7 @@ class ForwardSimulator(object):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
+           subtrees of eval_tree (if it is split).
 
 
         Returns
@@ -587,33 +587,33 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("bulk_fill_probs(...) is not implemented!")
 
-    def bulk_fill_dprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, clipTo=None, check=False,
-                         comm=None, wrtFilter=None, wrtBlockSize=None,
-                         profiler=None, gatherMemLimit=None):
+    def bulk_fill_dprobs(self, mx_to_fill, eval_tree,
+                         pr_mx_to_fill=None, clip_to=None, check=False,
+                         comm=None, wrt_filter=None, wrt_block_size=None,
+                         profiler=None, gather_mem_limit=None):
         """
         Compute the outcome probability-derivatives for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `evalTree`.
+        probability-derivatives for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M is the
+          computed elements (i.e. eval_tree.num_final_elements()) and M is the
           number of model parameters.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -624,29 +624,29 @@ class ForwardSimulator(object):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter : list of ints, optional
+        wrt_filter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
           internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
+          in conjuction with wrt_block_size.
 
-        wrtBlockSize : int or float, optional
+        wrt_block_size : int or float, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
+          at once.  The  minimum of wrt_block_size and the size that makes
           maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
+          This argument must be None if wrt_filter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -656,29 +656,29 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("bulk_fill_dprobs(...) is not implemented!")
 
-    def bulk_fill_hprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
-                         clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
-                         wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
+    def bulk_fill_hprobs(self, mx_to_fill, eval_tree,
+                         pr_mx_to_fill=None, deriv1_mx_to_fill=None, deriv2_mx_to_fill=None,
+                         clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
+                         wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
         """
         Compute the outcome probability-Hessians for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
-        probability-Hessians for each "final element" of `evalTree`.
+        probability-Hessians for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
+          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
@@ -686,9 +686,9 @@ class ForwardSimulator(object):
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
           where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
+          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -699,28 +699,28 @@ class ForwardSimulator(object):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter1, wrtFilter2 : list of ints, optional
+        wrt_filter1, wrt_filter2 : list of ints, optional
           If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+        wrt_block_size2, wrt_block_size2 : int or float, optional
           The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          rows or columns at once.  The  minimum of wrt_block_size and the size
           that makes maximal use of available processors is used as the final
           block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
+          wrt_filter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -730,11 +730,11 @@ class ForwardSimulator(object):
         """
         raise NotImplementedError("bulk_fill_hprobs(...) is not implemented!")
 
-    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
-                             bReturnDProbs12=False, comm=None):
+    def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
+                             return_dprobs_12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
-        probabilities generated by a each gate sequence given by evalTree
+        probabilities generated by a each gate sequence given by eval_tree
         column-by-column.
 
         This routine can be useful when memory constraints make constructing
@@ -749,21 +749,21 @@ class ForwardSimulator(object):
         ----------
         spam_label_rows : dictionary
             a dictionary with keys == spam labels and values which
-            are integer row indices into mxToFill, specifying the
-            correspondence between rows of mxToFill and spam labels.
+            are integer row indices into mx_to_fill, specifying the
+            correspondence between rows of mx_to_fill and spam labels.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
             given by a prior call to bulk_evaltree.  Specifies the operation sequences
             to compute the bulk operation on.  This tree *cannot* be split.
 
-        wrtSlicesList : list
+        wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
             a "block" of the Hessian to compute.  Iterating over the output
             of this function iterates over these computed blocks, in the order
-            given by `wrtSlicesList`.  `rowSlice` and `colSlice` must by Python
+            given by `wrt_slices_list`.  `rowSlice` and `colSlice` must by Python
             `slice` objects.
 
-        bReturnDProbs12 : boolean, optional
+        return_dprobs_12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
            d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
@@ -783,17 +783,17 @@ class ForwardSimulator(object):
         block_generator
           A generator which, when iterated, yields the 3-tuple
           `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
-          (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
-          are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
+          (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
+          are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
           arrays of shape K x S x B x B', where:
 
           - K is the length of spam_label_rows,
-          - S is the number of operation sequences (i.e. evalTree.num_final_strings()),
+          - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
           - B is the number of parameter rows (the length of rowSlice)
           - B' is the number of parameter columns (the length of colSlice)
 
           If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
-          (i.e. args `mxToFill`, `deriv1MxToFill`, and `deriv1MxToFill`), then:
+          (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
 
           - `hprobs == mx[:,:,rowSlice,colSlice]`
           - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`

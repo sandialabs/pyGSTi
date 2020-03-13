@@ -25,13 +25,13 @@ class QubitGraph(object):
     """
 
     @classmethod
-    def common_graph(cls, nQubits=0, geometry="line", directed=True, qubit_labels=None, all_directions=False):
+    def common_graph(cls, n_qubits=0, geometry="line", directed=True, qubit_labels=None, all_directions=False):
         """
         Create a QubitGraph that is one of several standard types of graphs.
 
         Parameters
         ----------
-        nQubits : int, optional
+        n_qubits : int, optional
             The number of qubits (nodes in the graph).
 
         geometry : {"line","ring","grid","torus"}
@@ -42,31 +42,31 @@ class QubitGraph(object):
             Whether the graph is directed or undirected.
 
         qubit_labels : iterable, optional
-            The labels for the qubits.  Must be of length `nQubits`.
-            If None, then the integers from 0 to `nQubits-1` are used.
+            The labels for the qubits.  Must be of length `n_qubits`.
+            If None, then the integers from 0 to `n_qubits-1` are used.
 
 
         Returns
         -------
         QubitGraph
         """
-        qls = tuple(range(nQubits)) if (qubit_labels is None) else qubit_labels
-        assert(len(qls) == nQubits), "Invalid `qubit_labels` arg - length %d! (expected %d)" % (len(qls), nQubits)
+        qls = tuple(range(n_qubits)) if (qubit_labels is None) else qubit_labels
+        assert(len(qls) == n_qubits), "Invalid `qubit_labels` arg - length %d! (expected %d)" % (len(qls), n_qubits)
         edges = []
-        if nQubits >= 2:
+        if n_qubits >= 2:
             if geometry in ("line", "ring"):
-                for i in range(nQubits - 1):
+                for i in range(n_qubits - 1):
                     edges.append((qls[i], qls[i + 1], "right") if directed else (qls[i], qls[i + 1]))
                     if all_directions:
                         edges.append((qls[i + 1], qls[i], "left") if directed else (qls[i + 1], qls[i]))
-                if nQubits > 2 and geometry == "ring":
-                    edges.append((qls[nQubits - 1], qls[0], "right") if directed else (qls[nQubits - 1], qls[0]))
+                if n_qubits > 2 and geometry == "ring":
+                    edges.append((qls[n_qubits - 1], qls[0], "right") if directed else (qls[n_qubits - 1], qls[0]))
                     if all_directions:
-                        edges.append((qls[0], qls[nQubits - 1], "left") if directed else (qls[0], qls[nQubits - 1]))
+                        edges.append((qls[0], qls[n_qubits - 1], "left") if directed else (qls[0], qls[n_qubits - 1]))
             elif geometry in ("grid", "torus"):
-                s = int(round(_np.sqrt(nQubits)))
-                assert(nQubits >= 4 and s * s == nQubits), \
-                    "`nQubits` must be a perfect square >= 4"
+                s = int(round(_np.sqrt(n_qubits)))
+                assert(n_qubits >= 4 and s * s == n_qubits), \
+                    "`n_qubits` must be a perfect square >= 4"
                 #row links
                 for irow in range(s):
                     for icol in range(s):
@@ -556,17 +556,17 @@ class QubitGraph(object):
         path = self.shortest_path(node1, node2)
         return [(path[i], path[i + 1]) for i in range(len(path) - 1)]
 
-    def shortest_path_intersect(self, node1, node2, nodesToIntersect):
+    def shortest_path_intersect(self, node1, node2, nodes_to_intersect):
         """
         Determine  whether the shortest path between `node1` and `node2`
-        contains any of the nodes in `nodesToIntersect`.
+        contains any of the nodes in `nodes_to_intersect`.
 
         Parameters
         ----------
         node1, node2 : object
             Node (qubit) labels, usually integers or strings.
 
-        nodesToIntersect : list
+        nodes_to_intersect : list
             A list of node labels.
 
         Returns
@@ -575,7 +575,7 @@ class QubitGraph(object):
             True if the shortest path intersects any node in `nodeToIntersect`.
         """
         path_set = set(self.shortest_path(node1, node2))
-        return len(path_set.intersection(nodesToIntersect)) > 0
+        return len(path_set.intersection(nodes_to_intersect)) > 0
 
     def shortest_path_distance(self, node1, node2):
         """

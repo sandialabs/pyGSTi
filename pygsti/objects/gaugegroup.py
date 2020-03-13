@@ -90,7 +90,7 @@ class GaugeGroupElement(object):
         """Return the inverse of the gauge-transform matrix"""
         return None
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Return the derivative of the group of gauge transformations (with
         respect to the group's parameters) at this element.
@@ -198,9 +198,9 @@ class OpGaugeGroupElement(GaugeGroupElement):
             self._inv_matrix = _np.linalg.inv(self.gate.todense())
         return self._inv_matrix
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """ See :method:`GaugeGroupElement.deriv_wrt_params` """
-        return self.gate.deriv_wrt_params(wrtFilter)
+        return self.gate.deriv_wrt_params(wrt_filter)
 
     def to_vector(self):
         """ See :method:`GaugeGroupElement.to_vector` """
@@ -369,7 +369,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         from . import operation as _op  # b/c operation.py imports gaugegroup
         gate = _op.LindbladDenseOp.from_operation_matrix(
             None, _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
-            param_mode="cptp", mxBasis=basis)
+            param_mode="cptp", mx_basis=basis)
         OpGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
 
 
@@ -511,7 +511,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """ See :method:`GaugeGroupElement.get_transform_matrix_inverse` """
         return self._matrix  # inverse of identity is itself!
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """ See :method:`GaugeGroupElement.deriv_wrt_params` """
         return _np.empty(0, 'd')
 

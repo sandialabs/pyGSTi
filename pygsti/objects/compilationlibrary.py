@@ -147,7 +147,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
         def is_local_compilation_feasible(template_labels):
             """ Whether template_labels can possibly be enough
-                gates to compile a template for opLabel with """
+                gates to compile a template for op_label with """
             if oplabel.number_of_qubits <= 1:
                 return len(template_labels) > 0  # 1Q gates, anything is ok
             elif oplabel.number_of_qubits == 2:

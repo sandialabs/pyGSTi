@@ -65,12 +65,12 @@ class ForwardSimBase(object):
     def test_bulk_fill_dprobs(self):
         dmx = np.empty((self.nEls, 3), 'd')
         pmx = np.empty(self.nEls, 'd')
-        self.fwdsim.bulk_fill_dprobs(dmx, self.evt, prMxToFill=pmx, wrtFilter=[0, 1, 2])
+        self.fwdsim.bulk_fill_dprobs(dmx, self.evt, pr_mx_to_fill=pmx, wrt_filter=[0, 1, 2])
         # TODO assert correctness
 
     def test_bulk_fill_dprobs_with_block_size(self):
         dmx = np.empty((self.nEls, self.nP), 'd')
-        self.fwdsim.bulk_fill_dprobs(dmx, self.evt, wrtBlockSize=2)
+        self.fwdsim.bulk_fill_dprobs(dmx, self.evt, wrt_block_size=2)
         # TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
@@ -78,8 +78,8 @@ class ForwardSimBase(object):
         dmx = np.zeros((self.nEls, 3), 'd')
         pmx = np.zeros(self.nEls, 'd')
         self.fwdsim.bulk_fill_hprobs(hmx, self.evt,
-                                     prMxToFill=pmx, deriv1MxToFill=dmx, deriv2MxToFill=dmx,
-                                     wrtFilter1=[0, 1, 2], wrtFilter2=[0, 1, 2])  # same slice on each deriv
+                                     pr_mx_to_fill=pmx, deriv1_mx_to_fill=dmx, deriv2_mx_to_fill=dmx,
+                                     wrt_filter1=[0, 1, 2], wrt_filter2=[0, 1, 2])  # same slice on each deriv
         # TODO assert correctness
 
         hmx = np.zeros((self.nEls, 3, 2), 'd')
@@ -87,8 +87,8 @@ class ForwardSimBase(object):
         dmx2 = np.zeros((self.nEls, 2), 'd')
         pmx = np.zeros(self.nEls, 'd')
         self.fwdsim.bulk_fill_hprobs(hmx, self.evt,
-                                     prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
-                                     wrtFilter1=[0, 1, 2], wrtFilter2=[2, 3])  # different slices on 1st vs. 2nd deriv
+                                     pr_mx_to_fill=pmx, deriv1_mx_to_fill=dmx1, deriv2_mx_to_fill=dmx2,
+                                     wrt_filter1=[0, 1, 2], wrt_filter2=[2, 3])  # different slices on 1st vs. 2nd deriv
         # TODO assert correctness
 
     def test_bulk_hprobs_by_block(self):
@@ -97,14 +97,14 @@ class ForwardSimBase(object):
         dmx1 = np.zeros((self.nEls, self.nP), 'd')
         dmx2 = np.zeros((self.nEls, self.nP), 'd')
         pmx = np.zeros(self.nEls, 'd')
-        self.fwdsim.bulk_fill_hprobs(mx, self.evt, clipTo=(-1, 1),
-                                     prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
-                                     wrtBlockSize1=2, wrtBlockSize2=3)  # use block sizes
+        self.fwdsim.bulk_fill_hprobs(mx, self.evt, clip_to=(-1, 1),
+                                     pr_mx_to_fill=pmx, deriv1_mx_to_fill=dmx1, deriv2_mx_to_fill=dmx2,
+                                     wrt_block_size1=2, wrt_block_size2=3)  # use block sizes
         # TODO assert correctness
 
     def test_prs(self):
-        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clipTo=(-1, 1))
-        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clipTo=(-1, 1), bUseScaling=True)
+        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1))
+        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1), use_scaling=True)
         # TODO assert correctness
 
     def test_estimate_cache_size(self):
@@ -131,7 +131,7 @@ class MatrixForwardSimTester(ForwardSimBase, BaseCase):
         # TODO assert correctness
 
     def test_hproduct(self):
-        self.fwdsim.hproduct(Ls('Gx', 'Gx'), flat=True, wrtFilter1=[0, 1], wrtFilter2=[1, 2, 3])
+        self.fwdsim.hproduct(Ls('Gx', 'Gx'), flat=True, wrt_filter1=[0, 1], wrt_filter2=[1, 2, 3])
         # TODO assert correctness
 
     def test_hoperation(self):
@@ -140,13 +140,13 @@ class MatrixForwardSimTester(ForwardSimBase, BaseCase):
         # TODO assert correctness
 
     def test_hpr(self):
-        self.fwdsim.hpr(Ls('rho0', 'Mdefault_0'), Ls('Gx', 'Gx'), False, False, clipTo=(-1, 1))
+        self.fwdsim.hpr(Ls('rho0', 'Mdefault_0'), Ls('Gx', 'Gx'), False, False, clip_to=(-1, 1))
         # TODO assert correctness
 
     def test_rhoE_from_spamTuple(self):
         # XXX does this need to be tested?  EGN: No
         custom_spamTuple = (np.zeros((4, 1), 'd'), np.zeros((4, 1), 'd'))
-        self.fwdsim._rhoE_from_spamTuple(custom_spamTuple)
+        self.fwdsim._rho_e_from_spam_tuple(custom_spamTuple)
         # TODO assert correctness
 
 

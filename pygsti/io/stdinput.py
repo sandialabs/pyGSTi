@@ -326,7 +326,7 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcomeLabels=outcomeLabels, collisionAction=collision_action,
+        dataset = _objs.DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
                                 comment="\n".join(preamble_comments))
         nLines = 0
         with open(filename, 'r') as datafile:
@@ -405,7 +405,7 @@ class StdInputParser(object):
                                 # fill_in_empty_dataset_with_fake_data).
                                 pass
 
-                        dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=record_zero_counts,
+                        dataset.add_count_dict(circuit, countDict, aux=commentDict, record_zero_counts=record_zero_counts,
                                                update_ol=False)  # for performance - to this once at the end.
                     else:
                         current_item['circuit'] = circuit
@@ -416,7 +416,7 @@ class StdInputParser(object):
                         #add current item & look for next one
                         dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
                                                     current_item['times'], current_item.get('repetitions', None),
-                                                    recordZeroCnts=record_zero_counts, aux=current_item.get('aux', None),
+                                                    record_zero_counts=record_zero_counts, aux=current_item.get('aux', None),
                                                     update_ol=False)  # for performance - to this once at the end.
                         current_item.clear()
                         looking_for = "circuit_line"
@@ -437,7 +437,7 @@ class StdInputParser(object):
             #add final circuit info (no blank line at end of file)
             dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
                                         current_item['times'], current_item.get('repetitions', None),
-                                        recordZeroCnts=record_zero_counts, aux=current_item.get('aux', None),
+                                        record_zero_counts=record_zero_counts, aux=current_item.get('aux', None),
                                         update_ol=False)  # for performance - to this once at the end.
 
         dataset.update_ol()  # because we set update_ol=False above, we need to do this
@@ -590,8 +590,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
-            datasets[dsLabel] = _objs.DataSet(outcomeLabels=outcomeLabels,
-                                              collisionAction=collision_action)
+            datasets[dsLabel] = _objs.DataSet(outcome_labels=outcomeLabels,
+                                              collision_action=collision_action)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
@@ -801,7 +801,7 @@ class StdInputParser(object):
         outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
+        dataset = _objs.DataSet(outcome_labels=outcomeLabels)
         with open(filename, 'r') as f:
             nLines = sum(1 for line in f)
         nSkip = int(nLines / 100.0)
@@ -830,7 +830,7 @@ class StdInputParser(object):
                 seriesList = [outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr]  # iter over characters in str
                 timesList = list(range(len(seriesList)))  # FUTURE: specify an offset and step??
                 dataset.add_raw_series_data(circuit, seriesList, timesList,
-                                            recordZeroCnts=record_zero_counts)
+                                            record_zero_counts=record_zero_counts)
 
         dataset.done_adding_data()
         return dataset
@@ -1070,7 +1070,7 @@ def read_model(filename):
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis)  # unitary postfactor = Id
+                qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
             pureVec = _objs.StaticSPAMVec(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), typ="prep")
             mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec, errorMap, "prep")
         elif cur_typ == "STATIC-PREP":
@@ -1102,7 +1102,7 @@ def read_model(filename):
                 bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
                 errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                    qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis)  # unitary postfactor = Id
+                    qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
                 base_povm = _objs.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
                 mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
@@ -1123,7 +1123,7 @@ def read_model(filename):
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, unitary_post, proj_basis, proj_basis, truncate=False, mxBasis=basis)
+                qty, unitary_post, proj_basis, proj_basis, truncate=False, mx_basis=basis)
 
         elif cur_typ == "STATIC-GATE":
             mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))

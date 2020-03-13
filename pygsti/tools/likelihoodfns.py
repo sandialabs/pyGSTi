@@ -288,11 +288,6 @@ def logl(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    evalTree : evaluation tree, optional
-      given by a prior call to bulk_evaltree for the same circuit_list.
-      Significantly speeds up evaluation of log-likelihood, even more so
-      when accompanied by countVecMx (see below).
-
     poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
@@ -374,11 +369,6 @@ def logl_jacobian(model, dataset, circuit_list=None,
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
-
-    evalTree : evaluation tree, optional
-        given by a prior call to bulk_evaltree for the same circuit_list.
-        Significantly speeds up evaluation of log-likelihood derivatives, even
-        more so when accompanied by countVecMx (see below).  Defaults to None.
 
     poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
@@ -472,9 +462,9 @@ def logl_jacobian(model, dataset, circuit_list=None,
     else:
         firsts = None
 
-    smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
-          clipTo=prob_clip_interval, check=check, comm=comm,
-          wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
+    smart(model.bulk_fill_dprobs, dprobs, evalTree, pr_mx_to_fill=probs,
+          clip_to=prob_clip_interval, check=check, comm=comm,
+          wrt_block_size=blkSize, _filledarrays=(0, 'pr_mx_to_fill'))  # FUTURE: set gather_mem_limit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
@@ -483,7 +473,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
         #TODO: is v actualy needed/used here??
-        v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = nCircuits)
+        v = countVecMx * _np.log(pos_probs) - totalCntVec * pos_probs  # dim KM (K = nSpamLabels, M = n_circuits)
         # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
         v = _np.minimum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
@@ -529,7 +519,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         # to sum to 1)
         S = countVecMx / min_p              # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+        v = countVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = n_circuits)
         # remove small positive elements due to roundoff error (above expression *cannot* really be positive)
         v = _np.minimum(v, 0)
         # quadratic extrapolation of logl at min_p for probabilities < min_p
@@ -819,7 +809,7 @@ def logl_hessian(model, dataset, circuit_list=None, min_prob_clip=1e-6,
             # usually want but NOT here, where we fill arrays just big
             # enough for each subtree separately - so re-init spamtuple_indices
             evalSubTree = evalSubTree.copy()
-            evalSubTree.recompute_spamtuple_indices(bLocal=True)
+            evalSubTree.recompute_spamtuple_indices(local=True)
 
         # Create views into pre-allocated memory
         probs = probs_mem[0:sub_nEls]
@@ -831,7 +821,7 @@ def logl_hessian(model, dataset, circuit_list=None, min_prob_clip=1e-6,
 
         #compute pos_probs separately
         smart(model.bulk_fill_probs, probs, evalSubTree,
-              clipTo=prob_clip_interval, check=check,
+              clip_to=prob_clip_interval, check=check,
               comm=mySubComm, _filledarrays=(0,))
         pos_probs = _np.where(probs < min_p, min_p, probs)
 
@@ -935,11 +925,6 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    evalTree : evaluation tree, optional
-        given by a prior call to bulk_evaltree for the same circuit_list.
-        Significantly speeds up evaluation of log-likelihood derivatives, even
-        more so when accompanied by countVecMx (see below).  Defaults to None.
-
     poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
@@ -1018,9 +1003,9 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         totalCntVec[lookup[i]] = sum(cnts.values())  # dataset[opStr].total
         cntVecMx[lookup[i]] = [cnts.get(x, 0) for x in outcomes_lookup[i]]
 
-    smart(model.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
-          clipTo=prob_clip_interval, check=check, comm=comm,
-          wrtBlockSize=blkSize, _filledarrays=(0, 'prMxToFill'))  # FUTURE: set gatherMemLimit=?
+    smart(model.bulk_fill_dprobs, dprobs, evalTree, pr_mx_to_fill=probs,
+          clip_to=prob_clip_interval, check=check, comm=comm,
+          wrt_block_size=blkSize, _filledarrays=(0, 'pr_mx_to_fill'))  # FUTURE: set gather_mem_limit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
@@ -1273,11 +1258,6 @@ def two_delta_logl(model, dataset, circuit_list=None,
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
-
-    evalTree : evaluation tree, optional
-      given by a prior call to bulk_evaltree for the same circuit_list.
-      Significantly speeds up evaluation of log-likelihood, even more so
-      when accompanied by countVecMx (see below).
 
     poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
@@ -1660,8 +1640,8 @@ def _patched_logl_fn(n, p, min_p):
 #def dpr_plus(model, circuits):
 #    DELTA = 1e-7
 #    nP = model.num_params()
-#    nCircuits = len(circuits)
-#    result = _np.zeros([nP,nCircuits])
+#    n_circuits = len(circuits)
+#    result = _np.zeros([nP,n_circuits])
 #
 #    for (j,s) in enumerate(circuits):
 #        fMid = model.PrPlus(s)

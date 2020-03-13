@@ -163,7 +163,7 @@ class ModelMember(ModelChild):
         Called when at least one reference (via `key`) to this object is being
         disassociated with `parent`.   If *all* references are to this object
         are now gone, set parent to None, invalidating any gpindices.
-        `startingIndex`.
+        `starting_index`.
 
         Returns
         -------
@@ -235,18 +235,18 @@ class ModelMember(ModelChild):
         self._parent = parent
         self._gpindices = gpindices
 
-    def allocate_gpindices(self, startingIndex, parent, memo=None):
+    def allocate_gpindices(self, starting_index, parent, memo=None):
         """
         Sets gpindices array for this object or any objects it
         contains (i.e. depends upon).  Indices may be obtained
         from contained objects which have already been initialized
         (e.g. if a contained object is shared with other
          top-level objects), or given new indices starting with
-        `startingIndex`.
+        `starting_index`.
 
         Parameters
         ----------
-        startingIndex : int
+        starting_index : int
             The starting index for un-allocated parameters.
 
         parent : Model or ModelMember
@@ -262,7 +262,7 @@ class ModelMember(ModelChild):
         num_new: int
             The number of *new* allocated parameters (so
             the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+            indices `starting_index` to `starting_index + new_new`).
         """
         if memo is None: memo = set()
         elif id(self) in memo: return 0
@@ -271,8 +271,8 @@ class ModelMember(ModelChild):
             #Allocate sub-members
             tot_new_params = 0; all_gpindices = []
             for subm in self.submembers():
-                num_new_params = subm.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as this member
-                startingIndex += num_new_params
+                num_new_params = subm.allocate_gpindices(starting_index, parent, memo)  # *same* parent as this member
+                starting_index += num_new_params
                 tot_new_params += num_new_params
                 all_gpindices.extend(subm.gpindices_as_array())
 
@@ -303,7 +303,7 @@ class ModelMember(ModelChild):
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"
                 Np = self.num_params()
-                slc = slice(startingIndex, startingIndex + Np) \
+                slc = slice(starting_index, starting_index + Np) \
                     if Np > 0 else slice(0, 0, None)  # special "null slice" for zero params
                 self.set_gpindices(slc, parent, memo)
                 #print(" -- allocated %d indices: %s" % (Np,str(slc)))
@@ -378,7 +378,7 @@ class ModelMember(ModelChild):
         memo = {id(self.parent): None}  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent)
 
-    def _copy_gpindices(self, opObj, parent):
+    def _copy_gpindices(self, op_obj, parent):
         """ Helper function for implementing copy in derived classes """
         gpindices_copy = None
         if isinstance(self.gpindices, slice):
@@ -390,16 +390,16 @@ class ModelMember(ModelChild):
         # "advanced" implementations containing sub-members assume that the
         # gpindices has already been set and is just being updated (so it compares
         # the "old" (existing) gpindices with the value being set).  Here,
-        # we just want to copy any existing gpindices from "self" to opObj
-        # and *not* cause opObj to shift any underlying indices (they'll
+        # we just want to copy any existing gpindices from "self" to op_obj
+        # and *not* cause op_obj to shift any underlying indices (they'll
         # be copied separately. -- FUTURE: make separate "update_gpindices" and
         # "copy_gpindices" functions?
-        opObj._set_only_my_gpindices(gpindices_copy, parent)
-        #opObj.set_gpindices(gpindices_copy, parent) #don't do this, as
+        op_obj._set_only_my_gpindices(gpindices_copy, parent)
+        #op_obj.set_gpindices(gpindices_copy, parent) #don't do this, as
         # this routines doesn't copy sub-member indices yet -- copy(...) methods
         # of derived classes do this.
 
-        return opObj
+        return op_obj
 
     def _print_gpindices(self, prefix=""):
         print(self.gpindices, " [%s]" % str(type(self)))

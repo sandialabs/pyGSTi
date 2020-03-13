@@ -12,7 +12,7 @@ class StdListTester(BaseCase):
         self.germs = cc.circuit_list([('Gx', 'Gy'), ('Gy', 'Gy')])
         self.testFidPairs = [(0, 1)]
         self.testFidPairsDict = {(Label('Gx'), Label('Gy')): [(0, 0), (0, 1)], (Label('Gy'), Label('Gy')): [(0, 0)]}
-        self.ds = DataSet(outcomeLabels=['0', '1'])  # a dataset that is missing
+        self.ds = DataSet(outcome_labels=['0', '1'])  # a dataset that is missing
         self.ds.add_count_dict(('Gx',), {'0': 10, '1': 90})     # almost all our strings...
         self.ds.done_adding_data()
 

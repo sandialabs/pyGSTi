@@ -18,17 +18,17 @@ class ReplibBase(object):
         staterep = self.replib.DMStateRep(x)  # state rep
         # TODO assert correctness
 
-    def test_DMEffectRep_Dense(self):
+    def test_DMEffectRepDense(self):
         x = np.zeros(4, 'd')
         staterep = self.replib.DMStateRep(x)
-        erep = self.replib.DMEffectRep_Dense(x)
+        erep = self.replib.DMEffectRepDense(x)
         self.assertAlmostEqual(erep.probability(staterep), 0.0)
 
-    def test_DMOpRep_Dense(self):
+    def test_DMOpRepDense(self):
         x = np.zeros(4, 'd')
         staterep = self.replib.DMStateRep(x)
         g = np.zeros((4, 4), 'd')
-        grep = self.replib.DMOpRep_Dense(g)
+        grep = self.replib.DMOpRepDense(g)
         staterep2 = grep.acton(staterep)
         self.assertEqual(type(staterep2), self.replib.DMStateRep)
 

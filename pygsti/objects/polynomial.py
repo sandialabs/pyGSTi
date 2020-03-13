@@ -143,16 +143,16 @@ class FASTPolynomial(object):
     def vindices_per_int(self):
         return self._rep.vindices_per_int
 
-    def deriv(self, wrtParam):
+    def deriv(self, wrt_param):
         """
         Take the derivative of this Polynomial with respect to a single
         variable/parameter.  The result is another Polynomial.
 
-        E.g. deriv(x_2^3 + 3*x_1, wrtParam=2) = 3x^2
+        E.g. deriv(x_2^3 + 3*x_1, wrt_param=2) = 3x^2
 
         Parameters
         ----------
-        wrtParam : int
+        wrt_param : int
             The variable index to differentiate with respect to.
             E.g. "4" means "differentiate w.r.t. x_4".
 
@@ -162,10 +162,10 @@ class FASTPolynomial(object):
         """
         dcoeffs = {}
         for ivar, coeff in self.coeffs.items():
-            cnt = float(ivar.count(wrtParam))
+            cnt = float(ivar.count(wrt_param))
             if cnt > 0:
                 l = list(ivar)
-                del l[l.index(wrtParam)]
+                del l[l.index(wrt_param)]
                 dcoeffs[tuple(l)] = cnt * coeff
 
         return FASTPolynomial(dcoeffs, self.max_num_vars)
@@ -527,33 +527,33 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         self.fastpoly = FASTPolynomial(coeffs, max_num_vars)
         self.check_fastpoly()
 
-    def check_fastpoly(self, raiseErr=True):
+    def check_fastpoly(self, raise_err=True):
         if set(self.fastpoly.coeffs.keys()) != set(self.keys()):
             print("FAST", self.fastpoly.coeffs, " != SLOW", dict(self))
-            if raiseErr: assert(False), "STOP"
+            if raise_err: assert(False), "STOP"
             return False
         for k in self.fastpoly.coeffs.keys():
             if not _np.isclose(self.fastpoly.coeffs[k], self[k]):
                 print("FAST", self.fastpoly.coeffs, " != SLOW", dict(self))
-                if raiseErr: assert(False), "STOP"
+                if raise_err: assert(False), "STOP"
                 return False
         if self.max_num_vars != self.fastpoly.max_num_vars:
             print("#Var mismatch: FAST", self.fastpoly.max_num_vars, " != SLOW", self.max_num_vars)
-            if raiseErr: assert(False), "STOP"
+            if raise_err: assert(False), "STOP"
             return False
 
         return True
 
-    def deriv(self, wrtParam):
+    def deriv(self, wrt_param):
         """
         Take the derivative of this Polynomial with respect to a single
         variable/parameter.  The result is another Polynomial.
 
-        E.g. deriv(x_2^3 + 3*x_1, wrtParam=2) = 3x^2
+        E.g. deriv(x_2^3 + 3*x_1, wrt_param=2) = 3x^2
 
         Parameters
         ----------
-        wrtParam : int
+        wrt_param : int
             The variable index to differentiate with respect to.
             E.g. "4" means "differentiate w.r.t. x_4".
 
@@ -563,14 +563,14 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         """
         dcoeffs = {}
         for ivar, coeff in self.items():
-            cnt = float(ivar.count(wrtParam))
+            cnt = float(ivar.count(wrt_param))
             if cnt > 0:
                 l = list(ivar)
-                del l[l.index(wrtParam)]
+                del l[l.index(wrt_param)]
                 dcoeffs[tuple(l)] = cnt * coeff
 
         ret = Polynomial(dcoeffs, self.max_num_vars)
-        ret.fastpoly = self.fastpoly.deriv(wrtParam)
+        ret.fastpoly = self.fastpoly.deriv(wrt_param)
         ret.check_fastpoly()
         return ret
 

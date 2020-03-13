@@ -1057,13 +1057,13 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
             gate_dim = gate_mx.shape[0]
             basis = _BuiltinBasis('pp', gate_dim)  # assume we're always given basis els in a Pauli basis?
             errgen = _op.LindbladErrorgen(gate_dim, errs, basis, param_mode,
-                                          nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
+                                          nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
             gate = _op.LindbladOp(gate_mx, errgen, dense_rep=not _sps.issparse(gate_mx))
 
             #OLD TODO REMOVE
             #gate = _op.LindbladOp.from_operation_matrix(gate_mx, gate_mx, ham_basis="pp", nonham_basis="pp",
             #                                            param_mode=param_mode, nonham_mode=nonham_mode,
-            #                                            truncate=True, mxBasis="pp", evotype=evotype)
+            #                                            truncate=True, mx_basis="pp", evotype=evotype)
             #gate.set_error_rates(errs)
 
         elif isinstance(errs, tuple):
@@ -1076,7 +1076,7 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
             #Make a depolarization operator:
             gate = _op.LindbladOp.from_operation_matrix(gate_mx, ham_basis=None, nonham_basis="pp",
                                                         param_mode="depol", nonham_mode="diagonal",
-                                                        truncate=True, mxBasis="pp", evotype=evotype)
+                                                        truncate=True, mx_basis="pp", evotype=evotype)
             perPauliRate = errs / len(gate.errorgen.other_basis.labels)
             errdict = {('S', bl): perPauliRate for bl in gate.errorgen.other_basis.labels[1:]}  # skip identity el
             gate.set_error_rates(errdict)

@@ -27,34 +27,34 @@ def xlogy(x, y):
         return x * _np.log(y)
 
 
-def likelihood(pList, nList):
+def likelihood(p_list, n_list):
     """
-    The likelihood for probabilities `pList` of a die,
-    given `nList` counts for each outcome.
+    The likelihood for probabilities `p_list` of a die,
+    given `n_list` counts for each outcome.
     """
     output = 1.
-    for i, pVal in enumerate(pList):
-        output *= pVal**nList[i]
+    for i, pVal in enumerate(p_list):
+        output *= pVal**n_list[i]
     return output
 
 
-def loglikelihood(pList, nList):
+def loglikelihood(p_list, n_list):
     """
-    The log of the likelihood for probabilities `pList` of a die,
-    given `nList` counts for each outcome.
+    The log of the likelihood for probabilities `p_list` of a die,
+    given `n_list` counts for each outcome.
     """
     output = 0.
-    for i, pVal in enumerate(pList):
-        output += xlogy(nList[i], pVal)
+    for i, pVal in enumerate(p_list):
+        output += xlogy(n_list[i], pVal)
     return output
 
 # Only used by the rectify datasets function, which is commented out,
 # so this is also commented out.
-# def loglikelihoodRatioObj(alpha,nListList,dof):
-#     return _np.abs(dof - loglikelihoodRatio(alpha*nListList))
+# def loglikelihoodRatioObj(alpha,n_list_list,dof):
+#     return _np.abs(dof - loglikelihood_ratio(alpha*n_list_list))
 
 
-def loglikelihoodRatio(nListList):
+def loglikelihood_ratio(n_list_list):
     """
     Calculates the log-likelood ratio between the null hypothesis
     that a die has *the same* probabilities in multiple "contexts" and
@@ -62,7 +62,7 @@ def loglikelihoodRatio(nListList):
 
     Parameters
     ----------
-    nListList : List of lists of ints
+    n_list_list : List of lists of ints
         A list whereby element i is a list containing observed counts for
         all the different possible outcomes of the "die" in context i.
 
@@ -71,18 +71,18 @@ def loglikelihoodRatio(nListList):
     float
         The log-likehood ratio for this model comparison.
     """
-    nListC = _np.sum(nListList, axis=0)
+    nListC = _np.sum(n_list_list, axis=0)
     pListC = nListC / _np.float(_np.sum(nListC))
     lC = loglikelihood(pListC, nListC)
     li_list = []
-    for nList in nListList:
+    for nList in n_list_list:
         pList = _np.array(nList) / _np.float(_np.sum(nList))
         li_list.append(loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
 
 
-def JensenShannonDivergence(nListList):
+def jensen_shannon_divergence(n_list_list):
     """
     Calculates the Jensen-Shannon divergence (JSD) between between different
     observed frequencies, obtained in different "contexts", for the different
@@ -90,7 +90,7 @@ def JensenShannonDivergence(nListList):
 
     Parameters
     ----------
-    nListList : List of lists of ints
+    n_list_list : List of lists of ints
         A list whereby element i is a list containing observed counts for
         all the different possible outcomes of the "die" in context i.
 
@@ -99,8 +99,8 @@ def JensenShannonDivergence(nListList):
     float
         The observed JSD for this data.
     """
-    total_counts = _np.sum(_np.array(nListList))
-    return loglikelihoodRatio(nListList) / (2 * total_counts)
+    total_counts = _np.sum(_np.array(n_list_list))
+    return loglikelihood_ratio(n_list_list) / (2 * total_counts)
 
 
 def pval(llrval, dof):
@@ -221,7 +221,7 @@ def compute_llr_threshold(significance, dof):
     return _scipy.stats.chi2.isf(significance, dof)
 
 
-def tvd(nListList):
+def tvd(n_list_list):
     """
     Calculates the total variation distance (TVD) between between different
     observed frequencies, obtained in different "contexts", for the *two* set of
@@ -229,7 +229,7 @@ def tvd(nListList):
 
     Parameters
     ----------
-    nListList : List of lists of ints
+    n_list_list : List of lists of ints
         A list whereby element i is a list counting counts for the
         different outcomes of the "die" in context i, for *two* contexts.
 
@@ -238,14 +238,14 @@ def tvd(nListList):
     float
         The observed TVD between the two contexts
     """
-    assert(len(nListList) == 2), "Can only compute the TVD between two sets of outcomes!"
-    num_outcomes = len(nListList[0])
-    assert(num_outcomes == len(nListList[1])), "The number of outcomes must be the same in both contexts!"
+    assert(len(n_list_list) == 2), "Can only compute the TVD between two sets of outcomes!"
+    num_outcomes = len(n_list_list[0])
+    assert(num_outcomes == len(n_list_list[1])), "The number of outcomes must be the same in both contexts!"
 
-    N0 = _np.sum(nListList[0])
-    N1 = _np.sum(nListList[1])
+    N0 = _np.sum(n_list_list[0])
+    N1 = _np.sum(n_list_list[1])
 
-    return 0.5 * _np.sum(_np.abs(nListList[0][i] / N0 - nListList[1][i] / N1) for i in range(num_outcomes))
+    return 0.5 * _np.sum(_np.abs(n_list_list[0][i] / N0 - n_list_list[1][i] / N1) for i in range(num_outcomes))
 
 
 class DataComparator():
@@ -266,7 +266,7 @@ class DataComparator():
     """
 
     def __init__(self, dataset_list_or_multidataset, circuits='all',
-                 op_exclusions=None, op_inclusions=None, DS_names=None,
+                 op_exclusions=None, op_inclusions=None, ds_names=None,
                  allow_bad_circuits=False):
         """
         Initializes a DataComparator object.
@@ -296,7 +296,7 @@ class DataComparator():
             If not None, a Circuit will be dropped from the list to implement the comparisons for
             if it doesn't include *some* gate from this list (or is the empty circuit).
 
-        DS_names : None or list, optional (default is None)
+        ds_names : None or list, optional (default is None)
             If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
             for the DataSets in the list. E.g., ["Time 0", "Time 1", "Time 3"] or ["Driving","NoDriving"].
 
@@ -312,9 +312,9 @@ class DataComparator():
         A DataComparator object.
 
         """
-        if DS_names is not None:
-            if len(DS_names) != len(dataset_list_or_multidataset):
-                raise ValueError('Length of provided DS_names list must equal length of dataset_list_or_multidataset.')
+        if ds_names is not None:
+            if len(ds_names) != len(dataset_list_or_multidataset):
+                raise ValueError('Length of provided ds_names list must equal length of dataset_list_or_multidataset.')
 
         if isinstance(circuits, str):
             assert(circuits == 'all'), "If circuits is a string it must be 'all'!"
@@ -323,7 +323,7 @@ class DataComparator():
             dsList = dataset_list_or_multidataset
             olIndex = dsList[0].olIndex
             olIndexListBool = [ds.olIndex == (olIndex) for ds in dsList]
-            DS_names = list(range(len(dataset_list_or_multidataset)))
+            ds_names = list(range(len(dataset_list_or_multidataset)))
             if not _np.all(olIndexListBool):
                 raise ValueError('Outcomes labels and order must be the same across datasets.')
             if circuits == 'all':
@@ -338,8 +338,8 @@ class DataComparator():
             dsList = [dataset_list_or_multidataset[key] for key in dataset_list_or_multidataset.keys()]
             if circuits == 'all':
                 circuits = dsList[0].keys()
-            if DS_names is None:
-                DS_names = list(dataset_list_or_multidataset.keys())
+            if ds_names is None:
+                ds_names = list(dataset_list_or_multidataset.keys())
 
         else:
             raise ValueError("The `dataset_list_or_multidataset` must be a list of DataSets of a MultiDataSet!")
@@ -378,8 +378,8 @@ class DataComparator():
             datalineList = [ds[circuit] for ds in dsList]
             nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList])
             total_counts.append(_np.sum(nListList))
-            llrs[circuit] = loglikelihoodRatio(nListList)
-            jsds[circuit] = JensenShannonDivergence(nListList)
+            llrs[circuit] = loglikelihood_ratio(nListList)
+            jsds[circuit] = jensen_shannon_divergence(nListList)
             pVals[circuit] = pval(llrs[circuit], dof)
             if len(dataset_list_or_multidataset) == 2:
                 tvds[circuit] = tvd(nListList)
@@ -397,7 +397,7 @@ class DataComparator():
         self.pVals0 = str(len(self.pVals) - _np.count_nonzero(list(self.pVals.values())))
         self.dof = dof
         self.num_strs = len(self.pVals)
-        self.DS_names = DS_names
+        self.DS_names = ds_names
 
         if _np.std(_np.array(total_counts)) > 10e-10:
             self.fixed_totalcount_data = False
@@ -586,7 +586,7 @@ class DataComparator():
                     "    - The number of sequences with data that is "
                     "inconsistent is {0}".format(self.number_of_significant_sequences))
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
-                    max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
+                    max_SSTVD_gs, max_SSTVD = self.get_maximum_sstvd()
                     print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
                     if verbosity >= 2:
                         print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
@@ -596,7 +596,7 @@ class DataComparator():
 
         return
 
-    def get_TVD(self, circuit):
+    def get_tvd(self, circuit):
         """
         Returns the observed total variation distacnce (TVD) for the specified circuit.
         This is only possible if the comparison is between two sets of data. See Eq. (19)
@@ -604,7 +604,7 @@ class DataComparator():
         definition of this observed TVD.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_JSD(), get_SSTVD() and get_SSJSD()).
+        get_jsd(), get_sstvd() and get_ssjsd()).
 
         Parameters
         ----------
@@ -621,7 +621,7 @@ class DataComparator():
 
         return self.tvds[circuit]
 
-    def get_SSTVD(self, circuit):
+    def get_sstvd(self, circuit):
         """
         Returns the "statistically significant total variation distacnce" (SSTVD) for the specified
         circuit. This is only possible if the comparison is between two sets of data. The SSTVD
@@ -630,7 +630,7 @@ class DataComparator():
         "Probing context-dependent errors in quantum processors", by Rudinger et al., for more information.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_JSD(), get_TVD() and get_SSJSD()).
+        get_jsd(), get_tvd() and get_ssjsd()).
 
         Parameters
         ----------
@@ -648,10 +648,10 @@ class DataComparator():
 
         return self.sstvds.get(circuit, None)
 
-    def get_maximum_SSTVD(self):
+    def get_maximum_sstvd(self):
         """
         Returns the maximum, over circuits, of the "statistically significant total variation distance"
-        (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_SSTVD()
+        (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_sstvd()
         method for information on SSTVD.
 
         Returns
@@ -705,7 +705,7 @@ class DataComparator():
             "This has not yet been calculated! Run the .implement() method first!"
         return self.pVal_pseudothreshold
 
-    def get_LLR(self, circuit):
+    def get_llr(self, circuit):
         """
         Returns the log-likelihood ratio (LLR) for the input circuit.
         This is the quantity defined in Eq (4) of "Probing context-dependent
@@ -723,7 +723,7 @@ class DataComparator():
         """
         return self.llrs[circuit]
 
-    def get_LLR_pseudothreshold(self):
+    def get_llr_pseudothreshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence
         log-likelihood ratio (LLR). This is a "pseudo-threshold", because it is data-dependent in
@@ -739,7 +739,7 @@ class DataComparator():
             "This has not yet been calculated! Run the .implement() method first!"
         return self.llr_pseudothreshold
 
-    def get_JSD(self, circuit):
+    def get_jsd(self, circuit):
         """
         Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for
         the specified circuit. The JSD is a rescaling of the LLR, given by dividing
@@ -748,7 +748,7 @@ class DataComparator():
         errors in quantum processors", Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_TVD(), get_SSTVD() and get_SSJSD()).
+        get_tvd(), get_sstvd() and get_ssjsd()).
 
         Parameters
         ----------
@@ -762,11 +762,11 @@ class DataComparator():
         """
         return self.jsds[circuit]
 
-    def get_JSD_pseudothreshold(self):
+    def get_jsd_pseudothreshold(self):
         """
         Returns the statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD)
         between "contexts". This is a rescaling of the pseudo-threshold for the LLR, returned by the
-        method .get_LLR_pseudothreshold(); see that method for more details. This threshold is also given by
+        method .get_llr_pseudothreshold(); see that method for more details. This threshold is also given by
         Eq (17) in  "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
         Note that this pseudo-threshold is not defined if the total number of counts (summed over
@@ -783,16 +783,16 @@ class DataComparator():
             "This has not yet been calculated! Run the .implement() method first!"
         return self.jsd_pseudothreshold
 
-    def get_SSJSD(self, circuit):
+    def get_ssjsd(self, circuit):
         """
         Returns the "statistically significanet Jensen-Shannon divergence" (SSJSD) between "contexts" for
-        the specified circuit. This is the JSD of the circuit (see .get_JSD()), if the circuit
+        the specified circuit. This is the JSD of the circuit (see .get_jsd()), if the circuit
         has been found to be context dependent, and otherwise it is None. This quantity is the JSD version
         of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum processors", by Rudinger
         et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_TVD(), get_SSTVD() and get_SSJSD()).
+        get_tvd(), get_sstvd() and get_ssjsd()).
 
         Parameters
         ----------
@@ -811,7 +811,7 @@ class DataComparator():
         else:
             return None
 
-    def get_aggregate_LLR(self):
+    def get_aggregate_llr(self):
         """
         Returns the "aggregate" log-likelihood ratio (LLR), comparing the null
         hypothesis of no context dependence in *any* sequence with the full model
@@ -826,11 +826,11 @@ class DataComparator():
         """
         return self.aggregate_llr
 
-    def get_aggregate_LLR_threshold(self):
+    def get_aggregate_llr_threshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance threshold for the
         "aggregate" log-likelihood ratio (LLR), above which this LLR is significant.
-        See .get_aggregate_LLR() for more details. This quantity is the LLR version
+        See .get_aggregate_llr() for more details. This quantity is the LLR version
         of the quantity defined in Eq (14) of "Probing context-dependent errors in
         quantum processors", by Rudinger et al.
 

@@ -126,7 +126,7 @@ class TestWorkspace(ReportBaseCase):
             est = pygsti.objects.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
-                hessian=hessian, nonMarkRadiusSq=0.0)
+                hessian=hessian, non_mark_radius_sq=0.0)
             crfactory.project_hessian('std')
             return crfactory.view(95)
 

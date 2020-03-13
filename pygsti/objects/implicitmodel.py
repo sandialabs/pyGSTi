@@ -188,35 +188,35 @@ class ImplicitOpModel(_mdl.OpModel):
         # maybe add a self.factories arg? (but factories aren't really "simplified"...
         # use self._lizardArgs internally?
 
-    def _init_copy(self, copyInto):
+    def _init_copy(self, copy_into):
         """
-        Copies any "tricky" member of this model into `copyInto`, before
+        Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
         # Copy special base class members first
-        super(ImplicitOpModel, self)._init_copy(copyInto)
+        super(ImplicitOpModel, self)._init_copy(copy_into)
 
         # Copy our "tricky" members
-        copyInto.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copyInto))
+        copy_into.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copy_into))
                                                        for lbl, prepdict in self.prep_blks.items()])
-        copyInto.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copyInto))
+        copy_into.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copy_into))
                                                        for lbl, povmdict in self.povm_blks.items()])
-        copyInto.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copyInto))
+        copy_into.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copy_into))
                                                             for lbl, opdict in self.operation_blks.items()])
-        copyInto.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copyInto))
+        copy_into.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copy_into))
                                                              for lbl, idict in self.instrument_blks.items()])
-        copyInto.factories = _collections.OrderedDict([(lbl, fdict.copy(copyInto))
+        copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into))
                                                        for lbl, fdict in self.factories.items()])
 
-        copyInto._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
-        copyInto._shlp = self.simplifier_helper_class(copyInto)
+        copy_into._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
+        copy_into._shlp = self.simplifier_helper_class(copy_into)
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
-        if 'uuid' not in stateDict:
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
+        if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 
-        if 'factories' not in stateDict:
+        if 'factories' not in state_dict:
             self.factories = _collections.OrderedDict()  # backward compatibility (temporary)
 
         #Additionally, must re-connect this model as the parent

@@ -29,7 +29,7 @@ class Label(object):
     # depending on whether the tuple of sector names exists or not.
     # (the reason for separate classes is for hashing speed)
 
-    def __new__(cls, name, stateSpaceLabels=None, time=None, args=None):
+    def __new__(cls, name, state_space_labels=None, time=None, args=None):
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -40,7 +40,7 @@ class Label(object):
         name : str
             The item name. E.g., 'CNOT' or 'H'.
 
-        stateSpaceLabels : list or tuple, optional
+        state_space_labels : list or tuple, optional
             A list or tuple that identifies which sectors/parts of the Hilbert
             space is acted upon.  In many cases, this is a list of integers
             specifying the qubits on which a gate acts, when the ordering in the
@@ -60,15 +60,15 @@ class Label(object):
             could be an argument of a gate label, and one might create a label:
             `Label('Gx', (0,), args=(pi/3,))`
         """
-        #print("Label.__new__ with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
-        if isinstance(name, Label) and stateSpaceLabels is None:
+        #print("Label.__new__ with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
+        if isinstance(name, Label) and state_space_labels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
-        if not isinstance(name, str) and stateSpaceLabels is None \
+        if not isinstance(name, str) and state_space_labels is None \
            and isinstance(name, (tuple, list)):
 
             #We're being asked to initialize from a non-string with no
-            # stateSpaceLabels, explicitly given.  `name` could either be:
+            # state_space_labels, explicitly given.  `name` could either be:
             # 0) an empty tuple: () -> LabelTupTup with *no* subLabels.
             # 1) a (name, ssl0, ssl1, ...) tuple -> LabelTup
             # 2) a (subLabel1_tup, subLabel2_tup, ...) tuple -> LabelTupTup if
@@ -86,10 +86,10 @@ class Label(object):
                 else:
                     return Label(name[0], time=time, args=args)
             else:
-                #Case when stateSpaceLabels, etc, are given after name in a single tuple
+                #Case when state_space_labels, etc, are given after name in a single tuple
                 tup = name
                 name = tup[0]
-                tup_args = []; stateSpaceLabels = []
+                tup_args = []; state_space_labels = []
                 next_is_arg = False
                 next_is_time = False
                 for x in tup[1:]:
@@ -115,23 +115,23 @@ class Label(object):
                             else:
                                 time = float(x[1:])
                             continue
-                    stateSpaceLabels.append(x)
+                    state_space_labels.append(x)
                 args = tup_args if len(tup_args) > 0 else None
-                stateSpaceLabels = tuple(stateSpaceLabels)  # needed for () and (None,) comparison below
+                state_space_labels = tuple(state_space_labels)  # needed for () and (None,) comparison below
 
         if time is None:
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
 
-        #print(" -> preproc with name=", name, "sslbls=", stateSpaceLabels, "t=", time, "args=", args)
-        if stateSpaceLabels is None or stateSpaceLabels in ((), (None,)):
+        #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
+        if state_space_labels is None or state_space_labels in ((), (None,)):
             if args:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
                 return LabelStr.init(name, time)
 
         else:
-            if args: return LabelTupWithArgs.init(name, stateSpaceLabels, time, args)
-            else: return LabelTup.init(name, stateSpaceLabels, time)
+            if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            else: return LabelTup.init(name, state_space_labels, time)
 
     def depth(self):
         return 1  # most labels are depth=1
@@ -165,7 +165,7 @@ class LabelTup(Label, tuple):
     """
 
     @classmethod
-    def init(cls, name, stateSpaceLabels, time=0.0):
+    def init(cls, name, state_space_labels, time=0.0):
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -176,7 +176,7 @@ class LabelTup(Label, tuple):
         name : str
             The item name. E.g., 'CNOT' or 'H'.
 
-        stateSpaceLabels : list or tuple
+        state_space_labels : list or tuple
             A list or tuple that identifies which sectors/parts of the Hilbert
             space is acted upon.  In many cases, this is a list of integers
             specifying the qubits on which a gate acts, when the ordering in the
@@ -190,17 +190,17 @@ class LabelTup(Label, tuple):
 
         #Type checking
         assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
+        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
-        if not isinstance(stateSpaceLabels, (tuple, list)):
-            stateSpaceLabels = (stateSpaceLabels,)
-        for ssl in stateSpaceLabels:
+        if not isinstance(state_space_labels, (tuple, list)):
+            state_space_labels = (state_space_labels,)
+        for ssl in state_space_labels:
             assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
 
         #Try to convert integer-strings to ints (for parsing from files...)
         integerized_sslbls = []
-        for ssl in stateSpaceLabels:
+        for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
             except: integerized_sslbls.append(ssl)
 
@@ -509,7 +509,7 @@ class LabelTupTup(Label, tuple):
     """
 
     @classmethod
-    def init(cls, tupOfTups, time=None):
+    def init(cls, tup_of_tups, time=None):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -517,19 +517,19 @@ class LabelTupTup(Label, tuple):
 
         Parameters
         ----------
-        tupOfTups : tuple
+        tup_of_tups : tuple
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
         """
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
-        tupOfLabels = tuple((Label(tup) for tup in tupOfTups))  # Note: tup can also be a Label obj
+        tupOfLabels = tuple((Label(tup) for tup in tup_of_tups))  # Note: tup can also be a Label obj
         if time is None:
             time = 0.0 if len(tupOfLabels) == 0 else \
                 max([lbl.time for lbl in tupOfLabels])
         return cls.__new__(cls, tupOfLabels, time)
 
-    def __new__(cls, tupOfLabels, time=0.0):
-        ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+    def __new__(cls, tup_of_labels, time=0.0):
+        ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTup object using tuple's __new__
         ret.time = time
         return ret
 
@@ -710,7 +710,7 @@ class LabelTupTup(Label, tuple):
 
 
 class CircuitLabel(Label, tuple):
-    def __new__(cls, name, tupOfLayers, stateSpaceLabels, reps=1, time=None):
+    def __new__(cls, name, tup_of_layers, state_space_labels, reps=1, time=None):
         # Note: may need default args for all but 1st for pickling!
         """
         Creates a new Model-item label, which defines a set of other labels
@@ -728,18 +728,18 @@ class CircuitLabel(Label, tuple):
             The name of the sub-circuit (box).  Cannot be `None`, but can be
             empty.
 
-        tupOfLayers : tuple
+        tup_of_layers : tuple
             The item data - a tuple of tuples which label the components
             (layers) within this label.
 
-        stateSpaceLabels : list or tuple
+        state_space_labels : list or tuple
             A list or tuple that identifies which sectors/parts of the Hilbert
             space is acted upon.  In many cases, this is a list of integers
             specifying the qubits on which a gate acts, when the ordering in the
             list defines the 'direction' of the gate.
 
         reps : int, optional
-            The "exponent" - the number of times the `tupOfLayers` labels are
+            The "exponent" - the number of times the `tup_of_layers` labels are
             repeated.
 
         time : float
@@ -748,9 +748,9 @@ class CircuitLabel(Label, tuple):
         #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
         assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
-        tupOfLabels = tuple((Label(tup) for tup in tupOfLayers))  # Note: tup can also be a Label obj
+        tupOfLabels = tuple((Label(tup) for tup in tup_of_layers))  # Note: tup can also be a Label obj
         # creates a CircuitLabel object using tuple's __new__
-        ret = tuple.__new__(cls, (name, stateSpaceLabels, reps) + tupOfLabels)
+        ret = tuple.__new__(cls, (name, state_space_labels, reps) + tupOfLabels)
         if time is None:
             ret.time = 0.0 if len(tupOfLabels) == 0 else \
                 sum([lbl.time for lbl in tupOfLabels])  # sum b/c components are *layers* of sub-circuit
@@ -932,7 +932,7 @@ class CircuitLabel(Label, tuple):
 
 
 #class NamedLabelTupTup(Label,tuple):
-#    def __new__(cls,name,tupOfTups):
+#    def __new__(cls,name,tup_of_tups):
 #        pass
 
 
@@ -942,7 +942,7 @@ class LabelTupWithArgs(Label, tuple):
     """
 
     @classmethod
-    def init(cls, name, stateSpaceLabels, time=0.0, args=()):
+    def init(cls, name, state_space_labels, time=0.0, args=()):
         """
         Creates a new Model-item label, which is divided into a simple string
         label, a tuple specifying the part of the Hilbert space upon which the
@@ -953,7 +953,7 @@ class LabelTupWithArgs(Label, tuple):
         name : str
             The item name. E.g., 'CNOT' or 'H'.
 
-        stateSpaceLabels : list or tuple
+        state_space_labels : list or tuple
             A list or tuple that identifies which sectors/parts of the Hilbert
             space is acted upon.  In many cases, this is a list of integers
             specifying the qubits on which a gate acts, when the ordering in the
@@ -969,10 +969,10 @@ class LabelTupWithArgs(Label, tuple):
         """
         #Type checking
         assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(stateSpaceLabels is not None), "LabelTup must be initialized with non-None state-space labels"
-        if not isinstance(stateSpaceLabels, (tuple, list)):
-            stateSpaceLabels = (stateSpaceLabels,)
-        for ssl in stateSpaceLabels:
+        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
+        if not isinstance(state_space_labels, (tuple, list)):
+            state_space_labels = (state_space_labels,)
+        for ssl in state_space_labels:
             assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
@@ -981,7 +981,7 @@ class LabelTupWithArgs(Label, tuple):
 
         #Try to convert integer-strings to ints (for parsing from files...)
         integerized_sslbls = []
-        for ssl in stateSpaceLabels:
+        for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
             except: integerized_sslbls.append(ssl)
 
@@ -1151,7 +1151,7 @@ class LabelTupTupWithArgs(Label, tuple):
     """
 
     @classmethod
-    def init(cls, tupOfTups, time=None, args=()):
+    def init(cls, tup_of_tups, time=None, args=()):
         """
         Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
@@ -1159,7 +1159,7 @@ class LabelTupTupWithArgs(Label, tuple):
 
         Parameters
         ----------
-        tupOfTups : tuple
+        tup_of_tups : tuple
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
 
@@ -1171,7 +1171,7 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
-        tupOfLabels = (1 + len(args),) + args + tuple((Label(tup) for tup in tupOfTups))  # Note tup can be a Label
+        tupOfLabels = (1 + len(args),) + args + tuple((Label(tup) for tup in tup_of_tups))  # Note tup can be a Label
         # stores: (K, args, subLabels) where K is the index of the start of subLabels
 
         #if time is not None:
@@ -1182,8 +1182,8 @@ class LabelTupTupWithArgs(Label, tuple):
                 max([lbl.time for lbl in tupOfLabels])
         return cls.__new__(cls, tupOfLabels, time)
 
-    def __new__(cls, tupOfLabels, time=0.0):
-        ret = tuple.__new__(cls, tupOfLabels)  # creates a LabelTupTup object using tuple's __new__
+    def __new__(cls, tup_of_labels, time=0.0):
+        ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTup object using tuple's __new__
         ret.time = time
         return ret
 

@@ -37,12 +37,12 @@ class MatrixEvalTree(EvalTree):
         # from the "main evaluation" given by eval_order
         self.init_indices = []
 
-        # a list of spamTuple-lists, one for each final operation sequence
+        # a list of spam_tuple-lists, one for each final operation sequence
         self.simplified_circuit_spamTuples = None
         #self.finalStringToElsMap = None
 
         # a dictionary of final-gate-string index lists keyed by
-        # each distinct spamTuple
+        # each distinct spam_tuple
         self.spamtuple_indices = None
 
         # list of the operation labels
@@ -50,7 +50,7 @@ class MatrixEvalTree(EvalTree):
 
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_elabels, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_elabels, num_sub_tree_comms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -63,7 +63,7 @@ class MatrixEvalTree(EvalTree):
               objects, specifying the operation sequences that
               should be present in the evaluation tree.
 
-          numSubTreeComms : int, optional
+          num_sub_tree_comms : int, optional
               The number of processor groups (communicators)
               to divide the subtrees of this EvalTree among
               when calling `distribute`.  By default, the
@@ -92,20 +92,20 @@ class MatrixEvalTree(EvalTree):
         #  at the beginning of the tree.  This list must include all the gate
         #  labels contained in the elements of simplified_circuit_list
         #  (including a special empty-string sentinel at the beginning).
-        self.opLabels = [""] + self._get_opLabels(simplified_circuit_elabels)
-        if numSubTreeComms is not None:
-            self.distribution['numSubtreeComms'] = numSubTreeComms
+        self.opLabels = [""] + self._get_op_labels(simplified_circuit_elabels)
+        if num_sub_tree_comms is not None:
+            self.distribution['numSubtreeComms'] = num_sub_tree_comms
 
         circuit_list = [tuple(mdl) for mdl in simplified_circuit_list.keys()]
         self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here
+        self.recompute_spamtuple_indices(local=True)  # local shouldn't matter here
 
         #Evaluation dictionary:
         # keys == operation sequences that have been evaluated so far
-        # values == index of operation sequence (key) within evalTree
+        # values == index of operation sequence (key) within eval_tree
         evalDict = {}
 
         #Evaluation tree:
@@ -113,8 +113,8 @@ class MatrixEvalTree(EvalTree):
         #  information about evaluating a particular operation sequence:
         #  (iLeft, iRight)
         # and the order of the elements specifies the evaluation order.
-        # In particular, the circuit = evalTree[iLeft] + evalTree[iRight]
-        #   so that matrix(circuit) = matrixOf(evalTree[iRight]) * matrixOf(evalTree[iLeft])
+        # In particular, the circuit = eval_tree[iLeft] + eval_tree[iRight]
+        #   so that matrix(circuit) = matrixOf(eval_tree[iRight]) * matrixOf(eval_tree[iLeft])
         del self[:]  # clear self (a list)
 
         #Final Indices
@@ -292,23 +292,23 @@ class MatrixEvalTree(EvalTree):
         """
         Returns the minimum sub tree size required to compute each
         of the tree entries individually.  This minimum size is the
-        smallest "maxSubTreeSize" that can be passed to split(),
+        smallest "max_sub_tree_size" that can be passed to split(),
         as any smaller value will result in at least one entry being
         uncomputable.
         """
-        singleItemTreeSetList = self._createSingleItemTrees()
+        singleItemTreeSetList = self._create_single_item_trees()
         return max(list(map(len, singleItemTreeSetList)))
 
-    def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
+    def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
           maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either maxSubTreeSize
-          or numSubTrees.
+          or for using multiple cores).  Must specify either max_sub_tree_size
+          or num_sub_trees.
 
         Parameters
         ----------
-        elIndicesDict : dict
+        el_indices_dict : dict
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
@@ -317,12 +317,12 @@ class MatrixEvalTree(EvalTree):
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
 
-        maxSubTreeSize : int, optional
+        max_sub_tree_size : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
             If None, then there is no limit.
 
-        numSubTrees : int, optional
+        num_sub_trees : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
 
@@ -332,21 +332,21 @@ class MatrixEvalTree(EvalTree):
         Returns
         -------
         OrderedDict
-            A updated version of elIndicesDict
+            A updated version of el_indices_dict
         """
         #dbList = self.generate_circuit_list()
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        if (maxSubTreeSize is None and numSubTrees is None) or \
-           (maxSubTreeSize is not None and numSubTrees is not None):
-            raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
-        if numSubTrees is not None and numSubTrees <= 0:
-            raise ValueError("EvalTree split() error: numSubTrees must be > 0!")
+        if (max_sub_tree_size is None and num_sub_trees is None) or \
+           (max_sub_tree_size is not None and num_sub_trees is not None):
+            raise ValueError("Specify *either* max_sub_tree_size or num_sub_trees")
+        if num_sub_trees is not None and num_sub_trees <= 0:
+            raise ValueError("EvalTree split() error: num_sub_trees must be > 0!")
 
         #Don't split at all if it's unnecessary
-        if maxSubTreeSize is None or len(self) < maxSubTreeSize:
-            if numSubTrees is None or numSubTrees == 1: return elIndicesDict
+        if max_sub_tree_size is None or len(self) < max_sub_tree_size:
+            if num_sub_trees is None or num_sub_trees == 1: return el_indices_dict
 
         self.subTrees = []
         printer.log("EvalTree.split done initial prep in %.0fs" %
@@ -354,7 +354,7 @@ class MatrixEvalTree(EvalTree):
 
         #First pass - identify which indices go in which subtree
         #   Part 1: create disjoint set of subtrees generated by single items
-        singleItemTreeSetList = self._createSingleItemTrees()
+        singleItemTreeSetList = self._create_single_item_trees()
         #each element represents a subtree, and
         # is a set of the indices owned by that subtree
         nSingleItemTrees = len(singleItemTreeSetList)
@@ -363,10 +363,10 @@ class MatrixEvalTree(EvalTree):
                     (_time.time() - tm)); tm = _time.time()
 
         #   Part 2: determine whether we need to split/merge "single" trees
-        if numSubTrees is not None:
+        if num_sub_trees is not None:
 
             #Merges: find the best merges to perform if any are required
-            if nSingleItemTrees > numSubTrees:
+            if nSingleItemTrees > num_sub_trees:
 
                 #Find trees that have least intersection to begin:
                 # The goal is to find a set of single-item trees such that
@@ -391,7 +391,7 @@ class MatrixEvalTree(EvalTree):
                 #    startingTreeEls = singleItemTreeSetList[i_min].copy()
                 #    del availableIndices[i_min]
                 #
-                #    while len(iStartingTrees) < numSubTrees:
+                #    while len(iStartingTrees) < num_sub_trees:
                 #        ii_min,_ = min( enumerate(
                 #            ( len(startingTreeEls.intersection(singleItemTreeSetList[i]))
                 #              for i in availableIndices )), key=lambda x: x[1]) #argmin
@@ -405,15 +405,15 @@ class MatrixEvalTree(EvalTree):
                 #
                 #elif start_select_method == "fast":
 
-                def get_start_indices(maxIntersect):
+                def get_start_indices(max_intersect):
                     """ Builds an initial set of indices by merging single-
                         item trees that don't intersect too much (intersection
-                        is less than `maxIntersect`.  Returns a list of the
+                        is less than `max_intersect`.  Returns a list of the
                         single-item tree indices and the final set of indices."""
                     starting = [0]  # always start with 0th tree
                     startingSet = singleItemTreeSetList[0].copy()
                     for i, s in enumerate(singleItemTreeSetList[1:], start=1):
-                        if len(startingSet.intersection(s)) <= maxIntersect:
+                        if len(startingSet.intersection(s)) <= max_intersect:
                             starting.append(i)
                             startingSet.update(s)
                     return starting, startingSet
@@ -423,16 +423,16 @@ class MatrixEvalTree(EvalTree):
                     mid = (left + right) // 2
                     iStartingTrees, startingTreeEls = get_start_indices(mid)
                     nStartingTrees = len(iStartingTrees)
-                    if nStartingTrees < numSubTrees:
+                    if nStartingTrees < num_sub_trees:
                         left = mid + 1
-                    elif nStartingTrees > numSubTrees:
+                    elif nStartingTrees > num_sub_trees:
                         right = mid
-                    else: break  # nStartingTrees == numSubTrees!
+                    else: break  # nStartingTrees == num_sub_trees!
 
-                if len(iStartingTrees) < numSubTrees:
+                if len(iStartingTrees) < num_sub_trees:
                     iStartingTrees, startingTreeEls = get_start_indices(mid + 1)
-                if len(iStartingTrees) > numSubTrees:
-                    iStartingTrees = iStartingTrees[0:numSubTrees]
+                if len(iStartingTrees) > num_sub_trees:
+                    iStartingTrees = iStartingTrees[0:num_sub_trees]
                     startingTreeEls = set()
                     for i in iStartingTrees:
                         startingTreeEls.update(singleItemTreeSetList[i])
@@ -446,7 +446,7 @@ class MatrixEvalTree(EvalTree):
                 #Merge all the non-starting trees into the starting trees
                 # so that we're left with the desired number of trees
                 subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
-                assert(len(subTreeSetList) == numSubTrees)
+                assert(len(subTreeSetList) == num_sub_trees)
 
                 indicesLeft = list(range(nSingleItemTrees))
                 for i in iStartingTrees:
@@ -495,7 +495,7 @@ class MatrixEvalTree(EvalTree):
                 #else:
                 #    raise ValueError("Invalid merge method: %s" % merge_method)
 
-                assert(len(subTreeSetList) == numSubTrees)
+                assert(len(subTreeSetList) == num_sub_trees)
                 printer.log("EvalTree.split merged trees in %.0fs" %
                             (_time.time() - tm)); tm = _time.time()
 
@@ -505,7 +505,7 @@ class MatrixEvalTree(EvalTree):
                 #TODO: how to split a tree intelligently -- for now, just do
                 # trivial splits by making empty trees.
                 subTreeSetList = singleItemTreeSetList[:]
-                nSplitsNeeded = numSubTrees - nSingleItemTrees
+                nSplitsNeeded = num_sub_trees - nSingleItemTrees
                 while nSplitsNeeded > 0:
                     # LATER...
                     # for iSubTree,subTreeSet in enumerate(subTreeSetList):
@@ -513,15 +513,15 @@ class MatrixEvalTree(EvalTree):
                     nSplitsNeeded -= 1
 
         else:
-            assert(maxSubTreeSize is not None)
+            assert(max_sub_tree_size is not None)
             subTreeSetList = []
 
             #Merges: find the best merges to perform if any are allowed given
             # the maximum tree size
             for singleItemTreeSet in singleItemTreeSetList:
-                if len(singleItemTreeSet) > maxSubTreeSize:
+                if len(singleItemTreeSet) > max_sub_tree_size:
                     raise ValueError("Max. sub tree size (%d) is too low (<%d)!"
-                                     % (maxSubTreeSize, self.get_min_tree_size()))
+                                     % (max_sub_tree_size, self.get_min_tree_size()))
 
                 #See if we should merge this single-item-generated tree with
                 # another one or make it a new subtree.
@@ -529,7 +529,7 @@ class MatrixEvalTree(EvalTree):
                 maxIntersectSize = None; iMaxIntersectSize = None
                 for k, existingSubTreeSet in enumerate(subTreeSetList):
                     mergedSize = len(existingSubTreeSet) + newTreeSize
-                    if mergedSize <= maxSubTreeSize:
+                    if mergedSize <= max_sub_tree_size:
                         intersectionSize = \
                             len(singleItemTreeSet.intersection(existingSubTreeSet))
                         if maxIntersectSize is None or \
@@ -573,51 +573,51 @@ class MatrixEvalTree(EvalTree):
             return (perm[el[0]] if (el[0] is not None) else None,
                     perm[el[1]] if (el[1] is not None) else None)
 
-        def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
+        def create_subtree(parent_indices, num_final, full_eval_order, slice_into_parents_final_array, parent_tree):
             """
             Creates a subtree given requisite information:
 
             Parameters
             ----------
-            parentIndices : list
+            parent_indices : list
                 The ordered list of (parent-tree) indices to be included in
                 the created subtree.
 
-            numFinal : int
+            num_final : int
                 The number of "final" elements, i.e. those that are used to
                 construct the final array of results and not just an intermediate.
-                The first numFinal elemements of parentIndices are "final", and
-                'sliceIntoParentsFinalArray' tells you which final indices of
+                The first num_final elemements of parent_indices are "final", and
+                'slice_into_parents_final_array' tells you which final indices of
                 the parent they map to.
 
-            fullEvalOrder : list
+            full_eval_order : list
                 A list of the integers between 0 and len(parentIndics)-1 which
                 gives the evaluation order of the subtree *including* evaluation
                 of any initial elements.
 
-            sliceIntoParentsFinalArray : slice
+            slice_into_parents_final_array : slice
                 Described above - map between to-be-created subtree's final
                 elements and parent-tree indices.
 
-            parentTree : EvalTree
+            parent_tree : EvalTree
                 The parent tree itself.
             """
             subTree = MatrixEvalTree()
-            subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
-            subTree.num_final_strs = numFinal
-            subTree[:] = [None] * len(parentIndices)
+            subTree.myFinalToParentFinalMap = slice_into_parents_final_array
+            subTree.num_final_strs = num_final
+            subTree[:] = [None] * len(parent_indices)
 
-            mapParentIndxToSubTreeIndx = {k: ik for ik, k in enumerate(parentIndices)}
+            mapParentIndxToSubTreeIndx = {k: ik for ik, k in enumerate(parent_indices)}
 
-            for ik in fullEvalOrder:  # includes any initial indices
-                k = parentIndices[ik]  # original tree index
-                (oLeft, oRight) = parentTree[k]  # original tree indices
+            for ik in full_eval_order:  # includes any initial indices
+                k = parent_indices[ik]  # original tree index
+                (oLeft, oRight) = parent_tree[k]  # original tree indices
 
                 if (oLeft is None) and (oRight is None):
                     iLeft = iRight = None
                     #assert(len(subTree.opLabels) == len(subTree)) #make sure all oplabel items come first
-                    subTree.opLabels.append(parentTree.opLabels[
-                        parentTree.init_indices.index(k)])
+                    subTree.opLabels.append(parent_tree.opLabels[
+                        parent_tree.init_indices.index(k)])
                     subTree.init_indices.append(ik)
                 else:
                     iLeft = mapParentIndxToSubTreeIndx[oLeft]
@@ -631,14 +631,14 @@ class MatrixEvalTree(EvalTree):
                 #    assert(k < self.num_final_strings()) # it should be a final element in parent too!
                 #    subTree.myFinalToParentFinalMap[ik] = k
 
-            subTree.parentIndexMap = parentIndices  # parent index of *each* subtree index
+            subTree.parentIndexMap = parent_indices  # parent index of *each* subtree index
             subTree.simplified_circuit_spamTuples = [self.simplified_circuit_spamTuples[k]
                                                      for k in _slct.indices(subTree.myFinalToParentFinalMap)]
             subTree.simplified_circuit_nEls = list(map(len, subTree.simplified_circuit_spamTuples))
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
 
             final_el_startstops = []; i = 0
-            for spamTuples in parentTree.simplified_circuit_spamTuples:
+            for spamTuples in parent_tree.simplified_circuit_spamTuples:
                 final_el_startstops.append((i, i + len(spamTuples)))
                 i += len(spamTuples)
 
@@ -652,11 +652,11 @@ class MatrixEvalTree(EvalTree):
             #   (which are what is held in simplified_circuit_spamTuples)
 
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
-            subTree.recompute_spamtuple_indices(bLocal=False)
+            subTree.recompute_spamtuple_indices(local=False)
 
             return subTree
 
-        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
+        updated_elIndices = self._finish_split(el_indices_dict, subTreeSetList,
                                                permute_parent_element, create_subtree)
 
         #print("PT5 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
@@ -665,13 +665,13 @@ class MatrixEvalTree(EvalTree):
 
         return updated_elIndices
 
-    def _walkSubTree(self, indx, out):
+    def _walk_subtree(self, indx, out):
         if indx not in out: out.append(indx)
         (iLeft, iRight) = self[indx]
-        if iLeft is not None: self._walkSubTree(iLeft, out)
-        if iRight is not None: self._walkSubTree(iRight, out)
+        if iLeft is not None: self._walk_subtree(iLeft, out)
+        if iRight is not None: self._walk_subtree(iRight, out)
 
-    def _createSingleItemTrees(self):
+    def _create_single_item_trees(self):
         #  Create disjoint set of subtrees generated by single items
         need_to_compute = _np.zeros(len(self), 'bool')
         need_to_compute[0:self.num_final_strings()] = True
@@ -680,10 +680,10 @@ class MatrixEvalTree(EvalTree):
         # is a set of the indices owned by that subtree
         for i in reversed(range(self.num_final_strings())):
             if not need_to_compute[i]: continue  # move to the last element
-            #of evalTree that needs to be computed (i.e. is not in a subTree)
+            #of eval_tree that needs to be computed (i.e. is not in a subTree)
 
             subTreeIndices = []  # create subtree for uncomputed item
-            self._walkSubTree(i, subTreeIndices)
+            self._walk_subtree(i, subTreeIndices)
             newTreeSet = set(subTreeIndices)
             for k in subTreeIndices:
                 need_to_compute[k] = False  # mark all the elements of
@@ -709,7 +709,7 @@ class MatrixEvalTree(EvalTree):
         xs = []; ys = []
         for i in range(len(self)):
             subTree = []
-            self._walkSubTree(i, subTree)
+            self._walk_subtree(i, subTree)
             subTreeSize[i] = len(subTree)
             ys.extend([i] * len(subTree) + [None])
             xs.extend(list(sorted(subTree) + [None]))
@@ -738,7 +738,7 @@ class MatrixEvalTree(EvalTree):
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
-        newTree = self._copyBase(MatrixEvalTree(self[:]))
+        newTree = self._copy_base(MatrixEvalTree(self[:]))
         newTree.opLabels = self.opLabels[:]
         newTree.init_indices = self.init_indices[:]
         newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
@@ -746,13 +746,13 @@ class MatrixEvalTree(EvalTree):
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
 
-    def recompute_spamtuple_indices(self, bLocal=False):
+    def recompute_spamtuple_indices(self, local=False):
         """
         Recompute this tree's `.spamtuple_indices` array.
 
         Parameters
         ----------
-        bLocal : bool, optional
+        local : bool, optional
             If True, then the indices computed will index
             this tree's final array (even if it's a subtree).
             If False (the default), then a subtree's indices
@@ -764,15 +764,15 @@ class MatrixEvalTree(EvalTree):
         """
         self.spamtuple_indices = _compute_spamtuple_indices(
             self.simplified_circuit_spamTuples,
-            None if bLocal else self.myFinalElsToParentFinalElsMap)
+            None if local else self.myFinalElsToParentFinalElsMap)
 
     def _get_full_eval_order(self):
         """Includes init_indices in matrix-based evaltree case... HACK """
         return self.init_indices + self.eval_order
 
-    def _update_eval_order_helpers(self, indexPermutation):
+    def _update_eval_order_helpers(self, index_permutation):
         """Update anything pertaining to the "full" evaluation order - e.g. init_inidces in matrix-based case (HACK)"""
-        self.init_indices = [indexPermutation[iCur] for iCur in self.init_indices]
+        self.init_indices = [index_permutation[iCur] for iCur in self.init_indices]
 
     def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
         """
@@ -782,26 +782,26 @@ class MatrixEvalTree(EvalTree):
         each circuit.
         """
         self.simplified_circuit_spamTuples, updated_elIndices = \
-            self._permute_simplified_circuit_Xs(self.simplified_circuit_spamTuples,
+            self._permute_simplified_circuit_xs(self.simplified_circuit_spamTuples,
                                                 element_indices_dict, old_indices_in_new_order)
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
-        self.recompute_spamtuple_indices(bLocal=True)  # bLocal shouldn't matter here - just for clarity
+        self.recompute_spamtuple_indices(local=True)  # local shouldn't matter here - just for clarity
 
         return updated_elIndices
 
 
-def _compute_spamtuple_indices(simplified_circuit_spamTuples,
-                               subtreeFinalElsToParentFinalElsMap=None):
+def _compute_spamtuple_indices(simplified_circuit_spam_tuples,
+                               subtree_final_els_to_parent_final_els_map=None):
     """
     Returns a dictionary whose keys are the distinct spamTuples
-    found in `simplified_circuit_spamTuples` and whose values are
+    found in `simplified_circuit_spam_tuples` and whose values are
     (finalIndices, finalTreeSlice) tuples where:
 
     finalIndices = the "element" indices in any final filled quantities
                    which combines both spam and gate-sequence indices.
                    If this tree is a subtree, then these final indices
                    refer to the *parent's* final elements if
-                   `subtreeFinalElsToParentFinalElsMap` is given, otherwise
+                   `subtree_final_els_to_parent_final_els_map` is given, otherwise
                    they refer to the subtree's final indices (usually desired).
     treeIndices = indices into the tree's final circuit list giving
                   all of the (raw) operation sequences which need to be computed
@@ -810,26 +810,26 @@ def _compute_spamtuple_indices(simplified_circuit_spamTuples,
     """
     spamtuple_indices = _collections.OrderedDict(); el_off = 0
     for i, spamTuples in enumerate(  # i == final operation sequence index
-            simplified_circuit_spamTuples):
+            simplified_circuit_spam_tuples):
         for j, spamTuple in enumerate(spamTuples, start=el_off):  # j == final element index
             if spamTuple not in spamtuple_indices:
                 spamtuple_indices[spamTuple] = ([], [])
-            f = subtreeFinalElsToParentFinalElsMap[j] \
-                if (subtreeFinalElsToParentFinalElsMap is not None) else j  # parent's final
+            f = subtree_final_els_to_parent_final_els_map[j] \
+                if (subtree_final_els_to_parent_final_els_map is not None) else j  # parent's final
             spamtuple_indices[spamTuple][0].append(f)
             spamtuple_indices[spamTuple][1].append(i)
         el_off += len(spamTuples)
 
-    def to_slice(x, maxLen=None):
+    def to_slice(x, max_len=None):
         s = _slct.list_to_slice(x, array_ok=True, require_contiguous=False)
-        if maxLen is not None and isinstance(s, slice) and (s.start, s.stop, s.step) == (0, maxLen, None):
+        if max_len is not None and isinstance(s, slice) and (s.start, s.stop, s.step) == (0, max_len, None):
             return slice(None, None)  # check for entire range
         else:
             return s
 
-    nRawSequences = len(simplified_circuit_spamTuples)
-    nElements = el_off if (subtreeFinalElsToParentFinalElsMap is None) \
+    nRawSequences = len(simplified_circuit_spam_tuples)
+    nElements = el_off if (subtree_final_els_to_parent_final_els_map is None) \
         else None  # (we don't know how many els the parent has!)
     return _collections.OrderedDict(
-        [(spamTuple, (to_slice(fInds, nElements), to_slice(gInds, nRawSequences)))
-         for spamTuple, (fInds, gInds) in spamtuple_indices.items()])
+        [(spamTuple, (to_slice(f_inds, nElements), to_slice(g_inds, nRawSequences)))
+         for spamTuple, (f_inds, g_inds) in spamtuple_indices.items()])

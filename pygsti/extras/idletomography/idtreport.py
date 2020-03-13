@@ -918,7 +918,7 @@ def create_idletomography_report(results, filename, title="auto",
             #            ds1 = results_dict[dslbl1].dataset
             #            ds2 = results_dict[dslbl2].dataset
             #            dsComp[(d1, d2)] = _DataComparator(
-            #                [ds1, ds2], DS_names=[dslbl1, dslbl2])
+            #                [ds1, ds2], ds_names=[dslbl1, dslbl2])
             #    dicts = comm.gather(dsComp, root=0)
             #    if rank == 0:
             #        for d in dicts:
@@ -932,7 +932,7 @@ def create_idletomography_report(results, filename, title="auto",
                 dslbl2 = dataset_labels[d2]
                 ds1 = results_dict[dslbl1].dataset
                 ds2 = results_dict[dslbl2].dataset
-                all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd

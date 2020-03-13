@@ -21,7 +21,7 @@ class SummarySection(_Section):
         return workspace.FitComparisonBarPlot(
             Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi,
-            'L', comm=comm, minProbClip=switchboard.mpc_modvi
+            'L', comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory()
@@ -31,7 +31,7 @@ class SummarySection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc_modvi,
+            min_prob_clip_for_weighting=switchboard.mpc_modvi,
             typ='histogram', comm=comm, bgcolor=bgcolor
         )
 
@@ -77,7 +77,7 @@ class SummarySection(_Section):
                       for d in range(Nd)]
             return workspace.FitComparisonBoxPlot(
                 est_lbls_mt, dataset_labels, gssGrid, gsGrid, dsGrid, grid_objective,
-                comm=comm, minProbClip=switchboard.mpc_modvi
+                comm=comm, min_prob_clip=switchboard.mpc_modvi
             )
         else:
             dsGrid = [na_to_none(switchboard.modvi_ds[0, i]) for i in est_inds_mt]
@@ -88,5 +88,5 @@ class SummarySection(_Section):
                 gsGrid = [na_to_none(switchboard.gsL_modvi[0, i, -1]) for i in est_inds_mt]
             return workspace.FitComparisonBarPlot(
                 est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate',
-                comm=comm, minProbClip=switchboard.mpc_modvi
+                comm=comm, min_prob_clip=switchboard.mpc_modvi
             )

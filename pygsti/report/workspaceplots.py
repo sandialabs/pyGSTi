@@ -1664,7 +1664,7 @@ class ColorBoxPlot(WorkspacePlot):
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = dscomparator.get_LLR_pseudothreshold()
+                linlog_trans = dscomparator.get_llr_pseudothreshold()
                 ytitle = "2 log(L ratio)"
                 mx_fn = _mx_fn_dscmp  # use a *global* function so cache can tell it's the same
                 extra_arg = dscomparator

@@ -727,7 +727,7 @@ def build_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_u
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
                 _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
                 lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
-                                                   nonham_mode, truncate=False, mxBasis="pp", evotype=evotype)
+                                                   nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
                 #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
                 new_stencil[error_sslbls] = lind_errgen
 
@@ -2445,7 +2445,7 @@ def create_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
         germList = [idle_op_str]
         Ls = sorted(max_lengths)
         gss = _objs.LsGermsSerialStructure(Ls, germList, nMinorRows, nMinorCols,
-                                           aliases=None, sequenceRules=None)
+                                           aliases=None, sequence_rules=None)
         serial_germ = idle_op_str.serialize()  # must serialize to get correct count
         for L, fidpairs in Gi_fidpairs.items():
             germ_power = _gsc.repeat_with_max_length(serial_germ, L)
@@ -2840,7 +2840,7 @@ def create_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
     germList = list(germs.keys())  # ordered dict so retains nice ordering
     Ls = sorted(list(Ls))
     gss = _objs.LsGermsSerialStructure(Ls, germList, nMinorRows, nMinorCols,
-                                       aliases=None, sequenceRules=None)
+                                       aliases=None, sequence_rules=None)
 
     for germ, gdict in germs.items():
         serial_germ = germ.serialize()  # must serialize to get correct count

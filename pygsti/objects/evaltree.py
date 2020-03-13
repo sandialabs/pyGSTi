@@ -49,7 +49,7 @@ class EvalTree(list):
         self.num_final_strs = 0
 
         # Number of "final" or "requested" elements, which separately
-        # counts each spamTuple of each of the final operation sequences.
+        # counts each spam_tuple of each of the final operation sequences.
         self.num_final_els = 0
 
         # The list of "child" sub-trees (if this tree is spilt)
@@ -77,7 +77,7 @@ class EvalTree(list):
 
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_list, num_sub_tree_comms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -89,7 +89,7 @@ class EvalTree(list):
               objects, specifying the operation sequences that
               should be present in the evaluation tree.
 
-          numSubTreeComms : int, optional
+          num_sub_tree_comms : int, optional
               The number of processor groups (communicators)
               to divide the subtrees of this EvalTree among
               when calling `distribute`.  By default, the
@@ -101,7 +101,7 @@ class EvalTree(list):
         """
         raise NotImplementedError("initialize(...) must be implemented by a derived class")
 
-    def _get_opLabels(self, simplified_circuit_list):
+    def _get_op_labels(self, simplified_circuit_list):
         """
         Returns a list of the distinct operation labels in
         `simplified_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
@@ -116,21 +116,21 @@ class EvalTree(list):
 
         return sorted(opLabels)
 
-    def _copyBase(self, newTree):
+    def _copy_base(self, new_tree):
         """ copy EvalTree members to a new tree (used by derived classes "copy" fns) """
-        newTree.eval_order = self.eval_order[:]
-        newTree.num_final_strs = self.num_final_strs
-        newTree.num_final_els = self.num_final_els
-        newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap  # a slice
-        newTree.myFinalElsToParentFinalElsMap = self.myFinalElsToParentFinalElsMap.copy() \
+        new_tree.eval_order = self.eval_order[:]
+        new_tree.num_final_strs = self.num_final_strs
+        new_tree.num_final_els = self.num_final_els
+        new_tree.myFinalToParentFinalMap = self.myFinalToParentFinalMap  # a slice
+        new_tree.myFinalElsToParentFinalElsMap = self.myFinalElsToParentFinalElsMap.copy() \
             if (self.myFinalElsToParentFinalElsMap is not None) else None
-        newTree.parentIndexMap = self.parentIndexMap[:] \
+        new_tree.parentIndexMap = self.parentIndexMap[:] \
             if (self.parentIndexMap is not None) else None
-        newTree.subTrees = [st.copy() for st in self.subTrees]
-        newTree.original_index_lookup = self.original_index_lookup[:] \
+        new_tree.subTrees = [st.copy() for st in self.subTrees]
+        new_tree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
-        newTree.simplified_circuit_nEls = self.simplified_circuit_nEls[:]
-        return newTree
+        new_tree.simplified_circuit_nEls = self.simplified_circuit_nEls[:]
+        return new_tree
 
     def get_init_labels(self):
         """ Return a tuple of the operation labels (strings)
@@ -444,16 +444,16 @@ class EvalTree(list):
 
         return mySubtreeIndices, subTreeOwners, mySubComm
 
-    def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
+    def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
           maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either maxSubTreeSize
-          or numSubTrees.
+          or for using multiple cores).  Must specify either max_sub_tree_size
+          or num_sub_trees.
 
         Parameters
         ----------
-        elIndicesDict : dict
+        el_indices_dict : dict
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
@@ -462,12 +462,12 @@ class EvalTree(list):
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
 
-        maxSubTreeSize : int, optional
+        max_sub_tree_size : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
             If None, then there is no limit.
 
-        numSubTrees : int, optional
+        num_sub_trees : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
 
@@ -477,19 +477,19 @@ class EvalTree(list):
         Returns
         -------
         OrderedDict
-            A updated version of elIndicesDict
+            A updated version of el_indices_dict
         """
         raise NotImplementedError("split(...) not implemented!")
 
-    def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree, all_final=False):
+    def _finish_split(self, el_indices_dict, sub_tree_set_list, permute_parent_element, create_subtree, all_final=False):
         # Create subtrees from index sets
         import time as _time
         need_to_compute = _np.zeros(len(self), 'bool')  # flags so we don't duplicate computation of needed quantities
         need_to_compute[0:self.num_final_strings()] = True  # b/c multiple subtrees need them as intermediates
 
         #print("DEBUG Tree split: ")
-        #print("  subTreeSetList = ",subTreeSetList)
-        #print("  elIndices = ",elIndicesDict)
+        #print("  sub_tree_set_list = ",sub_tree_set_list)
+        #print("  el_indices = ",el_indices_dict)
 
         #First, reorder the parent tree's elements so that the final
         # elements of the subtrees map to contiguous slices of the
@@ -498,7 +498,7 @@ class EvalTree(list):
         subTreeIndicesList = []
         numFinalList = []
         #t0 = _time.time() #REMOVE
-        for subTreeSet in subTreeSetList:
+        for subTreeSet in sub_tree_set_list:
             subTreeIndices = list(subTreeSet)
             #if bDebug: print("SUBTREE0: %s (len=%d)" % (str(subTreeIndices),len(subTreeIndices)))
             #if bDebug: print("  NEED: %s" % ",".join([ "1" if b else "0" for b in need_to_compute]))
@@ -573,7 +573,7 @@ class EvalTree(list):
         #Permute parent indices
         # HACK to allow .init_indices to be updated in Matrix tree case
         self._update_eval_order_helpers(parentIndexPerm)
-        updated_elIndices = self._update_element_indices(parentIndexPerm, parentIndexRevPerm, elIndicesDict)
+        updated_elIndices = self._update_element_indices(parentIndexPerm, parentIndexRevPerm, el_indices_dict)
         self.eval_order = [parentIndexPerm[iCur] for iCur in self.eval_order]
         self[:] = [permute_parent_element(parentIndexPerm, self[iCur])
                    for iCur in parentIndexRevPerm]
@@ -622,7 +622,7 @@ class EvalTree(list):
         """Includes init_indices in matrix-based evaltree case... HACK """
         return self.eval_order
 
-    def _update_eval_order_helpers(self, indexPermutation):
+    def _update_eval_order_helpers(self, index_permutation):
         """Update anything pertaining to the "full" evaluation order
            - e.g. init_inidces in matrix-based case (HACK)"""
         pass
@@ -639,17 +639,17 @@ class EvalTree(list):
         # the derived class should implement this).
         return element_indices_dict.copy()
 
-    def _permute_simplified_circuit_Xs(self, simplified_circuit_Xs, element_indices, old_indices_in_new_order):
+    def _permute_simplified_circuit_xs(self, simplified_circuit_xs, element_indices, old_indices_in_new_order):
         """
-        Updates simplified_circuit_Xs by the old->new circuit mapping specified by
-        `old_indices_in_new_order`.  Because the order of simplified_circuit_Xs implied
+        Updates simplified_circuit_xs by the old->new circuit mapping specified by
+        `old_indices_in_new_order`.  Because the order of simplified_circuit_xs implied
         an element ordering, this routine also returns an updated_elIndices mapping
-        that provides an updated element-index array (i.e. elIndices[circuitIndex] = slice of element indices)
+        that provides an updated element-index array (i.e. el_indices[circuitIndex] = slice of element indices)
 
         Parameters
         ----------
-        simplified_circuit_Xs : list
-            list of nCircuits (#final circuits) lists, each
+        simplified_circuit_xs : list
+            list of n_circuits (#final circuits) lists, each
             of whose length gives the number of elements for that circuit (the values are
             immaterial - it could be an elabel or spamtuple, etc).
 
@@ -662,15 +662,15 @@ class EvalTree(list):
         updated_element_indices : OrderedDict
         """
 
-        # Setting simplified_circuit_Xs, (re)sets the element ordering,
+        # Setting simplified_circuit_xs, (re)sets the element ordering,
         # so before doing this compute the old_to_new mapping and update
-        # elIndicesDict.
+        # el_indices_dict.
 
-        # just assume that len(simplified_circuit_Xs[k]) gives number of elements
+        # just assume that len(simplified_circuit_xs[k]) gives number of elements
         # for circuit k.
 
         old_finalStringToElsMap = []; i = 0
-        for k, Xs in enumerate(simplified_circuit_Xs):
+        for k, Xs in enumerate(simplified_circuit_xs):
             old_finalStringToElsMap.append(list(range(i, i + len(Xs))))
             i += len(Xs)
 
@@ -685,8 +685,8 @@ class EvalTree(list):
                 [permute_oldToNew[x] for x in
                  (_slct.indices(indices) if isinstance(indices, slice) else indices)])
 
-        # Now update simplified_circuit_Xs
-        updated_simplified_circuit_Xs = [simplified_circuit_Xs[iCur]
+        # Now update simplified_circuit_xs
+        updated_simplified_circuit_Xs = [simplified_circuit_xs[iCur]
                                          for iCur in old_indices_in_new_order[0:self.num_final_strings()]]
         return updated_simplified_circuit_Xs, updated_elIndices
 
@@ -722,7 +722,7 @@ class EvalTree(list):
 
         #Analyze tree
         if not self.is_split():
-            print("Size of evalTree = %d" % len(self))
+            print("Size of eval_tree = %d" % len(self))
             print("Size of circuit_list = %d" % self.num_final_strings())
 
             #TODO: maybe revive this later if it ever becomes useful again.

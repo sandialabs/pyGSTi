@@ -40,7 +40,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         #                                            n_samples=1000, sample_error="multinomial", seed=1234)
         #ds.save(compare_files + "/calcMethods2Q.dataset")
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset")
+        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q.dataset")
         cls.advOpts = {'tolerance': 1e-2 }
 
         #Reduced model GST dataset
@@ -68,7 +68,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         #redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
         #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset")
 
-        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q_redmod.dataset")
+        cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q_redmod.dataset")
 
         #print(len(expList)," reduced model sequences")
 

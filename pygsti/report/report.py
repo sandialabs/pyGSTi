@@ -313,7 +313,7 @@ class Report:
             dscmp_gss = results_dict[dslbl1].circuit_structs['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+            dscmp = pygsti.obj.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
                 templatePath / 'data_comparison.txt'])

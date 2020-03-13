@@ -39,7 +39,7 @@ class AlgorithmsBase(BaseTestCase):
                                                         n_samples=10000, sample_error='binomial', seed=100)
             ds.save(compare_files + "/analysis.dataset")
 
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        self.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
         if regenerate_references():
@@ -47,4 +47,4 @@ class AlgorithmsBase(BaseTestCase):
                                                              n_samples=10000,sample_error='binomial', seed=100)
             ds_lgst.save(compare_files + "/analysis_lgst.dataset")
 
-        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
+        self.ds_lgst = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis_lgst.dataset")

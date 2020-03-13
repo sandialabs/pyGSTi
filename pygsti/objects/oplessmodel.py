@@ -68,7 +68,7 @@ class OplessModel(_Model):
     def get_num_outcomes(self, circuit):  # needed for sparse data detection
         raise NotImplementedError("Derived classes should implement this!")
 
-    def probs(self, circuit, clipTo=None, cache=None):
+    def probs(self, circuit, clip_to=None, cache=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -78,19 +78,19 @@ class OplessModel(_Model):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
         Returns
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,circuit,clipTo)
+            probs[SL] = pr(SL,circuit,clip_to)
             for each spam label (string) SL.
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def dprobs(self, circuit, returnPr=False, clipTo=None):
+    def dprobs(self, circuit, return_pr=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -100,42 +100,42 @@ class OplessModel(_Model):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
             for each spam label (string) SL.
         """
         eps = 1e-7
         orig_pvec = self.to_vector()
         Np = self.num_params()
-        probs0 = self.probs(circuit, clipTo, None)
+        probs0 = self.probs(circuit, clip_to, None)
 
         deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
         for i in range(Np):
             p_plus_dp = orig_pvec.copy()
             p_plus_dp[i] += eps
             self.from_vector(p_plus_dp)
-            probs1 = self.probs(circuit, clipTo, None)
+            probs1 = self.probs(circuit, clip_to, None)
             for k, p0 in probs0.items():
                 deriv[k][i] = (probs1[k] - p0) / eps
         self.from_vector(orig_pvec)
 
-        if returnPr:
+        if return_pr:
             return {k: (p0, deriv[k]) for k in probs0.keys()}
         else:
             return deriv
 
-    def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
-                                     distributeMethod="default", subcalls=[],
+    def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
+                                     distribute_method="default", subcalls=[],
                                      dataset=None, verbosity=0):
         #TODO: choose these based on resources, and enable split trees
         minSubtrees = 0
@@ -145,16 +145,16 @@ class OplessModel(_Model):
                                     numSubtreeComms, dataset, verbosity)
         return evTree, 0, 0, evTree.element_indices, evTree.outcomes
 
-    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1, dataset=None, verbosity=0):
+    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+                      num_subtree_comms=1, dataset=None, verbosity=0):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_probs(self, circuit_list, clipTo=None, check=False,
-                   comm=None, memLimit=None, dataset=None, smartc=None):
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit, "default",
+    def bulk_probs(self, circuit_list, clip_to=None, check=False,
+                   comm=None, mem_limit=None, dataset=None, smartc=None):
+        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, mem_limit, "default",
                                                                                 [], dataset)
         vp = _np.empty(evalTree.num_final_elements(), 'd')
-        self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
+        self.bulk_fill_probs(vp, evalTree, clip_to, check, comm)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(evalTree):
@@ -164,8 +164,8 @@ class OplessModel(_Model):
                 [(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-    def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
-                    check=False, comm=None, wrtBlockSize=None, dataset=None):
+    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
+                    check=False, comm=None, wrt_block_size=None, dataset=None):
         memLimit = None
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit,
                                                                                 "default", [], dataset)
@@ -173,17 +173,17 @@ class OplessModel(_Model):
         nDerivCols = self.num_params()
 
         vdp = _np.empty((nElements, nDerivCols), 'd')
-        vp = _np.empty(nElements, 'd') if returnPr else None
+        vp = _np.empty(nElements, 'd') if return_pr else None
 
         self.bulk_fill_dprobs(vdp, evalTree,
-                              vp, clipTo, check, comm,
-                              None, wrtBlockSize)
+                              vp, clip_to, check, comm,
+                              None, wrt_block_size)
 
         ret = _collections.OrderedDict()
         for i, opstr in enumerate(evalTree):
             elInds = _slct.indices(elIndices[i]) \
                 if isinstance(elIndices[i], slice) else elIndices[i]
-            if returnPr:
+            if return_pr:
                 ret[opstr] = _OutcomeLabelDict(
                     [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
@@ -191,61 +191,61 @@ class OplessModel(_Model):
                     [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
-    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
-        if False and evalTree.cache:  # TEST (disabled)
-            cpolys = evalTree.cache
-            ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (evalTree.num_final_elements(),))
+    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
+        if False and eval_tree.cache:  # TEST (disabled)
+            cpolys = eval_tree.cache
+            ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (eval_tree.num_final_elements(),))
             assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
             ps = _np.real(ps)
-            if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
-            mxToFill[:] = ps
+            if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
+            mx_to_fill[:] = ps
         else:
-            for i, c in enumerate(evalTree):
-                cache = evalTree.cache[i] if evalTree.cache else None
-                probs = self.probs(c, clipTo, cache)
-                elInds = _slct.indices(evalTree.element_indices[i]) \
-                    if isinstance(evalTree.element_indices[i], slice) else evalTree.element_indices[i]
-                for k, outcome in zip(elInds, evalTree.outcomes[i]):
-                    mxToFill[k] = probs[outcome]
+            for i, c in enumerate(eval_tree):
+                cache = eval_tree.cache[i] if eval_tree.cache else None
+                probs = self.probs(c, clip_to, cache)
+                elInds = _slct.indices(eval_tree.element_indices[i]) \
+                    if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
+                for k, outcome in zip(elInds, eval_tree.outcomes[i]):
+                    mx_to_fill[k] = probs[outcome]
 
-    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
-                         check=False, comm=None, wrtBlockSize=None,
-                         profiler=None, gatherMemLimit=None):
+    def bulk_fill_dprobs(self, mx_to_fill, eval_tree, pr_mx_to_fill=None, clip_to=None,
+                         check=False, comm=None, wrt_block_size=None,
+                         profiler=None, gather_mem_limit=None):
 
         Np = self.num_params()
         p = self.to_vector()
 
-        if False and evalTree.cache:  # TEST (disabled)
-            cpolys = evalTree.cache
-            if prMxToFill is not None:
-                ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (evalTree.num_final_elements(),))
+        if False and eval_tree.cache:  # TEST (disabled)
+            cpolys = eval_tree.cache
+            if pr_mx_to_fill is not None:
+                ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (eval_tree.num_final_elements(),))
                 assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
                 ps = _np.real(ps)
-                if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
-                prMxToFill[:] = ps
+                if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
+                pr_mx_to_fill[:] = ps
             dpolys = _compact_deriv(cpolys[0], cpolys[1], list(range(Np)))
-            dps = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (evalTree.num_final_elements(), Np))
-            mxToFill[:, :] = dps
+            dps = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (eval_tree.num_final_elements(), Np))
+            mx_to_fill[:, :] = dps
         else:
             # eps = 1e-6
-            for i, c in enumerate(evalTree):
-                cache = evalTree.cache[i] if evalTree.cache else None
-                probs0 = self.probs(c, clipTo, cache)
-                dprobs0 = self.dprobs(c, False, clipTo, cache)
-                elInds = _slct.indices(evalTree.element_indices[i]) \
-                    if isinstance(evalTree.element_indices[i], slice) else evalTree.element_indices[i]
-                for k, outcome in zip(elInds, evalTree.outcomes[i]):
-                    if prMxToFill is not None:
-                        prMxToFill[k] = probs0[outcome]
-                    mxToFill[k, :] = dprobs0[outcome]
+            for i, c in enumerate(eval_tree):
+                cache = eval_tree.cache[i] if eval_tree.cache else None
+                probs0 = self.probs(c, clip_to, cache)
+                dprobs0 = self.dprobs(c, False, clip_to, cache)
+                elInds = _slct.indices(eval_tree.element_indices[i]) \
+                    if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
+                for k, outcome in zip(elInds, eval_tree.outcomes[i]):
+                    if pr_mx_to_fill is not None:
+                        pr_mx_to_fill[k] = probs0[outcome]
+                    mx_to_fill[k, :] = dprobs0[outcome]
 
-                    #Do this to fill mxToFill instead of calling dprobs above as it's a little faster for finite diff?
-                    #for j in range(Np):
+                    #Do this to fill mx_to_fill instead of calling dprobs above as it's a little faster for finite diff?
+                    #for j in range(np):
                     #    p_plus_dp = p.copy()
                     #    p_plus_dp[j] += eps
                     #    self.from_vector(p_plus_dp)
-                    #    probs1 = self.probs(c,clipTo,cache)
-                    #    mxToFill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
+                    #    probs1 = self.probs(c,clip_to,cache)
+                    #    mx_to_fill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
                     #self.from_vector(p)
 
     def __str__(self):
@@ -266,8 +266,8 @@ class SuccessFailModel(OplessModel):
     def _success_dprob(self, circuit, cache):
         raise NotImplementedError("Derived classes should implement this!")
 
-    #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clipTo):
-    def probs(self, circuit, clipTo=None, cache=None):
+    #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clip_to):
+    def probs(self, circuit, clip_to=None, cache=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -277,20 +277,20 @@ class SuccessFailModel(OplessModel):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
         Returns
         -------
         probs : dictionary
             A dictionary such that
-            probs[outcome] = pr(outcome,circuit,clipTo).
+            probs[outcome] = pr(outcome,circuit,clip_to).
         """
         sp = self._success_prob(circuit, cache)
-        if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
+        if clip_to is not None: sp = _np.clip(sp, clip_to[0], clip_to[1])
         return _OutcomeLabelDict([('success', sp), ('fail', 1 - sp)])
 
-    def dprobs(self, circuit, returnPr=False, clipTo=None, cache=None):
+    def dprobs(self, circuit, return_pr=False, clip_to=None, cache=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -300,28 +300,28 @@ class SuccessFailModel(OplessModel):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
             for each spam label (string) SL.
         """
         try:
             dsp = self._success_dprob(circuit, cache)
         except NotImplementedError:
-            return OplessModel.dprobs(self, circuit, returnPr, clipTo)
+            return OplessModel.dprobs(self, circuit, return_pr, clip_to)
 
-        if returnPr:
+        if return_pr:
             sp = self._success_prob(circuit, cache)
-            if clipTo is not None: sp = _np.clip(sp, clipTo[0], clipTo[1])
+            if clip_to is not None: sp = _np.clip(sp, clip_to[0], clip_to[1])
             return {('success',): (sp, dsp), ('fail',): (1 - sp, -dsp)}
         else:
             return {('success',): dsp, ('fail',): -dsp}
@@ -340,8 +340,8 @@ class SuccessFailModel(OplessModel):
 
         return rawdict, lookup, outcome_lookup, 2 * len(circuits)
 
-    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1, dataset=None, verbosity=0):
+    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+                      num_subtree_comms=1, dataset=None, verbosity=0):
         lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuit_list))}
         outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuit_list))}
 
@@ -375,14 +375,14 @@ def compact_poly_list(list_of_polys):
 
 class ErrorRatesModel(SuccessFailModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
         if state_space_labels is None:
-            state_space_labels = ['Q%d' % i for i in range(nQubits)]
+            state_space_labels = ['Q%d' % i for i in range(n_qubits)]
         else:
-            assert(len(state_space_labels) == nQubits)
+            assert(len(state_space_labels) == n_qubits)
 
         SuccessFailModel.__init__(self, state_space_labels, use_cache=True)
 
@@ -447,7 +447,7 @@ class ErrorRatesModel(SuccessFailModel):
         #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
 
         # else:
-        layers_with_idles = [circuit.get_layer_with_idles(i, idleGateName=self._idlename) for i in range(depth)]
+        layers_with_idles = [circuit.get_layer_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
         inds_to_mult_by_layer = [_np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
                                  for layer in layers_with_idles]
 
@@ -464,11 +464,11 @@ class ErrorRatesModel(SuccessFailModel):
 
 class TwirledLayersModel(ErrorRatesModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
+        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _success_prob(self, circuit, cache):
@@ -539,11 +539,11 @@ class TwirledLayersModel(ErrorRatesModel):
 
 class TwirledGatesModel(ErrorRatesModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
+        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -614,11 +614,11 @@ class TwirledGatesModel(ErrorRatesModel):
 
 class AnyErrorCausesFailureModel(ErrorRatesModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
+        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -669,11 +669,11 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
 
 class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
 
-    def __init__(self, error_rates, nQubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, nQubits, state_space_labels=state_space_labels,
+        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -742,15 +742,15 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
 
     #     if self.model_type in ('FE', 'FiE+U'):
 
-    #         twoQgates = []
+    #         two_q_gates = []
     #         for i in range(depth):
     #             layer = circuit.get_layer(i)
-    #             twoQgates += [q.qubits for q in layer if len(q.qubits) > 1]
+    #             two_q_gates += [q.qubits for q in layer if len(q.qubits) > 1]
 
     #         sp = 1
     #         oneqs = {q: depth for q in circuit.line_labels}
 
-    #         for qs in twoQgates:
+    #         for qs in two_q_gates:
     #             sp = sp * (1 - pvec[g_inds[frozenset(qs)]])
     #             oneqs[qs[0]] += -1
     #             oneqs[qs[1]] += -1

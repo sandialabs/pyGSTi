@@ -450,8 +450,8 @@ class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.EigenvalueParamDenseOp(
-            mx, includeOffDiagsInDegen2Blocks=False,
-            TPconstrainedAndUnital=False
+            mx, include_off_diags_in_degen_2_blocks=False,
+            tp_constrained_and_unital=False
         )
 
     def test_include_off_diags_in_degen_2_blocks(self):
@@ -461,7 +461,7 @@ class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0, -1]], 'complex')
         # 2 degenerate real pairs of evecs => should add off-diag els
         g2 = op.EigenvalueParamDenseOp(
-            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
         )
         self.assertEqual(
             g2.params,
@@ -482,8 +482,8 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0, 1],
                        [0, 0, -1, 0]], 'd')
         return op.EigenvalueParamDenseOp(
-            mx, includeOffDiagsInDegen2Blocks=False,
-            TPconstrainedAndUnital=False
+            mx, include_off_diags_in_degen_2_blocks=False,
+            tp_constrained_and_unital=False
         )
 
     def test_include_off_diags_in_degen_2_blocks(self):
@@ -493,7 +493,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0.1, 1 + 1]], 'complex')
         # complex pairs of evecs => make sure combined parameters work
         g3 = op.EigenvalueParamDenseOp(
-            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
         )
         self.assertEqual(
             g3.params,
@@ -510,7 +510,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0.1, 1]], 'complex')
         # 2 degenerate complex pairs of evecs => should add off-diag els
         g4 = op.EigenvalueParamDenseOp(
-            mx, includeOffDiagsInDegen2Blocks=True, TPconstrainedAndUnital=False
+            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
         )
         self.assertArraysAlmostEqual(g4.evals, [1. + 0.1j, 1. + 0.1j, 1. - 0.1j, 1. - 0.1j])  # Note: evals are sorted!
         self.assertEqual(
@@ -574,9 +574,9 @@ class CPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis="pp",
+            mx, unitary_postfactor=None, ham_basis="pp",
             nonham_basis="pp", param_mode="cptp", nonham_mode="all",
-            truncate=True, mxBasis="pp"
+            truncate=True, mx_basis="pp"
         )
 
 
@@ -587,9 +587,9 @@ class DiagonalCPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis="pp",
+            mx, unitary_postfactor=None, ham_basis="pp",
             nonham_basis="pp", param_mode="cptp",
-            nonham_mode="diagonal", truncate=True, mxBasis="pp"
+            nonham_mode="diagonal", truncate=True, mx_basis="pp"
         )
 
 
@@ -604,9 +604,9 @@ class CPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
                             [0, 0, -1, 0]], 'd')
         sparsemx = sps.csr_matrix(densemx, dtype='d')
         return op.LindbladOp.from_operation_matrix(
-            sparsemx, unitaryPostfactor=None, ham_basis="pp",
+            sparsemx, unitary_postfactor=None, ham_basis="pp",
             nonham_basis="pp", param_mode="cptp", nonham_mode="all",
-            truncate=True, mxBasis="pp"
+            truncate=True, mx_basis="pp"
         )
 
 
@@ -621,9 +621,9 @@ class PostFactorCPTPLindbladSparseOpTester(LindbladSparseOpBase, BaseCase):
                             [0, 0, -1, 0]], 'd')
         sparsemx = sps.csr_matrix(densemx, dtype='d')
         return op.LindbladOp.from_operation_matrix(
-            None, unitaryPostfactor=sparsemx, ham_basis="pp",
+            None, unitary_postfactor=sparsemx, ham_basis="pp",
             nonham_basis="pp", param_mode="cptp", nonham_mode="all",
-            truncate=True, mxBasis="pp"
+            truncate=True, mx_basis="pp"
         )
 
 
@@ -635,9 +635,9 @@ class UnconstrainedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppBasis = Basis.cast("pp", 4)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppBasis,
+            mx, unitary_postfactor=None, ham_basis=ppBasis,
             nonham_basis=ppBasis, param_mode="unconstrained",
-            nonham_mode="all", truncate=True, mxBasis="pp"
+            nonham_mode="all", truncate=True, mx_basis="pp"
         )
 
 
@@ -649,9 +649,9 @@ class DiagonalUnconstrainedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppMxs = bc.pp_matrices(2)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppMxs,
+            mx, unitary_postfactor=None, ham_basis=ppMxs,
             nonham_basis=ppMxs, param_mode="unconstrained",
-            nonham_mode="diagonal", truncate=True, mxBasis="pp"
+            nonham_mode="diagonal", truncate=True, mx_basis="pp"
         )
 
 
@@ -663,9 +663,9 @@ class UntruncatedLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
         mx = np.identity(4, 'd')
         ppBasis = Basis.cast("pp", 4)
         return op.LindbladDenseOp.from_operation_matrix(
-            mx, unitaryPostfactor=None, ham_basis=ppBasis,
+            mx, unitary_postfactor=None, ham_basis=ppBasis,
             nonham_basis=ppBasis, param_mode="unconstrained",
-            nonham_mode="all", truncate=False, mxBasis="pp"
+            nonham_mode="all", truncate=False, mx_basis="pp"
         )
 
 

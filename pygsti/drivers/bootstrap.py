@@ -81,8 +81,8 @@ def make_bootstrap_dataset(input_data_set, generation_method, input_model=None,
     assert(all([ol in possibleOutcomeLabels for ol in outcome_labels]))
 
     #create new dataset
-    simDS = _obj.DataSet(outcomeLabels=outcome_labels,
-                         collisionAction=input_data_set.collisionAction)
+    simDS = _obj.DataSet(outcome_labels=outcome_labels,
+                         collision_action=input_data_set.collisionAction)
     circuit_list = list(input_data_set.keys())
     for s in circuit_list:
         nSamples = input_data_set[s].total
@@ -482,10 +482,10 @@ def to_rms_model(gs_list, target_gs):
     return output_gs
 
 #Unused?
-#def gateset_jtracedist(mdl,target_model,mxBasis="gm"):
+#def gateset_jtracedist(mdl,target_model,mx_basis="gm"):
 #    output = _np.zeros(3,dtype=float)
 #    for i, gate in enumerate(target_model.operations.keys()):
-#        output[i] = _tools.jtracedist(mdl.operations[gate],target_model.operations[gate],mxBasis=mxBasis)
+#        output[i] = _tools.jtracedist(mdl.operations[gate],target_model.operations[gate],mx_basis=mx_basis)
 ##    print output
 #    return output
 #
@@ -513,16 +513,16 @@ def to_rms_model(gs_list, target_gs):
 #        output[i] = _tools.decompose_gate_matrix(mdl.operations[gate]).get('decay of off diagonal rotation terms',0)
 #    return output
 #
-##def gateset_fidelity(mdl,target_model,mxBasis="gm"):
+##def gateset_fidelity(mdl,target_model,mx_basis="gm"):
 ##    output = _np.zeros(3,dtype=float)
 ##    for i, gate in enumerate(target_model.operations.keys()):
 ##        output[i] = _tools.fidelity(mdl.operations[gate],target_model.operations[gate])
 ##    return output
 #
-#def gateset_diamonddist(mdl,target_model,mxBasis="gm"):
+#def gateset_diamonddist(mdl,target_model,mx_basis="gm"):
 #    output = _np.zeros(3,dtype=float)
 #    for i, gate in enumerate(target_model.operations.keys()):
-#        output[i] = _tools.diamonddist(mdl.operations[gate],target_model.operations[gate],mxBasis=mxBasis)
+#        output[i] = _tools.diamonddist(mdl.operations[gate],target_model.operations[gate],mx_basis=mx_basis)
 #    return output
 #
 #def spamrameter(mdl):

@@ -32,18 +32,18 @@ class WildcardBudget(object):
     implemented and usually `__init__` should accept more customized args).
     """
 
-    def __init__(self, Wvec):
+    def __init__(self, w_vec):
         """
         Create a new WildcardBudget.
 
         Parameters
         ----------
-        Wvec : numpy array
+        w_vec : numpy array
             The "wildcard vector" which stores the parameters of this budget
             which can be varied when trying to find an optimal budget (similar
             to the parameters of a :class:`Model`).
         """
-        self.wildcard_vector = Wvec
+        self.wildcard_vector = w_vec
 
     def to_vector(self):
         """
@@ -55,20 +55,20 @@ class WildcardBudget(object):
         """
         return self.wildcard_vector
 
-    def from_vector(self, Wvec):
+    def from_vector(self, w_vec):
         """
         Set the parameters of this wildcard budge.
 
         Parameters
         ----------
-        Wvec : numpy array
+        w_vec : numpy array
             A vector of parameter values.
 
         Returns
         -------
         None
         """
-        self.wildcard_vector = Wvec
+        self.wildcard_vector = w_vec
 
     def circuit_budget(self, circuit):
         """
@@ -104,10 +104,10 @@ class WildcardBudget(object):
         """
         raise NotImplementedError("Derived classes must implement `to_descriptive_dict`")
 
-    #def compute_circuit_wildcard_budget(c, Wvec):
+    #def compute_circuit_wildcard_budget(c, w_vec):
     #    #raise NotImplementedError("TODO!!!")
-    #    #for now, assume Wvec is a length-1 vector
-    #    return abs(Wvec[0]) * len(c)
+    #    #for now, assume w_vec is a length-1 vector
+    #    return abs(w_vec[0]) * len(c)
 
     def get_precomp_for_circuits(self, circuits):
         """
@@ -130,7 +130,7 @@ class WildcardBudget(object):
                     circuit_budget_matrix[i, self.primOpLookup[component]] += 1.0
         return circuit_budget_matrix
 
-    def slow_update_probs(self, probs_in, probs_out, freqs, circuits, elIndices, precomp=None):
+    def slow_update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
         """
         Update a set of circuit outcome probabilities, `probs_in`, into a
         corresponding set, `probs_out`, which uses the slack alloted to each
@@ -158,14 +158,14 @@ class WildcardBudget(object):
             A list of :class:`Circuit` objects giving the circuits that
             `probs_in` contains the outcome probabilities of.  Typically
             there are multiple outcomes per circuit, so `len(circuits)`
-            is less than `len(probs_in)` - see `elIndices` below.
+            is less than `len(probs_in)` - see `el_indices` below.
 
-        elIndices : list or numpy array
+        el_indices : list or numpy array
             A list of the element indices corresponding to each circuit in
-            `circuits`.  Thus, `probs_in[elIndices[i]]` must give the
-            probabilities corresponding to `circuits[i]`, and `elIndices[i]`
+            `circuits`.  Thus, `probs_in[el_indices[i]]` must give the
+            probabilities corresponding to `circuits[i]`, and `el_indices[i]`
             can be any valid index for a numpy array (an integer, a slice,
-            or an integer-array).  Similarly, `freqs[elIndices[i]]` gives
+            or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
             the corresponding frequencies.
 
         Returns
@@ -174,67 +174,67 @@ class WildcardBudget(object):
         """
 
         #For these helper functions, see Robin's notes
-        def computeTVD(A, B, alpha, beta, q, f):
+        def compute_tvd(a, b, alpha, beta, q, f):
             # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB)  - difference between p=[alpha|beta]*f and q
             # (no contrib from set C)
-            ret = 0.5 * (sum(q[A] - alpha * f[A]) + sum(beta * f[B] - q[B]))
+            ret = 0.5 * (sum(q[a] - alpha * f[a]) + sum(beta * f[b] - q[b]))
             return ret
 
-        def compute_alpha(A, B, C, TVD, q, f):
+        def compute_alpha(a, b, c, tvd, q, f):
             # beta = (1-alpha*SA - qC)/SB
-            # 2*TVD = qA - alpha*SA + [(1-alpha*SA - qC)/SB]*SB - qB
-            # 2*TVD = qA - alpha(SA + SA) + (1-qC) - qB
-            # alpha = [ qA-qB + (1-qC) - 2*TVD ] / 2*SA
-            # But if SB == 0 then 2*TVD = qA - alpha*SA - qB => alpha = (qA-qB-2*TVD)/SA
-            if sum(f[B]) == 0:
-                return (sum(q[A]) - sum(q[B]) - 2 * TVD) / sum(f[A])
-            return (sum(q[A]) - sum(q[B]) + 1.0 - sum(q[C]) - 2 * TVD) / (2 * sum(f[A]))
+            # 2*tvd = qA - alpha*SA + [(1-alpha*SA - qC)/SB]*SB - qB
+            # 2*tvd = qA - alpha(SA + SA) + (1-qC) - qB
+            # alpha = [ qA-qB + (1-qC) - 2*tvd ] / 2*SA
+            # But if SB == 0 then 2*tvd = qA - alpha*SA - qB => alpha = (qA-qB-2*tvd)/SA
+            if sum(f[b]) == 0:
+                return (sum(q[a]) - sum(q[b]) - 2 * tvd) / sum(f[a])
+            return (sum(q[a]) - sum(q[b]) + 1.0 - sum(q[c]) - 2 * tvd) / (2 * sum(f[a]))
 
-        def compute_beta(A, B, C, TVD, q, f):
+        def compute_beta(a, b, c, tvd, q, f):
             # alpha = (1-beta*SB - qC)/SA
-            # 2*TVD = qA - [(1-beta*SB - qC)/SA]*SA + beta*SB - qB
-            # 2*TVD = qA - (1-qC) + beta(SB + SB) - qB
-            # beta = -[ qA-qB - (1-qC) - 2*TVD ] / 2*SB
-            # But if SA == 0 then 2*TVD = qA + beta*SB - qB => beta = -(qA-qB-2*TVD)/SB
-            if sum(f[A]) == 0:
-                return -(sum(q[A]) - sum(q[B]) - 2 * TVD) / sum(f[B])
-            return -(sum(q[A]) - sum(q[B]) - 1.0 + sum(q[C]) - 2 * TVD) / (2 * sum(f[B]))
+            # 2*tvd = qA - [(1-beta*SB - qC)/SA]*SA + beta*SB - qB
+            # 2*tvd = qA - (1-qC) + beta(SB + SB) - qB
+            # beta = -[ qA-qB - (1-qC) - 2*tvd ] / 2*SB
+            # But if SA == 0 then 2*tvd = qA + beta*SB - qB => beta = -(qA-qB-2*tvd)/SB
+            if sum(f[a]) == 0:
+                return -(sum(q[a]) - sum(q[b]) - 2 * tvd) / sum(f[b])
+            return -(sum(q[a]) - sum(q[b]) - 1.0 + sum(q[c]) - 2 * tvd) / (2 * sum(f[b]))
 
-        def compute_pvec(alpha, beta, A, B, C, q, f):
+        def compute_pvec(alpha, beta, a, b, c, q, f):
             p = f.copy()
             #print("Fill pvec alpha=%g, beta=%g" % (alpha,beta))
-            #print("f = ",f, " A = ",A, "B=",B," C=",C)
-            p[A] = alpha * f[A]
-            p[B] = beta * f[B]
-            p[C] = q[C]
+            #print("f = ",f, " a = ",a, "b=",b," c=",c)
+            p[a] = alpha * f[a]
+            p[b] = beta * f[b]
+            p[c] = q[c]
             return p
 
-        def alpha_fn(beta, A, B, C, q, f):
-            if len(A) == 0: return _np.nan  # this can be ok, but mark it
-            return (1.0 - beta * sum(f[B]) - sum(q[C])) / sum(f[A])
+        def alpha_fn(beta, a, b, c, q, f):
+            if len(a) == 0: return _np.nan  # this can be ok, but mark it
+            return (1.0 - beta * sum(f[b]) - sum(q[c])) / sum(f[a])
 
-        def beta_fn(alpha, A, B, C, q, f):
+        def beta_fn(alpha, a, b, c, q, f):
             # beta * SB = 1 - alpha * SA - qC   => 1 = alpha*SA + beta*SB + qC (probs sum to 1)
             # also though, beta must be > 0 so (alpha*SA + qC) < 1.0
-            if len(B) == 0: return _np.nan  # this can be ok, but mark it
-            return (1.0 - alpha * sum(f[A]) - sum(q[C])) / sum(f[B])
+            if len(b) == 0: return _np.nan  # this can be ok, but mark it
+            return (1.0 - alpha * sum(f[a]) - sum(q[c])) / sum(f[b])
 
-        def get_minalpha_breakpoint(remaining_indices, A, B, C, qvec):
+        def get_minalpha_breakpoint(remaining_indices, a, b, c, qvec):
             k, r = sorted([(kx, rx) for kx, rx in enumerate(ratio_vec)
                            if kx in remaining_indices], key=lambda x: abs(1.0 - x[1]))[0]
-            if k in A:
+            if k in a:
                 alpha_break = r
-                beta_break = beta_fn(alpha_break, A, B, C, qvec, fvec)
+                beta_break = beta_fn(alpha_break, a, b, c, qvec, fvec)
                 #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
-                AorBorC = "A"
-            elif k in B:
+                AorBorC = "a"
+            elif k in b:
                 beta_break = r
-                alpha_break = alpha_fn(beta_break, A, B, C, qvec, fvec)
+                alpha_break = alpha_fn(beta_break, a, b, c, qvec, fvec)
                 #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
-                AorBorC = "B"
+                AorBorC = "b"
             else:
                 alpha_break = beta_break = 1e100  # sentinel so it gets sorted at end
-                AorBorC = "C"
+                AorBorC = "c"
             if debug: print("chksum = ", chk_sum(alpha_break, beta_break))
             return (k, alpha_break, beta_break, AorBorC)
 
@@ -253,7 +253,7 @@ class WildcardBudget(object):
             #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
         for i, circ in enumerate(circuits):
-            elInds = elIndices[i]
+            elInds = el_indices[i]
             qvec = probs_in[elInds]
             fvec = freqs[elInds]
             W = self.circuit_budget(circ)
@@ -286,7 +286,7 @@ class WildcardBudget(object):
                 remaining_indices.remove(j)
 
                 # will keep getting smaller with each iteration
-                TVD_at_breakpt = computeTVD(A, B, alpha0, beta0, qvec, fvec)
+                TVD_at_breakpt = compute_tvd(A, B, alpha0, beta0, qvec, fvec)
                 #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is
                 #the same
 
@@ -317,7 +317,7 @@ class WildcardBudget(object):
                 else:
                     pass
 
-                if debug: TVD_at_breakpt_chk = computeTVD(A, B, alpha0, beta0, qvec, fvec)
+                if debug: TVD_at_breakpt_chk = compute_tvd(A, B, alpha0, beta0, qvec, fvec)
                 if debug: print(" --> A=", A, " B=", B, " C=", C, " chk = ", TVD_at_breakpt_chk)
 
             else:
@@ -342,15 +342,15 @@ class WildcardBudget(object):
             _tools.matrixtools._fas(probs_out, (elInds,), compute_pvec(alpha, beta, A, B, C, qvec, fvec))
             if debug:
                 print("DB: probs_out = ", probs_out[elInds])
-            #print("TVD = ",computeTVD(A,B,alpha,beta_fn(alpha,A,B,C,fvec),qvec,fvec))
-            compTVD = computeTVD(A, B, alpha, beta, qvec, fvec)
+            #print("TVD = ",compute_tvd(A,B,alpha,beta_fn(alpha,A,B,C,fvec),qvec,fvec))
+            compTVD = compute_tvd(A, B, alpha, beta, qvec, fvec)
             #print("compare: ",W,compTVD)
             assert(abs(W - compTVD) < 1e-3), "TVD mismatch!"
             #assert(_np.isclose(W, compTVD)), "TVD mismatch!"
 
         return
 
-    def update_probs(self, probs_in, probs_out, freqs, circuits, elIndices, precomp=None):
+    def update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
         """
         Update a set of circuit outcome probabilities, `probs_in`, into a
         corresponding set, `probs_out`, which uses the slack alloted to each
@@ -378,14 +378,14 @@ class WildcardBudget(object):
             A list of :class:`Circuit` objects giving the circuits that
             `probs_in` contains the outcome probabilities of.  Typically
             there are multiple outcomes per circuit, so `len(circuits)`
-            is less than `len(probs_in)` - see `elIndices` below.
+            is less than `len(probs_in)` - see `el_indices` below.
 
-        elIndices : list or numpy array
+        el_indices : list or numpy array
             A list of the element indices corresponding to each circuit in
-            `circuits`.  Thus, `probs_in[elIndices[i]]` must give the
-            probabilities corresponding to `circuits[i]`, and `elIndices[i]`
+            `circuits`.  Thus, `probs_in[el_indices[i]]` must give the
+            probabilities corresponding to `circuits[i]`, and `el_indices[i]`
             can be any valid index for a numpy array (an integer, a slice,
-            or an integer-array).  Similarly, `freqs[elIndices[i]]` gives
+            or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
             the corresponding frequencies.
 
         Returns
@@ -415,7 +415,7 @@ class WildcardBudget(object):
         tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
-            elInds = elIndices[i]
+            elInds = el_indices[i]
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
 
@@ -472,7 +472,7 @@ class WildcardBudget(object):
                     alpha_break = ratio
                     beta_break = _np.nan if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
 
-                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # computeTVD
+                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
                     #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
                     if TVD_at_breakpt <= W + tol: break  # exit loop
 
@@ -483,7 +483,7 @@ class WildcardBudget(object):
                     alpha_break = _np.nan if sum_fA == 0.0 else (
                         1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
 
-                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # computeTVD
+                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
                     #print("B TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
                     if TVD_at_breakpt <= W + tol: break  # exit loop
 
@@ -534,13 +534,13 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
     the parameters corresponding to each primitive operation in the circuit.
     """
 
-    def __init__(self, primitiveOpLabels, add_spam=True, start_budget=0.0):
+    def __init__(self, primitive_op_labels, add_spam=True, start_budget=0.0):
         """
         Create a new PrimitiveOpsWildcardBudget.
 
         Parameters
         ----------
-        primitiveOpLabels : iterable
+        primitive_op_labels : iterable
             A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
             which give all the possible primitive ops (components of circuit
             layers) that will appear in circuits.  Each one of these operations
@@ -553,7 +553,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         start_budget : float, optional
             An initial value to set all the parameters to.
         """
-        self.primOpLookup = {lbl: i for i, lbl in enumerate(primitiveOpLabels)}
+        self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
         nPrimOps = len(self.primOpLookup)
         if add_spam:
             nPrimOps += 1

@@ -39,7 +39,7 @@ def create_standard_cost_function(name):
     """
     if name == '2QGC':
         def costfunction(circuit, junk):  # Junk input as no processorspec is needed here.
-            return circuit.twoQgate_count()
+            return circuit.two_q_gate_count()
     elif name == 'depth':
         def costfunction(circuit, junk):  # Junk input as no processorspec is needed here.
             return circuit.depth()
@@ -55,7 +55,7 @@ def create_standard_cost_function(name):
         except: raise ValueError("This `costfunction` string is not a valid option!")
 
         def costfunction(circuit, junk):  # Junk input as no processorspec is needed here.
-            return twoQGCfactor * circuit.twoQgate_count() + depthfactor * circuit.depth()
+            return twoQGCfactor * circuit.two_q_gate_count() + depthfactor * circuit.depth()
 
     else: raise ValueError("This `costfunction` string is not a valid option!")
     return costfunction
@@ -202,13 +202,13 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     # Only change gate library of the Pauli circuit if we have a ProcessorSpec with compilations.
     if pspec is not None:
         pauli_circuit.change_gate_library(
-            pspec.compilations['absolute'], oneQgate_relations=pspec.oneQgate_relations)  # identity=pspec.identity,
+            pspec.compilations['absolute'], one_q_gate_relations=pspec.oneQgate_relations)  # identity=pspec.identity,
     # Prefix or post-fix the Pauli circuit to the main symplectic-generating circuit.
     if prefixpaulis: circuit.prefix_circuit(pauli_circuit)
     else: circuit.append_circuit(pauli_circuit)
 
     # If we aren't Pauli-randomizing, do a final bit of depth compression
-    if pspec is not None: circuit.compress_depth(oneQgate_relations=pspec.oneQgate_relations, verbosity=0)
+    if pspec is not None: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
     else: circuit.compress_depth(verbosity=0)
 
     # Check that the correct Clifford has been compiled. This should never fail, but could if
@@ -435,7 +435,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
                 # not sufficient here.
                 # identity=pspec.identity,
                 pcircuit.change_gate_library(pspec.compilations['absolute'],
-                                             oneQgate_relations=pspec.oneQgate_relations)
+                                             one_q_gate_relations=pspec.oneQgate_relations)
             circuit.insert_circuit(pcircuit, d - i)
 
     if check:
@@ -644,11 +644,11 @@ def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qub
     if pspec is not None:
         if qubit_labels is None:
             # ,identity=pspec.identity,
-            circuit.change_gate_library(pspec.compilations['paulieq'], oneQgate_relations=pspec.oneQgate_relations)
+            circuit.change_gate_library(pspec.compilations['paulieq'], one_q_gate_relations=pspec.oneQgate_relations)
         else:
             # identity=pspec.identity,
             circuit.change_gate_library(pspec.compilations['paulieq'], allowed_filter=set(qubit_labels),
-                                        oneQgate_relations=pspec.oneQgate_relations)
+                                        one_q_gate_relations=pspec.oneQgate_relations)
     if check:
         implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
         assert(_np.array_equal(s, implemented_s))
@@ -883,7 +883,7 @@ def compile_symplectic_using_GGE_core(s, check=True):
     # To do the depth compression, we use the 1-qubit gate relations for the standard set of gates used
     # here.
     oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
-    circuit.compress_depth(oneQgate_relations=oneQgate_relations, verbosity=0)
+    circuit.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
     # We check that the correct Clifford -- up to Pauli operators -- has been implemented.
     if check:
         implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit)
@@ -997,11 +997,11 @@ def compile_symplectic_using_RiAG_algoritm(s, pspec, qubit_labels=None, iteratio
             circuit = circuit.copy(editable=True)
             if qubit_labels is None:
                 # ,identity=pspec.identity
-                circuit.change_gate_library(pspec.compilations['paulieq'], oneQgate_relations=pspec.oneQgate_relations)
+                circuit.change_gate_library(pspec.compilations['paulieq'], one_q_gate_relations=pspec.oneQgate_relations)
             else:
                 # identity=pspec.identity,
                 circuit.change_gate_library(pspec.compilations['paulieq'], allowed_filter=set(qubit_labels),
-                                            oneQgate_relations=pspec.oneQgate_relations)
+                                            one_q_gate_relations=pspec.oneQgate_relations)
 
         # Calculate the cost after changing gate library.
         cost = costfunction(circuit, pspec)
@@ -1263,7 +1263,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     if clname is not None:
         circuit = circuit.copy(editable=True)
         circuit.change_gate_library(pspec.compilations[clname], allowed_filter=qubit_labels,
-                                    oneQgate_relations=pspec.oneQgate_relations)  # , identity=pspec.identity)
+                                    one_q_gate_relations=pspec.oneQgate_relations)  # , identity=pspec.identity)
     if check:
         s_implemented, p_implemented = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
         # This only checks its correct upto the phase vector, so that we can use the algorithm
@@ -1902,7 +1902,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             tc = tc.copy(editable=True)
             i += 1
             # Do the depth-compression *before* changing gate library
-            tc.compress_depth(oneQgate_relations=oneQgate_relations, verbosity=0)
+            tc.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
             tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
             cost = costfunction(tc, pspec)
             # If this is the best circuit so far, then save it.
@@ -1947,7 +1947,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
     circuit.append_circuit(paulicircuit)
 
-    if not paulirandomize: circuit.compress_depth(oneQgate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
@@ -2071,7 +2071,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             tc.reverse()
             # Do the depth-compression *after* the circuit is reversed (after this, reversing circuit doesn't implement
             # inverse).
-            tc.compress_depth(oneQgate_relations=oneQgate_relations, verbosity=0)
+            tc.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
             # Change into the gates of pspec.
             tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
             # If this is the best circuit so far, then save it.
@@ -2127,7 +2127,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     circuit.prefix_circuit(paulicircuit)
     # We can only do depth compression again if we haven't Pauli-randomized. Otherwise we'd potentially undo this
     # randomization.
-    if not paulirandomize: circuit.compress_depth(oneQgate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
