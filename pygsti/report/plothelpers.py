@@ -66,7 +66,7 @@ def count_matrices(gsplaq, dataset):
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         count values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
@@ -98,7 +98,7 @@ def frequency_matrices(gsplaq, dataset):
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         frequency values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -132,7 +132,7 @@ def probability_matrices(gsplaq, model,
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         probability values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -178,7 +178,7 @@ def chi2_matrix(gsplaq, dataset, model, min_prob_clip_for_weighting=1e-4,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         chi^2 values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -229,7 +229,7 @@ def logl_matrix(gsplaq, dataset, model, min_prob_clip=1e-6,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         logl values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -277,7 +277,7 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         logl values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -517,7 +517,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, direct_model,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         Direct-X chi^2 values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
@@ -578,7 +578,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, direct_model,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         Direct-X logL values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
@@ -620,7 +620,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         log-likelihood-ratio values corresponding to the operation sequences
         where a base circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
@@ -651,7 +651,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         -log10(pvalues) for testing the "no drift" null hypothesis, using the "max power in
         spectra" test, on the relevant sequences. This operation sequences correspond to the
         operation sequences where a base circuit is sandwiched between the each prep-fiducial
@@ -691,7 +691,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         The max tvd for quantifying deviations from the data mean. This
         operation sequences correspond to the operation sequences where a base circuit
         is sandwiched between the each prep-fiducial and effect-fiducial pair.
@@ -730,7 +730,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
 #     Returns
 #     -------
-#     numpy array of shape ( len(effectStrs), len(prepStrs) )
+#     numpy array of shape ( len(effect_strs), len(prep_strs) )
 #         Matrix of max powers in the time-series power spectra forthe operation sequences where a
 #         base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
 

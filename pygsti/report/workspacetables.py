@@ -771,15 +771,15 @@ class GaugeRobustMetricTable(WorkspaceTable):
             #print("PT1:\n",mdl.strdiff(target_model))
             #print("PT1b:\n",mdl.strdiff(target_model, 'inf'))
             try:
-                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gatesMetric=gmetric,
-                                                            itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
-                                                            returnAll=True)  # ADDITIONAL GOPT
+                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric=gmetric,
+                                                            item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                            return_all=True)  # ADDITIONAL GOPT
             except Exception as e:
                 _warnings.warn(("GaugeRobustMetricTable gauge opt failed for %s label - "
                                 "falling back to frobenius metric! Error was:\n%s") % (lbl, str(e)))
-                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gatesMetric="frobenius",
-                                                            itemWeights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
-                                                            returnAll=True)  # ADDITIONAL GOPT
+                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric="frobenius",
+                                                            item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
+                                                            return_all=True)  # ADDITIONAL GOPT
 
             #print("PT2:\n",mdl.strdiff(target_model))
             #print("PT2b:\n",mdl.strdiff(target_model, 'inf'))
@@ -2768,15 +2768,15 @@ class GaugeOptParamsTable(WorkspaceTable):
                 table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None, None))
             if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:
                 table.addrow(("%sSPAM penalty factor" % pre, str(goargs['spam_penalty_factor'])), (None, None))
-            if 'gatesMetric' in goargs:
-                table.addrow(("%sMetric for gate-to-target" % pre, str(goargs['gatesMetric'])), (None, None))
-            if 'spamMetric' in goargs:
-                table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spamMetric'])), (None, None))
-            if 'itemWeights' in goargs:
-                if goargs['itemWeights']:
+            if 'gates_metric' in goargs:
+                table.addrow(("%sMetric for gate-to-target" % pre, str(goargs['gates_metric'])), (None, None))
+            if 'spam_metric' in goargs:
+                table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spam_metric'])), (None, None))
+            if 'item_weights' in goargs:
+                if goargs['item_weights']:
                     table.addrow(
                         ("%sItem weights" % pre,
-                         ", ".join([("%s=%.2g" % (k, v)) for k, v in goargs['itemWeights'].items()])), (None, None))
+                         ", ".join([("%s=%.2g" % (k, v)) for k, v in goargs['item_weights'].items()])), (None, None))
             if 'gauge_group' in goargs:
                 table.addrow(("%sGauge group" % pre, goargs['gauge_group'].name), (None, None))
 

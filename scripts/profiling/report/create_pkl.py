@@ -34,7 +34,7 @@ def main():
     gsTarget = est.gatesets['target']
     for spamWt in [1e-4,1e-3,1e-2,1e-1,1.0]:
         gs = pygsti.gaugeopt_to_target(gsFinal,gsTarget,{'gates':1, 'spam':spamWt})
-        est.add_gaugeoptimized({'itemWeights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt) 
+        est.add_gaugeoptimized({'item_weights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt) 
 
     #Case2: "Full" GST
     fullTarget = gs_target.copy()
@@ -47,7 +47,7 @@ def main():
     gsTarget = est.gatesets['target']
     for spamWt in [1e-4,1e-3,1e-2,1e-1,1.0]:
         gs = pygsti.gaugeopt_to_target(gsFinal,gsTarget,{'gates':1, 'spam':spamWt})
-        est.add_gaugeoptimized({'itemWeights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt)
+        est.add_gaugeoptimized({'item_weights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt)
 
     with open('data/full_report_results.pkl', 'wb') as outfile:
         pickle.dump((results_tp, results_full), outfile, protocol=2)

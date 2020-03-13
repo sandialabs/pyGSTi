@@ -61,31 +61,31 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         # file to be filled in after the experiments are performed.
 
         graspGerms = germsel.generate_germs(target_model, algorithm='grasp', 
-                                            seed=2017, numGSCopies=2,
-                                            candidateGermCounts={3: 'all upto', 4:10, 5:10, 6:10},
-                                            candidateSeed=2017,
+                                            seed=2017, num_gs_copies=2,
+                                            candidate_germ_counts={3: 'all upto', 4:10, 5:10, 6:10},
+                                            candidate_seed=2017,
                                             algorithm_kwargs={'iterations': 1})
         slackPrepFids, slackMeasFids = fidsel.generate_fiducials(target_model, algorithm='slack',
-                                                                 algorithm_kwargs={'slackFrac': 0.25})
-        fidsel.generate_fiducials(target_model, algorithm='slack') # slacFrac == 1.0 if don't specify either slackFrac or fixedSlack
+                                                                 algorithm_kwargs={'slack_frac': 0.25})
+        fidsel.generate_fiducials(target_model, algorithm='slack') # slacFrac == 1.0 if don't specify either slack_frac or fixed_slack
                 
 
-        germsMaxLength3 = germsel.generate_germs(target_model, candidateGermCounts={3: 'all upto'}, seed=2017)
+        germsMaxLength3 = germsel.generate_germs(target_model, candidate_germ_counts={3: 'all upto'}, seed=2017)
 
-        uniformPrepFids, uniformMeasFids = fidsel.generate_fiducials(target_model, maxFidLength=3,
+        uniformPrepFids, uniformMeasFids = fidsel.generate_fiducials(target_model, max_fid_length=3,
                                                                      algorithm='grasp',
                                                                      algorithm_kwargs={'iterations': 100})
 
 
-        incompletePrepFids, incompleteMeasFids = fidsel.generate_fiducials(target_model, maxFidLength=1)
+        incompletePrepFids, incompleteMeasFids = fidsel.generate_fiducials(target_model, max_fid_length=1)
 
-        nonSingletonGerms = germsel.generate_germs(target_model, numGSCopies=2, force=None, candidateGermCounts={4: 'all upto'},
+        nonSingletonGerms = germsel.generate_germs(target_model, num_gs_copies=2, force=None, candidate_germ_counts={4: 'all upto'},
                                                    algorithm='grasp', algorithm_kwargs={'iterations': 5},
                                                    seed=2017)
 
 
-        omitIdentityPrepFids, omitIdentityMeasFids = fidsel.generate_fiducials(target_model, omitIdentity=False,
-                                                                               opsToOmit=['Gi'])
+        omitIdentityPrepFids, omitIdentityMeasFids = fidsel.generate_fiducials(target_model, omit_identity=False,
+                                                                               ops_to_omit=['Gi'])
 
 
 if __name__ == '__main__':

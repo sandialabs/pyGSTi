@@ -639,7 +639,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
             if gg.name in ("Full", "TP"):
                 stages.append(
                     {
-                        'itemWeights': {'gates': 1.0, 'spam': 1.0},
+                        'item_weights': {'gates': 1.0, 'spam': 1.0},
                         'verbosity': printer
                     })
 
@@ -647,7 +647,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
             #         expense of spam if needed)
             stages.append(
                 {
-                    'itemWeights': {'gates': 1.0, 'spam': 0.0},
+                    'item_weights': {'gates': 1.0, 'spam': 0.0},
                     'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
                     'verbosity': printer
                 })
@@ -659,7 +659,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                 _objs.TPSpamGaugeGroup
             stages.append(
                 {
-                    'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                    'item_weights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
                     'gauge_group': s3gg(model.dim),
                     'oob_check_interval': 1,
@@ -678,7 +678,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                         if gl in model.operations.keys(): stage2_item_weights[gl] = 0.01
                     stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
                     iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                    stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
+                    stages_2QUR[iStage2]['item_weights'] = stage2_item_weights
                     gaugeOptSuite_dict[rootLbl] = stages_2QUR  # add additional gauge opt
                 else:
                     _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
@@ -723,7 +723,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                 itemWeights = baseWts.copy()
                 itemWeights['spam'] = spamWt
                 gaugeOptSuite_dict[lbl] = {
-                    'itemWeights': itemWeights,
+                    'item_weights': itemWeights,
                     'spam_penalty_factor': vSpam, 'verbosity': printer}
 
     elif suiteName == "unreliable2Q":
@@ -910,11 +910,11 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
         for goparams in gaugeOptSuite_dict.values():
             goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
             for goparams_dict in goparams_list:
-                if 'targetModel' in goparams_dict:
+                if 'target_model' in goparams_dict:
                     _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                    "user-defined targetModel in gauge opt"
+                                    "user-defined target_model in gauge opt"
                                     "param dict(s)"))
-                goparams_dict.update({'targetModel': target_model})
+                goparams_dict.update({'target_model': target_model})
 
     #Gauge optimize to list of gauge optimization parameters
     for goLabel, goparams in gaugeOptSuite_dict.items():
@@ -1594,7 +1594,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         for gokey in gauge_opt_keys:
             trivialEl = _TrivialGaugeGroupElement(themodel.dim)
             goparams = {'model': themodel,
-                        'targetModel': targetModel,
+                        'target_model': targetModel,
                         '_gaugeGroupEl': trivialEl}
             est.add_gaugeoptimized(goparams, themodel, gokey)
 

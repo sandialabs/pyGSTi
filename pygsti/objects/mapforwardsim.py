@@ -1217,10 +1217,10 @@ class MapForwardSimulator(ForwardSimulator):
         dataset : DataSet
             the data set used to compute the logl contributions.
 
-        minProbClipForWeighting : float, optional
+        min_prob_clip_for_weighting : float, optional
             Sets the minimum and maximum probability p allowed in the chi^2
             weights: N/(p*(1-p)) by clipping probability p values to lie within
-            the interval [ minProbClipForWeighting, 1-minProbClipForWeighting ].
+            the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
            (min,max) values used to clip the predicted probabilities to.

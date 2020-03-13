@@ -751,13 +751,13 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
             return jac
 
-    #def checked_jacobian(vectorGS):
+    #def checked_jacobian(vector_gs):
     #  def obj_i(x, i): return _objective_func(x)[i]
     #  def jac_i(x, i): return (_jacobian(x))[i]
-    #  y = _objective_func(vectorGS)
-    #  jac = _jacobian(vectorGS); nJ = _np.linalg.norm(jac)
+    #  y = _objective_func(vector_gs)
+    #  jac = _jacobian(vector_gs); nJ = _np.linalg.norm(jac)
     #  for i in range(len(y)):
-    #    err = _spo.check_grad(obj_i, jac_i, vectorGS, i)
+    #    err = _spo.check_grad(obj_i, jac_i, vector_gs, i)
     #    if err/nJ > 1e-6: print "Jacobian(%d) Error = %g (jac norm = %g)" % (i,err,nJ)
     #  return jac
 

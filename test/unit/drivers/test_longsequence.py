@@ -160,7 +160,7 @@ class StdPracticeGSTTester(LongSequenceBase):
     def test_stdpractice_gst_gaugeOptTarget(self):
         myGaugeOptSuiteDict = {
             'MyGaugeOpt': {
-                'itemWeights': {'gates': 1, 'spam': 0.0001}
+                'item_weights': {'gates': 1, 'spam': 0.0001}
             }
         }
         result = ls.do_stdpractice_gst(
@@ -174,8 +174,8 @@ class StdPracticeGSTTester(LongSequenceBase):
     def test_stdpractice_gst_gaugeOptTarget_warns_on_target_override(self):
         myGaugeOptSuiteDict = {
             'MyGaugeOpt': {
-                'itemWeights': {'gates': 1, 'spam': 0.0001},
-                'targetModel': self.model  # to test overriding internal target model (prints a warning)
+                'item_weights': {'gates': 1, 'spam': 0.0001},
+                'target_model': self.model  # to test overriding internal target model (prints a warning)
             }
         }
         with self.assertWarns(Warning):

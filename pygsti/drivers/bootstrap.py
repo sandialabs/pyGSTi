@@ -279,9 +279,9 @@ def gauge_optimize_model_list(gs_list, target_model,
         for mdl in listOfBootStrapEstsNoOpt:
             listOfBootStrapEstsNoOptG0toTargetVarSpam.append(
                 _alg.gaugeopt_to_target(mdl, target_model,
-                                        itemWeights={'spam': spW},
-                                        gatesMetric=gate_metric,
-                                        spamMetric=spam_metric))
+                                        item_weights={'spam': spW},
+                                        gates_metric=gate_metric,
+                                        spam_metric=spam_metric))
 
         ModelGOtoTargetVarSpamVecArray = _np.zeros([numResamples],
                                                    dtype='object')
@@ -329,9 +329,9 @@ def gauge_optimize_model_list(gs_list, target_model,
     for mdl in listOfBootStrapEstsNoOpt:
         listOfBootStrapEstsG0toTargetSmallSpam.append(
             _alg.gaugeopt_to_target(mdl, target_model,
-                                    itemWeights={'spam': bestSPAMWeight},
-                                    gatesMetric=gate_metric,
-                                    spamMetric=spam_metric))
+                                    item_weights={'spam': bestSPAMWeight},
+                                    gates_metric=gate_metric,
+                                    spam_metric=spam_metric))
 
     return listOfBootStrapEstsG0toTargetSmallSpam
 

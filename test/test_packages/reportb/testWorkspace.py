@@ -324,7 +324,7 @@ class TestWorkspace(ReportBaseCase):
         #        effect_labels=self.mdl.get_effect_labels() )
         baseStrs = self.gss.get_basestrings()
         directModels = dx.direct_mlgst_models(
-            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svdTruncateTo=4)
+            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
         plts.append( w.ColorBoxPlot(["chi2","logl","blank",'directchi2','directlogl'], self.gss,
                                     self.ds, self.mdl, box_labels=False, direct_gst_models=directModels) )
         plts.append( w.ColorBoxPlot(["errorrate"], self.gss,

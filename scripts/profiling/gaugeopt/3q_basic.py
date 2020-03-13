@@ -22,9 +22,9 @@ def main():
 
     with timed_block('Basic gauge opt (3Q)'):
         gs_gaugeopt = gaugeopt_to_target(gs, gs_target, 
-                itemWeights={'spam' : 0.0001, 'gates':1.0},
-                spamMetric='frobenius',
-                gatesMetric='frobenius')
+                item_weights={'spam' : 0.0001, 'gates':1.0},
+                spam_metric='frobenius',
+                gates_metric='frobenius')
 
 if __name__ == '__main__':
     main()

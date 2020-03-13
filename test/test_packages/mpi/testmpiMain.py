@@ -839,8 +839,8 @@ def test_run1Q_end2end(comm):
 def test_MPI_germsel(comm):
     if comm is None or comm.Get_rank() == 0:
         gatesetNeighborhood = pygsti.alg.randomize_model_list(
-            [std.target_model()], randomizationStrength=1e-3,
-            numCopies=3, seed=2018)
+            [std.target_model()], randomization_strength=1e-3,
+            num_copies=3, seed=2018)
         comm.bcast(gatesetNeighborhood, root=0)
     else:
         gatesetNeighborhood = comm.bcast(None, root=0)
@@ -850,14 +850,14 @@ def test_MPI_germsel(comm):
     superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
     #germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
-    #                                    randomize=False, seed=2018, scoreFunc='all',
+    #                                    randomize=False, seed=2018, score_func='all',
     #                                    threshold=1e6, verbosity=1, opPenalty=1.0,
     #                                    mem_limit=3*(1024**3), comm=comm)
 
     germs_lowmem = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
-                                               randomize=False, seed=2018, scoreFunc='all',
-                                               threshold=1e6, verbosity=1, opPenalty=1.0,
-                                               memLimit=3*(1024**2), comm=comm) # force "single-Jac" mode
+                                               randomize=False, seed=2018, score_func='all',
+                                               threshold=1e6, verbosity=1, op_penalty=1.0,
+                                               mem_limit=3*(1024**2), comm=comm) # force "single-Jac" mode
 
 @mpitest(4)
 def test_MPI_profiler(comm):

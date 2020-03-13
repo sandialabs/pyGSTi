@@ -353,14 +353,14 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
             eliminationorder = list(range(len(pspec.qubit_labels)))
         else:
             eliminationorder = list(range(n))
-        circuit = compile_symplectic_using_OGGE_algorithm(s, eliminationorder=eliminationorder, pspec=pspec,
+        circuit = compile_symplectic_using_ogge_algorithm(s, eliminationorder=eliminationorder, pspec=pspec,
                                                           qubit_labels=qubit_labels, ctype='basic', check=False)
         circuits.append(circuit)
 
     # Randomized basic global Gaussian elimination, whereby the order that the qubits are eliminated in
     # is randomized.
     if 'ROGGE' in algorithms:
-        circuit = compile_symplectic_using_ROGGE_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, ctype='basic',
+        circuit = compile_symplectic_using_rogge_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, ctype='basic',
                                                            costfunction=costfunction, iterations=iterations,
                                                            check=False)
         circuits.append(circuit)
@@ -369,7 +369,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     # The Aaraonson-Gottesman method for compiling a symplectic matrix using 5 CNOT circuits + local layers,
     # with the CNOT circuits compiled using Gaussian elimination.
     # if 'AGvGE' in algorithms:
-    #     circuit = compile_symplectic_using_AG_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod='GE',
+    #     circuit = compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod='GE',
     #                                                     check=False)
     #     circuits.append(circuit)
 
@@ -378,7 +378,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     # with the CNOT circuits compiled using the asymptotically optimal O(n^2/logn) CNOT circuit algorithm of
     # PMH.
     # if 'AGvPMH' in algorithms:
-    #     circuit = compile_symplectic_using_AG_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod = 'PMH',
+    #     circuit = compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod = 'PMH',
     #                                                     check=False)
     #     circuits.append(circuit)
 
@@ -388,7 +388,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         # This defaults to what we think is the best Gauss. elimin. based CNOT compiler in pyGSTi (this one may actual
         # not be the best one though). Note that this is a randomized version of the algorithm (using the albert-factor
         # randomization).
-        circuit = compile_symplectic_using_RiAG_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
+        circuit = compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
                                                          cnotalg='COiCAGE', cargs=[], costfunction=costfunction,
                                                          check=False)
         circuits.append(circuit)
@@ -445,10 +445,10 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     return circuit
 
 
-def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
+def compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
                                              costfunction='2QGC:10:depth:1', iterations=10, check=True):
     """
-    The order global Gaussian elimiation algorithm of compile_symplectic_using_OGGE_algorithm() with the
+    The order global Gaussian elimiation algorithm of compile_symplectic_using_ogge_algorithm() with the
     qubit elimination order randomized. See that function for further details on the algorithm, This algorithm
     is more conveniently and flexibly accessed via the `compile_symplectic()` or  `compile_clifford()` wrap-around
     functions.
@@ -528,7 +528,7 @@ def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, qubit_labels=None, c
         _np.random.shuffle(eliminationorder)
         # Call the re-ordered global Gaussian elimination, which is wrap-around for the GE algorithms to deal
         # with qubit relabeling. Check is False avoids multiple checks of success, when only the last check matters.
-        circuit = compile_symplectic_using_OGGE_algorithm(
+        circuit = compile_symplectic_using_ogge_algorithm(
             s, eliminationorder, pspec=pspec, qubit_labels=qubit_labels, ctype=ctype, check=False)
         # Find the cost of the circuit, and keep it if this circuit is the lowest-cost circuit so far.
         circuit_cost = costfunction(circuit, pspec)
@@ -543,7 +543,7 @@ def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, qubit_labels=None, c
     return bestcircuit
 
 
-def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
+def compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
                                             ctype='basic', check=True):
     """
     An ordered global Gaussian elimiation algorithm for creating a circuit that implements a Clifford that is
@@ -617,7 +617,7 @@ def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qub
 
     if ctype == 'basic':
         # Check is False avoids multiple checks of success, when only the last check matters.
-        circuit = compile_symplectic_using_GGE_core(permuted_s, check=False)
+        circuit = compile_symplectic_using_gge_core(permuted_s, check=False)
         circuit = circuit.copy(editable=True)  # make editable - maybe make `editable` a param of above fn call?
     else: raise ValueError("The compilation sub-method is not valid!")
     # Futures: write a connectivity-adjusted algorithm, similar to the COGE/iCAGE CNOT compilers.
@@ -656,12 +656,12 @@ def compile_symplectic_using_OGGE_algorithm(s, eliminationorder, pspec=None, qub
     return circuit
 
 
-def compile_symplectic_using_GGE_core(s, check=True):
+def compile_symplectic_using_gge_core(s, check=True):
     """
     Creates a circuit over 'I','H','HP','PH','HPH', and 'CNOT' that implements a Clifford
     gate with `s` as its symplectic matrix in the symplectic representation (and with any
     phase vector). This circuit is generated using a basic Gaussian elimination algorithm,
-    which is described in more detail in compile_symplectic_using_OGGE_algorithm(), which
+    which is described in more detail in compile_symplectic_using_ogge_algorithm(), which
     is a wrap-around for this algorithm that implements a more flexible compilation method.
 
     This algorithm is more conveniently accessed via the `compile_symplectic()` or
@@ -893,7 +893,7 @@ def compile_symplectic_using_GGE_core(s, check=True):
     return circuit
 
 
-def compile_symplectic_using_AG_algorithm(s, pspec=None, qubit_labels=None, cnotmethod='PMH', check=False):
+def compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cnotmethod='PMH', check=False):
     """
     The Aaraonson-Gottesman method for compiling a symplectic matrix using 5 CNOT circuits + local layers.
     This algorithm is presented in PRA 70 052328 (2014).
@@ -912,7 +912,7 @@ def compile_symplectic_using_AG_algorithm(s, pspec=None, qubit_labels=None, cnot
     return circuit
 
 
-def compile_symplectic_using_RiAG_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
+def compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
                                            cargs=[], costfunction='2QGC:10:depth:1', check=True):
     """
     Our improved version of Aaraonson-Gottesman method [PRA 70 052328 (2014)] for compiling a symplectic matrix
@@ -989,7 +989,7 @@ def compile_symplectic_using_RiAG_algoritm(s, pspec, qubit_labels=None, iteratio
 
     mincost = _np.inf
     for i in range(iterations):
-        circuit = compile_symplectic_using_iAG_algorithm(
+        circuit = compile_symplectic_using_iag_algorithm(
             s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs, check=False)
 
         # Change to the native gate library
@@ -1016,9 +1016,9 @@ def compile_symplectic_using_RiAG_algoritm(s, pspec, qubit_labels=None, iteratio
     return bestcircuit
 
 
-def compile_symplectic_using_iAG_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True):
+def compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True):
     """
-    A single iteration of the algorithm in compile_symplectic_using_RiAG_algoritm(). See that functions
+    A single iteration of the algorithm in compile_symplectic_using_riag_algoritm(). See that functions
     docstring for more information. Note that it is normallly better to access this algorithm through that
     function even when only a single iteration of the randomization is desired: this function does *not* change
     into the native model.
@@ -1207,7 +1207,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     assert(_symp.check_symplectic(s)), "`s` is not symplectic, so it does not rep. a valid CNOT circuit!"
 
     # basic GE
-    if algorithm == 'BGE': circuit = compile_cnot_circuit_using_BGE_algorithm(s, pspec, qubit_labels=qubit_labels)
+    if algorithm == 'BGE': circuit = compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=qubit_labels)
 
     # ordered GE with the qubit elimination order specified by the aargs list.
     elif algorithm == 'OCAGE' or algorithm == 'OiCAGE':
@@ -1215,10 +1215,10 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
             'With the `OCAGE` algorithm, `arrgs` must be a length-1 list/tuple containing a list of all the qubits!'
         qubitorder = _copy.copy(aargs[0])
         if algorithm == 'OCAGE':
-            circuit = compile_cnot_circuit_using_OCAGE_algorithm(
+            circuit = compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs[1:])
         if algorithm == 'OiCAGE':
-            circuit = compile_cnot_circuit_using_OiCAGE_algorithm(
+            circuit = compile_cnot_circuit_using_oicage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs[1:])
 
     # ordered GE with the qubit elimination order from least to most connected qubit
@@ -1241,10 +1241,10 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
             del remaining_qubits[qindex]
 
         if algorithm == 'COCAGE':
-            circuit = compile_cnot_circuit_using_OCAGE_algorithm(
+            circuit = compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs)
         if algorithm == 'COiCAGE':
-            circuit = compile_cnot_circuit_using_OiCAGE_algorithm(
+            circuit = compile_cnot_circuit_using_oicage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs)
 
     # ordered GE with the qubit elimination order random. This is likely a pretty stupid algorithm to use
@@ -1254,7 +1254,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
         qubitorder = _copy.copy(qubits)
         _np.random.shuffle(qubitorder)
         if algorithm == 'ROCAGE':
-            circuit = compile_cnot_circuit_using_OCAGE_algorithm(
+            circuit = compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=True, *aargs)
 
     else: raise ValueError("The choice of algorithm is invalid!")
@@ -1274,7 +1274,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     return circuit
 
 
-def compile_cnot_circuit_using_BGE_algorithm(s, pspec, qubit_labels=None, clname=None, check=True):
+def compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname=None, check=True):
     """
     A basic Gaussian elimination algorithm, that uses CNOT to perform row-reduction on the upper
     LHS (or lower RHS) of `s`. This algorithm does not take device connectivity into account.
@@ -1348,7 +1348,7 @@ def add_cnot(qubitgraph, controllabel, targetlabel):
 # algorithm is only slightly better on average than this one).
 
 
-def compile_cnot_circuit_using_OCAGE_algorithm(s, pspec, qubitorder, qubit_labels=None, check=True,
+def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labels=None, check=True,
                                                respect_connectivity=True):
     """
     An ordered and connectivity-adjusted Gaussian-elimination (OCAGE) algorithm for compiling a CNOT circuit.
@@ -1623,11 +1623,11 @@ def compile_cnot_circuit_using_OCAGE_algorithm(s, pspec, qubitorder, qubit_label
     return cnot_circuit
 
 
-def compile_cnot_circuit_using_OiCAGE_algorithm(s, pspec, qubitorder, qubit_labels=None, clname=None, check=True):
+def compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, clname=None, check=True):
     """
     An improved, ordered and connectivity-adjusted Gaussian-elimination (OiCAGE) algorithm for compiling a CNOT
     circuit. This is a *slight* improvement (for some CNOT circuits), on the algorithm in
-    `compile_cnot_circuit_using_OCAGE_algorithm()`, which is the meaning of the "improved". See the docstring
+    `compile_cnot_circuit_using_ocage_algorithm()`, which is the meaning of the "improved". See the docstring
     for that function for information on the parameters of this function and the basic outline of the algorithm.
     """
     # The number of qubits the CNOT circuit is over.

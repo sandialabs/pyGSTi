@@ -106,7 +106,7 @@ ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments, n_sam
 start = time.time()
 '''
 results = pygsti.do_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
-                                    maxLengths, gaugeOptParams={'itemWeights': {'spam':0.1,'gates': 1.0}},
+                                    maxLengths, gaugeOptParams={'item_weights': {'spam':0.1,'gates': 1.0}},
                                     advancedOptions={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
                                     verbosity=3 )
 '''

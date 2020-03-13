@@ -73,7 +73,7 @@ def mdl_lgst(self):
 @ns.memo
 def mdl_lgst_go(self):
     return alg.gaugeopt_to_target(
-        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, checkJac=True
+        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True
     )
 
 

@@ -45,8 +45,8 @@ class TestDriversMethods(DriversTestCase):
         #Global FPR
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.target_model(), std.fiducials, std.fiducials, std.germs,
-            searchMode="random", nRandom=100, seed=1234,
-            verbosity=1, memLimit=int(2*(1024)**3), minimumPairs=2)
+            search_mode="random", n_random=100, seed=1234,
+            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
 
         gfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
@@ -69,9 +69,9 @@ class TestDriversMethods(DriversTestCase):
         #Per-germ FPR
         fidPairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ(
             std.target_model(), std.fiducials, std.fiducials, std.germs,
-            searchMode="random", constrainToTP=True,
-            nRandom=100, seed=1234, verbosity=1,
-            memLimit=int(2*(1024)**3))
+            search_mode="random", constrain_to_tp=True,
+            n_random=100, seed=1234, verbosity=1,
+            mem_limit=int(2*(1024)**3))
 
         pfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,

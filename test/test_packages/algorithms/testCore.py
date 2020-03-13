@@ -26,7 +26,7 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual(mdl_lgst.frobeniusdist(mdl_lgst_verb),0)
 
         print("GG = ",mdl_lgst.default_gauge_group)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
@@ -56,7 +56,7 @@ class TestCoreMethods(AlgorithmsBase):
         print(self.datagen_gateset)
         print("\nLGST RAW:")
         print(mdl_lgst)
-        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, checkJac=False)
+        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, check_jac=False)
         print("\nAfter gauge opt:")
         print(mdl_lgst)
         print(mdl_lgst.strdiff(self.datagen_gateset))
@@ -69,7 +69,7 @@ class TestCoreMethods(AlgorithmsBase):
         assert(pygsti.obj.Model._pcheck)
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
         #mdl_lgst._check_paramvec() #will fail, but OK, since paramvec is computed only when *needed* now
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_lgst_go._check_paramvec()
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         mdl_clgst.to_vector() # to make sure we're in sync
@@ -121,8 +121,8 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_exlgst_reg_compare = pygsti.io.load_model(compare_files + "/exlgst_reg.model")
         mdl_exlgst.set_all_parameterizations("full") # b/c ex-LGST sets spam to StaticSPAMVec objects (b/c they're not optimized)
         mdl_exlgst_reg.set_all_parameterizations("full") # b/c ex-LGST sets spam to StaticSPAMVec objects (b/c they're not optimized)
-        mdl_exlgst_go = pygsti.gaugeopt_to_target(mdl_exlgst,mdl_exlgst_compare, {'spam':1.0 }, checkJac=True)
-        mdl_exlgst_reg_go = pygsti.gaugeopt_to_target(mdl_exlgst_reg,mdl_exlgst_reg_compare, {'spam':1.0 }, checkJac=True)
+        mdl_exlgst_go = pygsti.gaugeopt_to_target(mdl_exlgst,mdl_exlgst_compare, {'spam':1.0 }, check_jac=True)
+        mdl_exlgst_reg_go = pygsti.gaugeopt_to_target(mdl_exlgst_reg,mdl_exlgst_reg_compare, {'spam':1.0 }, check_jac=True)
 
 
     def test_MC2GST(self):
@@ -130,7 +130,7 @@ class TestCoreMethods(AlgorithmsBase):
         ds = self.ds
 
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         CM = profiler._get_mem_usage()
 
@@ -159,9 +159,9 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lsgst_compare = pygsti.io.load_model(compare_files + "/lsgst.model")
         mdl_lsgst_reg_compare = pygsti.io.load_model(compare_files + "/lsgst_reg.model")
 
-        mdl_lsgst_go = pygsti.gaugeopt_to_target(mdl_lsgst, mdl_lsgst_compare, {'spam':1.0}, checkJac=True)
+        mdl_lsgst_go = pygsti.gaugeopt_to_target(mdl_lsgst, mdl_lsgst_compare, {'spam':1.0}, check_jac=True)
 
-        mdl_lsgst_reg_go = pygsti.gaugeopt_to_target(mdl_lsgst_reg, mdl_lsgst_reg_compare, {'spam':1.0}, checkJac=True)
+        mdl_lsgst_reg_go = pygsti.gaugeopt_to_target(mdl_lsgst_reg, mdl_lsgst_reg_compare, {'spam':1.0}, check_jac=True)
 
         self.assertAlmostEqual( mdl_lsgst_go.frobeniusdist(mdl_lsgst_compare), 0, places=4)
         self.assertAlmostEqual( mdl_lsgst_reg_go.frobeniusdist(mdl_lsgst_reg_compare), 0, places=4)
@@ -178,7 +178,7 @@ class TestCoreMethods(AlgorithmsBase):
         ds = self.ds
 
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         mdl_clgst = mdl_clgst.depolarize(op_noise=0.02, spam_noise=0.02) # just to avoid infinity objective funct & jacs below
         CM = profiler._get_mem_usage()
@@ -274,7 +274,7 @@ class TestCoreMethods(AlgorithmsBase):
             pygsti.io.write_model(mdl_mlegst,compare_files + "/mle_gst.model", "Saved MLE-GST Model")
 
         mdl_mle_compare = pygsti.io.load_model(compare_files + "/mle_gst.model")
-        mdl_mlegst_go = pygsti.gaugeopt_to_target(mdl_mlegst, mdl_mle_compare, {'spam':1.0}, checkJac=True)
+        mdl_mlegst_go = pygsti.gaugeopt_to_target(mdl_mlegst, mdl_mle_compare, {'spam':1.0}, check_jac=True)
 
         self.assertAlmostEqual( mdl_mlegst_go.frobeniusdist(mdl_mle_compare), 0, places=4)
 
@@ -288,7 +288,7 @@ class TestCoreMethods(AlgorithmsBase):
             ds = pygsti.construction.generate_fake_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                         sample_error='binomial', seed=100)
             mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
-            mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, checkJac=True)
+            mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, check_jac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(mdl_lgst_go) )
 
         diffs = np.array(diffs, 'd')
@@ -340,7 +340,7 @@ class TestCoreMethods(AlgorithmsBase):
             pygsti.io.write_model(mdl_lsgst,compare_files + "/lsgstMS.model", "Saved LSGST Model with model selection")
 
         mdl_lsgst_compare = pygsti.io.load_model(compare_files + "/lsgstMS.model")
-        mdl_lsgst_go = pygsti.gaugeopt_to_target(mdl_lsgst, mdl_lsgst_compare, {'spam':1.0}, checkJac=True)
+        mdl_lsgst_go = pygsti.gaugeopt_to_target(mdl_lsgst, mdl_lsgst_compare, {'spam':1.0}, check_jac=True)
         self.assertAlmostEqual( mdl_lsgst_go.frobeniusdist(mdl_lsgst_compare), 0, places=4)
 
     def test_miscellaneous(self):

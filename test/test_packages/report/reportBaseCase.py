@@ -82,9 +82,9 @@ class ReportBaseCase(BaseTestCase):
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
                 ('targetModel', targetModel),       #so can gauge-propagate CIs
                 ('cptp_penalty_factor', 0),
-                ('gatesMetric',"frobenius"),
-                ('spamMetric',"frobenius"),
-                ('itemWeights', {'gates': 1.0, 'spam': 0.001}),
+                ('gates_metric',"frobenius"),
+                ('spam_metric',"frobenius"),
+                ('item_weights', {'gates': 1.0, 'spam': 0.001}),
                 ('returnAll', True) ])
 
         _, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)

@@ -53,7 +53,7 @@ class NonDirectCPContractLGSTTester(CPContractLGSTTester):
     def setUp(self):
         super(NonDirectCPContractLGSTTester, self).setUp()
         self.options.update(
-            useDirectCP=False
+            use_direct_cp=False
         )
 
 
@@ -77,7 +77,7 @@ class NonDirectCPTPContractLGSTTester(CPTPContractLGSTTester):
     def setUp(self):
         super(NonDirectCPTPContractLGSTTester, self).setUp()
         self.options.update(
-            useDirectCP=False
+            use_direct_cp=False
         )
 
 

@@ -198,15 +198,15 @@ class Estimate(object):
                         gop["model"] = self.models['final iteration estimate']
                     else: raise ValueError("Must supply 'model' in 'goparams' argument")
 
-                if "targetModel" not in gop:
+                if "target_model" not in gop:
                     if 'target' in self.models:
-                        gop["targetModel"] = self.models['target']
-                    else: raise ValueError("Must supply 'targetModel' in 'goparams' argument")
+                        gop["target_model"] = self.models['target']
+                    else: raise ValueError("Must supply 'target_model' in 'goparams' argument")
 
                 if "maxiter" not in gop:
                     gop["maxiter"] = 100
 
-                gop['returnAll'] = True
+                gop['return_all'] = True
                 if isinstance(gop['model'], _ExplicitOpModel):
                     #only explicit models can be gauge optimized
                     _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)

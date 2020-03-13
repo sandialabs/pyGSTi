@@ -17,8 +17,8 @@ from . import grasp as _grasp
 from . import scoring as _scoring
 
 
-def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
-                       opsToOmit=None, forceEmpty=True, maxFidLength=2,
+def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
+                       ops_to_omit=None, force_empty=True, max_fid_length=2,
                        algorithm='grasp', algorithm_kwargs=None, verbosity=1):
     """Generate prep and measurement fiducials for a given target model.
 
@@ -27,29 +27,29 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
     target_model : Model
         The model you are aiming to implement.
 
-    omitIdentity : bool, optional
+    omit_identity : bool, optional
         Whether to remove the identity gate from the set of gates with which
         fiducials are constructed. Identity gates do nothing to alter
         fiducials, and so should almost always be left out.
 
-    eqThresh : float, optional
+    eq_thresh : float, optional
         Threshold for determining if a gate is the identity gate. If the square
         Frobenius distance between a given gate and the identity gate is less
         than this threshold, the gate is considered to be an identity gate and
         will be removed from the list of gates from which to construct
-        fiducials if `omitIdentity` is ``True``.
+        fiducials if `omit_identity` is ``True``.
 
-    opsToOmit : list of string, optional
+    ops_to_omit : list of string, optional
         List of strings identifying gates in the model that should not be
         used in fiducials. Oftentimes this will include the identity gate, and
         may also include entangling gates if their fidelity is anticipated to
         be much worse than that of single-system gates.
 
-    forceEmpty : bool, optional (default is True)
+    force_empty : bool, optional (default is True)
         Whether or not to force all fiducial sets to contain the empty gate
         string as a fiducial.
 
-    maxFidLength : int, optional
+    max_fid_length : int, optional
         The maximum number of gates to include in a fiducial. The default is
         not guaranteed to work for arbitrary models (particularly for quantum
         systems larger than a single qubit).
@@ -81,20 +81,20 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
 
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    if opsToOmit is None:
-        opsToOmit = []
+    if ops_to_omit is None:
+        ops_to_omit = []
 
-    fidOps = [gate for gate in target_model.operations if gate not in opsToOmit]
+    fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
 
-    if omitIdentity:
+    if omit_identity:
         # we assume identity gate is always the identity mx regardless of basis
         Identity = _np.identity(target_model.get_dimension(), 'd')
 
         for gate in fidOps:
-            if frobeniusdist2(target_model.operations[gate], Identity) < eqThresh:
+            if frobeniusdist2(target_model.operations[gate], Identity) < eq_thresh:
                 fidOps.remove(gate)
 
-    availableFidList = _constr.list_all_circuits(fidOps, 0, maxFidLength)
+    availableFidList = _constr.list_all_circuits(fidOps, 0, max_fid_length)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -105,35 +105,35 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
         default_kwargs = {
             'fidList': availableFidList,
             'verbosity': max(0, verbosity - 1),
-            'forceEmpty': forceEmpty,
-            'scoreFunc': 'all',
+            'force_empty': force_empty,
+            'score_func': 'all',
         }
 
-        if ('slackFrac' not in algorithm_kwargs
-                and 'fixedSlack' not in algorithm_kwargs):
-            algorithm_kwargs['slackFrac'] = 1.0
+        if ('slack_frac' not in algorithm_kwargs
+                and 'fixed_slack' not in algorithm_kwargs):
+            algorithm_kwargs['slack_frac'] = 1.0
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
         prepFidList = optimize_integer_fiducials_slack(model=target_model,
-                                                       prepOrMeas='prep',
+                                                       prep_or_meas='prep',
                                                        **algorithm_kwargs)
         if prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList, 'prep',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = optimize_integer_fiducials_slack(model=target_model,
-                                                       prepOrMeas='meas',
+                                                       prep_or_meas='meas',
                                                        **algorithm_kwargs)
         if measFidList is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList, 'meas',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([fid.str for fid in measFidList]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
@@ -141,12 +141,12 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
         default_kwargs = {
-            'fidsList': availableFidList,
+            'fids_list': availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
             'opPenalty': 0.1,
             'verbosity': max(0, verbosity - 1),
-            'forceEmpty': forceEmpty,
-            'scoreFunc': 'all',
+            'force_empty': force_empty,
+            'score_func': 'all',
             'returnAll': False,
         }
         for key in default_kwargs:
@@ -154,39 +154,39 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
                 algorithm_kwargs[key] = default_kwargs[key]
 
         prepFidList = grasp_fiducial_optimization(model=target_model,
-                                                  prepOrMeas='prep',
+                                                  prep_or_meas='prep',
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and prepFidList[0] is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList[0], 'prep',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([fid.str for fid in prepFidList[0]]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList, 'prep',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = grasp_fiducial_optimization(model=target_model,
-                                                  prepOrMeas='meas',
+                                                  prep_or_meas='meas',
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and measFidList[0] is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList[0], 'meas',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([fid.str for fid in measFidList[0]]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and measFidList is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList, 'meas',
-                scoreFunc=algorithm_kwargs['scoreFunc'])
+                score_func=algorithm_kwargs['score_func'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([fid.str for fid in measFidList]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
@@ -226,7 +226,7 @@ def xor(*args):
     return output
 
 
-def make_prep_mxs(mdl, prepFidList):
+def make_prep_mxs(mdl, prep_fid_list):
     """Make a list of matrices for the model preparation operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
@@ -238,7 +238,7 @@ def make_prep_mxs(mdl, prepFidList):
     mdl : Model
         The model (associates operation matrices with operation labels).
 
-    prepFidList : list of Circuits
+    prep_fid_list : list of Circuits
         List of fiducial operation sequences for preparation.
 
     Returns
@@ -251,17 +251,17 @@ def make_prep_mxs(mdl, prepFidList):
 
     dimRho = mdl.get_dimension()
     #numRho = len(mdl.preps)
-    numFid = len(prepFidList)
+    numFid = len(prep_fid_list)
     outputMatList = []
     for rho in list(mdl.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
-        for i, prepFid in enumerate(prepFidList):
+        for i, prepFid in enumerate(prep_fid_list):
             outputMat[:, i] = _np.dot(mdl.product(prepFid), rho)[:, 0]
         outputMatList.append(outputMat)
     return outputMatList
 
 
-def make_meas_mxs(mdl, prepMeasList):
+def make_meas_mxs(mdl, prep_meas_list):
     """Make a list of matrices for the model measurement operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
@@ -285,21 +285,21 @@ def make_meas_mxs(mdl, prepMeasList):
     """
 
     dimE = mdl.get_dimension()
-    numFid = len(prepMeasList)
+    numFid = len(prep_meas_list)
     outputMatList = []
     for povm in mdl.povms.values():
         for E in povm.values():
             if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
-            for i, measFid in enumerate(prepMeasList):
+            for i, measFid in enumerate(prep_meas_list):
                 outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0, :]
             outputMatList.append(outputMat)
     return outputMatList
 
 
-def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all',
-                                     threshold=1e6, returnAll=False, opPenalty=0.0,
-                                     l1Penalty=0.0):
+def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='all',
+                                     threshold=1e6, return_all=False, op_penalty=0.0,
+                                     l1_penalty=0.0):
     """Compute a composite score for a fiducial list.
 
     Parameters
@@ -307,13 +307,13 @@ def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all'
     model : Model
         The model (associates operation matrices with operation labels).
 
-    fidList : list of Circuits
+    fid_list : list of Circuits
         List of fiducial operation sequences to test.
 
-    prepOrMeas : string ("prep" or "meas")
+    prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
 
-    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+    score_func : str ('all' or 'worst'), optional (default is 'all')
         Sets the objective function for scoring a fiducial set.  If 'all',
         score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
         If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
@@ -331,14 +331,14 @@ def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all'
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
-    returnAll : bool, optional (default is False)
+    return_all : bool, optional (default is False)
         Whether the spectrum should be returned along with the score.
 
-    l1Penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    opPenalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
@@ -353,15 +353,15 @@ def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all'
 
     """
     # dimRho = model.get_dimension()
-    if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(model, fidList)
-    elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(model, fidList)
+    if prep_or_meas == 'prep':
+        fidArrayList = make_prep_mxs(model, fid_list)
+    elif prep_or_meas == 'meas':
+        fidArrayList = make_meas_mxs(model, fid_list)
     else:
-        raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
-                         'or "meas")!'.format(prepOrMeas))
+        raise ValueError('Invalid value "{}" for prep_or_meas (must be "prep" '
+                         'or "meas")!'.format(prep_or_meas))
 
-    numFids = len(fidList)
+    numFids = len(fid_list)
     scoreMx = _np.concatenate(fidArrayList, axis=1)  # shape = (dimRho, nFiducials*nPrepsOrEffects)
     scoreSqMx = _np.dot(scoreMx, scoreMx.T)  # shape = (dimRho, dimRho)
     spectrum = sorted(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
@@ -369,25 +369,25 @@ def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all'
     N_nonzero = 0
     nonzero_score = _np.inf
     for N in range(1, specLen + 1):
-        score = numFids * _scoring.list_score(spectrum[-N:], scoreFunc)
+        score = numFids * _scoring.list_score(spectrum[-N:], score_func)
         if score <= 0 or _np.isinf(score) or score > threshold:
             break   # We've found a zero eigenvalue.
         else:
             nonzero_score = score
             N_nonzero = N
 
-    nonzero_score += l1Penalty * len(fidList)
+    nonzero_score += l1_penalty * len(fid_list)
 
-    nonzero_score += opPenalty * sum([len(fiducial) for fiducial in fidList])
+    nonzero_score += op_penalty * sum([len(fiducial) for fiducial in fid_list])
 
     score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
-    return (score, spectrum) if returnAll else score
+    return (score, spectrum) if return_all else score
 
 
-def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
-                       returnAll=False, threshold=1e6, l1Penalty=0.0,
-                       opPenalty=0.0):
+def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
+                       return_all=False, threshold=1e6, l1_penalty=0.0,
+                       op_penalty=0.0):
     """Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
@@ -395,13 +395,13 @@ def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
     model : Model
         The model (associates operation matrices with operation labels).
 
-    fidList : list of Circuits
+    fid_list : list of Circuits
         List of fiducial operation sequences to test.
 
-    prepOrMeas : string ("prep" or "meas")
+    prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
 
-    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+    score_func : str ('all' or 'worst'), optional (default is 'all')
         Sets the objective function for scoring a fiducial set.  If 'all',
         score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
         If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
@@ -415,9 +415,9 @@ def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
         other objective function can help avoid such minima in different
         circumstances.)
 
-    returnAll : bool, optional (default is False)
+    return_all : bool, optional (default is False)
         If true, function returns reciprocals of eigenvalues of fiducial score
-        matrix, and the score of the fiducial set as specified by scoreFunc, in
+        matrix, and the score of the fiducial set as specified by score_func, in
         addition to a boolean specifying whether or not the fiducial set is
         informationally complete
 
@@ -425,11 +425,11 @@ def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
-    l1Penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    opPenalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
@@ -442,24 +442,24 @@ def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
 
     spectrum : array, optional
         The number of fiducials times the reciprocal of the spectrum of the
-        score matrix.  Only returned if returnAll == True.
+        score matrix.  Only returned if return_all == True.
 
     score : float, optional
-        The score for the fiducial set; only returned if returnAll == True.
+        The score for the fiducial set; only returned if return_all == True.
 
     """
 
     score, spectrum = compute_composite_fiducial_score(
-        model, fidList, prepOrMeas, scoreFunc=scoreFunc,
-        threshold=threshold, returnAll=True, l1Penalty=l1Penalty,
-        opPenalty=opPenalty)
+        model, fid_list, prep_or_meas, score_func=score_func,
+        threshold=threshold, return_all=True, l1_penalty=l1_penalty,
+        op_penalty=op_penalty)
 
     if score.N < len(spectrum):
         testResult = False
     else:
         testResult = True
 
-    return (testResult, spectrum, score) if returnAll else testResult
+    return (testResult, spectrum, score) if return_all else testResult
 
 
 def build_bitvec_mx(n, k):
@@ -529,37 +529,37 @@ def build_bitvec_mx(n, k):
     return bitVecMx
 
 
-def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
-                                     initialWeights=None, scoreFunc='all',
-                                     maxIter=100, fixedSlack=None,
-                                     slackFrac=None, returnAll=False,
-                                     forceEmpty=True, forceEmptyScore=1e100,
-                                     fixedNum=None, threshold=1e6,
+def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
+                                     initial_weights=None, score_func='all',
+                                     max_iter=100, fixed_slack=None,
+                                     slack_frac=None, return_all=False,
+                                     force_empty=True, force_empty_score=1e100,
+                                     fixed_num=None, threshold=1e6,
                                      # forceMinScore=1e100,
                                      verbosity=1):
-    """Find a locally optimal subset of the fiducials in fidList.
+    """Find a locally optimal subset of the fiducials in fid_list.
 
     Locally optimal here means that no single fiducial can be excluded without
     increasing the sum of the reciprocals of the singular values of the "score
     matrix" (the matrix whose columns are the fiducials acting on the
     preparation, or the transpose of the measurement acting on the fiducials),
     by more than a fixed or variable amount of "slack", as specified by
-    fixedSlack or slackFrac.
+    fixed_slack or slack_frac.
 
     Parameters
     ----------
     model : Model
         The model (associates operation matrices with operation labels).
 
-    fidList : list of Circuits
+    fid_list : list of Circuits
         List of all fiducials operation sequences to consider.
 
-    initialWeights : list-like
+    initial_weights : list-like
         List or array of either booleans or (0 or 1) integers specifying which
-        fiducials in fidList comprise the initial fiduial set.  If None, then
+        fiducials in fid_list comprise the initial fiduial set.  If None, then
         starting point includes all fiducials.
 
-    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+    score_func : str ('all' or 'worst'), optional (default is 'all')
         Sets the objective function for scoring a fiducial set.  If 'all',
         score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
         If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
@@ -573,32 +573,32 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
         other objective function can help avoid such minima in different
         circumstances.)
 
-    maxIter : int, optional
+    max_iter : int, optional
         The maximum number of iterations before stopping.
 
-    fixedSlack : float, optional
+    fixed_slack : float, optional
         If not None, a floating point number which specifies that excluding a
         fiducial is allowed to increase the fiducial set score additively by
-        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
+        fixed_slack.  You must specify *either* fixed_slack or slack_frac.
 
-    slackFrac : float, optional
+    slack_frac : float, optional
         If not None, a floating point number which specifies that excluding a
         fiducial is allowed to increase the fiducial set score multiplicatively
-        by (1+slackFrac).  You must specify *either* fixedSlack or slackFrac.
+        by (1+slack_frac).  You must specify *either* fixed_slack or slack_frac.
 
-    returnAll : bool, optional
+    return_all : bool, optional
         If True, return the final "weights" vector and score dictionary in
         addition to the optimal fiducial list (see below).
 
-    forceEmpty : bool, optional (default is True)
+    force_empty : bool, optional (default is True)
         Whether or not to force all fiducial sets to contain the empty gate
         string as a fiducial.
 
-        IMPORTANT:  This only works if the first element of fidList is the
+        IMPORTANT:  This only works if the first element of fid_list is the
         empty operation sequence.
 
-    forceEmptyScore : float, optional (default is 1e100)
-        When forceEmpty is True, what score to assign any fiducial set that
+    force_empty_score : float, optional (default is 1e100)
+        When force_empty is True, what score to assign any fiducial set that
         does not contain the empty operation sequence as a fiducial.
 
     forceMin : bool, optional (default is False)
@@ -625,27 +625,27 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
     Returns
     -------
     finalFidList : list
-        Sublist of fidList specifying the final, optimal, set of fiducials.
+        Sublist of fid_list specifying the final, optimal, set of fiducials.
 
     weights : array
-        Integer array, of length len(fidList), containing 0s and 1s to indicate
-        which elements of fidList were chosen as finalFidList.  Only returned
-        when returnAll == True.
+        Integer array, of length len(fid_list), containing 0s and 1s to indicate
+        which elements of fid_list were chosen as finalFidList.  Only returned
+        when return_all == True.
 
     scoreDictionary : dict
-        Dictionary with keys == tuples of 0s and 1s of length len(fidList),
+        Dictionary with keys == tuples of 0s and 1s of length len(fid_list),
         specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
         eigenvalue "scores".
 
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if not xor(fixedSlack, slackFrac):
-        raise ValueError("One and only one of fixedSlack or slackFrac should "
+    if not xor(fixed_slack, slack_frac):
+        raise ValueError("One and only one of fixed_slack or slack_frac should "
                          "be specified!")
 
-    initial_test = test_fiducial_list(model, fidList, prepOrMeas,
-                                      scoreFunc=scoreFunc, returnAll=True,
+    initial_test = test_fiducial_list(model, fid_list, prep_or_meas,
+                                      score_func=score_func, return_all=True,
                                       threshold=threshold)
     if initial_test[0]:
         printer.log("Complete initial fiducial set succeeds.", 1)
@@ -658,7 +658,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
     #Initially allow adding to weight. -- maybe make this an argument??
     lessWeightOnly = False
 
-    nFids = len(fidList)
+    nFids = len(fid_list)
 
     dimRho = model.get_dimension()
 
@@ -667,21 +667,21 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
 
     scoreD = {}
 
-    #fidLengths = _np.array( list(map(len,fidList)), _np.int64)
-    if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(model, fidList)
-    elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(model, fidList)
+    #fidLengths = _np.array( list(map(len,fid_list)), _np.int64)
+    if prep_or_meas == 'prep':
+        fidArrayList = make_prep_mxs(model, fid_list)
+    elif prep_or_meas == 'meas':
+        fidArrayList = make_meas_mxs(model, fid_list)
     else:
-        raise ValueError('prepOrMeas must be specified!')  # pragma: no cover
+        raise ValueError('prep_or_meas must be specified!')  # pragma: no cover
         # unreachable given check within test_fiducial_list above
     numMxs = len(fidArrayList)
 
     def compute_score(wts, cache_score=True):
         """ objective function for optimization """
         score = None
-        if forceEmpty and _np.count_nonzero(wts[:1]) != 1:
-            score = forceEmptyScore
+        if force_empty and _np.count_nonzero(wts[:1]) != 1:
+            score = force_empty_score
 #        if forceMinNum and _np.count_nonzero(wts) < forceMinNum:
 #            score = forceMinScore
         if score is None:
@@ -696,22 +696,22 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
             scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
             score = numFids * _scoring.list_score(
-                _np.linalg.eigvalsh(scoreSqMx), scoreFunc)
+                _np.linalg.eigvalsh(scoreSqMx), score_func)
             if score <= 0 or _np.isinf(score):
                 score = 1e10
         if cache_score:
             scoreD[tuple(wts)] = score
         return score
 
-    if fixedNum is not None:
-        if forceEmpty:
-            hammingWeight = fixedNum - 1
-            numBits = len(fidList) - 1
+    if fixed_num is not None:
+        if force_empty:
+            hammingWeight = fixed_num - 1
+            numBits = len(fid_list) - 1
         else:
-            hammingWeight = fixedNum
-            numBits = len(fidList)
+            hammingWeight = fixed_num
+            numBits = len(fid_list)
         numFidLists = scipy.special.binom(numBits, hammingWeight)
-        printer.log("Output set is required to be of size%s" % fixedNum, 1)
+        printer.log("Output set is required to be of size%s" % fixed_num, 1)
         printer.log("Total number of fiducial sets to be checked is%s"
                     % numFidLists, 1)
         printer.warning("If this is very large, you may wish to abort.")
@@ -720,7 +720,7 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
         # Now a non auxillary function:
         bitVecMat = build_bitvec_mx(numBits, hammingWeight)
 
-        if forceEmpty:
+        if force_empty:
             bitVecMat = _np.concatenate((_np.array([[1] * int(numFidLists)]).T,
                                          bitVecMat), axis=1)
         best_score = _np.inf
@@ -735,11 +735,11 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                 bestFidList = []
                 for index, val in enumerate(best_weights):
                     if val == 1:
-                        bestFidList.append(fidList[index])
+                        bestFidList.append(fid_list[index])
                 tempFidList = []
                 for index, val in enumerate(weights):
                     if val == 1:
-                        tempFidList.append(fidList[index])
+                        tempFidList.append(fid_list[index])
                 tempLen = sum(len(i) for i in tempFidList)
                 bestLen = sum(len(i) for i in bestFidList)
 #                print tempLen, bestLen
@@ -756,22 +756,22 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
         weights = best_weights
         for index, val in enumerate(weights):
             if val == 1:
-                goodFidList.append(fidList[index])
+                goodFidList.append(fid_list[index])
 
-        if returnAll:
+        if return_all:
             return goodFidList, weights, scoreD
         else:
             return goodFidList
 
-    def get_neighbors(boolVec):
-        """ Iterate over neighbors of `boolVec` """
+    def get_neighbors(bool_vec):
+        """ Iterate over neighbors of `bool_vec` """
         for i in range(nFids):
-            v = boolVec.copy()
+            v = bool_vec.copy()
             v[i] = (v[i] + 1) % 2  # toggle v[i] btwn 0 and 1
             yield v
 
-    if initialWeights is not None:
-        weights = _np.array([1 if x else 0 for x in initialWeights])
+    if initial_weights is not None:
+        weights = _np.array([1 if x else 0 for x in initial_weights])
     else:
         weights = _np.ones(nFids, _np.int64)  # default: start with all germs
         lessWeightOnly = True  # we're starting at the max-weight vector
@@ -781,10 +781,10 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
 
     with printer.progress_logging(1):
 
-        for iIter in range(maxIter):
+        for iIter in range(max_iter):
             scoreD_keys = scoreD.keys()  # list of weight tuples already computed
 
-            printer.show_progress(iIter, maxIter,
+            printer.show_progress(iIter, max_iter,
                                   suffix="score=%g, nFids=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
@@ -809,11 +809,11 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                 # from now on, don't allow increasing weight L1
                 lessWeightOnly = True
 
-                if fixedSlack:
+                if fixed_slack:
                     # Note score is positive (for sum of 1/lambda)
-                    slack = score + fixedSlack
-                elif slackFrac:
-                    slack = score * slackFrac
+                    slack = score + fixed_slack
+                elif slack_frac:
+                    slack = score * slack_frac
                 assert slack > 0
 
                 printer.log("No better neighbor. "
@@ -847,38 +847,38 @@ def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
     goodFidList = []
     for index, val in enumerate(weights):
         if val == 1:
-            goodFidList.append(fidList[index])
+            goodFidList.append(fid_list[index])
 
-    # final_test = test_fiducial_list(model, goodFidList, prepOrMeas,
-    #                                 scoreFunc=scoreFunc, returnAll=True,
+    # final_test = test_fiducial_list(model, goodFidList, prep_or_meas,
+    #                                 score_func=score_func, return_all=True,
     #                                 threshold=threshold)
     if initial_test[0]:
         printer.log("Final fiducial set succeeds.", 1)
     else:
         printer.log("WARNING: Final fiducial set FAILS.", 1)
 
-    if returnAll:
+    if return_all:
         return goodFidList, weights, scoreD
     else:
         return goodFidList
 
 
-def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
-                                iterations=5, scoreFunc='all', opPenalty=0.0,
-                                l1Penalty=0.0, returnAll=False,
-                                forceEmpty=True, threshold=1e6, seed=None,
+def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
+                                iterations=5, score_func='all', op_penalty=0.0,
+                                l1_penalty=0.0, return_all=False,
+                                force_empty=True, threshold=1e6, seed=None,
                                 verbosity=0):
     """Use GRASP to find a high-performing set of fiducials.
 
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if prepOrMeas not in ['prep', 'meas']:
-        raise ValueError("'{}' is an invalid value for prepOrMeas (must be "
-                         "'prep' or 'meas')!".format(prepOrMeas))
+    if prep_or_meas not in ['prep', 'meas']:
+        raise ValueError("'{}' is an invalid value for prep_or_meas (must be "
+                         "'prep' or 'meas')!".format(prep_or_meas))
 
-    initial_test = test_fiducial_list(model, fidsList, prepOrMeas,
-                                      scoreFunc=scoreFunc, returnAll=False,
+    initial_test = test_fiducial_list(model, fids_list, prep_or_meas,
+                                      score_func=score_func, return_all=False,
                                       threshold=threshold)
     if initial_test:
         printer.log("Complete initial fiducial set succeeds.", 1)
@@ -886,15 +886,15 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
     else:
         printer.warning("Complete initial fiducial set FAILS.")
         printer.warning("Aborting search.")
-        return (None, None, None) if returnAll else None
+        return (None, None, None) if return_all else None
 
-    initialWeights = _np.zeros(len(fidsList), dtype=_np.int64)
-    if forceEmpty:
-        fidsLens = [len(fiducial) for fiducial in fidsList]
+    initialWeights = _np.zeros(len(fids_list), dtype=_np.int64)
+    if force_empty:
+        fidsLens = [len(fiducial) for fiducial in fids_list]
         initialWeights[fidsLens.index(0)] = 1
 
-    def getNeighborsFn(weights): return _grasp.get_swap_neighbors(
-        weights, forcedWeights=initialWeights)
+    def get_neighbors_fn(weights): return _grasp.get_swap_neighbors(
+        weights, forced_weights=initialWeights)
 
     printer.log("Starting fiducial list optimization. Lower score is better.",
                 1)
@@ -903,27 +903,27 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
     # change from call to call
     compute_kwargs = {
         'model': model,
-        'prepOrMeas': prepOrMeas,
-        'scoreFunc': scoreFunc,
+        'prep_or_meas': prep_or_meas,
+        'score_func': score_func,
         'threshold': threshold,
-        'opPenalty': opPenalty,
-        'returnAll': False,
-        'l1Penalty': 0.0,
+        'op_penalty': op_penalty,
+        'return_all': False,
+        'l1_penalty': 0.0,
     }
 
     final_compute_kwargs = compute_kwargs.copy()
-    final_compute_kwargs['l1Penalty'] = l1Penalty
+    final_compute_kwargs['l1_penalty'] = l1_penalty
 
-    def scoreFn(fidList): return compute_composite_fiducial_score(
-        fidList=fidList, **compute_kwargs)
+    def score_fn(fid_list): return compute_composite_fiducial_score(
+        fid_list=fid_list, **compute_kwargs)
 
-    def finalScoreFn(fidList): return compute_composite_fiducial_score(
-        fidList=fidList, **final_compute_kwargs)
+    def final_score_fn(fid_list): return compute_composite_fiducial_score(
+        fid_list=fid_list, **final_compute_kwargs)
 
     dimRho = model.get_dimension()
     feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
 
-    def rclFn(x): return _scoring.composite_rcl_fn(x, alpha)
+    def rcl_fn(x): return _scoring.composite_rcl_fn(x, alpha)
 
     initialSolns = []
     localSolns = []
@@ -938,11 +938,11 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
         while not success and failCount < 10:
             try:
                 iterSolns = _grasp.do_grasp_iteration(
-                    elements=fidsList, greedyScoreFn=scoreFn, rclFn=rclFn,
-                    localScoreFn=scoreFn,
-                    getNeighborsFn=getNeighborsFn,
-                    feasibleThreshold=feasibleThreshold,
-                    initialElements=initialWeights, seed=seed,
+                    elements=fids_list, greedy_score_fn=score_fn, rcl_fn=rcl_fn,
+                    local_score_fn=score_fn,
+                    get_neighbors_fn=get_neighbors_fn,
+                    feasible_threshold=feasibleThreshold,
+                    initial_elements=initialWeights, seed=seed,
                     verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])
@@ -958,8 +958,8 @@ def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
                 else:
                     printer.warning(e)
 
-    finalScores = _np.array([finalScoreFn(localSoln)
+    finalScores = _np.array([final_score_fn(localSoln)
                              for localSoln in localSolns])
     bestSoln = localSolns[_np.argmin(finalScores)]
 
-    return (bestSoln, initialSolns, localSolns) if returnAll else bestSoln
+    return (bestSoln, initialSolns, localSolns) if return_all else bestSoln

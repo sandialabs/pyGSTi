@@ -29,9 +29,9 @@ class RobustPhaseEstimation(object):
     the estimates from each generation.
     """
 
-    def __init__(self, Q):
-        self.Q = Q
-        meas = self.raw_angles = Q.raw_angles
+    def __init__(self, q):
+        self.Q = q
+        meas = self.raw_angles = q.raw_angles
         angle_estimates = self.angle_estimates = numpy.zeros(len(meas))
 
         # The 2π/Nₖ window that is selected is centered around previousAngle,
@@ -45,7 +45,7 @@ class RobustPhaseEstimation(object):
 
             frac = 2 * numpy.pi / N
 
-            theta = self.Theta_N(N)
+            theta = self.theta_n(N)
 
             # -> (previousAngle - theta ) // frac
             #       would push into the frac-sized bin that is closest, but the
@@ -62,7 +62,7 @@ class RobustPhaseEstimation(object):
 
             angle_estimates[k] = theta
 
-    def Theta_N(self, N):
+    def theta_n(self, n):
         """
         Returns the equivalence class of the measurement Θ, by definition
         equivalent when any integer multiples of 2π/N is added.
@@ -72,4 +72,4 @@ class RobustPhaseEstimation(object):
         # P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2
         # P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2
 
-        return (self.raw_angles[N] % (2 * numpy.pi)) / N
+        return (self.raw_angles[n] % (2 * numpy.pi)) / n

@@ -65,7 +65,7 @@ fixture_3Q.pspec = ProcessorSpec(
 
 class CompilersTester(BaseCase):
     def test_compile_symplectic_using_GGE_core(self):
-        compiled = compilers.compile_symplectic_using_GGE_core(fixture_2Q.clifford_sym)
+        compiled = compilers.compile_symplectic_using_gge_core(fixture_2Q.clifford_sym)
         # TODO assert intermediate correctness
         sym_out, _ = symplectic.symplectic_rep_of_clifford_circuit(compiled)
         self.assertArraysEqual(fixture_2Q.clifford_sym, sym_out)

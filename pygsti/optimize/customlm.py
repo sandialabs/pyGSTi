@@ -505,7 +505,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT7: %.3fs" % (_time.time()-t0)) # REMOVE
         #end of outer loop
         else:
-            #if no break stmt hit, then we've exceeded maxIter
+            #if no break stmt hit, then we've exceeded max_iter
             msg = "Maximum iterations (%d) exceeded" % max_iter
             converged = True  # call result "converged" even in this case, but issue warning:
             printer.warning("Treating result as *converged* after maximum iterations (%d) were exceeded." % max_iter)
@@ -762,7 +762,7 @@ def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
 #        #end of inner loop
 #    #end of outer loop
 #    else:
-#        #if no break stmt hit, then we've exceeded maxIter
+#        #if no break stmt hit, then we've exceeded max_iter
 #        msg = "Maximum iterations (%d) exceeded" % max_iter
 #
 #    return x, converged, msg

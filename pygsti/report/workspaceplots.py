@@ -2516,7 +2516,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             maximal (best) Gram matrix.  It's useful to make this
             at least twice the maximum length fiducial sequence.
 
-        fixed_lists : (prepStrs, effectStrs), optional
+        fixed_lists : (prep_strs, effect_strs), optional
             2-tuple of operation sequence lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.

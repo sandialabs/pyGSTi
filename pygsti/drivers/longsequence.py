@@ -95,7 +95,7 @@ def do_model_test(model_filename_or_object,
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -188,7 +188,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -234,7 +234,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None, advanced_options,
                                            output_pkl, printer)
@@ -305,7 +305,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -391,7 +391,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     if advanced_options.get("starting point", None) is None:
         advanced_options["starting point"] = "LGST-if-possible"  # to keep backward compatibility
@@ -440,7 +440,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -489,7 +489,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     proto = _proto.GateSetTomography(None, gopt_suite, None, advanced_options,
                                      output_pkl, printer)
@@ -734,7 +734,7 @@ def legacy_do_model_test(model_filename_or_object,
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -871,7 +871,7 @@ def legacy_do_linear_gst(data_filename_or_set, target_model_filename_or_object,
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -980,7 +980,7 @@ def legacy_do_long_sequence_gst(data_filename_or_set, target_model_filename_or_o
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -1155,7 +1155,7 @@ def legacy_do_long_sequence_gst_base(data_filename_or_set, target_model_filename
         of :func:`gaugeopt_to_target` *except* for the first `model`
         argument, which is specified internally.  The `target_model` argument,
         *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
     advanced_options : dict, optional
@@ -1199,7 +1199,7 @@ def legacy_do_long_sequence_gst_base(data_filename_or_set, target_model_filename
     # because they are mutable objects
     if advanced_options is None: advanced_options = {}
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
 
     profile = advanced_options.get('profile', 1)
 
@@ -1593,11 +1593,11 @@ def legacy_do_stdpractice_gst(data_filename_or_set, target_model_filename_or_obj
                 for goparams in gaugeOptSuite_dict.values():
                     goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
                     for goparams_dict in goparams_list:
-                        if 'targetModel' in goparams_dict:
+                        if 'target_model' in goparams_dict:
                             _warnings.warn(("`gauge_opt_target` argument is overriding"
-                                            "user-defined targetModel in gauge opt"
+                                            "user-defined target_model in gauge opt"
                                             "param dict(s)"))
-                        goparams_dict.update({'targetModel': gauge_opt_target})
+                        goparams_dict.update({'target_model': gauge_opt_target})
 
             #Gauge optimize to list of gauge optimization parameters
             for goLabel, goparams in gaugeOptSuite_dict.items():
@@ -1737,7 +1737,7 @@ def gaugeopt_suite_to_dictionary(gauge_opt_suite, target_model, advanced_options
                     if gg.name in ("Full", "TP"):
                         stages.append(
                             {
-                                'itemWeights': {'gates': 1.0, 'spam': 1.0},
+                                'item_weights': {'gates': 1.0, 'spam': 1.0},
                                 'verbosity': printer
                             })
 
@@ -1745,7 +1745,7 @@ def gaugeopt_suite_to_dictionary(gauge_opt_suite, target_model, advanced_options
                     #         expense of spam if needed)
                     stages.append(
                         {
-                            'itemWeights': {'gates': 1.0, 'spam': 0.0},
+                            'item_weights': {'gates': 1.0, 'spam': 0.0},
                             'gauge_group': _objs.UnitaryGaugeGroup(target_model.dim, target_model.basis),
                             'verbosity': printer
                         })
@@ -1757,7 +1757,7 @@ def gaugeopt_suite_to_dictionary(gauge_opt_suite, target_model, advanced_options
                         _objs.TPSpamGaugeGroup
                     stages.append(
                         {
-                            'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                            'item_weights': {'gates': 0.0, 'spam': 1.0},
                             'spam_penalty_factor': 1.0,
                             'gauge_group': s3gg(target_model.dim),
                             'verbosity': printer
@@ -1777,7 +1777,7 @@ def gaugeopt_suite_to_dictionary(gauge_opt_suite, target_model, advanced_options
                                 if gl in target_model.operations.keys(): stage2_item_weights[gl] = 0.01
                             stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                            stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
+                            stages_2QUR[iStage2]['item_weights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR  # add additional gauge opt
                         else:
                             _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
@@ -1818,7 +1818,7 @@ def gaugeopt_suite_to_dictionary(gauge_opt_suite, target_model, advanced_options
                             itemWeights = baseWts.copy()
                             itemWeights['spam'] = spamWt
                             gaugeOptSuite_dict[lbl] = {
-                                'itemWeights': itemWeights,
+                                'item_weights': itemWeights,
                                 'spam_penalty_factor': vSpam, 'verbosity': printer}
 
             elif suiteName == "unreliable2Q":
@@ -1973,15 +1973,15 @@ def add_gauge_opt(estimate, gauge_opt_params, target_model, starting_model,
     gauge_opt_params = gauge_opt_params.copy()  # so we don't modify the caller's dict
     if '_gaugeGroupEl' in gauge_opt_params: del gauge_opt_params['_gaugeGroupEl']
 
-    if "targetModel" not in gauge_opt_params:
-        gauge_opt_params["targetModel"] = target_model
+    if "target_model" not in gauge_opt_params:
+        gauge_opt_params["target_model"] = target_model
 
     # somewhat redundant given add_gaugeoptimized behavior - but
     #  if not here won't do parallel gaugeopt_to_target below
     if "comm" not in gauge_opt_params:
         gauge_opt_params["comm"] = comm
 
-    gauge_opt_params['returnAll'] = True  # so we get gaugeEl to save
+    gauge_opt_params['return_all'] = True  # so we get gaugeEl to save
     gauge_opt_params['model'] = starting_model
 
     if isinstance(gauge_opt_params['model'], _objs.ExplicitOpModel):
