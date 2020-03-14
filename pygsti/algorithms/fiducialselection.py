@@ -103,7 +103,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     if algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
         default_kwargs = {
-            'fidList': availableFidList,
+            'fid_list': availableFidList,
             'verbosity': max(0, verbosity - 1),
             'force_empty': force_empty,
             'score_func': 'all',
@@ -143,11 +143,11 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         default_kwargs = {
             'fids_list': availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
-            'opPenalty': 0.1,
+            'op_penalty': 0.1,
             'verbosity': max(0, verbosity - 1),
             'force_empty': force_empty,
             'score_func': 'all',
-            'returnAll': False,
+            'return_all': False,
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -157,14 +157,14 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                                                   prep_or_meas='prep',
                                                   **algorithm_kwargs)
 
-        if algorithm_kwargs['returnAll'] and prepFidList[0] is not None:
+        if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList[0], 'prep',
                 score_func=algorithm_kwargs['score_func'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([fid.str for fid in prepFidList[0]]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
-        elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
+        elif not algorithm_kwargs['return_all'] and prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList, 'prep',
                 score_func=algorithm_kwargs['score_func'])
@@ -176,14 +176,14 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                                                   prep_or_meas='meas',
                                                   **algorithm_kwargs)
 
-        if algorithm_kwargs['returnAll'] and measFidList[0] is not None:
+        if algorithm_kwargs['return_all'] and measFidList[0] is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList[0], 'meas',
                 score_func=algorithm_kwargs['score_func'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([fid.str for fid in measFidList[0]]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
-        elif not algorithm_kwargs['returnAll'] and measFidList is not None:
+        elif not algorithm_kwargs['return_all'] and measFidList is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList, 'meas',
                 score_func=algorithm_kwargs['score_func'])

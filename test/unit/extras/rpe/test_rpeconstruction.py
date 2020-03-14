@@ -79,8 +79,8 @@ class RPEConstructionFuncBase(object):
 
 
 class RPEConstruction00ConfigTester(RPEConstructionFuncBase, BaseCase):
-    from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_gxpi2_gypi2_00 as config
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00 as config  # noqa N813
 
 
 class RPEConstructionUpDnConfigTester(RPEConstructionFuncBase, BaseCase):
-    from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_gxpi2_gypi2_updn as config
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn as config  # noqa N813

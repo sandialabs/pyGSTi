@@ -2323,7 +2323,7 @@ def DM_mapfill_TDterms(calc, objective, mxToFill, dest_indices, num_outcomes,
     #rhoVec, EVecs = calc._rho_es_from_labels(rholabel, elabels)
     EVecs = calc._es_from_labels(evalTree.elabels)
 
-    elabels_as_outcomes = [(_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
+    elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in evalTree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
     dataset_rows = {i: row for i,row in enumerate(dataset_rows) } # change to dict for indexing speed - maybe pass this in? FUTURE
     num_outcomes = {i: N for i,N in enumerate(num_outcomes) } # change to dict for indexing speed

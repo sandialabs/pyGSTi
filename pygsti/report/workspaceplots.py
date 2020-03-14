@@ -1048,9 +1048,6 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     matrix : numpy array
         The matrix to visualize.
 
-    color_min, color_max : float
-        Minimum and maximum of the color scale.
-
     xlabels, ylabels: list, optional
         List of (str) box labels for each axis.
 

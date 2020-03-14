@@ -99,7 +99,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
 		               profiler=None, verbosity=1)
 
         #more args
-        options['returnAll'] = True #but doesn't change generate_germs return value
+        options['return_all'] = True #but doesn't change generate_germs return value
         germs2 = pygsti.alg.generate_germs(std.target_model(), randomize=True, randomization_strength=1e-3,
                                            num_gs_copies=2, seed=2017, candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                            candidate_seed=2017, force="singletons", algorithm='grasp',

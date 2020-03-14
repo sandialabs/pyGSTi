@@ -3399,7 +3399,7 @@ def stdmodule_to_smqmodule(std_module):
     out_module['target_model'] = target_model
 
     # circuit lists
-    circuitlist_names = ['germs', 'germs_lite', 'prep_strs', 'effect_strs', 'fiducials']
+    circuitlist_names = ['germs', 'germs_lite', 'prepStrs', 'effectStrs', 'fiducials']
     for nm in circuitlist_names:
         if hasattr(std_module, nm):
             out_module[nm] = _gsc.manipulate_circuit_list(getattr(std_module, nm), find_replace_strs, sslbls)

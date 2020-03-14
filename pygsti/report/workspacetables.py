@@ -393,7 +393,7 @@ class GatesTable(WorkspaceTable):
                 elif display_as == "boxes":
                     maxAbsVal = _np.max(_np.abs(intervalMx))
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
-                                             m=-maxAbsVal, color_max=maxAbsVal,
+                                             color_min=-maxAbsVal, color_max=maxAbsVal,
                                              colorbar=False,
                                              mx_basis=basis)
                     row_data.append(fig)

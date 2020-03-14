@@ -74,4 +74,5 @@ rpeconfig_gxpi2_gypi2_updn_dict['theta_sin_germ_str'] = 'GxGyGyGxGxGyGyGx'
 rpeconfig_gxpi2_gypi2_updn_dict['theta_sin_meas_tuple'] = ('Gy',)
 rpeconfig_gxpi2_gypi2_updn_dict['theta_sin_meas_str'] = 'Gy'
 
-rpeconfig_gxpi2_gypi2_updn = _RPEconfig(rpeconfig_gxpi2_gypi2_updn_dict)
+import sys
+sys.modules[__name__] = _RPEconfig(rpeconfig_gxpi2_gypi2_updn_dict)

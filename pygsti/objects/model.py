@@ -1442,16 +1442,16 @@ class OpModel(Model):
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
 
-                mem_estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
-                while mem_estimate > mem_limit:
-                    ng += Ng; next = mem_estimate(ng, np1, np2, Ng, verb=1)
-                    if(next >= mem_estimate): raise MemoryError("Not enough memory: splitting unproductive")
-                    mem_estimate = next
+                estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
+                while estimate > mem_limit:
+                    ng += Ng; _next = mem_estimate(ng, np1, np2, Ng, verb=1)
+                    if(_next >= estimate): raise MemoryError("Not enough memory: splitting unproductive")
+                    estimate = _next
 
                     #Note: could do these while loops smarter, e.g. binary search-like?
                     #  or assume mem_estimate scales linearly in ng? E.g:
-                    #     if mem_limit < mem_estimate:
-                    #         reductionFactor = float(mem_estimate) / float(mem_limit)
+                    #     if mem_limit < estimate:
+                    #         reductionFactor = float(estimate) / float(mem_limit)
                     #         maxTreeSize = int(nstrs / reductionFactor)
             else:
                 mem_estimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
@@ -1510,12 +1510,12 @@ class OpModel(Model):
                     #Finally, increase ng in amounts of Ng (so ng % Ng == 0).  Start
                     # with fast cache_size computation then switch to slow
                     while mem_estimate(ng, np1, np2, Ng, True) > mem_limit: ng += Ng
-                    mem_estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
-                    while mem_estimate > mem_limit:
-                        ng += Ng; next = mem_estimate(ng, np1, np2, Ng, verb=1)
-                        if next >= mem_estimate:
+                    estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
+                    while estimate > mem_limit:
+                        ng += Ng; _next = mem_estimate(ng, np1, np2, Ng, verb=1)
+                        if _next >= estimate:
                             raise MemoryError("Not enough memory: splitting unproductive")
-                        mem_estimate = next
+                        estimate = _next
             else:
                 mem_estimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 

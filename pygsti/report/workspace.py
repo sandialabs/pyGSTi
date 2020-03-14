@@ -1706,7 +1706,7 @@ class WorkspaceOutput(object):
         js += "\n"
 
         cnd = " && ".join(["$('#switchbd%s_%d').hasClass('initializedSwitch')"
-                           % (sb.id, switchIndex)
+                           % (sb.ID, switchIndex)
                            for sb, switchInds in zip(switchboards, switch_indices)
                            for switchIndex in switchInds])
         if len(cnd) == 0: cnd = "true"
@@ -1946,7 +1946,7 @@ class WorkspaceTable(WorkspaceOutput):
                 if isinstance(table, NotApplicable):
                     table_dict = table.render("html", tableDivID)
                 else:
-                    table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                    table_dict = table.render("html", table_id=tableDivID + "_tbl",
                                               tableclass="dataTable",
                                               precision=precDict['normal'],
                                               polarprecision=precDict['polar'],

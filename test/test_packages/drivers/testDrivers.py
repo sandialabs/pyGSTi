@@ -105,7 +105,7 @@ class TestDriversMethods(DriversTestCase):
             maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result = self.runSilent(pygsti.do_long_sequence_gst_base,
             ds, std.target_model(), reducedLists,
-            advancedOptions={'truncScheme': ts})
+            advanced_options={'truncScheme': ts})
 
         #create a report...
         pygsti.report.create_standard_report(result, temp_files + "/full_report_RFPR",
@@ -119,7 +119,7 @@ class TestDriversMethods(DriversTestCase):
             maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result2 = self.runSilent(pygsti.do_long_sequence_gst_base,
                                  ds, std.target_model(), reducedLists,
-                                 advancedOptions={'truncScheme': ts})
+                                 advanced_options={'truncScheme': ts})
 
         #create a report...
         pygsti.report.create_standard_report(result2, temp_files + "/full_report_RFPR2.html",
@@ -205,7 +205,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, advancedOptions={'truncScheme': ts,
+                                std.germs, maxLens, advanced_options={'truncScheme': ts,
                                                                      'badFitThreshold': -100})
 
         pygsti.report.create_standard_report(result, temp_files + "/full_report_badfit",

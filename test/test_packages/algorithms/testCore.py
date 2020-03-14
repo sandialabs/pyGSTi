@@ -96,7 +96,7 @@ class TestCoreMethods(AlgorithmsBase):
             targetModel=self.model, svdTruncateTo=4, verbosity=0, returnAll=True, returnErrorVec=True)
 
         mdl_exlgst_verb = self.runSilent(pygsti.do_iterative_exlgst, ds, mdl_clgst, self.fiducials, self.fiducials, self.elgstStrings,
-                                        target_model=self.model, svdTruncateTo=4, verbosity=10)
+                                        targetModel=self.model, svdTruncateTo=4, verbosity=10)
         mdl_exlgst_reg = pygsti.do_iterative_exlgst(ds, mdl_clgst, self.fiducials, self.fiducials, self.elgstStrings,
                                                targetModel=self.model, svdTruncateTo=4, verbosity=0,
                                                regularizeFactor=10)
@@ -109,7 +109,7 @@ class TestCoreMethods(AlgorithmsBase):
                                                    targetModel=self.model, svdTruncateTo=4, verbosity=0,
                                                    check_jacobian=True)
         mdl_exlgst_chk_verb = self.runSilent(pygsti.do_iterative_exlgst,ds, mdl_clgst, self.fiducials, self.fiducials, self.elgstStrings[0:2],
-                                                   target_model=self.model, svdTruncateTo=4, verbosity=10,
+                                                   targetModel=self.model, svdTruncateTo=4, verbosity=10,
                                                    check_jacobian=True)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES

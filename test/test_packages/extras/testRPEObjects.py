@@ -5,8 +5,8 @@ import numpy as np
 
 import pygsti.extras.rpe as rpe
 import pygsti.extras.rpe.rpeconstruction as rc
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_gxpi2_gypi2_updn
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_gxpi2_gypi2_00
+from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn
+from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00
 
 
 class TestRPEObjectMethods(BaseTestCase):
@@ -19,7 +19,7 @@ class TestRPEObjectMethods(BaseTestCase):
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 
         #test RPE datasets
-        rpeconfig_inst_list = [rpeconfig_gxpi2_gypi2_updn,rpeconfig_gxpi2_gypi2_00]
+        rpeconfig_inst_list = [rpeconfig_GxPi2_GyPi2_UpDn,rpeconfig_GxPi2_GyPi2_00]
         for rpeconfig_inst in rpeconfig_inst_list:
             rpeGS  = rc.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True, rpeconfig_inst=rpeconfig_inst)
             rpeGS2 = rc.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False, rpeconfig_inst=rpeconfig_inst)

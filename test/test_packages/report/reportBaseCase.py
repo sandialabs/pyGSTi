@@ -80,12 +80,12 @@ class ReportBaseCase(BaseTestCase):
 
         gaugeOptParams = collections.OrderedDict([
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
-                ('targetModel', targetModel),       #so can gauge-propagate CIs
+                ('target_model', targetModel),       #so can gauge-propagate CIs
                 ('cptp_penalty_factor', 0),
                 ('gates_metric',"frobenius"),
                 ('spam_metric',"frobenius"),
                 ('item_weights', {'gates': 1.0, 'spam': 0.001}),
-                ('returnAll', True) ])
+                ('return_all', True) ])
 
         _, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl  #so can gauge-propagate CIs

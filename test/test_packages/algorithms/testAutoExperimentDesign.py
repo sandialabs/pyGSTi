@@ -28,7 +28,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         # We begin by demonstrating the most hands-off approach.
 
         # We can generate a germ set simply by providing the target model. (and seed so it's deterministic)
-        
+
         germs = germsel.generate_germs(target_model, seed=2017)
 
 
@@ -37,12 +37,12 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         prepFiducials, measFiducials = fidsel.generate_fiducials(target_model)
 
-        #test returnAll - this just prints more info...
-        p,m = fidsel.generate_fiducials(target_model, algorithm_kwargs={'returnAll': True})
+        #test return_all - this just prints more info...
+        p,m = fidsel.generate_fiducials(target_model, algorithm_kwargs={'return_all': True})
 
         #test invalid algorithm
         with self.assertRaises(ValueError):
-            fidsel.generate_fiducials(target_model, algorithm='foobar') 
+            fidsel.generate_fiducials(target_model, algorithm='foobar')
 
 
         # Now that we have germs and fiducials, we can construct the list of experiments we need to perform in
@@ -60,7 +60,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         # form to present the information in, so we can write the experiment list out to an empty data
         # file to be filled in after the experiments are performed.
 
-        graspGerms = germsel.generate_germs(target_model, algorithm='grasp', 
+        graspGerms = germsel.generate_germs(target_model, algorithm='grasp',
                                             seed=2017, num_gs_copies=2,
                                             candidate_germ_counts={3: 'all upto', 4:10, 5:10, 6:10},
                                             candidate_seed=2017,
@@ -68,7 +68,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         slackPrepFids, slackMeasFids = fidsel.generate_fiducials(target_model, algorithm='slack',
                                                                  algorithm_kwargs={'slack_frac': 0.25})
         fidsel.generate_fiducials(target_model, algorithm='slack') # slacFrac == 1.0 if don't specify either slack_frac or fixed_slack
-                
+
 
         germsMaxLength3 = germsel.generate_germs(target_model, candidate_germ_counts={3: 'all upto'}, seed=2017)
 

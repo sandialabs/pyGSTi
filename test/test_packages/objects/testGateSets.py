@@ -287,13 +287,13 @@ class TestGateSetMethods(GateSetTestCase):
                             circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_dprobs'], comm=fake_comm) #where bNp2Matters == False
 
                     except MemoryError:

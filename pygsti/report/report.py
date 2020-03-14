@@ -156,7 +156,7 @@ class Report:
             )
         else:
             _merge.merge_jinja_template_dir(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
                 render_math=True, resizable=resizable,

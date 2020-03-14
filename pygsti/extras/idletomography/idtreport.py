@@ -964,7 +964,7 @@ def create_idletomography_report(results, filename, title="auto",
                     )
                 else:
                     _merge.merge_jinja_template_dir(
-                        qtys, filename, templateDir='~idletomography_html_report',
+                        qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
                         connected=connected, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
