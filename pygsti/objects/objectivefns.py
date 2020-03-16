@@ -133,7 +133,33 @@ class ResourceAllocation(object):
 
 
 class ObjectiveFunctionBuilder(object):
-    #TODO: add build() classmethod that can build from an all-dictionary description of an objective fn?
+    @classmethod
+    def simple(cls, objective='logl', freqWeightedChi2=False):
+        if objective == "chi2":
+            if freqWeightedChi2:
+                builder = FreqWeightedChi2Function.builder(
+                    name='fqchi2',
+                    regularization={'minProbClipForWeighting': 1e-4,
+                                    'probClipInterval': (-1e6, 1e6),
+                                    'radius': 1e-4})
+            else:
+                builder = Chi2Function.builder(
+                    name='chi2',
+                    regularization={'minProbClipForWeighting': 1e-4,
+                                    'probClipInterval': (-1e6, 1e6)})
+
+        elif objective == "logl":
+            builder = DeltaLogLFunction_PoissonPic.builder(
+                name='logl',
+                regularization={'minProbClip': 1e-4,
+                                'probClipInterval': (-1e6, 1e6),
+                                'radius': 1e-4},
+                penalties={'cptp_penalty_factor': 0,
+                           'spam_penalty_factor': 0})
+        else:
+            raise ValueError("Invalid objective: %s" % objective)
+        assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"
+        return builder
 
     def __init__(self, cls_to_build, name=None, desc=None, penalties=None, regularization=None, **kwargs):
         self.name = name if (name is not None) else cls_to_build.__name__

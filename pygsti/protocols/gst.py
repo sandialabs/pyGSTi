@@ -131,17 +131,14 @@ class GSTInitialModel(object):
     def build(cls, obj):
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
-    def __init__(self, starting_point="target", depolarize_start=0, randomize_start=0,
+    def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=None, contractStartToCPTP=False):
         # Note: starting_point can be an initial model or string
-        self.model = None
+        self.model = model
         if starting_point is None:
-            self.starting_point = "target"
-        elif isinstance(starting_point, str):
+            self.starting_point = "target" if (model is None) else "User-supplied-Model"
+        else:
             self.starting_point = starting_point
-        else:  # assume startingPt IS the model we start with
-            self.starting_point = "User-supplied-Model"
-            self.model = starting_point
 
         self.lgst_gaugeopt_tol = lgst_gaugeopt_tol
         self.contract_start_to_cptp = contractStartToCPTP
@@ -157,16 +154,14 @@ class GSTInitialModel(object):
 
         elif startingPt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
-            mdl_start = target_model
+            mdl_start = self.model if (self.model is not None) else target_model
             lgst = LGST(mdl_start,
                         gaugeopt_suite={'lgst_gaugeopt': {'tol': self.lgst_gaugeopt_tol}},
-                        gaugeopt_target=gaugeopt_target)
-            lgst.set_estimate_label("LGST")
-            lgst.set_onbadfit([])
+                        gaugeopt_target=gaugeopt_target, badfit_options=None, name="LGST")
 
             try:  # see if LGST can be run on this data
                 if lgst_struct:
-                    lgst_data = _proto.ProtocolData(StructuredGSTDesign(target_model, [lgst_struct], qubit_labels),
+                    lgst_data = _proto.ProtocolData(StructuredGSTDesign(mdl_start, [lgst_struct], qubit_labels),
                                                     dataset)
                     lgst.check_if_runnable(lgst_data)
                     startingPt = "LGST"
@@ -174,8 +169,14 @@ class GSTInitialModel(object):
                     raise ValueError("Experiment design must contain circuit structures in order to run LGST")
             except ValueError as e:
                 if startingPt == "LGST": raise e  # error if we *can't* run LGST
-                startingPt = "target"
-                mdl_start = target_model
+
+                #Fall back to target or custom model
+                if self.model is not None:
+                    startingPt = "User-supplied-Model"
+                    mdl_start = self.model
+                else:
+                    startingPt = "target"
+                    mdl_start = target_model
 
             if startingPt == "LGST":
                 lgst_results = lgst.run(lgst_data)
@@ -239,25 +240,8 @@ class GSTObjFnBuilders(object):
 
     @classmethod
     def init_simple(cls, objective='logl', freqWeightedChi2=False, alwaysPerformMLE=False, onlyPerformMLE=False):
-        if freqWeightedChi2:
-            chi2_builder = _objfns.FreqWeightedChi2Function.builder(
-                name='fqchi2',
-                regularization={'minProbClipForWeighting': 1e-4,
-                                'probClipInterval': (-1e6, 1e6),
-                                'radius': 1e-4})
-        else:
-            chi2_builder = _objfns.Chi2Function.builder(
-                name='chi2',
-                regularization={'minProbClipForWeighting': 1e-4,
-                                'probClipInterval': (-1e6, 1e6)})
-
-        mle_builder = _objfns.DeltaLogLFunction_PoissonPic.builder(
-            name='logl',
-            regularization={'minProbClip': 1e-4,
-                            'probClipInterval': (-1e6, 1e6),
-                            'radius': 1e-4},
-            penalties={'cptp_penalty_factor': 0,
-                       'spam_penalty_factor': 0})
+        chi2_builder = _objfns.ObjectiveFunctionBuilder.simple('chi2', freqWeightedChi2)
+        mle_builder = _objfns.ObjectiveFunctionBuilder.simple('logl')
 
         if objective == "chi2":
             iteration_builders = [chi2_builder]
@@ -282,10 +266,6 @@ class GSTObjFnBuilders(object):
 class GateSetTomography(_proto.Protocol):
     """ The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set."""
 
-    #advancedOptions=None
-    #if advancedOptions is None: advancedOptions = {}
-    #self.advancedOptions = advancedOptions
-    #self.auxfile_types['advancedOptions'] = 'pickle'  # TODO - better later? - json?
     def __init__(self, initial_model=None, gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, objfn_builders=None, optimizer=None,
                  badfit_options=None, verbosity=2, name=None):
@@ -317,6 +297,8 @@ class GateSetTomography(_proto.Protocol):
         self.auxfile_types['initial_model'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['iteration_builders'] = 'pickle'
+        self.auxfile_types['final_builders'] = 'pickle'
 
         #Advanced options that could be changed by users who know what they're doing
         #self.estimate_label = estimate_label -- just use name?
@@ -391,7 +373,7 @@ class GateSetTomography(_proto.Protocol):
 
         #set parameters
         parameters = _collections.OrderedDict()
-        parameters['protocol'] = self
+        parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
@@ -399,40 +381,32 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys abot fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        estlbl = self.name
         estimate = _Estimate.gst_init(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
-        ret.add_estimate(estimate, estlbl)
-
-        #Do final gauge optimization to *final* iteration result only
-        if self.gaugeopt_suite:
-            gaugeopt_target = self.gaugeopt_target if self.gaugeopt_target else data.edesign.target_model
-            add_gauge_opt(ret, estlbl, self.gaugeopt_suite, gaugeopt_target,
-                          mdl_lsgst_list[-1], self.unreliable_ops, comm, printer - 1)
-        profiler.add_time('%s: gauge optimization' % estlbl, tRef); tRef = _time.time()
-
-        add_badfit_estimates(ret, estlbl, self.badfit_options, self.optimizer, resource_alloc, printer)
-        profiler.add_time('%s: add badfit estimates' % estlbl, tRef); tRef = _time.time()
-
-        #Add recorded info (even robust-related info) to the *base*
-        #   estimate label's "stdout" meta information
-        if printer.is_recording():
-            ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-
-        return ret
+        ret.add_estimate(estimate, estimate_key=self.name)
+        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lsgst_list[-1], data.edesign.target_model,
+                                        self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
+                                        self.badfit_options, self.final_builders[-1], self.optimizer,
+                                        resource_alloc, printer)
 
 
 class LinearGateSetTomography(_proto.Protocol):
     """ The linear gate set tomography protocol."""
 
     def __init__(self, target_model=None, gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
-                 advancedOptions=None, output_pkl=None, verbosity=2, name=None):
+                 badfit_options=None, verbosity=2, name=None):
         super().__init__(name)
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.advancedOptions = advancedOptions
-        self.output_pkl = output_pkl
+        self.badfit_options = GSTBadFitOptions.build(badfit_options)        
         self.verbosity = verbosity
+
+        #Advanced options that could be changed by users who know what they're doing
+        self.profile = 1
+        self.record_output = True
+        self.oplabels = "default"
+        self.oplabel_aliases = None
+        self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
     def check_if_runnable(self, data):
         """Raises a ValueError if LGST cannot be run on data"""
@@ -464,63 +438,70 @@ class LinearGateSetTomography(_proto.Protocol):
         edesign = data.edesign
         target_model = self.target_model if (self.target_model is not None) else edesign.target_model
         circuit_struct = edesign.circuit_structs[0]
-        advancedOptions = self.advancedOptions or {}
 
-        profile = advancedOptions.get('profile', 1)
-
+        profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
         elif profile == 1: profiler = _objs.Profiler(comm, False)
         elif profile == 2: profiler = _objs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
         printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
-        if advancedOptions.get('recordOutput', True) and not printer.is_recording():
+        if self.record_output and not printer.is_recording():
             printer.start_recording()
 
+        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
+                                                    distributeMethod="default")
+
         ds = data.dataset
-        aliases = advancedOptions.get('opLabelAliases', circuit_struct.aliases)
-        opLabels = advancedOptions.get('opLabels',
-                                       list(target_model.operations.keys())
-                                       + list(target_model.instruments.keys()))
+        aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
+        opLabels = self.oplabels if self.oplabels != "default" else \
+            list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
                                 opLabels, svdTruncateTo=target_model.get_dimension(),
-                                opLabelAliases=aliases,
-                                verbosity=printer)
+                                opLabelAliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
-        parameters['objective'] = 'lgst'
-        parameters['profiler'] = profiler
-        args = dict()
-        if not advancedOptions.get('estimateLabel', None):
-            advancedOptions['estimateLabel'] = "LGST"
+        parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
+        #parameters['objective'] = 'lgst'
 
-        return _package_into_results(self, data, edesign.target_model, mdl_lgst,
-                                     [circuit_struct], parameters, args, [mdl_lgst],
-                                     self.gaugeopt_suite, self.gaugeopt_target, advancedOptions,
-                                     comm, memlimit, self.output_pkl, printer, profiler, None)
+        ret = ModelEstimateResults(data, self)
+        estimate = _Estimate(ret, {'target': target_model, 'lgst': mdl_lgst,
+                                   'iteration estimates': [mdl_lgst],
+                                   'final iteration estimate': mdl_lgst},
+                             parameters)
+        ret.add_estimate(estimate, estimate_key=self.name)
+        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lgst, data.edesign.target_model, self.gaugeopt_suite,
+                                        self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
+                                        None, None, resource_alloc, printer)
 
-
+#HERE's what we need to do:
+#x continue upgrading this module: StandardGST (similar to others, but need "appendTo" workaround)
+#x upgrade ModelTest
+#x fix do_XXX driver functions in longsequence.py
+# (maybe upgraded advancedOptions there to a class w/validation, etc)
+# upgrade likelihoodfns.py and chi2.py to use objective funtions -- should be lots of consolidation, and maybe
+# add hessian & non-poisson-pic logl to objective fns.
+# fix report generation (changes to ModelEstimateResults)
+# run/update tests - test out custom/new objective functions.
 class StandardGST(_proto.Protocol):
     """The standard-practice GST protocol."""
 
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, modelsToTest=None,
-                 advancedOptions=None, output_pkl=None, verbosity=2, name=None):
-
-        #Note: *don't* specify default dictionary arguments, as this is dangerous
-        # because they are mutable objects
-        if advancedOptions is None: advancedOptions = {}
-
+                 objfn_builders=None, optimizer=None,
+                 badfit_options=None, verbosity=2, name=None):
+        
         super().__init__(name)
         self.modes = modes.split(',')
         self.models_to_test = modelsToTest
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.advancedOptions = advancedOptions
-        self.output_pkl = output_pkl
+        self.objfn_builders = objfn_builders
+        self.optimizer = optimizer
+        self.badfit_options = badfit_options
         self.verbosity = verbosity
 
         self.auxfile_types['models_to_test'] = 'pickle'
@@ -528,6 +509,9 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['gaugeopt_target'] = 'pickle'
         self.auxfile_types['advancedOptions'] = 'pickle'
         self.auxfile_types['comm'] = 'reset'
+
+        #Advanced options that could be changed by users who know what they're doing
+        self.starting_point = {}  # a dict whose keys are modes
 
     #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
     #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
@@ -539,56 +523,39 @@ class StandardGST(_proto.Protocol):
 
         modes = self.modes
         modelsToTest = self.models_to_test
-        advancedOptions = self.advancedOptions.copy()  # ever None?? - if not, simplify below logic
         if modelsToTest is None: modelsToTest = {}
 
-        ret = None
+        ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
-                #prepare advanced options dictionary
-                advanced = advancedOptions.get('all', {})
-                advanced.update(advancedOptions.get(mode, {}))
-
                 if mode == "Target":
-                    est_label = mode
                     model_to_test = data.edesign.target_model.copy()  # no parameterization change
-                    advanced.update({'appendTo': ret, 'estimateLabel': est_label, 'onBadFit': []})
-                    mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target, advanced,
-                                         verbosity=printer - 1)
-                    ret = mdltest.run(data, memlimit, comm)
+                    mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target,
+                                         None, self.badfit_options, verbosity=printer - 1, name=mode)
+                    result = mdltest.run(data, memlimit, comm)
+                    ret.add_estimates(result)
 
                 elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
-                    est_label = parameterization = mode  # for now, 1-1 correspondence
+                    parameterization = mode  # for now, 1-1 correspondence
                     initial_model = data.edesign.target_model.copy()
                     initial_model.set_all_parameterizations(parameterization)
-                    advanced.update({'appendTo': ret, 'estimateLabel': est_label})
-                    if not advanced.get('starting point', None):
-                        advanced['starting point'] = "LGST-if-possible"
+                    initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
 
-                    gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target,
-                              advanced, verbosity=printer - 1)
-                    ret = gst.run(data, memlimit, comm)
+                    gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target, self.objfn_builders,
+                              self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
+                    result = gst.run(data, memlimit, comm)
+                    ret.add_estimates(result)
 
                 elif mode in modelsToTest:
-                    est_label = mode
-                    advanced.update({'appendTo': ret, 'estimateLabel': est_label})
                     mdltest = _ModelTest(modelsToTest[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
-                                         advanced, verbosity=printer - 1)
-                    ret = mdltest.run(data, memlimit, comm)
+                                         None, self.badfit_options, verbosity=printer - 1, name=mode)
+                    result = mdltest.run(data, memlimit, comm)
+                    ret.add_estimates(result)
                 else:
                     raise ValueError("Invalid item in 'modes' argument: %s" % mode)
 
-        #Write results to a pickle file if desired
-        if self.output_pkl and (comm is None or comm.Get_rank() == 0):
-            if isinstance(self.output_pkl, str):
-                with open(self.output_pkl, 'wb') as pklfile:
-                    _pickle.dump(ret, pklfile)
-            else:
-                _pickle.dump(ret, self.output_pkl)
-
-        ret.name = self.name
         return ret
 
 
@@ -870,7 +837,32 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
     return lsgstLists
 
 
-def _package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
+def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
+                             unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
+    tRef = _time.time()
+    comm = resource_alloc.comm
+    profiler = resource_alloc.profiler
+
+    #Do final gauge optimization to *final* iteration result only
+    if gaugeopt_suite:
+        gaugeopt_target = gaugeopt_target if gaugeopt_target else target_model
+        add_gauge_opt(results, estlbl, gaugeopt_suite, gaugeopt_target,
+                      model_to_gaugeopt, unreliable_ops, comm, printer - 1)
+    profiler.add_time('%s: gauge optimization' % estlbl, tRef); tRef = _time.time()
+
+    add_badfit_estimates(results, estlbl, badfit_options, objfn_builder, optimizer, resource_alloc, printer)
+    profiler.add_time('%s: add badfit estimates' % estlbl, tRef); tRef = _time.time()
+
+    #Add recorded info (even robust-related info) to the *base*
+    #   estimate label's "stdout" meta information
+    if printer.is_recording():
+        results.estimates[estlbl].meta['stdout'] = printer.stop_recording()
+
+    return results
+
+
+#TODO REMOVE
+def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
                           parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
                           comm, memLimit, output_pkl, verbosity,
                           profiler, evaltree_cache=None):
@@ -988,12 +980,17 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
                     results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
 
 
-def add_badfit_estimates(results, base_estimate_label, badfit_options, optimizer, resource_alloc=None, verbosity=0):
+def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
+                         resource_alloc=None, verbosity=0):
     #estimate_types=('wildcard',), badFitThreshold=None, badfit_opts=None,
     """
     Add any and all "bad fit" estimates to `results`.
     TODO: docstring
     """
+
+    if badfit_options is None:
+        return  # nothing to do
+
     comm = resource_alloc.comm if resource_alloc else None
     memLimit = resource_alloc.memLimit if resource_alloc else None
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -1026,9 +1023,9 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, optimizer
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
             new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuit_list,
                                                        parameters, cache, comm, memLimit)
-            if badfit_typ in ("Robust", "Robust+") and (opt_args is not None):
+            if badfit_typ in ("Robust", "Robust+") and (optimizer is not None):
                 mdl_reopt = reoptimize_with_weights(mdl, ds, circuit_list, new_params['weights'],
-                                                    objective, opt_args, printer - 1)
+                                                    objfn_builder, optimizer, resource_alloc, cache, printer - 1)
                 new_final_model = mdl_reopt
 
         elif badfit_typ == "wildcard":
@@ -1299,42 +1296,16 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evalt
     return budget
 
 
-def reoptimize_with_weights(model, ds, circuitList, circuitWeights, objective, opt_args, verbosity):
+def reoptimize_with_weights(model, ds, circuit_list, circuit_weights, objfn_builder, optimizer,
+                            resource_alloc, cache, verbosity):
     """
     TODO: docstring
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-
-    #convert weights dict to an array for do_XXX methods below
-    circuitWeightsArray = _np.ones(len(circuitList), 'd')
-    gsindx = {opstr: i for i, opstr in enumerate(circuitList)}
-    for opstr, weight in circuitWeights.items():
-        circuitWeightsArray[gsindx[opstr]] = weight
-
-    reopt_args = dict(dataset=ds,
-                      startModel=model,
-                      circuitsToUse=circuitList,
-                      circuitWeights=circuitWeightsArray,
-                      verbosity=printer - 1)
-    for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
-              'probClipInterval', 'check', 'opLabelAliases',
-              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
-        reopt_args[x] = opt_args[x]
-
-    printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
-    if objective == "chi2":
-        reopt_args['useFreqWeightedChiSq'] = opt_args['useFreqWeightedChiSq']
-        reopt_args['minProbClipForWeighting'] = opt_args['minProbClipForWeighting']
-        reopt_args['check_jacobian'] = opt_args['check_jacobian']
-        _, mdl_reopt = _alg.do_mc2gst(**reopt_args)
-
-    elif objective == "logl":
-        reopt_args['minProbClip'] = opt_args['minProbClip']
-        reopt_args['radius'] = opt_args['radius']
-        _, mdl_reopt = _alg.do_mlgst(**reopt_args)
-
-    else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
-
+    printer.log("--- Re-optimizing after robust data scaling ---")
+    bulk_circuit_list = _objfns.BulkCircuitList(circuit_list, circuitWeights=circuit_weights)
+    opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
+                                            resource_alloc, cache, printer - 1)
     return mdl_reopt
 
 
@@ -1463,12 +1434,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
             raise ValueError(("The data set must be initialized"
                               "*before* adding estimates"))
 
-        if 'iteration' not in self.circuit_structs:
+        if 'iteration' not in self.circuit_lists:
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
-        assert(len(self.circuit_structs['iteration']) == len(results.circuit_structs['iteration'])), \
+        assert(len(self.circuit_lists['iteration']) == len(results.circuit_lists['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
         for estimate_key in results.estimates:
@@ -1575,7 +1546,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         -------
         None
         """
-        nIter = len(self.circuit_structs['iteration'])
+        nIter = len(self.circuit_lists['iteration'])
 
         # base parameter values off of existing estimate parameters
         defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
@@ -1645,7 +1616,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
         """
         view = ModelEstimateResults(self.data, self.protocol, init_circuits=False)
         view.qtys['circuit_lists'] = self.circuit_lists
-        view.qyts['circuit_structs'] = self.circuit_structs
 
         if isinstance(estimate_keys, str):
             estimate_keys = [estimate_keys]
@@ -1661,7 +1631,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
         data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
         cpy = ModelEstimateResults(data, self.protocol, init_circuits=False)
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
-        cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
         for est_key, est in self.estimates.items():
             cpy.estimates[est_key] = est.copy()
         return cpy
@@ -1681,10 +1650,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
         s += " .circuit_lists   -- a dict of Circuit lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
-        s += "\n"
-        s += " .circuit_structs   -- a dict of CircuitStructures w/keys:\n"
-        s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.circuit_structs.keys())) + "\n"
         s += "\n"
         s += " .estimates   -- a dictionary of Estimate objects:\n"
         s += " ---------------------------------------------------------\n"

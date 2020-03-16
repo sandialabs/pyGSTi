@@ -136,13 +136,29 @@ def do_model_test(modelFilenameOrObj,
                                           advancedOptions.get('stringManipRules', None),
                                           advancedOptions.get('opLabelAliases', None),
                                           ds, 'drop', verbosity=printer)
+    # Note: no advancedOptions['truncScheme'] support anymore
 
     data = _proto.ProtocolData(exp_design, ds)
 
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
+    builder = _objfns.ObjectiveFunctionBuilder.simple(advancedOptions.get('objective', 'logl'),
+                                                      advancedOptions.get('useFreqWeightedChiSq', False))
+    _update_objfn_builders([builder], advancedOptions)
+
+    #Create the protocol
     proto = _proto.ModelTest(_load_model(modelFilenameOrObj), None, gopt_suite, None,
-                             advancedOptions, output_pkl, printer)
-    return proto.run(data, memLimit, comm)
+                             builder, _get_badfit_options(advancedOptions),
+                             advancedOptions.get('set trivial gauge group', True), printer)
+
+    #Set more advanced options
+    proto.profile = advancedOptions.get('profile', 1)
+    proto.oplabel_aliases = advancedOptions.get('opLabelAliases', None)
+    proto.circuit_weights = advancedOptions.get('circuitWeights', None)
+    proto.unreliable_ops = advancedOptions.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+
+    results = proto.run(data, memLimit, comm)
+    _output_to_pickle(results, output_pkl, comm)
+    return results
 
 
 def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -236,9 +252,18 @@ def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     if gaugeOptParams is None:
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
-    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None, advancedOptions,
-                                           output_pkl, printer)
-    return proto.run(data, memLimit, comm)
+
+    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
+                                           _get_badfit_options(advancedOptions), printer)
+    proto.profile = advancedOptions.get('profile', 1)
+    proto.record_output = advancedOptions.get('recordOutput', 1)
+    proto.oplabels = advancedOptions.get('opLabels', 'default')
+    proto.oplabel_aliases = advancedOptions.get('opLabelAliases', None)
+    proto.unreliable_ops = advancedOptions.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+
+    results = proto.run(data, memLimit, comm)
+    _output_to_pickle(results, output_pkl, comm)
+    return results
 
 
 def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -393,11 +418,21 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     if gaugeOptParams is None:
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
-    if advancedOptions.get("starting point", None) is None:
-        advancedOptions["starting point"] = "LGST-if-possible"  # to keep backward compatibility
-    proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
-                                     output_pkl, printer)
-    return proto.run(data, memLimit, comm)
+    proto = _proto.GateSetTomography(_get_gst_initial_model(advancedOptions), gopt_suite, None,
+                                     _get_gst_builders(advancedOptions),
+                                     _get_optimizer(advancedOptions, exp_design),
+                                     _get_badfit_options(advancedOptions), printer)
+
+    proto.profile = advancedOptions.get('profile', 1)
+    proto.record_output = advancedOptions.get('recordOutput', 1)
+    proto.distribute_method = advancedOptions.get('distributeMethod', "default")
+    proto.oplabel_aliases = advancedOptions.get('opLabelAliases', None)
+    proto.circuit_weights = advancedOptions.get('circuitWeights', None)
+    proto.unreliable_ops = advancedOptions.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+
+    results = proto.run(data, memLimit, comm)
+    _output_to_pickle(results, output_pkl, comm)
+    return results
 
 
 def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -491,9 +526,21 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
     if gaugeOptParams is None:
         gaugeOptParams = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gaugeOptParams} if gaugeOptParams else None
-    proto = _proto.GateSetTomography(None, gopt_suite, None, advancedOptions,
-                                     output_pkl, printer)
-    return proto.run(data, memLimit, comm)
+    proto = _proto.GateSetTomography(_get_gst_initial_model(advancedOptions), gopt_suite, None,
+                                     _get_gst_builders(advancedOptions),
+                                     _get_optimizer(advancedOptions, exp_design),
+                                     _get_badfit_options(advancedOptions), printer)
+
+    proto.profile = advancedOptions.get('profile', 1)
+    proto.record_output = advancedOptions.get('recordOutput', 1)
+    proto.distribute_method = advancedOptions.get('distributeMethod', "default")
+    proto.oplabel_aliases = advancedOptions.get('opLabelAliases', None)
+    proto.circuit_weights = advancedOptions.get('circuitWeights', None)
+    proto.unreliable_ops = advancedOptions.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+
+    results = proto.run(data, memLimit, comm)
+    _output_to_pickle(results, output_pkl, comm)
+    return results
 
 
 def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
@@ -634,8 +681,13 @@ def do_stdpractice_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
     proto = _proto.StandardGST(modes, gaugeOptSuite, gaugeOptTarget, modelsToTest,
-                               advancedOptions, output_pkl, printer)
-    return proto.run(data, memLimit, comm)
+                               _get_gst_builders(advancedOptions),
+                               _get_optimizer(advancedOptions, exp_design),
+                               _get_badfit_options(advancedOptions), printer)
+
+    results = proto.run(data, memLimit, comm)
+    _output_to_pickle(results, output_pkl, comm)
+    return results
 
 
 # --- Helper functions ---
@@ -664,6 +716,71 @@ def _load_dataset(dataFilenameOrSet, comm, verbosity):
         ds = dataFilenameOrSet  # assume a Dataset object
 
     return ds
+
+
+def _update_objfn_builders(builders, advancedOptions):
+    def _update_regularization(builder, nm):
+        if builder.regularization and nm in builder.regularization and nm in advancedOptions:
+            builder.regularization[nm] = advancedOptions[nm]
+
+    def _update_penalty(builder, nm):
+        if builder.penalties and nm in builder.penalties and nm in advancedOptions:
+            builder.penalties[nm] = advancedOptions[nm]
+
+    for builder in builders:
+        _update_regularization(builder, 'probClipInterval')
+        _update_regularization(builder, 'minProbClip')
+        _update_regularization(builder, 'radius')
+        _update_regularization(builder, 'minProbClipForWeighting')
+        _update_penalty(builder, 'cptp_penalty_factor')
+        _update_penalty(builder, 'spam_penalty_factor')
+
+
+def _get_badfit_options(advancedOptions):
+    old_badfit_options = advancedOptions.get('badFitOptions', {})
+    return _proto.GSTBadFitOptions(advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD),
+                                   advancedOptions.get('onBadFit', []),
+                                   old_badfit_options.get('wildcard_budget_includes_spam', True),
+                                   old_badfit_options.get('wildcard_smart_init', True))
+
+
+def _output_to_pickle(obj, output_pkl, comm):
+    if output_pkl and (comm is None or comm.Get_rank() == 0):
+        if isinstance(output_pkl, str):
+            with open(output_pkl, 'wb') as pklfile:
+                _pickle.dump(obj, pklfile)
+        else:
+            _pickle.dump(obj, output_pkl)
+
+
+def _get_gst_initial_model(advancedOptions):
+    if advancedOptions.get("starting point", None) is None:
+        advancedOptions["starting point"] = "LGST-if-possible"  # to keep backward compatibility
+    return _proto.GSTInitialModel(None, advancedOptions.get("starting point", None),
+                                  advancedOptions.get('depolarizeStart', 0),
+                                  advancedOptions.get('randomizeStart', 0),
+                                  advancedOptions.get('lgst_gaugeopt_tol', 1e-6),
+                                  advancedOptions.get('contractStartToCPTP', 0))
+
+
+def _get_gst_builders(advancedOptions):
+    objfn_builders = _proto.GSTObjFnBuilders.init_simple(
+        advancedOptions.get('objective', 'logl'),
+        advancedOptions.get('useFreqWeightedChiSq', False),
+        advancedOptions.get('alwaysPerformMLE', False),
+        advancedOptions.get('onlyPerformMLE', False))
+    _update_objfn_builders(objfn_builders.iteration_builders, advancedOptions)
+    _update_objfn_builders(objfn_builders.final_builders, advancedOptions)
+    return objfn_builders
+
+
+def _get_optimizer(advancedOptions, exp_design):
+    default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
+    optimizer = {'maxiter': advancedOptions.get('maxIterations', 100000),
+                 'tol': advancedOptions.get('tolerance', 1e-6),
+                 'fditer': advancedOptions.get('fdIterations', default_fditer)}
+    optimizer.update(advancedOptions.get('extra_lm_opts', {}))
+
 
 
 # --------------------------------------------------------------------------------------------------
