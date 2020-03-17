@@ -2168,6 +2168,14 @@ class StochasticNoiseOp(LinearOperator):
             raise ValueError("Invalid evotype '%s' for %s" % (evotype, self.__class__.__name__))
 
         LinearOperator.__init__(self, rep, evotype)
+        self._update_rep()  # initialize self._rep
+
+    def _update_rep(self):
+        # Create dense error superoperator from paramvec
+        errormap = _np.identity(self.dim)
+        for rate, ss in zip(self._params_to_rates(self.params), self.stochastic_superops):
+            errormap += rate * ss
+        self._rep.base[:, :] = errormap
 
     def _rates_to_params(self, rates):
         return _np.sqrt(_np.array(rates))
@@ -2363,12 +2371,7 @@ class StochasticNoiseOp(LinearOperator):
         None
         """
         self.params[:] = v
-
-        # Create dense error superoperator from paramvec
-        errormap = _np.identity(self.dim)
-        for rate, ss in zip(self._params_to_rates(v), self.stochastic_superops):
-            errormap += rate * ss
-        self._rep.base[:, :] = errormap
+        self._update_rep()
         if not nodirty: self.dirty = True
 
     #Transform functions? (for gauge opt)
