@@ -10,18 +10,39 @@
 
 import time as _time
 import numpy as _np
+import itertools as _itertools
+import sys as _sys
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import optimize as _opt
 from .. import tools as _tools
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
+from ..tools import mpitools as _mpit
 from . import profiler as _profiler
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 
 _dummy_profiler = _profiler.DummyProfiler()
 CHECK = False
 CHECK_JACOBIAN = False
+FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
+
+
+def objfn(objfn_cls, model, dataset, circuits=None,
+          penalties=None, regularization=None, memLimit=None,
+          opLabelAliases=None, cache=None, comm=None, **addl_args):
+    """ TODO: docstring """
+
+    if circuits is None:
+        circuits = list(dataset.keys())
+
+    if opLabelAliases:
+        circuits = BulkCircuitList(circuits, opLabelAliases)
+
+    resource_alloc = ResourceAllocation(comm, memLimit)
+    ofn = objfn_cls(model, dataset, circuits, resource_alloc,
+                    penalties, regularization, cache, verbosity=0, *addl_args)
+    return ofn
 
 
 class ComputationCache(object):
@@ -102,7 +123,7 @@ class BulkCircuitList(list):
         self.opLabelAliases = opLabelAliases
         self.circuitWeights = circuitWeights
         self.name = name  # an optional name for this circuit list
-        self[:] = self.circuitsToUse  #maybe get rid of self.circuitsToUse in the future...
+        self[:] = self.circuitsToUse  # maybe get rid of self.circuitsToUse in the future...
 
     #def __len__(self):
     #    return len(self.circuitsToUse)
@@ -118,7 +139,7 @@ class ResourceAllocation(object):
         else:  # assume argument is a dict of args
             return cls(arg.get('comm', None), arg.get('memLimit', None),
                        arg.get('profiler', None), arg.get('distributeMethod', 'default'))
-    
+
     def __init__(self, comm=None, memLimit=None, profiler=None, distributeMethod="default"):
         self.comm = comm
         self.memLimit = memLimit
@@ -149,7 +170,7 @@ class ObjectiveFunctionBuilder(object):
                                     'probClipInterval': (-1e6, 1e6)})
 
         elif objective == "logl":
-            builder = DeltaLogLFunction_PoissonPic.builder(
+            builder = DeltaLogLFunctionPoissonPic.builder(
                 name='logl',
                 regularization={'minProbClip': 1e-4,
                                 'probClipInterval': (-1e6, 1e6),
@@ -229,7 +250,7 @@ class ObjectiveFunction(object):
         else:
             evt_mlim = None
 
-        self.cache = cache
+        self.cache = cache if (cache is not None) else ComputationCache()
         if not self.cache.has_evaltree():
             evt_resource_alloc = resource_alloc.copy(); evt_resource_alloc.memLimit = evt_mlim
             self.cache.add_evaltree(self.mdl, self.dataset, self.circuitsToUse, evt_resource_alloc,
@@ -239,6 +260,7 @@ class ObjectiveFunction(object):
         self.lookup = self.cache.lookup
         self.outcomes_lookup = self.cache.outcomes_lookup
         self.wrtBlkSize = self.cache.wrtBlkSize
+        self.wrtBlkSize2 = self.cache.wrtBlkSize2
 
         self.time_dependent = False
         self.check = CHECK
@@ -255,29 +277,74 @@ class ObjectiveFunction(object):
 
         self.ls_fn = None
         self.ls_jfn = None
-        self.terms_fn = self._default_terms_fn
+        self.term_fn = self._default_term_fn
+        self.percircuit_fn = self._default_percircuit_fn
         self.fn = self._default_fn
+        self.jfn = self._default_jfn  # jacobian of .fn (the entire, summed-up objective fn)
+        self.hfn = None  # no default hessian
+        self.approx_hfn = self._default_approx_hfn
 
-    def _default_terms_fn(self, pv=None):
+    def _default_evalpt(self):
+        """The default point to evaluate functions at """
+        return self.mdl.to_vector()  # just use current model's point
+
+    def _default_term_fn(self, pv=None):
+        assert(self.ls_fn is not None), "Default per-term function requires leastsq objective to be implemented!"
+        if pv is None: pv = self._default_evalpt()
+        v = self.ls_fn(pv)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
+        obj_per_term = v**2  # per term or "element" (one per circuit outcome)
+        return obj_per_term
+
+    def _default_percircuit_fn(self, pv=None):
         """
         TODO: docstring - pv = "parameter vector"
         """
-        assert(self.ls_fn is not None), "Default objective function requires leastsq objective to be implemented!"
-        if pv is None: pv = self.mdl.to_vector()  # just use current model if v is None
-        v = self.ls_fn(pv)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
-        obj_per_el = v**2
+        assert(self.term_fn is not None), "Default objective function requires per-term objective to be implemented!"
+        if pv is None: pv = self._default_evalpt()
+        obj_per_term = self.term_fn(pv)
 
         #Aggregate over outcomes:
         # obj_per_el[iElement] contains contributions per element - now aggregate over outcomes
-        # terms[iCircuit] wiil contain contributions for each original circuit (aggregated over outcomes)
+        # percircuit[iCircuit] will contain contributions for each original circuit (aggregated over outcomes)
         nCircuits = len(self.circuitsToUse)
-        terms = _np.empty(nCircuits, 'd')
+        percircuit = _np.empty(nCircuits, 'd')
         for i in range(nCircuits):
-            terms[i] = _np.sum(obj_per_el[self.lookup[i]], axis=0)
-        return terms
+            percircuit[i] = _np.sum(obj_per_term[self.lookup[i]], axis=0)
+        return percircuit
 
     def _default_fn(self, pv=None):
-        return _np.sum(self.terms_fn(pv))  # just sum contributions of all circuits => total obj_fn
+        return _np.sum(self.percircuit_fn(pv))  # just sum contributions of all circuits => total obj_fn
+
+    def _default_jfn(self, pv=None):
+        assert(self.ls_fn is not None and self.ls_jfn is not None), \
+            "Default jacobian function requires leastsq objective & jacobian to be implemented!"
+        if pv is None: pv = self._default_evalpt()
+        v = self.ls_fn(pv)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
+        J = self.ls_jfn(pv)  # jacobian of dim N x M where N = len(v) and M = len(pv)
+        assert(J.shape == (len(v), len(pv))), "ls_jfn returned a Jacobian with the wrong shape!"
+
+        #Objective is sum(v**2), so Jacobian = 2*sum(v * dv/dp)
+        jacobian = 2.0 * _np.sum(v[:, None] * J, axis=0)  # (N,1) * (N,M) => (N,M) =sum=> (M,)
+        return jacobian
+
+    def _default_approx_hfn(self, pv=None):
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval, self.check, self.comm)  # fill .probs
+        d2v_dp2 = self._d2v_dp2()  # 2nd derivative of objective fn elements wrt probs
+        assert(self.jac is not None)  # this function also assumes we have allocated self.jac
+        self.mld.bulk_fill_dprobs(self.jac, self.evTree, None, self.probClipInterval,
+                                  self.check, self.comm)  # use cache?
+        JT = self.jac[:, None, :]  # (KM,1,N) - will "dot" using 2nd parameter col
+        J = self.jac[:, :, None]  # (KM,N,1) - will "dot" using 1st parameter col
+        approx_hessian = d2v_dp2[:, None, None] * JT * J
+        return approx_hessian
+
+    def _d2v_dp2(self):
+        """
+        Derivative of the objective function elements (one per probability)
+        wrt the probabilities (*not* the parameters)
+        """
+        raise NotImplementedError(("Derived classes should implement this to make use "
+                                   "of the default approximate-hessian implementation!"))
 
     def set_penalties(self):
         return 0  # no additional penalty terms
@@ -288,15 +355,25 @@ class ObjectiveFunction(object):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
-    def get_persistent_memory_estimate(self):
+    def get_persistent_memory_estimate(self, num_elements=None):
         #  Estimate & check persistent memory (from allocs within objective function)
-        ns = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-        ng = len(self.circuitsToUse)
-        ne = self.mdl.num_params()
+        if num_elements is None:
+            nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
+            nc = len(self.circuitsToUse)
+            ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
+        else:
+            ne = num_elements
+        np = self.mdl.num_params()
 
-        obj_fn_mem = 8 * ng * ns
-        jac_mem = 8 * ng * ns * ne
+        # "persistent" memory is that used to store the final results.
+        obj_fn_mem = FLOATSIZE * ne
+        jac_mem = FLOATSIZE * ne * np
+        hess_mem = FLOATSIZE * ne * np**2
         persistentMem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
+        if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
+            persistentMem += hess_mem  # we need room for the hessian too!
+        # TODO: what about "bulk_hprobs_by_block"?
+
         return persistentMem
 
     def get_evaltree_subcalls(self):
@@ -328,6 +405,118 @@ class ObjectiveFunction(object):
             self.cache.add_count_vectors(self.dataset, self.circuitsToUse, self.dsCircuitsToUse, self.circuitWeights)
         return self.cache.cntVecMx, self.cache.totalCntVec
 
+    def _construct_hessian(self, cntVecMx_all, totalCntVec_all, probClipInterval):
+        """
+        Framework for constructing a hessian matrix row by row using a derived
+        class's `_hessian_from_hprobs` method.  This function expects that this
+        objective function has been setup for hessian computation, and it's evaltree
+        may be split in order to facilitate this.
+        """
+        #Note - we could in the future use comm to distribute over
+        # subtrees here.  We currently don't because we parallelize
+        # over columns and it seems that in almost all cases of
+        # interest there will be more hessian columns than processors,
+        # so adding the additional ability to parallelize over
+        # subtrees would just add unnecessary complication.
+
+        #get distribution across subtrees (groups if needed)
+        subtrees = self.evTree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = self.evTree.distribute(self.comm)
+
+        nP = self.mdl.num_params()
+        blkSize1, blkSize2 = self.wrtBlkSize, self.wrtBlkSize2
+        rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
+        colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
+
+        #  Allocate memory (alloc max required & take views)
+        max_nEls = max([subtrees[i].num_final_elements() for i in mySubTreeIndices])
+        probs_mem = _np.empty(max_nEls, 'd')
+
+        #  Allocate persistent memory
+        final_hessian = _np.zeros((nP, nP), 'd')
+
+        tStart = _time.time()
+
+        #Loop over subtrees
+        for iSubTree in mySubTreeIndices:
+            evalSubTree = subtrees[iSubTree]
+            sub_nEls = evalSubTree.num_final_elements()
+
+            if evalSubTree.myFinalElsToParentFinalElsMap is not None:
+                #Then `evalSubTree` is a nontrivial sub-tree and its .spamtuple_indices
+                # will index the *parent's* final index array space, which we
+                # usually want but NOT here, where we fill arrays just big
+                # enough for each subtree separately - so re-init spamtuple_indices
+                evalSubTree = evalSubTree.copy()
+                evalSubTree.recompute_spamtuple_indices(bLocal=True)
+
+            # Create views into pre-allocated memory
+            probs = probs_mem[0:sub_nEls]
+
+            # Take portions of count arrays for this subtree
+            cntVecMx = cntVecMx_all[evalSubTree.final_element_indices(self.evTree)]
+            totalCntVec = totalCntVec_all[evalSubTree.final_element_indices(self.evTree)]
+            assert(len(cntVecMx) == len(probs))
+
+            #compute pos_probs separately
+            self.mdl.bulk_fill_probs(probs, evalSubTree,
+                                     clipTo=probClipInterval, check=self.check,
+                                     comm=mySubComm)
+
+            nCols = self.mdl.num_params()
+            blocks1 = _mpit.slice_up_range(nCols, rowParts)
+            blocks2 = _mpit.slice_up_range(nCols, colParts)
+            sliceTupList_all = list(_itertools.product(blocks1, blocks2))
+            #cull out lower triangle blocks, which have no overlap with
+            # the upper triangle of the hessian
+            sliceTupList = [(slc1, slc2) for slc1, slc2 in sliceTupList_all
+                            if slc1.start <= slc2.stop]
+
+            loc_iBlks, blkOwners, blkComm = \
+                _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
+            mySliceTupList = [sliceTupList[i] for i in loc_iBlks]
+
+            subtree_hessian = _np.zeros((nP, nP), 'd')
+
+            k, kmax = 0, len(mySliceTupList)
+            for (slice1, slice2, hprobs, dprobs12) in self.mdl.bulk_hprobs_by_block(
+                    evalSubTree, mySliceTupList, True, blkComm):
+                rank = self.comm.Get_rank() if (self.comm is not None) else 0
+
+                if self.printer.verbosity > 3 or (self.printer.verbosity == 3 and rank == 0):
+                    iSub = mySubTreeIndices.index(iSubTree)
+                    print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+                          % (rank, _time.time() - tStart, k, kmax, iSub,
+                             len(mySubTreeIndices), len(evalSubTree)))
+                    _sys.stdout.flush(); k += 1
+
+                subtree_hessian[slice1, slice2] = \
+                    self._hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
+                                              totalCntVec, probs)
+                #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
+
+            #Gather columns from different procs and add to running final hessian
+            #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian,[], (0,1), mySubComm)
+            _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, [], (0, 1), mySubComm)
+            final_hessian += subtree_hessian
+
+        #gather (add together) final_hessians from different processors
+        if self.comm is not None and len(set(subTreeOwners.values())) > 1:
+            if self.comm.Get_rank() not in subTreeOwners.values():
+                # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
+                final_hessian[:, :] = 0.0  # zero out hessian so it won't contribute
+            final_hessian = self.comm.allreduce(final_hessian)
+
+        #copy upper triangle to lower triangle (we only compute upper)
+        for i in range(final_hessian.shape[0]):
+            for j in range(i + 1, final_hessian.shape[1]):
+                final_hessian[j, i] = final_hessian[i, j]
+
+        return final_hessian  # (N,N)
+
+    def _hessian_from_hprobs(self, hprobs, dprobs12, cntVecMx, totalCntVec, probs):
+        raise NotImplementedError("Derived classes should implement this!")
+
 
 #NOTE on chi^2 expressions:
 #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -340,8 +529,9 @@ class ObjectiveFunction(object):
 class Chi2Function(ObjectiveFunction):
 
     def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
 
+        self.enable_hessian = enable_hessian
         super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
 
         #  Allocate peristent memory
@@ -349,6 +539,7 @@ class Chi2Function(ObjectiveFunction):
         #   tree and initialization of dsCircuitsToUse)
         self.probs = _np.empty(self.KM, 'd')
         self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
+        self.hprobs = _np.empty((self.KM, self.vec_gs_len, self.vec_gs_len), 'd') if self.enable_hessian else None
         self.cntVecMx, self.N = self.compute_count_vectors()
         self.f = self.cntVecMx / self.N
         self.maxCircuitLength = max([len(x) for x in self.circuitsToUse])
@@ -385,6 +576,15 @@ class Chi2Function(ObjectiveFunction):
             self.ls_fn = self.verbose_chi2
             self.ls_jfn = self.verbose_jac
 
+        self.jfn = self._jacobian_fn
+        self.hfn = self._hessian_fn
+        self.approx_hfn = self._approx_hessian_fn
+
+    def get_evaltree_subcalls(self):
+        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+        if self.enable_hessian: calls.append("bulk_fill_hprobs")
+        return calls
+
     def set_penalties(self, regularizeFactor=0, cptp_penalty_factor=0, spam_penalty_factor=0):
         self.regularizeFactor = regularizeFactor
         self.cptp_penalty_factor = cptp_penalty_factor
@@ -404,21 +604,21 @@ class Chi2Function(ObjectiveFunction):
         self.probClipInterval = probClipInterval
 
     def get_weights(self, p):
-        cp = _np.clip(p, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        cp = _np.clip(p, self.minProbClipForWeighting, None)
         return _np.sqrt(self.N / cp)  # nSpamLabels x nCircuits array (K x M)
 
     def get_dweights(self, p, wts):  # derivative of weights w.r.t. p
-        cp = _np.clip(p, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        cp = _np.clip(p, self.minProbClipForWeighting, None)
         dw = -0.5 * wts / cp   # nSpamLabels x nCircuits array (K x M)
         dw[_np.logical_or(p < self.minProbClipForWeighting, p > (1 - self.minProbClipForWeighting))] = 0.0
         return dw
 
     def zero_freq_chi2(self, N, probs):
-        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, None)
         return N * probs**2 / clipped_probs
 
     def zero_freq_dchi2(self, N, probs):
-        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, 1 - self.minProbClipForWeighting)
+        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, None)
         return _np.where(probs == clipped_probs, N, 2 * N * probs / clipped_probs)
 
     def update_v_for_omitted_probs(self, v, probs):
@@ -747,6 +947,91 @@ class Chi2Function(ObjectiveFunction):
         self.profiler.add_time("do_mc2gst: JACOBIAN", tm)
         return self.jac
 
+    # Scratch work:
+    # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over circuits & spam labels)                                                                                      # noqa
+    # d(chi^2)/dx = sum_i N_i * [ 2(p_i-f_i)*dp_i/dx / p_i - (p_i-f_i)^2 / p_i^2 * dp_i/dx ]                                                                    # noqa
+    #             = sum_i N_i * (p_i-f_i) / p_i * [2 - (p_i-f_i)/p_i   ] * dp_i/dx                                                                              # noqa
+    #             = sum_i N_i * t_i * [2 - t_i ] * dp_i/dx     where t_i = (p_i-f_i) / p_i                                                                      # noqa
+    # d2(chi^2)/dydx = sum_i N_i * [ dt_i/dy * [2 - t_i ] * dp_i/dx - t_i * dt_i/dy * dp_i/dx + t_i * [2 - t_i] * d2p_i/dydx ]                                  # noqa
+    #                          where dt_i/dy = [ 1/p_i - (p_i-f_i) / p_i^2 ] * dp_i/dy                                                                          # noqa
+    def _jacobian_fn(self, pv=None):
+        dprobs = self.jac
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  self.probs, self.probClipInterval, self.check, self.comm)  # use cache?
+
+        if self.firsts is not None:
+            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+
+        cprobs = _np.clip(self.probs, self.minProbClipForWeighting, None)
+
+        #account for omitted probs (sparse data)
+        if self.firsts is not None:
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.lookup[i]])
+                                             for i in self.indicesOfCircuitsWithOmittedData])
+            clipped_oprobs = _np.clip(omitted_probs, self.minProbClipForWeighting, None)
+
+        t = ((self.probs - self.f) / cprobs)[:, None]  # (iElement, 0) = (KM,1)
+        dchi2 = self.N[:, None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
+
+        #account for omitted probs
+        if self.firsts is not None:
+            t_firsts = (omitted_probs / clipped_oprobs)[:, None]
+            dchi2[self.firsts, :] -= self.N[self.firsts, None] * t_firsts * (2 - t_firsts) * self.dprobs_omitted_rowsum
+
+        dchi2 = _np.sum(dchi2, axis=0)  # sum over operation sequences and spam labels => (N)
+        return dchi2
+
+    def _hessian_fn(self, pv=None):
+        if self.firsts is not None:
+            raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
+
+        dprobs = self.jac
+        self.mdl.bulk_fill_hprobs(self.hprobs, self.evTree, self.probs, dprobs,
+                                  self.probClipInterval, self.check, self.comm)  # use cache?
+
+        cprobs = _np.clip(self.probs, self.minProbClipForWeighting, None)
+        dprobs_p = dprobs[:, None, :]  # (KM,1,N)
+        t = ((self.probs - self.f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
+        dt = ((1.0 / cprobs - (self.probs - self.f) / cprobs**2)[:, None]
+              * dprobs)[:, :, None]  # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
+
+        d2chi2 = self.N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * self.hprobs)
+        return d2chi2
+
+    def _approx_hessian_fn(self, pv=None):
+        #Almost the same as function above but drops hprobs term
+        if self.firsts is not None:
+            raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
+
+        dprobs = self.jac
+        self.mld.bulk_fill_dprobs(dprobs, self.evTree, self.probs, self.probClipInterval,
+                                  self.check, self.comm)  # use cache?
+
+        cprobs = _np.clip(self.probs, self.minProbClipForWeighting, None)
+        dprobs_p = dprobs[:, None, :]  # (KM,1,N)
+        t = ((self.probs - self.f) / cprobs)[:, None, None]  # (iElement, 0,0) = (KM,1,1)
+        dt = ((1.0 / cprobs - (self.probs - self.f) / cprobs**2)[:, None]
+              * dprobs)[:, :, None]  # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
+
+        d2chi2 = self.N[:, None, None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p)  # collapse this?
+        return d2chi2
+
+    def _d2v_dp2(self):
+        # v = N * (p-f)**2 / p  => dv/dp = 2N * (p-f)/p - N * (p-f)**2 / p**2 = 2N * t - N * t**2
+        # => d2v/dp2 = 2N*dt - 2N*t*dt = 2N(1-t)*dt
+        # Note: in above _approx_hessian_fn we have (note that the `dt` there = JT*dt using the notation here):
+        # N * JT*dt * (2 - t) * J - N * t * JT*dt * J  = -2 * N * dt * t * J + 2 * N * dt * J = JT * 2N(1-t)*dt * J, so
+        # this is consistent with generic approx hessian formula H = JT * d2v/dp2 * J.
+        cprobs = _np.clip(self.probs, self.minProbClipForWeighting, None)
+        iclip = (self.probs == self.minProbClipForWeighting)
+        t = ((self.probs - self.f) / cprobs)  # should think of as (p-f)/p
+        dtdp = (1.0 - (self.probs - self.f) / cprobs) / cprobs  # 1/p - (p-f)/p**2 => 1/cp - (p-f)/cp**2
+        d2v_dp2 = 2 * self.N * (1 - t) * dtdp
+        d2v_dp2[iclip] = 2 * self.N[iclip] / self.minProbClipForWeighting
+        # with cp constant v = N*(p-f)**2/cp => dv/dp = 2N*(p-f)/cp => d2v/dp2 = 2N/cp
+        return d2v_dp2
+
 
 class FreqWeightedChi2Function(Chi2Function):
 
@@ -756,7 +1041,7 @@ class FreqWeightedChi2Function(Chi2Function):
         super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
         self.fweights = _np.sqrt(self.N / _np.clip(self.f, 1e-7, None))
         self.z = _np.zeros(self.KM, 'd')
-        
+
         #OLD, more complex and seemingly less accurate way to perform weighting:
         #self.fweights = _np.empty(self.KM, 'd')
         #for (i, opStr) in enumerate(self.dsCircuitsToUse):
@@ -870,8 +1155,8 @@ class TimeDependentChi2Function(ObjectiveFunction):
 
 class ChiAlphaFunction(ObjectiveFunction):
 
-    def __init__(self, alpha, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
+                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, alpha=1):
         """ TODO: docstring - note: if radius is None, then the "relaxed" zero-f-term mode is used
             whereas a radius > 0 implies that the "harsh" zero-f-term mode is used.
         """
@@ -1111,10 +1396,12 @@ class ChiAlphaFunction(ObjectiveFunction):
 #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
 #
 # See LikelihoodFunction.py for details on patching
-class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
+class DeltaLogLFunctionPoissonPic(ObjectiveFunction):
 
     def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
+
+        self.enable_hessian = enable_hessian
         super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
 
         #Allocate peristent memory
@@ -1138,11 +1425,15 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
             assert(self.forcefn_grad is None), "Cannot use force functions when using the termgap simtype"
             self.ls_fn = self.termgap_poisson_picture_logl
             self.ls_jfn = self.poisson_picture_jacobian  # same jacobian as normal case
-            self.v_from_probs_fn = None
         else:
             self.ls_fn = self.poisson_picture_logl
             self.ls_jfn = self.poisson_picture_jacobian
-            self.v_from_probs_fn = self._poisson_picture_v_from_probs
+        self.hfn = self.poisson_picture_hessian
+
+    def get_evaltree_subcalls(self):
+        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+        if self.enable_hessian: calls.append('bulk_hprobs_by_block')
+        return calls
 
     def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, forcefn_grad=None, shiftFctr=100):
         self.cptp_penalty_factor = cptp_penalty_factor
@@ -1205,7 +1496,7 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
         self.mdl.from_vector(vectorGS)
         self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
                                  self.check, self.comm)
-        return self._poisson_picture_v_from_probs(tm, debug=True)
+        return self._v_from_probs(tm, debug=True)
 
     def _zero_freq_poisson_logl_harsh(self, N, probs):
         a = self.a
@@ -1226,7 +1517,7 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
         p0 = 1.0 / C0
         return N * _np.where(probs > p0, 1.0, 2 * C0 * probs)
 
-    def _poisson_picture_v_from_probs(self, tm_start, extra=False, debug=False):
+    def _v_from_probs(self, tm_start, extra=False, debug=False):
 
         if self.regtype == 'pfratio':
             x0 = self.x0
@@ -1249,18 +1540,18 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
             pos_x = _np.where(x < x0, x0, x)
             S = self.minusCntVecMx * (1 / x1 - 1)  # deriv wrt x at x == x0 (=min_p)
             S2 = -0.5 * self.minusCntVecMx / (x1**2)  # 0.5 * 2nd deriv at x0
-        
+
             #pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
             #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
             #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
-            
+
             v = self.minusCntVecMx * (1.0 - pos_x + _np.log(pos_x))
             #Note: order of +/- terms above is important to avoid roundoff errors when x is near 1.0
             # (see patching line below).  For example, using log(x) + 1 - x causes significant loss
             # of precision because log(x) is tiny and so is |1-x| but log(x) + 1 == 1.0.
 
             # omit = 1-p1-p2  => 1/2-p1 + 1/2-p2
-            
+
             # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             v = _np.maximum(v, 0)
             # quadratic extrapolation of logl at x0 for probabilities/frequencies < x0
@@ -1450,10 +1741,10 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
                                   profiler=self.profiler, gatherMemLimit=self.gthrMem)
 
         if self.regtype == 'pfratio':
-            v, (x, pos_x, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
+            v, (x, pos_x, S, S2, omitted_probs) = self._v_from_probs(tm, extra=True)
             x0 = self.x0
         elif self.regtype == 'minp':
-            v, (pos_probs, S, S2, omitted_probs) = self._poisson_picture_v_from_probs(tm, extra=True)
+            v, (pos_probs, S, S2, omitted_probs) = self._v_from_probs(tm, extra=True)
 
         # derivative should not actually diverge as v->0, but clip v (always >= 0) to a small positive
         # value to avoid divide by zero errors below.
@@ -1585,13 +1876,319 @@ class DeltaLogLFunction_PoissonPic(ObjectiveFunction):
         self.profiler.add_time("do_mlgst: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
 
+    def poisson_picture_hessian(self, pvec=None):
+        assert(self.regtype == 'minp'), "Only regtype='minp' is supported for hessian calcs so far!"
+        if pvec is None: pvec = self.mdl.to_vector()
+        return self._construct_hessian(-self.minusCntVecMx, self.totalCntVec, self.probClipInterval)
+
+    def _hessian_from_hprobs(self, hprobs, dprobs12, cntVecMx, totalCntVec, probs):
+        """ Factored-out computation of hessian from raw components """
+        # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
+        a = self.a
+        min_p = self.min_p
+        totCnts = totalCntVec  # shorthand
+        pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
+        S = -cntVecMx / min_p + totCnts  # slope term that is derivative of logl at min_p
+        S2 = 0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
+
+        #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
+        if self.firsts is not None:
+            dprobs12_omitted_rowsum = _np.empty((len(self.firsts),) + dprobs12.shape[1:], 'd')
+            hprobs_omitted_rowsum = _np.empty((len(self.firsts),) + hprobs.shape[1:], 'd')
+
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
+        # hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
+        #                             -totalCntVec[None,:,None,None] * hprobs,
+        #                             (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] \
+        #                              * dprobs12
+        #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] \
+        #                              * hprobs )
+        # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+        # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
+
+        omitted_probs = 1.0 - _np.array([_np.sum(pos_probs[self.lookup[i]])
+                                         for i in self.indicesOfCircuitsWithOmittedData])
+        for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+            dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[self.lookup[i], :, :], axis=0)
+            hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[self.lookup[i], :, :], axis=0)
+
+        #Accomplish the same thing as the above commented-out lines,
+        # but with more memory effiency:
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2 * S2, cntVecMx / pos_probs**2)
+        zfc = _np.where(probs >= a, 0.0, totCnts * ((-2.0 / a**2) * probs + 2.0 / a))
+        dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
+
+        hprobs_coeffs = \
+            _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
+                      -cntVecMx / pos_probs + totCnts)
+        zfc = _np.where(probs >= a, totCnts,
+                        totCnts * ((-1.0 / a**2) * probs**2 + 2 * probs / a))
+        hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
+
+        if self.firsts is not None:
+            dprobs12_omitted_coeffs = totCnts[self.firsts] * _np.where(
+                omitted_probs >= a, 0.0, (2.0 / a**2) * omitted_probs - 2.0 / a)
+            hprobs_omitted_coeffs = totCnts[self.firsts] * _np.where(
+                omitted_probs >= a, 1.0,
+                (1.0 / a**2) * omitted_probs**2 - 2 * omitted_probs / a)
+
+        # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+        #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+        hprobs *= hprobs_coeffs[:, None, None]
+        dprobs12 *= dprobs12_coeffs[:, None, None]
+        if self.firsts is not None:
+            hprobs[self.firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
+            dprobs12[self.firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
+        hessian = dprobs12; hessian += hprobs
+
+        # hessian[iSpamLabel,iCircuit,iModelParam1,iModelParams2] contains all
+        #  d2(logl)/d(modelParam1)d(modelParam2) contributions
+        return _np.sum(hessian, axis=0)
+        # sum over spam label and operation sequence dimensions (operation sequences in evalSubTree)
+        # adds current subtree contribution for (N,N')-sized block of Hessian
+
+    def _d2v_dp2(self):
+        assert(self.regtype == "minp")
+        pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)   # 2nd derivative of logl term at min_p
+        d2v_dp2 = _np.where(self.probs < self.min_p,
+                            2 * S2,
+                            -self.minusCntVecMx / pos_probs**2)
+        zfc = _np.where(self.probs >= self.a, 0.0,
+                        self.totalCntVec * ((-2.0 / self.a**2) * self.probs + 2.0 / self.a))
+        d2v_dp2 = _np.where(self.minusCntVecMx == 0, zfc, d2v_dp2)
+        return d2v_dp2  # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+
 
 class DeltaLogLFunction(ObjectiveFunction):
     """ TODO: standard logl function, which will *not* implement self.ls_fn, as it doesn't have always >=0 terms"""
-    pass
+    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
+                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
+        self.enable_hessian = enable_hessian
+        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+
+        #Allocate peristent memory
+        self.probs = _np.empty(self.KM, 'd')
+        self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
+
+        cntVecMx, self.totalCntVec = self.compute_count_vectors()
+        self.minusCntVecMx = -1.0 * cntVecMx
+        self.freqs = cntVecMx / self.totalCntVec
+        # set zero freqs to 1.0 so np.log doesn't complain
+        self.freqs_nozeros = _np.where(cntVecMx == 0, 1.0, self.freqs)
+        self.freqTerm = cntVecMx * _np.log(self.freqs_nozeros)
+
+        if mdl.get_simtype() == "termgap":
+            raise NotImplementedError("Term-calculations are not implemented for non-poisson-picture logl function.")
+        else:
+            self.ls_fn = None
+            self.ls_jfn = None
+            self.fn = self._logl_fn
+            self.jfn = self._logl_jac
+            self.hfn = self._logl_hessian
+
+    def get_evaltree_subcalls(self):
+        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+        if self.enable_hessian: calls.append('bulk_hprobs_by_block')
+        return calls
+
+    def set_regularization(self, minProbClip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None,
+                           probClipInterval=(-10000, 10000)):
+        if minProbClip is not None:
+            assert(pfratio_stitchpt is None and pfratio_derivpt is None), \
+                "Cannot specify pfratio and minProbClip arguments as non-None!"
+            self.min_p = minProbClip
+            self.regtype = "minp"
+        else:
+            assert(minProbClip is None), "Cannot specify pfratio and minProbClip arguments as non-None!"
+            self.x0 = pfratio_stitchpt
+            self.x1 = pfratio_derivpt
+            self.regtype = "pfratio"
+        self.probClipInterval = probClipInterval
+
+    def get_chi2k_distributed_qty(self, objective_function_value):
+        return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
+
+    def _terms_from_probs(self, extra=False):
+
+        if self.regtype == 'pfratio':
+            x0 = self.x0
+            x1 = self.x1
+            x = self.probs / self.freqs_nozeros  # objective is -Nf*log(x)
+
+            pos_x = _np.where(x < x0, x0, x)
+            S = self.minusCntVecMx * (1 / x1)  # deriv wrt x at x == x0 (=min_p)
+            S2 = -0.5 * self.minusCntVecMx / (x1**2)  # 0.5 * 2nd deriv at x0
+
+            v = self.minusCntVecMx * _np.log(pos_x)
+            v = _np.where(x < x0, v + S * (x - x0) + S2 * (x - x0)**2, v)
+
+        elif self.regtype == 'minp':
+            pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
+            S = self.minusCntVecMx / self.min_p
+            S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)
+            v = self.freqTerm + self.minusCntVecMx * _np.log(pos_probs)  # dims K x M (K = nSpamLabels, M = nCircuits)
+            v = _np.where(self.probs < self.min_p,
+                          v + S * (self.probs - self.min_p) + S2 * (self.probs - self.min_p)**2, v)
+        else:
+            raise ValueError("Invalid regularization type: %s" % self.regtype)
+
+        v = _np.where(self.minusCntVecMx == 0, 0.0, v)
+
+        #Note: no penalty for omitted probabilities (objective fn == 0 whenever counts == 0)
+
+        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        if self.regtype == "pfratio":
+            if extra:  # then used for jacobian where penalty terms are added later, so return now
+                return v, (x, pos_x, S, S2)
+        elif self.regtype == 'minp':
+            if extra:  # then used for jacobian where penalty terms are added later, so return now
+                return v, (pos_probs, S, S2)
+        else:
+            return v
+
+    def _logl_terms(self, pvec):
+        tm = _time.time()
+        self.mdl.from_vector(pvec)
+        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+                                 self.check, self.comm)
+        terms = self._terms_from_probs(tm)
+        self.profiler.add_time(self.__class__.__name__ + " OBJECTIVE", tm)
+        return terms
+
+    def _logl_fn(self, pvec=None):
+        if pvec is None: pvec = self.mdl.to_vector()
+        return _np.sum(self._logl_terms(pvec))
+
+    def _logl_jac_terms(self, pvec):
+        tm = _time.time()
+        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.KM, self.vec_gs_len)
+        self.mdl.from_vector(pvec)
+        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
+                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
+                                  check=self.check, comm=self.comm, wrtBlockSize=self.wrtBlkSize,
+                                  profiler=self.profiler, gatherMemLimit=self.gthrMem)
+
+        if self.regtype == 'pfratio':
+            terms, (x, pos_x, S, S2) = self._terms_from_probs(extra=True)
+            x0 = self.x0
+        elif self.regtype == 'minp':
+            terms, (pos_probs, S, S2) = self._terms_from_probs(extra=True)
+
+        # compute jacobian
+        if self.regtype == 'pfratio':
+            dprobs_factor_pos = (self.totalCntVec * (-1 / pos_x))  # objective = -Nf*log(x) => -Nf/x * (1/f) = -N/x
+            dprobs_factor_neg = (S + 2 * S2 * (x - x0)) / self.freqs_nozeros
+            dprobs_factor = _np.where(x < x0, dprobs_factor_neg, dprobs_factor_pos)
+
+        elif self.regtype == 'minp':
+            dprobs_factor_pos = self.minusCntVecMx / pos_probs  # objective = Nf*(log(f) - log(p))
+            dprobs_factor_neg = S + 2 * S2 * (self.probs - self.min_p)
+            dprobs_factor = _np.where(self.probs < self.min_p, dprobs_factor_neg, dprobs_factor_pos)
+
+        dprobs_factor = _np.where(self.minusCntVecMx == 0, 0.0, dprobs_factor)
+        dprobs *= dprobs_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        #Note: this also sets jac[0:KM,:]
+
+        self.profiler.add_time("logl JACOBIAN", tm)
+        return self.jac
+
+    def _logl_jac(self, pvec=None):
+        if pvec is None: pvec = self.mdl.to_vector()
+        return _np.sum(self._logl_jac_terms(pvec), axis=0)
+
+    def _logl_hessian(self, pvec):
+        assert(self.regtype == 'minp'), "Only regtype='minp' is supported for hessian calcs so far!"
+        if pvec is None: pvec = self.mdl.to_vector()
+        return self._construct_hessian(-self.minusCntVecMx, self.totalCntVec, self.probClipInterval)
+
+    def _hessian_from_hprobs(self, hprobs, dprobs12, cntVecMx, totalCntVec, probs):
+        """ Factored-out computation of hessian from raw components """
+        # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
+        min_p = self.min_p
+        pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
+        S = -cntVecMx / min_p  # slope term that is derivative of logl at min_p
+        S2 = 0.5 * cntVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
+
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs
+        # # (K,M,1,1) * (K,M,N,N')
+        # hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs
+        # hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+        # # (K,M,N,N')
+        # hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian)
+
+        #Accomplish the same thing as the above commented-out lines,
+        # but with more memory effiency:
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2 * S2, cntVecMx / pos_probs**2)
+        dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
+
+        hprobs_coeffs = \
+            _np.where(probs < min_p, S + 2 * S2 * (probs - min_p),
+                      -cntVecMx / pos_probs)
+        hprobs_coeffs = _np.where(cntVecMx == 0, 0.0, hprobs_coeffs)
+
+        # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+        #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+        hprobs *= hprobs_coeffs[:, None, None]
+        dprobs12 *= dprobs12_coeffs[:, None, None]
+        hessian = dprobs12; hessian += hprobs
+        #Note: no need to correct for omitted probs (zero contribution)
+
+        return _np.sum(hessian, axis=0)
+        # sum over spam label and operation sequence dimensions (operation sequences in evalSubTree)
+        # adds current subtree contribution for (N,N')-sized block of Hessian
+
+    def _d2v_dp2(self):
+        assert(self.regtype == "minp")
+        pos_probs = _np.where(self.probs < self.min_p, self.min_p, self.probs)
+        S2 = -0.5 * self.minusCntVecMx / (self.min_p**2)   # 2nd derivative of logl term at min_p
+        d2v_dp2 = _np.where(self.probs < self.min_p,
+                            2 * S2,
+                            -self.minusCntVecMx / pos_probs**2)
+        d2v_dp2 = _np.where(self.minusCntVecMx == 0, 0.0, d2v_dp2)
+        return d2v_dp2  # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
 
 
-class TimeDependentLogLFunction_PoissonPic(ObjectiveFunction):
+class MaxLogLFunction(ObjectiveFunction):
+    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
+                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, poisson_picture=True):
+        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+
+        #Allocate peristent memory
+        self.precompute_omitted_freqs()  # sets self.firsts
+        self.cntVecMx, self.totalCntVec = self.compute_count_vectors()
+        self.freqs = self.cntVecMx / self.totalCntVec
+        # set zero freqs to 1.0 so np.log doesn't complain
+        self.freqs_nozeros = _np.where(self.cntVecMx == 0, 1.0, self.freqs)
+        self.poisson_picture = poisson_picture
+
+        if poisson_picture:
+            self.terms = self.cntVecMx * (_np.log(self.freqs_nozeros) - 1.0)
+        else:
+            self.terms = self.cntVecMx * _np.log(self.freqs_nozeros)
+        self.terms[self.cntVecMx == 0] = 0.0
+        # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+
+        self.term_fn = self.max_logl_terms
+        self.jfn = None
+        self.hfn = None
+
+    def max_logl_terms(self, pvec=None):
+        return self.terms
+
+
+class TimeDependentLogLFunctionPoissonPic(ObjectiveFunction):
 
     def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
                  penalties=None, regularization=None, cache=None, name=None, verbosity=0):
@@ -1888,6 +2485,10 @@ class LogLWildcardFunction(ObjectiveFunction):
         #calling fn(...) initializes the members of self.logl_objfn
         self.probs = self.logl_objfn.probs.copy()
 
+    def _default_evalpt(self):
+        """The default point to evaluate functions at """
+        return self.wildcard_budget.to_vector()
+
     def logl_wildcard(self, Wvec):
         tm = _time.time()
         self.wildcard_budget.from_vector(Wvec)
@@ -1898,4 +2499,4 @@ class LogLWildcardFunction(ObjectiveFunction):
                                           self.logl_objfn.lookup,
                                           self.wildcard_budget_precomp)
 
-        return self.logl_objfn._poisson_picture_v_from_probs(tm)
+        return self.logl_objfn._v_from_probs(tm)
