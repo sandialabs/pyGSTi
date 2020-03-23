@@ -16,8 +16,7 @@ from ..objects import objectivefns as _objfns
 
 def chi2(model, dataset, circuit_list=None,
          minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-         memLimit=None, opLabelAliases=None,
-         cache=None, comm=None):
+         opLabelAliases=None, cache=None, comm=None, memLimit=None):
     """
     Computes the total (aggregate) chi^2 for a set of circuits.
 
@@ -46,10 +45,6 @@ def chi2(model, dataset, circuit_list=None,
         (min,max) to clip probabilities to within Model probability
         computation routines (see Model.bulk_fill_probs)
 
-    memLimit : int, optional
-        A rough memory limit in bytes which restricts the amount of intermediate
-        values that are computed and stored.
-
     opLabelAliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
@@ -63,21 +58,24 @@ def chi2(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
     Returns
     -------
     chi2 : float
         chi^2 value, equal to the sum of chi^2 terms from all specified operation sequences
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list, None,
+    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo},
-                         memLimit, opLabelAliases, cache, comm).fn()
+                          'probClipInterval': clipTo}, None,
+                         opLabelAliases, cache, comm, memLimit).fn()
 
 
 def chi2_per_circuit(model, dataset, circuit_list=None,
                      minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                     memLimit=None, opLabelAliases=None,
-                     cache=None, comm=None):
+                     opLabelAliases=None, cache=None, comm=None, memLimit=None):
     """
     Computes the per-circuit chi^2 contributions for a set of cirucits.
 
@@ -97,16 +95,15 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         Values are the chi2 contributions of the corresponding gate
         string aggregated over outcomes.
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list, None,
+    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo},
-                         memLimit, opLabelAliases, cache, comm).percircuit_fn()
+                          'probClipInterval': clipTo}, None,
+                         opLabelAliases, cache, comm, memLimit).percircuit_fn()
 
 
 def chi2_jacobian(model, dataset, circuit_list=None,
                   minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                  memLimit=None, opLabelAliases=None,
-                  cache=None, comm=None):
+                  opLabelAliases=None, cache=None, comm=None, memLimit=None):
     """
     Compute the gradient of the chi^2 function computed by :function:`chi2`.
 
@@ -122,29 +119,21 @@ def chi2_jacobian(model, dataset, circuit_list=None,
     numpy array
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list, None,
+    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo},
-                         memLimit, opLabelAliases, cache, comm).jfn()
+                          'probClipInterval': clipTo}, None,
+                         opLabelAliases, cache, comm, memLimit).jfn()
 
 
 def chi2_hessian(model, dataset, circuit_list=None,
                  minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                 memLimit=None, opLabelAliases=None,
-                 cache=None, comm=None, approximate=False):
+                 opLabelAliases=None, approximate=False, cache=None, comm=None, memLimit=None):
     """
     Compute the Hessian matrix of the :func:`chi2` function.
 
     Parameters
     ----------
-    This function takes the same arguments as :func:`chi2`, with the addition of:
-
-    approximateHessian : bool, optional
-        Whether, an *approximate* version of the Hessian should be returned.
-        This approximation neglects terms proportional to the Hessian of the
-        probabilities w.r.t. the model parameters (which can take a long time
-        to compute).  See `logl_hessian` for details on the analogous approximation
-        for the log-likelihood Hessian.
+    This function takes the same arguments as :func:`chi2`.
 
     Returns
     -------
@@ -152,41 +141,69 @@ def chi2_hessian(model, dataset, circuit_list=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params()`.
     """
-    obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                         {'minProbClipForWeighting': minProbClipForWeighting,
-                         'probClipInterval': clipTo},
-                        memLimit, opLabelAliases, cache, comm, enable_hessian=not approximate)
-    return obj.approx_hfn() if approximate else obj.hfn()
+                         'probClipInterval': clipTo}, None,
+                        opLabelAliases, cache, comm, memLimit, enable_hessian=True)
+    return obj.hfn()
+
+
+def chi2_approximate_hessian(model, dataset, circuit_list=None,
+                             minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
+                             opLabelAliases=None, cache=None, comm=None, memLimit=None):
+    """
+    Compute and approximate Hessian matrix of the :func:`chi2` function.
+
+    This approximation neglects terms proportional to the Hessian of the
+    probabilities w.r.t. the model parameters (which can take a long time
+    to compute).  See `logl_approximate_hessian` for details on the analogous approximation
+    for the log-likelihood Hessian.
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`chi2`.
+
+    Returns
+    -------
+    numpy array
+        The Hessian matrix of shape (nModelParams, nModelParams), where
+        nModelParams = `model.num_params()`.
+    """
+    obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+                        {'minProbClipForWeighting': minProbClipForWeighting,
+                         'probClipInterval': clipTo}, None,
+                        opLabelAliases, cache, comm, memLimit)
+    return obj.approx_hfn()
 
 
 def chialpha(alpha, model, dataset, circuit_list=None,
              pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, clipTo=(-10000, 10000),
-             radius=None, memLimit=None, opLabelAliases=None,
-             cache=None, comm=None):
+             radius=None, opLabelAliases=None,
+             cache=None, comm=None, memLimit=None):
     """
     TODO: docstring
     """
-    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list, None,
+    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'probClipInterval': clipTo,
-                          'radius': radius},
-                         memLimit, opLabelAliases, cache, comm, alpha=alpha).fn()
+                          'radius': radius}, None,
+                         opLabelAliases, cache, comm, memLimit, alpha=alpha).fn()
 
 
 def chialpha_percircuit(alpha, model, dataset, circuit_list=None,
                         pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, clipTo=(-10000, 10000),
-                        radius=None, memLimit=None, opLabelAliases=None,
-                        cache=None, comm=None):
+                        radius=None, opLabelAliases=None,
+                        cache=None, comm=None, memLimit=None):
     """
     TODO: docstring
     """
-    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list, None,
+    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'probClipInterval': clipTo,
-                          'radius': radius},
-                         memLimit, opLabelAliases, cache, comm, alpha=alpha).percircuit_fn()
+                          'radius': radius}, None,
+                         opLabelAliases, cache, comm, memLimit, alpha=alpha).percircuit_fn()
 
 
 def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):

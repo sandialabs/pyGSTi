@@ -109,45 +109,10 @@ TOL = 1e-20
 #   F(p) = piecewise{ if( p>r ) then p; else (r-p)^2/(2*r) + p }
 
 
-def logl_per_circuit(model, dataset, circuit_list=None,
-                     minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                     poissonPicture=True, opLabelAliases=None,
-                     cache=None, comm=None, wildcard=None):
-    """
-    Computes the per-circuit log-likelihood contribution for a set of circuits.
-
-    Parameters
-    ----------
-    This function takes the same arguments as :func:`logl` except it
-    doesn't perform the final sum over circuits.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
-        Values are the log-likelihood contributions of the corresponding gate
-        string aggregated over outcomes.
-    """
-    obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
-                            opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
-                        {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        None, opLabelAliases, cache, comm)
-
-    if wildcard:
-        assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
-        obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
-
-    return obj_max.percircuit_fn() - obj.percircuit_fn()
-
-
 def logl(model, dataset, circuit_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-         poissonPicture=True, opLabelAliases=None,
-         cache=None, comm=None, wildcard=None):
+         poissonPicture=True, opLabelAliases=None, wildcard=None,
+         cache=None, comm=None, memLimit=None):
     """
     The log-likelihood function.
 
@@ -188,6 +153,13 @@ def logl(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
+
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
 
@@ -195,12 +167,9 @@ def logl(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    wildcard : WildcardBudget
-        A wildcard budget to apply to this log-likelihood computation.
-        This increases the returned log-likelihood value by adjusting
-        (by a maximal amount measured in TVD, given by the budget) the
-        probabilities produced by `model` to optimially match the data
-        (within the bugetary constraints) evaluating the log-likelihood.
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
 
     Returns
     -------
@@ -209,15 +178,50 @@ def logl(model, dataset, circuit_list=None,
     """
     v = logl_per_circuit(model, dataset, circuit_list,
                          minProbClip, probClipInterval, radius,
-                         poissonPicture, opLabelAliases,
-                         cache, comm, wildcard)
+                         poissonPicture, opLabelAliases, wildcard,
+                         cache, comm, memLimit)
     return _np.sum(v)  # sum over *all* dimensions
+
+
+def logl_per_circuit(model, dataset, circuit_list=None,
+                     minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
+                     poissonPicture=True, opLabelAliases=None, wildcard=None,
+                     cache=None, comm=None, memLimit=None):
+    """
+    Computes the per-circuit log-likelihood contribution for a set of circuits.
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`logl` except it
+    doesn't perform the final sum over circuits.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
+        Values are the log-likelihood contributions of the corresponding gate
+        string aggregated over outcomes.
+    """
+    obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
+                            opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
+    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+                        {'minProbClip': minProbClip,
+                         'probClipInterval': probClipInterval,
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm, memLimit)
+
+    if wildcard:
+        assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
+        obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
+
+    return obj_max.percircuit_fn() - obj.percircuit_fn()
 
 
 def logl_jacobian(model, dataset, circuit_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                   poissonPicture=True, opLabelAliases=None, cache=None,
-                  memLimit=None, comm=None, verbosity=0):
+                  comm=None, memLimit=None, verbosity=0):
     """
     The jacobian of the log-likelihood function.
 
@@ -260,13 +264,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
 
-    memLimit : int, optional
-        A rough memory limit in bytes which restricts the amount of intermediate
-        values that are computed and stored.
-
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
 
     verbosity : int, optional
         How much detail to print to stdout.
@@ -277,18 +281,18 @@ def logl_jacobian(model, dataset, circuit_list=None,
       array of shape (M,), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        memLimit, opLabelAliases, cache, comm)
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm, memLimit)
     return -obj.jfn()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_hessian(model, dataset, circuit_list=None,
                  minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                  poissonPicture=True, opLabelAliases=None, cache=None,
-                 memLimit=None, comm=None, verbosity=0):
+                 comm=None, memLimit=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -331,13 +335,14 @@ def logl_hessian(model, dataset, circuit_list=None,
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
-    memLimit : int, optional
-        A rough memory limit in bytes which restricts the amount of intermediate
-        values that are computed and stored.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
 
     verbosity : int, optional
         How much detail to print to stdout.
@@ -348,18 +353,18 @@ def logl_hessian(model, dataset, circuit_list=None,
       array of shape (M,M), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        memLimit, opLabelAliases, cache, comm)
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm, memLimit)
     return -obj.hfn()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuit_list=None,
                              minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                              poissonPicture=True, opLabelAliases=None, cache=None,
-                             memLimit=None, comm=None, verbosity=0):
+                             comm=None, memLimit=None, verbosity=0):
     """
     An approximate Hessian of the log-likelihood function.
 
@@ -415,13 +420,13 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
 
-    memLimit : int, optional
-        A rough memory limit in bytes which restricts the amount of intermediate
-        values that are computed and stored.
-
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
 
     verbosity : int, optional
         How much detail to print to stdout.
@@ -432,11 +437,11 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
       array of shape (M,M), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        memLimit, opLabelAliases, cache, comm)
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm, memLimit)
     return -obj.approx_hfn()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -519,7 +524,8 @@ def two_delta_logl_nsigma(model, dataset, circuit_list=None,
 def two_delta_logl(model, dataset, circuit_list=None,
                    minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                    poissonPicture=True, opLabelAliases=None,
-                   cache=None, comm=None, dof_calc_method=None, wildcard=None):
+                   dof_calc_method=None, wildcard=None,
+                   cache=None, comm=None):
     """
     Twice the difference between the maximum and actual log-likelihood,
     optionally along with Nsigma (# std deviations from mean) and p-value
@@ -569,13 +575,6 @@ def two_delta_logl(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
-
-    comm : mpi4py.MPI.Comm, optional
-        When not None, an MPI communicator for distributing the computation
-        across multiple processors.
-
     dof_calc_method : {None, "all", "nongauge"}
         How `model`'s number of degrees of freedom (parameters) are obtained
         when computing the number of standard deviations and p-value relative to
@@ -590,6 +589,13 @@ def two_delta_logl(model, dataset, circuit_list=None,
         probabilities produced by `model` to optimially match the data
         (within the bugetary constraints) evaluating the log-likelihood.
 
+    cache : ComputationCache, optional
+        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
     Returns
     -------
     twoDeltaLogL : float
@@ -599,11 +605,11 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        None, opLabelAliases, cache, comm)
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm)
 
     if wildcard:
         assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
@@ -638,7 +644,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
 def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
                                minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
                                poissonPicture=True, opLabelAliases=None,
-                               cache=None, comm=None, dof_calc_method=None, wildcard=None):
+                               dof_calc_method=None, wildcard=None,
+                               cache=None, comm=None):
     """
     The vector of twice the difference between the maximum and actual
     log-likelihood for each operation sequence, aggregated over outcomes.
@@ -659,11 +666,11 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list, None,
+    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
-                         'radius': radius},
-                        None, opLabelAliases, cache, comm)
+                         'radius': radius}, None,
+                        opLabelAliases, cache, comm)
 
     if wildcard:
         assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"

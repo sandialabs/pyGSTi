@@ -29,8 +29,8 @@ FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
 def objfn(objfn_cls, model, dataset, circuits=None,
-          penalties=None, regularization=None, memLimit=None,
-          opLabelAliases=None, cache=None, comm=None, **addl_args):
+          regularization=None, penalties=None, opLabelAliases=None,
+          cache=None, comm=None, memLimit=None, **addl_args):
     """ TODO: docstring """
 
     if circuits is None:
@@ -41,7 +41,7 @@ def objfn(objfn_cls, model, dataset, circuits=None,
 
     resource_alloc = ResourceAllocation(comm, memLimit)
     ofn = objfn_cls(model, dataset, circuits, resource_alloc,
-                    penalties, regularization, cache, verbosity=0, *addl_args)
+                    regularization, penalties, cache, verbosity=0, *addl_args)
     return ofn
 
 
@@ -182,29 +182,28 @@ class ObjectiveFunctionBuilder(object):
         assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"
         return builder
 
-    def __init__(self, cls_to_build, name=None, desc=None, penalties=None, regularization=None, **kwargs):
+    def __init__(self, cls_to_build, name=None, desc=None, regularization=None, penalties=None, **kwargs):
         self.name = name if (name is not None) else cls_to_build.__name__
         self.description = desc if (desc is not None) else "objfn"  # "Sum of Chi^2"  OR "2*Delta(log(L))"
         self.cls_to_build = cls_to_build
-        self.penalties = penalties
         self.regularization = regularization
+        self.penalties = penalties
         self.additional_args = kwargs
 
     def build(self, mdl, dataset, circuit_list, resource_alloc=None, cache=None, verbosity=0):
         return self.cls_to_build(mdl=mdl, dataset=dataset, circuit_list=circuit_list,
                                  resource_alloc=resource_alloc, cache=cache, verbosity=verbosity,
-                                 penalties=self.penalties, regularization=self.regularization,
+                                 regularization=self.regularization, penalties=self.penalties,
                                  name=self.name, **self.additional_args)
 
 
 class ObjectiveFunction(object):
     @classmethod
-    def builder(cls, name=None, desc=None, penalties=None, regularization=None, **kwargs):
-        return ObjectiveFunctionBuilder(cls, name, desc, penalties, regularization, **kwargs)
+    def builder(cls, name=None, desc=None, regularization=None, penalties=None, **kwargs):
+        return ObjectiveFunctionBuilder(cls, name, desc, regularization, penalties, **kwargs)
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None,
-                 description=None, verbosity=0):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0):
         """
         TODO: docstring - note: 'cache' is for repeated calls with same mdl, circuit_list,
         and dataset (but different derived objective fn class).  Note: circuit_list can be
@@ -528,11 +527,11 @@ class ObjectiveFunction(object):
 
 class Chi2Function(ObjectiveFunction):
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0, enable_hessian=False):
 
         self.enable_hessian = enable_hessian
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
 
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
@@ -1035,10 +1034,10 @@ class Chi2Function(ObjectiveFunction):
 
 class FreqWeightedChi2Function(Chi2Function):
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None,  resource_alloc=None, name=None, verbosity=0):
 
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
         self.fweights = _np.sqrt(self.N / _np.clip(self.f, 1e-7, None))
         self.z = _np.zeros(self.KM, 'd')
 
@@ -1077,10 +1076,10 @@ class TimeDependentChi2Function(ObjectiveFunction):
     #This objective function can handle time-dependent circuits - that is, circuitsToUse are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0):
 
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
         self.time_dependent = True
 
         #  Allocate peristent memory
@@ -1155,12 +1154,12 @@ class TimeDependentChi2Function(ObjectiveFunction):
 
 class ChiAlphaFunction(ObjectiveFunction):
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, alpha=1):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0, alpha=1):
         """ TODO: docstring - note: if radius is None, then the "relaxed" zero-f-term mode is used
             whereas a radius > 0 implies that the "harsh" zero-f-term mode is used.
         """
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
         self.alpha = alpha
 
         #  Allocate peristent memory
@@ -1398,11 +1397,11 @@ class ChiAlphaFunction(ObjectiveFunction):
 # See LikelihoodFunction.py for details on patching
 class DeltaLogLFunctionPoissonPic(ObjectiveFunction):
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0, enable_hessian=False):
 
         self.enable_hessian = enable_hessian
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
 
         #Allocate peristent memory
         self.probs = _np.empty(self.KM, 'd')
@@ -1968,10 +1967,10 @@ class DeltaLogLFunctionPoissonPic(ObjectiveFunction):
 
 class DeltaLogLFunction(ObjectiveFunction):
     """ TODO: standard logl function, which will *not* implement self.ls_fn, as it doesn't have always >=0 terms"""
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, enable_hessian=False):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0, enable_hessian=False):
         self.enable_hessian = enable_hessian
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
 
         #Allocate peristent memory
         self.probs = _np.empty(self.KM, 'd')
@@ -2161,9 +2160,9 @@ class DeltaLogLFunction(ObjectiveFunction):
 
 
 class MaxLogLFunction(ObjectiveFunction):
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0, poisson_picture=True):
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0, poisson_picture=True):
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
 
         #Allocate peristent memory
         self.precompute_omitted_freqs()  # sets self.firsts
@@ -2190,10 +2189,10 @@ class MaxLogLFunction(ObjectiveFunction):
 
 class TimeDependentLogLFunctionPoissonPic(ObjectiveFunction):
 
-    def __init__(self, mdl, dataset, circuit_list, resource_alloc=None,
-                 penalties=None, regularization=None, cache=None, name=None, verbosity=0):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, verbosity=0):
 
-        super().__init__(mdl, dataset, circuit_list, resource_alloc, penalties, regularization, cache, name, verbosity)
+        super().__init__(mdl, dataset, circuit_list, regularization, penalties, cache, resource_alloc, name, verbosity)
         self.time_dependent = True
 
         #Allocate peristent memory
