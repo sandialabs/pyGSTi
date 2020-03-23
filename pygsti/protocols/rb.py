@@ -390,7 +390,10 @@ class DirectRBDesign(BenchmarkingDesign):
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
-        self.sampler = sampler
+        if isinstance(sampler, str):
+            self.sampler = sampler
+        else:
+            self.sampler = 'function'
         self.samplerargs = samplerargs
         self.addlocal = addlocal
         self.lsargs = lsargs
