@@ -522,3 +522,35 @@ def trim_to_constant_numtimesteps(ds):
     trimmedds.done_adding_data()
 
     return trimmedds
+
+
+def subsample_timeseries_data(ds, step):
+    """
+    Returns a new dataset where, for every circuit, we only keep the data at every
+    'step' timestep. Specifically, the outcomes at the ith time for each circuit are
+    kept for each i such that i modulo 'step' is zero.
+
+    Parameters
+    ----------
+    ds : DataSet
+        The dataset to subsample
+
+    Returns
+    -------
+    DataSet
+        The subsampled dataset.
+    """
+    subsampled_ds = ds.copy_nonstatic()
+    for circ in ds.keys():
+        times, odicts = ds[circ].get_timeseries_for_outcomes()
+        newtimes = []
+        newseries = []
+        for i in range(len(times)):
+            if (i % step) == 0:
+                newtimes.append(times[i])
+                newseries.append({key: counts[i] for key, counts in odicts.items()})
+
+        subsampled_ds.add_series_data(circ, newseries, newtimes)
+    subsampled_ds.done_adding_data()
+
+    return subsampled_ds
