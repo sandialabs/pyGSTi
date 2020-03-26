@@ -207,8 +207,8 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius}, None,
+                         'radius': radius},
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm, memLimit)
 
     if wildcard:
@@ -283,8 +283,8 @@ def logl_jacobian(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius}, None,
+                         'radius': radius},
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm, memLimit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -355,8 +355,8 @@ def logl_hessian(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius}, None,
+                         'radius': radius},
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm, memLimit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -439,8 +439,8 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius}, None,
+                         'radius': radius},
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm, memLimit)
     return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -607,8 +607,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
-                         'radius': radius}, None,
+                         'radius': radius},
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm)
 
     if wildcard:
@@ -668,8 +668,8 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
-                         'probClipInterval': probClipInterval,
                          'radius': radius}, None,
+                        {'probClipInterval': probClipInterval},
                         opLabelAliases, cache, comm)
 
     if wildcard:

@@ -953,8 +953,6 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
     tStart = _time.time()
     mdl = startModel  # .copy()  # to allow caches in startModel to be retained
 
-    printer.log("--- Generic GST ---", 1)
-
     if comm is not None:
         #assume all models at least have same parameters - so just compare vecs
         v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
@@ -964,6 +962,7 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
 
     objective = objective_function_builder.build(mdl, dataset, circuitsToUse, resource_alloc, cache, printer)
     profiler.add_time("do_gst_fit: pre-opt", tStart)
+    printer.log("--- %s GST ---" % objective.name, 1)
 
     #Step 3: solve least squares minimization problem
     if mdl.simtype in ("termgap", "termorder"):
@@ -1439,7 +1438,7 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
         profiler.add_time("do_gst_fit: num data params", tm)
 
         chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
-        desc = "Sum of Chi^2"  # OR 2*Delta(log(L)) -- get from objective?
+        desc = objective.description
         # reject GST model if p-value < threshold (~0.05?)
         pvalue = 1.0 - _stats.chi2.cdf(chi2_k_qty, nDataParams - nModelParams)
         printer.log("%s = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %

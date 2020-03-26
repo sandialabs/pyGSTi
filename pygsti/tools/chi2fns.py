@@ -69,8 +69,8 @@ def chi2(model, dataset, circuit_list=None,
         chi^2 value, equal to the sum of chi^2 terms from all specified operation sequences
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo}, None,
+                         {'minProbClipForWeighting': minProbClipForWeighting},
+                         {'probClipInterval': clipTo},
                          opLabelAliases, cache, comm, memLimit).fn()
 
 
@@ -97,8 +97,8 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         string aggregated over outcomes.
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo}, None,
+                         {'minProbClipForWeighting': minProbClipForWeighting},
+                         {'probClipInterval': clipTo},
                          opLabelAliases, cache, comm, memLimit).percircuit()
 
 
@@ -121,8 +121,8 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting,
-                          'probClipInterval': clipTo}, None,
+                         {'minProbClipForWeighting': minProbClipForWeighting},
+                         {'probClipInterval': clipTo},
                          opLabelAliases, cache, comm, memLimit).jacobian()
 
 
@@ -143,8 +143,8 @@ def chi2_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'minProbClipForWeighting': minProbClipForWeighting,
-                         'probClipInterval': clipTo}, None,
+                        {'minProbClipForWeighting': minProbClipForWeighting},
+                        {'probClipInterval': clipTo},
                         opLabelAliases, cache, comm, memLimit, enable_hessian=True)
     return obj.hessian()
 
@@ -171,8 +171,8 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'minProbClipForWeighting': minProbClipForWeighting,
-                         'probClipInterval': clipTo}, None,
+                        {'minProbClipForWeighting': minProbClipForWeighting},
+                        {'probClipInterval': clipTo},
                         opLabelAliases, cache, comm, memLimit)
     return obj.approximate_hessian()
 
@@ -187,8 +187,8 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
-                          'probClipInterval': clipTo,
-                          'radius': radius}, None,
+                          'radius': radius},
+                         {'probClipInterval': clipTo},
                          opLabelAliases, cache, comm, memLimit, alpha=alpha).fn()
 
 
@@ -202,8 +202,8 @@ def chialpha_percircuit(alpha, model, dataset, circuit_list=None,
     return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
-                          'probClipInterval': clipTo,
-                          'radius': radius}, None,
+                          'radius': radius},
+                         {'probClipInterval': clipTo},
                          opLabelAliases, cache, comm, memLimit, alpha=alpha).percircuit()
 
 

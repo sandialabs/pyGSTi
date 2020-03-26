@@ -374,6 +374,7 @@ class GateSetTomography(_proto.Protocol):
         #set parameters
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
+        parameters['final_objfn_builder'] = self.final_builders[-1]
         parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.

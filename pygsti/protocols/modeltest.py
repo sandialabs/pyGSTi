@@ -128,6 +128,7 @@ class ModelTest(_proto.Protocol):
         parameters = _collections.OrderedDict()
         parameters['raw_objective_values'] = objfn_vals
         parameters['model_test_values'] = chi2d_vals
+        parameters['final_objfn_builder'] = self.objfn_builders[-1]
 
         from .gst import _add_gaugeopt_and_badfit
         from .gst import ModelEstimateResults as _ModelEstimateResults

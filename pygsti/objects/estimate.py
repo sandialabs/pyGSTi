@@ -15,6 +15,7 @@ import copy as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
+from . import objectivefns as _objfns
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from .circuit import Circuit as _Circuit
 from .explicitmodel import ExplicitOpModel as _ExplicitOpModel
@@ -536,25 +537,10 @@ class Estimate(object):
         circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
         cache = self.parameters.get('final_cache', None)
         ds = self.get_effective_dataset()
-        
-        #mpc = self.parameters.get('minProbClipForWeighting', 1e-4)
-        #aliases = self.parameters.get('opLabelAliases', gss.aliases)
-        mpc = 1e-4  # TEMPORARY TODO FIX THIS
-        aliases = None
-        cache = None # because currently fns below are incompatible with new cache object
-        obj = 'logl'
-
-        if obj == "chi2":
-            fitQty = _tools.chi2(mdl, ds, circuit_list,
-                                 minProbClipForWeighting=mpc,
-                                 opLabelAliases=aliases,
-                                 evaltree_cache=cache, comm=comm)
-        elif obj in ("logl", "lgst"):
-            logL_upperbound = _tools.logl_max(mdl, ds, circuit_list, opLabelAliases=aliases,
-                                              evaltree_cache=cache)
-            logl = _tools.logl(mdl, ds, circuit_list, opLabelAliases=aliases,
-                               evaltree_cache=cache, comm=comm)
-            fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
+        objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, cache)
+        fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+        aliases = circuit_list.opLabelAliases if isinstance(circuit_list, _objfns.BulkCircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
         Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
@@ -564,7 +550,7 @@ class Estimate(object):
             Np = mdl.num_params()
         k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
-        return (fitQty - k) / _np.sqrt(2 * k)
+        return (fitqty - k) / _np.sqrt(2 * k)
 
     def view(self, gaugeopt_keys, parent=None):
         """
