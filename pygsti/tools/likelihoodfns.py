@@ -204,7 +204,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
@@ -215,7 +215,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
         assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    return obj_max.percircuit_fn() - obj.percircuit_fn()
+    return obj_max.percircuit() - obj.percircuit()
 
 
 def logl_jacobian(model, dataset, circuit_list=None,
@@ -280,13 +280,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
                          'radius': radius}, None,
                         opLabelAliases, cache, comm, memLimit)
-    return -obj.jfn()  # negative b/c objective is deltaLogL = max_logl - logL
+    return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_hessian(model, dataset, circuit_list=None,
@@ -352,13 +352,13 @@ def logl_hessian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,M), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
                          'radius': radius}, None,
                         opLabelAliases, cache, comm, memLimit)
-    return -obj.hfn()  # negative b/c objective is deltaLogL = max_logl - logL
+    return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuit_list=None,
@@ -436,13 +436,13 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,M), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
                          'radius': radius}, None,
                         opLabelAliases, cache, comm, memLimit)
-    return -obj.approx_hfn()  # negative b/c objective is deltaLogL = max_logl - logL
+    return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
@@ -506,7 +506,7 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
-    return obj_max.percircuit_fn()
+    return obj_max.percircuit()
 
 
 def two_delta_logl_nsigma(model, dataset, circuit_list=None,
@@ -604,7 +604,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
@@ -665,7 +665,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
-    obj_cls = _objfns.DeltaLogLFunctionPoissonPic if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
                         {'minProbClip': minProbClip,
                          'probClipInterval': probClipInterval,
@@ -676,7 +676,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
         assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    twoDeltaLogL_percircuit = 2 * obj.percircuit_fn()
+    twoDeltaLogL_percircuit = 2 * obj.percircuit()
 
     if dof_calc_method is None: return twoDeltaLogL_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params()
@@ -834,8 +834,6 @@ def cptp_penalty(model, include_spam_penalty=True):
     return ret
 
 
-#TODO: incorporate this into objective functions, or utilize an ObjectiveFunction
-# to implement this.
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
@@ -864,39 +862,24 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     -------
     float or numpy array
     """
-    #TODO: change this function to handle nan's in the inputs without warnings, since
+
+    #Allow this function to pass NaNs through silently, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
-    cp = _np.clip(p, minProbClip, 1e10)  # effectively no upper bound
 
     nan_indices = _np.isnan(f)  # get indices of invalid entries
-    if not _np.isscalar(f): f[nan_indices] = 0.0
-    #set nan's to zero to avoid RuntimeWarnings (invalid value)
-
-    zf = _np.where(f < 1e-10, 0.0, f)  # set zero-freqs to zero
-    nzf = _np.where(f < 1e-10, 1.0, f)  # set zero-freqs to one -- together
-    # w/above line makes 0 * log(0) == 0
     if not _np.isscalar(f):
-        zf[nan_indices] = _np.nan  # set nan indices back to nan
-        nzf[nan_indices] = _np.nan  # set nan indices back to nan
+        f = f.copy(); p = p.copy(); N = N.copy()
+        f[nan_indices] = p[nan_indices] = N[nan_indices] = 0.0  # so computation runs fine
 
     if poissonPicture:
-        return 2 * (N * zf * _np.log(nzf / cp) - N * (f - cp))
+        rawfn = _objfns.RawPoissonPicDeltaLogLFunction({'minProbClip': minProbClip})
     else:
-        return 2 * N * zf * _np.log(nzf / cp)
+        rawfn = _objfns.RawDeltaLogLFunction({'minProbClip': minProbClip})
 
-
-#UNUSED (REMOVE?)
-def _patched_logl_fn(N, p, min_p):
-    """ N * log(p) with min-prob-clip patching """
-    if N == 0: return 0.0
-    S = N / min_p               # slope term that is derivative of logl at min_p
-    S2 = -0.5 * N / (min_p**2)  # 2nd derivative of logl term at min_p
-    pos_p = max(min_p, p)
-    v = N * _np.log(pos_p)
-    if p < min_p:
-        v += S * (p - min_p) + S2 * (p - min_p)**2  # quadratic extrapolation of logl at min_p for p < min_p
-    return v
+    ret = 2 * rawfn.terms(p, N * f, N, f)
+    ret[nan_indices] = _np.nan
+    return ret
 
 
 ##############################################################################################

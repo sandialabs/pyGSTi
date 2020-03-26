@@ -70,8 +70,8 @@ class CustomLMOptimizer(Optimizer):
 
     def run(self, objective, comm, profiler, printer):
 
-        objective_func = objective.ls_fn
-        jacobian = objective.ls_jfn
+        objective_func = objective.lsvec
+        jacobian = objective.dlsvec
         x0 = objective.mdl.to_vector()
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_JTJ = custom_leastsq(

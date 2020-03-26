@@ -12,6 +12,7 @@ import numpy as _np
 from . import listtools as _lt
 from . import slicetools as _slct
 from ..objects import objectivefns as _objfns
+from ..tools.legacytools import deprecated_fn as _deprecated_fn
 
 
 def chi2(model, dataset, circuit_list=None,
@@ -98,7 +99,7 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'minProbClipForWeighting': minProbClipForWeighting,
                           'probClipInterval': clipTo}, None,
-                         opLabelAliases, cache, comm, memLimit).percircuit_fn()
+                         opLabelAliases, cache, comm, memLimit).percircuit()
 
 
 def chi2_jacobian(model, dataset, circuit_list=None,
@@ -122,7 +123,7 @@ def chi2_jacobian(model, dataset, circuit_list=None,
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'minProbClipForWeighting': minProbClipForWeighting,
                           'probClipInterval': clipTo}, None,
-                         opLabelAliases, cache, comm, memLimit).jfn()
+                         opLabelAliases, cache, comm, memLimit).jacobian()
 
 
 def chi2_hessian(model, dataset, circuit_list=None,
@@ -145,7 +146,7 @@ def chi2_hessian(model, dataset, circuit_list=None,
                         {'minProbClipForWeighting': minProbClipForWeighting,
                          'probClipInterval': clipTo}, None,
                         opLabelAliases, cache, comm, memLimit, enable_hessian=True)
-    return obj.hfn()
+    return obj.hessian()
 
 
 def chi2_approximate_hessian(model, dataset, circuit_list=None,
@@ -173,7 +174,7 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
                         {'minProbClipForWeighting': minProbClipForWeighting,
                          'probClipInterval': clipTo}, None,
                         opLabelAliases, cache, comm, memLimit)
-    return obj.approx_hfn()
+    return obj.approximate_hessian()
 
 
 def chialpha(alpha, model, dataset, circuit_list=None,
@@ -203,9 +204,10 @@ def chialpha_percircuit(alpha, model, dataset, circuit_list=None,
                           'pfratio_derivpt': pfratio_derivpt,
                           'probClipInterval': clipTo,
                           'radius': radius}, None,
-                         opLabelAliases, cache, comm, memLimit, alpha=alpha).percircuit_fn()
+                         opLabelAliases, cache, comm, memLimit, alpha=alpha).percircuit()
 
 
+@_deprecated_fn('This function will be removed soon.  Use chi2fn(...) with `p` and `1-p`.')
 def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes chi^2 for a 2-outcome measurement.
@@ -238,6 +240,7 @@ def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
     return N * (p - f)**2 / (cp * (1 - cp))
 
 
+@_deprecated_fn('This function will be removed soon.')
 def chi2fn_2outcome_wfreqs(N, p, f):
     """
     Computes chi^2 for a 2-outcome measurement using frequency-weighting.
@@ -267,6 +270,7 @@ def chi2fn_2outcome_wfreqs(N, p, f):
     return N * (p - f)**2 / (f1 * (1 - f1))
 
 
+@_deprecated_fn('Use RawChi2Function object instead')
 def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes the chi^2 term corresponding to a single outcome.
@@ -296,10 +300,11 @@ def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
         where cp is the value of p clipped to the interval
         (minProbClipForWeighting, 1-minProbClipForWeighting)
     """
-    cp = _np.clip(p, minProbClipForWeighting, None)
-    return N * (p - f)**2 / cp
+    rawfn = _objfns.RawChi2Function({'minProbClipForWeighting': minProbClipForWeighting})
+    return rawfn.terms(p, N * f, N, f)
 
 
+@_deprecated_fn('Use RawFreqWeightedChi2Function object instead')
 def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
     """
     Computes the frequency-weighed chi^2 term corresponding to a single outcome.
@@ -325,9 +330,6 @@ def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
     Returns
     -------
     float or numpy array
-        N(p-f)^2 / f*,
-        where f* = (f*N+1)/N+2 is the frequency value used in the
-        statistical weighting (prevents divide by zero errors)
     """
-    f1 = (f * N + 1) / (N + 2)
-    return N * (p - f)**2 / f1
+    rawfn = _objfns.RawFreqWeightedChi2Function({'minProbClipForWeighting': minProbClipForWeighting})
+    return rawfn.terms(p, N * f, N, f)
