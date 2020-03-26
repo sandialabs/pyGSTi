@@ -252,12 +252,11 @@ def convert(gate, toType, basis, extra=None):
         postfactor = None
 
         ret = LindbladOpType.from_operation_obj(gate, toType, postfactor, proj_basis,
-                                               basis, truncate=True, lazy=True)
+                                                basis, truncate=True, lazy=True)
         if ret.dim <= 16:  # only do this for up to 2Q gates, otherwise todense is too expensive
             assert(_np.linalg.norm(gate.todense() - ret.todense()) < 1e-6), \
                 "Failure to create CPTP gate (maybe due the complex log's branch cut?)"
         return ret
-        
 
     elif toType == "clifford":
         if isinstance(gate, CliffordOp):
