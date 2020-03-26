@@ -127,7 +127,7 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     return negll
 
 
-def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=False,
+def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, returnoptout=False,
                   optoptions={}, verbosity=1):
     """
     Finds the maximum likelihood TimeResolvedModel given the data.
@@ -182,7 +182,7 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=Fal
     if verbosity > 0:
         print("- Time taken: {} seconds".format(end - start)),
 
-    if optout:
+    if returnoptout:
         return maxlmodel, optout
     else:
         return maxlmodel
