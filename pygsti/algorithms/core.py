@@ -940,7 +940,7 @@ def do_iterative_exlgst(
 
 
 ###################################################################################
-#                 Generic GST
+#                 GST
 ##################################################################################
 
 def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function_builder,
@@ -1364,7 +1364,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                          'cptp_penalty_factor': cptp_penalty_factor,
                          'spam_penalty_factor': spam_penalty_factor}
             objective = _objfns.Chi2Function(mdl, dataset, bulk_circuit_list, resource_alloc,
-                                             penalties, regularization, cache, printer)
+                                             penalties, regularization, evaltree_cache, printer)
         else:
             objective = _objfns.ChiAlphaFunction(
                 alpha, mdl, evTree, lookup, circuitsToUse, opLabelAliases, 

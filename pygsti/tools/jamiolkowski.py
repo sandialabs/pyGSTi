@@ -119,8 +119,8 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
             choiMx[i, j] = _mt.trace(_np.dot(opMxInStdBasis, BiBj_dag)) \
                 / _mt.trace(_np.dot(BiBj, BiBj_dag))
 
-    # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0]) (dimension of density matrix)
-    #  but we'd like a Jmx with trace == 1, so normalize:
+    # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
+    #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     choiMx_normalized = choiMx / dmDim
     return choiMx_normalized
 

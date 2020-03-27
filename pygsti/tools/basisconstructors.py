@@ -34,9 +34,9 @@ def mut(i, j, n):
 
 MX_UNIT_VEC = (mut(0, 0, 2), mut(0, 1, 2), mut(1, 0, 2), mut(1, 1, 2))
 MX_UNIT_VEC_2Q = (mut(0, 0, 4), mut(0, 1, 4), mut(0, 2, 4), mut(0, 3, 4),
-                mut(1, 0, 4), mut(1, 1, 4), mut(1, 2, 4), mut(1, 3, 4),
-                mut(2, 0, 4), mut(2, 1, 4), mut(2, 2, 4), mut(2, 3, 4),
-                mut(3, 0, 4), mut(3, 1, 4), mut(3, 2, 4), mut(3, 3, 4))
+                  mut(1, 0, 4), mut(1, 1, 4), mut(1, 2, 4), mut(1, 3, 4),
+                  mut(2, 0, 4), mut(2, 1, 4), mut(2, 2, 4), mut(2, 3, 4),
+                  mut(3, 0, 4), mut(3, 1, 4), mut(3, 2, 4), mut(3, 3, 4))
 
 MAX_BASIS_MATRIX_DIM = 2**6
 
@@ -752,7 +752,7 @@ _basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_mat
 _basis_constructor_dict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
 _basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
 _basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
-                                                                  identity_labels, True)
+                                                                    identity_labels, True)
 _basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
 _basis_constructor_dict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
 _basis_constructor_dict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)
