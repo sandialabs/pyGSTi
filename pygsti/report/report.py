@@ -148,18 +148,18 @@ class Report:
             assert(embed_figures), \
                 "Single-file mode requires `embed_figures` to be True"
             _merge.merge_jinja_template(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
         else:
             _merge.merge_jinja_template_dir(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, embed_figures=embed_figures,
                 verbosity=verbosity
             )
@@ -313,7 +313,7 @@ class Report:
             dscmp_gss = results_dict[dslbl1].circuit_structs['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+            dscmp = pygsti.obj.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
                 templatePath / 'data_comparison.txt'])

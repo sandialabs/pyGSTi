@@ -91,7 +91,7 @@ class EvalTreeTestCase(BaseTestCase):
 
           #SPLIT
         mevt_split = mevt.copy()
-        mlookup_splt = mevt_split.split(mlookup,numSubTrees=4)
+        mlookup_splt = mevt_split.split(mlookup,num_sub_trees=4)
         print("Split tree = ",mevt_split)
         print("new lookup = ",mlookup_splt)
         print()

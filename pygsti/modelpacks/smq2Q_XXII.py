@@ -404,8 +404,8 @@ class _Module(GSTModelPack):
             sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0), ('Gxxpi2', 0, 1)],
             ['I({0}):I({1})', 'I({0}):X(pi/2,{1})', 'I({0}):Y(pi/2,{1})', 'X(pi/2,{0}):I({1})',
              'Y(pi/2,{0}):I({1})', 'X(pi/2,{0}):X(pi/2,{1})'],
-            effectLabels=['00', '01', '10', '11'],
-            effectExpressions=['0', '1', '2', '3'])
+            effect_labels=['00', '01', '10', '11'],
+            effect_expressions=['0', '1', '2', '3'])
 
 
 import sys

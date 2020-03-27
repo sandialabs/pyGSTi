@@ -57,7 +57,7 @@ class ConfidenceRegionFactory(object):
     """
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
-                 hessian=None, nonMarkRadiusSq=None):
+                 hessian=None, non_mark_radius_sq=None):
         """
         Initializes a new ConfidenceRegionFactory.
 
@@ -78,10 +78,10 @@ class ConfidenceRegionFactory(object):
             when computing fit functions (the log-likelihood or chi2).
 
         hessian : numpy array, optional
-            A pre-computed nParams x nParams Hessian matrix, where nParams is
+            A pre-computed n_params x n_params Hessian matrix, where n_params is
             the number of dimensions of model space, i.e. model.num_params().
 
-        nonMarkRadiusSq : float, optional
+        non_mark_radius_sq : float, optional
             The non-Markovian radius associated with the goodness of fit found
             at the point where `hessian` was computed.  This must be specified
             whenver `hessian` is, and should be left as `None` when `hessian`
@@ -89,10 +89,10 @@ class ConfidenceRegionFactory(object):
         """
 
         #May be specified (together) whey hessian has already been computed
-        assert(hessian is None or nonMarkRadiusSq is not None), \
-            "'nonMarkRadiusSq' must be non-None when 'hessian' is specified"
+        assert(hessian is None or non_mark_radius_sq is not None), \
+            "'non_mark_radius_sq' must be non-None when 'hessian' is specified"
         self.hessian = hessian
-        self.nonMarkRadiusSq = nonMarkRadiusSq
+        self.nonMarkRadiusSq = non_mark_radius_sq
 
         self.hessian_projection_parameters = _collections.OrderedDict()
         self.inv_hessian_projections = _collections.OrderedDict()
@@ -114,8 +114,8 @@ class ConfidenceRegionFactory(object):
 
         return to_pickle
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
         self.parent = None  # initialize to None upon unpickling
 
     def set_parent(self, parent):
@@ -171,7 +171,7 @@ class ConfidenceRegionFactory(object):
         assert(self.parent is not None)  # Estimate
         return self.parent.models[self.model_lbl]
 
-    def compute_hessian(self, comm=None, memLimit=None, approximate=False):
+    def compute_hessian(self, comm=None, mem_limit=None, approximate=False):
         """
         Computes the Hessian for this factory.
 
@@ -181,7 +181,7 @@ class ConfidenceRegionFactory(object):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A rough memory limit in bytes which restricts the amount of intermediate
             values that are computed and stored.
 
@@ -213,10 +213,10 @@ class ConfidenceRegionFactory(object):
         spam_penalty_factor = parameters.get('spamPenaltyFactor', 0)
         useFreqWt = parameters.get('useFreqWeightedChiSq', False)
         aliases = parameters.get('opLabelAliases', None)
-        if memLimit is None:
-            memLimit = parameters.get('memLimit', None)
+        if mem_limit is None:
+            mem_limit = parameters.get('mem_limit', None)
 
-        vb = 3 if memLimit else 0  # only show details of hessian comp when there's a mem limit (a heuristic)
+        vb = 3 if mem_limit else 0  # only show details of hessian comp when there's a mem limit (a heuristic)
 
         assert(cptp_penalty_factor == 0), 'cptp_penalty_factor unsupported in hessian computation'
         assert(spam_penalty_factor == 0), 'spam_penalty_factor unsupported in hessian computation'
@@ -236,20 +236,20 @@ class ConfidenceRegionFactory(object):
                 else _tools.logl_hessian
             hessian = hessian_fn(model, dataset, circuit_list,
                                  minProbClip, probClipInterval, radius,
-                                 comm=comm, memLimit=memLimit, verbosity=vb,
-                                 opLabelAliases=aliases)
+                                 comm=comm, mem_limit=mem_limit, verbosity=vb,
+                                 op_label_aliases=aliases)
 
             nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset)
                                        - _tools.logl(model, dataset,
-                                                     opLabelAliases=aliases))
+                                                     op_label_aliases=aliases))
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 
         elif obj == 'chi2':
             chi2, hessian = _tools.chi2(model, dataset, circuit_list,
                                         False, True, minProbClipForWeighting,
-                                        probClipInterval, memLimit=memLimit,
-                                        opLabelAliases=aliases,
-                                        approximateHessian=approximate)
+                                        probClipInterval, mem_limit=mem_limit,
+                                        op_label_aliases=aliases,
+                                        approximate_hessian=approximate)
 
             nonMarkRadiusSq = max(chi2 - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
         else:
@@ -317,10 +317,10 @@ class ConfidenceRegionFactory(object):
         elif projection_type == 'std':
             projected_hessian = _np.dot(proj_non_gauge, _np.dot(self.hessian, proj_non_gauge))
         elif projection_type == 'optimal gate CIs':
-            projected_hessian = self._optProjectionForOperationCIs("L-BFGS-B", maxiter, maxiter,
+            projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
                                                                    tol, verbosity=3)  # verbosity for DEBUG
         elif projection_type == 'intrinsic error':
-            projected_hessian = self._optProjectionFromSplit(verbosity=3)  # verbosity for DEBUG
+            projected_hessian = self._opt_projection_from_split(verbosity=3)  # verbosity for DEBUG
         else:
             raise ValueError("Invalid value of projection_type argument: %s" % projection_type)
 
@@ -331,7 +331,7 @@ class ConfidenceRegionFactory(object):
         evals, U = _np.linalg.eigh(projected_hessian)
         Udag = _np.conjugate(_np.transpose(U))
 
-        #invert only the non-gauge eigenvalues (those with ordering index >= nGaugeParams)
+        #invert only the non-gauge eigenvalues (those with ordering index >= n_gauge_params)
         orderInds = [el[0] for el in sorted(enumerate(evals), key=lambda x: abs(x[1]))
                      ]  # ordering index of each eigenvalue
         invEvals = _np.zeros(evals.shape, evals.dtype)
@@ -403,7 +403,7 @@ class ConfidenceRegionFactory(object):
         self.nNonGaugeParams = self.get_model().num_params()
         self.nGaugeParams = 0
 
-    def view(self, confidenceLevel, regionType='normal',
+    def view(self, confidence_level, region_type='normal',
              hessian_projection_label=None):
         """
         Constructs a "view" of this ConfidenceRegionFactory for a particular
@@ -412,10 +412,10 @@ class ConfidenceRegionFactory(object):
 
         Parameters
         ----------
-        confidenceLevel : float
+        confidence_level : float
             The confidence level as a percentage, i.e. between 0 and 100.
 
-        regionType : {'normal', 'non-markovian'}
+        region_type : {'normal', 'non-markovian'}
             The type of confidence regions.  `'normal'` constructs standard
             intervals based on the inverted Hessian matrix or linear-response
             optimizations.  `'non-markovian'` attempts to enlarge the intervals
@@ -454,15 +454,15 @@ class ConfidenceRegionFactory(object):
             linresponse_mlgst_params = self.linresponse_mlgst_params
 
         #Compute the non-Markovian "radius" if required
-        if regionType == "normal":
+        if region_type == "normal":
             nonMarkRadiusSq = 0.0
-        elif regionType == "non-markovian":
+        elif region_type == "non-markovian":
             nonMarkRadiusSq = self.nonMarkRadiusSq
         else:
-            raise ValueError("Invalid confidence region type: %s" % regionType)
+            raise ValueError("Invalid confidence region type: %s" % region_type)
 
         return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_mlgst_params,
-                                           confidenceLevel, nonMarkRadiusSq,
+                                           confidence_level, nonMarkRadiusSq,
                                            self.nNonGaugeParams, self.nGaugeParams)
 
         #TODO: where to move this?
@@ -473,7 +473,7 @@ class ConfidenceRegionFactory(object):
         #    _warnings.warn("Number of non-gauge parameters in model and confidence region do "
         #                   + " not match.  This indicates an internal logic error.")
 
-    def _optProjectionForOperationCIs(self, method="L-BFGS-B", maxiter=10000,
+    def _opt_projection_for_operation_cis(self, method="L-BFGS-B", maxiter=10000,
                                       maxfev=10000, tol=1e-6, verbosity=0):
         printer = _VerbosityPrinter.build_printer(verbosity)
         model = self.parent.models[self.model_lbl]
@@ -481,11 +481,11 @@ class ConfidenceRegionFactory(object):
         level = 95  # or 50, or whatever - the scale factory doesn't matter for the optimization
 
         printer.log('', 3)
-        printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
+        printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indent_offset=-1)
 
-        def _objective_func(vectorM):
-            matM = vectorM.reshape((self.nNonGaugeParams, self.nGaugeParams))
-            proj_extra = model.get_nongauge_projector(nonGaugeMixMx=matM)
+        def _objective_func(vector_m):
+            matM = vector_m.reshape((self.nNonGaugeParams, self.nGaugeParams))
+            proj_extra = model.get_nongauge_projector(non_gauge_mix_mx=matM)
             projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
             sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl, self.circuit_list_lbl,
@@ -507,23 +507,23 @@ class ConfidenceRegionFactory(object):
                                callback=print_obj_func if verbosity > 2 else None)
 
         mixMx = minSol.x.reshape((self.nNonGaugeParams, self.nGaugeParams))
-        proj_extra = model.get_nongauge_projector(nonGaugeMixMx=mixMx)
+        proj_extra = model.get_nongauge_projector(non_gauge_mix_mx=mixMx)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
         printer.log('The resulting min sqrt(sum(operationCIs**2)): %g' % minSol.fun, 2)
         return projected_hessian_ex
 
-    def _optProjectionFromSplit(self, verbosity=0):
+    def _opt_projection_from_split(self, verbosity=0):
         printer = _VerbosityPrinter.build_printer(verbosity)
         model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
         level = 95  # or 50, or whatever - the scale factory doesn't matter for the optimization
 
         printer.log('', 3)
-        printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indentOffset=-1)
+        printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indent_offset=-1)
 
         #get gate-intrinsic-error
-        proj = model.get_nongauge_projector(itemWeights={'gates': 1.0, 'spam': 0.0})
+        proj = model.get_nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
@@ -534,7 +534,7 @@ class ConfidenceRegionFactory(object):
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
         #get spam-intrinsic-error
-        proj = model.get_nongauge_projector(itemWeights={'gates': 0.0, 'spam': 1.0})
+        proj = model.get_nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
@@ -546,7 +546,7 @@ class ConfidenceRegionFactory(object):
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
 
         ratio = op_intrinsic_err / spam_intrinsic_err
-        proj = model.get_nongauge_projector(itemWeights={'gates': 1.0, 'spam': ratio})
+        proj = model.get_nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
 
         if printer.verbosity >= 2:
@@ -581,8 +581,8 @@ class ConfidenceRegionFactoryView(object):
     typically don't depend on what confidence-level is being used.
     """
 
-    def __init__(self, model, inv_projected_hessian, mlgst_params, confidenceLevel,
-                 nonMarkRadiusSq, nNonGaugeParams, nGaugeParams):
+    def __init__(self, model, inv_projected_hessian, mlgst_params, confidence_level,
+                 non_mark_radius_sq, n_non_gauge_params, n_gauge_params):
         """
         Creates a new ConfidenceRegionFactoryView.
 
@@ -602,11 +602,11 @@ class ConfidenceRegionFactoryView(object):
             A dictionary of ML-GST parameters only used for linear-response
             error bars.
 
-        confidenceLevel : float
+        confidence_level : float
             the confidence level (between 0 and 100) used in
             the computation of confidence regions/intervals.
 
-        nonMarkRadiusSq : float, optional
+        non_mark_radius_sq : float, optional
             When non-zero, "a non-Markovian error region" is constructed using
             this value as the squared "non-markovian radius". This specifies the
             portion of 2*(max-log-likelihood - model-log-likelihood) that we
@@ -617,7 +617,7 @@ class ConfidenceRegionFactoryView(object):
             conficence region is created.  Non-zero values should only be
             supplied if you really know what you're doing.
 
-        nNonGaugeParams, nGaugeParams : int
+        n_non_gauge_params, n_gauge_params : int
             The numbers of non-gauge and gauge parameters, respectively.  These could be
             computed from `model` but they're passed in to save compuational time.
         """
@@ -625,10 +625,10 @@ class ConfidenceRegionFactoryView(object):
         # Scale projected Hessian for desired confidence level => quadratic form for confidence region assume hessian
         # gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian) where
         # seScaleFctr gives the scaling factor for a normal distribution, i.e. integrating the std normal distribution
-        # between -seScaleFctr and seScaleFctr == confidenceLevel/100 (as a percentage)
-        assert(confidenceLevel > 0.0 and confidenceLevel < 100.0)
-        if confidenceLevel < 1.0:
-            _warnings.warn("You've specified a %f%% confidence interval, " % confidenceLevel
+        # between -seScaleFctr and seScaleFctr == confidence_level/100 (as a percentage)
+        assert(confidence_level > 0.0 and confidence_level < 100.0)
+        if confidence_level < 1.0:
+            _warnings.warn("You've specified a %f%% confidence interval, " % confidence_level
                            + "which is usually small.  Be sure to specify this"
                            + "number as a percentage in (0,100) and not a fraction in (0,1).")
 
@@ -636,15 +636,15 @@ class ConfidenceRegionFactoryView(object):
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
         #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* model
         #        parameters
-        self.nonMarkRadiusSq = nonMarkRadiusSq
-        if nonMarkRadiusSq == 0.0:  # use == to test for *exact* zero floating pt value as herald
-            C1 = _stats.chi2.ppf(confidenceLevel / 100.0, 1)
-            Ck = _stats.chi2.ppf(confidenceLevel / 100.0, nNonGaugeParams)
+        self.nonMarkRadiusSq = non_mark_radius_sq
+        if non_mark_radius_sq == 0.0:  # use == to test for *exact* zero floating pt value as herald
+            C1 = _stats.chi2.ppf(confidence_level / 100.0, 1)
+            Ck = _stats.chi2.ppf(confidence_level / 100.0, n_non_gauge_params)
 
             # Alt. method to get C1: square the result of a single gaussian (normal distribution)
             #Note: scipy's ppf gives inverse of cdf, so want to know where cdf == the leftover probability on left side
             # std error scaling factor for desired confidence region
-            seScaleFctr = -_stats.norm.ppf((1.0 - confidenceLevel / 100.0) / 2.0)
+            seScaleFctr = -_stats.norm.ppf((1.0 - confidence_level / 100.0) / 2.0)
             assert(_np.isclose(C1, seScaleFctr**2))
 
             # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
@@ -662,22 +662,22 @@ class ConfidenceRegionFactoryView(object):
             # to those obtained using a full *standard* confidence region.
 
         else:
-            C1 = _stats.ncx2.ppf(confidenceLevel / 100.0, 1, nonMarkRadiusSq)
-            Ck = _stats.ncx2.ppf(confidenceLevel / 100.0, nNonGaugeParams, nonMarkRadiusSq)
+            C1 = _stats.ncx2.ppf(confidence_level / 100.0, 1, non_mark_radius_sq)
+            Ck = _stats.ncx2.ppf(confidence_level / 100.0, n_non_gauge_params, non_mark_radius_sq)
 
             # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
             #  region appropriate for generating 1-D confidence intervals.
             if inv_projected_hessian is not None:
                 self.invRegionQuadcForm = inv_projected_hessian * C1
-                self.invRegionQuadcForm /= _np.sqrt(nNonGaugeParams)  # make a *worst case* non-mark. region...
+                self.invRegionQuadcForm /= _np.sqrt(n_non_gauge_params)  # make a *worst case* non-mark. region...
             else:
                 self.invRegionQuadcForm = None
 
             self.intervalScaling = _np.sqrt(Ck / C1)  # multiplicative scaling required to convert intervals
             # to those obtained using a full (using Ck) confidence region.
 
-            stdC1 = _stats.chi2.ppf(confidenceLevel / 100.0, 1)
-            stdCk = _stats.chi2.ppf(confidenceLevel / 100.0, nNonGaugeParams)
+            stdC1 = _stats.chi2.ppf(confidence_level / 100.0, 1)
+            stdCk = _stats.chi2.ppf(confidence_level / 100.0, n_non_gauge_params)
             self.stdIntervalScaling = _np.sqrt(stdC1 / C1)  # see above description
             self.stdRegionScaling = _np.sqrt(stdCk / C1)  # see above description
 
@@ -695,9 +695,9 @@ class ConfidenceRegionFactoryView(object):
             self.profLCI = None
 
         self.model = model
-        self.level = confidenceLevel  # a percentage, i.e. btwn 0 and 100
-        self.nNonGaugeParams = nNonGaugeParams
-        self.nGaugeParams = nGaugeParams
+        self.level = confidence_level  # a percentage, i.e. btwn 0 and 100
+        self.nNonGaugeParams = n_non_gauge_params
+        self.nGaugeParams = n_gauge_params
 
         self.mlgst_params = mlgst_params
         self._C1 = C1  # save for linear response scaling
@@ -762,8 +762,8 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError(("Invalid item label (%s) for computing" % label)
                              + "profile likelihood confidence intervals")
 
-    def get_fn_confidence_interval(self, fnObj, eps=1e-7,
-                                   returnFnVal=False, verbosity=0):
+    def get_fn_confidence_interval(self, fn_obj, eps=1e-7,
+                                   return_fn_val=False, verbosity=0):
         """
         Compute the confidence interval for an arbitrary function.
 
@@ -774,7 +774,7 @@ class ConfidenceRegionFactoryView(object):
 
         Parameters
         ----------
-        fnObj : ModelFunction
+        fn_obj : ModelFunction
             An object representing the function to evaluate. The
             returned confidence interval is based on linearizing this function
             and propagating the model-space confidence region.
@@ -782,7 +782,7 @@ class ConfidenceRegionFactoryView(object):
         eps : float, optional
             Step size used when taking finite-difference derivatives of fnOfOp.
 
-        returnFnVal : bool, optional
+        return_fn_val : bool, optional
             If True, return the value of fnOfOp along with it's confidence
             region half-widths.
 
@@ -797,17 +797,17 @@ class ConfidenceRegionFactoryView(object):
             df matches that returned by fnOfOp.
 
         f0 : float or numpy array
-            Only returned when returnFnVal == True. Value of fnOfOp
-            at the gate specified by opLabel.
+            Only returned when return_fn_val == True. Value of fnOfOp
+            at the gate specified by op_label.
         """
 
         nParams = self.model.num_params()
-        f0 = fnObj.evaluate(self.model)  # function value at "base point"
+        f0 = fn_obj.evaluate(self.model)  # function value at "base point"
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        gradF = _create_empty_gradF(f0, nParams)
+        gradF = _create_empty_grad_f(f0, nParams)
 
-        fn_dependencies = fnObj.get_dependencies()
+        fn_dependencies = fn_obj.get_dependencies()
         if 'all' in fn_dependencies:
             fn_dependencies = ['all']  # no need to do anything else
         if 'spam' in fn_dependencies:
@@ -838,9 +838,9 @@ class ConfidenceRegionFactoryView(object):
         for igp in all_gpindices:  # iterate over "global" Model-parameter indices
             vec = vec0.copy(); vec[igp] += eps
             mdl.from_vector(vec)
-            mdl.basis = self.model.basis  # we're still in the same basis (maybe needed by fnObj)
+            mdl.basis = self.model.basis  # we're still in the same basis (maybe needed by fn_obj)
 
-            f = fnObj.evaluate_nearby(mdl)
+            f = fn_obj.evaluate_nearby(mdl)
             if isinstance(f0, dict):  # special behavior for dict: process each item separately
                 for ky in gradF:
                     gradF[ky][igp] = (f[ky] - f0[ky]) / eps
@@ -849,28 +849,28 @@ class ConfidenceRegionFactoryView(object):
                        ), "gradF seems to be the wrong type!"
                 gradF[igp] = _np.real_if_close(f - f0) / eps
 
-        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_grad_f(gradF, f0, return_fn_val, verbosity)
 
-    def _compute_return_from_gradF(self, gradF, f0, returnFnVal, verbosity):
+    def _compute_return_from_grad_f(self, grad_f, f0, return_fn_val, verbosity):
         """ Just adds logic for special behavior when f0 is a dict """
         if isinstance(f0, dict):
-            df_dict = {ky: self._compute_df_from_gradF(
-                gradF[ky], f0[ky], False, verbosity)
-                for ky in gradF}
-            return (df_dict, f0) if returnFnVal else df_dict
+            df_dict = {ky: self._compute_df_from_grad_f(
+                grad_f[ky], f0[ky], False, verbosity)
+                for ky in grad_f}
+            return (df_dict, f0) if return_fn_val else df_dict
         else:
-            return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+            return self._compute_df_from_grad_f(grad_f, f0, return_fn_val, verbosity)
 
-    def _compute_df_from_gradF(self, gradF, f0, returnFnVal, verbosity):
+    def _compute_df_from_grad_f(self, grad_f, f0, return_fn_val, verbosity):
         if self.invRegionQuadcForm is None:
-            df = self._compute_df_from_gradF_linresponse(
-                gradF, f0, verbosity)
+            df = self._compute_df_from_grad_f_linresponse(
+                grad_f, f0, verbosity)
         else:
-            df = self._compute_df_from_gradF_hessian(
-                gradF, f0, verbosity)
-        return (df, f0) if returnFnVal else df
+            df = self._compute_df_from_grad_f_hessian(
+                grad_f, f0, verbosity)
+        return (df, f0) if return_fn_val else df
 
-    def _compute_df_from_gradF_linresponse(self, gradF, f0, verbosity):
+    def _compute_df_from_grad_f_linresponse(self, grad_f, f0, verbosity):
         from .. import algorithms as _alg
         assert(self.mlgst_params is not None)
 
@@ -881,27 +881,27 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % len(f0.shape))
             #May not be needed here, but gives uniformity with Hessian case
 
-        #massage gradF, which has shape (nParams,) + f0.shape
+        #massage grad_f, which has shape (n_params,) + f0.shape
         # to that expected by _do_mlgst_base, which is
-        # (flat_f0_size, nParams)
-        if len(gradF.shape) == 1:
-            gradF.shape = (1, gradF.shape[0])
+        # (flat_f0_size, n_params)
+        if len(grad_f.shape) == 1:
+            grad_f.shape = (1, grad_f.shape[0])
         else:
             flatDim = _np.prod(f0.shape)
-            gradF.shape = (gradF.shape[0], flatDim)
-            gradF = _np.transpose(gradF)  # now shape == (flatDim, nParams)
-        assert(len(gradF.shape) == 2)
+            grad_f.shape = (grad_f.shape[0], flatDim)
+            grad_f = _np.transpose(grad_f)  # now shape == (flatDim, n_params)
+        assert(len(grad_f.shape) == 2)
 
         mlgst_args = self.mlgst_params.copy()
         mlgst_args['startModel'] = self.model
-        mlgst_args['forcefn_grad'] = gradF
+        mlgst_args['forcefn_grad'] = grad_f
         mlgst_args['shiftFctr'] = 100.0
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
         mlgst_args['maxiter'] = 100  # don't let this run for too long
         _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
-        norms = _np.array([_np.dot(gradF[i], gradF[i]) for i in range(gradF.shape[0])])
-        delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.model.to_vector())
+        norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
+        delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
                          * _np.where(norms > 1e-10, 1.0 / norms, 0.0))
         delta2 *= self._C1  # scaling appropriate for confidence level
         delta = _np.sqrt(delta2)  # error^2 -> error
@@ -914,80 +914,80 @@ class ConfidenceRegionFactoryView(object):
 
         return delta
 
-    def _compute_df_from_gradF_hessian(self, gradF, f0, verbosity):
+    def _compute_df_from_grad_f_hessian(self, grad_f, f0, verbosity):
         """
         Internal function which computes error bars given an function value
         and gradient (using linear approx. to function)
         """
 
         #Compute df = sqrt( gradFu.dag * 1/D * gradFu )
-        #  where regionQuadcForm = U * D * U.dag and gradFu = U.dag * gradF
-        #  so df = sqrt( gradF.dag * U * 1/D * U.dag * gradF )
-        #        = sqrt( gradF.dag * invRegionQuadcForm * gradF )
+        #  where regionQuadcForm = U * D * U.dag and gradFu = U.dag * grad_f
+        #  so df = sqrt( grad_f.dag * U * 1/D * U.dag * grad_f )
+        #        = sqrt( grad_f.dag * invRegionQuadcForm * grad_f )
 
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        printer.log("gradF = %s" % gradF)
+        printer.log("grad_f = %s" % grad_f)
 
         if isinstance(f0, float) or isinstance(f0, int):
-            gradFdag = _np.conjugate(_np.transpose(gradF))
+            gradFdag = _np.conjugate(_np.transpose(grad_f))
 
             #DEBUG
-            #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
+            #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f))
             #print "HERE: taking sqrt(abs(%s))" % arg
 
-            df = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))))
+            df = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f))))
         elif isinstance(f0, complex):
-            gradFdag = _np.transpose(gradF)  # conjugate?
-            df = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real)))) \
-                + 1j * _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))))
+            gradFdag = _np.transpose(grad_f)  # conjugate?
+            df = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, grad_f.real)))) \
+                + 1j * _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, grad_f.imag))))
         else:
             fDims = len(f0.shape)
-            gradF = _np.rollaxis(gradF, 0, 1 + fDims)  # roll parameter axis to be the last index, preceded by f-shape
+            grad_f = _np.rollaxis(grad_f, 0, 1 + fDims)  # roll parameter axis to be the last index, preceded by f-shape
             df = _np.empty(f0.shape, f0.dtype)
 
             if f0.dtype == _np.dtype("complex"):  # real and imaginary parts separately
                 if fDims == 0:  # same as float case above
-                    gradFdag = _np.transpose(gradF)  # conjugate?
-                    df = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real)))) \
-                        + 1j * _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))))
+                    gradFdag = _np.transpose(grad_f)  # conjugate?
+                    df = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, grad_f.real)))) \
+                        + 1j * _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, grad_f.imag))))
                 elif fDims == 1:
                     for i in range(f0.shape[0]):
-                        gradFdag = _np.transpose(gradF[i])  # conjugate?
-                        df[i] = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i].real)))) \
+                        gradFdag = _np.transpose(grad_f[i])  # conjugate?
+                        df[i] = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, grad_f[i].real)))) \
                             + 1j * \
-                            _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i].imag))))
+                            _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, grad_f[i].imag))))
                 elif fDims == 2:
                     for i in range(f0.shape[0]):
                         for j in range(f0.shape[1]):
-                            gradFdag = _np.transpose(gradF[i, j])  # conjugate?
+                            gradFdag = _np.transpose(grad_f[i, j])  # conjugate?
                             df[i, j] = _np.sqrt(abs(_np.dot(
                                 gradFdag.real,
-                                _np.dot(self.invRegionQuadcForm, gradF[i, j].real)))) \
+                                _np.dot(self.invRegionQuadcForm, grad_f[i, j].real)))) \
                                 + 1j * \
                                 _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(
-                                    self.invRegionQuadcForm, gradF[i, j].imag))))
+                                    self.invRegionQuadcForm, grad_f[i, j].imag))))
                 else:
                     raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % fDims)
 
             else:  # assume real -- so really don't need conjugate calls below
                 if fDims == 0:  # same as float case above
-                    gradFdag = _np.conjugate(_np.transpose(gradF))
+                    gradFdag = _np.conjugate(_np.transpose(grad_f))
 
                     #DEBUG
-                    #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
+                    #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f))
                     #print "HERE2: taking sqrt(abs(%s))" % arg
 
-                    df = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))))
+                    df = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f))))
                 elif fDims == 1:
                     for i in range(f0.shape[0]):
-                        gradFdag = _np.conjugate(_np.transpose(gradF[i]))
-                        df[i] = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i]))))
+                        gradFdag = _np.conjugate(_np.transpose(grad_f[i]))
+                        df[i] = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f[i]))))
                 elif fDims == 2:
                     for i in range(f0.shape[0]):
                         for j in range(f0.shape[1]):
-                            gradFdag = _np.conjugate(_np.transpose(gradF[i, j]))
-                            df[i, j] = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i, j]))))
+                            gradFdag = _np.conjugate(_np.transpose(grad_f[i, j]))
+                            df[i, j] = _np.sqrt(abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, grad_f[i, j]))))
                 else:
                     raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % fDims)
 
@@ -998,21 +998,21 @@ class ConfidenceRegionFactoryView(object):
 #Helper functions
 
 
-def _create_empty_grad(val, nParams):
-    """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
+def _create_empty_grad(val, n_params):
+    """ Get finite difference derivative grad_f that is shape (n_params, <shape of val>) """
     if isinstance(val, float) or isinstance(val, int):
-        gradVal = _np.zeros(nParams, 'd')
+        gradVal = _np.zeros(n_params, 'd')
     elif isinstance(val, complex):
-        gradVal = _np.zeros(nParams, 'complex')
+        gradVal = _np.zeros(n_params, 'complex')
     else:
-        gradSize = (nParams,) + tuple(val.shape)
+        gradSize = (n_params,) + tuple(val.shape)
         gradVal = _np.zeros(gradSize, val.dtype)
     return gradVal  # gradient of value (empty)
 
 
-def _create_empty_gradF(f0, nParams):
+def _create_empty_grad_f(f0, n_params):
     if isinstance(f0, dict):  # special behavior for dict: process each item separately
-        gradF = {ky: _create_empty_grad(val, nParams) for ky, val in f0.items()}
+        gradF = {ky: _create_empty_grad(val, n_params) for ky, val in f0.items()}
     else:
-        gradF = _create_empty_grad(f0, nParams)
+        gradF = _create_empty_grad(f0, n_params)
     return gradF

@@ -48,7 +48,7 @@ class DataComparisonSection(_Section):
 
                     ds1 = results[dslbl1].dataset
                     ds2 = results[dslbl2].dataset
-                    dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                    dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                     dsc.implement()  # to perform processing
                     dsComp[(d1, d2)] = dsc
             dicts = comm.gather(dsComp, root=0)
@@ -64,7 +64,7 @@ class DataComparisonSection(_Section):
                 dslbl2 = dataset_labels[d2]
                 ds1 = results[dslbl1].dataset
                 ds2 = results[dslbl2].dataset
-                dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                 dsc.implement()  # to perform processing
                 all_dsComps[(d1, d2)] = dsc
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]

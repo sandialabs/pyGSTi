@@ -33,9 +33,10 @@ class Estimate(object):
     final `Model`, and then different gauge optimizations of the final
     set.
     """
+
     @classmethod
-    def gst_init(cls, parent, targetModel=None, seedModel=None,
-                 modelsByIter=None, parameters=None):
+    def gst_init(cls, parent, target_model=None, seed_model=None,
+                 models_by_iter=None, parameters=None):
         """
         Initialize an empty Estimate object.
 
@@ -45,15 +46,15 @@ class Estimate(object):
             The parent Results object containing the dataset and
             operation sequence structure used for this Estimate.
 
-        targetModel : Model
+        target_model : Model
             The target model used when optimizing the objective.
 
-        seedModel : Model
+        seed_model : Model
             The initial model used to seed the iterative part
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        modelsByIter : list of Models
+        models_by_iter : list of Models
             The estimated model at each GST iteration. Typically these are the
             estimated models *before* any gauge optimization is performed.
 
@@ -62,11 +63,11 @@ class Estimate(object):
             were obtained.
         """
         models = {}
-        if targetModel: models['target'] = targetModel
-        if seedModel: models['seed'] = seedModel
-        if modelsByIter:
-            models['iteration estimates'] = modelsByIter
-            models['final iteration estimate'] = modelsByIter[-1]
+        if target_model: models['target'] = target_model
+        if seed_model: models['seed'] = seed_model
+        if models_by_iter:
+            models['iteration estimates'] = models_by_iter
+            models['final iteration estimate'] = models_by_iter[-1]
         return cls(parent, models, parameters)
 
     def __init__(self, parent, models=None, parameters=None):
@@ -221,23 +222,23 @@ class Estimate(object):
                         gop["model"] = self.models['final iteration estimate']
                     else: raise ValueError("Must supply 'model' in 'goparams' argument")
 
-                if "targetModel" not in gop:
+                if "target_model" not in gop:
                     if 'target' in self.models:
-                        gop["targetModel"] = self.models['target']
-                    else: raise ValueError("Must supply 'targetModel' in 'goparams' argument")
+                        gop["target_model"] = self.models['target']
+                    else: raise ValueError("Must supply 'target_model' in 'goparams' argument")
 
                 if "maxiter" not in gop:
                     gop["maxiter"] = 100
 
-                gop['returnAll'] = True
+                gop['return_all'] = True
                 if isinstance(gop['model'], _ExplicitOpModel):
                     #only explicit models can be gauge optimized
-                    _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                    _, gauge_group_el, last_gs = _gaugeopt_to_target(**gop)
                 else:
                     #but still fill in results for other models (?)
-                    gaugeGroupEl, last_gs = None, gop['model'].copy()
+                    gauge_group_el, last_gs = None, gop['model'].copy()
 
-                gop['_gaugeGroupEl'] = gaugeGroupEl  # an output stored here for convenience
+                gop['_gaugeGroupEl'] = gauge_group_el  # an output stored here for convenience
 
             #sort the parameters by name for consistency
             ordered_goparams.append(_collections.OrderedDict(
@@ -280,9 +281,9 @@ class Estimate(object):
         if ky in self.confidence_region_factories:
             _warnings.warn("Confidence region factory for %s already exists - overwriting!" % str(ky))
 
-        newCRF = _ConfidenceRegionFactory(self, model_label, circuits_label)
-        self.confidence_region_factories[ky] = newCRF
-        return newCRF
+        new_crf = _ConfidenceRegionFactory(self, model_label, circuits_label)
+        self.confidence_region_factories[ky] = new_crf
+        return new_crf
 
     def has_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final'):
@@ -306,7 +307,7 @@ class Estimate(object):
         return bool(CRFkey(model_label, circuits_label) in self.confidence_region_factories)
 
     def get_confidence_region_factory(self, model_label='final iteration estimate',
-                                      circuits_label='final', createIfNeeded=False):
+                                      circuits_label='final', create_if_needed=False):
         """
         Retrieves a confidence region factory for the given model
         and operation sequence list labels.  For more information about
@@ -321,7 +322,7 @@ class Estimate(object):
             The label of a operation sequence list within this estimate's parent
             `Results` object.
 
-        createIfNeeded : bool, optional
+        create_if_needed : bool, optional
             If True, a new confidence region factory will be created if none
             exists.  Otherwise a `KeyError` is raised when the requested
             factory doesn't exist.
@@ -333,14 +334,14 @@ class Estimate(object):
         ky = CRFkey(model_label, circuits_label)
         if ky in self.confidence_region_factories:
             return self.confidence_region_factories[ky]
-        elif createIfNeeded:
+        elif create_if_needed:
             return self.add_confidence_region_factory(model_label, circuits_label)
         else:
             raise KeyError("No confidence region factory for key %s exists!" % str(ky))
 
     def gauge_propagate_confidence_region_factory(
             self, to_model_label, from_model_label='final iteration estimate',
-            circuits_label='final', EPS=1e-3, verbosity=0):
+            circuits_label='final', eps=1e-3, verbosity=0):
         """
         Propagates an existing "reference" confidence region for a Model
         "G0" to a new confidence region for a gauge-equivalent model "G1".
@@ -367,7 +368,7 @@ class Estimate(object):
             `.circuit_lists` dictionary) that identifies the operation sequence
             list used by the old (&new) confidence region factories.
 
-        EPS : float, optional
+        eps : float, optional
             A small offset used for constructing finite-difference derivatives.
             Usually the default value is fine.
 
@@ -389,11 +390,11 @@ class Estimate(object):
         start_model = goparams_list[0]['model'].copy()
         final_model = self.models[to_model_label].copy()
 
-        gaugeGroupEls = []
+        gauge_group_els = []
         for gop in goparams_list:
             assert('_gaugeGroupEl' in gop), "To propagate a confidence " + \
                 "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
-            gaugeGroupEls.append(gop['_gaugeGroupEl'])
+            gauge_group_els.append(gop['_gaugeGroupEl'])
 
         assert(start_model.frobeniusdist(ref_model) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) Model"
@@ -405,7 +406,7 @@ class Estimate(object):
         assert(crf.has_hessian()), "Initial factory must contain a computed Hessian!"
 
         #Update hessian by TMx = d(diffs in current go'd model)/d(diffs in ref model)
-        TMx = _np.empty((final_model.num_params(), ref_model.num_params()), 'd')
+        tmx = _np.empty((final_model.num_params(), ref_model.num_params()), 'd')
         v0, w0 = ref_model.to_vector(), final_model.to_vector()
         mdl = ref_model.copy()
 
@@ -413,23 +414,23 @@ class Estimate(object):
                     (from_model_label, to_model_label))
 
         with printer.progress_logging(1):
-            for iCol in range(ref_model.num_params()):
-                v = v0.copy(); v[iCol] += EPS  # dv is along iCol-th direction
+            for icol in range(ref_model.num_params()):
+                v = v0.copy(); v[icol] += eps  # dv is along iCol-th direction
                 mdl.from_vector(v)
-                for gaugeGroupEl in gaugeGroupEls:
-                    mdl.transform(gaugeGroupEl)
+                for gauge_group_el in gauge_group_els:
+                    mdl.transform(gauge_group_el)
                 w = mdl.to_vector()
-                dw = (w - w0) / EPS
-                TMx[:, iCol] = dw
-                printer.show_progress(iCol, ref_model.num_params(), prefix='Column: ')
+                dw = (w - w0) / eps
+                tmx[:, icol] = dw
+                printer.show_progress(icol, ref_model.num_params(), prefix='Column: ')
                 #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
 
         #rank = _np.linalg.matrix_rank(TMx)
         #print("DEBUG: constructed TMx: rank = ", rank)
 
         # Hessian is gauge-transported via H -> TMx_inv^T * H * TMx_inv
-        TMx_inv = _np.linalg.inv(TMx)
-        new_hessian = _np.dot(TMx_inv.T, _np.dot(crf.hessian, TMx_inv))
+        tmx_inv = _np.linalg.inv(tmx)
+        new_hessian = _np.dot(tmx_inv.T, _np.dot(crf.hessian, tmx_inv))
 
         #Create a new confidence region based on the new hessian
         new_crf = _ConfidenceRegionFactory(self, to_model_label,
@@ -440,7 +441,7 @@ class Estimate(object):
 
         return new_crf
 
-    def get_effective_dataset(self, return_subMxs=False):
+    def get_effective_dataset(self, return_submxs=False):
         """
         Generate a `DataSet` containing the effective counts as dictated by
         the "weights" parameter, which specifies a dict of operation sequence weights.
@@ -453,7 +454,7 @@ class Estimate(object):
 
         Parameters
         ----------
-        return_subMxs : boolean
+        return_submxs : boolean
             If true, also return a list-of-lists of matrices containing the
             scaling values, as described above.
 
@@ -463,7 +464,7 @@ class Estimate(object):
             The "effective" (scaled) data set.
 
         subMxs : list-of-lists
-            Only returned if `return_subMxs == True`.  Contains the
+            Only returned if `return_submxs == True`.  Contains the
             scale values (see above).
         """
         p = self.parent
@@ -472,53 +473,53 @@ class Estimate(object):
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-            nRows, nCols = gss.plaquette_rows_cols()
+            nrows, ncols = gss.plaquette_rows_cols()
 
-            subMxs = []
+            sub_mxs = []
             for y in gss.used_yvals():
-                subMxs.append([])
+                sub_mxs.append([])
                 for x in gss.used_xvals():
-                    scalingMx = _np.nan * _np.ones((nRows, nCols), 'd')
+                    scaling_mx = _np.nan * _np.ones((nrows, ncols), 'd')
                     plaq = gss.get_plaquette(x, y).expand_aliases()
                     if len(plaq) > 0:
                         for i, j, opstr in plaq:
-                            scalingMx[i, j] = weights.get(opstr, 1.0)
-                            if scalingMx[i, j] != 1.0:
-                                scaled_dataset[opstr].scale(scalingMx[i, j])
+                            scaling_mx[i, j] = weights.get(opstr, 1.0)
+                            if scaling_mx[i, j] != 1.0:
+                                scaled_dataset[opstr].scale(scaling_mx[i, j])
 
                     #build up a subMxs list-of-lists as a plotting
                     # function does, so we can easily plot the scaling
                     # factors in a color box plot.
-                    subMxs[-1].append(scalingMx)
+                    sub_mxs[-1].append(scaling_mx)
 
             scaled_dataset.done_adding_data()
-            if return_subMxs:
-                return scaled_dataset, subMxs
+            if return_submxs:
+                return scaled_dataset, sub_mxs
             else: return scaled_dataset
 
         else:  # no weights specified - just return original dataset (no scaling)
 
-            if return_subMxs:  # then need to create subMxs with all 1's
-                subMxs = []
+            if return_submxs:  # then need to create subMxs with all 1's
+                sub_mxs = []
                 for y in gss.used_yvals():
-                    subMxs.append([])
+                    sub_mxs.append([])
                     for x in gss.used_xvals():
                         plaq = gss.get_plaquette(x, y)
-                        scalingMx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
+                        scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
                         for i, j, opstr in plaq:
-                            scalingMx[i, j] = 1.0
-                        subMxs[-1].append(scalingMx)
-                return p.dataset, subMxs  # copy dataset?
+                            scaling_mx[i, j] = 1.0
+                        sub_mxs[-1].append(scaling_mx)
+                return p.dataset, sub_mxs  # copy dataset?
             else:
                 return p.dataset
 
-    def misfit_sigma(self, use_accurate_Np=False, comm=None):
+    def misfit_sigma(self, use_accurate_np=False, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
 
         Parameters
         ----------
-        use_accurate_Np : bool, optional
+        use_accurate_np : bool, optional
             Whether to use the more accurate number of *non-gauge* parameters
             (but more expensive to compute), or just use the total number of
             model parameters.
@@ -543,13 +544,14 @@ class Estimate(object):
         aliases = circuit_list.opLabelAliases if isinstance(circuit_list, _objfns.BulkCircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
-        Ns = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
+        ds_dof = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         if hasattr(mdl, 'num_nongauge_params'):
-            Np = mdl.num_nongauge_params() if use_accurate_Np else mdl.num_params()
+            mdl_dof = mdl.num_nongauge_params() if use_accurate_np else mdl.num_params()
         else:
-            Np = mdl.num_params()
-        k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
-        if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
+            mdl_dof = mdl.num_params()
+        k = max(ds_dof - mdl_dof, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
+        if ds_dof <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1."
+                                             % (ds_dof, mdl_dof))
         return (fitqty - k) / _np.sqrt(2 * k)
 
     def view(self, gaugeopt_keys, parent=None):
@@ -642,17 +644,17 @@ class Estimate(object):
         del to_pickle['parent']
         return to_pickle
 
-    def __setstate__(self, stateDict):
+    def __setstate__(self, state_dict):
         #BACKWARDS COMPATIBILITY
-        if 'confidence_regions' in stateDict:
-            del stateDict['confidence_regions']
-            stateDict['confidence_region_factories'] = _collections.OrderedDict()
-        if 'meta' not in stateDict: stateDict['meta'] = {}
-        if 'gatesets' in stateDict:
-            stateDict['models'] = stateDict['gatesets']
-            del stateDict['gatesets']
+        if 'confidence_regions' in state_dict:
+            del state_dict['confidence_regions']
+            state_dict['confidence_region_factories'] = _collections.OrderedDict()
+        if 'meta' not in state_dict: state_dict['meta'] = {}
+        if 'gatesets' in state_dict:
+            state_dict['models'] = state_dict['gatesets']
+            del state_dict['gatesets']
 
-        self.__dict__.update(stateDict)
+        self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():
             crf.set_parent(self)
         self.parent = None  # initialize to None upon unpickling

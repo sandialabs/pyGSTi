@@ -8,11 +8,11 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ..rb import analysis as _anl
 from ...objects import oplessmodel as _oplessmodel
 from ...objects import processorspec as _pspec
 from ...objects import povm as _povm
 from ...construction import modelconstruction as _mconst
+from ...tools import rbtools as _anl
 
 from . import ibmq_melbourne
 from . import ibmq_ourense
@@ -351,7 +351,7 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
     print(qubits)
     print(edgelist)
 
-    model = _mconst.build_localnoise_model(nQubits=len(qubits),
+    model = _mconst.build_localnoise_model(n_qubits=len(qubits),
                                            qubit_labels=qubits,
                                            gate_names=[devspecs.twoQgate] + oneQgates,
                                            availability={devspecs.twoQgate: edgelist},

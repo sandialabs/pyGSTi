@@ -315,7 +315,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
 
     """
     if returnds:
-        ds = _obj.DataSet(collisionAction=collisionAction)
+        ds = _obj.DataSet(collision_action=collisionAction)
     else:
         ds = []
     assert(_os.path.isfile("chp")), "This simulator uses the chp.c code.\n" + \
@@ -434,7 +434,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
                 aux = None
 
         if returnds:
-            ds.add_count_dict(circuit, countdict, recordZeroCnts=False, aux=aux)
+            ds.add_count_dict(circuit, countdict, record_zero_counts=False, aux=aux)
         else:
             ds.append(countdict)
 
@@ -580,8 +580,8 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
 
     for l in range(depth):
 
-        layer = circuit.get_layer_with_idles(l, idleGateName=idle1Q_placeholder)
-        s, p = _symp.symplectic_rep_of_clifford_layer(layer, n, Qlabels=circuit.line_labels, srep_dict=srep)
+        layer = circuit.get_layer_with_idles(l, idle_gate_name=idle1Q_placeholder)
+        s, p = _symp.symplectic_rep_of_clifford_layer(layer, n, q_labels=circuit.line_labels, srep_dict=srep)
         # Apply the perfect layer to the current state.
         sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)
 
@@ -742,7 +742,7 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
 #            scounts.append(outcome.get(idealout,0))
             scounts.append(outcome.get(''.join(str(idealbit) for idealbit in idealout), 0))
             cdepths.append(c.depth())
-            c2Qgcounts.append(c.twoQgate_count())
+            c2Qgcounts.append(c.two_q_gate_count())
 
             # Write the data to file in each round.
             if filename is not None:

@@ -66,7 +66,7 @@ def count_matrices(gsplaq, dataset):
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         count values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
@@ -98,7 +98,7 @@ def frequency_matrices(gsplaq, dataset):
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         frequency values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -132,7 +132,7 @@ def probability_matrices(gsplaq, model,
 
     Returns
     -------
-    numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
         probability values corresponding to spamLabel and operation sequences
         where circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -150,7 +150,7 @@ def probability_matrices(gsplaq, model,
 
 
 @smart_cached
-def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
+def chi2_matrix(gsplaq, dataset, model, min_prob_clip_for_weighting=1e-4,
                 probs_precomp_dict=None):
     """
     Computes the chi^2 matrix for a base circuit.
@@ -168,7 +168,7 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
     model : Model
         The model used to specify the probabilities and SPAM labels
 
-    minProbClipForWeighting : float, optional
+    min_prob_clip_for_weighting : float, optional
         defines the clipping interval for the statistical weight (see chi2fn).
 
     probs_precomp_dict : dict, optional
@@ -178,7 +178,7 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         chi^2 values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -193,13 +193,13 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
     for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
             gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
         chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
-                               freqs[elIndices_ds], minProbClipForWeighting)
+                               freqs[elIndices_ds], min_prob_clip_for_weighting)
         ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
     return ret
 
 
 @smart_cached
-def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
+def logl_matrix(gsplaq, dataset, model, min_prob_clip=1e-6,
                 probs_precomp_dict=None):
     """
     Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
@@ -218,7 +218,7 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
     model : Model
         The model used to specify the probabilities and SPAM labels
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         defines the minimum probability "patch-point" of the log-likelihood function.
 
     probs_precomp_dict : dict, optional
@@ -229,7 +229,7 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         logl values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -245,7 +245,7 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
     for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
             gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
         logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
-                                        freqs[elIndices_ds], minProbClip)
+                                        freqs[elIndices_ds], min_prob_clip)
         ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
     return ret
 
@@ -277,7 +277,7 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         logl values corresponding to operation sequences where
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
@@ -296,7 +296,7 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
     return ret
 
 
-def small_eigval_err_rate(sigma, directGSTmodels):
+def small_eigval_err_rate(sigma, direct_gst_models):
     """
     Compute per-gate error rate.
 
@@ -311,7 +311,7 @@ def small_eigval_err_rate(sigma, directGSTmodels):
     dataset : DataSet
         The dataset used obtain operation sequence frequencies
 
-    directGSTmodels : dictionary of Models
+    direct_gst_models : dictionary of Models
         A dictionary with keys = operation sequences and
         values = Models.
 
@@ -321,7 +321,7 @@ def small_eigval_err_rate(sigma, directGSTmodels):
         the approximate per-gate error rate.
     """
     if sigma is None: return _np.nan  # in plot processing, "None" circuits = no plot output = nan values
-    mdl_direct = directGSTmodels[sigma]
+    mdl_direct = direct_gst_models[sigma]
     minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations["GsigmaLbl"])))
     # (approximate) per-gate error rate; max averts divide by zero error
     return 1.0 - minEigval**(1.0 / max(len(sigma), 1))
@@ -388,17 +388,17 @@ def _all_same(items):
     return all(x == items[0] for x in items)
 
 
-def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
+def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
     """
     A helper function to compute the number of boxes, and corresponding
     number of degrees of freedom, for the GST chi2/logl boxplots.
 
     """
-    if sumUp:
-        s = _np.shape(subMxs)
-        # Reshape the subMxs into a "flattened" form (as opposed to a
+    if sum_up:
+        s = _np.shape(sub_mxs)
+        # Reshape the sub_mxs into a "flattened" form (as opposed to a
         # two-dimensional one)
-        reshape_subMxs = _np.array(_np.reshape(subMxs, (s[0] * s[1], s[2], s[3])))
+        reshape_subMxs = _np.array(_np.reshape(sub_mxs, (s[0] * s[1], s[2], s[3])))
 
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]  # noqa: E721,E501
@@ -424,13 +424,13 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
-        n_boxes = _np.sum(~_np.isnan(subMxs).flatten())
+        n_boxes = _np.sum(~_np.isnan(sub_mxs).flatten())
 
     return n_boxes, dof_per_box
 
 
-def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
-                          check=False, opLabelAliases=None,
+def _compute_probabilities(gss, model, dataset, prob_clip_interval=(-1e6, 1e6),
+                          check=False, op_label_aliases=None,
                           comm=None, smartc=None, wildcard=None):
     """
     Returns a dictionary of probabilities for each gate sequence in
@@ -452,13 +452,13 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
 
     # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
     bulk_probs = _np.zeros(evt.num_final_elements(), 'd')
-    smart(model.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm, _filledarrays=(0,))
+    smart(model.bulk_fill_probs, bulk_probs, evt, prob_clip_interval, check, comm, _filledarrays=(0,))
     # bulk_probs indexed by [element_index]
 
     if wildcard:
         freqs = _np.empty(evt.num_final_elements(), 'd')
-        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, opLabelAliases)
-        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, opLabelAliases)
+        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, op_label_aliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, op_label_aliases)
         for (i, opStr) in enumerate(ds_circuit_list):
             cnts = dataset[opStr].counts; total = sum(cnts.values())
             freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
@@ -473,17 +473,17 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6, 1e6),
 
 
 #@smart_cached
-def _computeSubMxs(gss, model, subMxCreationFn, dataset=None, subMxCreationFn_extra_arg=None):
+def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
     if model is not None: gss.simplify_plaquettes(model, dataset)
-    subMxs = [[subMxCreationFn(gss.get_plaquette(x, y), x, y, subMxCreationFn_extra_arg)
+    subMxs = [[sub_mx_creation_fn(gss.get_plaquette(x, y), x, y, sub_mx_creation_fn_extra_arg)
                for x in gss.used_xvals()] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
 
 
 @smart_cached
-def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
-                       minProbClipForWeighting=1e-4):
+def direct_chi2_matrix(gsplaq, gss, dataset, direct_model,
+                       min_prob_clip_for_weighting=1e-4):
     """
     Computes the Direct-X chi^2 matrix for a base circuit sigma.
 
@@ -507,34 +507,34 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    directModel : Model
+    direct_model : Model
         Model which contains an estimate of sigma stored
         under the operation label "GsigmaLbl".
 
-    minProbClipForWeighting : float, optional
+    min_prob_clip_for_weighting : float, optional
         defines the clipping interval for the statistical weight (see chi2fn).
 
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         Direct-X chi^2 values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
     if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
+        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
         plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
-        plaq_pr.simplify_circuits(directModel)
+        plaq_pr.simplify_circuits(direct_model)
 
         cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices(plaq_pr, directModel)  # no probs_precomp_dict
+        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
         freqs = frequency_matrices(plaq_ds, dataset)
 
         ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
         for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
                 plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
             chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
-                                   freqs[elIndices_ds], minProbClipForWeighting)
+                                   freqs[elIndices_ds], min_prob_clip_for_weighting)
             ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
 
         return ret
@@ -543,8 +543,8 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
 
 
 @smart_cached
-def direct_logl_matrix(gsplaq, gss, dataset, directModel,
-                       minProbClip=1e-6):
+def direct_logl_matrix(gsplaq, gss, dataset, direct_model,
+                       min_prob_clip=1e-6):
     """
     Computes the Direct-X log-likelihood matrix, containing the values
      of 2*( log(L)_upperbound - log(L) ) for a base circuit sigma.
@@ -569,33 +569,33 @@ def direct_logl_matrix(gsplaq, gss, dataset, directModel,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    directModel : Model
+    direct_model : Model
         Model which contains an estimate of sigma stored
         under the operation label "GsigmaLbl".
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         defines the minimum probability clipping.
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         Direct-X logL values corresponding to operation sequences where
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
     if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
+        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
         plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
-        plaq_pr.simplify_circuits(directModel)
+        plaq_pr.simplify_circuits(direct_model)
 
         cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices(plaq_pr, directModel)  # no probs_precomp_dict
+        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
         freqs = frequency_matrices(plaq_ds, dataset)
 
         ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
         for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
                 plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
             logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
-                                            freqs[elIndices_ds], minProbClip)
+                                            freqs[elIndices_ds], min_prob_clip)
             ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
         return ret
     else:
@@ -620,7 +620,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         log-likelihood-ratio values corresponding to the operation sequences
         where a base circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
@@ -651,7 +651,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         -log10(pvalues) for testing the "no drift" null hypothesis, using the "max power in
         spectra" test, on the relevant sequences. This operation sequences correspond to the
         operation sequences where a base circuit is sandwiched between the each prep-fiducial
@@ -691,7 +691,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
     Returns
     -------
-    numpy array of shape ( len(effectStrs), len(prepStrs) )
+    numpy array of shape ( len(effect_strs), len(prep_strs) )
         The max tvd for quantifying deviations from the data mean. This
         operation sequences correspond to the operation sequences where a base circuit
         is sandwiched between the each prep-fiducial and effect-fiducial pair.
@@ -730,7 +730,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
 #     Returns
 #     -------
-#     numpy array of shape ( len(effectStrs), len(prepStrs) )
+#     numpy array of shape ( len(effect_strs), len(prep_strs) )
 #         Matrix of max powers in the time-series power spectra forthe operation sequences where a
 #         base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
 
@@ -744,8 +744,8 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 #     return ret
 
 
-def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAll=False,
-                comm=None, smartc=None, minProbClip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
+def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return_all=False,
+                comm=None, smartc=None, min_prob_clip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `model` model at the "points" (sequences)
@@ -768,7 +768,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     objective : {"logl", "chi2"}
         Which objective function is used to compute the model violation.
 
-    Np : int, optional
+    np : int, optional
         The number of free parameters in the model.  If None, then
         `model.num_nongauge_params()` is used.
 
@@ -779,7 +779,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         the frequencies in `dataset`.  Currently, this functionality is only
         supported for `objective == "logl"`.
 
-    returnAll : bool, optional
+    return_all : bool, optional
         Returns additional information such as the raw and expected model
         violation (see below).
 
@@ -791,7 +791,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         A cache object to cache & use previously cached values inside this
         function.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
@@ -808,29 +808,29 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
 
     modelViolation : float
         The raw value of the objective function.  Only returned when
-        `returnAll==True`.
+        `return_all==True`.
 
     expectedViolation : float
         The expected value of the objective function.  Only returned when
-        `returnAll==True`.
+        `return_all==True`.
 
-    Ns, Np : int
+    Ns, np : int
         The number of dataset and model parameters, respectively. Only
-        returned when `returnAll==True`.
+        returned when `return_all==True`.
 
     """
     gstrs = gss.allstrs
     if objective == "chi2":
         assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
         fitQty = _tools.chi2(model, dataset, gstrs,
-                             minProbClipForWeighting=minProbClip,
-                             opLabelAliases=gss.aliases,
+                             min_prob_clip_for_weighting=min_prob_clip,
+                             op_label_aliases=gss.aliases,
                              comm=comm, smartc=smartc)
     elif objective == "logl":
-        logL_upperbound = _tools.logl_max(model, dataset, gstrs, opLabelAliases=gss.aliases,
+        logL_upperbound = _tools.logl_max(model, dataset, gstrs, op_label_aliases=gss.aliases,
                                           smartc=smartc)
-        logl = _tools.logl(model, dataset, gstrs, opLabelAliases=gss.aliases,
-                           minProbClip=minProbClip, comm=comm, smartc=smartc,
+        logl = _tools.logl(model, dataset, gstrs, op_label_aliases=gss.aliases,
+                           min_prob_clip=min_prob_clip, comm=comm, smartc=smartc,
                            wildcard=wildcard)
         fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
 
@@ -843,13 +843,13 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     ds_gstrs = _tools.apply_aliases_to_circuit_list(gstrs, gss.aliases)
 
     if hasattr(model, 'num_nongauge_params'):
-        Np = model.num_nongauge_params()
+        np = model.num_nongauge_params()
     else:
-        Np = model.num_params()
+        np = model.num_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
-    k = max(Ns - Np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
+    k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty - k) / _np.sqrt(2 * k)
-    if Ns <= Np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, Np))
+    if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))
     #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
     if Nsig <= 2: rating = 5
@@ -858,7 +858,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
     elif Nsig <= 500: rating = 2
     else: rating = 1
 
-    if returnAll:
-        return Nsig, rating, fitQty, k, Ns, Np
+    if return_all:
+        return Nsig, rating, fitQty, k, Ns, np
     else:
         return Nsig, rating

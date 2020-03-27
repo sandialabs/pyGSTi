@@ -78,7 +78,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         incomplete_strings = self.lgstStrings[5:]  # drop first 5 strings...
         bad_ds = pc.generate_fake_data(
             self.datagen_gateset, incomplete_strings,
-            nSamples=10, sampleError='none')
+            n_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.do_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,
@@ -89,7 +89,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         incomplete_strings = self.lgstStrings[:-5]  # drop last 5 strings...
         bad_ds = pc.generate_fake_data(
             self.datagen_gateset, incomplete_strings,
-            nSamples=10, sampleError='none')
+            n_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.do_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,

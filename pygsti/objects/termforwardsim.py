@@ -140,19 +140,19 @@ class TermForwardSimulator(ForwardSimulator):
         return TermForwardSimulator(self.dim, self.sos, self.paramvec,
                                     self.max_order, self.cache)
 
-    def _rhoE_from_spamTuple(self, spamTuple):
-        assert(len(spamTuple) == 2)
-        if isinstance(spamTuple[0], _Label):
-            rholabel, elabel = spamTuple
+    def _rho_e_from_spam_tuple(self, spam_tuple):
+        assert(len(spam_tuple) == 2)
+        if isinstance(spam_tuple[0], _Label):
+            rholabel, elabel = spam_tuple
             rho = self.sos.get_prep(rholabel)
             E = self.sos.get_effect(elabel)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
-            rho, E = spamTuple
+            rho, E = spam_tuple
         return rho, E
 
-    def _rhoEs_from_labels(self, rholabel, elabels):
+    def _rho_es_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.sos.get_prep(rholabel)
         Es = [self.sos.get_effect(elabel) for elabel in elabels]
@@ -187,41 +187,41 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho)  # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def prs_directly(self, evalTree, comm=None, memLimit=None, resetWts=True, repcache=None):
+    def prs_directly(self, eval_tree, comm=None, mem_limit=None, reset_wts=True, repcache=None):
 
-        prs = _np.empty(evalTree.num_final_elements(), 'd')
+        prs = _np.empty(eval_tree.num_final_elements(), 'd')
         #print("Computing prs directly for %d circuits" % len(circuit_list))
         if repcache is None: repcache = {}  # new repcache...
         k = 0   # *linear* evaluation order so we know final indices are just running
-        for i in evalTree.get_evaluation_order():
-            circuit = evalTree[i]
+        for i in eval_tree.get_evaluation_order():
+            circuit = eval_tree[i]
             #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
             assert(self.evotype == "svterm")  # for now, just do SV case
             fastmode = False  # start with slow mode
             wtTol = 0.1
             rholabel = circuit[0]
             opStr = circuit[1:]
-            elabels = evalTree.simplified_circuit_elabels[i]
+            elabels = eval_tree.simplified_circuit_elabels[i]
             prs[k:k + len(elabels)] = replib.SV_prs_directly(self, rholabel, elabels, opStr,
-                                                             repcache, comm, memLimit, fastmode, wtTol, resetWts,
+                                                             repcache, comm, mem_limit, fastmode, wtTol, reset_wts,
                                                              self.times_debug)
             k += len(elabels)
         #print("PRS = ",prs)
         return prs
 
-    def dprs_directly(self, evalTree, wrtSlice, comm=None, memLimit=None, resetWts=True, repcache=None):
+    def dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
         #Finite difference derivatives (SLOW!)
 
-        if wrtSlice is None:
+        if wrt_slice is None:
             wrt_indices = list(range(self.Np))
-        elif isinstance(wrtSlice, slice):
-            wrt_indices = _slct.indices(wrtSlice)
+        elif isinstance(wrt_slice, slice):
+            wrt_indices = _slct.indices(wrt_slice)
         else:
-            wrt_indices = wrtSlice
+            wrt_indices = wrt_slice
 
         eps = 1e-6  # HARDCODED
-        probs = self.prs_directly(evalTree, comm, memLimit, resetWts, repcache)
-        dprobs = _np.empty((evalTree.num_final_elements(), len(wrt_indices)), 'd')
+        probs = self.prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
+        dprobs = _np.empty((eval_tree.num_final_elements(), len(wrt_indices)), 'd')
         orig_vec = self.to_vector().copy()
         iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
         for i in range(self.Np):
@@ -230,10 +230,10 @@ class TermForwardSimulator(ForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.from_vector(vec, close=True)
-                dprobs[:, iFinal] = (self.prs_directly(evalTree,
+                dprobs[:, iFinal] = (self.prs_directly(eval_tree,
                                                        comm=None,
-                                                       memLimit=None,
-                                                       resetWts=False,
+                                                       mem_limit=None,
+                                                       reset_wts=False,
                                                        repcache=repcache) - probs) / eps
         self.from_vector(orig_vec, close=True)
         return dprobs
@@ -247,7 +247,7 @@ class TermForwardSimulator(ForwardSimulator):
     #                            opcache,
     #                            circuitsetup_cache,
     #                            comm=None,
-    #                            memLimit=None,
+    #                            mem_limit=None,
     #                            pathmagnitude_gap=0.0,
     #                            min_term_mag=0.01,
     #                            max_paths=500,
@@ -281,7 +281,7 @@ class TermForwardSimulator(ForwardSimulator):
     #         When not None, an MPI communicator for distributing the computation
     #         across multiple processors.
     #
-    #     memLimit : int, optional
+    #     mem_limit : int, optional
     #         A memory limit in bytes to impose on the computation.
     #
     #     pathmagnitude_gap : float, optional
@@ -337,12 +337,12 @@ class TermForwardSimulator(ForwardSimulator):
     #     if self.evotype == "svterm":
     #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
     #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-    #                                           comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag, max_paths,
+    #                                           comm, mem_limit, fastmode, pathmagnitude_gap, min_term_mag, max_paths,
     #                                           current_threshold, compute_polyreps)
     #         # sopm = "sum of path magnitudes"
     #     else:  # "cterm" (stabilizer-based term evolution)
     #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-    #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, memLimit,
+    #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, mem_limit,
     #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
     #                                           current_threshold, compute_polyreps)
     #
@@ -362,7 +362,7 @@ class TermForwardSimulator(ForwardSimulator):
                                opcache,
                                circuitsetup_cache,
                                comm=None,
-                               memLimit=None,
+                               mem_limit=None,
                                mode="normal"):
         """
         TODO: docstring - see OLD version
@@ -385,7 +385,7 @@ class TermForwardSimulator(ForwardSimulator):
         if self.evotype == "svterm":
             poly_reps = replib.SV_compute_pruned_path_polys_given_threshold(
                 threshold, self, rholabel, elabels, circuit, repcache,
-                opcache, circuitsetup_cache, comm, memLimit, fastmode)
+                opcache, circuitsetup_cache, comm, mem_limit, fastmode)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
@@ -405,7 +405,7 @@ class TermForwardSimulator(ForwardSimulator):
                                          opcache,
                                          circuitsetup_cache,
                                          comm=None,
-                                         memLimit=None,
+                                         mem_limit=None,
                                          threshold_guess=None):
         """
         TODO: docstring - see OLD version
@@ -423,7 +423,7 @@ class TermForwardSimulator(ForwardSimulator):
             npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_find_best_pathmagnitude_threshold(
                     self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                    comm, memLimit, self.desired_pathmagnitude_gap, self.min_term_mag,
+                    comm, mem_limit, self.desired_pathmagnitude_gap, self.min_term_mag,
                     self.max_paths_per_outcome, threshold_guess
                 )
             # sopm = "sum of path magnitudes"
@@ -440,8 +440,8 @@ class TermForwardSimulator(ForwardSimulator):
         else:
             raise NotImplementedError("TODO mimic SV case")
 
-    # LATER? , resetWts=True, repcache=None):
-    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
+    # LATER? , reset_wts=True, repcache=None):
+    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
         Computes polynomials of the probabilities for multiple spam-tuples of
         `circuit`, sharing the same state preparation (so with different
@@ -463,7 +463,7 @@ class TermForwardSimulator(ForwardSimulator):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A memory limit in bytes to impose on the computation.
 
         Returns
@@ -478,9 +478,9 @@ class TermForwardSimulator(ForwardSimulator):
 
         fastmode = True
         if self.evotype == "svterm":
-            poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, circuit, comm, memLimit, fastmode)
+            poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
         else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, circuit, comm, memLimit, fastmode)
+            poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
         prps = [_Polynomial.fromrep(rep) for rep in poly_reps]
 
         #Cache hold *compact* polys now: see prs_as_compact_polys
@@ -489,14 +489,14 @@ class TermForwardSimulator(ForwardSimulator):
         #        self.cache[ck] = poly
         return prps
 
-    def pr_as_poly(self, spamTuple, circuit, comm=None, memLimit=None):
+    def pr_as_poly(self, spam_tuple, circuit, comm=None, mem_limit=None):
         """
         Compute probability of a single "outcome" (spam-tuple) for a single
         operation sequence.
 
         Parameters
         ----------
-        spamTuple : (rho_label, simplified_effect_label)
+        spam_tuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
@@ -507,17 +507,17 @@ class TermForwardSimulator(ForwardSimulator):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A memory limit in bytes to impose on the computation.
 
         Returns
         -------
         Polynomial
         """
-        return self.prs_as_polys(spamTuple[0], [spamTuple[1]], circuit,
-                                 comm, memLimit)[0]
+        return self.prs_as_polys(spam_tuple[0], [spam_tuple[1]], circuit,
+                                 comm, mem_limit)[0]
 
-    def prs_as_compact_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
+    def prs_as_compact_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
         Computes compact-form polynomials of the probabilities for multiple
         spam-tuples of `circuit`, sharing the same state preparation (so
@@ -539,7 +539,7 @@ class TermForwardSimulator(ForwardSimulator):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A memory limit in bytes to impose on the computation.
 
         Returns
@@ -551,7 +551,7 @@ class TermForwardSimulator(ForwardSimulator):
         if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
             return [self.cache[ck] for ck in cache_keys]
 
-        raw_prps = self.prs_as_polys(rholabel, elabels, circuit, comm, memLimit)
+        raw_prps = self.prs_as_polys(rholabel, elabels, circuit, comm, mem_limit)
         prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
         # create compact polys w/*complex* coeffs always since we're likely
         # going to concatenate a bunch of them.
@@ -561,7 +561,7 @@ class TermForwardSimulator(ForwardSimulator):
                 self.cache[ck] = poly
         return prps
 
-    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False, time=None):
+    def prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
         operation sequence.  The spam tuples may only vary in their effect-label (their
@@ -579,11 +579,11 @@ class TermForwardSimulator(ForwardSimulator):
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
-        clipTo : 2-tuple
+        clip_to : 2-tuple
           (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+          Only relevant when pr_mx_to_fill is not None.
 
-        bUseScaling : bool, optional
+        use_scaling : bool, optional
           Unused.  Present to match function signature of other calculators.
 
         time : float, optional
@@ -600,10 +600,10 @@ class TermForwardSimulator(ForwardSimulator):
         vals = [_safe_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
                 for cpoly in cpolys]
         ps = _np.array([_np.real_if_close(val) for val in vals])
-        if clipTo is not None: ps = _np.clip(ps, clipTo[0], clipTo[1])
+        if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
         return ps
 
-    def dpr(self, spamTuple, circuit, returnPr, clipTo):
+    def dpr(self, spam_tuple, circuit, return_pr, clip_to):
         """
         Compute the derivative of a probability generated by a operation sequence and
         spam tuple as a 1 x M numpy array, where M is the number of model
@@ -611,19 +611,19 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, simplified_effect_label)
+        spam_tuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
-        returnPr : bool
+        return_pr : bool
           when set to True, additionally return the probability itself.
 
-        clipTo : 2-tuple
+        clip_to : 2-tuple
           (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+          Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
@@ -632,22 +632,22 @@ class TermForwardSimulator(ForwardSimulator):
             each model parameter (M is the length of the vectorized model).
 
         probability : float
-            only returned if returnPr == True.
+            only returned if return_pr == True.
         """
         dp = _np.empty((1, self.Np), 'd')
 
-        poly = self.pr_as_poly(spamTuple, circuit, comm=None, memLimit=None)
+        poly = self.pr_as_poly(spam_tuple, circuit, comm=None, mem_limit=None)
         for i in range(self.Np):
             dpoly_di = poly.deriv(i)
             dp[0, i] = dpoly_di.evaluate(self.paramvec)
 
-        if returnPr:
+        if return_pr:
             p = poly.evaluate(self.paramvec)
-            if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
+            if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
             return dp, p
         else: return dp
 
-    def hpr(self, spamTuple, circuit, returnPr, returnDeriv, clipTo):
+    def hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
         """
         Compute the Hessian of a probability generated by a operation sequence and
         spam tuple as a 1 x M x M array, where M is the number of model
@@ -655,23 +655,23 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, simplified_effect_label)
+        spam_tuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
-        returnPr : bool
+        return_pr : bool
           when set to True, additionally return the probability itself.
 
-        returnDeriv : bool
+        return_deriv : bool
           when set to True, additionally return the derivative of the
           probability.
 
-        clipTo : 2-tuple
+        clip_to : 2-tuple
           (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+          Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
@@ -681,34 +681,34 @@ class TermForwardSimulator(ForwardSimulator):
             k-th then the j-th model parameter.
 
         derivative : numpy array
-            only returned if returnDeriv == True. A 1 x M numpy array of
+            only returned if return_deriv == True. A 1 x M numpy array of
             derivatives of the probability w.r.t. each model parameter.
 
         probability : float
-            only returned if returnPr == True.
+            only returned if return_pr == True.
         """
         hp = _np.empty((1, self.Np, self.Np), 'd')
-        if returnDeriv:
+        if return_deriv:
             dp = _np.empty((1, self.Np), 'd')
 
-        poly = self.pr_as_poly(spamTuple, circuit, comm=None, memLimit=None)
+        poly = self.pr_as_poly(spam_tuple, circuit, comm=None, mem_limit=None)
         for j in range(self.Np):
             dpoly_dj = poly.deriv(j)
-            if returnDeriv:
+            if return_deriv:
                 dp[0, j] = dpoly_dj.evaluate(self.paramvec)
 
             for i in range(self.Np):
                 dpoly_didj = dpoly_dj.deriv(i)
                 hp[0, i, j] = dpoly_didj.evaluate(self.paramvec)
 
-        if returnPr:
+        if return_pr:
             p = poly.evaluate(self.paramvec)
-            if clipTo is not None: p = _np.clip(p, clipTo[0], clipTo[1])
+            if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
 
-            if returnDeriv: return hp, dp, p
+            if return_deriv: return hp, dp, p
             else: return hp, p
         else:
-            if returnDeriv: return hp, dp
+            if return_deriv: return hp, dp
             else: return hp
 
     def default_distribute_method(self):
@@ -717,7 +717,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         return "circuits"
 
-    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
+    def construct_evaltree(self, simplified_circuits, num_subtree_comms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -732,7 +732,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         TODO: docstring opcache
 
-        numSubtreeComms : int
+        num_subtree_comms : int
             The number of processor groups that will be assigned to
             subtrees of the created tree.  This aids in the tree construction
             by giving the tree information it needs to distribute itself
@@ -743,7 +743,7 @@ class TermForwardSimulator(ForwardSimulator):
         TermEvalTree
         """
         evTree = _TermEvalTree()
-        evTree.initialize(simplified_circuits, numSubtreeComms)
+        evTree.initialize(simplified_circuits, num_subtree_comms)
         return evTree
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
@@ -780,7 +780,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         num_final_strs : int
             The number of final strings (may be less than or greater than
-            `cacheSize`) the tree will hold.
+            `cache_size`) the tree will hold.
 
         Returns
         -------
@@ -809,35 +809,35 @@ class TermForwardSimulator(ForwardSimulator):
 
         return mem * FLOATSIZE
 
-    def _fill_probs_block(self, mxToFill, dest_indices, evalTree, comm=None, memLimit=None):
-        nEls = evalTree.num_final_elements()
+    def _fill_probs_block(self, mx_to_fill, dest_indices, eval_tree, comm=None, mem_limit=None):
+        nEls = eval_tree.num_final_elements()
         if self.mode == "direct":
-            probs = self.prs_directly(evalTree, comm, memLimit)  # could make into a fill_routine?
+            probs = self.prs_directly(eval_tree, comm, mem_limit)  # could make into a fill_routine?
         else:  # "pruned" or "taylor order"
-            polys = evalTree.merged_compact_polys
+            polys = eval_tree.merged_compact_polys
             probs = _safe_bulk_eval_compact_polys(
                 polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
-        _fas(mxToFill, [dest_indices], probs)
+        _fas(mx_to_fill, [dest_indices], probs)
 
-    def _fill_dprobs_block(self, mxToFill, dest_indices, dest_param_indices, evalTree, param_slice, comm=None,
-                           memLimit=None):
+    def _fill_dprobs_block(self, mx_to_fill, dest_indices, dest_param_indices, eval_tree, param_slice, comm=None,
+                           mem_limit=None):
         if param_slice is None: param_slice = slice(0, self.Np)
         if dest_param_indices is None: dest_param_indices = slice(0, _slct.length(param_slice))
 
         if self.mode == "direct":
-            dprobs = self.dprs_directly(evalTree, param_slice, comm, memLimit)
+            dprobs = self.dprs_directly(eval_tree, param_slice, comm, mem_limit)
         else:  # "pruned" or "taylor order"
             # evaluate derivative of polys
-            nEls = evalTree.num_final_elements()
-            polys = evalTree.merged_compact_polys
+            nEls = eval_tree.num_final_elements()
+            polys = eval_tree.merged_compact_polys
             wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
             dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
             dprobs = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], self.paramvec, (nEls, len(wrtInds)))
-        _fas(mxToFill, [dest_indices, dest_param_indices], dprobs)
+        _fas(mx_to_fill, [dest_indices, dest_param_indices], dprobs)
 
-    def _fill_hprobs_block(self, mxToFill, dest_indices, dest_param_indices1,
-                           dest_param_indices2, evalTree, param_slice1, param_slice2,
-                           comm=None, memLimit=None):
+    def _fill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1,
+                           dest_param_indices2, eval_tree, param_slice1, param_slice2,
+                           comm=None, mem_limit=None):
         if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.Np)
         if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.Np)
         if dest_param_indices1 is None: dest_param_indices1 = slice(0, _slct.length(param_slice1))
@@ -845,28 +845,28 @@ class TermForwardSimulator(ForwardSimulator):
 
         if self.mode == "direct":
             raise NotImplementedError("hprobs does not support direct path-integral evaluation yet")
-            # hprobs = self.hprs_directly(evalTree, ...)
+            # hprobs = self.hprs_directly(eval_tree, ...)
         else:  # "pruned" or "taylor order"
             # evaluate derivative of polys
-            nEls = evalTree.num_final_elements()
-            polys = evalTree.merged_compact_polys
+            nEls = eval_tree.num_final_elements()
+            polys = eval_tree.merged_compact_polys
             wrtInds1 = _np.ascontiguousarray(_slct.indices(param_slice1), _np.int64)
             wrtInds2 = _np.ascontiguousarray(_slct.indices(param_slice2), _np.int64)
             dpolys = _compact_deriv(polys[0], polys[1], wrtInds1)
             hpolys = _compact_deriv(dpolys[0], dpolys[1], wrtInds2)
             hprobs = _safe_bulk_eval_compact_polys(
                 hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
-        _fas(mxToFill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
+        _fas(mx_to_fill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
-    def bulk_test_if_paths_are_sufficient(self, evalTree, probs, comm, memLimit, printer):
+    def bulk_test_if_paths_are_sufficient(self, eval_tree, probs, comm, mem_limit, printer):
         """TODO: docstring
            returns nFailures, failed_circuits """
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
         # # done in bulk_get_achieved_and_max_sopm
-        # replib.SV_refresh_magnitudes_in_repcache(evalTree.highmag_termrep_cache, self.to_vector())
-        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
+        # replib.SV_refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
+        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(eval_tree, comm, mem_limit)
         # a strict bound on the error in each outcome probability, but often pessimistic
         gaps = max_sopm - achieved_sopm
         assert(_np.all(gaps >= 0))
@@ -896,20 +896,20 @@ class TermForwardSimulator(ForwardSimulator):
 
         return True
 
-    def bulk_get_achieved_and_max_sopm(self, evalTree, comm=None, memLimit=None):
+    def bulk_get_achieved_and_max_sopm(self, eval_tree, comm=None, mem_limit=None):
         """TODO: docstring """
 
         assert(self.mode == "pruned")
-        max_sopm = _np.empty(evalTree.num_final_elements(), 'd')
-        achieved_sopm = _np.empty(evalTree.num_final_elements(), 'd')
+        max_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
+        achieved_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
 
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(evalTree)
+            felInds = evalSubTree.final_element_indices(eval_tree)
 
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
@@ -918,7 +918,7 @@ class TermForwardSimulator(ForwardSimulator):
             _fas(achieved_sopm, [felInds], achieved)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
                              max_sopm, [], 0, comm)
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
@@ -926,9 +926,9 @@ class TermForwardSimulator(ForwardSimulator):
 
         return max_sopm, achieved_sopm
 
-    def bulk_get_sopm_gaps(self, evalTree, comm=None, memLimit=None):
+    def bulk_get_sopm_gaps(self, eval_tree, comm=None, mem_limit=None):
         """TODO: docstring  """
-        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(evalTree, comm, memLimit)
+        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(eval_tree, comm, mem_limit)
         gaps = max_sopm - achieved_sopm
         # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
         assert(_np.all(gaps >= -1e-6))
@@ -936,18 +936,18 @@ class TermForwardSimulator(ForwardSimulator):
 
         return gaps
 
-    def bulk_get_sopm_gaps_jacobian(self, evalTree, comm=None, memLimit=None):
+    def bulk_get_sopm_gaps_jacobian(self, eval_tree, comm=None, mem_limit=None):
         """TODO: docstring """
 
         assert(self.mode == "pruned")
-        termgap_penalty_jac = _np.empty((evalTree.num_final_elements(), self.Np), 'd')
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        termgap_penalty_jac = _np.empty((eval_tree.num_final_elements(), self.Np), 'd')
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(evalTree)
+            felInds = evalSubTree.final_element_indices(eval_tree)
 
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
@@ -957,62 +957,62 @@ class TermForwardSimulator(ForwardSimulator):
             _fas(termgap_penalty_jac, [felInds], gap_jacs)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
                              termgap_penalty_jac, [], 0, comm)
 
         return termgap_penalty_jac
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def find_minimal_paths_set(self, evalTree, comm=None, memLimit=None, exit_after_this_many_failures=0):
+    def find_minimal_paths_set(self, eval_tree, comm=None, mem_limit=None, exit_after_this_many_failures=0):
         """
         TODO: docstring
         """
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
         local_subtree_pathsets = []  # call this list of TermPathSets for each subtree a "pathset" too
 
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             if self.mode == "pruned":
-                subPathSet = evalSubTree.find_minimal_paths_set(self, mySubComm, memLimit,
+                subPathSet = evalSubTree.find_minimal_paths_set(self, mySubComm, mem_limit,
                                                                 exit_after_this_many_failures)
             else:
                 subPathSet = _UnsplitTreeTermPathSet(evalSubTree, None, None, None, 0, 0, 0)
             local_subtree_pathsets.append(subPathSet)
 
-        return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+        return _SplitTreeTermPathSet(eval_tree, local_subtree_pathsets, comm)
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def select_paths_set(self, pathSet, comm=None, memLimit=None):
+    def select_paths_set(self, path_set, comm=None, mem_limit=None):
         """
         TODO: docstring
         """
-        evalTree = pathSet.tree
+        evalTree = path_set.tree
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
-        for iSubTree, subtree_pathset in zip(mySubTreeIndices, pathSet.local_subtree_pathsets):
+        for iSubTree, subtree_pathset in zip(mySubTreeIndices, path_set.local_subtree_pathsets):
             evalSubTree = subtrees[iSubTree]
 
             if self.mode == "pruned":
-                evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, memLimit)
+                evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, mem_limit)
                 #This computes (&caches) polys for this path set as well
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
 
-    def get_current_pathset(self, evalTree, comm):
+    def get_current_pathset(self, eval_tree, comm):
         """ TODO: docstring """
         if self.mode == "pruned":
-            subtrees = evalTree.get_sub_trees()
-            mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+            subtrees = eval_tree.get_sub_trees()
+            mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
             local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
-            return _SplitTreeTermPathSet(evalTree, local_subtree_pathsets, comm)
+            return _SplitTreeTermPathSet(eval_tree, local_subtree_pathsets, comm)
         else:
             return None
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+    def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -1021,19 +1021,19 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
             The evaluation tree used to define a list of circuits and hold (cache)
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of `evalTree` (if it is split).
+           subtrees of `eval_tree` (if it is split).
 
-        memLimit : TODO: docstring
+        mem_limit : TODO: docstring
         """
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
         nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
@@ -1042,12 +1042,12 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
 
             if self.mode == "pruned":
-                #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, memLimit, self.pathmagnitude_gap,
+                #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, mem_limit, self.pathmagnitude_gap,
                 #                                           self.min_term_mag, self.max_paths_per_outcome)
                 pathset = evalSubTree.find_minimal_paths_set(
-                    self, mySubComm, memLimit, exit_after_this_many_failures=0)  # pruning_thresholds_and_highmag_terms
+                    self, mySubComm, mem_limit, exit_after_this_many_failures=0)  # pruning_thresholds_and_highmag_terms
                 # this sets these as internal cached qtys
-                evalSubTree.select_paths_set(self, pathset, mySubComm, memLimit)
+                evalSubTree.select_paths_set(self, pathset, mySubComm, mem_limit)
             else:
                 evalSubTree.cache_p_polys(self, mySubComm)
                 pathset = _TermPathSet(evalSubTree, 0, 0, 0)
@@ -1060,34 +1060,34 @@ class TermForwardSimulator(ForwardSimulator):
             _warnings.warn(("Unable to find a path set that achieves the desired "
                             "pathmagnitude gap (%d circuits failed)") % nTotFailed)
 
-    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
+    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False,
                         comm=None):
         """
         Compute the outcome probabilities for an entire tree of operation sequences.
 
-        This routine fills a 1D array, `mxToFill` with the probabilities
+        This routine fills a 1D array, `mx_to_fill` with the probabilities
         corresponding to the *simplified* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
+        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
         must have length equal to the number of final elements (this can be
-        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings
         generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. evalTree.num_final_elements())
+          total number of computed elements (i.e. eval_tree.num_final_elements())
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1098,7 +1098,7 @@ class TermForwardSimulator(ForwardSimulator):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
+           subtrees of eval_tree (if it is split).
 
 
         Returns
@@ -1107,56 +1107,56 @@ class TermForwardSimulator(ForwardSimulator):
         """
 
         #get distribution across subtrees (groups if needed)
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
 
-            felInds = evalSubTree.final_element_indices(evalTree)
-            self._fill_probs_block(mxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
+            felInds = evalSubTree.final_element_indices(eval_tree)
+            self._fill_probs_block(mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill, [], 0, comm)
-        #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
+                             mx_to_fill, [], 0, comm)
+        #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
 
-        if clipTo is not None:
-            _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
+        if clip_to is not None:
+            _np.clip(mx_to_fill, clip_to[0], clip_to[1], out=mx_to_fill)  # in-place clip
 
 #Will this work?? TODO
 #        if check:
-#            self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
+#            self._check(eval_tree, spam_label_rows, mx_to_fill, clip_to=clip_to)
 
-    def bulk_fill_dprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, clipTo=None, check=False,
-                         comm=None, wrtFilter=None, wrtBlockSize=None,
-                         profiler=None, gatherMemLimit=None):
+    def bulk_fill_dprobs(self, mx_to_fill, eval_tree,
+                         pr_mx_to_fill=None, clip_to=None, check=False,
+                         comm=None, wrt_filter=None, wrt_block_size=None,
+                         profiler=None, gather_mem_limit=None):
         """
         Compute the outcome probability-derivatives for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `evalTree`.
+        probability-derivatives for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M is the
+          computed elements (i.e. eval_tree.num_final_elements()) and M is the
           number of model parameters.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1167,29 +1167,29 @@ class TermForwardSimulator(ForwardSimulator):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter : list of ints, optional
+        wrt_filter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
           internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
+          in conjuction with wrt_block_size.
 
-        wrtBlockSize : int or float, optional
+        wrt_block_size : int or float, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
+          at once.  The  minimum of wrt_block_size and the size that makes
           maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
+          This argument must be None if wrt_filter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -1202,37 +1202,37 @@ class TermForwardSimulator(ForwardSimulator):
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
-        if wrtFilter is not None:
-            assert(wrtBlockSize is None)  # Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice = _slct.list_to_slice(wrtFilter)  # for now, require the filter specify a slice
+        if wrt_filter is not None:
+            assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
+            wrtSlice = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
         else:
             wrtSlice = None
 
         profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
-                           % (mxToFill.nbytes / (1024.0**3)))
+                           % (mx_to_fill.nbytes / (1024.0**3)))
 
         #get distribution across subtrees (groups if needed)
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(evalTree)
+            felInds = evalSubTree.final_element_indices(eval_tree)
             #nEls = evalSubTree.num_final_elements()
 
-            if prMxToFill is not None:
-                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
+            if pr_mx_to_fill is not None:
+                self._fill_probs_block(pr_mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
 
-            #Set wrtBlockSize to use available processors if it isn't specified
-            blkSize = self._setParamBlockSize(wrtFilter, wrtBlockSize, mySubComm)
+            #Set wrt_block_size to use available processors if it isn't specified
+            blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, mySubComm)
 
             if blkSize is None:
-                self._fill_dprobs_block(mxToFill, felInds, None, evalSubTree, wrtSlice, mySubComm, memLimit=None)
+                self._fill_dprobs_block(mx_to_fill, felInds, None, evalSubTree, wrtSlice, mySubComm, mem_limit=None)
                 profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
-                assert(wrtFilter is None)  # cannot specify both wrtFilter and blkSize
+                assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
                 nBlks = int(_np.ceil(self.Np / blkSize))
                 # num blocks required to achieve desired average size == blkSize
                 blocks = _mpit.slice_up_range(self.Np, nBlks)
@@ -1247,40 +1247,40 @@ class TermForwardSimulator(ForwardSimulator):
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_dprobs_block(mxToFill, felInds, paramSlice, evalSubTree, paramSlice,
-                                            blkComm, memLimit=None)
+                    self._fill_dprobs_block(mx_to_fill, felInds, paramSlice, evalSubTree, paramSlice,
+                                            blkComm, mem_limit=None)
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
                 tm = _time.time()
-                _mpit.gather_slices(blocks, blkOwners, mxToFill, [felInds],
-                                    1, mySubComm, gatherMemLimit)
-                #note: gathering axis 1 of mxToFill[:,fslc], dim=(ks,M)
+                _mpit.gather_slices(blocks, blkOwners, mx_to_fill, [felInds],
+                                    1, mySubComm, gather_mem_limit)
+                #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
                 profiler.mem_check("bulk_fill_dprobs: post gather blocks")
 
         #collect/gather results
         tm = _time.time()
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill, [], 0, comm, gatherMemLimit)
-        #note: pass mxToFill, dim=(KS,M), so gather mxToFill[felInds] (axis=0)
+                             mx_to_fill, [], 0, comm, gather_mem_limit)
+        #note: pass mx_to_fill, dim=(KS,M), so gather mx_to_fill[felInds] (axis=0)
 
-        if prMxToFill is not None:
+        if pr_mx_to_fill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 prMxToFill, [], 0, comm)
-            #note: pass prMxToFill, dim=(KS,), so gather prMxToFill[felInds] (axis=0)
+                                 pr_mx_to_fill, [], 0, comm)
+            #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
 
         profiler.add_time("MPI IPC", tm)
         profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
 
-        if clipTo is not None and prMxToFill is not None:
-            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
+        if clip_to is not None and pr_mx_to_fill is not None:
+            _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
 
         #TODO: will this work?
         #if check:
-        #    self._check(evalTree, spam_label_rows, prMxToFill, mxToFill,
-        #                clipTo=clipTo)
+        #    self._check(eval_tree, spam_label_rows, pr_mx_to_fill, mx_to_fill,
+        #                clip_to=clip_to)
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
@@ -1289,29 +1289,29 @@ class TermForwardSimulator(ForwardSimulator):
         #                     't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
         #                     'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
 
-    def bulk_fill_hprobs(self, mxToFill, evalTree,
-                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None,
-                         clipTo=None, check=False, comm=None, wrtFilter1=None, wrtFilter2=None,
-                         wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
+    def bulk_fill_hprobs(self, mx_to_fill, eval_tree,
+                         pr_mx_to_fill=None, deriv1_mx_to_fill=None, deriv2_mx_to_fill=None,
+                         clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
+                         wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
         """
         Compute the outcome probability-Hessians for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
-        probability-Hessians for each "final element" of `evalTree`.
+        probability-Hessians for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
+          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
@@ -1319,9 +1319,9 @@ class TermForwardSimulator(ForwardSimulator):
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
           where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
+          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1332,28 +1332,28 @@ class TermForwardSimulator(ForwardSimulator):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtFilter1, wrtFilter2 : list of ints, optional
+        wrt_filter1, wrt_filter2 : list of ints, optional
           If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+        wrt_block_size2, wrt_block_size2 : int or float, optional
           The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          rows or columns at once.  The  minimum of wrt_block_size and the size
           that makes maximal use of available processors is used as the final
           block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
+          wrt_filter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -1362,21 +1362,21 @@ class TermForwardSimulator(ForwardSimulator):
         None
         """
 
-        if wrtFilter1 is not None:
-            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice1 = _slct.list_to_slice(wrtFilter1)  # for now, require the filter specify a slice
+        if wrt_filter1 is not None:
+            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
         else:
             wrtSlice1 = None
 
-        if wrtFilter2 is not None:
-            assert(wrtBlockSize1 is None and wrtBlockSize2 is None)  # Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice2 = _slct.list_to_slice(wrtFilter2)  # for now, require the filter specify a slice
+        if wrt_filter2 is not None:
+            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
         else:
             wrtSlice2 = None
 
         #get distribution across subtrees (groups if needed)
-        subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        subtrees = eval_tree.get_sub_trees()
+        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         if self.mode == "direct":
             raise NotImplementedError("hprobs does not support direct path-integral evaluation")
@@ -1384,31 +1384,31 @@ class TermForwardSimulator(ForwardSimulator):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(evalTree)
+            felInds = evalSubTree.final_element_indices(eval_tree)
 
-            if prMxToFill is not None:
-                self._fill_probs_block(prMxToFill, felInds, evalSubTree, mySubComm, memLimit=None)
+            if pr_mx_to_fill is not None:
+                self._fill_probs_block(pr_mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
 
-            #Set wrtBlockSize to use available processors if it isn't specified
-            blkSize1 = self._setParamBlockSize(wrtFilter1, wrtBlockSize1, mySubComm)
-            blkSize2 = self._setParamBlockSize(wrtFilter2, wrtBlockSize2, mySubComm)
+            #Set wrt_block_size to use available processors if it isn't specified
+            blkSize1 = self._set_param_block_size(wrt_filter1, wrt_block_size1, mySubComm)
+            blkSize2 = self._set_param_block_size(wrt_filter2, wrt_block_size2, mySubComm)
 
             if blkSize1 is None and blkSize2 is None:
 
-                if deriv1MxToFill is not None:
-                    self._fill_dprobs_block(deriv1MxToFill, felInds, None, evalSubTree, wrtSlice1,
-                                            mySubComm, memLimit=None)
-                if deriv2MxToFill is not None:
-                    if deriv1MxToFill is not None and wrtSlice1 == wrtSlice2:
-                        deriv2MxToFill[felInds, :] = deriv1MxToFill[felInds, :]
+                if deriv1_mx_to_fill is not None:
+                    self._fill_dprobs_block(deriv1_mx_to_fill, felInds, None, evalSubTree, wrtSlice1,
+                                            mySubComm, mem_limit=None)
+                if deriv2_mx_to_fill is not None:
+                    if deriv1_mx_to_fill is not None and wrtSlice1 == wrtSlice2:
+                        deriv2_mx_to_fill[felInds, :] = deriv1_mx_to_fill[felInds, :]
                     else:
-                        self._fill_dprobs_block(deriv2MxToFill, felInds, None, evalSubTree, wrtSlice2,
-                                                mySubComm, memLimit=None)
-                self.fill_hprobs_block(mxToFill, felInds, None, None, evalTree,
-                                       wrtSlice1, wrtSlice2, mySubComm, memLimit=None)
+                        self._fill_dprobs_block(deriv2_mx_to_fill, felInds, None, evalSubTree, wrtSlice2,
+                                                mySubComm, mem_limit=None)
+                self.fill_hprobs_block(mx_to_fill, felInds, None, None, eval_tree,
+                                       wrtSlice1, wrtSlice2, mySubComm, mem_limit=None)
 
             else:  # Divide columns into blocks of at most blkSize
-                assert(wrtFilter1 is None and wrtFilter2 is None)  # cannot specify both wrtFilter and blkSize
+                assert(wrt_filter1 is None and wrt_filter2 is None)  # cannot specify both wrt_filter and blkSize
                 nBlks1 = int(_np.ceil(self.Np / blkSize1))
                 nBlks2 = int(_np.ceil(self.Np / blkSize2))
                 # num blocks required to achieve desired average size == blkSize1 or blkSize2
@@ -1429,54 +1429,54 @@ class TermForwardSimulator(ForwardSimulator):
 
                 #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
                 # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                derivMxToFill = deriv1MxToFill if (deriv1MxToFill is not None) else deriv2MxToFill  # first non-None
+                derivMxToFill = deriv1_mx_to_fill if (deriv1_mx_to_fill is not None) else deriv2_mx_to_fill  # first non-None
 
                 for iBlk1 in myBlk1Indices:
                     paramSlice1 = blocks1[iBlk1]
                     if derivMxToFill is not None:
                         self._fill_dprobs_block(derivMxToFill, felInds, paramSlice1, evalSubTree, paramSlice1,
-                                                blk1Comm, memLimit=None)
+                                                blk1Comm, mem_limit=None)
 
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]
-                        self.fill_hprobs_block(mxToFill, felInds, paramSlice1, paramSlice2, evalTree,
-                                               paramSlice1, paramSlice2, blk2Comm, memLimit=None)
+                        self.fill_hprobs_block(mx_to_fill, felInds, paramSlice1, paramSlice2, eval_tree,
+                                               paramSlice1, paramSlice2, blk2Comm, mem_limit=None)
 
-                    #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds, blocks1[iBlk1]],
-                                        2, blk1Comm, gatherMemLimit)
+                    #gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
+                    _mpit.gather_slices(blocks2, blk2Owners, mx_to_fill, [felInds, blocks1[iBlk1]],
+                                        2, blk1Comm, gather_mem_limit)
 
-                #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, mxToFill, [felInds],
-                                    1, mySubComm, gatherMemLimit)
-                if deriv1MxToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill, [felInds],
-                                        1, mySubComm, gatherMemLimit)
-                if deriv2MxToFill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill, [felInds],
-                                        1, blk1Comm, gatherMemLimit)
-                    #Note: deriv2MxToFill gets computed on every inner loop completion
+                #gather row results; gather axis 1 of mx_to_fill[felInds], dim=(ks,M,M)
+                _mpit.gather_slices(blocks1, blk1Owners, mx_to_fill, [felInds],
+                                    1, mySubComm, gather_mem_limit)
+                if deriv1_mx_to_fill is not None:
+                    _mpit.gather_slices(blocks1, blk1Owners, deriv1_mx_to_fill, [felInds],
+                                        1, mySubComm, gather_mem_limit)
+                if deriv2_mx_to_fill is not None:
+                    _mpit.gather_slices(blocks2, blk2Owners, deriv2_mx_to_fill, [felInds],
+                                        1, blk1Comm, gather_mem_limit)
+                    #Note: deriv2_mx_to_fill gets computed on every inner loop completion
                     # (to save mem) but isn't gathered until now (but using blk1Comm).
-                    # (just as prMxToFill is computed fully on each inner loop *iteration*!)
+                    # (just as pr_mx_to_fill is computed fully on each inner loop *iteration*!)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(evalTree) for t in subtrees]
+        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
         _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mxToFill, [], 0, comm, gatherMemLimit)
-        if deriv1MxToFill is not None:
+                             mx_to_fill, [], 0, comm, gather_mem_limit)
+        if deriv1_mx_to_fill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv1MxToFill, [], 0, comm, gatherMemLimit)
-        if deriv2MxToFill is not None:
+                                 deriv1_mx_to_fill, [], 0, comm, gather_mem_limit)
+        if deriv2_mx_to_fill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv2MxToFill, [], 0, comm, gatherMemLimit)
-        if prMxToFill is not None:
+                                 deriv2_mx_to_fill, [], 0, comm, gather_mem_limit)
+        if pr_mx_to_fill is not None:
             _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 prMxToFill, [], 0, comm)
+                                 pr_mx_to_fill, [], 0, comm)
 
-        if clipTo is not None and prMxToFill is not None:
-            _np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)  # in-place clip
+        if clip_to is not None and pr_mx_to_fill is not None:
+            _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
 
         #TODO: check if this works
         #if check:
-        #    self._check(evalTree, spam_label_rows,
-        #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
+        #    self._check(eval_tree, spam_label_rows,
+        #                pr_mx_to_fill, deriv1_mx_to_fill, mx_to_fill, clip_to)

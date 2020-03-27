@@ -25,9 +25,9 @@ def main():
     test = partial(test_options, gs, gs_target)
 
     defaultOptions = {
-            'itemWeights' : {'spam' : 0.0001, 'gates' : 1.0},
-            'spamMetric'  : 'frobenius',
-            'gatesMetric' : 'frobenius'}
+            'item_weights' : {'spam' : 0.0001, 'gates' : 1.0},
+            'spam_metric'  : 'frobenius',
+            'gates_metric' : 'frobenius'}
 
     test(defaultOptions, iterations=10000)
 

@@ -26,12 +26,12 @@ class DriversTestCase(BaseTestCase):
             datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
             ds = pygsti.construction.generate_fake_data(
                 datagen_gateset, self.lsgstStrings[-1],
-                nSamples=1000,sampleError='binomial', seed=100)
+                n_samples=1000,sample_error='binomial', seed=100)
             ds.save(compare_files + "/drivers.dataset")
 
 class TestDriversMethods(DriversTestCase):
     def test_longSequenceGST_fiducialPairReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         maxLens = self.maxLens
 
         #Make list-of-lists of GST operation sequences
@@ -45,12 +45,12 @@ class TestDriversMethods(DriversTestCase):
         #Global FPR
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.target_model(), std.fiducials, std.fiducials, std.germs,
-            searchMode="random", nRandom=100, seed=1234,
-            verbosity=1, memLimit=int(2*(1024)**3), minimumPairs=2)
+            search_mode="random", n_random=100, seed=1234,
+            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
 
         gfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairs)
+            fid_pairs=fidPairs)
 
         lens = [ len(strct.allstrs) for strct in gfprStructs ]
         #self.assertEqual(lens, [92,100,130]) #,163,196,229]
@@ -59,7 +59,7 @@ class TestDriversMethods(DriversTestCase):
 
         gfprExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairs)
+            fid_pairs=fidPairs)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.target_model(), gfprStructs, verbosity=0)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_GFPR",
@@ -69,13 +69,13 @@ class TestDriversMethods(DriversTestCase):
         #Per-germ FPR
         fidPairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ(
             std.target_model(), std.fiducials, std.fiducials, std.germs,
-            searchMode="random", constrainToTP=True,
-            nRandom=100, seed=1234, verbosity=1,
-            memLimit=int(2*(1024)**3))
+            search_mode="random", constrain_to_tp=True,
+            n_random=100, seed=1234, verbosity=1,
+            mem_limit=int(2*(1024)**3))
 
         pfprStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairsDict) #note: fidPairs arg can be a dict too!
+            fid_pairs=fidPairsDict) #note: fidPairs arg can be a dict too!
 
         lens = [ len(strct.allstrs) for strct in pfprStructs ]
         #self.assertEqual(lens, [92,99,138]) # ,185,233,281]
@@ -85,7 +85,7 @@ class TestDriversMethods(DriversTestCase):
 
         pfprExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
-            fidPairs=fidPairsDict)
+            fid_pairs=fidPairsDict)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.target_model(), pfprStructs, verbosity=0)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_PFPR",
@@ -94,7 +94,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_randomReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
         maxLens = self.maxLens
 
@@ -102,10 +102,10 @@ class TestDriversMethods(DriversTestCase):
         fidPairs = None
         reducedLists = pygsti.construction.make_lsgst_structs(
             std.target_model().operations.keys(), std.fiducials, std.fiducials, std.germs,
-            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+            maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result = self.runSilent(pygsti.do_long_sequence_gst_base,
             ds, std.target_model(), reducedLists,
-            advancedOptions={'truncScheme': ts})
+            advanced_options={'truncScheme': ts})
 
         #create a report...
         pygsti.report.create_standard_report(result, temp_files + "/full_report_RFPR",
@@ -116,17 +116,17 @@ class TestDriversMethods(DriversTestCase):
             std.target_model(), std.fiducials, std.fiducials, std.germs, verbosity=0)
         reducedLists = pygsti.construction.make_lsgst_structs(
             std.target_model().operations.keys(), std.fiducials, std.fiducials, std.germs,
-            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+            maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result2 = self.runSilent(pygsti.do_long_sequence_gst_base,
                                  ds, std.target_model(), reducedLists,
-                                 advancedOptions={'truncScheme': ts})
+                                 advanced_options={'truncScheme': ts})
 
         #create a report...
         pygsti.report.create_standard_report(result2, temp_files + "/full_report_RFPR2.html",
                                              verbosity=2)
 
     def test_longSequenceGST_CPTP(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
@@ -142,7 +142,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_Sonly(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("S")
@@ -159,7 +159,7 @@ class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_GLND(self):
         #General Lindbladian parameterization (allowed to be non-CPTP)
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
 
@@ -181,7 +181,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_HplusS(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
 
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S")
@@ -198,21 +198,21 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_badfit(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, advancedOptions={'truncScheme': ts,
+                                std.germs, maxLens, advanced_options={'truncScheme': ts,
                                                                      'badFitThreshold': -100})
 
         pygsti.report.create_standard_report(result, temp_files + "/full_report_badfit",
                                              "badfit report", verbosity=2)
 
     def test_stdpracticeGST(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         mdl_guess = std.target_model().depolarize(op_noise=0.01,spam_noise=0.01)
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
@@ -220,14 +220,14 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_stdpractice_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
                                 std.germs, maxLens, modes="TP,CPTP,Test,Target",
-                                modelsToTest = {"Test": mdl_guess},
-                                comm=None, memLimit=None, verbosity=5)
+                                models_to_test = {"Test": mdl_guess},
+                                comm=None, mem_limit=None, verbosity=5)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_stdpractice",
                                              "Std Practice Test Report", verbosity=2)
 
     def test_bootstrap(self):
         """Test bootstrap model generation"""
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
         mdl = pygsti.do_lgst(ds, std.fiducials, std.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0)
@@ -235,15 +235,15 @@ class TestDriversMethods(DriversTestCase):
         default_maxLens = [0]+[2**k for k in range(10)]
         circuits = pygsti.construction.make_lsgst_experiment_list(
             self.opLabels, self.fiducials, self.fiducials, self.germs,
-            default_maxLens, fidPairs=None, truncScheme="whole germ powers")
+            default_maxLens, fid_pairs=None, trunc_scheme="whole germ powers")
         ds_defaultMaxLens = pygsti.construction.generate_fake_data(
-            mdl, circuits, nSamples=10000, sampleError='round')
+            mdl, circuits, n_samples=10000, sample_error='round')
 
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.make_bootstrap_models(
                 2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-                std.germs, None, inputModel=mdl,
-                returnData=False) #test when maxLengths == None
+                std.germs, None, input_model=mdl,
+                return_data=False) #test when max_lengths == None
 
 
 if __name__ == "__main__":

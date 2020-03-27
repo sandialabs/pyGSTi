@@ -19,8 +19,8 @@ from . import loaders as _loaders
 
 
 def write_empty_dataset(filename, circuit_list,
-                        headerString='## Columns = 1 frequency, count total', numZeroCols=None,
-                        appendWeightsColumn=False):
+                        header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
+                        append_weights_column=False):
     """
     Write an empty dataset file to be used as a template.
 
@@ -30,18 +30,18 @@ def write_empty_dataset(filename, circuit_list,
         The filename to write.
 
     circuit_list : list of Circuits
-        List of operation sequences to write, each to be followed by numZeroCols zeros.
+        List of operation sequences to write, each to be followed by num_zero_cols zeros.
 
-    headerString : string, optional
+    header_string : string, optional
         Header string for the file; should start with a pound (#) or double-pound (##)
         so it is treated as a commend or directive, respectively.
 
-    numZeroCols : int, optional
+    num_zero_cols : int, optional
         The number of zero columns to place after each operation sequence.  If None,
-        then headerString must begin with "## Columns = " and number of zero
+        then header_string must begin with "## Columns = " and number of zero
         columns will be inferred.
 
-    appendWeightsColumn : bool, optional
+    append_weights_column : bool, optional
         Add an additional 'weights' column.
 
     """
@@ -49,18 +49,18 @@ def write_empty_dataset(filename, circuit_list,
     if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
         raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
-    if numZeroCols is None:  # TODO: cleaner way to extract number of columns from headerString?
-        if headerString.startswith('## Columns = '):
-            numZeroCols = len(headerString.split(','))
+    if num_zero_cols is None:  # TODO: cleaner way to extract number of columns from header_string?
+        if header_string.startswith('## Columns = '):
+            num_zero_cols = len(header_string.split(','))
         else:
-            raise ValueError("Must specify numZeroCols since I can't figure it out from the header string")
+            raise ValueError("Must specify num_zero_cols since I can't figure it out from the header string")
 
     with open(str(filename), 'w') as output:
-        zeroCols = "  ".join(['0'] * numZeroCols)
-        output.write(headerString + '\n')
+        zeroCols = "  ".join(['0'] * num_zero_cols)
+        output.write(header_string + '\n')
         for circuit in circuit_list:  # circuit should be a Circuit object here
             output.write(circuit.str + "  " + zeroCols + (("  %f" %
-                                                           circuit.weight) if appendWeightsColumn else "") + '\n')
+                                                           circuit.weight) if append_weights_column else "") + '\n')
 
 
 def _outcome_to_str(x):
@@ -69,7 +69,7 @@ def _outcome_to_str(x):
 
 
 def write_dataset(filename, dataset, circuit_list=None,
-                  outcomeLabelOrder=None, fixedColumnMode=True, withTimes="auto"):
+                  outcome_label_order=None, fixed_column_mode='auto', with_times="auto"):
     """
     Write a text-formatted dataset file.
 
@@ -85,21 +85,21 @@ def write_dataset(filename, dataset, circuit_list=None,
         The list of operation sequences to include in the written dataset.
         If None, all operation sequences are output.
 
-    outcomeLabelOrder : list, optional
+    outcome_label_order : list, optional
         A list of the outcome labels in dataset which specifies
         the column order in the output file.
 
-    fixedColumnMode : bool, optional
+    fixed_column_mode : bool or 'auto', optional
         When `True`, a file is written with column headers indicating which
         outcome each column of counts corresponds to.  If a row doesn't have
         any counts for an outcome, `'--'` is used in its place.  When `False`,
         each row's counts are written in an expanded form that includes the
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
 
-    withTimes : bool or "auto", optional
+    with_times : bool or "auto", optional
         Whether to include (save) time-stamp information in output.  This
-        can only be True when `fixedColumnMode=False`.  `"auto"` will set
-        this to True if `fixedColumnMode=False` and `dataset` has data at
+        can only be True when `fixed_column_mode=False`.  `"auto"` will set
+        this to True if `fixed_column_mode=False` and `dataset` has data at
         non-trivial (non-zero) times.
     """
     if circuit_list is not None:
@@ -108,16 +108,16 @@ def write_dataset(filename, dataset, circuit_list=None,
     else:
         circuit_list = list(dataset.keys())
 
-    if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcomeLabelOrder]
+    if outcome_label_order is not None:  # convert to tuples if needed
+        outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                             for ol in outcome_label_order]
 
     outcomeLabels = dataset.get_outcome_labels()
-    if outcomeLabelOrder is not None:
-        assert(len(outcomeLabelOrder) == len(outcomeLabels))
-        assert(all([ol in outcomeLabels for ol in outcomeLabelOrder]))
-        assert(all([ol in outcomeLabelOrder for ol in outcomeLabels]))
-        outcomeLabels = outcomeLabelOrder
+    if outcome_label_order is not None:
+        assert(len(outcome_label_order) == len(outcomeLabels))
+        assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+        assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+        outcomeLabels = outcome_label_order
 
     headerString = ""
     if hasattr(dataset, 'comment') and dataset.comment is not None:
@@ -127,14 +127,20 @@ def write_dataset(filename, dataset, circuit_list=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
-    if fixedColumnMode is True:
+    if fixed_column_mode == "auto":
+        fixed_column_mode = bool(len(outcomeLabels) <= 8 and not with_times)
+
+    if fixed_column_mode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
-        assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
-    elif withTimes == "auto":
-        trivial_times = dataset.has_trivial_timedependence()
+        assert(not (with_times is True)), "Cannot set `witTimes=True` when `fixed_column_mode=True`"
     else:
-        trivial_times = not withTimes
+        headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
+
+        if with_times == "auto":
+            trivial_times = dataset.has_trivial_timedependence()
+        else:
+            trivial_times = not with_times
 
     with open(str(filename), 'w') as output:
         output.write(headerString)
@@ -144,7 +150,7 @@ def write_dataset(filename, dataset, circuit_list=None,
             circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
                 if dataset.collisionAction == "keepseparate" else circuit
 
-            if fixedColumnMode:
+            if fixed_column_mode:
                 #output '--' for outcome labels that aren't present in this row
                 output.write(circuit_to_write.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
@@ -154,8 +160,7 @@ def write_dataset(filename, dataset, circuit_list=None,
 
             elif trivial_times:  # use expanded label:count format
                 output.write(circuit_to_write.str + "  "
-                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
-                                          for ol in outcomeLabels if ol in counts]))
+                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), cnt)) for ol, cnt in counts.items()]))
                 if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
                 output.write('\n')  # finish the line
 
@@ -170,7 +175,7 @@ def write_dataset(filename, dataset, circuit_list=None,
                 output.write('\n')  # blank line between circuits
 
 
-def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOrder=None):
+def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_order=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -186,7 +191,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
         The list of operation sequences to include in the written dataset.
         If None, all operation sequences are output.
 
-    outcomeLabelOrder : list, optional
+    outcome_label_order : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
@@ -197,16 +202,16 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
     else:
         circuit_list = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
 
-    if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcomeLabelOrder]
+    if outcome_label_order is not None:  # convert to tuples if needed
+        outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                             for ol in outcome_label_order]
 
     outcomeLabels = multidataset.get_outcome_labels()
-    if outcomeLabelOrder is not None:
-        assert(len(outcomeLabelOrder) == len(outcomeLabels))
-        assert(all([ol in outcomeLabels for ol in outcomeLabelOrder]))
-        assert(all([ol in outcomeLabelOrder for ol in outcomeLabels]))
-        outcomeLabels = outcomeLabelOrder
+    if outcome_label_order is not None:
+        assert(len(outcome_label_order) == len(outcomeLabels))
+        assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+        assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+        outcomeLabels = outcome_label_order
 
     dsLabels = list(multidataset.keys())
 
@@ -496,11 +501,11 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
-def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
-                                         sampleError="multinomial", seed=None, randState=None,
-                                         aliasDict=None, collisionAction="aggregate",
-                                         recordZeroCnts=True, comm=None, memLimit=None, times=None,
-                                         fixedColumnMode="auto"):
+def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
+                                         sample_error="multinomial", seed=None, rand_state=None,
+                                         alias_dict=None, collision_action="aggregate",
+                                         record_zero_counts=True, comm=None, mem_limit=None, times=None,
+                                         fixed_column_mode="auto"):
     """
     Fills in the text-format data set file `dataset_fileame` with simulated data counts using `model`.
 
@@ -521,12 +526,12 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
         The generated data set (also written in place of the template file).
     """
     from ..construction import generate_fake_data as _generate_fake_data
-    ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, withTimes=False, verbosity=0)
-    ds = _generate_fake_data(model, list(ds_template.keys()), nSamples,
-                             sampleError, seed, randState, aliasDict,
-                             collisionAction, recordZeroCnts, comm,
-                             memLimit, times)
-    if fixedColumnMode == "auto":
-        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
-    write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)
+    ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
+    ds = _generate_fake_data(model, list(ds_template.keys()), n_samples,
+                             sample_error, seed, rand_state, alias_dict,
+                             collision_action, record_zero_counts, comm,
+                             mem_limit, times)
+    if fixed_column_mode == "auto":
+        fixed_column_mode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
+    write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds

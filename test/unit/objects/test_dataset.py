@@ -27,19 +27,19 @@ class DataSetTester(BaseCase):
         self.reps_nonstc = [10 * np.ones(2, 'i'), 10 * np.ones(2, 'i'), 10 * np.ones(2, 'i')]
 
     def test_construct_empty_dataset(self):
-        dsEmpty = DataSet(outcomeLabels=['0', '1'])
+        dsEmpty = DataSet(outcome_labels=['0', '1'])
         dsEmpty.done_adding_data()
         # TODO assert correctness
 
     def test_initialize_by_index(self):
-        ds1 = DataSet(outcomeLabels=['0', '1'])
+        ds1 = DataSet(outcome_labels=['0', '1'])
         ds1.add_count_dict(('Gx',), {'0': 10, '1': 90})
-        ds2 = DataSet(outcomeLabels=['0', '1'])
+        ds2 = DataSet(outcome_labels=['0', '1'])
         ds2[('Gx',)] = {'0': 10, '1': 90}
         # TODO assert correctness
 
     def test_initialize_from_raw_series_data(self):
-        ds = DataSet(outcomeLabelIndices=self.olInds)
+        ds = DataSet(outcome_label_indices=self.olInds)
         ds.add_raw_series_data(('Gy',),  # gate sequence
                                ['0', '1'],  # spam labels
                                [0.0, 1.0],  # time stamps
@@ -47,7 +47,7 @@ class DataSetTester(BaseCase):
         # TODO assert correctness
 
     def test_initialize_from_series_data(self):
-        ds = DataSet(outcomeLabels=['0', '1'])
+        ds = DataSet(outcome_labels=['0', '1'])
         ds.add_series_data(('Gy', 'Gy'), [{'0': 2, '1': 8}, {'0': 6, '1': 4}, {'1': 10}],
                            [0.0, 1.2, 2.4])
         ds.add_series_data(('Gy', 'Gy', 'Gy'),
@@ -59,27 +59,27 @@ class DataSetTester(BaseCase):
 
     def test_construct_from_list(self):
         ds = DataSet(self.oli_nonstc, self.time_nonstc, self.reps_nonstc,
-                     circuits=self.gstrs, outcomeLabels=['0', '1'])
+                     circuits=self.gstrs, outcome_labels=['0', '1'])
         # TODO assert correctness
 
     def test_construct_from_map(self):
         ds = DataSet(self.oli_nonstc[:], self.time_nonstc[:], self.reps_nonstc[:],
-                     circuitIndices=self.gstrInds, outcomeLabelIndices=self.olInds)
+                     circuit_indices=self.gstrInds, outcome_label_indices=self.olInds)
         # TODO assert correctness
 
     def test_construct_static(self):
         ds = DataSet(self.oli_nonstc, self.time_nonstc, self.reps_nonstc,
-                     circuitIndices=self.gstrInds_static, outcomeLabels=['0', '1'], bStatic=True)
+                     circuit_indices=self.gstrInds_static, outcome_labels=['0', '1'], static=True)
         with self.assertRaises(ValueError):
             ds.add_counts_from_dataset(ds)  # can't add to static DataSet
 
     def test_construct_keep_separate_on_collision(self):
-        ds = DataSet(outcomeLabels=['0', '1'], collisionAction="keepseparate")
+        ds = DataSet(outcome_labels=['0', '1'], collision_action="keepseparate")
         ds.add_count_dict(('Gx', 'Gx'), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 20, '1': 80})
         ds.add_count_dict(('Gx', 'Gx'), {'0': 30, '1': 70})  # a duplicate
         self.assertEqual(ds.keys(), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', '#1')])
-        self.assertEqual(ds.keys(stripOccurrenceTags=True), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
+        self.assertEqual(ds.keys(strip_occurrence_tags=True), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
         # TODO set_row test separately
         ds.set_row(('Gx', 'Gx'), {'0': 5, '1': 95}, occurrence=1)  # test set_row with occurrence arg
 
@@ -91,17 +91,17 @@ class DataSetTester(BaseCase):
     def test_static_constructor_raises_on_missing_oplabels(self):
         with self.assertRaises(ValueError):
             DataSet(self.oli_static, self.time_static, self.reps_static,
-                    outcomeLabels=['0', '1'], bStatic=True)
+                    outcome_labels=['0', '1'], static=True)
 
     def test_static_constructor_raises_on_missing_counts(self):
         with self.assertRaises(ValueError):
-            DataSet(circuits=self.gstrs, outcomeLabels=['0', '1'], bStatic=True)
+            DataSet(circuits=self.gstrs, outcome_labels=['0', '1'], static=True)
 
 
 class DefaultDataSetInstance(object):
     def setUp(self):
         super(DefaultDataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=['0', '1'], collisionAction='aggregate') # adds counts at next available integer timestep
+        self.ds = DataSet(outcome_labels=['0', '1'], collision_action='aggregate') # adds counts at next available integer timestep
         self.ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         self.ds.add_count_dict(('Gy', 'Gy'), {'1': 90})
         self.ds.add_count_dict(('Gy', 'Gy'), ld.OutcomeLabelDict([('0', 10), ('1', 90)]))  
@@ -119,7 +119,7 @@ class DefaultDataSetInstance(object):
 class RawSeriesDataSetInstance(object):
     def setUp(self):
         super(RawSeriesDataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=['0', '1'])
+        self.ds = DataSet(outcome_labels=['0', '1'])
         self.ds.add_raw_series_data(('Gx',),
                                     ['0', '0', '1', '0', '1', '0', '1', '1', '1', '0'],
                                     [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
@@ -141,7 +141,7 @@ class DataSetMethodBase(object):
         time_nonstc = [np.zeros(2, 'd'), np.zeros(2, 'd'), np.zeros(2, 'd')]
         reps_nonstc = [10 * np.ones(2, 'i'), 10 * np.ones(2, 'i'), 10 * np.ones(2, 'i')]
         ds2 = DataSet(oli_nonstc, time_nonstc, reps_nonstc,
-                      circuits=gstrs, outcomeLabels=['0', '1'])
+                      circuits=gstrs, outcome_labels=['0', '1'])
         ds2.add_counts_from_dataset(self.ds)
         # TODO assert correctness
 
@@ -173,15 +173,15 @@ class DataSetMethodBase(object):
 
     def test_truncate_ignore_on_missing(self):
         with self.assertNoWarns():
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="ignore")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="ignore")
 
     def test_truncate_warn_on_missing(self):
         with self.assertWarns(Warning):
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="warn")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="warn")
 
     def test_truncate_raise_on_missing(self):
         with self.assertRaises(KeyError):
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="raise")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="raise")
 
     def test_len(self):
         n = len(self.ds)
@@ -203,7 +203,7 @@ class DataSetMethodBase(object):
     def test_time_slice(self):
         empty_slice = self.ds.time_slice(100.0, 101.0)
         ds_slice = self.ds.time_slice(1.0, 2.0)
-        ds_slice = self.ds.time_slice(1.0, 2.0, aggregateToTime=0.0)
+        ds_slice = self.ds.time_slice(1.0, 2.0, aggregate_to_time=0.0)
         # TODO assert correctness
 
     def test_pickle(self):

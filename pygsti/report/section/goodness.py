@@ -21,7 +21,7 @@ class GoodnessSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc_modvi,
+            min_prob_clip_for_weighting=switchboard.mpc_modvi,
             typ="scatter", comm=comm, bgcolor=bgcolor
         )
 
@@ -30,7 +30,7 @@ class GoodnessSection(_Section):
         return workspace.FitComparisonTable(
             Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi, 'L',
-            comm=comm, minProbClip=switchboard.mpc_modvi
+            comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory(4)
@@ -38,7 +38,7 @@ class GoodnessSection(_Section):
         return workspace.FitComparisonBarPlot(
             Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi, 'L',
-            comm=comm, minProbClip=switchboard.mpc_modvi
+            comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
 
@@ -52,7 +52,7 @@ class GoodnessColorBoxPlotSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc_modvi, comm=comm,
+            min_prob_clip_for_weighting=switchboard.mpc_modvi, comm=comm,
             bgcolor=bgcolor
         )
         if brevity < 1:
@@ -84,7 +84,7 @@ class GoodnessScalingSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc,
+            min_prob_clip_for_weighting=switchboard.mpc,
             typ="scatter", comm=comm, bgcolor=bgcolor
         )
 
@@ -95,7 +95,7 @@ class GoodnessScalingSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc, comm=comm,
+            min_prob_clip_for_weighting=switchboard.mpc, comm=comm,
             bgcolor=bgcolor
         )
         if brevity < 1:
@@ -109,7 +109,7 @@ class GoodnessScalingSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc,
+            min_prob_clip_for_weighting=switchboard.mpc,
             typ="histogram", comm=comm, bgcolor=bgcolor
         )
 
@@ -117,14 +117,14 @@ class GoodnessScalingSection(_Section):
     def progressTable_scl(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
             Ls, switchboard.gssAllL, switchboard.gsAllL,
-            switchboard.eff_ds, switchboard.objective, 'L', comm=comm, minProbClip=switchboard.mpc
+            switchboard.eff_ds, switchboard.objective, 'L', comm=comm, min_prob_clip=switchboard.mpc
         )
 
     @_Section.figure_factory(4)
     def progressBarPlot_scl(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
             Ls, switchboard.gssAllL, switchboard.gsAllL,
-            switchboard.eff_ds, switchboard.objective, 'L', comm=comm, minProbClip=switchboard.mpc
+            switchboard.eff_ds, switchboard.objective, 'L', comm=comm, min_prob_clip=switchboard.mpc
         )
 
     @_Section.figure_factory(1)
@@ -148,7 +148,7 @@ class GoodnessUnmodeledSection(_Section):
         return workspace.FitComparisonBarPlot(
             Ls, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.modvi_ds, switchboard.objective, 'L',
-            wildcard=switchboard.wildcardBudget, comm=comm, minProbClip=switchboard.mpc_modvi
+            wildcard=switchboard.wildcardBudget, comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory(4)
@@ -156,7 +156,7 @@ class GoodnessUnmodeledSection(_Section):
         return workspace.FitComparisonTable(
             Ls, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.modvi_ds, switchboard.objective, 'L',
-            wildcard=switchboard.wildcardBudget, comm=comm, minProbClip=switchboard.mpc_modvi
+            wildcard=switchboard.wildcardBudget, comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory()
@@ -166,7 +166,7 @@ class GoodnessUnmodeledSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc, typ="histogram",
+            min_prob_clip_for_weighting=switchboard.mpc, typ="histogram",
             wildcard=switchboard.wildcardBudget, comm=comm,
             bgcolor=bgcolor
         )
@@ -178,7 +178,7 @@ class GoodnessUnmodeledSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc,
+            min_prob_clip_for_weighting=switchboard.mpc,
             wildcard=switchboard.wildcardBudget, comm=comm,
             bgcolor=bgcolor
         )
@@ -193,7 +193,7 @@ class GoodnessUnmodeledSection(_Section):
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,
             linlg_pcntle=linlog_percentile / 100,
-            minProbClipForWeighting=switchboard.mpc, typ="scatter",
+            min_prob_clip_for_weighting=switchboard.mpc, typ="scatter",
             wildcard=switchboard.wildcardBudget, comm=comm,
             bgcolor=bgcolor
         )

@@ -475,6 +475,7 @@ class ExperimentDesign(_TreeNode):
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
+        self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
         # *isn't* listed in this dict, then it's assumed to be json-able and included
@@ -593,6 +594,7 @@ class ExperimentDesign(_TreeNode):
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
+        self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
 
     def create_subdata(self, subdata_name, dataset):
         """
@@ -609,7 +611,8 @@ class CircuitListsDesign(ExperimentDesign):
     Experiment deisgn specification that is comprised of multiple circuit lists.
     """
 
-    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
+    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
+                 nested=False, remove_duplicates=True):
         """
         Create a new CircuitListsDesign object.
 
@@ -635,6 +638,11 @@ class CircuitListsDesign(ExperimentDesign):
             is useful to know because certain operations can be more efficient
             when it is known that the lists are nested.
 
+        remove_duplicates : bool, optional
+            Whether to remove duplicates when automatically creating
+            all the circuits that need data (this argument isn't used
+            when `all_circuits_needing_data` is given).
+
         Returns
         -------
         CircuitListsDesign
@@ -647,7 +655,8 @@ class CircuitListsDesign(ExperimentDesign):
             all_circuits = []
             for lst in circuit_lists:
                 all_circuits.extend(lst)
-            _lt.remove_duplicates_in_place(all_circuits)
+            if remove_duplicates:
+                _lt.remove_duplicates_in_place(all_circuits)
 
         self.circuit_lists = circuit_lists
         self.nested = nested
@@ -662,7 +671,7 @@ class CircuitStructuresDesign(CircuitListsDesign):
     circuit structures (:class:`CircuitStructure` objects).
     """
 
-    def __init__(self, circuit_structs, qubit_labels=None, nested=False):
+    def __init__(self, circuit_structs, qubit_labels=None, nested=False, remove_duplicates=True):
         """
         Create a new CircuitStructuresDesign object.
 
@@ -682,6 +691,11 @@ class CircuitStructuresDesign(CircuitListsDesign):
             lists, e.g. whether `circuit_structs[i].allstrs` is a subset of
             `circuit_structs[i+1].allstrs`.
 
+        remove_duplicates : bool, optional
+            Whether to remove duplicates when automatically creating
+            all the circuits that need data (this argument isn't used
+            when `all_circuits_needing_data` is given).
+
         Returns
         -------
         CircuitStructureDesign
@@ -694,7 +708,7 @@ class CircuitStructuresDesign(CircuitListsDesign):
                                for i in range(len(master.Ls))]
             nested = True  # (by this construction)
 
-        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested)
+        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested, remove_duplicates)
         self.circuit_structs = circuit_structs
         self.auxfile_types['circuit_structs'] = 'pickle'
 
@@ -776,6 +790,8 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         """
         sub_circuits = self[sub_name].all_circuits_needing_data
         truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+        #truncated_ds.add_outcome_labels(dataset.get_outcome_labels())  # make sure truncated ds has all outcome lbls
+        truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
 
@@ -888,6 +904,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         sub_design = self[qubit_labels]
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
         filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+        filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcome lbls
 
         if sub_design.alt_actual_circuits_executed:
             actual_to_desired = _collections.defaultdict(lambda: None)
@@ -1086,7 +1103,7 @@ class ProtocolData(_TreeNode):
         _io.obj_to_meta_json(self, data_dir)
 
         if parent is None:
-            self.edesign.write(dirname)  # assume parent has already written edesign
+            self.edesign.write(dirname)  # otherwise assume parent has already written edesign
 
         if self.dataset is not None:  # otherwise don't write any dataset
             if parent and (self.dataset is parent.dataset):  # then no need to write any data

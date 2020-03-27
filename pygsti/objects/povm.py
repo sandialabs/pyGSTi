@@ -68,9 +68,9 @@ from ..tools import optools as _gt
 
 #
 
-def convert(povm, toType, basis, extra=None):
+def convert(povm, to_type, basis, extra=None):
     """
-    TODO: update toType options
+    TODO: update to_type options
     Convert POVM to a new type of parameterization, potentially
     creating a new object.  Raises ValueError for invalid conversions.
 
@@ -79,7 +79,7 @@ def convert(povm, toType, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    toType : {"full","TP","static","static unitary","H+S terms",
+    to_type : {"full","TP","static","static unitary","H+S terms",
               "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -95,12 +95,12 @@ def convert(povm, toType, basis, extra=None):
        The converted POVM vector, usually a distinct
        object from the object passed as input.
     """
-    if toType in ("full", "static", "static unitary"):
-        converted_effects = [(lbl, _sv.convert(vec, toType, basis))
+    if to_type in ("full", "static", "static unitary"):
+        converted_effects = [(lbl, _sv.convert(vec, to_type, basis))
                              for lbl, vec in povm.items()]
         return UnconstrainedPOVM(converted_effects)
 
-    elif toType == "TP":
+    elif to_type == "TP":
         if isinstance(povm, TPPOVM):
             return povm  # no conversion necessary
         else:
@@ -108,7 +108,7 @@ def convert(povm, toType, basis, extra=None):
                                  for lbl, vec in povm.items()]
             return TPPOVM(converted_effects)
 
-    elif _gt.is_valid_lindblad_paramtype(toType):
+    elif _gt.is_valid_lindblad_paramtype(to_type):
 
         # A LindbladPOVM needs a *static* base/reference POVM
         #  with the appropriate evotype.  If we can convert `povm` to such a
@@ -118,7 +118,7 @@ def convert(povm, toType, basis, extra=None):
         bQubits = bool(_np.isclose(nQubits, _np.log2(povm.dim) / 2.0))  # integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
-        _, evotype = _gt.split_lindblad_paramtype(toType)
+        _, evotype = _gt.split_lindblad_paramtype(to_type)
 
         if isinstance(povm, ComputationalBasisPOVM):  # special easy case
             assert(povm.nqubits == nQubits)
@@ -131,11 +131,11 @@ def convert(povm, toType, basis, extra=None):
         # purevecs = extra if (extra is not None) else None # UNUSED
         cls = _op.LindbladDenseOp if (povm.dim <= 64 and evotype == "densitymx") \
             else _op.LindbladOp
-        povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim, 'd'), toType,
+        povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim, 'd'), to_type,
                                               None, proj_basis, basis, truncate=True)
         return LindbladPOVM(povmNoiseMap, base_povm, basis)
 
-    elif toType == "clifford":
+    elif to_type == "clifford":
         if isinstance(povm, ComputationalBasisPOVM) and povm._evotype == "stabilizer":
             return povm
 
@@ -162,7 +162,7 @@ def convert(povm, toType, basis, extra=None):
         return ComputationalBasisPOVM(nqubits, 'stabilizer')
 
     else:
-        raise ValueError("Invalid toType argument: %s" % toType)
+        raise ValueError("Invalid to_type argument: %s" % to_type)
 
 
 class POVM(_gm.ModelMember, _collections.OrderedDict):
@@ -225,17 +225,17 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == 0)  # should be no parameters
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update each POVM effect E as S^T * E.
+        Update each POVM effect E as s^T * E.
 
         Note that this is equivalent to the *transpose* of the effect vectors
-        being mapped as `E^T -> E^T * S`.
+        being mapped as `E^T -> E^T * s`.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         raise ValueError("Cannot transform a %s object" % self.__class__.__name__)
@@ -505,29 +505,29 @@ class _BasePOVM(POVM):
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update each POVM effect E as S^T * E.
+        Update each POVM effect E as s^T * E.
 
         Note that this is equivalent to the *transpose* of the effect vectors
-        being mapped as `E^T -> E^T * S`.
+        being mapped as `E^T -> E^T * s`.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.transform(S, 'effect')
+            effect.transform(s, 'effect')
 
         if self.complement_label:
             #Other effects being transformed transforms the complement,
             # so just check that the transform preserves the identity.
             TOL = 1e-6
             identityVec = self[self.complement_label].identity.todense().reshape((-1, 1))
-            SmxT = _np.transpose(S.get_transform_matrix())
+            SmxT = _np.transpose(s.get_transform_matrix())
             assert(_np.linalg.norm(identityVec - _np.dot(SmxT, identityVec)) < TOL),\
                 ("Cannot transform complement effect in a way that doesn't"
                  " preserve the identity!")
@@ -632,21 +632,21 @@ class TensorProdPOVM(POVM):
     POVMs (which can be TP).
     """
 
-    def __init__(self, factorPOVMs):
+    def __init__(self, factor_povms):
         """
         Creates a new TensorProdPOVM object.
 
         Parameters
         ----------
-        factorPOVMs : list of POVMs
+        factor_povms : list of POVMs
             POVMs that will be tensor-producted together.
         """
-        dim = _np.product([povm.dim for povm in factorPOVMs])
+        dim = _np.product([povm.dim for povm in factor_povms])
 
         # self.factorPOVMs
         #  Copy each POVM and set it's parent and gpindices.
         #  Assume each one's parameters are independent.
-        self.factorPOVMs = [povm.copy() for povm in factorPOVMs]
+        self.factorPOVMs = [povm.copy() for povm in factor_povms]
 
         off = 0; evotype = None
         for povm in self.factorPOVMs:
@@ -661,7 +661,7 @@ class TensorProdPOVM(POVM):
             evotype = "densitymx"  # default (if there are no factors)
 
         items = []  # init as empty (lazy creation of members)
-        self._factor_keys = tuple((list(povm.keys()) for povm in factorPOVMs))
+        self._factor_keys = tuple((list(povm.keys()) for povm in factor_povms))
         self._factor_lbllens = []
         for fkeys in self._factor_keys:
             assert(len(fkeys) > 0), "Each factor POVM must have at least one effect!"
@@ -707,7 +707,7 @@ class TensorProdPOVM(POVM):
             elbls = []; i = 0  # decompose key into separate factor-effect labels
             for fkeys, lbllen in zip(self._factor_keys, self._factor_lbllens):
                 elbls.append(key[i:i + lbllen]); i += lbllen
-            # infers parent & gpindices from factorPOVMs
+            # infers parent & gpindices from factor_povms
             effect = _sv.TensorProdSPAMVec('effect', self.factorPOVMs, elbls)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
@@ -820,7 +820,7 @@ class TensorProdPOVM(POVM):
             povm.depolarize(amount)
 
         #No need to re-init effect vectors since they don't store a (dense)
-        # version of their vector - they just create it from factorPOVMs on demand
+        # version of their vector - they just create it from factor_povms on demand
         self.dirty = True
 
     def __str__(self):
@@ -954,7 +954,7 @@ class LindbladPOVM(POVM):
     followed by a computational-basis POVM.
     """
 
-    def __init__(self, errormap, povm=None, mxBasis=None):
+    def __init__(self, errormap, povm=None, mx_basis=None):
         """
         Creates a new LindbladPOVM object.
 
@@ -975,7 +975,7 @@ class LindbladPOVM(POVM):
             `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is
             used on the number of qubits appropriate to `errormap`'s dimension.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The basis for this spam vector. Allowed values are Matrix-unit (std),
             Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt) (or a custom
             basis object).  If None, then this is extracted (if possible) from
@@ -984,14 +984,14 @@ class LindbladPOVM(POVM):
         self.error_map = errormap
         dim = self.error_map.dim
 
-        if mxBasis is None:
+        if mx_basis is None:
             if isinstance(errormap, _op.LindbladOp):
-                mxBasis = errormap.errorgen.matrix_basis
+                mx_basis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
                                  % str(type(errormap)))
 
-        self.matrix_basis = mxBasis
+        self.matrix_basis = mx_basis
         evotype = self.error_map._evotype
 
         if povm is None:
@@ -1052,18 +1052,18 @@ class LindbladPOVM(POVM):
         return (LindbladPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
-    def allocate_gpindices(self, startingIndex, parent, memo=None):
+    def allocate_gpindices(self, starting_index, parent, memo=None):
         """
         Sets gpindices array for this object or any objects it
         contains (i.e. depends upon).  Indices may be obtained
         from contained objects which have already been initialized
         (e.g. if a contained object is shared with other
          top-level objects), or given new indices starting with
-        `startingIndex`.
+        `starting_index`.
 
         Parameters
         ----------
-        startingIndex : int
+        starting_index : int
             The starting index for un-allocated parameters.
 
         parent : Model or ModelMember
@@ -1079,14 +1079,14 @@ class LindbladPOVM(POVM):
         num_new: int
             The number of *new* allocated parameters (so
             the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+            indices `starting_index` to `starting_index + new_new`).
         """
         if memo is None: memo = set()
         if id(self) in memo: return 0
         memo.add(id(self))
 
         assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
-        num_new_params = self.error_map.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as this SPAMVec
+        num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as this SPAMVec
         _gm.ModelMember.set_gpindices(
             self, self.error_map.gpindices, parent)
         return num_new_params
@@ -1205,23 +1205,23 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         self.error_map.from_vector(v, close, nodirty)
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update each POVM effect E as S^T * E.
+        Update each POVM effect E as s^T * E.
 
         Note that this is equivalent to the *transpose* of the effect vectors
-        being mapped as `E^T -> E^T * S`.
+        being mapped as `E^T -> E^T * s`.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
-        self.error_map.spam_transform(S, 'effect')  # only do this *once*
+        self.error_map.spam_transform(s, 'effect')  # only do this *once*
         for lbl, effect in self.items():
             effect._update_rep()  # these two lines mimic the bookeepging in
-            effect.dirty = True   # a "effect.transform(S, 'effect')" call.
+            effect.dirty = True   # a "effect.transform(s, 'effect')" call.
         self.dirty = True
 
     def __str__(self):
@@ -1320,18 +1320,18 @@ class MarginalizedPOVM(POVM):
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
     #May need to implement this in future if we allow non-static MarginalizedPOVMs
-    #def allocate_gpindices(self, startingIndex, parent, memo=None):
+    #def allocate_gpindices(self, starting_index, parent, memo=None):
     #    """
     #    Sets gpindices array for this object or any objects it
     #    contains (i.e. depends upon).  Indices may be obtained
     #    from contained objects which have already been initialized
     #    (e.g. if a contained object is shared with other
     #     top-level objects), or given new indices starting with
-    #    `startingIndex`.
+    #    `starting_index`.
     #
     #    Parameters
     #    ----------
-    #    startingIndex : int
+    #    starting_index : int
     #        The starting index for un-allocated parameters.
     #
     #    parent : Model or ModelMember
@@ -1347,14 +1347,14 @@ class MarginalizedPOVM(POVM):
     #    num_new: int
     #        The number of *new* allocated parameters (so
     #        the parent should mark as allocated parameter
-    #        indices `startingIndex` to `startingIndex + new_new`).
+    #        indices `starting_index` to `starting_index + new_new`).
     #    """
     #    if memo is None: memo = set()
     #    if id(self) in memo: return 0
     #    memo.add(id(self))
     #
     #    assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
-    #    num_new_params = self.error_map.allocate_gpindices(startingIndex, parent, memo)  # *same* parent as self
+    #    num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
     #    _gm.ModelMember.set_gpindices(
     #        self, self.error_map.gpindices, parent)
     #    return num_new_params

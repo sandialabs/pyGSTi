@@ -37,26 +37,32 @@ from .polynomial import Polynomial as _Polynomial
 from . import replib
 from .opcalc import bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
 
+try:
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
+
+
 IMAG_TOL = 1e-8  # tolerance for imaginary part being considered zero
 
 
-def optimize_spamvec(vecToOptimize, targetVec):
+def optimize_spamvec(vec_to_optimize, target_vec):
     """
-    Optimize the parameters of vecToOptimize so that the
+    Optimize the parameters of vec_to_optimize so that the
       the resulting SPAM vector is as close as possible to
-      targetVec.
+      target_vec.
 
     This is trivial for the case of FullSPAMVec
       instances, but for other types of parameterization
       this involves an iterative optimization over all the
-      parameters of vecToOptimize.
+      parameters of vec_to_optimize.
 
     Parameters
     ----------
-    vecToOptimize : SPAMVec
+    vec_to_optimize : SPAMVec
       The vector to optimize. This object gets altered.
 
-    targetVec : SPAMVec
+    target_vec : SPAMVec
       The SPAM vector used as the target.
 
     Returns
@@ -65,31 +71,31 @@ def optimize_spamvec(vecToOptimize, targetVec):
     """
 
     #TODO: cleanup this code:
-    if isinstance(vecToOptimize, StaticSPAMVec):
+    if isinstance(vec_to_optimize, StaticSPAMVec):
         return  # nothing to optimize
 
-    if isinstance(vecToOptimize, FullSPAMVec):
-        if(targetVec.dim != vecToOptimize.dim):  # special case: gates can have different overall dimension
-            vecToOptimize.dim = targetVec.dim  # this is a HACK to allow model selection code to work correctly
-        vecToOptimize.set_value(targetVec)  # just copy entire overall matrix since fully parameterized
+    if isinstance(vec_to_optimize, FullSPAMVec):
+        if(target_vec.dim != vec_to_optimize.dim):  # special case: gates can have different overall dimension
+            vec_to_optimize.dim = target_vec.dim  # this is a HACK to allow model selection code to work correctly
+        vec_to_optimize.set_value(target_vec)  # just copy entire overall matrix since fully parameterized
         return
 
-    assert(targetVec.dim == vecToOptimize.dim)  # vectors must have the same overall dimension
-    targetVector = _np.asarray(targetVec)
+    assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
+    targetVector = _np.asarray(target_vec)
 
     def _objective_func(param_vec):
-        vecToOptimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(vecToOptimize - targetVector)
+        vec_to_optimize.from_vector(param_vec)
+        return _mt.frobeniusnorm(vec_to_optimize - targetVector)
 
-    x0 = vecToOptimize.to_vector()
+    x0 = vec_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
-    vecToOptimize.from_vector(minSol.x)
-    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
+    vec_to_optimize.from_vector(minSol.x)
+    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vec_to_optimize-targetVector))
 
 
-def convert(spamvec, toType, basis, extra=None):
+def convert(spamvec, to_type, basis, extra=None):
     """
     Convert SPAM vector to a new type of parameterization, potentially
     creating a new SPAMVec object.  Raises ValueError for invalid conversions.
@@ -99,7 +105,7 @@ def convert(spamvec, toType, basis, extra=None):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","static","static unitary","clifford",LINDBLAD}
+    to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -119,40 +125,40 @@ def convert(spamvec, toType, basis, extra=None):
        The converted SPAM vector, usually a distinct
        object from the object passed as input.
     """
-    if toType == "full":
+    if to_type == "full":
         if isinstance(spamvec, FullSPAMVec):
             return spamvec  # no conversion necessary
         else:
             typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
             return FullSPAMVec(spamvec.todense(), typ=typ)
 
-    elif toType == "TP":
+    elif to_type == "TP":
         if isinstance(spamvec, TPSPAMVec):
             return spamvec  # no conversion necessary
         else:
             return TPSPAMVec(spamvec.todense())
             # above will raise ValueError if conversion cannot be done
 
-    elif toType == "TrueCPTP":  # a non-lindbladian CPTP spamvec that hasn't worked well...
+    elif to_type == "TrueCPTP":  # a non-lindbladian CPTP spamvec that hasn't worked well...
         if isinstance(spamvec, CPTPSPAMVec):
             return spamvec  # no conversion necessary
         else:
             return CPTPSPAMVec(spamvec, basis)
             # above will raise ValueError if conversion cannot be done
 
-    elif toType == "static":
+    elif to_type == "static":
         if isinstance(spamvec, StaticSPAMVec):
             return spamvec  # no conversion necessary
         else:
             typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
             return StaticSPAMVec(spamvec, typ=typ)
 
-    elif toType == "static unitary":
+    elif to_type == "static unitary":
         dmvec = _bt.change_basis(spamvec.todense(), basis, 'std')
         purevec = _gt.dmvec_to_state(dmvec)
         return StaticSPAMVec(purevec, "statevec", spamvec._prep_or_effect)
 
-    elif _gt.is_valid_lindblad_paramtype(toType):
+    elif _gt.is_valid_lindblad_paramtype(to_type):
 
         if extra is None:
             purevec = spamvec  # right now, we don't try to extract a "closest pure vec"
@@ -166,10 +172,10 @@ def convert(spamvec, toType, basis, extra=None):
         typ = spamvec._prep_or_effect if isinstance(spamvec, SPAMVec) else "prep"
 
         return LindbladSPAMVec.from_spamvec_obj(
-            spamvec, typ, toType, None, proj_basis, basis,
+            spamvec, typ, to_type, None, proj_basis, basis,
             truncate=True, lazy=True)
 
-    elif toType == "clifford":
+    elif to_type == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):
             return spamvec  # no conversion necessary
 
@@ -178,10 +184,10 @@ def convert(spamvec, toType, basis, extra=None):
         return StabilizerSPAMVec.from_dense_purevec(purevec)
 
     else:
-        raise ValueError("Invalid toType argument: %s" % toType)
+        raise ValueError("Invalid to_type argument: %s" % to_type)
 
 
-def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
+def _convert_to_lindblad_base(vec, typ, new_evotype, mx_basis="pp"):
     """
     Attempts to convert `vec` to a static (0 params) SPAMVec with
     evoution type `new_evotype`.  Used to convert spam vecs to
@@ -198,7 +204,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
             # then try to extract a (static) pure state from vec wth
             # evotype 'statevec' or 'stabilizer' <=> 'svterm', 'cterm'
             if isinstance(vec, DenseSPAMVec):
-                dmvec = _bt.change_basis(vec, mxBasis, 'std')
+                dmvec = _bt.change_basis(vec, mx_basis, 'std')
                 purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec), 'statevec', typ)
             elif isinstance(vec, PureStateSPAMVec):
                 purestate = vec.pure_state_vec  # evotype 'statevec'
@@ -211,13 +217,13 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
                 else:  # type == "effect"
                     purestate = StabilizerEffectVec.from_dense_purevec(purestate.todense())
 
-            return PureStateSPAMVec(purestate, new_evotype, mxBasis, typ)
+            return PureStateSPAMVec(purestate, new_evotype, mx_basis, typ)
 
     raise ValueError("Could not convert %s (evotype %s) to %s w/0 params!" %
                      (str(type(vec)), vec._evotype, new_evotype))
 
 
-def finite_difference_deriv_wrt_params(spamvec, wrtFilter=None, eps=1e-7):
+def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
     """
     Computes a finite-difference Jacobian for a SPAMVec object.
 
@@ -252,13 +258,13 @@ def finite_difference_deriv_wrt_params(spamvec, wrtFilter=None, eps=1e-7):
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
     fd_deriv.shape = [dim, spamvec.num_params()]
-    if wrtFilter is None:
+    if wrt_filter is None:
         return fd_deriv
     else:
-        return _np.take(fd_deriv, wrtFilter, axis=1)
+        return _np.take(fd_deriv, wrt_filter, axis=1)
 
 
-def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrtFilter=None, eps=1e-7):
+def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a SPAMVec object.
 
@@ -285,7 +291,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrtFilter=None, eps=1e-
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrtFilter, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrt_filter, eps)
     if deriv_to_check is None:
         deriv_to_check = spamvec.deriv_wrt_params()
 
@@ -411,9 +417,9 @@ class SPAMVec(_modelmember.ModelMember):
 #                                      (self._evotype, self.__class__.__name__))
 #        elif typ == "effect":
 #            if self._evotype == "statevec":
-#                return replib.SVEffectRep_Dense(self.todense())
+#                return replib.SVEffectRepDense(self.todense())
 #            elif self._evotype == "densitymx":
-#                return replib.DMEffectRep_Dense(self.todense())
+#                return replib.DMEffectRepDense(self.todense())
 #            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
 #                                      (self._evotype, self.__class__.__name__))
 #        else:
@@ -558,16 +564,16 @@ class SPAMVec(_modelmember.ModelMember):
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist2(self, otherSpamVec, typ, transform=None,
+    def frobeniusdist2(self, other_spam_vec, typ, transform=None,
                        inv_transform=None):
         """
         Return the squared frobenius difference between this spam vector and
-        `otherSpamVec`, optionally transforming this vector first using
+        `other_spam_vec`, optionally transforming this vector first using
         `transform` and `inv_transform` (depending on the value of `typ`).
 
         Parameters
         ----------
-        otherSpamVec : SPAMVec
+        other_spam_vec : SPAMVec
             The other spam vector
 
         typ : { 'prep', 'effect' }
@@ -583,27 +589,27 @@ class SPAMVec(_modelmember.ModelMember):
         vec = self.todense()
         if typ == 'prep':
             if inv_transform is None:
-                return _gt.frobeniusdist2(vec, otherSpamVec.todense())
+                return _gt.frobeniusdist2(vec, other_spam_vec.todense())
             else:
                 return _gt.frobeniusdist2(_np.dot(inv_transform, vec),
-                                          otherSpamVec.todense())
+                                          other_spam_vec.todense())
         elif typ == "effect":
             if transform is None:
-                return _gt.frobeniusdist2(vec, otherSpamVec.todense())
+                return _gt.frobeniusdist2(vec, other_spam_vec.todense())
             else:
                 return _gt.frobeniusdist2(_np.dot(_np.transpose(transform),
-                                                  vec), otherSpamVec.todense())
+                                                  vec), other_spam_vec.todense())
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
 
-    def residuals(self, otherSpamVec, typ, transform=None, inv_transform=None):
+    def residuals(self, other_spam_vec, typ, transform=None, inv_transform=None):
         """
         Return a vector of residuals between this spam vector and
-        `otherSpamVec`, optionally transforming this vector first using
+        `other_spam_vec`, optionally transforming this vector first using
         `transform` and `inv_transform` (depending on the value of `typ`).
 
         Parameters
         ----------
-        otherSpamVec : SPAMVec
+        other_spam_vec : SPAMVec
             The other spam vector
 
         typ : { 'prep', 'effect' }
@@ -619,25 +625,25 @@ class SPAMVec(_modelmember.ModelMember):
         vec = self.todense()
         if typ == 'prep':
             if inv_transform is None:
-                return _gt.residuals(vec, otherSpamVec.todense())
+                return _gt.residuals(vec, other_spam_vec.todense())
             else:
                 return _gt.residuals(_np.dot(inv_transform, vec),
-                                     otherSpamVec.todense())
+                                     other_spam_vec.todense())
         elif typ == "effect":
             if transform is None:
-                return _gt.residuals(vec, otherSpamVec.todense())
+                return _gt.residuals(vec, other_spam_vec.todense())
             else:
                 return _gt.residuals(_np.dot(_np.transpose(transform),
-                                             vec), otherSpamVec.todense())
+                                             vec), other_spam_vec.todense())
 
-    def transform(self, S, typ):
+    def transform(self, s, typ):
         """
-        Update SPAM (column) vector V as inv(S) * V or S^T * V for preparation
+        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation
         or  effect SPAM vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
-        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
-        being mapped as `E^T -> E^T * S`.
+        mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * s`.
 
         Generally, the transform function updates the *parameters* of
         the SPAM vector such that the resulting vector is altered as
@@ -646,20 +652,20 @@ class SPAMVec(_modelmember.ModelMember):
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
 
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
         """
         if typ == 'prep':
-            Si = S.get_transform_matrix_inverse()
+            Si = s.get_transform_matrix_inverse()
             self.set_value(_np.dot(Si, self.todense()))
         elif typ == 'effect':
-            Smx = S.get_transform_matrix()
+            Smx = s.get_transform_matrix()
             self.set_value(_np.dot(_np.transpose(Smx), self.todense()))
-            #Evec^T --> ( Evec^T * S )^T
+            #Evec^T --> ( Evec^T * s )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
 
@@ -730,7 +736,7 @@ class SPAMVec(_modelmember.ModelMember):
         """
         assert(len(v) == 0)  # should be no parameters, and nothing to do
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -744,10 +750,10 @@ class SPAMVec(_modelmember.ModelMember):
         """
         dtype = complex if self._evotype == 'statevec' else 'd'
         derivMx = _np.zeros((self.dim, 0), dtype)
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -762,7 +768,7 @@ class SPAMVec(_modelmember.ModelMember):
         #Default: assume Hessian can be nonzero if there are any parameters
         return self.num_params() > 0
 
-    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+    def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
@@ -772,7 +778,7 @@ class SPAMVec(_modelmember.ModelMember):
 
         Parameters
         ----------
-        wrtFilter1, wrtFilter2 : list
+        wrt_filter1, wrt_filter2 : list
             Lists of indices of the paramters to take first and second
             derivatives with respect to.  If None, then derivatives are
             taken with respect to all of the vectors's parameters.
@@ -791,49 +797,49 @@ class SPAMVec(_modelmember.ModelMember):
     #Note: no __str__ fn
 
     @staticmethod
-    def convert_to_vector(V):
+    def convert_to_vector(v):
         """
         Static method that converts a vector-like object to a 2D numpy
         dim x 1 column array.
 
         Parameters
         ----------
-        V : array_like
+        v : array_like
 
         Returns
         -------
         numpy array
         """
-        if isinstance(V, SPAMVec):
-            vector = V.todense().copy()
+        if isinstance(v, SPAMVec):
+            vector = v.todense().copy()
             vector.shape = (vector.size, 1)
-        elif isinstance(V, _np.ndarray):
-            vector = V.copy()
+        elif isinstance(v, _np.ndarray):
+            vector = v.copy()
             if len(vector.shape) == 1:  # convert (N,) shape vecs to (N,1)
                 vector.shape = (vector.size, 1)
         else:
             try:
-                len(V)
+                len(v)
                 # XXX this is an abuse of exception handling
             except:
-                raise ValueError("%s doesn't look like an array/list" % V)
+                raise ValueError("%s doesn't look like an array/list" % v)
             try:
-                d2s = [len(row) for row in V]
+                d2s = [len(row) for row in v]
             except TypeError:  # thrown if len(row) fails because no 2nd dim
                 d2s = None
 
             if d2s is not None:
-                if any([len(row) != 1 for row in V]):
-                    raise ValueError("%s is 2-dimensional but 2nd dim != 1" % V)
+                if any([len(row) != 1 for row in v]):
+                    raise ValueError("%s is 2-dimensional but 2nd dim != 1" % v)
 
-                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
+                typ = 'd' if _np.all(_np.isreal(v)) else 'complex'
                 try:
-                    vector = _np.array(V, typ)  # vec is already a 2-D column vector
+                    vector = _np.array(v, typ)  # vec is already a 2-D column vector
                 except TypeError:
-                    raise ValueError("%s doesn't look like an array/list" % V)
+                    raise ValueError("%s doesn't look like an array/list" % v)
             else:
-                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
-                vector = _np.array(V, typ)[:, None]  # make into a 2-D column vec
+                typ = 'd' if _np.all(_np.isreal(v)) else 'complex'
+                vector = _np.array(v, typ)[:, None]  # make into a 2-D column vec
 
         assert(len(vector.shape) == 2 and vector.shape[1] == 1)
         return vector.flatten()  # HACK for convention change -> (N,) instead of (N,1)
@@ -862,16 +868,16 @@ class DenseSPAMVec(SPAMVec):
                 raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         elif prep_or_effect == "effect":
             if evotype == "statevec":
-                rep = replib.SVEffectRep_Dense(vec)
+                rep = replib.SVEffectRepDense(vec)
             elif evotype == "densitymx":
-                rep = replib.DMEffectRep_Dense(vec)
+                rep = replib.DMEffectRepDense(vec)
             else:
                 raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
         else:
             raise ValueError("Invalid `prep_or_effect` argument: %s" % prep_or_effect)
 
         super(DenseSPAMVec, self).__init__(rep, evotype, prep_or_effect)
-        assert(self.base1D.flags['C_CONTIGUOUS'] and self.base1D.flags['OWNDATA'])
+        assert(self.base_1d.flags['C_CONTIGUOUS'] and self.base_1d.flags['OWNDATA'])
 
     def todense(self, scratch=None):
         """
@@ -879,15 +885,15 @@ class DenseSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         #don't use scratch since we already have memory allocated
-        return self.base1D  # *must* be a numpy array for Cython arg conversion
+        return self.base_1d  # *must* be a numpy array for Cython arg conversion
 
     @property
-    def base1D(self):
+    def base_1d(self):
         return self._rep.base
 
     @property
     def base(self):
-        bv = self.base1D.view()
+        bv = self.base_1d.view()
         bv.shape = (bv.size, 1)  # 'base' is by convention a (N,1)-shaped array
         return bv
 
@@ -1045,7 +1051,7 @@ class FullSPAMVec(DenseSPAMVec):
         vec = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
-        self.base1D[:] = vec
+        self.base_1d[:] = vec
         self.dirty = True
 
     def num_params(self):
@@ -1069,9 +1075,9 @@ class FullSPAMVec(DenseSPAMVec):
             The parameters as a 1D array with length num_params().
         """
         if self._evotype == "statevec":
-            return _np.concatenate((self.base1D.real, self.base1D.imag), axis=0)
+            return _np.concatenate((self.base_1d.real, self.base_1d.imag), axis=0)
         else:
-            return self.base1D
+            return self.base_1d
 
     def from_vector(self, v, close=False, nodirty=False):
         """
@@ -1088,12 +1094,12 @@ class FullSPAMVec(DenseSPAMVec):
         None
         """
         if self._evotype == "statevec":
-            self.base1D[:] = v[0:self.dim] + 1j * v[self.dim:]
+            self.base_1d[:] = v[0:self.dim] + 1j * v[self.dim:]
         else:
-            self.base1D[:] = v
+            self.base_1d[:] = v
         if not nodirty: self.dirty = True
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -1110,10 +1116,10 @@ class FullSPAMVec(DenseSPAMVec):
         else:
             derivMx = _np.identity(self.dim, 'd')
 
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -1164,9 +1170,9 @@ class TPSPAMVec(DenseSPAMVec):
 
     @property
     def base(self):
-        bv = self.base1D.view()
+        bv = self.base_1d.view()
         bv.shape = (bv.size, 1)
-        return _ProtectedArray(bv, indicesToProtect=(0, 0))
+        return _ProtectedArray(bv, indices_to_protect=(0, 0))
 
     def set_value(self, vec):
         """
@@ -1190,7 +1196,7 @@ class TPSPAMVec(DenseSPAMVec):
         if not _np.isclose(vec[0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        self.base1D[1:] = vec[1:]
+        self.base_1d[1:] = vec[1:]
         self.dirty = True
 
     def num_params(self):
@@ -1213,7 +1219,7 @@ class TPSPAMVec(DenseSPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self.base1D[1:]  # .real in case of complex matrices?
+        return self.base_1d[1:]  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, nodirty=False):
         """
@@ -1229,11 +1235,11 @@ class TPSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        assert(_np.isclose(self.base1D[0], (self.dim)**-0.25))
-        self.base1D[1:] = v
+        assert(_np.isclose(self.base_1d[0], (self.dim)**-0.25))
+        self.base_1d[1:] = v
         if not nodirty: self.dirty = True
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -1246,10 +1252,10 @@ class TPSPAMVec(DenseSPAMVec):
         """
         derivMx = _np.identity(self.dim, 'd')  # TP vecs assumed real
         derivMx = derivMx[:, 1:]  # remove first col ( <=> first-el parameters )
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -1304,9 +1310,9 @@ class ComplementSPAMVec(DenseSPAMVec):
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
-        self.base1D.flags.writeable = True
-        self.base1D[:] = self.identity.base1D - sum([vec.base1D for vec in self.other_vecs])
-        self.base1D.flags.writeable = False
+        self.base_1d.flags.writeable = True
+        self.base_1d[:] = self.identity.base_1d - sum([vec.base_1d for vec in self.other_vecs])
+        self.base_1d.flags.writeable = False
 
     def num_params(self):
         """
@@ -1350,7 +1356,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         self._construct_vector()
         if not nodirty: self.dirty = True
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -1373,10 +1379,10 @@ class ComplementSPAMVec(DenseSPAMVec):
             neg_deriv[:, local_inds] += ovec.deriv_wrt_params()
         derivMx = -neg_deriv
 
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -1515,9 +1521,9 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)
         vec = _np.real(vec)
 
-        self.base1D.flags.writeable = True
-        self.base1D[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
-        self.base1D.flags.writeable = False
+        self.base_1d.flags.writeable = True
+        self.base_1d[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
+        self.base_1d.flags.writeable = False
 
     def set_value(self, vec):
         """
@@ -1583,7 +1589,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         self._construct_vector()
         if not nodirty: self.dirty = True
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -1644,10 +1650,10 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(_np.linalg.norm(_np.imag(dVdP)) < IMAG_TOL)
         derivMx = _np.real(dVdP)
 
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -1661,7 +1667,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         """
         return True
 
-    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+    def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
@@ -1671,7 +1677,7 @@ class CPTPSPAMVec(DenseSPAMVec):
 
         Parameters
         ----------
-        wrtFilter1, wrtFilter2 : list
+        wrt_filter1, wrt_filter2 : list
             Lists of indices of the paramters to take first and second
             derivatives with respect to.  If None, then derivatives are
             taken with respect to all of the vectors's parameters.
@@ -1689,7 +1695,7 @@ class TensorProdSPAMVec(SPAMVec):
     Encapsulates a SPAM vector that is a tensor-product of other SPAM vectors.
     """
 
-    def __init__(self, typ, factors, povmEffectLbls=None):
+    def __init__(self, typ, factors, povm_effect_lbls=None):
         """
         Initialize a TensorProdSPAMVec object.
 
@@ -1702,9 +1708,9 @@ class TensorProdSPAMVec(SPAMVec):
         factors : list of SPAMVecs or POVMs
             if `typ == "prep"`, a list of the component SPAMVecs; if
             `typ == "effect"`, a list of "reference" POVMs into which
-            `povmEffectLbls` indexes.
+            `povm_effect_lbls` indexes.
 
-        povmEffectLbls : array-like
+        povm_effect_lbls : array-like
             Only non-None when `typ == "effect"`.  The effect label of each
             factor POVM which is tensored together to form this SPAM vector.
         """
@@ -1713,9 +1719,9 @@ class TensorProdSPAMVec(SPAMVec):
         self.factors = factors  # do *not* copy - needs to reference common objects
         self.Np = sum([fct.num_params() for fct in factors])
         if typ == "effect":
-            self.effectLbls = _np.array(povmEffectLbls)
+            self.effectLbls = _np.array(povm_effect_lbls)
         elif typ == "prep":
-            assert(povmEffectLbls is None), '`povmEffectLbls` must be None when `typ != "effects"`'
+            assert(povm_effect_lbls is None), '`povm_effect_lbls` must be None when `typ != "effects"`'
             self.effectLbls = None
         else: raise ValueError("Invalid `typ` argument: %s" % typ)
 
@@ -1737,17 +1743,17 @@ class TensorProdSPAMVec(SPAMVec):
         if evotype == "statevec":
             if typ == "prep":  # prep-type vectors can be represented as dense effects too
                 rep = replib.SVStateRep(_np.ascontiguousarray(_np.zeros(dim, complex)))
-                #sometimes: return replib.SVEffectRep_Dense(self.todense()) ???
+                #sometimes: return replib.SVEffectRepDense(self.todense()) ???
             else:  # "effect"
-                rep = replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+                rep = replib.SVEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                     len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "densitymx":
             if typ == "prep":
                 vec = _np.require(_np.zeros(dim, 'd'), requirements=['OWNDATA', 'C_CONTIGUOUS'])
                 rep = replib.DMStateRep(vec)
-                #sometimes: return replib.DMEffectRep_Dense(self.todense()) ???
+                #sometimes: return replib.DMEffectRepDense(self.todense()) ???
             else:  # "effect"
-                rep = replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+                rep = replib.DMEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                     len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "stabilizer":
             if typ == "prep":
@@ -1833,8 +1839,8 @@ class TensorProdSPAMVec(SPAMVec):
                 self._rep.amps[:, :] = new_rep.amps[:, :]
             else:
                 pass  # I think the below (e.g. 'outcomes') is not altered by any parameters
-                #factorPOVMs = self.factors
-                #factorVecs = [factorPOVMs[i][self.effectLbls[i]] for i in range(1, len(factorPOVMs))]
+                #factor_povms = self.factors
+                #factorVecs = [factor_povms[i][self.effectLbls[i]] for i in range(1, len(factor_povms))]
                 #outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
                 #rep = replib.SBEffectRep(outcomes)
 
@@ -1901,19 +1907,19 @@ class TensorProdSPAMVec(SPAMVec):
     #            if typ == "prep":
     #                return replib.SVStateRep(self.todense())
     #            else:
-    #                return replib.SVEffectRep_Dense(self.todense())
+    #                return replib.SVEffectRepDense(self.todense())
     #        else:
-    #            return replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+    #            return replib.SVEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
     #                                                 len(self.factors), self._fast_kron_array.shape[1], self.dim)
     #    elif self._evotype == "densitymx":
     #        if self._prep_or_effect == "prep":
     #            if typ == "prep":
     #                return replib.DMStateRep(self.todense())
     #            else:
-    #                return replib.DMEffectRep_Dense(self.todense())
+    #                return replib.DMEffectRepDense(self.todense())
     #
     #        else:
-    #            return replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+    #            return replib.DMEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
     #                                                 len(self.factors), self._fast_kron_array.shape[1], self.dim)
     #
     #    elif self._evotype == "stabilizer":
@@ -1930,8 +1936,8 @@ class TensorProdSPAMVec(SPAMVec):
     #
     #        else:  # self._prep_or_effect == "effect", so each factor is a StabilizerZPOVM
     #            # like above, but get a StabilizerEffectVec from each StabilizerZPOVM factor
-    #            factorPOVMs = self.factors
-    #            factorVecs = [factorPOVMs[i][self.effectLbls[i]] for i in range(1, len(factorPOVMs))]
+    #            factor_povms = self.factors
+    #            factorVecs = [factor_povms[i][self.effectLbls[i]] for i in range(1, len(factor_povms))]
     #            outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
     #            return replib.SBEffectRep(outcomes)
     #
@@ -2096,7 +2102,7 @@ class TensorProdSPAMVec(SPAMVec):
         elif all([self.effectLbls[i] == list(povm.keys())[0]
                   for i, povm in enumerate(self.factors)]):
             #then this is the *first* vector in the larger TensorProdPOVM
-            # and we should initialize all of the factorPOVMs
+            # and we should initialize all of the factor_povms
             for povm in self.factors:
                 local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
@@ -2106,7 +2112,7 @@ class TensorProdSPAMVec(SPAMVec):
         # just fast-kron arrays or a stabilizer state.
         self._update_rep()
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -2163,10 +2169,10 @@ class TensorProdSPAMVec(SPAMVec):
             derivMx[:, local_inds] += deriv
 
         derivMx.shape = (self.dim, self.num_params())  # necessary?
-        if wrtFilter is None:
+        if wrt_filter is None:
             return derivMx
         else:
-            return _np.take(derivMx, wrtFilter, axis=1)
+            return _np.take(derivMx, wrt_filter, axis=1)
 
     def has_nonzero_hessian(self):
         """
@@ -2395,7 +2401,7 @@ class PureStateSPAMVec(SPAMVec):
         self.pure_state_vec.from_vector(v, close, nodirty)
         #Update dense rep if one is created (TODO)
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -2431,8 +2437,8 @@ class LindbladSPAMVec(SPAMVec):
     """ A Lindblad-parameterized SPAMVec (that is also expandable into terms)"""
 
     @classmethod
-    def from_spamvec_obj(cls, spamvec, typ, paramType="GLND", purevec=None,
-                         proj_basis="pp", mxBasis="pp", truncate=True,
+    def from_spamvec_obj(cls, spamvec, typ, param_type="GLND", purevec=None,
+                         proj_basis="pp", mx_basis="pp", truncate=True,
                          lazy=False):
         """
         Creates a LindbladSPAMVec from an existing SPAMVec object
@@ -2453,7 +2459,7 @@ class LindbladSPAMVec(SPAMVec):
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
 
-        paramType : str, optional
+        param_type : str, optional
             The high-level "parameter type" of the gate to create.  This
             specifies both which Lindblad parameters are included and what
             type of evolution is used.  Examples of valid values are
@@ -2475,7 +2481,7 @@ class LindbladSPAMVec(SPAMVec):
             are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
@@ -2506,9 +2512,9 @@ class LindbladSPAMVec(SPAMVec):
         elif not isinstance(purevec, SPAMVec):
             purevec = StaticSPAMVec(purevec, typ=typ)  # assume spamvec is just a vector
 
-        #Break paramType in to a "base" type and an evotype
+        #Break param_type in to a "base" type and an evotype
         from .operation import LindbladOp as _LPGMap
-        bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(paramType)
+        bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(param_type)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
         nonham_basis = proj_basis
@@ -2528,39 +2534,39 @@ class LindbladSPAMVec(SPAMVec):
            and spamvec._evotype == evotype and spamvec.typ == typ \
            and beq(ham_basis, spamvec.error_map.ham_basis) and beq(nonham_basis, spamvec.error_map.other_basis) \
            and param_mode == spamvec.error_map.param_mode and nonham_mode == spamvec.error_map.nonham_mode \
-           and beq(mxBasis, spamvec.error_map.matrix_basis) and lazy:
+           and beq(mx_basis, spamvec.error_map.matrix_basis) and lazy:
             #normeq(gate.pure_state_vec,purevec) \ # TODO: more checks for equality?!
             return spamvec  # no creation necessary!
         else:
             #Convert vectors (if possible) to SPAMVecs
             # of the appropriate evotype and 0 params.
             bDiff = spamvec is not purevec
-            spamvec = _convert_to_lindblad_base(spamvec, typ, evotype, mxBasis)
-            purevec = _convert_to_lindblad_base(purevec, typ, evotype, mxBasis) if bDiff else spamvec
+            spamvec = _convert_to_lindblad_base(spamvec, typ, evotype, mx_basis)
+            purevec = _convert_to_lindblad_base(purevec, typ, evotype, mx_basis) if bDiff else spamvec
             assert(spamvec._evotype == evotype)
             assert(purevec._evotype == evotype)
 
             return cls.from_spam_vector(
                 spamvec, purevec, typ, ham_basis, nonham_basis,
-                param_mode, nonham_mode, truncate, mxBasis, evotype)
+                param_mode, nonham_mode, truncate, mx_basis, evotype)
 
     @classmethod
-    def from_spam_vector(cls, spamVec, pureVec, typ,
+    def from_spam_vector(cls, spam_vec, pure_vec, typ,
                          ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                         nonham_mode="all", truncate=True, mxBasis="pp",
+                         nonham_mode="all", truncate=True, mx_basis="pp",
                          evotype="densitymx"):
         """
         Creates a Lindblad-parameterized spamvec from a state vector and a basis
         which specifies how to decompose (project) the vector's error generator.
 
-        spamVec : SPAMVec
+        spam_vec : SPAMVec
             the SPAM vector to initialize from.  The error generator that
-            tranforms `pureVec` into `spamVec` forms the parameterization
+            tranforms `pure_vec` into `spam_vec` forms the parameterization
             of the returned LindbladSPAMVec.
 
-        pureVec : numpy array or SPAMVec
+        pure_vec : numpy array or SPAMVec
             An array or SPAMVec in the *full* density-matrix space (this
-            vector will have the same dimension as `spamVec` - 4 in the case
+            vector will have the same dimension as `spam_vec` - 4 in the case
             of a single qubit) which represents a pure-state preparation or
             projection.  This is used as the "base" preparation/projection
             when computing the error generator that will be parameterized.
@@ -2600,7 +2606,7 @@ class LindbladSPAMVec(SPAMVec):
             If False, then an error is thrown when the given `gate` cannot
             be realized by the specified set of Lindblad projections.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
@@ -2616,16 +2622,16 @@ class LindbladSPAMVec(SPAMVec):
         -------
         LindbladSPAMVec
         """
-        #Compute a (errgen, pureVec) pair from the given
-        # (spamVec, pureVec) pair.
+        #Compute a (errgen, pure_vec) pair from the given
+        # (spam_vec, pure_vec) pair.
 
-        assert(pureVec is not None), "Must supply `pureVec`!"  # since there's no good default?
+        assert(pure_vec is not None), "Must supply `pure_vec`!"  # since there's no good default?
 
-        if not isinstance(spamVec, SPAMVec):
-            spamVec = StaticSPAMVec(spamVec, evotype, typ)  # assume spamvec is just a vector
-        if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
-        d2 = pureVec.dim
+        if not isinstance(spam_vec, SPAMVec):
+            spam_vec = StaticSPAMVec(spam_vec, evotype, typ)  # assume spamvec is just a vector
+        if not isinstance(pure_vec, SPAMVec):
+            pure_vec = StaticSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
+        d2 = pure_vec.dim
 
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -2639,17 +2645,17 @@ class LindbladSPAMVec(SPAMVec):
                 sparse = _sps.issparse(nonham_basis[0])
         if sparse is None: sparse = False  # the default
 
-        if spamVec is None or spamVec is pureVec:
+        if spam_vec is None or spam_vec is pure_vec:
             if sparse: errgen = _sps.csr_matrix((d2, d2), dtype='d')
             else: errgen = _np.zeros((d2, d2), 'd')
         else:
             #Construct "spam error generator" by comparing *dense* vectors
-            pvdense = pureVec.todense()
-            svdense = spamVec.todense()
-            errgen = _gt.spam_error_generator(svdense, pvdense, mxBasis)
+            pvdense = pure_vec.todense()
+            svdense = spam_vec.todense()
+            errgen = _gt.spam_error_generator(svdense, pvdense, mx_basis)
             if sparse: errgen = _sps.csr_matrix(errgen)
 
-        assert(pureVec._evotype == evotype), "`pureVec` must have evotype == '%s'" % evotype
+        assert(pure_vec._evotype == evotype), "`pure_vec` must have evotype == '%s'" % evotype
 
         from .operation import LindbladErrorgen as _LErrorgen
         from .operation import LindbladOp as _LPGMap
@@ -2657,29 +2663,29 @@ class LindbladSPAMVec(SPAMVec):
 
         errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
                                                  nonham_basis, param_mode, nonham_mode,
-                                                 mxBasis, truncate, evotype)
-        errcls = _LPOp if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
+                                                 mx_basis, truncate, evotype)
+        errcls = _LPOp if (pure_vec.dim <= 64 and evotype == "densitymx") else _LPGMap
         errmap = errcls(None, errgen)
 
-        return cls(pureVec, errmap, typ)
+        return cls(pure_vec, errmap, typ)
 
     @classmethod
-    def from_lindblad_terms(cls, pureVec, Ltermdict, typ, basisdict=None,
+    def from_lindblad_terms(cls, pure_vec, lindblad_term_dict, typ, basisdict=None,
                             param_mode="cptp", nonham_mode="all", truncate=True,
-                            mxBasis="pp", evotype="densitymx"):
+                            mx_basis="pp", evotype="densitymx"):
         """
         Create a Lindblad-parameterized spamvec with a given set of Lindblad terms.
 
         Parameters
         ----------
-        pureVec : numpy array or SPAMVec
+        pure_vec : numpy array or SPAMVec
             An array or SPAMVec in the *full* density-matrix space (this
             vector will have dimension 4 in the case of a single qubit) which
             represents a pure-state preparation or projection.  This is used as
             the "base" preparation or projection that is followed or preceded
             by, respectively, the parameterized Lindblad-form error generator.
 
-        Ltermdict : dict
+        lindblad_term_dict : dict
             A dictionary specifying which Linblad terms are present in the gate
             parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
             tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
@@ -2696,7 +2702,7 @@ class LindbladSPAMVec(SPAMVec):
 
         basisdict : dict, optional
             A dictionary mapping the basis labels (strings or ints) used in the
-            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+            keys of `lindblad_term_dict` to basis matrices (numpy arrays or Scipy sparse
             matrices).
 
         param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
@@ -2719,7 +2725,7 @@ class LindbladSPAMVec(SPAMVec):
             If False, then an error is thrown when the given dictionary of
             Lindblad terms doesn't conform to the constrains.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
@@ -2736,16 +2742,16 @@ class LindbladSPAMVec(SPAMVec):
         LindbladOp
         """
         #Need a dimension for error map construction (basisdict could be completely empty)
-        if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
-        d2 = pureVec.dim
+        if not isinstance(pure_vec, SPAMVec):
+            pure_vec = StaticSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
+        d2 = pure_vec.dim
 
         from .operation import LindbladOp as _LPGMap
-        errmap = _LPGMap(d2, Ltermdict, basisdict, param_mode, nonham_mode,
-                         truncate, mxBasis, evotype)
-        return cls(pureVec, errmap, typ)
+        errmap = _LPGMap(d2, lindblad_term_dict, basisdict, param_mode, nonham_mode,
+                         truncate, mx_basis, evotype)
+        return cls(pure_vec, errmap, typ)
 
-    def __init__(self, pureVec, errormap, typ):
+    def __init__(self, pure_vec, errormap, typ):
         """
         Initialize a LindbladSPAMVec object.
 
@@ -2754,7 +2760,7 @@ class LindbladSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        pureVec : numpy array or SPAMVec
+        pure_vec : numpy array or SPAMVec
             An array or SPAMVec in the *full* density-matrix space (this
             vector will have dimension 4 in the case of a single qubit) which
             represents a pure-state preparation or projection.  This is used as
@@ -2778,15 +2784,15 @@ class LindbladSPAMVec(SPAMVec):
         assert(evotype in ("densitymx", "svterm", "cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
-        if not isinstance(pureVec, SPAMVec):
-            pureVec = StaticSPAMVec(pureVec, evotype, typ)  # assume spamvec is just a vector
+        if not isinstance(pure_vec, SPAMVec):
+            pure_vec = StaticSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
 
-        assert(pureVec._evotype == evotype), \
-            "`pureVec` evotype must match `errormap` ('%s' != '%s')" % (pureVec._evotype, evotype)
-        assert(pureVec.num_params() == 0), "`pureVec` 'reference' must have *zero* parameters!"
+        assert(pure_vec._evotype == evotype), \
+            "`pure_vec` evotype must match `errormap` ('%s' != '%s')" % (pure_vec._evotype, evotype)
+        assert(pure_vec.num_params() == 0), "`pure_vec` 'reference' must have *zero* parameters!"
 
-        d2 = pureVec.dim
-        self.state_vec = pureVec
+        d2 = pure_vec.dim
+        self.state_vec = pure_vec
         self.error_map = errormap
         self.terms = {} if evotype in ("svterm", "cterm") else None
         self.local_term_poly_coeffs = {} if evotype in ("svterm", "cterm") else None
@@ -2806,7 +2812,7 @@ class LindbladSPAMVec(SPAMVec):
             else:  # effect
                 dmEffectRep = self.state_vec._rep
                 errmapRep = self.error_map._rep
-                rep = replib.DMEffectRep_Errgen(errmapRep, dmEffectRep, id(self.error_map))
+                rep = replib.DMEffectRepErrgen(errmapRep, dmEffectRep, id(self.error_map))
                 # an effect that applies a *named* errormap before computing with dmEffectRep
 
         else:
@@ -2823,7 +2829,7 @@ class LindbladSPAMVec(SPAMVec):
                 self._rep.base[:] = errmapRep.acton(dmRep).base[:]  # copy from "new_rep"
 
             else:  # effect
-                # _rep is a DMEffectRep_Errgen, which just holds references to the
+                # _rep is a DMEffectRepErrgen, which just holds references to the
                 # effect and error map's representations (which we assume have been updated)
                 # so there's no need to update anything here
                 pass
@@ -2912,7 +2918,7 @@ class LindbladSPAMVec(SPAMVec):
     #        else:  # effect
     #            dmEffectRep = self.state_vec.torep(typ)
     #            errmapRep = self.error_map.torep()
-    #            return replib.DMEffectRep_Errgen(errmapRep, dmEffectRep, id(self.error_map))
+    #            return replib.DMEffectRepErrgen(errmapRep, dmEffectRep, id(self.error_map))
     #            # an effect that applies a *named* errormap before computing with dmEffectRep
     #
     #    else:
@@ -3038,7 +3044,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return self.error_map.get_total_term_magnitude_deriv()
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def deriv_wrt_params(self, wrt_filter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
@@ -3051,20 +3057,20 @@ class LindbladSPAMVec(SPAMVec):
         """
         dmVec = self.state_vec.todense()
 
-        derrgen = self.error_map.deriv_wrt_params(wrtFilter)  # shape (dim*dim, nParams)
-        derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,nParams)
+        derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
+        derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
 
         if self._prep_or_effect == "prep":
             #derror map acts on dmVec
-            #return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,nParams)
-            return _np.tensordot(derrgen, dmVec, (1, 0))  # return shape = (dim,nParams)
+            #return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,n_params)
+            return _np.tensordot(derrgen, dmVec, (1, 0))  # return shape = (dim,n_params)
         else:
             # self.error_map acts on the *state* vector before dmVec acts
             # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
-            #return _np.einsum("jik,j->ik", derrgen.conjugate(), dmVec) # return shape = (dim,nParams)
-            return _np.tensordot(derrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,nParams)
+            #return _np.einsum("jik,j->ik", derrgen.conjugate(), dmVec) # return shape = (dim,n_params)
+            return _np.tensordot(derrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,n_params)
 
-    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+    def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
@@ -3074,7 +3080,7 @@ class LindbladSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        wrtFilter1, wrtFilter2 : list
+        wrt_filter1, wrt_filter2 : list
             Lists of indices of the paramters to take first and second
             derivatives with respect to.  If None, then derivatives are
             taken with respect to all of the vectors's parameters.
@@ -3086,18 +3092,18 @@ class LindbladSPAMVec(SPAMVec):
         """
         dmVec = self.state_vec.todense()
 
-        herrgen = self.error_map.hessian_wrt_params(wrtFilter1, wrtFilter2)  # shape (dim*dim, nParams1, nParams2)
+        herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)
 
         if self._prep_or_effect == "prep":
             #derror map acts on dmVec
-            #return _np.einsum("ijkl,j->ikl", herrgen, dmVec) # return shape = (dim,nParams)
-            return _np.tensordot(herrgen, dmVec, (1, 0))  # return shape = (dim,nParams)
+            #return _np.einsum("ijkl,j->ikl", herrgen, dmVec) # return shape = (dim,n_params)
+            return _np.tensordot(herrgen, dmVec, (1, 0))  # return shape = (dim,n_params)
         else:
             # self.error_map acts on the *state* vector before dmVec acts
             # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
-            #return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,nParams)
-            return _np.tensordot(herrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,nParams)
+            #return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,n_params)
+            return _np.tensordot(herrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,n_params)
 
     def num_params(self):
         """
@@ -3139,14 +3145,14 @@ class LindbladSPAMVec(SPAMVec):
         self._update_rep()
         if not nodirty: self.dirty = True
 
-    def transform(self, S, typ):
+    def transform(self, s, typ):
         """
-        Update SPAM (column) vector V as inv(S) * V or S^T * V for preparation
+        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation
         or  effect SPAM vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
-        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
-        being mapped as `E^T -> E^T * S`.
+        mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * s`.
 
         Generally, the transform function updates the *parameters* of
         the SPAM vector such that the resulting vector is altered as
@@ -3155,8 +3161,8 @@ class LindbladSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
 
         typ : { 'prep', 'effect' }
@@ -3164,9 +3170,9 @@ class LindbladSPAMVec(SPAMVec):
         """
         #Defer everything to LindbladOp's
         # `spam_tranform` function, which applies either
-        # error_map -> inv(S) * error_map ("prep" case) OR
-        # error_map -> error_map * S      ("effect" case)
-        self.error_map.spam_transform(S, typ)
+        # error_map -> inv(s) * error_map ("prep" case) OR
+        # error_map -> error_map * s      ("effect" case)
+        self.error_map.spam_transform(s, typ)
         self._update_rep()
         self.dirty = True
 
@@ -3451,9 +3457,9 @@ class ComputationalSPAMVec(SPAMVec):
 
         elif typ == "effect":
             if evotype == "statevec":
-                rep = replib.SVEffectRep_Computational(self._zvals, dim)
+                rep = replib.SVEffectRepComputational(self._zvals, dim)
             elif evotype == "densitymx":
-                rep = replib.DMEffectRep_Computational(self._zvals, dim)
+                rep = replib.DMEffectRepComputational(self._zvals, dim)
             elif evotype == "stabilizer":
                 rep = replib.SBEffectRep(self._zvals)
             else:
@@ -3469,9 +3475,11 @@ class ComputationalSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         if self._evotype == "densitymx":
+            factor_dim = 4
             v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
             v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
         elif self._evotype in ("statevec", "stabilizer"):
+            factor_dim = 2
             v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
             v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
         elif self._evotype in ("svterm", "cterm"):
@@ -3480,7 +3488,22 @@ class ComputationalSPAMVec(SPAMVec):
         else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
 
         v = (v0, v1)
-        return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
+
+        if _fastcalc is None:  # do it the slow way using numpy
+            return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
+        else:
+            typ = 'd' if self._evotype == "densitymx" else complex
+            fast_kron_array = _np.ascontiguousarray(
+                _np.empty((len(self._zvals), factor_dim), typ))
+            fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
+            for i, zi in enumerate(self._zvals):
+                fast_kron_array[i, :] = v[zi]
+            ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
+            if self._evotype == "densitymx":
+                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            else:
+                _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
+            return ret
 
     #def torep(self, typ, outvec=None):
     #    if typ == "prep":
@@ -3495,9 +3518,9 @@ class ComputationalSPAMVec(SPAMVec):
     #                                  (self._evotype, self.__class__.__name__))
     #    elif typ == "effect":
     #        if self._evotype == "statevec":
-    #            return replib.SVEffectRep_Computational(self._zvals, self.dim)
+    #            return replib.SVEffectRepComputational(self._zvals, self.dim)
     #        elif self._evotype == "densitymx":
-    #            return replib.DMEffectRep_Computational(self._zvals, self.dim)
+    #            return replib.DMEffectRepComputational(self._zvals, self.dim)
     #        elif self._evotype == "stabilizer":
     #            return replib.SBEffectRep(_np.ascontiguousarray(self._zvals, _np.int64))
     #        raise NotImplementedError("torep(%s) not implemented for %s objects!" %

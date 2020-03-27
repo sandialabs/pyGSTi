@@ -10,6 +10,6 @@
 
 from .rpetools import *
 from .rpeconfig import *
-from .rpeconfig_GxPi2_GyPi2_UpDn import *
-from .rpeconfig_GxPi2_GyPi2_00 import *
+from . import rpeconfig_GxPi2_GyPi2_00
+from . import rpeconfig_GxPi2_GyPi2_UpDn
 from .rpeconstruction import *

@@ -748,7 +748,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT7: %.3fs" % (_time.time()-t0)) # REMOVE
         #end of outer loop
         else:
-            #if no break stmt hit, then we've exceeded maxIter
+            #if no break stmt hit, then we've exceeded max_iter
             msg = "Maximum iterations (%d) exceeded" % max_iter
             converged = True  # call result "converged" even in this case, but issue warning:
             printer.warning("Treating result as *converged* after maximum iterations (%d) were exceeded." % max_iter)
@@ -774,7 +774,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     #return solution
 
 
-def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
+def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
     #HACK1
     #if nRejects >= 2:
     #    dx = -(10.0**(1-nRejects))*x
@@ -790,7 +790,7 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
         STEP = 0.0001
 
         #import bpdb; bpdb.set_trace()
-        #gradient = -JTf
+        #gradient = -jtf
         test_dx = _np.zeros(len(dx), 'd')
         last_normf = norm_f
         for ii in range(len(dx)):
@@ -816,10 +816,10 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
                         break
 
             if abs(test_dx[ii]) > 1e-6:
-                test_prediction = norm_f + _np.dot(-2 * JTf, test_dx)
-                tp2_f = f + _np.dot(Jac, test_dx)
+                test_prediction = norm_f + _np.dot(-2 * jtf, test_dx)
+                tp2_f = f + _np.dot(jac, test_dx)
                 test_prediction2 = _np.dot(tp2_f, tp2_f)
-                cmp_dx = dx  # -JTf
+                cmp_dx = dx  # -jtf
                 print(" -> Adjusting index ", ii, ":", x[ii], "+", test_dx[ii], " => ", last_normf, "(cmp w/dx: ",
                       cmp_dx[ii], test_prediction, test_prediction2, ") ",
                       "YES" if test_dx[ii] * cmp_dx[ii] > 0 else "NO")
@@ -834,15 +834,15 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
     if False:
         print("HACK3 - checking if there's a simple dx that is better...")
         test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
-        orig_prediction = norm_f + _np.dot(2 * JTf, dx)
-        Jdx = _np.dot(Jac, dx)
+        orig_prediction = norm_f + _np.dot(2 * jtf, dx)
+        Jdx = _np.dot(jac, dx)
         op2_f = f + Jdx
         orig_prediction2 = _np.dot(op2_f, op2_f)
         # main objective = fT*f = norm_f
         # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx
         #                                  = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
         #                                  = norm_f + 2*dxT*(JT*f)
-        # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (JTJ) * dx
+        # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (jtj) * dx
         orig_prediction3 = orig_prediction + _np.dot(Jdx, Jdx)
         norm_dx = _np.linalg.norm(dx)
         print("Compare with suggested |dx| = ", norm_dx, " => ", cmp_normf,
@@ -871,8 +871,8 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
             test_dx[ii] = 0
 
         test_dx[best_ii] = best_dx
-        test_prediction = norm_f + _np.dot(2 * JTf, test_dx)
-        tp2_f = f + _np.dot(Jac, test_dx)
+        test_prediction = norm_f + _np.dot(2 * jtf, test_dx)
+        tp2_f = f + _np.dot(jac, test_dx)
         test_prediction2 = _np.dot(tp2_f, tp2_f)
 
         jj = _np.argmax(_np.abs(dx))
@@ -922,25 +922,25 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
 #            print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
 #
 #        if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
-#        Jac = None; JTJ = None; JTf = None
+#        jac = None; jtj = None; jtf = None
 #
 #        if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
-#        Jac = jac_fn(x)
+#        jac = jac_fn(x)
 #        if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
-#                                        + "shape=%s, GB=%.2f" % (str(Jac.shape),
-#                                                        Jac.nbytes/(1024.0**3)) )
+#                                        + "shape=%s, GB=%.2f" % (str(jac.shape),
+#                                                        jac.nbytes/(1024.0**3)) )
 #
 #        tm = _time.time()
 #        if my_cols_slice is None:
-#            my_cols_slice = _mpit.distribute_for_dot(Jac.shape[0], comm)
-#        JTJ = _mpit.mpidot(Jac.T,Jac,my_cols_slice,comm)   #_np.dot(Jac.T,Jac)
-#        JTf = _np.dot(Jac.T,f)
+#            my_cols_slice = _mpit.distribute_for_dot(jac.shape[0], comm)
+#        jtj = _mpit.mpidot(jac.T,jac,my_cols_slice,comm)   #_np.dot(jac.T,jac)
+#        jtf = _np.dot(jac.T,f)
 #        if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
 #
-#        idiag = _np.diag_indices_from(JTJ)
-#        norm_JTf = _np.linalg.norm(JTf) #, ord='inf')
+#        idiag = _np.diag_indices_from(jtj)
+#        norm_JTf = _np.linalg.norm(jtf) #, ord='inf')
 #        norm_x = _np.linalg.norm(x)
-#        undampled_JTJ_diag = JTJ.diagonal().copy()
+#        undampled_JTJ_diag = jtj.diagonal().copy()
 #
 #        if norm_JTf < jac_norm_tol:
 #            msg = "norm(jacobian) is small"
@@ -956,14 +956,14 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
 #            ### Evaluate with mu' = mu / nu
 #            mu = mu / nu
 #            if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
-#            JTJ[idiag] *= (1.0 + mu) # augment normal equations
-#            #JTJ[idiag] += mu # augment normal equations
+#            jtj[idiag] *= (1.0 + mu) # augment normal equations
+#            #jtj[idiag] += mu # augment normal equations
 #
 #            try:
 #                if profiler: profiler.mem_check("custom_leastsq: before linsolve")
 #                tm = _time.time()
 #                success = True
-#                dx = _np.linalg.solve(JTJ, -JTf)
+#                dx = _np.linalg.solve(jtj, -jtf)
 #                if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
 #            except _np.linalg.LinAlgError:
 #                success = False
@@ -1002,11 +1002,11 @@ def _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f):
 #                mu *= nu #increase mu
 #                nu = 2*nu
 #
-#            JTJ[idiag] = undampled_JTJ_diag #restore diagonal for next inner loop iter
+#            jtj[idiag] = undampled_JTJ_diag #restore diagonal for next inner loop iter
 #        #end of inner loop
 #    #end of outer loop
 #    else:
-#        #if no break stmt hit, then we've exceeded maxIter
+#        #if no break stmt hit, then we've exceeded max_iter
 #        msg = "Maximum iterations (%d) exceeded" % max_iter
 #
 #    return x, converged, msg

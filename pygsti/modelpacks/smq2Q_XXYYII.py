@@ -1160,8 +1160,8 @@ class _Module(GSTModelPack, RBModelPack):
             ['I({0}):I({1})', 'I({0}):X(pi/2,{1})', 'I({0}):Y(pi/2,{1})', 'X(pi/2,{0}):I({1})', 'Y(pi/2,{0}):I({1})',
              'X(pi/2,{0}):X(pi/2,{1})', 'Y(pi/2,{0}):Y(pi/2,{1})',
              'X(pi/2,{0}):Y(pi/2,{1})', 'Y(pi/2,{0}):X(pi/2,{1})'],
-            effectLabels=['00', '01', '10', '11'],
-            effectExpressions=['0', '1', '2', '3'])
+            effect_labels=['00', '01', '10', '11'],
+            effect_expressions=['0', '1', '2', '3'])
 
 
 import sys

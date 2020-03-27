@@ -110,9 +110,9 @@ TOL = 1e-20
 
 
 def logl(model, dataset, circuit_list=None,
-         minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-         poissonPicture=True, opLabelAliases=None, wildcard=None,
-         cache=None, comm=None, memLimit=None):
+         min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+         poisson_picture=True, op_label_aliases=None, wildcard=None,
+         cache=None, comm=None, mem_limit=None):
     """
     The log-likelihood function.
 
@@ -129,13 +129,13 @@ def logl(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -143,15 +143,15 @@ def logl(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     wildcard : WildcardBudget
         A wildcard budget to apply to this log-likelihood computation.
@@ -167,7 +167,7 @@ def logl(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
@@ -177,16 +177,16 @@ def logl(model, dataset, circuit_list=None,
         The log likelihood
     """
     v = logl_per_circuit(model, dataset, circuit_list,
-                         minProbClip, probClipInterval, radius,
-                         poissonPicture, opLabelAliases, wildcard,
-                         cache, comm, memLimit)
+                         min_prob_clip, prob_clip_interval, radius,
+                         poisson_picture, op_label_aliases, wildcard,
+                         cache, comm, mem_limit)
     return _np.sum(v)  # sum over *all* dimensions
 
 
 def logl_per_circuit(model, dataset, circuit_list=None,
-                     minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                     poissonPicture=True, opLabelAliases=None, wildcard=None,
-                     cache=None, comm=None, memLimit=None):
+                     min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                     poisson_picture=True, op_label_aliases=None, wildcard=None,
+                     cache=None, comm=None, mem_limit=None):
     """
     Computes the per-circuit log-likelihood contribution for a set of circuits.
 
@@ -203,25 +203,25 @@ def logl_per_circuit(model, dataset, circuit_list=None,
         string aggregated over outcomes.
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
-                            opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+                            op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius},
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm, memLimit)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit)
 
     if wildcard:
-        assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
+        assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
     return obj_max.percircuit() - obj.percircuit()
 
 
 def logl_jacobian(model, dataset, circuit_list=None,
-                  minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                  poissonPicture=True, opLabelAliases=None, cache=None,
-                  comm=None, memLimit=None, verbosity=0):
+                  min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                  poisson_picture=True, op_label_aliases=None, cache=None,
+                  comm=None, mem_limit=None, verbosity=0):
     """
     The jacobian of the log-likelihood function.
 
@@ -238,13 +238,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -252,14 +252,14 @@ def logl_jacobian(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
@@ -268,7 +268,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
@@ -280,19 +280,19 @@ def logl_jacobian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius},
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm, memLimit)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_hessian(model, dataset, circuit_list=None,
-                 minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                 poissonPicture=True, opLabelAliases=None, cache=None,
-                 comm=None, memLimit=None, verbosity=0):
+                 min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                 poisson_picture=True, op_label_aliases=None, cache=None,
+                 comm=None, mem_limit=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -309,13 +309,13 @@ def logl_hessian(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by
         models during MLEGST's search for an optimal model (if not None).
         if None, no clipping is performed.
@@ -324,14 +324,14 @@ def logl_hessian(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
@@ -340,7 +340,7 @@ def logl_hessian(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
@@ -352,19 +352,19 @@ def logl_hessian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,M), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius},
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm, memLimit)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuit_list=None,
-                             minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                             poissonPicture=True, opLabelAliases=None, cache=None,
-                             comm=None, memLimit=None, verbosity=0):
+                             min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                             poisson_picture=True, op_label_aliases=None, cache=None,
+                             comm=None, mem_limit=None, verbosity=0):
     """
     An approximate Hessian of the log-likelihood function.
 
@@ -394,13 +394,13 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -408,14 +408,14 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
@@ -424,7 +424,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
@@ -436,17 +436,17 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,M), where M is the length of the vectorized model.
     """
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius},
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm, memLimit)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit)
     return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
-def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
-             opLabelAliases=None, cache=None):
+def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
+             op_label_aliases=None, cache=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
     log-likelihood obtained by a maximal model that can fit perfectly
@@ -465,14 +465,14 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
         sum.  Default value of None implies all the operation sequences in dataset should
         be used.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the Poisson-picture maximum log-likelihood should be returned.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
@@ -482,12 +482,12 @@ def logl_max(model, dataset, circuit_list=None, poissonPicture=True,
     float
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
-                            opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
+                            op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.fn()
 
 
 def logl_max_per_circuit(model, dataset, circuit_list=None,
-                         poissonPicture=True, opLabelAliases=None, cache=None):
+                         poisson_picture=True, op_label_aliases=None, cache=None):
     """
     The vector of maximum log-likelihood contributions for each circuit,
     aggregated over outcomes.
@@ -505,25 +505,25 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
         operation sequence aggregated over outcomes.
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
-                            opLabelAliases=opLabelAliases, poisson_picture=poissonPicture)
+                            op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.percircuit()
 
 
 def two_delta_logl_nsigma(model, dataset, circuit_list=None,
-                          minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                          poissonPicture=True, opLabelAliases=None,
+                          min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                          poisson_picture=True, op_label_aliases=None,
                           dof_calc_method='nongauge', wildcard=None):
     """See docstring for :function:`pygsti.tools.two_delta_logl` """
     assert(dof_calc_method is not None)
     return two_delta_logl(model, dataset, circuit_list,
-                          minProbClip, probClipInterval, radius,
-                          poissonPicture, opLabelAliases,
+                          min_prob_clip, prob_clip_interval, radius,
+                          poisson_picture, op_label_aliases,
                           None, None, dof_calc_method, wildcard)[1]
 
 
 def two_delta_logl(model, dataset, circuit_list=None,
-                   minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                   poissonPicture=True, opLabelAliases=None,
+                   min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                   poisson_picture=True, op_label_aliases=None,
                    dof_calc_method=None, wildcard=None,
                    cache=None, comm=None):
     """
@@ -551,13 +551,13 @@ def two_delta_logl(model, dataset, circuit_list=None,
         sum.  Default value of None implies all the operation sequences in dataset
         should be used.
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
         below this threshold so that the log-likelihood never becomes undefined (which improves
         optimizer performance).
 
-    probClipInterval : 2-tuple or None, optional
+    prob_clip_interval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by models during MLEGST's
         search for an optimal model (if not None).  if None, no clipping is performed.
 
@@ -565,15 +565,15 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the computed log-likelihood values.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     dof_calc_method : {None, "all", "nongauge"}
         How `model`'s number of degrees of freedom (parameters) are obtained
@@ -604,21 +604,21 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius},
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm)
 
     if wildcard:
-        assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
+        assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    twoDeltaLogL = 2 * obj.fn()
+    two_delta_logl = 2 * obj.fn()
 
     if dof_calc_method is None:
-        return twoDeltaLogL
+        return two_delta_logl
     elif dof_calc_method == "nongauge":
         if hasattr(model, 'num_nongauge_params'):
             mdl_dof = model.num_nongauge_params()
@@ -629,21 +629,22 @@ def two_delta_logl(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
     else: ds_strs = None
 
-    Ns = dataset.get_degrees_of_freedom(ds_strs)
-    k = max(Ns - mdl_dof, 1)
-    if Ns <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, mdl_dof))
+    ds_dof = dataset.get_degrees_of_freedom(ds_strs)
+    k = max(ds_dof - mdl_dof, 1)
+    if ds_dof <= mdl_dof:
+        _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof))
 
-    Nsigma = (twoDeltaLogL - k) / _np.sqrt(2 * k)
-    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL, k)
-    return twoDeltaLogL, Nsigma, pvalue
+    nsigma = (two_delta_logl - k) / _np.sqrt(2 * k)
+    pvalue = 1.0 - _stats.chi2.cdf(two_delta_logl, k)
+    return two_delta_logl, nsigma, pvalue
 
 
 def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
-                               minProbClip=1e-6, probClipInterval=(-1e6, 1e6), radius=1e-4,
-                               poissonPicture=True, opLabelAliases=None,
+                               min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                               poisson_picture=True, op_label_aliases=None,
                                dof_calc_method=None, wildcard=None,
                                cache=None, comm=None):
     """
@@ -665,36 +666,36 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
-    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poissonPicture else _objfns.DeltaLogLFunction
+    obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'minProbClip': minProbClip,
+                        {'min_prob_clip': min_prob_clip,
                          'radius': radius}, None,
-                        {'probClipInterval': probClipInterval},
-                        opLabelAliases, cache, comm)
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm)
 
     if wildcard:
-        assert(poissonPicture), "Wildcard budgets can only be used with `poissonPicture=True`"
+        assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    twoDeltaLogL_percircuit = 2 * obj.percircuit()
+    two_dlogl_percircuit = 2 * obj.percircuit()
 
-    if dof_calc_method is None: return twoDeltaLogL_percircuit
+    if dof_calc_method is None: return two_dlogl_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params()
     elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, opLabelAliases)
+        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
     else: ds_strs = None
 
-    Ns = dataset.get_degrees_of_freedom(ds_strs)
-    k = max(Ns - mdl_dof, 1)
+    ds_dof = dataset.get_degrees_of_freedom(ds_strs)
+    k = max(ds_dof - mdl_dof, 1)
     # HACK - just take a single average #dof per circuit to use as chi_k distribution!
     k = int(_np.ceil(k / (1.0 * len(circuit_list))))
 
-    Nsigma = (twoDeltaLogL_percircuit - k) / _np.sqrt(2 * k)
-    pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in twoDeltaLogL_percircuit], 'd')
-    return twoDeltaLogL_percircuit, Nsigma, pvalue
+    nsigma = (two_dlogl_percircuit - k) / _np.sqrt(2 * k)
+    pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in two_dlogl_percircuit], 'd')
+    return two_dlogl_percircuit, nsigma, pvalue
 
 
 #UNUSED (REMOVE?)
@@ -723,34 +724,34 @@ def forbidden_prob(model, dataset):
     """
     forbidden_prob = 0
 
-    for mdl, dsRow in dataset.items():
+    for mdl, dsrow in dataset.items():
         probs = model.probs(mdl)
-        for (spamLabel, p) in probs.items():
+        for (spamlabel, p) in probs.items():
             if p < TOL:
-                if round(dsRow[spamLabel]) == 0: continue  # contributes zero to the sum
+                if round(dsrow[spamlabel]) == 0: continue  # contributes zero to the sum
                 else: forbidden_prob += abs(TOL - p) + TOL
             elif p > 1 - TOL:
-                if round(dsRow[spamLabel]) == dsRow.total: continue  # contributes zero to the sum
+                if round(dsrow[spamlabel]) == dsrow.total: continue  # contributes zero to the sum
                 else: forbidden_prob += abs(p - (1 - TOL)) + TOL
 
     return forbidden_prob
 
 
 #UNUSED (REMOVE?)
-def prep_penalty(rhoVec, basis):
+def prep_penalty(rho_vec, basis):
     """
-    Penalty assigned to a state preparation (rho) vector rhoVec.  State
+    Penalty assigned to a state preparation (rho) vector rho_vec.  State
       preparation density matrices must be positive semidefinite
       and trace == 1.  A positive return value indicates an
       these criteria are not met and the rho-vector is invalid.
 
     Parameters
     ----------
-    rhoVec : numpy array
+    rho_vec : numpy array
         rho vector array of shape (N,1) for some N.
 
     basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret rhoVec
+        The abbreviation for the basis used to interpret rho_vec
         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
          "qt" = qutrit, or standard).
 
@@ -758,32 +759,32 @@ def prep_penalty(rhoVec, basis):
     -------
     float
     """
-    # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec), basis)
-    evals = _np.linalg.eigvals(rhoMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    sumOfNeg = sum([-ev.real for ev in evals if ev.real < 0])
-    tracePenalty = abs(rhoVec[0, 0] - (1.0 / _np.sqrt(rhoMx.shape[0])))
+    # rho_vec must be positive semidefinite and trace = 1
+    rho_mx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
+    evals = _np.linalg.eigvals(rho_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
+    sum_of_neg = sum([-ev.real for ev in evals if ev.real < 0])
+    trace_penalty = abs(rho_vec[0, 0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
     # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
     #print "Trace Penalty = ",tracePenalty  #DEBUG
-    return sumOfNeg + tracePenalty
+    return sum_of_neg + trace_penalty
 
 
 #UNUSED (REMOVE?)
-def effect_penalty(EVec, basis):
+def effect_penalty(effect_vec, basis):
     """
-    Penalty assigned to a POVM effect vector EVec. Effects
+    Penalty assigned to a POVM effect vector effect_vec. Effects
       must have eigenvalues between 0 and 1.  A positive return
       value indicates this criterion is not met and the E-vector
       is invalid.
 
     Parameters
     ----------
-    EVec : numpy array
+    effect_vec : numpy array
          effect vector array of shape (N,1) for some N.
 
     basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret EVec
+        The abbreviation for the basis used to interpret effect_vec
         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
          "qt" = qutrit, or standard).
 
@@ -791,14 +792,14 @@ def effect_penalty(EVec, basis):
     -------
     float
     """
-    # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.vec_to_stdmx(_np.asarray(EVec), basis)
-    evals = _np.linalg.eigvals(EMx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    sumOfPen = 0
+    # effect_vec must have eigenvalues between 0 and 1
+    effect_mx = _bt.vec_to_stdmx(_np.asarray(effect_vec), basis)
+    evals = _np.linalg.eigvals(effect_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
+    sum_of_penalties = 0
     for ev in evals:
-        if ev.real < 0: sumOfPen += -ev.real
-        if ev.real > 1: sumOfPen += ev.real - 1.0
-    return sumOfPen
+        if ev.real < 0: sum_of_penalties += -ev.real
+        if ev.real > 1: sum_of_penalties += ev.real - 1.0
+    return sum_of_penalties
 
 
 #UNUSED (REMOVE?)
@@ -834,14 +835,14 @@ def cptp_penalty(model, include_spam_penalty=True):
     return ret
 
 
-def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
+def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
      to a single operation sequence and spam label.
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -850,11 +851,11 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    minProbClip : float, optional
+    min_prob_clip : float, optional
         Minimum probability clip point to avoid evaluating
         log(number <= zero)
 
-    poissonPicture : boolean, optional
+    poisson_picture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
 
@@ -869,19 +870,20 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 
     nan_indices = _np.isnan(f)  # get indices of invalid entries
     if not _np.isscalar(f):
-        f = f.copy(); p = p.copy(); N = N.copy()
-        f[nan_indices] = p[nan_indices] = N[nan_indices] = 0.0  # so computation runs fine
+        f = f.copy(); p = p.copy(); n = n.copy()
+        f[nan_indices] = p[nan_indices] = n[nan_indices] = 0.0  # so computation runs fine
 
-    if poissonPicture:
-        rawfn = _objfns.RawPoissonPicDeltaLogLFunction({'minProbClip': minProbClip})
+    if poisson_picture:
+        rawfn = _objfns.RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip})
     else:
-        rawfn = _objfns.RawDeltaLogLFunction({'minProbClip': minProbClip})
+        rawfn = _objfns.RawDeltaLogLFunction({'min_prob_clip': min_prob_clip})
 
-    ret = 2 * rawfn.terms(p, N * f, N, f)
+    ret = 2 * rawfn.terms(p, n * f, n, f)
     ret[nan_indices] = _np.nan
     return ret
 
 
+#TODO REMOVE
 ##############################################################################################
 #   FUNCTIONS FOR HESSIAN ANALYSIS (which take derivatives of the log(likelihood) function)  #
 ##############################################################################################
@@ -935,8 +937,8 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #def dpr_plus(model, circuits):
 #    DELTA = 1e-7
 #    nP = model.num_params()
-#    nCircuits = len(circuits)
-#    result = _np.zeros([nP,nCircuits])
+#    n_circuits = len(circuits)
+#    result = _np.zeros([nP,n_circuits])
 #
 #    for (j,s) in enumerate(circuits):
 #        fMid = model.PrPlus(s)

@@ -124,7 +124,7 @@ class Model(object):
         assert(len(v) == self.num_params())
         self._paramvec = v.copy()
 
-    def probs(self, circuit, clipTo=None):
+    def probs(self, circuit, clip_to=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -134,19 +134,19 @@ class Model(object):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
         Returns
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,circuit,clipTo)
+            probs[SL] = pr(SL,circuit,clip_to)
             for each spam label (string) SL.
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def dprobs(self, circuit, returnPr=False, clipTo=None):
+    def dprobs(self, circuit, return_pr=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -156,24 +156,24 @@ class Model(object):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
             for each spam label (string) SL.
         """
         #Finite difference default?
         raise NotImplementedError("Derived classes should implement this!")
 
-    def hprobs(self, circuit, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -183,34 +183,34 @@ class Model(object):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        returnDeriv : bool, optional
+        return_deriv : bool, optional
           when set to True, additionally return the derivatives of the
           probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         hprobs : dictionary
             A dictionary such that
-            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,return_deriv,clip_to)
             for each spam label (string) SL.
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
-                                     distributeMethod="default", subcalls=[],
+    def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
+                                     distribute_method="default", subcalls=[],
                                      dataset=None, verbosity=0):
         raise NotImplementedError("Derived classes should implement this!")
         #return circuit_list # MORE?
 
-    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1, dataset=None, verbosity=0):
+    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+                      num_subtree_comms=1, dataset=None, verbosity=0):
         raise NotImplementedError("Derived classes should implement this!")
         #return circuit_list # MORE?
 
@@ -225,44 +225,44 @@ class Model(object):
     #    """
     #    return False
 
-    def bulk_probs(self, circuit_list, clipTo=None, check=False,
-                   comm=None, memLimit=None, dataset=None, smartc=None):
+    def bulk_probs(self, circuit_list, clip_to=None, check=False,
+                   comm=None, mem_limit=None, dataset=None, smartc=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
-                    check=False, comm=None, wrtBlockSize=None, dataset=None):
+    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
+                    check=False, comm=None, wrt_block_size=None, dataset=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_hprobs(self, circuit_list, returnPr=False, returnDeriv=False,
-                    clipTo=None, check=False, comm=None,
-                    wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
+    def bulk_hprobs(self, circuit_list, return_pr=False, return_deriv=False,
+                    clip_to=None, check=False, comm=None,
+                    wrt_block_size1=None, wrt_block_size2=None, dataset=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
-                         check=False, comm=None, wrtBlockSize=None,
-                         profiler=None, gatherMemLimit=None):
+    def bulk_fill_dprobs(self, mx_to_fill, eval_tree, pr_mx_to_fill=None, clip_to=None,
+                         check=False, comm=None, wrt_block_size=None,
+                         profiler=None, gather_mem_limit=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_fill_hprobs(self, mxToFill, evalTree=None,
-                         prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None,
-                         wrtBlockSize1=None, wrtBlockSize2=None,
-                         gatherMemLimit=None):
+    def bulk_fill_hprobs(self, mx_to_fill, eval_tree=None,
+                         pr_mx_to_fill=None, deriv_mx_to_fill=None,
+                         clip_to=None, check=False, comm=None,
+                         wrt_block_size1=None, wrt_block_size2=None,
+                         gather_mem_limit=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
-                             bReturnDProbs12=False, comm=None):
+    def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
+                             return_dprobs_12=False, comm=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _init_copy(self, copyInto):
+    def _init_copy(self, copy_into):
         """
-        Copies any "tricky" member of this model into `copyInto`, before
+        Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
-        copyInto.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
+        copy_into.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
 
     def copy(self):
         """
@@ -946,7 +946,7 @@ class OpModel(Model):
                 # so that there's a single "element" for each simplified string,
                 # which means that the usual "lookup" or "elIndices" will map
                 # original circuit-list indices to simplified-string, i.e.,
-                # evalTree index, which is useful when computing products
+                # eval_tree index, which is useful when computing products
                 # (often the case when a Model has no preps or povms,
                 #  e.g. in germ selection)
             else:
@@ -977,7 +977,7 @@ class OpModel(Model):
 
             return circuit, elabels
 
-        def process(s, elabels, observed_outcomes, elIndsToOutcomes,
+        def process(s, elabels, observed_outcomes, el_inds_to_outcomes,
                     op_outcomes=(), start=0):
             """
             Implements recursive processing of a string. Separately
@@ -997,7 +997,7 @@ class OpModel(Model):
                 #    for inst_el_lbl in self.instruments[op_label]:
                 #        simplified_el_lbl = op_label + "_" + inst_el_lbl
                 #        process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i+1:],
-                #                spamtuples, elIndsToOutcomes, op_outcomes + (inst_el_lbl,), i+1)
+                #                spamtuples, el_inds_to_outcomes, op_outcomes + (inst_el_lbl,), i+1)
                 #    break
 
                 if any([self._shlp.is_instrument_lbl(sub_gl) for sub_gl in op_label.components]):
@@ -1024,7 +1024,7 @@ class OpModel(Model):
                         simplified_el_lbl = _Label(sublabels)
                         simplified_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i + 1:],
-                                elabels, observed_outcomes, elIndsToOutcomes,
+                                elabels, observed_outcomes, el_inds_to_outcomes,
                                 op_outcomes + simplified_el_outcomes, i + 1)
                     break
 
@@ -1034,7 +1034,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_elabels_dict[s]  # ordered dict
                     for elabel in elabels:
-                        outcome_tup = op_outcomes + (_gt.eLabelToOutcome(elabel),)
+                        outcome_tup = op_outcomes + (_gt.e_label_to_outcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add spamtuples we don't observe
@@ -1047,11 +1047,11 @@ class OpModel(Model):
                             od[elabel] = elabel_indx
 
                         #Link the current iParent to this index (even if it was already going to be computed)
-                        elIndsToOutcomes[(s, elabel_indx)] = outcome_tup
+                        el_inds_to_outcomes[(s, elabel_indx)] = outcome_tup
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + (_gt.eLabelToOutcome(x),) for x in elabels]
+                    outcome_tuples = [op_outcomes + (_gt.e_label_to_outcome(x),) for x in elabels]
 
                     if observed_outcomes is not None:
                         # only add els of `elabels` corresponding to observed data (w/indexes starting at 0)
@@ -1059,7 +1059,7 @@ class OpModel(Model):
                         for elabel, outcome_tup in zip(elabels, outcome_tuples):
                             if outcome_tup in observed_outcomes:
                                 elabel_dict[elabel] = ist
-                                elIndsToOutcomes[(s, ist)] = outcome_tup
+                                el_inds_to_outcomes[(s, ist)] = outcome_tup
                                 ist += 1
                     else:
                         # add all els of `spamtuples` (w/indexes starting at 0)
@@ -1068,7 +1068,7 @@ class OpModel(Model):
 
                         for ist, out_tup in enumerate(outcome_tuples):  # ist = spamtuple index
                             # element index is given by (parent_circuit, spamtuple_index) tuple
-                            elIndsToOutcomes[(s, ist)] = out_tup
+                            el_inds_to_outcomes[(s, ist)] = out_tup
                             # Note: works even if `i` already exists - doesn't reorder keys then
 
                     raw_elabels_dict[s] = elabel_dict
@@ -1183,7 +1183,7 @@ class OpModel(Model):
         _, outcomes = self.simplify_circuit(circuit, dataset=None)
         return len(outcomes)
 
-    def probs(self, circuit, clipTo=None, time=None):
+    def probs(self, circuit, clip_to=None, time=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -1193,7 +1193,7 @@ class OpModel(Model):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
 
         time : float, optional
@@ -1203,12 +1203,12 @@ class OpModel(Model):
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,circuit,clipTo)
+            probs[SL] = pr(SL,circuit,clip_to)
             for each spam label (string) SL.
         """
-        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo, time)
+        return self._fwdsim().probs(self.simplify_circuit(circuit), clip_to, time)
 
-    def dprobs(self, circuit, returnPr=False, clipTo=None):
+    def dprobs(self, circuit, return_pr=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -1218,24 +1218,24 @@ class OpModel(Model):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
             for each spam label (string) SL.
         """
         return self._fwdsim().dprobs(self.simplify_circuit(circuit),
-                                     returnPr, clipTo)
+                                     return_pr, clip_to)
 
-    def hprobs(self, circuit, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -1245,29 +1245,29 @@ class OpModel(Model):
         circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        returnDeriv : bool, optional
+        return_deriv : bool, optional
           when set to True, additionally return the derivatives of the
           probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         Returns
         -------
         hprobs : dictionary
             A dictionary such that
-            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,return_deriv,clip_to)
             for each spam label (string) SL.
         """
         return self._fwdsim().hprobs(self.simplify_circuit(circuit),
-                                     returnPr, returnDeriv, clipTo)
+                                     return_pr, return_deriv, clip_to)
 
-    def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
-                                     distributeMethod="default", subcalls=[],
+    def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
+                                     distribute_method="default", subcalls=[],
                                      dataset=None, verbosity=0):
         """
         Create an evaluation tree based on available memory and CPUs.
@@ -1285,11 +1285,11 @@ class OpModel(Model):
             When not None, an MPI communicator for distributing computations
             across multiple processors.
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A rough memory limit in bytes which is used to determine subtree
             number and size.
 
-        distributeMethod : {"circuits", "deriv"}
+        distribute_method : {"circuits", "deriv"}
             How to distribute calculation amongst processors (only has effect
             when comm is not None).  "circuits" will divide the list of
             circuits and thereby result in more subtrees; "deriv" will divide
@@ -1299,8 +1299,8 @@ class OpModel(Model):
         subcalls : list, optional
             A list of the names of the Model functions that will be called
             using the returned evaluation tree, which are necessary for
-            estimating memory usage (for comparison to memLimit).  If
-            memLimit is None, then there's no need to specify `subcalls`.
+            estimating memory usage (for comparison to mem_limit).  If
+            mem_limit is None, then there's no need to specify `subcalls`.
 
         dataset : DataSet, optional
             If not None, restrict what is computed to only those
@@ -1317,12 +1317,12 @@ class OpModel(Model):
         paramBlockSize1 : int or None
             The maximum size of 1st-deriv-dimension parameter blocks
             (i.e. the maximum number of parameters to compute at once
-             in calls to dprobs, etc., usually specified as wrtBlockSize
-             or wrtBlockSize1).
+             in calls to dprobs, etc., usually specified as wrt_block_size
+             or wrt_block_size1).
         paramBlockSize2 : int or None
             The maximum size of 2nd-deriv-dimension parameter blocks
             (i.e. the maximum number of parameters to compute at once
-             in calls to hprobs, etc., usually specified as wrtBlockSize2).
+             in calls to hprobs, etc., usually specified as wrt_block_size2).
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
@@ -1338,14 +1338,14 @@ class OpModel(Model):
         #  - any given CPU will be running a *single* (ng-index,np-index) pair at any given time, and so many
         #     memory estimates only depend on ng and np, not on Ng.  (The exception is when a routine *gathers*
         #     the end results from a divided computation.)
-        #  - "circuits" distributeMethod: never distribute num_params (np == 1, Ng == nprocs always).
-        #     Choose ng such that ng >= nprocs, memEstimate(ng,np=1) < memLimit, and ng % nprocs == 0 (ng % Ng == 0).
-        #  - "deriv" distributeMethod: if possible, set ng=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
+        #  - "circuits" distribute_method: never distribute num_params (np == 1, Ng == nprocs always).
+        #     Choose ng such that ng >= nprocs, mem_estimate(ng,np=1) < mem_limit, and ng % nprocs == 0 (ng % Ng == 0).
+        #  - "deriv" distribute_method: if possible, set ng=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
         #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1),
-        #     and ng set by memEstimate and ng % Ng == 0 (so comms are kept busy)
+        #     and ng set by mem_estimate and ng % Ng == 0 (so comms are kept busy)
         #
         # find ng, np, Ng such that:
-        # - memEstimate(ng,np,Ng) < memLimit
+        # - mem_estimate(ng,np,Ng) < mem_limit
         # - full cpu usage:
         #       - np*ng >= nprocs (all procs used)
         #       - ng % Ng == 0 (all subtree comms kept busy)
@@ -1363,118 +1363,118 @@ class OpModel(Model):
 
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
 
-        if memLimit is not None:
-            if memLimit <= 0:
+        if mem_limit is not None:
+            if mem_limit <= 0:
                 raise MemoryError("Attempted evaltree generation "
-                                  "w/memlimit = %g <= 0!" % memLimit)
+                                  "w/memlimit = %g <= 0!" % mem_limit)
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
-                        % (distributeMethod, memLimit * C))
+                        % (distribute_method, mem_limit * C))
 
-        def memEstimate(ng, np1, np2, Ng, fastCacheSz=False, verb=0, cacheSize=None):
+        def mem_estimate(n_groups, np1, np2, n_comms, fast_cache_size=False, verb=0, cache_size=None):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
 
-            nFinalStrs = int(round(len(circuit_list) / ng))  # may not need to be an int...
+            nFinalStrs = int(round(len(circuit_list) / n_groups))  # may not need to be an int...
 
-            if cacheSize is None:
+            if cache_size is None:
                 #Get cache size
-                if not fastCacheSz:
+                if not fast_cache_size:
                     #Slower (but more accurate way)
-                    if ng not in evt_cache:
-                        evt_cache[ng] = self.bulk_evaltree(
-                            circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
+                    if n_groups not in evt_cache:
+                        evt_cache[n_groups] = self.bulk_evaltree(
+                            circuit_list, min_subtrees=n_groups, num_subtree_comms=n_comms,
                             dataset=dataset, verbosity=printer)
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
                         # operation sequences as input so don't have to re-simplify every time we hit this line.
-                    cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
-                    nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
+                    cache_size = max([s.cache_size() for s in evt_cache[n_groups][0].get_sub_trees()])
+                    nFinalStrs = max([s.num_final_strings() for s in evt_cache[n_groups][0].get_sub_trees()])
                 else:
                     #heuristic (but fast)
-                    cacheSize = calc.estimate_cache_size(nFinalStrs)
+                    cache_size = calc.estimate_cache_size(nFinalStrs)
 
-            mem = calc.estimate_mem_usage(subcalls, cacheSize, ng, Ng, np1, np2, nFinalStrs)
+            mem = calc.estimate_mem_usage(subcalls, cache_size, n_groups, n_comms, np1, np2, nFinalStrs)
 
             if verb == 1:
-                if (not fastCacheSz):
+                if (not fast_cache_size):
                     fast_estimate = calc.estimate_mem_usage(
-                        subcalls, cacheSize, ng, Ng, np1, np2, nFinalStrs)
+                        subcalls, cache_size, n_groups, n_comms, np1, np2, nFinalStrs)
                     fc_est_str = " (%.2fGB fc)" % (fast_estimate * C)
                 else: fc_est_str = ""
 
                 printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
-                            % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
+                            % (n_groups, np1, np2, n_comms) + " in %.0fs = %.2fGB%s"
                             % (_time.time() - tm, mem * C, fc_est_str))
             elif verb == 2:
                 wrtLen1 = (num_params + np1 - 1) // np1  # ceiling(num_params / np1)
                 wrtLen2 = (num_params + np2 - 1) // np2  # ceiling(num_params / np2)
-                nSubtreesPerProc = (ng + Ng - 1) // Ng  # ceiling(ng / Ng)
+                nSubtreesPerProc = (n_groups + n_comms - 1) // n_comms  # ceiling(n_groups / n_comms)
                 printer.log(" Memory estimate = %.2fGB" % (mem * C)
                             + " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)."
-                            % (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
+                            % (cache_size, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
-                #printer.log("  cacheSize = %d" % cacheSize)
+                #printer.log("  cache_size = %d" % cache_size)
                 #printer.log("  wrtLen = %d" % wrtLen)
                 #printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
 
             return mem
 
-        if distributeMethod == "default":
-            distributeMethod = calc.default_distribute_method()
+        if distribute_method == "default":
+            distribute_method = calc.default_distribute_method()
 
-        if distributeMethod == "circuits":
+        if distribute_method == "circuits":
             Nstrs = len(circuit_list)
             np1 = 1; np2 = 1; Ng = min(nprocs, Nstrs)
             ng = Ng
-            if memLimit is not None:
+            if mem_limit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
-                # with fast cacheSize computation then switch to slow
-                while memEstimate(ng, np1, np2, Ng, False) > memLimit:
+                # with fast cache_size computation then switch to slow
+                while mem_estimate(ng, np1, np2, Ng, False) > mem_limit:
                     ng += Ng
                     if ng >= Nstrs:
                         # even "maximal" splitting (num trees == num strings)
                         # won't help - see if we can squeeze the this maximally-split tree
                         # to have zero cachesize
                         if Nstrs not in evt_cache:
-                            memEstimate(Nstrs, np1, np2, Ng, verb=1)
+                            mem_estimate(Nstrs, np1, np2, Ng, verb=1)
                         if hasattr(evt_cache[Nstrs], "squeeze") and \
-                           memEstimate(Nstrs, np1, np2, Ng, cacheSize=0) <= memLimit:
+                           mem_estimate(Nstrs, np1, np2, Ng, cache_size=0) <= mem_limit:
                             evt_cache[Nstrs].squeeze(0)  # To get here, need to use higher-dim models
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
 
-                mem_estimate = memEstimate(ng, np1, np2, Ng, verb=1)
-                while mem_estimate > memLimit:
-                    ng += Ng; next = memEstimate(ng, np1, np2, Ng, verb=1)
-                    if(next >= mem_estimate): raise MemoryError("Not enough memory: splitting unproductive")
-                    mem_estimate = next
+                estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
+                while estimate > mem_limit:
+                    ng += Ng; _next = mem_estimate(ng, np1, np2, Ng, verb=1)
+                    if(_next >= estimate): raise MemoryError("Not enough memory: splitting unproductive")
+                    estimate = _next
 
                     #Note: could do these while loops smarter, e.g. binary search-like?
-                    #  or assume memEstimate scales linearly in ng? E.g:
-                    #     if memLimit < memEstimate:
-                    #         reductionFactor = float(memEstimate) / float(memLimit)
+                    #  or assume mem_estimate scales linearly in ng? E.g:
+                    #     if mem_limit < estimate:
+                    #         reductionFactor = float(estimate) / float(mem_limit)
                     #         maxTreeSize = int(nstrs / reductionFactor)
             else:
-                memEstimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
+                mem_estimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 
-        elif distributeMethod == "deriv":
+        elif distribute_method == "deriv":
 
-            def set_Ng(desired_Ng):
+            def set_ng(desired_ng):
                 """ Set Ng, the number of subTree processor groups, such
                     that Ng divides nprocs evenly or vice versa. """
-                if desired_Ng >= nprocs:
-                    return nprocs * int(_np.ceil(1. * desired_Ng / nprocs))
+                if desired_ng >= nprocs:
+                    return nprocs * int(_np.ceil(1. * desired_ng / nprocs))
                 else:
                     fctrs = sorted(_mt.prime_factors(nprocs)); i = 1
-                    if int(_np.ceil(desired_Ng)) in fctrs:
-                        return int(_np.ceil(desired_Ng))  # we got lucky
-                    while _np.product(fctrs[0:i]) < desired_Ng: i += 1
+                    if int(_np.ceil(desired_ng)) in fctrs:
+                        return int(_np.ceil(desired_ng))  # we got lucky
+                    while _np.product(fctrs[0:i]) < desired_ng: i += 1
                     return _np.product(fctrs[0:i])
 
             ng = Ng = 1
             if bNp2Matters:
                 if nprocs > num_params**2:
                     np1 = np2 = max(num_params, 1)
-                    ng = Ng = set_Ng(nprocs / max(num_params**2, 1))  # Note floating-point division
+                    ng = Ng = set_ng(nprocs / max(num_params**2, 1))  # Note floating-point division
                 elif nprocs > num_params:
                     np1 = max(num_params, 1)
                     np2 = int(_np.ceil(nprocs / max(num_params, 1)))
@@ -1484,47 +1484,47 @@ class OpModel(Model):
                 np2 = 1
                 if nprocs > num_params:
                     np1 = max(num_params, 1)
-                    ng = Ng = set_Ng(nprocs / max(num_params, 1))
+                    ng = Ng = set_ng(nprocs / max(num_params, 1))
                 else:
                     np1 = nprocs
 
-            if memLimit is not None:
+            if mem_limit is not None:
 
                 ok = False
                 if (not ok) and np1 < num_params:
                     #First try to decrease mem consumption by increasing np1
-                    memEstimate(ng, np1, np2, Ng, verb=1)  # initial estimate (to screen)
+                    mem_estimate(ng, np1, np2, Ng, verb=1)  # initial estimate (to screen)
                     for n in range(np1, num_params + 1, nprocs):
-                        if memEstimate(ng, n, np2, Ng) < memLimit:
+                        if mem_estimate(ng, n, np2, Ng) < mem_limit:
                             np1 = n; ok = True; break
                     else: np1 = num_params
 
                 if (not ok) and bNp2Matters and np2 < num_params:
                     #Next try to decrease mem consumption by increasing np2
                     for n in range(np2, num_params + 1):
-                        if memEstimate(ng, np1, n, Ng) < memLimit:
+                        if mem_estimate(ng, np1, n, Ng) < mem_limit:
                             np2 = n; ok = True; break
                     else: np2 = num_params
 
                 if not ok:
                     #Finally, increase ng in amounts of Ng (so ng % Ng == 0).  Start
-                    # with fast cacheSize computation then switch to slow
-                    while memEstimate(ng, np1, np2, Ng, True) > memLimit: ng += Ng
-                    mem_estimate = memEstimate(ng, np1, np2, Ng, verb=1)
-                    while mem_estimate > memLimit:
-                        ng += Ng; next = memEstimate(ng, np1, np2, Ng, verb=1)
-                        if next >= mem_estimate:
+                    # with fast cache_size computation then switch to slow
+                    while mem_estimate(ng, np1, np2, Ng, True) > mem_limit: ng += Ng
+                    estimate = mem_estimate(ng, np1, np2, Ng, verb=1)
+                    while estimate > mem_limit:
+                        ng += Ng; _next = mem_estimate(ng, np1, np2, Ng, verb=1)
+                        if _next >= estimate:
                             raise MemoryError("Not enough memory: splitting unproductive")
-                        mem_estimate = next
+                        estimate = _next
             else:
-                memEstimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
+                mem_estimate(ng, np1, np2, Ng)  # to compute & cache final EvalTree
 
-        elif distributeMethod == "balanced":
+        elif distribute_method == "balanced":
             # try to minimize "unbalanced" procs
             #np = gcf(num_params, nprocs)
             #ng = Ng = max(nprocs / np, 1)
-            #if memLimit is not None:
-            #    while memEstimate(ng,np1,np2,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+            #if mem_limit is not None:
+            #    while mem_estimate(ng,np1,np2,Ng) > mem_limit: ng += Ng #so ng % Ng == 0
             raise NotImplementedError("balanced distribution still todo")
 
         # Retrieve final EvalTree (already computed from estimates above)
@@ -1549,8 +1549,8 @@ class OpModel(Model):
                         + "%d params (taken as %d param groups of ~%d params)."
                         % (num_params, np1, paramBlkSize1))
 
-        if memLimit is not None:
-            memEstimate(ng, np1, np2, Ng, False, verb=2)  # print mem estimate details
+        if mem_limit is not None:
+            mem_estimate(ng, np1, np2, Ng, False, verb=2)  # print mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
@@ -1572,12 +1572,12 @@ class OpModel(Model):
                 #all procs should have *same* paramBlkSize2
 
         #Prepare any computationally intensive preparation
-        calc.bulk_prep_probs(evt, comm, memLimit)
+        calc.bulk_prep_probs(evt, comm, mem_limit)
 
         return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
-    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1, dataset=None, verbosity=0):
+    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+                      num_subtree_comms=1, dataset=None, verbosity=0):
         """
         Create an evaluation tree for all the operation sequences in circuit_list.
 
@@ -1590,14 +1590,14 @@ class OpModel(Model):
         circuit_list : list of (tuples or Circuits)
             Each element specifies a operation sequence to include in the evaluation tree.
 
-        minSubtrees : int (optional)
+        min_subtrees : int (optional)
             The minimum number of subtrees the resulting EvalTree must have.
 
-        maxTreeSize : int (optional)
+        max_tree_size : int (optional)
             The maximum size allowed for the single un-split tree or any of
             its subtrees.
 
-        numSubtreeComms : int, optional
+        num_subtree_comms : int, optional
             The number of processor groups (communicators)
             to divide the subtrees of the EvalTree among
             when calling its `distribute` method.
@@ -1632,38 +1632,38 @@ class OpModel(Model):
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        def toCircuit(x): return x if isinstance(x, _cir.Circuit) else _cir.Circuit(x)
-        circuit_list = list(map(toCircuit, circuit_list))  # make sure simplify_circuits is given Circuits
+        def to_circuit(x): return x if isinstance(x, _cir.Circuit) else _cir.Circuit(x)
+        circuit_list = list(map(to_circuit, circuit_list))  # make sure simplify_circuits is given Circuits
         simplified_circuits, elIndices, outcomes, nEls = \
             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
+        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, num_subtree_comms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list), _time.time() - tm)); tm = _time.time()
 
-        if maxTreeSize is not None:
-            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer - 1)  # won't split if unnecessary
+        if max_tree_size is not None:
+            elIndices = evalTree.split(elIndices, max_tree_size, None, printer - 1)  # won't split if unnecessary
 
-        if minSubtrees is not None:
-            if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
+        if min_subtrees is not None:
+            if not evalTree.is_split() or len(evalTree.get_sub_trees()) < min_subtrees:
                 evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
-                elIndices = evalTree.split(elIndices, None, minSubtrees, printer - 1)
-                if maxTreeSize is not None and \
-                        any([len(sub) > maxTreeSize for sub in evalTree.get_sub_trees()]):
-                    _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
-                                   + " and maxTreeSize=%d" % maxTreeSize)
+                elIndices = evalTree.split(elIndices, None, min_subtrees, printer - 1)
+                if max_tree_size is not None and \
+                        any([len(sub) > max_tree_size for sub in evalTree.get_sub_trees()]):
+                    _warnings.warn("Could not create a tree with min_subtrees=%d" % min_subtrees
+                                   + " and max_tree_size=%d" % max_tree_size)
                     evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
-                    elIndices = evalTree.split(elIndices, maxTreeSize, None)  # fall back to split for max size
+                    elIndices = evalTree.split(elIndices, max_tree_size, None)  # fall back to split for max size
 
-        if maxTreeSize is not None or minSubtrees is not None:
+        if max_tree_size is not None or min_subtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs"
                         % (len(evalTree.get_sub_trees()), _time.time() - tm))
 
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
 
-    def bulk_prep_probs(self, evalTree, comm=None, memLimit=None):
+    def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
         Performs initial computation, such as computing probability polynomials,
         needed for bulk_fill_probs and related calls.  This is usually coupled with
@@ -1672,49 +1672,49 @@ class OpModel(Model):
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
             The evaluation tree used to define a list of circuits and hold (cache)
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of `evalTree` (if it is split).
+           subtrees of `eval_tree` (if it is split).
 
-        memLimit : TODO: docstring
+        mem_limit : TODO: docstring
         """
-        return self._fwdsim().bulk_prep_probs(evalTree, comm, memLimit)
+        return self._fwdsim().bulk_prep_probs(eval_tree, comm, mem_limit)
 
     #TODO REMOVE UNNECESSARY?
-    #def bulk_probs_get_termgaps(self, evalTree, comm=None, memLimit=None):
+    #def bulk_probs_get_termgaps(self, eval_tree, comm=None, mem_limit=None):
     #    """ TODO: docstring """
-    #    return self._fwdsim().bulk_get_current_gaps(evalTree, comm, memLimit)
+    #    return self._fwdsim().bulk_get_current_gaps(eval_tree, comm, mem_limit)
 
-    def bulk_probs_paths_are_sufficient(self, evalTree, probs, comm=None, memLimit=None, verbosity=0):
+    def bulk_probs_paths_are_sufficient(self, eval_tree, probs, comm=None, mem_limit=None, verbosity=0):
         """
         Only applicable for models with a term-based (path-integral) forward simulator.
 
         Returns a boolean indicating whether the currently selected paths are able to
-        predict the outcome probabilities of the circuits in `evalTree` accurately enough,
+        predict the outcome probabilities of the circuits in `eval_tree` accurately enough,
         as defined by the simulation-type arguments such as `allowed_perr`.
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
             The evaluation tree used to define a list of circuits and hold (cache)
             any computed quantities.
 
         probs : ndarray, optional
-            A list of the pre-computed probabilities for the circuits in `evalTree`,
+            A list of the pre-computed probabilities for the circuits in `eval_tree`,
             as these are needed by some heuristics used to predict errors in the
             probabilities.  If None, then the probabilities are computed internally.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of `evalTree` (if it is split).
+           subtrees of `eval_tree` (if it is split).
 
-        memLimit : TODO: docstring
+        mem_limit : TODO: docstring
 
         Returns
         -------
@@ -1726,12 +1726,12 @@ class OpModel(Model):
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
         printer = _VerbosityPrinter.build_printer(verbosity, comm)
         if probs is None:
-            probs = _np.empty(evalTree.num_final_elements(), 'd')
-            self.bulk_fill_probs(probs, evalTree, clipTo=None, comm=comm)
-        return fwdsim.bulk_test_if_paths_are_sufficient(evalTree, probs, comm, memLimit, printer)
+            probs = _np.empty(eval_tree.num_final_elements(), 'd')
+            self.bulk_fill_probs(probs, eval_tree, clip_to=None, comm=comm)
+        return fwdsim.bulk_test_if_paths_are_sufficient(eval_tree, probs, comm, mem_limit, printer)
 
-    def bulk_probs(self, circuit_list, clipTo=None, check=False,
-                   comm=None, memLimit=None, dataset=None, smartc=None):
+    def bulk_probs(self, circuit_list, clip_to=None, check=False,
+                   comm=None, mem_limit=None, dataset=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of operation sequences.
@@ -1741,7 +1741,7 @@ class OpModel(Model):
         circuit_list : list of (tuples or Circuits)
           Each element specifies a operation sequence to compute quantities for.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1754,7 +1754,7 @@ class OpModel(Model):
            across multiple processors.  Distribution is performed over
            subtrees of evalTree (if it is split).
 
-        memLimit : int, optional
+        mem_limit : int, optional
             A rough memory limit in bytes which is used to determine processor
             allocation.
 
@@ -1778,14 +1778,14 @@ class OpModel(Model):
         circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
                         for opstr in circuit_list]  # cast to Circuits
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
+            circuit_list, comm, mem_limit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0)  # FUTURE (maybe make verbosity into an arg?)
 
         return self._fwdsim().bulk_probs(circuit_list, evalTree, elIndices,
-                                         outcomes, clipTo, check, comm, smartc)
+                                         outcomes, clip_to, check, comm, smartc)
 
-    def bulk_dprobs(self, circuit_list, returnPr=False, clipTo=None,
-                    check=False, comm=None, wrtBlockSize=None, dataset=None):
+    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
+                    check=False, comm=None, wrt_block_size=None, dataset=None):
         """
         Construct a dictionary containing the probability-derivatives
         for an entire list of operation sequences.
@@ -1795,12 +1795,12 @@ class OpModel(Model):
         circuit_list : list of (tuples or Circuits)
           Each element specifies a operation sequence to compute quantities for.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -1812,12 +1812,12 @@ class OpModel(Model):
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtBlockSize : int or float, optional
+        wrt_block_size : int or float, optional
           The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+          The minimum of wrt_block_size and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
@@ -1833,7 +1833,7 @@ class OpModel(Model):
             A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
             `p` is the corresponding probability, and `dp` is an array containing
-            the derivative of `p` with respect to each parameter.  If `returnPr`
+            the derivative of `p` with respect to each parameter.  If `return_pr`
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
@@ -1841,12 +1841,12 @@ class OpModel(Model):
                         for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_dprobs(circuit_list, evalTree, elIndices,
-                                          outcomes, returnPr, clipTo,
-                                          check, comm, None, wrtBlockSize)
+                                          outcomes, return_pr, clip_to,
+                                          check, comm, None, wrt_block_size)
 
-    def bulk_hprobs(self, circuit_list, returnPr=False, returnDeriv=False,
-                    clipTo=None, check=False, comm=None,
-                    wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
+    def bulk_hprobs(self, circuit_list, return_pr=False, return_deriv=False,
+                    clip_to=None, check=False, comm=None,
+                    wrt_block_size1=None, wrt_block_size2=None, dataset=None):
         """
         Construct a dictionary containing the probability-Hessians
         for an entire list of operation sequences.
@@ -1856,15 +1856,15 @@ class OpModel(Model):
         circuit_list : list of (tuples or Circuits)
           Each element specifies a operation sequence to compute quantities for.
 
-        returnPr : bool, optional
+        return_pr : bool, optional
           when set to True, additionally return the probabilities.
 
-        returnDeriv : bool, optional
+        return_deriv : bool, optional
           when set to True, additionally return the probability derivatives.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
+           Only relevant when return_pr == True.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -1875,13 +1875,13 @@ class OpModel(Model):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+        wrt_block_size2, wrt_block_size2 : int or float, optional
           The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          rows or columns at once.  The  minimum of wrt_block_size and the size
           that makes maximal use of available processors is used as the final
           block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
+          wrt_filter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
         dataset : DataSet, optional
@@ -1898,44 +1898,44 @@ class OpModel(Model):
             `p` is the corresponding probability, `dp` is a 1D array containing
             the derivative of `p` with respect to each parameter, and `hp` is a
             2D array containing the Hessian of `p` with respect to each parameter.
-            If `returnPr` if False, then `p` is not included in the tuples.
-            If `returnDeriv` if False, then `dp` is not included in the tuples.
+            If `return_pr` if False, then `p` is not included in the tuples.
+            If `return_deriv` if False, then `dp` is not included in the tuples.
         """
         circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
                         for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_hprobs(circuit_list, evalTree, elIndices,
-                                          outcomes, returnPr, returnDeriv,
-                                          clipTo, check, comm, None, None,
-                                          wrtBlockSize1, wrtBlockSize2)
+                                          outcomes, return_pr, return_deriv,
+                                          clip_to, check, comm, None, None,
+                                          wrt_block_size1, wrt_block_size2)
 
-    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
         """
         Compute the outcome probabilities for an entire tree of operation sequences.
 
-        This routine fills a 1D array, `mxToFill` with the probabilities
+        This routine fills a 1D array, `mx_to_fill` with the probabilities
         corresponding to the *simplified* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
+        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
         must have length equal to the number of final elements (this can be
-        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings
         generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. evalTree.num_final_elements())
+          total number of computed elements (i.e. eval_tree.num_final_elements())
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1946,42 +1946,42 @@ class OpModel(Model):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
+           subtrees of eval_tree (if it is split).
 
 
         Returns
         -------
         None
         """
-        return self._fwdsim().bulk_fill_probs(mxToFill,
-                                              evalTree, clipTo, check, comm)
+        return self._fwdsim().bulk_fill_probs(mx_to_fill,
+                                              eval_tree, clip_to, check, comm)
 
-    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None, clipTo=None,
-                         check=False, comm=None, wrtBlockSize=None,
-                         profiler=None, gatherMemLimit=None):
+    def bulk_fill_dprobs(self, mx_to_fill, eval_tree, pr_mx_to_fill=None, clip_to=None,
+                         check=False, comm=None, wrt_block_size=None,
+                         profiler=None, gather_mem_limit=None):
         """
         Compute the outcome probability-derivatives for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `evalTree`.
+        probability-derivatives for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M is the
+          computed elements (i.e. eval_tree.num_final_elements()) and M is the
           number of model parameters.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -1992,21 +1992,21 @@ class OpModel(Model):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtBlockSize : int or float, optional
+        wrt_block_size : int or float, optional
           The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+          The minimum of wrt_block_size and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -2014,35 +2014,35 @@ class OpModel(Model):
         -------
         None
         """
-        return self._fwdsim().bulk_fill_dprobs(mxToFill,
-                                               evalTree, prMxToFill, clipTo,
-                                               check, comm, None, wrtBlockSize,
-                                               profiler, gatherMemLimit)
+        return self._fwdsim().bulk_fill_dprobs(mx_to_fill,
+                                               eval_tree, pr_mx_to_fill, clip_to,
+                                               check, comm, None, wrt_block_size,
+                                               profiler, gather_mem_limit)
 
-    def bulk_fill_hprobs(self, mxToFill, evalTree=None,
-                         prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None,
-                         wrtBlockSize1=None, wrtBlockSize2=None,
-                         gatherMemLimit=None):
+    def bulk_fill_hprobs(self, mx_to_fill, eval_tree=None,
+                         pr_mx_to_fill=None, deriv_mx_to_fill=None,
+                         clip_to=None, check=False, comm=None,
+                         wrt_block_size1=None, wrt_block_size2=None,
+                         gather_mem_limit=None):
         """
         Compute the outcome probability-Hessians for an entire tree of gate
         strings.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
-        probability-Hessians for each "final element" of `evalTree`.
+        probability-Hessians for each "final element" of `eval_tree`.
 
         Parameters
         ----------
-        mxToFill : numpy ndarray
+        mx_to_fill : numpy ndarray
           an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
+          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
-        prMxToFill : numpy array, optional
+        pr_mx_to_fill : numpy array, optional
           when not None, an already-allocated length-E numpy array that is filled
           with probabilities, just like in bulk_fill_probs(...).
 
@@ -2050,9 +2050,9 @@ class OpModel(Model):
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
           where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
+          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
 
-        clipTo : 2-tuple, optional
+        clip_to : 2-tuple, optional
            (min,max) to clip return value if not None.
 
         check : boolean, optional
@@ -2063,23 +2063,23 @@ class OpModel(Model):
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           subtrees of eval_tree (if it is split), and then over blocks (subsets)
            of the parameters being differentiated with respect to (see
-           wrtBlockSize).
+           wrt_block_size).
 
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+        wrt_block_size2, wrt_block_size2 : int or float, optional
           The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          rows or columns at once.  The  minimum of wrt_block_size and the size
           that makes maximal use of available processors is used as the final
           block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
+          wrt_filter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
-        gatherMemLimit : int, optional
+        gather_mem_limit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
@@ -2087,16 +2087,16 @@ class OpModel(Model):
         -------
         None
         """
-        return self._fwdsim().bulk_fill_hprobs(mxToFill,
-                                               evalTree, prMxToFill, derivMxToFill, None,
-                                               clipTo, check, comm, None, None,
-                                               wrtBlockSize1, wrtBlockSize2, gatherMemLimit)
+        return self._fwdsim().bulk_fill_hprobs(mx_to_fill,
+                                               eval_tree, pr_mx_to_fill, deriv_mx_to_fill, None,
+                                               clip_to, check, comm, None, None,
+                                               wrt_block_size1, wrt_block_size2, gather_mem_limit)
 
-    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
-                             bReturnDProbs12=False, comm=None):
+    def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
+                             return_dprobs_12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
-        probabilities generated by a each gate sequence given by evalTree
+        probabilities generated by a each gate sequence given by eval_tree
         column-by-column.
 
         This routine can be useful when memory constraints make constructing
@@ -2111,21 +2111,21 @@ class OpModel(Model):
         ----------
         spam_label_rows : dictionary
           a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+          are integer row indices into mx_to_fill, specifying the
+          correspondence between rows of mx_to_fill and spam labels.
 
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.  This tree *cannot* be split.
 
-        wrtSlicesList : list
+        wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
             a "block" of the Hessian to compute.  Iterating over the output
             of this function iterates over these computed blocks, in the order
-            given by `wrtSlicesList`.  `rowSlice` and `colSlice` must by Python
+            given by `wrt_slices_list`.  `rowSlice` and `colSlice` must by Python
             `slice` objects.
 
-        bReturnDProbs12 : boolean, optional
+        return_dprobs_12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
            d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
@@ -2145,35 +2145,35 @@ class OpModel(Model):
         block_generator
           A generator which, when iterated, yields the 3-tuple
           `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
-          (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
-          are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
+          (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
+          are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
           arrays of shape K x S x B x B', where:
 
           - K is the length of spam_label_rows,
-          - S is the number of operation sequences (i.e. evalTree.num_final_strings()),
+          - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
           - B is the number of parameter rows (the length of rowSlice)
           - B' is the number of parameter columns (the length of colSlice)
 
           If `mx` and `dp` the outputs of :func:`bulk_fill_hprobs`
-          (i.e. args `mxToFill` and `derivMxToFill`), then:
+          (i.e. args `mx_to_fill` and `deriv_mx_to_fill`), then:
 
           - `hprobs == mx[:,:,rowSlice,colSlice]`
           - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
         return self._fwdsim().bulk_hprobs_by_block(
-            evalTree, wrtSlicesList,
-            bReturnDProbs12, comm)
+            eval_tree, wrt_slices_list,
+            return_dprobs_12, comm)
 
-    def _init_copy(self, copyInto):
+    def _init_copy(self, copy_into):
         """
-        Copies any "tricky" member of this model into `copyInto`, before
+        Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
-        copyInto._shlp = None  # must be set by a derived-class _init_copy() method
-        copyInto._need_to_rebuild = True  # copy will have all gpindices = None, etc.
-        copyInto._opcache = {}  # don't copy opcache
-        super(OpModel, self)._init_copy(copyInto)
+        copy_into._shlp = None  # must be set by a derived-class _init_copy() method
+        copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
+        copy_into._opcache = {}  # don't copy opcache
+        super(OpModel, self)._init_copy(copy_into)
 
     def copy(self):
         """

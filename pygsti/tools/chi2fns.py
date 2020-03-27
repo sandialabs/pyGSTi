@@ -16,8 +16,8 @@ from ..tools.legacytools import deprecated_fn as _deprecated_fn
 
 
 def chi2(model, dataset, circuit_list=None,
-         minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-         opLabelAliases=None, cache=None, comm=None, memLimit=None):
+         min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
+         op_label_aliases=None, cache=None, comm=None, mem_limit=None):
     """
     Computes the total (aggregate) chi^2 for a set of circuits.
 
@@ -39,18 +39,18 @@ def chi2(model, dataset, circuit_list=None,
         List of operation sequences whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
-    minProbClipForWeighting : float, optional
-        defines the clipping interval for the statistical weight (see chi2fn).
+    min_prob_clip_for_weighting : float, optional
+        defines the clipping interval for the statistical weight.
 
-    clipTo : 2-tuple, optional
+    clip_to : 2-tuple, optional
         (min,max) to clip probabilities to within Model probability
         computation routines (see Model.bulk_fill_probs)
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     cache : ComputationCache, optional
         A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
@@ -59,7 +59,7 @@ def chi2(model, dataset, circuit_list=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
@@ -69,14 +69,14 @@ def chi2(model, dataset, circuit_list=None,
         chi^2 value, equal to the sum of chi^2 terms from all specified operation sequences
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting},
-                         {'probClipInterval': clipTo},
-                         opLabelAliases, cache, comm, memLimit).fn()
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, cache, comm, mem_limit).fn()
 
 
 def chi2_per_circuit(model, dataset, circuit_list=None,
-                     minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                     opLabelAliases=None, cache=None, comm=None, memLimit=None):
+                     min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
+                     op_label_aliases=None, cache=None, comm=None, mem_limit=None):
     """
     Computes the per-circuit chi^2 contributions for a set of cirucits.
 
@@ -97,14 +97,14 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         string aggregated over outcomes.
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting},
-                         {'probClipInterval': clipTo},
-                         opLabelAliases, cache, comm, memLimit).percircuit()
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, cache, comm, mem_limit).percircuit()
 
 
 def chi2_jacobian(model, dataset, circuit_list=None,
-                  minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                  opLabelAliases=None, cache=None, comm=None, memLimit=None):
+                  min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
+                  op_label_aliases=None, cache=None, comm=None, mem_limit=None):
     """
     Compute the gradient of the chi^2 function computed by :function:`chi2`.
 
@@ -121,14 +121,14 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'minProbClipForWeighting': minProbClipForWeighting},
-                         {'probClipInterval': clipTo},
-                         opLabelAliases, cache, comm, memLimit).jacobian()
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, cache, comm, mem_limit).jacobian()
 
 
 def chi2_hessian(model, dataset, circuit_list=None,
-                 minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                 opLabelAliases=None, approximate=False, cache=None, comm=None, memLimit=None):
+                 min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
+                 op_label_aliases=None, approximate=False, cache=None, comm=None, mem_limit=None):
     """
     Compute the Hessian matrix of the :func:`chi2` function.
 
@@ -143,15 +143,15 @@ def chi2_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'minProbClipForWeighting': minProbClipForWeighting},
-                        {'probClipInterval': clipTo},
-                        opLabelAliases, cache, comm, memLimit, enable_hessian=True)
+                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit, enable_hessian=True)
     return obj.hessian()
 
 
 def chi2_approximate_hessian(model, dataset, circuit_list=None,
-                             minProbClipForWeighting=1e-4, clipTo=(-10000, 10000),
-                             opLabelAliases=None, cache=None, comm=None, memLimit=None):
+                             min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
+                             op_label_aliases=None, cache=None, comm=None, mem_limit=None):
     """
     Compute and approximate Hessian matrix of the :func:`chi2` function.
 
@@ -171,16 +171,16 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'minProbClipForWeighting': minProbClipForWeighting},
-                        {'probClipInterval': clipTo},
-                        opLabelAliases, cache, comm, memLimit)
+                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                        {'prob_clip_interval': prob_clip_interval},
+                        op_label_aliases, cache, comm, mem_limit)
     return obj.approximate_hessian()
 
 
 def chialpha(alpha, model, dataset, circuit_list=None,
-             pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, clipTo=(-10000, 10000),
-             radius=None, opLabelAliases=None,
-             cache=None, comm=None, memLimit=None):
+             pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
+             radius=None, op_label_aliases=None,
+             cache=None, comm=None, mem_limit=None):
     """
     TODO: docstring
     """
@@ -188,14 +188,14 @@ def chialpha(alpha, model, dataset, circuit_list=None,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'radius': radius},
-                         {'probClipInterval': clipTo},
-                         opLabelAliases, cache, comm, memLimit, alpha=alpha).fn()
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, cache, comm, mem_limit, alpha=alpha).fn()
 
 
 def chialpha_percircuit(alpha, model, dataset, circuit_list=None,
-                        pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, clipTo=(-10000, 10000),
-                        radius=None, opLabelAliases=None,
-                        cache=None, comm=None, memLimit=None):
+                        pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
+                        radius=None, op_label_aliases=None,
+                        cache=None, comm=None, mem_limit=None):
     """
     TODO: docstring
     """
@@ -203,12 +203,12 @@ def chialpha_percircuit(alpha, model, dataset, circuit_list=None,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'radius': radius},
-                         {'probClipInterval': clipTo},
-                         opLabelAliases, cache, comm, memLimit, alpha=alpha).percircuit()
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, cache, comm, mem_limit, alpha=alpha).percircuit()
 
 
 @_deprecated_fn('This function will be removed soon.  Use chi2fn(...) with `p` and `1-p`.')
-def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
+def chi2fn_2outcome(n, p, f, min_prob_clip_for_weighting=1e-4):
     """
     Computes chi^2 for a 2-outcome measurement.
 
@@ -217,7 +217,7 @@ def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -226,22 +226,22 @@ def chi2fn_2outcome(N, p, f, minProbClipForWeighting=1e-4):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    minProbClipForWeighting : float, optional
+    min_prob_clip_for_weighting : float, optional
         Defines clipping interval (see return value).
 
     Returns
     -------
     float or numpy array
-        N(p-f)^2 / (cp(1-cp)),
+        n(p-f)^2 / (cp(1-cp)),
         where cp is the value of p clipped to the interval
-        (minProbClipForWeighting, 1-minProbClipForWeighting)
+        (min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting)
     """
-    cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
-    return N * (p - f)**2 / (cp * (1 - cp))
+    cp = _np.clip(p, min_prob_clip_for_weighting, 1 - min_prob_clip_for_weighting)
+    return n * (p - f)**2 / (cp * (1 - cp))
 
 
 @_deprecated_fn('This function will be removed soon.')
-def chi2fn_2outcome_wfreqs(N, p, f):
+def chi2fn_2outcome_wfreqs(n, p, f):
     """
     Computes chi^2 for a 2-outcome measurement using frequency-weighting.
 
@@ -250,7 +250,7 @@ def chi2fn_2outcome_wfreqs(N, p, f):
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -262,16 +262,16 @@ def chi2fn_2outcome_wfreqs(N, p, f):
     Returns
     -------
     float or numpy array
-        N(p-f)^2 / (f*(1-f*)),
-        where f* = (f*N+1)/N+2 is the frequency value used in the
+        n(p-f)^2 / (f*(1-f*)),
+        where f* = (f*n+1)/n+2 is the frequency value used in the
         statistical weighting (prevents divide by zero errors)
     """
-    f1 = (f * N + 1) / (N + 2)
-    return N * (p - f)**2 / (f1 * (1 - f1))
+    f1 = (f * n + 1) / (n + 2)
+    return n * (p - f)**2 / (f1 * (1 - f1))
 
 
 @_deprecated_fn('Use RawChi2Function object instead')
-def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
+def chi2fn(n, p, f, min_prob_clip_for_weighting=1e-4):
     """
     Computes the chi^2 term corresponding to a single outcome.
 
@@ -281,7 +281,7 @@ def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -290,22 +290,22 @@ def chi2fn(N, p, f, minProbClipForWeighting=1e-4):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    minProbClipForWeighting : float, optional
+    min_prob_clip_for_weighting : float, optional
         Defines clipping interval (see return value).
 
     Returns
     -------
     float or numpy array
-        N(p-f)^2 / cp ,
+        n(p-f)^2 / cp ,
         where cp is the value of p clipped to the interval
-        (minProbClipForWeighting, 1-minProbClipForWeighting)
+        (min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting)
     """
-    rawfn = _objfns.RawChi2Function({'minProbClipForWeighting': minProbClipForWeighting})
-    return rawfn.terms(p, N * f, N, f)
+    rawfn = _objfns.RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting})
+    return rawfn.terms(p, n * f, n, f)
 
 
 @_deprecated_fn('Use RawFreqWeightedChi2Function object instead')
-def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
+def chi2fn_wfreqs(n, p, f, min_prob_clip_for_weighting=1e-4):
     """
     Computes the frequency-weighed chi^2 term corresponding to a single outcome.
 
@@ -314,7 +314,7 @@ def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
 
     Parameters
     ----------
-    N : float or numpy array
+    n : float or numpy array
         Number of samples.
 
     p : float or numpy array
@@ -323,7 +323,7 @@ def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    minProbClipForWeighting : float, optional
+    min_prob_clip_for_weighting : float, optional
         unused but present to keep the same function
         signature as chi2fn.
 
@@ -331,5 +331,5 @@ def chi2fn_wfreqs(N, p, f, minProbClipForWeighting=1e-4):
     -------
     float or numpy array
     """
-    rawfn = _objfns.RawFreqWeightedChi2Function({'minProbClipForWeighting': minProbClipForWeighting})
-    return rawfn.terms(p, N * f, N, f)
+    rawfn = _objfns.RawFreqWeightedChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting})
+    return rawfn.terms(p, n * f, n, f)

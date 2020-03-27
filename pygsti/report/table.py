@@ -11,7 +11,7 @@
 
 from collections import OrderedDict as _OrderedDict
 from .row import Row
-from .convert import convertDict as _convertDict
+from .convert import convert_dict as _convert_dict
 
 
 class ReportTable(object):
@@ -19,50 +19,50 @@ class ReportTable(object):
     Table representation, renderable in multiple formats
     '''
 
-    def __init__(self, colHeadings, formatters, customHeader=None,
-                 colHeadingLabels=None, confidenceRegionInfo=None):
+    def __init__(self, col_headings, formatters, custom_header=None,
+                 col_heading_labels=None, confidence_region_info=None):
         '''
         Create a table object
 
         Parameters
         ----------
-        colHeadings : list or dict
+        col_headings : list or dict
             default column headings if list,
             dictionary of overrides if dict
         formatters : list
             names of default column heading formatters
-        customHeader : dict
+        custom_header : dict
             dictionary of overriden headers
-        colHeadingLabels : list
+        col_heading_labels : list
             labels for column headings (tooltips)
-        confidenceRegionInfo : ConfidenceRegion, optional
+        confidence_region_info : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals.
             Specifically, tells reportableqtys if
             they should use non markovian error bars or not
         '''
-        self.nonMarkovianEBs = bool(confidenceRegionInfo is not None
-                                    and confidenceRegionInfo.nonMarkRadiusSq > 0)
-        self._customHeadings = customHeader
+        self.nonMarkovianEBs = bool(confidence_region_info is not None
+                                    and confidence_region_info.nonMarkRadiusSq > 0)
+        self._customHeadings = custom_header
         self._rows = []
-        self._override = isinstance(colHeadings, dict)
+        self._override = isinstance(col_headings, dict)
 
         if self._override:
-            self._columnNames = colHeadings['python']
+            self._columnNames = col_headings['python']
         else:
-            self._columnNames = colHeadings
+            self._columnNames = col_headings
 
-        if colHeadingLabels is None:
-            colHeadingLabels = self._columnNames
+        if col_heading_labels is None:
+            col_heading_labels = self._columnNames
 
         if self._override:
             # Dictionary of overridden formats
-            self._headings = {k: Row(v, labels=colHeadingLabels, nonMarkovianEBs=self.nonMarkovianEBs)
-                              for k, v in colHeadings.items()}
+            self._headings = {k: Row(v, labels=col_heading_labels, non_markovian_ebs=self.nonMarkovianEBs)
+                              for k, v in col_headings.items()}
         else:
-            self._headings = Row(colHeadings, formatters, colHeadingLabels, self.nonMarkovianEBs)
+            self._headings = Row(col_headings, formatters, col_heading_labels, self.nonMarkovianEBs)
 
-    def addrow(self, data, formatters=None, labels=None, nonMarkovianEBs=None):
+    def addrow(self, data, formatters=None, labels=None, non_markovian_ebs=None):
         """
         Adds a row to the table.
 
@@ -72,16 +72,16 @@ class ReportTable(object):
             Parallel lists of the data, formatter names, and labels for each
             cell within the new row.
 
-        nonMarkovianEBs : bool, optional
+        non_markovian_ebs : bool, optional
             Whether non-Markovian error bars should be indicated.
 
         Returns
         -------
         None
         """
-        if nonMarkovianEBs is None:
-            nonMarkovianEBs = self.nonMarkovianEBs
-        self._rows.append(Row(data, formatters, labels, nonMarkovianEBs))
+        if non_markovian_ebs is None:
+            non_markovian_ebs = self.nonMarkovianEBs
+        self._rows.append(Row(data, formatters, labels, non_markovian_ebs))
 
     def finish(self):
         """ Finish table creation.  Indicates no more rows will be added."""
@@ -95,9 +95,9 @@ class ReportTable(object):
             # _headings is a row object
             return self._headings.render(fmt, spec)
 
-    def render(self, fmt, longtables=False, tableID=None, tableclass=None,
+    def render(self, fmt, longtables=False, table_id=None, tableclass=None,
                output_dir=None, precision=6, polarprecision=3, sciprecision=0,
-               resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
+               resizable=False, autosize=False, fontsize=None, complex_as_polar=True,
                brackets=False, click_to_display=False, link_to=None, render_includes=True):
         '''
         Render a table object
@@ -122,13 +122,13 @@ class ReportTable(object):
             table plots must be clicked to prompt creation
         fontsize       : int
             override fontsize of a tabel
-        complexAsPolar : bool
+        complex_as_polar : bool
             render complex numbers as polars
         brackets       : bool
             render matrix like types w/ brackets
         longtables     : bool
             latex table option
-        tableID        : string
+        table_id        : string
             id tag for HTML tables
         tableclass     : string
             class tag for HTML tables
@@ -151,18 +151,18 @@ class ReportTable(object):
             'autosize': autosize,
             'click_to_display': click_to_display,
             'fontsize': fontsize,
-            'complexAsPolar': complexAsPolar,
+            'complex_as_polar': complex_as_polar,
             'brackets': brackets,
             'longtables': longtables,
-            'tableID': tableID,
+            'table_id': table_id,
             'tableclass': tableclass,
             'link_to': link_to,
             'render_includes': render_includes}
 
-        if fmt not in _convertDict:
+        if fmt not in _convert_dict:
             raise NotImplementedError('%s format option is not currently supported' % fmt)
 
-        table = _convertDict[fmt]['table']  # Function for rendering a table in the format "fmt"
+        table = _convert_dict[fmt]['table']  # Function for rendering a table in the format "fmt"
         rows = [row.render(fmt, spec) for row in self._rows]
 
         colHeadingsFormatted = self._get_col_headings(fmt, spec)

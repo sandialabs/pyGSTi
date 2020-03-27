@@ -16,17 +16,17 @@ class StdoutText(WorkspaceText):
     """A text block showing standard output recorded using
        VerbosityPrinter objects"""
 
-    def __init__(self, ws, vbRecordedOutput):
+    def __init__(self, ws, vb_recorded_output):
         """
         A text block of standard output.
 
         Parameters
         ----------
-        vbRecordedOutput : list
+        vb_recorded_output : list
             A list of `(type,level,message)` tuples, one per line/message
             as returned by :method:`VerbosityPrinter.stop_recording`.
         """
-        super(StdoutText, self).__init__(ws, self._create, vbRecordedOutput)
+        super(StdoutText, self).__init__(ws, self._create, vb_recorded_output)
 
-    def _create(self, vbRecordedOutput):
-        return _ReportText(vbRecordedOutput, "VerbosityPrinter")
+    def _create(self, vb_recorded_output):
+        return _ReportText(vb_recorded_output, "VerbosityPrinter")

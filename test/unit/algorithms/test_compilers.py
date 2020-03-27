@@ -15,7 +15,7 @@ fixture_1Q = Namespace(
                            [0, 1]], dtype=np.int8),
     clifford_phase=np.array([0, 2])
 )
-fixture_1Q.pspec = ProcessorSpec(nQubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'])
+fixture_1Q.pspec = ProcessorSpec(n_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'])
 fixture_2Q = Namespace(
     n=2,
     qubit_labels=['Q0', 'Q1'],
@@ -65,7 +65,7 @@ fixture_3Q.pspec = ProcessorSpec(
 
 class CompilersTester(BaseCase):
     def test_compile_symplectic_using_GGE_core(self):
-        compiled = compilers.compile_symplectic_using_GGE_core(fixture_2Q.clifford_sym)
+        compiled = compilers.compile_symplectic_using_gge_core(fixture_2Q.clifford_sym)
         # TODO assert intermediate correctness
         sym_out, _ = symplectic.symplectic_rep_of_clifford_circuit(compiled)
         self.assertArraysEqual(fixture_2Q.clifford_sym, sym_out)

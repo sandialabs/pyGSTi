@@ -594,7 +594,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -606,7 +606,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -618,7 +618,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
-                            boxLabels=True, prec="compacthp")
+                            box_labels=True, prec="compacthp")
                         row_data.append(fig)
                         row_formatters.append('Figure')
                     else:
@@ -819,14 +819,14 @@ def create_idletomography_report(results, filename, title="auto",
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    renderMath = True
+    render_math = True
 
     qtys = {}  # stores strings to be inserted into report template
 
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
-            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+            with _timed_block(name, format_str='{:45}', printer=printer, verbosity=2):
                 qtys[name] = fn(*args, **kwargs)
 
     qtys['title'] = title
@@ -918,7 +918,7 @@ def create_idletomography_report(results, filename, title="auto",
             #            ds1 = results_dict[dslbl1].dataset
             #            ds2 = results_dict[dslbl2].dataset
             #            dsComp[(d1, d2)] = _DataComparator(
-            #                [ds1, ds2], DS_names=[dslbl1, dslbl2])
+            #                [ds1, ds2], ds_names=[dslbl1, dslbl2])
             #    dicts = comm.gather(dsComp, root=0)
             #    if rank == 0:
             #        for d in dicts:
@@ -932,16 +932,16 @@ def create_idletomography_report(results, filename, title="auto",
                 dslbl2 = dataset_labels[d2]
                 ds1 = results_dict[dslbl1].dataset
                 ds2 = results_dict[dslbl2].dataset
-                all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd
-            addqty(4, 'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-            #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-            addqty(4, 'dsComparisonHistogram', ws.ColorBoxPlot,
+            addqty(4, 'ds_comparison_summary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            #addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+            addqty(4, 'ds_comparison_histogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-            addqty(1, 'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+            addqty(1, 'ds_comparison_box_plot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
             toggles['CompareDatasets'] = True
         else:
@@ -957,16 +957,16 @@ def create_idletomography_report(results, filename, title="auto",
             if fmt == "html":
                 if filename.endswith(".html"):
                     _merge.merge_jinja_template(
-                        qtys, filename, templateDir='~idletomography_html_report',
+                        qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        connected=connected, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
                 else:
                     _merge.merge_jinja_template_dir(
-                        qtys, filename, templateDir='~idletomography_html_report',
+                        qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, renderMath=renderMath,
+                        connected=connected, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
 

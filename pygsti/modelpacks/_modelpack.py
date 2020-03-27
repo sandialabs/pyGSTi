@@ -172,7 +172,7 @@ class GSTModelPack(ModelPack):
         max_max_length : number
             The greatest maximum-length to use. Equivalent to
             constructing a :class:`StandardGSTDesign` with a
-            `maxLengths` list of powers of two less than or equal to
+            `max_lengths` list of powers of two less than or equal to
             the given value.
 
         qubit_labels : tuple, optional
@@ -195,8 +195,8 @@ class GSTModelPack(ModelPack):
         :class:`StandardGSTDesign`
         """
         for k in kwargs.keys():
-            if k not in ('germLengthLimits', 'keepFraction', 'keepSeed', 'includeLGST', 'nest', 'sequenceRules',
-                         'opLabelAliases', 'dscheck', 'actionIfMissing', 'verbosity', 'add_default_protocol'):
+            if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'sequence_rules',
+                         'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol'):
                 raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
         if qubit_labels is None: qubit_labels = self._sslbls
@@ -217,16 +217,16 @@ class GSTModelPack(ModelPack):
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),
             list(_gen_max_length(max_max_length)),
-            kwargs.get('germLengthLimits', None),
+            kwargs.get('germ_length_limits', None),
             fidpairs,
-            kwargs.get('keepFraction', 1),
-            kwargs.get('keepSeed', None),
-            kwargs.get('includeLGST', True),
+            kwargs.get('keep_fraction', 1),
+            kwargs.get('keep_seed', None),
+            kwargs.get('include_lgst', True),
             kwargs.get('nest', True),
-            kwargs.get('sequenceRules', None),
-            kwargs.get('opLabelAliases', None),
+            kwargs.get('sequence_rules', None),
+            kwargs.get('op_label_aliases', None),
             kwargs.get('dscheck', None),
-            kwargs.get('actionIfMissing', None),
+            kwargs.get('action_if_missing', None),
             qubit_labels,
             kwargs.get('verbosity', 0),
             kwargs.get('add_default_protocol', False),
@@ -239,7 +239,7 @@ class GSTModelPack(ModelPack):
         ----------
         max_max_length : number
             The greatest maximum-length to use. Equivalent to
-            constructing a cicuit struct with a `maxLengths`
+            constructing a cicuit struct with a `max_lengths`
             list of powers of two less than or equal to
             the given value.
 

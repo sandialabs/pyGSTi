@@ -29,17 +29,17 @@ FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
 def objfn(objfn_cls, model, dataset, circuits=None,
-          regularization=None, penalties=None, opLabelAliases=None,
-          cache=None, comm=None, memLimit=None, **addl_args):
+          regularization=None, penalties=None, op_label_aliases=None,
+          cache=None, comm=None, mem_limit=None, **addl_args):
     """ TODO: docstring """
 
     if circuits is None:
         circuits = list(dataset.keys())
 
-    if opLabelAliases:
-        circuits = BulkCircuitList(circuits, opLabelAliases)
+    if op_label_aliases:
+        circuits = BulkCircuitList(circuits, op_label_aliases)
 
-    resource_alloc = ResourceAllocation(comm, memLimit)
+    resource_alloc = ResourceAllocation(comm, mem_limit)
     ofn = objfn_cls(model, dataset, circuits, regularization, penalties, cache,
                     resource_alloc, verbosity=0, *addl_args)
     return ofn
@@ -47,49 +47,49 @@ def objfn(objfn_cls, model, dataset, circuits=None,
 
 class ComputationCache(object):
     def __init__(self,
-                 evTree=None, lookup=None, outcomes_lookup=None, wrtBlkSize=None, wrtBlkSize2=None,
-                 cntVecMx=None, totalCntVec=None):
-        self.evTree = evTree
+                 eval_tree=None, lookup=None, outcomes_lookup=None, wrt_blk_size=None, wrt_blk_size2=None,
+                 counts=None, total_counts=None):
+        self.eval_tree = eval_tree
         self.lookup = lookup
         self.outcomes_lookup = outcomes_lookup
-        self.wrtBlkSize = wrtBlkSize
-        self.wrtBlkSize2 = wrtBlkSize2
-        self.cntVecMx = cntVecMx
-        self.totalCntVec = totalCntVec
+        self.wrt_blk_size = wrt_blk_size
+        self.wrt_blk_size2 = wrt_blk_size2
+        self.counts = counts
+        self.total_counts = total_counts
 
     def has_evaltree(self):
-        return (self.evTree is not None)
+        return (self.eval_tree is not None)
 
-    def add_evaltree(self, model, dataset=None, circuitsToUse=None, resource_alloc=None, subcalls=(), verbosity=0):
+    def add_evaltree(self, model, dataset=None, circuits_to_use=None, resource_alloc=None, subcalls=(), verbosity=0):
         """TODO: docstring """
         comm = resource_alloc.comm if resource_alloc else None
-        mlim = resource_alloc.memLimit if resource_alloc else None
-        distributeMethod = resource_alloc.distributeMethod
-        self.evTree, self.wrtBlkSize, self.wrtBlkSize2, self.lookup, self.outcomes_lookup = \
-            model.bulk_evaltree_from_resources(circuitsToUse, comm, mlim, distributeMethod,
+        mlim = resource_alloc.mem_limit if resource_alloc else None
+        distribute_method = resource_alloc.distribute_method
+        self.eval_tree, self.wrt_blk_size, self.wrt_blk_size2, self.lookup, self.outcomes_lookup = \
+            model.bulk_evaltree_from_resources(circuits_to_use, comm, mlim, distribute_method,
                                                subcalls, dataset, verbosity)
 
     def has_count_vectors(self):
-        return (self.cntVecMx is not None) and (self.totalCntVec is not None)
+        return (self.counts is not None) and (self.total_counts is not None)
 
-    def add_count_vectors(self, dataset, circuitsToUse, dsCircuitsToUse, circuitWeights=None):
+    def add_count_vectors(self, dataset, circuits_to_use, ds_circuits_to_use, circuit_weights=None):
         assert(self.has_evaltree()), "Must `add_evaltree` before calling `add_count_vectors`!"
-        KM = self.evTree.num_final_elements()
-        cntVecMx = _np.empty(KM, 'd')
-        N = _np.empty(KM, 'd')
+        nelements = self.eval_tree.num_final_elements()
+        counts = _np.empty(nelements, 'd')
+        totals = _np.empty(nelements, 'd')
 
-        for (i, opStr) in enumerate(dsCircuitsToUse):
-            cnts = dataset[opStr].counts
-            N[self.lookup[i]] = sum(cnts.values())  # dataset[opStr].total
-            cntVecMx[self.lookup[i]] = [cnts.get(x, 0) for x in self.outcomes_lookup[i]]
+        for (i, circuit) in enumerate(ds_circuits_to_use):
+            cnts = dataset[circuit].counts
+            totals[self.lookup[i]] = sum(cnts.values())  # dataset[opStr].total
+            counts[self.lookup[i]] = [cnts.get(x, 0) for x in self.outcomes_lookup[i]]
 
-        if circuitWeights is not None:
-            for i in range(len(circuitsToUse)):
-                cntVecMx[self.lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = nCircuits )
-                N[self.lookup[i]] *= circuitWeights[i]  # multiply N's by weights
+        if circuit_weights is not None:
+            for i in range(len(circuits_to_use)):
+                counts[self.lookup[i]] *= circuit_weights[i]  # dim nelements (K = nSpamLabels, M = nCircuits )
+                totals[self.lookup[i]] *= circuit_weights[i]  # multiply N's by weights
 
-        self.cntVecMx = cntVecMx
-        self.totalCntVec = N
+        self.counts = counts
+        self.total_counts = totals
 
 
 class BulkCircuitList(list):
@@ -101,32 +101,32 @@ class BulkCircuitList(list):
     #    if circuit_list is None and dataset is not None:
     #        circuit_list = list(dataset.keys())
     #    comm = resource_alloc.comm if resource_alloc else None
-    #    mlim = resource_alloc.memLimit
-    #    distributeMethod = resource_alloc.distributeMethod
-    #    evalTree, wrtBlkSize, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
-    #        circuit_list, comm, mlim, distributeMethod, subcalls, dataset, verbosity)
+    #    mlim = resource_alloc.mem_limit
+    #    distribute_method = resource_alloc.distribute_method
+    #    evalTree, wrt_blk_size, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
+    #        circuit_list, comm, mlim, distribute_method, subcalls, dataset, verbosity)
     #
     #    # Note: evalTree.generate_circuit_list() != circuit_list, as the tree holds *simplified* circuits
     #    return cls(circuit_list, evalTree, lookup, outcomes_lookup)
 
-    def __init__(self, circuit_list_or_structure, opLabelAliases=None, circuitWeights=None, name=None):
+    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
 
         #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_list_or_structure, (list, tuple)):
-            self.circuitsToUse = circuit_list_or_structure
+            self.circuits_to_use = circuit_list_or_structure
             self.circuitStructure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
             self.circuitStructure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
         else:
             self.circuitStructure = circuit_list_or_structure
-            self.circuitsToUse = self.circuitStructure.allstrs
+            self.circuits_to_use = self.circuitStructure.allstrs
 
-        self.opLabelAliases = opLabelAliases
-        self.circuitWeights = circuitWeights
+        self.op_label_aliases = op_label_aliases
+        self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
-        self[:] = self.circuitsToUse  # maybe get rid of self.circuitsToUse in the future...
+        self[:] = self.circuits_to_use  # maybe get rid of self.circuits_to_use in the future...
 
     #def __len__(self):
-    #    return len(self.circuitsToUse)
+    #    return len(self.circuits_to_use)
 
 
 class ResourceAllocation(object):
@@ -137,27 +137,27 @@ class ResourceAllocation(object):
         elif isinstance(arg, ResourceAllocation):
             return arg
         else:  # assume argument is a dict of args
-            return cls(arg.get('comm', None), arg.get('memLimit', None),
-                       arg.get('profiler', None), arg.get('distributeMethod', 'default'))
+            return cls(arg.get('comm', None), arg.get('mem_limit', None),
+                       arg.get('profiler', None), arg.get('distribute_method', 'default'))
 
-    def __init__(self, comm=None, memLimit=None, profiler=None, distributeMethod="default"):
+    def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default"):
         self.comm = comm
-        self.memLimit = memLimit
+        self.mem_limit = mem_limit
         if profiler is not None:
             self.profiler = profiler
         else:
             self.profiler = _dummy_profiler
-        self.distributeMethod = distributeMethod
+        self.distribute_method = distribute_method
 
     def copy(self):
-        return ResourceAllocation(self.comm, self.memLimit, self.profiler, self.distributeMethod)
+        return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
 
 
 class ObjectiveFunctionBuilder(object):
     @classmethod
-    def simple(cls, objective='logl', freqWeightedChi2=False):
+    def simple(cls, objective='logl', freq_weighted_chi2=False):
         if objective == "chi2":
-            if freqWeightedChi2:
+            if freq_weighted_chi2:
                 builder = FreqWeightedChi2Function.builder(
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
@@ -214,8 +214,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         resource_alloc = ResourceAllocation.build_resource_allocation(resource_alloc)
         self.comm = resource_alloc.comm
         self.profiler = resource_alloc.profiler
-        self.memLimit = resource_alloc.memLimit
-        self.distribute_method = resource_alloc.distributeMethod
+        self.mem_limit = resource_alloc.mem_limit
+        self.distribute_method = resource_alloc.distribute_method
 
         self.printer = _VerbosityPrinter.build_printer(verbosity, self.comm)
         self.name = name if (name is not None) else self.__class__.__name__
@@ -315,7 +315,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         self.raw_objfn = raw_objfn
         self.dataset = dataset
         self.mdl = mdl
-        self.vec_gs_len = mdl.num_params()
+        self.nparams = mdl.num_params()
         self.opBasis = mdl.basis
         self.enable_hessian = enable_hessian
         self.gthrMem = None  # set below
@@ -326,25 +326,25 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
         circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
         bulk_circuit_list = circuit_list if isinstance(circuit_list, BulkCircuitList) else BulkCircuitList(circuit_list)
-        self.circuitsToUse = bulk_circuit_list[:]
-        self.circuitWeights = bulk_circuit_list.circuitWeights
-        self.dsCircuitsToUse = _tools.apply_aliases_to_circuit_list(self.circuitsToUse,
-                                                                    bulk_circuit_list.opLabelAliases)
+        self.circuits_to_use = bulk_circuit_list[:]
+        self.circuit_weights = bulk_circuit_list.circuit_weights
+        self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
+                                                                       bulk_circuit_list.op_label_aliases)
 
         # Memory check
-        persistentMem = self.get_persistent_memory_estimate()
-        if self.raw_objfn.memLimit:
-            if self.raw_objfn.memLimit < persistentMem:
-                in_GB = 1.0 / 1024.0**3
+        persistent_mem = self.get_persistent_memory_estimate()
+        if self.raw_objfn.mem_limit:
+            if self.raw_objfn.mem_limit < persistent_mem:
+                in_gb = 1.0 / 1024.0**3  # in gigabytes
                 raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
-                                  "({} GB)".format(self.raw_objfn.memLimit * in_GB, persistentMem * in_GB))
+                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, persistent_mem * in_gb))
 
-            curMem = _profiler._get_max_mem_usage(self.comm)  # is this what we want??
-            self.gthrMem = int(0.1 * (self.raw_objfn.memLimit - persistentMem))
-            evt_mlim = self.raw_objfn.memLimit - persistentMem - self.gthrMem - curMem
-            self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.memLimit * in_GB))
+            cur_mem = _profiler._get_max_mem_usage(self.comm)  # is this what we want??
+            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem))
+            evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
+            self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
             self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
-                                       (curMem * in_GB, persistentMem * in_GB, self.gthrMem * in_GB))
+                                       (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
             assert(evt_mlim > 0), 'Not enough memory, exiting..'
         else:
             evt_mlim = None
@@ -354,16 +354,16 @@ class MDSObjectiveFunction(ObjectiveFunction):
             subcalls = self.get_evaltree_subcalls()
             evt_resource_alloc = ResourceAllocation(self.raw_objfn.comm, evt_mlim,
                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-            self.cache.add_evaltree(self.mdl, self.dataset, self.circuitsToUse, evt_resource_alloc,
+            self.cache.add_evaltree(self.mdl, self.dataset, self.circuits_to_use, evt_resource_alloc,
                                     subcalls, self.raw_objfn.printer - 1)
 
-        self.evTree = self.cache.evTree
+        self.eval_tree = self.cache.eval_tree
         self.lookup = self.cache.lookup
         self.outcomes_lookup = self.cache.outcomes_lookup
-        self.wrtBlkSize = self.cache.wrtBlkSize
-        self.wrtBlkSize2 = self.cache.wrtBlkSize2
+        self.wrt_blk_size = self.cache.wrt_blk_size
+        self.wrt_blk_size2 = self.cache.wrt_blk_size2
 
-        self.KM = self.evTree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
         self.firsts = None  # no omitted probs by default
 
     @property
@@ -377,62 +377,62 @@ class MDSObjectiveFunction(ObjectiveFunction):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return self.raw_objfn.get_chi2k_distributed_qty(objective_function_value)
 
-    def lsvec(self, vectorGS=None, oob_check=False):
+    def lsvec(self, paramvec=None, oob_check=False):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def dlsvec(self, vectorGS=None):
+    def dlsvec(self, paramvec=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def terms(self, vectorGS=None):
-        return self.lsvec(vectorGS)**2
+    def terms(self, paramvec=None):
+        return self.lsvec(paramvec)**2
 
-    def dterms(self, vectorGS=None):
-        lsvec = self.lsvec(vectorGS)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
-        dlsvec = self.dlsvec(vectorGS)  # jacobian of dim N x M where N = len(v) and M = len(pv)
-        assert(dlsvec.shape == (len(lsvec), len(vectorGS))), "dlsvec returned a Jacobian with the wrong shape!"
+    def dterms(self, paramvec=None):
+        lsvec = self.lsvec(paramvec)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
+        dlsvec = self.dlsvec(paramvec)  # jacobian of dim N x M where N = len(v) and M = len(pv)
+        assert(dlsvec.shape == (len(lsvec), len(paramvec))), "dlsvec returned a Jacobian with the wrong shape!"
         return 2.0 * lsvec[:, None] * dlsvec  # terms = lsvec**2, so dterms = 2*lsvec*dlsvec
 
-    def percircuit(self, vectorGS=None):
-        terms = self.terms(vectorGS)
+    def percircuit(self, paramvec=None):
+        terms = self.terms(paramvec)
 
         #Aggregate over outcomes:
         # obj_per_el[iElement] contains contributions per element - now aggregate over outcomes
         # percircuit[iCircuit] will contain contributions for each original circuit (aggregated over outcomes)
-        nCircuits = len(self.circuitsToUse)
-        percircuit = _np.empty(nCircuits, 'd')
-        for i in range(nCircuits):
+        num_circuits = len(self.circuits_to_use)
+        percircuit = _np.empty(num_circuits, 'd')
+        for i in range(num_circuits):
             percircuit[i] = _np.sum(terms[self.lookup[i]], axis=0)
         return percircuit
 
-    def dpercircuit(self, vectorGS=None):
-        dterms = self.dterms(vectorGS)
+    def dpercircuit(self, paramvec=None):
+        dterms = self.dterms(paramvec)
 
         #Aggregate over outcomes:
         # obj_per_el[iElement] contains contributions per element - now aggregate over outcomes
         # percircuit[iCircuit] will contain contributions for each original circuit (aggregated over outcomes)
-        nCircuits = len(self.circuitsToUse)
-        dpercircuit = _np.empty((nCircuits, self.vec_gs_len), 'd')
-        for i in range(nCircuits):
+        num_circuits = len(self.circuits_to_use)
+        dpercircuit = _np.empty((num_circuits, self.nparams), 'd')
+        for i in range(num_circuits):
             dpercircuit[i] = _np.sum(dterms[self.lookup[i]], axis=0)
         return dpercircuit
 
-    def fn(self, vectorGS=None):
-        return _np.sum(self.terms(vectorGS))
+    def fn(self, paramvec=None):
+        return _np.sum(self.terms(paramvec))
 
-    def jacobian(self, vectorGS=None):
-        return _np.sum(self.dterms(vectorGS), axis=0)
+    def jacobian(self, paramvec=None):
+        return _np.sum(self.dterms(paramvec), axis=0)
 
-    def hessian(self, vectorGS=None):
+    def hessian(self, paramvec=None):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def approximate_hessian(self, vectorGS=None):
+    def approximate_hessian(self, paramvec=None):
         raise NotImplementedError("Derived classes should implement this!")
 
     def get_persistent_memory_estimate(self, num_elements=None):
         #  Estimate & check persistent memory (from allocs within objective function)
         if num_elements is None:
             nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-            nc = len(self.circuitsToUse)
+            nc = len(self.circuits_to_use)
             ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
         else:
             ne = num_elements
@@ -442,12 +442,12 @@ class MDSObjectiveFunction(ObjectiveFunction):
         obj_fn_mem = FLOATSIZE * ne
         jac_mem = FLOATSIZE * ne * np
         hess_mem = FLOATSIZE * ne * np**2
-        persistentMem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
+        persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
         if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
-            persistentMem += hess_mem  # we need room for the hessian too!
+            persistent_mem += hess_mem  # we need room for the hessian too!
         # TODO: what about "bulk_hprobs_by_block"?
 
-        return persistentMem
+        return persistent_mem
 
     def get_evaltree_subcalls(self):
         calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
@@ -456,12 +456,12 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
     def get_num_data_params(self):
         return self.dataset.get_degrees_of_freedom(
-            self.dsCircuitsToUse, aggregate_times=not self.time_dependent)
+            self.ds_circuits_to_use, aggregate_times=not self.time_dependent)
 
     def precompute_omitted_freqs(self):
         #Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
         self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-        for i, c in enumerate(self.circuitsToUse):
+        for i, c in enumerate(self.circuits_to_use):
             lklen = _slct.length(self.lookup[i])
             if 0 < lklen < self.mdl.get_num_outcomes(c):
                 self.firsts.append(_slct.as_array(self.lookup[i])[0])
@@ -469,18 +469,19 @@ class MDSObjectiveFunction(ObjectiveFunction):
         if len(self.firsts) > 0:
             self.firsts = _np.array(self.firsts, 'i')
             self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.vec_gs_len), 'd')
+            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
             self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-                                       (len(self.firsts), len(self.circuitsToUse)))
+                                       (len(self.firsts), len(self.circuits_to_use)))
         else:
             self.firsts = None  # no omitted probs
 
     def compute_count_vectors(self):
         if not self.cache.has_count_vectors():
-            self.cache.add_count_vectors(self.dataset, self.circuitsToUse, self.dsCircuitsToUse, self.circuitWeights)
-        return self.cache.cntVecMx, self.cache.totalCntVec
+            self.cache.add_count_vectors(self.dataset, self.circuits_to_use,
+                                         self.ds_circuits_to_use, self.circuit_weights)
+        return self.cache.counts, self.cache.total_counts
 
-    def _construct_hessian(self, cntVecMx_all, totalCntVec_all, probClipInterval):
+    def _construct_hessian(self, counts_all, total_counts_all, prob_clip_interval):
         """
         Framework for constructing a hessian matrix row by row using a derived
         class's `_hessian_from_hprobs` method.  This function expects that this
@@ -495,90 +496,90 @@ class MDSObjectiveFunction(ObjectiveFunction):
         # subtrees would just add unnecessary complication.
 
         #get distribution across subtrees (groups if needed)
-        subtrees = self.evTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = self.evTree.distribute(self.raw_objfn.comm)
+        subtrees = self.eval_tree.get_sub_trees()
+        my_subtree_indices, subtree_owners, my_subcomm = self.eval_tree.distribute(self.raw_objfn.comm)
 
-        nP = self.mdl.num_params()
-        blkSize1, blkSize2 = self.wrtBlkSize, self.wrtBlkSize2
-        rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
-        colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
+        nparams = self.mdl.num_params()
+        blk_size1, blk_size2 = self.wrt_blk_size, self.wrt_blk_size2
+        row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
+        col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
 
         #  Allocate memory (alloc max required & take views)
-        max_nEls = max([subtrees[i].num_final_elements() for i in mySubTreeIndices])
-        probs_mem = _np.empty(max_nEls, 'd')
+        max_nelements = max([subtrees[i].num_final_elements() for i in my_subtree_indices])
+        probs_mem = _np.empty(max_nelements, 'd')
 
         #  Allocate persistent memory
-        final_hessian = _np.zeros((nP, nP), 'd')
+        final_hessian = _np.zeros((nparams, nparams), 'd')
 
-        tStart = _time.time()
+        tm = _time.time()
 
         #Loop over subtrees
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            sub_nEls = evalSubTree.num_final_elements()
+        for subtree_index in my_subtree_indices:
+            eval_subtree = subtrees[subtree_index]
+            sub_nelements = eval_subtree.num_final_elements()
 
-            if evalSubTree.myFinalElsToParentFinalElsMap is not None:
-                #Then `evalSubTree` is a nontrivial sub-tree and its .spamtuple_indices
+            if eval_subtree.myFinalElsToParentFinalElsMap is not None:
+                #Then `eval_subtree` is a nontrivial sub-tree and its .spamtuple_indices
                 # will index the *parent's* final index array space, which we
                 # usually want but NOT here, where we fill arrays just big
                 # enough for each subtree separately - so re-init spamtuple_indices
-                evalSubTree = evalSubTree.copy()
-                evalSubTree.recompute_spamtuple_indices(bLocal=True)
+                eval_subtree = eval_subtree.copy()
+                eval_subtree.recompute_spamtuple_indices(bLocal=True)
 
             # Create views into pre-allocated memory
-            probs = probs_mem[0:sub_nEls]
+            probs = probs_mem[0:sub_nelements]
 
             # Take portions of count arrays for this subtree
-            cntVecMx = cntVecMx_all[evalSubTree.final_element_indices(self.evTree)]
-            totalCntVec = totalCntVec_all[evalSubTree.final_element_indices(self.evTree)]
-            freqs = cntVecMx / totalCntVec
-            assert(len(cntVecMx) == len(probs))
+            counts = counts_all[eval_subtree.final_element_indices(self.eval_tree)]
+            total_counts = total_counts_all[eval_subtree.final_element_indices(self.eval_tree)]
+            freqs = counts / total_counts
+            assert(len(counts) == len(probs))
 
             #compute probs separately
-            self.mdl.bulk_fill_probs(probs, evalSubTree,
-                                     clipTo=probClipInterval, check=self.check,
-                                     comm=mySubComm)
+            self.mdl.bulk_fill_probs(probs, eval_subtree,
+                                     clipTo=prob_clip_interval, check=self.check,
+                                     comm=my_subcomm)
 
-            nCols = self.mdl.num_params()
-            blocks1 = _mpit.slice_up_range(nCols, rowParts)
-            blocks2 = _mpit.slice_up_range(nCols, colParts)
-            sliceTupList_all = list(_itertools.product(blocks1, blocks2))
+            num_cols = self.mdl.num_params()
+            blocks1 = _mpit.slice_up_range(num_cols, row_parts)
+            blocks2 = _mpit.slice_up_range(num_cols, col_parts)
+            slicetup_list_all = list(_itertools.product(blocks1, blocks2))
             #cull out lower triangle blocks, which have no overlap with
             # the upper triangle of the hessian
-            sliceTupList = [(slc1, slc2) for slc1, slc2 in sliceTupList_all
-                            if slc1.start <= slc2.stop]
+            slicetup_list = [(slc1, slc2) for slc1, slc2 in slicetup_list_all
+                             if slc1.start <= slc2.stop]
 
-            loc_iBlks, blkOwners, blkComm = \
-                _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
-            mySliceTupList = [sliceTupList[i] for i in loc_iBlks]
+            loc_iblks, blk_owners, blk_comm = \
+                _mpit.distribute_indices(list(range(len(slicetup_list))), my_subcomm)
+            my_slicetup_list = [slicetup_list[i] for i in loc_iblks]
 
-            subtree_hessian = _np.zeros((nP, nP), 'd')
+            subtree_hessian = _np.zeros((nparams, nparams), 'd')
 
-            k, kmax = 0, len(mySliceTupList)
+            k, kmax = 0, len(my_slicetup_list)
             for (slice1, slice2, hprobs, dprobs12) in self.mdl.bulk_hprobs_by_block(
-                    evalSubTree, mySliceTupList, True, blkComm):
+                    eval_subtree, my_slicetup_list, True, blk_comm):
                 rank = self.raw_objfn.comm.Get_rank() if (self.raw_objfn.comm is not None) else 0
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
-                    iSub = mySubTreeIndices.index(iSubTree)
+                    isub = my_subtree_indices.index(subtree_index)
                     print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
-                          % (rank, _time.time() - tStart, k, kmax, iSub,
-                             len(mySubTreeIndices), len(evalSubTree)))
+                          % (rank, _time.time() - tm, k, kmax, isub,
+                             len(my_subtree_indices), len(eval_subtree)))
                     _sys.stdout.flush(); k += 1
 
                 subtree_hessian[slice1, slice2] = \
-                    self._hessian_from_block(hprobs, dprobs12, probs, cntVecMx,
-                                             totalCntVec, freqs)
+                    self._hessian_from_block(hprobs, dprobs12, probs, counts,
+                                             total_counts, freqs)
                 #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
 
             #Gather columns from different procs and add to running final hessian
             #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian,[], (0,1), mySubComm)
-            _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, [], (0, 1), mySubComm)
+            _mpit.gather_slices(slicetup_list, blk_owners, subtree_hessian, [], (0, 1), my_subcomm)
             final_hessian += subtree_hessian
 
         #gather (add together) final_hessians from different processors
-        if self.raw_objfn.comm is not None and len(set(subTreeOwners.values())) > 1:
-            if self.raw_objfn.comm.Get_rank() not in subTreeOwners.values():
+        if self.raw_objfn.comm is not None and len(set(subtree_owners.values())) > 1:
+            if self.raw_objfn.comm.Get_rank() not in subtree_owners.values():
                 # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
                 final_hessian[:, :] = 0.0  # zero out hessian so it won't contribute
             final_hessian = self.raw_objfn.comm.allreduce(final_hessian)
@@ -606,8 +607,8 @@ class RawChi2Function(RawObjectiveFunction):
     def __init__(self, regularization=None, resource_alloc=None, name="chi2", description="Sum of Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def set_regularization(self, minProbClipForWeighting=1e-4):
-        self.minProbClipForWeighting = minProbClipForWeighting
+    def set_regularization(self, min_prob_clip_for_weighting=1e-4):
+        self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         return (probs - freqs) * self.get_weights(probs, freqs, total_counts)  # Note: ok if this is negative
@@ -627,44 +628,44 @@ class RawChi2Function(RawObjectiveFunction):
         """ Unnecessary - should be the same as hterms, and maybe faster? """
         # v = N * (p-f)**2 / p  => dv/dp = 2N * (p-f)/p - N * (p-f)**2 / p**2 = 2N * t - N * t**2
         # => d2v/dp2 = 2N*dt - 2N*t*dt = 2N(1-t)*dt
-        cprobs = _np.clip(probs, self.minProbClipForWeighting, None)
-        iclip = (cprobs == self.minProbClipForWeighting)
+        cprobs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
+        iclip = (cprobs == self.min_prob_clip_for_weighting)
         t = ((self.probs - self.f) / cprobs)  # should think of as (p-f)/p
         dtdp = (1.0 - t) / cprobs  # 1/p - (p-f)/p**2 => 1/cp - (p-f)/cp**2 = (1-t)/cp
         d2v_dp2 = 2 * total_counts * (1.0 - t) * dtdp
-        d2v_dp2[iclip] = 2 * total_counts[iclip] / self.minProbClipForWeighting
+        d2v_dp2[iclip] = 2 * total_counts[iclip] / self.min_prob_clip_for_weighting
         # with cp constant v = N*(p-f)**2/cp => dv/dp = 2N*(p-f)/cp => d2v/dp2 = 2N/cp
         return d2v_dp2
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
-        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, None)
+        clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return total_counts * probs**2 / clipped_probs
 
     def zero_freq_dterms(self, total_counts, probs):
-        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, None)
+        clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, total_counts, 2 * total_counts * probs / clipped_probs)
 
     def zero_freq_hterms(self, total_counts, probs):
-        clipped_probs = _np.clip(probs, self.minProbClipForWeighting, None)
+        clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, 0.0, 2 * total_counts / clipped_probs)
 
     #Support functions
     def get_weights(self, p, f, total_counts):
-        cp = _np.clip(p, self.minProbClipForWeighting, None)
+        cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         return _np.sqrt(total_counts / cp)  # nSpamLabels x nCircuits array (K x M)
 
     def get_dweights(self, p, f, wts):  # derivative of weights w.r.t. p
-        cp = _np.clip(p, self.minProbClipForWeighting, None)
+        cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         dw = -0.5 * wts / cp   # nSpamLabels x nCircuits array (K x M)
-        dw[p < self.minProbClipForWeighting] = 0.0
+        dw[p < self.min_prob_clip_for_weighting] = 0.0
         return dw
 
     def get_hweights(self, p, f, wts):  # 2nd derivative of weights w.r.t. p
         # wts = sqrt(N/cp), dwts = (-1/2) sqrt(N) *cp^(-3/2), hwts = (3/4) sqrt(N) cp^(-5/2)
-        cp = _np.clip(p, self.minProbClipForWeighting, None)
+        cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         hw = 0.75 * wts / cp**2   # nSpamLabels x nCircuits array (K x M)
-        hw[p < self.minProbClipForWeighting] = 0.0
+        hw[p < self.min_prob_clip_for_weighting] = 0.0
         return hw
 
 
@@ -698,25 +699,25 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
         x = probs / freqs_nozeros
         itaylor = x < self.x0  # indices where we patch objective function with taylor series
-        S = 1. - 1. / (self.x1**(1 + self.alpha))
-        S2 = 0.5 * (1. + self.alpha) / self.x1**(2 + self.alpha)
-        return x, itaylor, S, S2
+        c0 = 1. - 1. / (self.x1**(1 + self.alpha))
+        c1 = 0.5 * (1. + self.alpha) / self.x1**(2 + self.alpha)
+        return x, itaylor, c0, c1
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
         x0 = self.x0
-        x, itaylor, S, S2 = intermediates
+        x, itaylor, c0, c1 = intermediates
         xt = x.copy(); xt[itaylor] = x0  # so we evaluate expression below at x0 (first taylor term) at itaylor indices
         terms = counts * (xt + 1.0 / (self.alpha * xt**self.alpha) - (1.0 + 1.0 / self.alpha))
-        terms = _np.where(itaylor, terms + S * counts * (x - x0) + S2 * counts * (x - x0)**2, terms)
+        terms = _np.where(itaylor, terms + c0 * counts * (x - x0) + c1 * counts * (x - x0)**2, terms)
         terms = _np.where(counts == 0, self.zero_freq_terms(total_counts, probs), terms)
 
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print("ALPHA OBJECTIVE: ", S, S2)
-        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor), " nZero=",_np.count_nonzero(self.cntVecMx==0))
+        #    print("ALPHA OBJECTIVE: ", c0, S2)
+        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor), " nZero=",_np.count_nonzero(self.counts==0))
         #    print(" xrange = ",_np.min(x),_np.max(x))
         #    print(" vrange = ",_np.min(terms),_np.max(terms))
         #    print(" |v|^2 = ",_np.sum(terms))
@@ -731,9 +732,9 @@ class RawChiAlphaFunction(RawObjectiveFunction):
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
         x0 = self.x0
-        x, itaylor, S, S2 = intermediates
+        x, itaylor, c0, c1 = intermediates
         dterms = total_counts * (1 - 1. / x**(1. + self.alpha))
-        dterms_taylor = total_counts * (S + 2 * S2 * (x - x0))
+        dterms_taylor = total_counts * (c0 + 2 * c1 * (x - x0))
         dterms[itaylor] = dterms_taylor[itaylor]
         dterms = _np.where(counts == 0, self.zero_freq_dterms(total_counts, probs), dterms)
         return dterms
@@ -745,24 +746,24 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         raise NotImplementedError("Hessian not implemented for ChiAlpha function yet")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def _zero_freq_terms_harsh(self, N, probs):
+    def _zero_freq_terms_harsh(self, total_counts, probs):
         a = self.a
-        return N * _np.where(probs >= a, probs,
-                             (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+        return total_counts * _np.where(probs >= a, probs,
+                                        (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
-    def _zero_freq_dterms_harsh(self, N, probs):
+    def _zero_freq_dterms_harsh(self, total_counts, probs):
         a = self.a
-        return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+        return total_counts * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
-    def _zero_freq_terms_relaxed(self, N, probs):
-        C0 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
-        p0 = 1.0 / C0
-        return N * _np.where(probs > p0, probs, C0 * probs**2)
+    def _zero_freq_terms_relaxed(self, total_counts, probs):
+        c1 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
+        p0 = 1.0 / c1
+        return total_counts * _np.where(probs > p0, probs, c1 * probs**2)
 
-    def _zero_freq_dterms_relaxed(self, N, probs):
-        C0 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
-        p0 = 1.0 / C0
-        return N * _np.where(probs > p0, 1.0, 2 * C0 * probs)
+    def _zero_freq_dterms_relaxed(self, total_counts, probs):
+        c1 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
+        p0 = 1.0 / c1
+        return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
 
 
 class RawFreqWeightedChi2Function(RawChi2Function):
@@ -771,8 +772,8 @@ class RawFreqWeightedChi2Function(RawChi2Function):
                  description="Sum of freq-weighted Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def set_regularization(self, minProbClipForWeighting=1e-4, radius=1e-4):
-        super().set_regularization(minProbClipForWeighting)
+    def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
+        super().set_regularization(min_prob_clip_for_weighting)
         self.radius = radius
 
     def get_weights(self, p, f, total_counts):
@@ -816,7 +817,6 @@ class RawFreqWeightedChi2Function(RawChi2Function):
 #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
 #                                                                                                                                                       # noqa
 # See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
-
 # The log(Likelihood) within the standard picture is:
 #
 # L = prod_{i,sl} p_{i,sl}^N_{i,sl}
@@ -839,14 +839,15 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def set_regularization(self, minProbClip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None, radius=1e-4, fmin=None):
-        if minProbClip is not None:
+    def set_regularization(self, min_prob_clip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None,
+                           radius=1e-4, fmin=None):
+        if min_prob_clip is not None:
             assert(pfratio_stitchpt is None and pfratio_derivpt is None), \
-                "Cannot specify pfratio and minProbClip arguments as non-None!"
-            self.min_p = minProbClip
+                "Cannot specify pfratio and min_prob_clip arguments as non-None!"
+            self.min_p = min_prob_clip
             self.regtype = "minp"
         else:
-            assert(minProbClip is None), "Cannot specify pfratio and minProbClip arguments as non-None!"
+            assert(min_prob_clip is None), "Cannot specify pfratio and min_prob_clip arguments as non-None!"
             self.x0 = pfratio_stitchpt
             self.x1 = pfratio_derivpt
             self.regtype = "pfratio"
@@ -882,8 +883,8 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             x1 = self.x1
             x = probs / freqs_nozeros  # objective is -Nf*(log(x) + 1 - x)
             pos_x = _np.where(x < x0, x0, x)
-            S = counts * (1 - 1 / x1)  # deriv wrt x at x == x1 (=min_p)
-            S2 = 0.5 * counts / (x1**2)  # 0.5 * 2nd deriv at x1
+            c0 = counts * (1 - 1 / x1)  # deriv wrt x at x == x1 (=min_p)
+            c1 = 0.5 * counts / (x1**2)  # 0.5 * 2nd deriv at x1
 
             #DEBUG TODO REMOVE
             #if self.comm.Get_rank() == 0 and debug:
@@ -893,24 +894,26 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             #    #print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
             #    #print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
             #    #print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
-            #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+            #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0),
+            #          " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
             #    #for i,el in enumerate(x):
             #    #    if el < 0.1 or el > 10.0:
-            #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i], self.freqs[i], self.freqs_nozeros[i]))
+            #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i],
+            #                   self.freqs[i], self.freqs_nozeros[i]))
             #    print("<<<<< DEBUG ----------------------------------")
 
             #pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
             #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
             #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
 
-            return x, pos_x, S, S2, freqs_nozeros
+            return x, pos_x, c0, c1, freqs_nozeros
 
         elif self.regtype == 'minp':
-            freqTerm = counts * (_np.log(freqs_nozeros) - 1.0)
+            freq_term = counts * (_np.log(freqs_nozeros) - 1.0)
             pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
-            S = total_counts - counts / self.min_p
-            S2 = 0.5 * counts / (self.min_p**2)
-            return freqTerm, pos_probs, S, S2, freqs_nozeros
+            c0 = total_counts - counts / self.min_p
+            c1 = 0.5 * counts / (self.min_p**2)
+            return freq_term, pos_probs, c0, c1, freqs_nozeros
 
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
@@ -921,7 +924,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
         if self.regtype == 'pfratio':
             x0 = self.x0
-            x, pos_x, S, S2, _ = intermediates
+            x, pos_x, c0, c1, _ = intermediates
             terms = -counts * (1.0 - pos_x + _np.log(pos_x))
             #Note: order of +/- terms above is important to avoid roundoff errors when x is near 1.0
             # (see patching line below).  For example, using log(x) + 1 - x causes significant loss
@@ -930,18 +933,18 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             terms = _np.maximum(terms, 0)
             # quadratic extrapolation of logl at x0 for probabilities/frequencies < x0
-            terms = _np.where(x < x0, terms + S * (x - x0) + S2 * (x - x0)**2, terms)
+            terms = _np.where(x < x0, terms + c0 * (x - x0) + c1 * (x - x0)**2, terms)
             #terms = _np.where(x > 1 / x0, terms + T * (x - x0) + T2 * (x - x0)**2, terms)
 
         elif self.regtype == 'minp':
-            freqTerm, pos_probs, S, S2, _ = intermediates
-            terms = freqTerm - counts * _np.log(pos_probs) + total_counts * pos_probs
+            freq_term, pos_probs, c0, c1, _ = intermediates
+            terms = freq_term - counts * _np.log(pos_probs) + total_counts * pos_probs
 
             # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             terms = _np.maximum(terms, 0)
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             terms = _np.where(probs < self.min_p,
-                              terms + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, terms)
+                              terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
@@ -953,8 +956,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
         #    print("LOGL OBJECTIVE: ")
-        #    #print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
-        #    print(" KM=",len(self.probs), " nTaylored=",_np.count_nonzero(self.probs < self.min_p), " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+        #    #print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0),
+        #           " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
+        #    print(" KM=",len(self.probs), " nTaylored=",_np.count_nonzero(self.probs < self.min_p),
+        #          " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
         #    #print(" xrange = ",_np.min(x),_np.max(x))
         #    print(" prange = ",_np.min(self.probs),_np.max(self.probs))
         #    print(" vrange = ",_np.min(v),_np.max(v))
@@ -964,7 +969,8 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         #    print(" |v(normal)|^2 = ",_np.sum(v[self.probs >= self.min_p]))
         #    print(" |v(taylor)|^2 = ",_np.sum(v[self.probs < self.min_p]))
         #    imax = _np.argmax(v)
-        #    print(" MAX: v=",v[imax]," p=",self.probs[imax]," f=",self.freqs[imax]) # " x=",x[imax]," pos_x=",pos_x[imax],
+        #    print(" MAX: v=",v[imax]," p=",self.probs[imax]," f=",self.freqs[imax])
+        #    " x=",x[imax]," pos_x=",pos_x[imax],
 
         return terms
 
@@ -985,17 +991,17 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
         if self.regtype == 'pfratio':
             x0 = self.x0
-            x, pos_x, S, S2, freqs_nozeros = intermediates
+            x, pos_x, c0, c1, freqs_nozeros = intermediates
             dterms = (total_counts * (-1 / pos_x + 1))
-            dterms_taylor = (S + 2 * S2 * (x - x0)) / freqs_nozeros
+            dterms_taylor = (c0 + 2 * c1 * (x - x0)) / freqs_nozeros
             #dterms_taylor2 = (T + 2 * T2 * (x - x0)) / self.freqs_nozeros
             dterms = _np.where(x < x0, dterms_taylor, dterms)
             #terms = _np.where(x > 1 / x0, dprobs_taylor2, dterms)
 
         elif self.regtype == 'minp':
-            _, pos_probs, S, S2, freqs_nozeros = intermediates
+            _, pos_probs, c0, c1, freqs_nozeros = intermediates
             dterms = total_counts - counts / pos_probs
-            dterms_taylor = S + 2 * S2 * (probs - self.min_p)
+            dterms_taylor = c0 + 2 * c1 * (probs - self.min_p)
             dterms = _np.where(probs < self.min_p, dterms_taylor, dterms)
 
         dterms_zerofreq = self.zero_freq_dterms(total_counts, probs)
@@ -1004,47 +1010,47 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
         # terms = Nf*(log(f)-log(p)) + N*(p-f)  OR const + S*(p - minp) + S2*(p - minp)^2
-        # dterms/dp = -Nf/p + N  OR  S + 2*S2*(p - minp)
+        # dterms/dp = -Nf/p + N  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = Nf/p^2   OR  2*S2
         assert(self.regtype == "minp")
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        _, pos_probs, S, S2, freqs_nozeros = intermediates
-        d2terms_dp2 = _np.where(probs < self.min_p, 2 * S2, counts / pos_probs**2)
+        _, pos_probs, c0, c1, freqs_nozeros = intermediates
+        d2terms_dp2 = _np.where(probs < self.min_p, 2 * c1, counts / pos_probs**2)
         zfc = _np.where(probs >= self.radius, 0.0,
                         total_counts * ((-2.0 / self.radius**2) * probs + 2.0 / self.radius))
         d2terms_dp2 = _np.where(counts == 0, zfc, d2terms_dp2)
         return d2terms_dp2  # a 1D array of d2(logl)/dprobs2 values; shape = (nEls,)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def _zero_freq_terms_harsh(self, N, probs):
+    def _zero_freq_terms_harsh(self, total_counts, probs):
         a = self.radius
-        return N * _np.where(probs >= a, probs,
-                             (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+        return total_counts * _np.where(probs >= a, probs,
+                                        (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
-    def _zero_freq_dterms_harsh(self, N, probs):
+    def _zero_freq_dterms_harsh(self, total_counts, probs):
         a = self.radius
-        return N * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
+        return total_counts * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
-    def _zero_freq_hterms_harsh(self, N, probs):
+    def _zero_freq_hterms_harsh(self, total_counts, probs):
         a = self.radius
-        return N * _np.where(probs >= a, 0.0, (-2.0 / a**2) * probs + 2 / a)
+        return total_counts * _np.where(probs >= a, 0.0, (-2.0 / a**2) * probs + 2 / a)
 
-    def _zero_freq_terms_relaxed(self, N, probs):
+    def _zero_freq_terms_relaxed(self, total_counts, probs):
         # quadratic N*C0*p^2 that == N*p at p=1/C0.
         # Pick C0 so it is ~ magnitude of curvature at patch-pt p/f = x1
         # Note that at d2f/dx2 at x1 is 0.5 N*f / x1^2 so d2f/dp2 = 0.5 (N/f) / x1^2  (dx/dp = 1/f)
         # Thus, we want C0 ~ 0.5(N/f)/x1^2; the largest this value can be is when f=fmin
-        C0 = (0.5 / self.fmin) * 1.0 / (self.x1**2)
-        p0 = 1.0 / C0
-        return N * _np.where(probs > p0, probs, C0 * probs**2)
+        c1 = (0.5 / self.fmin) * 1.0 / (self.x1**2)
+        p0 = 1.0 / c1
+        return total_counts * _np.where(probs > p0, probs, c1 * probs**2)
 
-    def _zero_freq_dterms_relaxed(self, N, probs):
-        C0 = (0.5 / self.fmin) * 1.0 / (self.x1**2)
-        p0 = 1.0 / C0
-        return N * _np.where(probs > p0, 1.0, 2 * C0 * probs)
+    def _zero_freq_dterms_relaxed(self, total_counts, probs):
+        c1 = (0.5 / self.fmin) * 1.0 / (self.x1**2)
+        p0 = 1.0 / c1
+        return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
 
-    def _zero_freq_hterms_relaxed(self, N, probs):
+    def _zero_freq_hterms_relaxed(self, total_counts, probs):
         raise NotImplementedError()  # This is straightforward, but do it later.
 
 
@@ -1056,14 +1062,14 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def set_regularization(self, minProbClip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None):
-        if minProbClip is not None:
+    def set_regularization(self, min_prob_clip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None):
+        if min_prob_clip is not None:
             assert(pfratio_stitchpt is None and pfratio_derivpt is None), \
-                "Cannot specify pfratio and minProbClip arguments as non-None!"
-            self.min_p = minProbClip
+                "Cannot specify pfratio and min_prob_clip arguments as non-None!"
+            self.min_p = min_prob_clip
             self.regtype = "minp"
         else:
-            assert(minProbClip is None), "Cannot specify pfratio and minProbClip arguments as non-None!"
+            assert(min_prob_clip is None), "Cannot specify pfratio and min_prob_clip arguments as non-None!"
             self.x0 = pfratio_stitchpt
             self.x1 = pfratio_derivpt
             self.regtype = "pfratio"
@@ -1079,16 +1085,16 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             x1 = self.x1
             x = probs / freqs_nozeros  # objective is -Nf*log(x)
             pos_x = _np.where(x < x0, x0, x)
-            S = -counts * (1 / x1)  # deriv wrt x at x == x1 (=min_p)
-            S2 = 0.5 * counts / (x1**2)  # 0.5 * 2nd deriv at x1
-            return x, pos_x, S, S2, freqs_nozeros
+            c0 = -counts * (1 / x1)  # deriv wrt x at x == x1 (=min_p)
+            c1 = 0.5 * counts / (x1**2)  # 0.5 * 2nd deriv at x1
+            return x, pos_x, c0, c1, freqs_nozeros
 
         elif self.regtype == 'minp':
-            freqTerm = counts * _np.log(freqs_nozeros)  # objective is Nf*(log(f) - log(p))
+            freq_term = counts * _np.log(freqs_nozeros)  # objective is Nf*(log(f) - log(p))
             pos_probs = _np.where(probs < self.min_p, self.min_p, probs)
-            S = -counts / self.min_p
-            S2 = 0.5 * counts / (self.min_p**2)
-            return freqTerm, pos_probs, S, S2, freqs_nozeros
+            c0 = -counts / self.min_p
+            c1 = 0.5 * counts / (self.min_p**2)
+            return freq_term, pos_probs, c0, c1, freqs_nozeros
 
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
@@ -1099,22 +1105,22 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
 
         if self.regtype == 'pfratio':
             x0 = self.x0
-            x, pos_x, S, S2, freqs_nozeros = intermediates
+            x, pos_x, c0, c1, freqs_nozeros = intermediates
             terms = -counts * _np.log(pos_x)
-            terms = _np.where(x < x0, terms + S * (x - x0) + S2 * (x - x0)**2, terms)
+            terms = _np.where(x < x0, terms + c0 * (x - x0) + c1 * (x - x0)**2, terms)
 
         elif self.regtype == 'minp':
-            freqTerm, pos_probs, S, S2, _ = intermediates
-            terms = freqTerm - counts * _np.log(pos_probs)
+            freq_term, pos_probs, c0, c1, _ = intermediates
+            terms = freq_term - counts * _np.log(pos_probs)
             terms = _np.where(probs < self.min_p,
-                              terms + S * (probs - self.min_p) + S2 * (probs - self.min_p)**2, terms)
+                              terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
         terms = _np.where(counts == 0, 0.0, terms)
         #Note: no penalty for omitted probabilities (objective fn == 0 whenever counts == 0)
 
-        terms.shape = [self.KM]  # reshape ensuring no copy is needed
+        terms.shape = [self.nelements]  # reshape ensuring no copy is needed
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
@@ -1123,15 +1129,15 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
 
         if self.regtype == 'pfratio':
             x0 = self.x0
-            x, pos_x, S, S2, freqs_nozeros = intermediates
+            x, pos_x, c0, c1, freqs_nozeros = intermediates
             dterms = total_counts * (-1 / pos_x)  # note Nf/p = N/x
-            dterms_taylor = (S + 2 * S2 * (x - x0)) / freqs_nozeros  # (...) is df/dx and want df/dp = df/dx * (1/f)
+            dterms_taylor = (c0 + 2 * c1 * (x - x0)) / freqs_nozeros  # (...) is df/dx and want df/dp = df/dx * (1/f)
             dterms = _np.where(x < x0, dterms_taylor, dterms)
 
         elif self.regtype == 'minp':
-            _, pos_probs, S, S2, freqs_nozeros = intermediates
+            _, pos_probs, c0, c1, freqs_nozeros = intermediates
             dterms = -counts / pos_probs
-            dterms_taylor = S + 2 * S2 * (probs - self.min_p)
+            dterms_taylor = c0 + 2 * c1 * (probs - self.min_p)
             dterms = _np.where(probs < self.min_p, dterms_taylor, dterms)
 
         dterms = _np.where(counts == 0, 0.0, dterms)
@@ -1139,13 +1145,13 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
         # terms = Nf*log(p) OR const + S*(p - minp) + S2*(p - minp)^2
-        # dterms/dp = Nf/p  OR  S + 2*S2*(p - minp)
+        # dterms/dp = Nf/p  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = -Nf/p^2   OR  2*S2
         assert(self.regtype == "minp")
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        _, pos_probs, S, S2, freqs_nozeros = intermediates
-        d2terms_dp2 = _np.where(probs < self.min_p, 2 * S2, counts / pos_probs**2)
+        _, pos_probs, c0, c1, freqs_nozeros = intermediates
+        d2terms_dp2 = _np.where(probs < self.min_p, 2 * c1, counts / pos_probs**2)
         d2terms_dp2 = _np.where(counts == 0, 0.0, d2terms_dp2)
         return d2terms_dp2  # a 1D array of d2(logl)/dprobs2 values; shape = (nEls,)
 
@@ -1163,13 +1169,13 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, N, probs):
+    def zero_freq_terms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_dterms(self, N, probs):
+    def zero_freq_dterms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_hterms(self, N, probs):
+    def zero_freq_hterms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
 
@@ -1210,13 +1216,13 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, N, probs):
+    def zero_freq_terms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_dterms(self, N, probs):
+    def zero_freq_dterms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_hterms(self, N, probs):
+    def zero_freq_hterms(self, total_counts, probs):
         return _np.zeros(len(probs), 'd')
 
 
@@ -1237,31 +1243,31 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
-        #   tree and initialization of dsCircuitsToUse)
-        self.probs = _np.empty(self.KM, 'd')
-        self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
-        self.hprobs = _np.empty((self.KM, self.vec_gs_len, self.vec_gs_len), 'd') if self.enable_hessian else None
-        self.cntVecMx, self.N = self.compute_count_vectors()
-        self.f = self.cntVecMx / self.N
-        self.maxCircuitLength = max([len(x) for x in self.circuitsToUse])
+        #   tree and initialization of ds_circuits_to_use)
+        self.probs = _np.empty(self.nelements, 'd')
+        self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+        self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if self.enable_hessian else None
+        self.counts, self.N = self.compute_count_vectors()
+        self.f = self.counts / self.N
+        self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
         self.precompute_omitted_freqs()  # sets self.first
 
     #Model-based regularization and penalty support functions
 
-    def set_penalties(self, regularizeFactor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
-                      forcefn_grad=None, shiftFctr=100, probClipInterval=(-10000, 1000)):
+    def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
+                      forcefn_grad=None, shift_fctr=100, prob_clip_interval=(-10000, 1000)):
 
-        self.regularizeFactor = regularizeFactor
+        self.regularize_factor = regularize_factor
         self.cptp_penalty_factor = cptp_penalty_factor
         self.spam_penalty_factor = spam_penalty_factor
         self.forcefn_grad = forcefn_grad
 
-        self.probClipInterval = probClipInterval  # not really a "penalty" per se, but including it as one
+        self.prob_clip_interval = prob_clip_interval  # not really a "penalty" per se, but including it as one
         # gives the user the ability to easily set it if they ever need to (unlikely)
 
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
-        if self.regularizeFactor != 0: ex += self.vec_gs_len
+        if self.regularize_factor != 0: ex += self.nparams
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.mdl)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.mdl)
 
@@ -1269,44 +1275,44 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             ex += forcefn_grad.shape[0]
             ffg_norm = _np.linalg.norm(forcefn_grad)
             start_norm = _np.linalg.norm(self.mdl.to_vector())
-            self.forceOffset = self.KM + ex  # index to jacobian row of first forcing term
-            self.forceShift = ffg_norm * (ffg_norm + start_norm) * shiftFctr
-            #used to keep forceShift - _np.dot(forcefn_grad,vectorGS) positive (Note: not analytic, just a heuristic!)
+            self.forceOffset = self.nelements + ex  # index to jacobian row of first forcing term
+            self.forceShift = ffg_norm * (ffg_norm + start_norm) * shift_fctr
+            #used to keep forceShift - _np.dot(forcefn_grad,paramvec) positive (Note: not analytic, just a heuristic!)
 
         return ex
 
-    def lspenaltyvec(self, vectorGS):
+    def lspenaltyvec(self, paramvec):
 
         if self.forcefn_grad is not None:
-            forceVec = self.forceShift - _np.dot(self.forcefn_grad, self.mdl.to_vector())
-            assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
-            forcefn_penalty = _np.sqrt(forceVec)
+            force_vec = self.forceShift - _np.dot(self.forcefn_grad, self.mdl.to_vector())
+            assert(_np.all(force_vec >= 0)), "Inadequate forcing shift!"
+            forcefn_penalty = _np.sqrt(force_vec)
         else: forcefn_penalty = []
 
-        if self.regularizeFactor != 0:
-            gsVecNorm = self.regularizeFactor * _np.array([max(0, absx - 1.0) for absx in map(abs, vectorGS)], 'd')
-        else: gsVecNorm = []  # so concatenate ignores
+        if self.regularize_factor != 0:
+            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+        else: paramvec_norm = []  # so concatenate ignores
 
         if self.cptp_penalty_factor > 0:
-            cpPenaltyVec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
-        else: cpPenaltyVec = []  # so concatenate ignores
+            cp_penalty_vec = _cptp_penalty(self.mdl, self.cptp_penalty_factor, self.opBasis)
+        else: cp_penalty_vec = []  # so concatenate ignores
 
         if self.spam_penalty_factor > 0:
-            spamPenaltyVec = _spam_penalty(self.mdl, self.spam_penalty_factor, self.opBasis)
-        else: spamPenaltyVec = []  # so concatenate ignores
+            spam_penalty_vec = _spam_penalty(self.mdl, self.spam_penalty_factor, self.opBasis)
+        else: spam_penalty_vec = []  # so concatenate ignores
 
-        return _np.concatenate((forcefn_penalty, gsVecNorm, cpPenaltyVec, spamPenaltyVec))
+        return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec))
 
-    def penaltyvec(self, vectorGS):
-        return self.lspenaltyvec(vectorGS)**2
+    def penaltyvec(self, paramvec):
+        return self.lspenaltyvec(paramvec)**2
 
-    def fill_lspenaltyvec_jac(self, vectorGS, lspenaltyvec_jac):
+    def fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
         off = 0
 
-        if self.regularizeFactor > 0:
-            n = len(vectorGS)
-            lspenaltyvec_jac[off:off + n, :] = _np.diag([(self.regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0)
-                                                         for x in vectorGS])  # (N,N)
+        if self.regularize_factor > 0:
+            n = len(paramvec)
+            lspenaltyvec_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0)
+                                                         for x in paramvec])  # (N,N)
             off += n
 
         if self.cptp_penalty_factor > 0:
@@ -1319,11 +1325,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         assert(off == self.ex)
 
-    def fill_dterms_penalty(self, vectorGS, terms_jac):
+    def fill_dterms_penalty(self, paramvec, terms_jac):
         # terms_penalty = ls_penalty**2
         # terms_penalty_jac = 2 * ls_penalty * ls_penalty_jac
-        self.fill_lspenaltyvec_jac(vectorGS, terms_jac)
-        terms_jac[:, :] *= 2 * self.lspenaltyvec(vectorGS)[:, None]
+        self.fill_lspenaltyvec_jac(paramvec, terms_jac)
+        terms_jac[:, :] *= 2 * self.lspenaltyvec(paramvec)[:, None]
 
     #Omitted-probability support functions
 
@@ -1382,130 +1388,131 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #TODO: REMOVE
         #if (self.comm is None or self.comm.Get_rank() == 0):
         #    print(" |dprobs_omitted_rowsum| = ",_np.linalg.norm(dprobs_omitted_rowsum))
-        #    print(" |dprobs_factor_omitted| = ",_np.linalg.norm(((0.5 / lsvec_firsts) * self.omitted_prob_first_dterms(probs))))
+        #    print(" |dprobs_factor_omitted| = ",_np.linalg.norm(((0.5 / lsvec_firsts)
+        #                                    * self.omitted_prob_first_dterms(probs))))
         #    print(" |jac(post-sparse)| = ",_np.linalg.norm(dlsvec))
 
     #Objective Function
 
-    def lsvec(self, vectorGS=None, oob_check=False):
+    def lsvec(self, paramvec=None, oob_check=False):
         tm = _time.time()
-        if vectorGS is not None: self.mdl.from_vector(vectorGS)
-        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+        if paramvec is not None: self.mdl.from_vector(paramvec)
+        self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
-        if oob_check:  #Only used for termgap cases
-            if not self.mdl.bulk_probs_paths_are_sufficient(self.evTree,
+        if oob_check:  # Only used for termgap cases
+            if not self.mdl.bulk_probs_paths_are_sufficient(self.eval_tree,
                                                             self.probs,
                                                             self.raw_objfn.comm,
-                                                            memLimit=self.raw_objfn.memLimit,
+                                                            mem_limit=self.raw_objfn.mem_limit,
                                                             verbosity=1):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
-        lsvec = self.raw_objfn.lsvec(self.probs, self.cntVecMx, self.N, self.f)
-        lsvec = _np.concatenate((lsvec, self.lspenaltyvec(vectorGS)))
+        lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.N, self.f)
+        lsvec = _np.concatenate((lsvec, self.lspenaltyvec(paramvec)))
 
         if self.firsts is not None:
             self.update_lsvec_for_omitted_probs(lsvec, self.probs)
 
         self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
-        assert(lsvec.shape == (self.KM,))  # reshape ensuring no copy is needed
+        assert(lsvec.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return lsvec
 
-    def terms(self, vectorGS=None):
+    def terms(self, paramvec=None):
         tm = _time.time()
-        if vectorGS is not None: self.mdl.from_vector(vectorGS)
-        self.mdl.bulk_fill_probs(self.probs, self.evTree, self.probClipInterval,
+        if paramvec is not None: self.mdl.from_vector(paramvec)
+        self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
-        terms = self.raw_objfn.terms(self.probs, self.cntVecMx, self.N, self.f)
-        terms = _np.concatenate((terms, self.penaltyvec(vectorGS)))
+        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.f)
+        terms = _np.concatenate((terms, self.penaltyvec(paramvec)))
 
         if self.firsts is not None:
             self.update_terms_for_omitted_probs(terms, self.probs)
 
         self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
-        assert(terms.shape == (self.KM,))  # reshape ensuring no copy is needed
+        assert(terms.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return terms
 
     # Jacobian function
-    def dlsvec(self, vectorGS=None):
+    def dlsvec(self, paramvec=None):
         tm = _time.time()
-        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.KM, self.vec_gs_len)
-        if vectorGS is not None: self.mdl.from_vector(vectorGS)
-        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
-                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrtBlkSize,
+        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.nelements, self.nparams)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
+        self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
+                                  prMxToFill=self.probs, clipTo=self.prob_clip_interval,
+                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrt_blk_size,
                                   profiler=self.raw_objfn.profiler, gatherMemLimit=self.gthrMem)
 
         #DEBUG TODO REMOVE - test dprobs to make sure they look right.
-        #EPS = 1e-7
+        #eps = 1e-7
         #db_probs = _np.empty(self.probs.shape, 'd')
         #db_probs2 = _np.empty(self.probs.shape, 'd')
         #db_dprobs = _np.empty(dprobs.shape, 'd')
-        #self.mdl.bulk_fill_probs(db_probs, self.evTree, self.probClipInterval, self.check, self.comm)
-        #for i in range(self.vec_gs_len):
-        #    vectorGS_eps = vectorGS.copy()
-        #    vectorGS_eps[i] += EPS
-        #    self.mdl.from_vector(vectorGS_eps)
-        #    self.mdl.bulk_fill_probs(db_probs2, self.evTree, self.probClipInterval, self.check, self.comm)
-        #    db_dprobs[:,i] = (db_probs2 - db_probs) / EPS
+        #self.mdl.bulk_fill_probs(db_probs, self.eval_tree, self.prob_clip_interval, self.check, self.comm)
+        #for i in range(self.nparams):
+        #    paramvec_eps = paramvec.copy()
+        #    paramvec_eps[i] += eps
+        #    self.mdl.from_vector(paramvec_eps)
+        #    self.mdl.bulk_fill_probs(db_probs2, self.eval_tree, self.prob_clip_interval, self.check, self.comm)
+        #    db_dprobs[:,i] = (db_probs2 - db_probs) / eps
         #if _np.linalg.norm(dprobs - db_dprobs)/dprobs.size > 1e-6:
         #    #assert(False), "STOP: %g" % (_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
         #    print("DB: dprobs per el mismatch = ",_np.linalg.norm(dprobs - db_dprobs)/db_dprobs.size)
-        #self.mdl.from_vector(vectorGS)
+        #self.mdl.from_vector(paramvec)
         #dprobs[:,:] = db_dprobs[:,:]
 
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
 
-        dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.cntVecMx, self.N, self.f)
+        dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.N, self.f)
         dprobs *= dg_dprobs[:, None]
-        # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
-        # with a different shape (jac.shape == [KM,vec_gs_len])
+        # with a different shape (jac.shape == [nelements,nparams])
 
         if self.firsts is not None:
             #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
             self.update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
 
-        self.fill_lspenaltyvec_jac(vectorGS, self.jac[self.KM:, :])  # jac.shape == (KM+N,N)
+        self.fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+            v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
         self.raw_objfn.profiler.add_time("JACOBIAN", tm)
         return self.jac
 
-    def dterms(self, vectorGS=None):
+    def dterms(self, paramvec=None):
         tm = _time.time()
-        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.KM, self.vec_gs_len)
-        if vectorGS is not None: self.mdl.from_vector(vectorGS)
-        self.mdl.bulk_fill_dprobs(dprobs, self.evTree,
-                                  prMxToFill=self.probs, clipTo=self.probClipInterval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrtBlkSize,
+        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.nelements, self.nparams)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
+        self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
+                                  prMxToFill=self.probs, clipTo=self.prob_clip_interval,
+                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrt_blk_size,
                                   profiler=self.raw_objfn.profiler, gatherMemLimit=self.gthrMem)
 
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
 
-        dprobs *= self.raw_objfn.dterms(self.probs, self.cntVecMx, self.N, self.f)[:, None]
-        # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.N, self.f)[:, None]
+        # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
-        # with a different shape (jac.shape == [KM,vec_gs_len])
+        # with a different shape (jac.shape == [nelements,nparams])
 
         if self.firsts is not None:
             self.update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
 
-        self.fill_dterms_penalty(vectorGS, self.jac[self.KM:, :])  # jac.shape == (KM+N,N)
+        self.fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
-            v), vectorGS, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
+            v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -1517,22 +1524,22 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             raise NotImplementedError("Brute-force Hessian not implemented for sparse data (yet)")
 
         #General idea of what we're doing:
-        # Let f(pv) = g(probs(pv)), and let there be KM elements (i.e. probabilities) & len(pv) == N
-        #  => df/dpv = dg/dprobs * dprobs/dpv = (KM,) * (KM,N)
+        # Let f(pv) = g(probs(pv)), and let there be nelements elements (i.e. probabilities) & len(pv) == N
+        #  => df/dpv = dg/dprobs * dprobs/dpv = (nelements,) * (nelements,N)
         #  => d2f/dpv1dpv2 = d/dpv2( dg/dprobs * dprobs/dpv1 )
         #                  = (d2g/dprobs2 * dprobs/dpv2) * dprobs/dpv1 + dg/dprobs * d2probs/dpv1dpv2
         #                  =  (KM,)       * (KM,N2)       * (KM,N1)    + (KM,)     * (KM,N1,N2)
         # Note that we need to end up with an array with shape (KM,N1,N2), and so we need to swap axes of first term
 
         if pv is not None: self.mdl.from_vector(pv)
-        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
-        self.mdl.bulk_fill_hprobs(self.hprobs, self.evTree, self.probs, dprobs,
-                                  self.probClipInterval, self.check, self.comm)  # use cache?
+        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        self.mdl.bulk_fill_hprobs(self.hprobs, self.eval_tree, self.probs, dprobs,
+                                  self.prob_clip_interval, self.check, self.comm)  # use cache?
 
-        dg_dprobs = self.raw_objfn.dterms(self.probs, self.cntVecMx, self.N, self.f)[:, None, None]
-        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.cntVecMx, self.N, self.f)[:, None, None]
-        dprobs_dp1 = dprobs[:, :, None]  # (KM,N,1)
-        dprobs_dp2 = dprobs[:, None, :]  # (KM,1,N)
+        dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.N, self.f)[:, None, None]
+        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.f)[:, None, None]
+        dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
+        dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
         #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * self.hprobs
         # do the above line in a more memory efficient way:
@@ -1548,20 +1555,20 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
 
         if pv is not None: self.mdl.from_vector(pv)
-        dprobs = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dprobs
-        self.mld.bulk_fill_dprobs(dprobs, self.evTree, self.probs, self.probClipInterval,
+        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        self.mld.bulk_fill_dprobs(dprobs, self.eval_tree, self.probs, self.prob_clip_interval,
                                   self.check, self.comm)  # use cache?
 
-        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.cntVecMx, self.N, self.f)[:, None, None]
-        dprobs_dp1 = dprobs[:, :, None]  # (KM,N,1)
-        dprobs_dp2 = dprobs[:, None, :]  # (KM,1,N)
+        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.f)[:, None, None]
+        dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
+        dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
         hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
         return _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
 
     def hessian(self, pv=None):
         if pv is not None: self.mdl.from_vector(pv)
-        return self._construct_hessian(self.cntVecMx, self.N, self.probClipInterval)
+        return self._construct_hessian(self.counts, self.N, self.prob_clip_interval)
 
     def _hessian_from_block(self, hprobs, dprobs12, probs, counts, total_counts, freqs):
         """ Factored-out computation of hessian from raw components """
@@ -1601,7 +1608,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         hessian = dprobs12; hessian += hprobs
 
         # hessian[iElement,iModelParam1,iModelParams2] contains all d2(logl)/d(modelParam1)d(modelParam2) contributions
-        # suming over element dimension (operation sequences in evalSubTree) gets current subtree contribution
+        # suming over element dimension (operation sequences in eval_subtree) gets current subtree contribution
         # for (N,N')-sized block of Hessian
         return _np.sum(hessian, axis=0)
 
@@ -1650,7 +1657,7 @@ class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
 
 class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
 
-    #This objective function can handle time-dependent circuits - that is, circuitsToUse are treated as
+    #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
@@ -1658,7 +1665,7 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         dummy = RawObjectiveFunction({}, resource_alloc, name, None, verbosity)
         super().__init__(dummy, mdl, dataset, circuit_list, cache, enable_hessian=False)
-                         
+
         self.time_dependent = True
 
         if regularization is None: regularization = {}
@@ -1669,11 +1676,11 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         #  Allocate peristent memory
         #  (must be AFTER possible operation sequence permutation by
-        #   tree and initialization of dsCircuitsToUse)
-        self.v = _np.empty(self.KM, 'd')
-        self.jac = _np.empty((self.KM + self.ex, self.vec_gs_len), 'd')
-        self.maxCircuitLength = max([len(x) for x in self.circuitsToUse])
-        self.num_total_outcomes = [mdl.get_num_outcomes(c) for c in self.circuitsToUse]  # for sparse data detection
+        #   tree and initialization of ds_circuits_to_use)
+        self.v = _np.empty(self.nelements, 'd')
+        self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+        self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
+        self.num_total_outcomes = [mdl.get_num_outcomes(c) for c in self.circuits_to_use]  # for sparse data detection
 
     def set_regularization(self):
         pass  # no regularization
@@ -1681,50 +1688,50 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
     def set_penalties(self):
         pass  # no penalties
 
-    def lsvec(self, vectorGS):
+    def lsvec(self, paramvec):
         raise NotImplementedError()
 
-    def dlsvec(self, vectorGS):
+    def dlsvec(self, paramvec):
         raise NotImplementedError()
 
 
 class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
 
-    #This objective function can handle time-dependent circuits - that is, circuitsToUse are treated as
+    #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
 
-    def set_regularization(self, minProbClipForWeighting=1e-4, radius=1e-4):
-        self.min_p = minProbClipForWeighting
+    def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
+        self.min_p = min_prob_clip_for_weighting
         self.a = radius  # parameterizes "roundness" of f == 0 terms
 
-    def set_penalties(self, regularizeFactor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
-                      probClipInterval=(-10000, 10000)):
-        assert(regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
+    def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
+                      prob_clip_interval=(-10000, 10000)):
+        assert(regularize_factor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
             "Cannot apply regularization or penalization in time-dependent chi2 case (yet)"
-        self.probClipInterval = probClipInterval
+        self.prob_clip_interval = prob_clip_interval
 
-    def lsvec(self, vectorGS):
+    def lsvec(self, paramvec):
         tm = _time.time()
-        self.mdl.from_vector(vectorGS)
+        self.mdl.from_vector(paramvec)
         fsim = self.mdl._fwdsim()
         v = self.v
-        fsim.bulk_fill_timedep_chi2(v, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
-                                    self.dataset, self.minProbClipForWeighting, self.probClipInterval, self.comm)
+        fsim.bulk_fill_timedep_chi2(v, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
+                                    self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, self.comm)
         self.raw_objfn.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
-        assert(v.shape == (self.KM,))  # reshape ensuring no copy is needed
+        assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
-    def dlsvec(self, vectorGS):
+    def dlsvec(self, paramvec):
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.KM, self.vec_gs_len)
-        self.mdl.from_vector(vectorGS)
+        dprobs.shape = (self.nelements, self.nparams)
+        self.mdl.from_vector(paramvec)
 
         fsim = self.mdl._fwdsim()
-        fsim.bulk_fill_timedep_dchi2(dprobs, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
-                                     self.dataset, self.minProbClipForWeighting, self.probClipInterval, None,
-                                     self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.raw_objfn.profiler,
+        fsim.bulk_fill_timedep_dchi2(dprobs, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
+                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
+                                     self.comm, wrtBlockSize=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
                                      gatherMemLimit=self.gthrMem)
 
         self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
@@ -1733,33 +1740,33 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
 
 class TimeDependentPoissonPicLogLFunction(ObjectiveFunction):
 
-    def set_regularization(self, minProbClip=1e-4, radius=1e-4):
-        self.min_p = minProbClip
+    def set_regularization(self, min_prob_clip=1e-4, radius=1e-4):
+        self.min_p = min_prob_clip
         self.a = radius  # parameterizes "roundness" of f == 0 terms
 
-    def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, forcefn_grad=None, shiftFctr=100,
-                      probClipInterval=(-10000, 10000)):
+    def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
+                      prob_clip_interval=(-10000, 10000)):
         assert(cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
             "Cannot apply CPTP or SPAM penalization in time-dependent logl case (yet)"
         assert(forcefn_grad is None), "forcing functions not supported with time-dependent logl function yet"
-        self.probClipInterval = probClipInterval
+        self.prob_clip_interval = prob_clip_interval
 
     def get_chi2k_distributed_qty(self, objective_function_value):
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def lsvec(self, vectorGS):
+    def lsvec(self, paramvec):
         tm = _time.time()
-        self.mdl.from_vector(vectorGS)
+        self.mdl.from_vector(paramvec)
         fsim = self.mdl._fwdsim()
         v = self.v
-        fsim.bulk_fill_timedep_loglpp(v, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
-                                      self.dataset, self.min_p, self.a, self.probClipInterval, self.comm)
+        fsim.bulk_fill_timedep_loglpp(v, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
+                                      self.dataset, self.min_p, self.a, self.prob_clip_interval, self.comm)
         v = _np.sqrt(v)
-        v.shape = [self.KM]  # reshape ensuring no copy is needed
+        v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
         self.raw_objfn.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
-        #      sqrt is well defined unless probClipInterval is set within [0,1].
+        #      sqrt is well defined unless prob_clip_interval is set within [0,1].
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
@@ -1768,17 +1775,17 @@ class TimeDependentPoissonPicLogLFunction(ObjectiveFunction):
     #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
 
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
-    #   and deriv == 0.5 / sqrt(...) * S * dp
-    def dlsvec(self, vectorGS):
+    #   and deriv == 0.5 / sqrt(...) * c0 * dp
+    def dlsvec(self, paramvec):
         tm = _time.time()
-        dlogl = self.jac[0:self.KM, :]  # avoid mem copying: use jac mem for dlogl
-        dlogl.shape = (self.KM, self.vec_gs_len)
-        self.mdl.from_vector(vectorGS)
+        dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
+        dlogl.shape = (self.nelements, self.nparams)
+        self.mdl.from_vector(paramvec)
 
         fsim = self.mdl._fwdsim()
-        fsim.bulk_fill_timedep_dloglpp(dlogl, self.evTree, self.dsCircuitsToUse, self.num_total_outcomes,
-                                       self.dataset, self.min_p, self.a, self.probClipInterval, self.v,
-                                       self.comm, wrtBlockSize=self.wrtBlkSize, profiler=self.raw_objfn.profiler,
+        fsim.bulk_fill_timedep_dloglpp(dlogl, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
+                                       self.dataset, self.min_p, self.a, self.prob_clip_interval, self.v,
+                                       self.comm, wrtBlockSize=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
                                        gatherMemLimit=self.gthrMem)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
@@ -1787,7 +1794,7 @@ class TimeDependentPoissonPicLogLFunction(ObjectiveFunction):
         # below
         v = _np.maximum(v, 1e-100)
         dlogl_factor = (0.5 / v)
-        dlogl *= dlogl_factor[:, None]  # (KM,N) * (KM,1)   (N = dim of vectorized model)
+        dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
         self.raw_objfn.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
@@ -1801,7 +1808,7 @@ def _spam_penalty_size(mdl):
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
 
-def _cptp_penalty(mdl, prefactor, opBasis):
+def _cptp_penalty(mdl, prefactor, op_basis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
     which in least squares optimization means returning an array
@@ -1814,11 +1821,11 @@ def _cptp_penalty(mdl, prefactor, opBasis):
     """
     from .. import tools as _tools
     return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
-        _tools.fast_jamiolkowski_iso_std(gate, opBasis)
+        _tools.fast_jamiolkowski_iso_std(gate, op_basis)
     ) for gate in mdl.operations.values()], 'd'))
 
 
-def _spam_penalty(mdl, prefactor, opBasis):
+def _spam_penalty(mdl, prefactor, op_basis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
     which in least squares optimization means returning an array
@@ -1833,29 +1840,29 @@ def _spam_penalty(mdl, prefactor, opBasis):
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.todense(), opBasis)
+                _tools.vec_to_stdmx(prepvec.todense(), op_basis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].todense(), opBasis)
+                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].todense(), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
 
 
-def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
+def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (len(mdl.operations), nParams).
+    Returns a (real) array of shape (len(mdl.operations), n_params).
     """
     from .. import tools as _tools
 
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     for i, gate in enumerate(mdl.operations.values()):
-        nP = gate.num_params()
+        nparams = gate.num_params()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, opBasis)
+        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
             "chi should be Hermitian!"
 
@@ -1872,48 +1879,48 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, mdl, prefactor, opBasis):
         assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
             "sgnchi should be Hermitian!"
 
-        # get d(gate)/dp in opBasis [shape == (nP,dim,dim)]
+        # get d(gate)/dp in op_basis [shape == (nP,dim,dim)]
         #OLD: dGdp = mdl.dproduct((gl,)) but wasteful
-        dGdp = gate.deriv_wrt_params()  # shape (dim**2, nP)
-        dGdp = _np.swapaxes(dGdp, 0, 1)  # shape (nP, dim**2, )
-        dGdp.shape = (nP, mdl.dim, mdl.dim)
+        dgate_dp = gate.deriv_wrt_params()  # shape (dim**2, nP)
+        dgate_dp = _np.swapaxes(dgate_dp, 0, 1)  # shape (nP, dim**2, )
+        dgate_dp.shape = (nparams, mdl.dim, mdl.dim)
 
         # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
         # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
         # transform).  This shuffle op commutes with the derivative, so that
         # dchi_std/dp := d(M(G))/dp = M(dG/dp), which we call "MdGdp_std" (the choi
         # mapping of dGdp in the std basis)
-        MdGdp_std = _np.empty((nP, mdl.dim, mdl.dim), 'complex')
-        for p in range(nP):  # p indexes param
-            MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], opBasis)  # now "M(dGdp_std)"
-            assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8)  # check hermitian
+        m_dgate_dp_std = _np.empty((nparams, mdl.dim, mdl.dim), 'complex')
+        for p in range(nparams):  # p indexes param
+            m_dgate_dp_std[p] = _tools.fast_jamiolkowski_iso_std(dgate_dp[p], op_basis)  # now "M(dGdp_std)"
+            assert(_np.linalg.norm(m_dgate_dp_std[p] - m_dgate_dp_std[p].T.conjugate()) < 1e-8)  # check hermitian
 
-        MdGdp_std = _np.conjugate(MdGdp_std)  # so element-wise multiply
+        m_dgate_dp_std = _np.conjugate(m_dgate_dp_std)  # so element-wise multiply
         # of complex number (einsum below) results in separately adding
         # Re and Im parts (also see NOTE in spam_penalty_jac_fill below)
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
         #v =  _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
-        v = _np.tensordot(sgnchi, MdGdp_std, ((0, 1), (1, 2)))
+        v = _np.tensordot(sgnchi, m_dgate_dp_std, ((0, 1), (1, 2)))
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi)))  # add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
-        cpPenaltyVecGradToFill[i, :] = 0.0
-        cpPenaltyVecGradToFill[i, gate.gpindices] = v.real  # indexing w/array OR
+        cp_penalty_vec_grad_to_fill[i, :] = 0.0
+        cp_penalty_vec_grad_to_fill[i, gate.gpindices] = v.real  # indexing w/array OR
         #slice works as expected in this case
-        chi = sgnchi = dGdp = MdGdp_std = v = None  # free mem
+        chi = sgnchi = dgate_dp = m_dgate_dp_std = v = None  # free mem
 
     return len(mdl.operations)  # the number of leading-dim indicies we filled in
 
 
-def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
+def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape ( _spam_penalty_size(mdl), nParams).
+    Returns a (real) array of shape ( _spam_penalty_size(mdl), n_params).
     """
     from .. import tools as _tools
-    BMxs = opBasis.elements  # shape [mdl.dim, dmDim, dmDim]
-    ddenMxdV = dEMxdV = BMxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+    basis_mxs = op_basis.elements  # shape [mdl.dim, dmDim, dmDim]
+    ddenmx_dv = demx_dv = basis_mxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
     #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
     # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
     # in order to gather the different components of the total derivative of the trace-norm
@@ -1925,21 +1932,21 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
 
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
     for i, prepvec in enumerate(mdl.preps.values()):
-        nP = prepvec.num_params()
+        nparams = prepvec.num_params()
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec, opBasis)
-        assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
+        denmx = _tools.vec_to_stdmx(prepvec, op_basis)
+        assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
-        sgndm = _tools.matrix_sign(denMx)
+        sgndm = _tools.matrix_sign(denmx)
         assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
             "sgndm should be Hermitian!"
 
-        # get d(prepvec)/dp in opBasis [shape == (nP,dim)]
-        dVdp = prepvec.deriv_wrt_params()  # shape (dim, nP)
-        assert(dVdp.shape == (mdl.dim, nP))
+        # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
+        dv_dp = prepvec.deriv_wrt_params()  # shape (dim, nP)
+        assert(dv_dp.shape == (mdl.dim, nparams))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
 
@@ -1947,12 +1954,12 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
         #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
-        v = _np.tensordot(_np.tensordot(sgndm, ddenMxdV, ((0, 1), (1, 2))), dVdp, (0, 0))
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx)))  # add 0.5/|denMx|_Tr factor
+        v = _np.tensordot(_np.tensordot(sgndm, ddenmx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denmx)))  # add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
-        spamPenaltyVecGradToFill[i, :] = 0.0
-        spamPenaltyVecGradToFill[i, prepvec.gpindices] = v.real  # slice or array index works!
-        denMx = sgndm = dVdp = v = None  # free mem
+        spam_penalty_vec_grad_to_fill[i, :] = 0.0
+        spam_penalty_vec_grad_to_fill[i, prepvec.gpindices] = v.real  # slice or array index works!
+        denmx = sgndm = dv_dp = v = None  # free mem
 
     #Compute derivatives for effect terms
     i = len(mdl.preps)
@@ -1960,37 +1967,37 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
         #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
         for _, effectvec in povm.simplify_effects(povmlbl).items():
-            nP = effectvec.num_params()
+            nparams = effectvec.num_params()
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec, opBasis)
+            emx = _tools.vec_to_stdmx(effectvec, op_basis)
             # dmDim = EMx.shape[0]
-            assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
+            assert(_np.linalg.norm(emx - emx.T.conjugate()) < 1e-4), \
                 "EMx should be Hermitian!"
 
-            sgnE = _tools.matrix_sign(EMx)
-            assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
+            sgn_e = _tools.matrix_sign(emx)
+            assert(_np.linalg.norm(sgn_e - sgn_e.T.conjugate()) < 1e-4), \
                 "sgnE should be Hermitian!"
 
-            # get d(prepvec)/dp in opBasis [shape == (nP,dim)]
-            dVdp = effectvec.deriv_wrt_params()  # shape (dim, nP)
-            assert(dVdp.shape == (mdl.dim, nP))
+            # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
+            dv_dp = effectvec.deriv_wrt_params()  # shape (dim, nP)
+            assert(dv_dp.shape == (mdl.dim, nparams))
 
-            # EMx = sum( spamvec[i] * Bmx[i] )
+            # emx = sum( spamvec[i] * basis_mx[i] )
 
             #contract to get (note contract along both mx indices b/c treat like a mx basis):
             # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
             # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
             #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-            v = _np.tensordot(_np.tensordot(sgnE, dEMxdV, ((0, 1), (1, 2))), dVdp, (0, 0))
-            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx)))  # add 0.5/|EMx|_Tr factor
+            v = _np.tensordot(_np.tensordot(sgn_e, demx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
+            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(emx)))  # add 0.5/|EMx|_Tr factor
             assert(_np.linalg.norm(v.imag) < 1e-4)
 
-            spamPenaltyVecGradToFill[i, :] = 0.0
-            spamPenaltyVecGradToFill[i, effectvec.gpindices] = v.real
+            spam_penalty_vec_grad_to_fill[i, :] = 0.0
+            spam_penalty_vec_grad_to_fill[i, effectvec.gpindices] = v.real
             i += 1
 
-            sgnE = dVdp = v = None  # free mem
+            sgn_e = dv_dp = v = None  # free mem
 
     #return the number of leading-dim indicies we filled in
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
@@ -2004,7 +2011,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
         self.wildcard_budget = wildcard
-        self.wildcard_budget_precomp = wildcard.get_precomp_for_circuits(self.logl_objfn.circuitsToUse)
+        self.wildcard_budget_precomp = wildcard.get_precomp_for_circuits(self.logl_objfn.circuits_to_use)
 
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.probs = self.logl_objfn.probs.copy()
@@ -2013,17 +2020,17 @@ class LogLWildcardFunction(ObjectiveFunction):
     #    """The default point to evaluate functions at """
     #    return self.wildcard_budget.to_vector()
 
-    def lsvec(self, Wvec):
+    def lsvec(self, w_vec):
         tm = _time.time()
-        self.wildcard_budget.from_vector(Wvec)
+        self.wildcard_budget.from_vector(w_vec)
         self.wildcard_budget.update_probs(self.probs,
                                           self.logl_objfn.probs,
                                           self.logl_objfn.freqs,
-                                          self.logl_objfn.circuitsToUse,
+                                          self.logl_objfn.circuits_to_use,
                                           self.logl_objfn.lookup,
                                           self.wildcard_budget_precomp)
 
         return self.logl_objfn.lsvec_from_probs(tm)
 
-    def dlsvec(self, Wvec):
+    def dlsvec(self, w_vec):
         raise NotImplementedError("No jacobian yet")

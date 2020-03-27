@@ -175,7 +175,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             if parent_sslbls == key_label.sslbls: return value  # no need to embed, as key_label uses *all* sslbls
 
             if self.flags['cast_to_type'] == "operation":
-                return self.parent._embedOperation(key_label.sslbls, self.cast_to_obj(value))
+                return self.parent._embed_operation(key_label.sslbls, self.cast_to_obj(value))
             else:
                 raise NotImplementedError("Cannot auto-embed objects other than opeations yet (not %s)."
                                           % self.flags['cast_to_type'])
@@ -349,7 +349,15 @@ class OutcomeLabelDict(_collections.OrderedDict):
             key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
-    def setitem_unsafe(self, key, val):
+    def get_unsafe(self, key, defaultval):
+        """
+        Gets an item without checking that `key` is a properly formatted outcome tuple.
+        Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
+        just a string.
+        """
+        return super(OutcomeLabelDict, self).get(key, defaultval)
+
+    def set_unsafe(self, key, val):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
@@ -361,6 +369,14 @@ class OutcomeLabelDict(_collections.OrderedDict):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
         return key in super(OutcomeLabelDict, self).keys()
+
+    def contains_unsafe(self, key):
+        """
+        Checks for `key` without ensuring that it is a properly formatted outcome tuple.
+        Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
+        just a string.
+        """
+        return super(OutcomeLabelDict, self).__contains__(key)
 
     def copy(self):
         """ Return a copy of this OutcomeLabelDict. """
@@ -386,13 +402,13 @@ class StateSpaceLabels(object):
     spaces.
     """
 
-    def __init__(self, labelList, dims=None, types=None, evotype="densitymx"):
+    def __init__(self, label_list, dims=None, types=None, evotype="densitymx"):
         """
         Creates a new StateSpaceLabels object.
 
         Parameters
         ----------
-        labelList : str or int or iterable
+        label_list : str or int or iterable
             Most generally, this can be a list of tuples, where each tuple
             contains the state-space labels (which can be strings or integers)
             for a single "tensor product block" formed by taking the tensor
@@ -410,7 +426,7 @@ class StateSpaceLabels(object):
         dims : int or iterable, optional
             The dimension of each state space label as an integer, tuple of
             integers, or list or tuples of integers to match the structure
-            of `labelList` (i.e., if `labelList=('Q0','Q1')` then `dims` should
+            of `label_list` (i.e., if `label_list=('Q0','Q1')` then `dims` should
             be a tuple of 2 integers).  Values specify state-space dimensions: 2
             for a qubit, 3 for a qutrit, etc.  If None, then the dimensions are
             inferred, if possible, from the following naming rules:
@@ -423,7 +439,7 @@ class StateSpaceLabels(object):
             A list of label types, either `'Q'` or `'C'` for "quantum" and
             "classical" respectively, indicating the type of state-space
             associated with each label.  Like `dims`, `types` must match
-            the structure of `labelList`.  A quantum state space of dimension
+            the structure of `label_list`.  A quantum state space of dimension
             `d` is a `d`-by-`d` density matrix, whereas a classical state space
             of dimension d is a vector of `d` probabilities.  If `None`, then
             all labels are assumed to be quantum.
@@ -436,42 +452,42 @@ class StateSpaceLabels(object):
         """
 
         #Allow initialization via another StateSpaceLabels object
-        if isinstance(labelList, StateSpaceLabels):
+        if isinstance(label_list, StateSpaceLabels):
             assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
-            dims = [tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
-                    for tpbLbls in labelList.labels]
-            types = [tuple((labelList.labeltypes[lbl] for lbl in tpbLbls))
-                     for tpbLbls in labelList.labels]
-            labelList = labelList.labels
+            dims = [tuple((label_list.labeldims[lbl] for lbl in tpbLbls))
+                    for tpbLbls in label_list.labels]
+            types = [tuple((label_list.labeltypes[lbl] for lbl in tpbLbls))
+                     for tpbLbls in label_list.labels]
+            label_list = label_list.labels
 
-        #Step1: convert labelList (and dims, if given) to a list of
+        #Step1: convert label_list (and dims, if given) to a list of
         # elements describing each "tensor product block" - each of
         # which is a tuple of string labels.
 
-        def isLabel(x):
+        def is_label(x):
             """ Return whether x is a valid space-label """
             return isinstance(x, str) or isinstance(x, _numbers.Integral)
 
-        if isLabel(labelList):
-            labelList = [(labelList,)]
+        if is_label(label_list):
+            label_list = [(label_list,)]
             if dims is not None: dims = [(dims,)]
             if types is not None: types = [(types,)]
         else:
-            #labelList must be iterable if it's not a string
-            labelList = list(labelList)
+            #label_list must be iterable if it's not a string
+            label_list = list(label_list)
 
-        if len(labelList) > 0 and isLabel(labelList[0]):
+        if len(label_list) > 0 and is_label(label_list[0]):
             # assume we've just been give the labels for a single tensor-prod-block
-            labelList = [labelList]
+            label_list = [label_list]
             if dims is not None: dims = [dims]
             if types is not None: types = [types]
 
-        self.labels = tuple([tuple(tpbLabels) for tpbLabels in labelList])
+        self.labels = tuple([tuple(tpbLabels) for tpbLabels in label_list])
 
         #Type check - labels must be strings or ints
         for tpbLabels in self.labels:  # loop over tensor-prod-blocks
             for lbl in tpbLabels:
-                if not isLabel(lbl):
+                if not is_label(lbl):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
         # Get the type of each labeled space
@@ -539,7 +555,7 @@ class StateSpaceLabels(object):
         """
         return len(self.labels)
 
-    def tensor_product_block_labels(self, iTPB):  # unused
+    def tensor_product_block_labels(self, i_tpb):  # unused
         """
         Get the labels for the `iTBP`-th tensor-product block.
 
@@ -553,9 +569,9 @@ class StateSpaceLabels(object):
         -------
         tuple
         """
-        return self.labels[iTPB]
+        return self.labels[i_tpb]
 
-    def tensor_product_block_dims(self, iTPB):  # unused
+    def tensor_product_block_dims(self, i_tpb):  # unused
         """
         Get the dimension corresponding to each label in the
         `iTBP`-th tensor-product block.  The dimension of the
@@ -571,7 +587,7 @@ class StateSpaceLabels(object):
         -------
         tuple
         """
-        return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
+        return tuple((self.labeldims[lbl] for lbl in self.labels[i_tpb]))
 
     def product_dim(self, labels):  # only in modelconstruction
         """

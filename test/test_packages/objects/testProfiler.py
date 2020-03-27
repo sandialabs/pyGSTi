@@ -32,24 +32,24 @@ class ProfilerTestCase(BaseTestCase):
         p.print_msg("My Message")
         p.print_msg("My Message", all_ranks=True)
 
-        s = p.format_times(sortBy="name")
-        s = p.format_times(sortBy="time")
+        s = p.format_times(sort_by="name")
+        s = p.format_times(sort_by="time")
         with self.assertRaises(ValueError):
-            p.format_times(sortBy="foobar")
+            p.format_times(sort_by="foobar")
 
-        s = p.format_counts(sortBy="name")
-        s = p.format_counts(sortBy="count")
+        s = p.format_counts(sort_by="name")
+        s = p.format_counts(sort_by="count")
         with self.assertRaises(ValueError):
-            p.format_counts(sortBy="foobar")
+            p.format_counts(sort_by="foobar")
 
-        s = p.format_memory(sortBy="name")
-        s = p.format_memory(sortBy="usage")
+        s = p.format_memory(sort_by="name")
+        s = p.format_memory(sort_by="usage")
         with self.assertRaises(ValueError):
-            p.format_memory(sortBy="foobar")
+            p.format_memory(sort_by="foobar")
         with self.assertRaises(NotImplementedError):
-            p.format_memory(sortBy="timestamp")
+            p.format_memory(sort_by="timestamp")
         empty = profiler.Profiler(comm, default_print_memcheck=True)
-        self.assertEqual(empty.format_memory(sortBy="timestamp"),"No memory checkpoints")
+        self.assertEqual(empty.format_memory(sort_by="timestamp"),"No memory checkpoints")
 
     def test_profiler_pickling(self):
         comm=None

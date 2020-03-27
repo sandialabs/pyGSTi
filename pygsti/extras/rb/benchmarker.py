@@ -491,8 +491,8 @@ class Benchmarker(object):
         sfmultids = _multids.MultiDataSet()
 
         for ds_ind, ds in self.multids['standard'].items():
-            sfds = _stdds.DataSet(outcomeLabels=['success', 'fail'], collisionAction=ds.collisionAction)
-            for circ, dsrow in ds.items(stripOccurrenceTags=True):
+            sfds = _stdds.DataSet(outcome_labels=['success', 'fail'], collision_action=ds.collisionAction)
+            for circ, dsrow in ds.items(strip_occurrence_tags=True):
                 try:
                     scounts = dsrow[dsrow.aux[self.success_key]]
                 except:
@@ -591,12 +591,12 @@ class Benchmarker(object):
             percent = 0
 
             if preddskey is None or ds_ind > 0:
-                iterator = zip(self.multids[useds][ds_ind].items(stripOccurrenceTags=True),
+                iterator = zip(self.multids[useds][ds_ind].items(strip_occurrence_tags=True),
                                self.multids[useds].auxInfo.values(), _cycle(zip([None, ], [None, ])))
             else:
-                iterator = zip(self.multids[useds][ds_ind].items(stripOccurrenceTags=True),
+                iterator = zip(self.multids[useds][ds_ind].items(strip_occurrence_tags=True),
                                self.multids[useds].auxInfo.values(),
-                               predds.items(stripOccurrenceTags=True))
+                               predds.items(strip_occurrence_tags=True))
 
             for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):
 
@@ -690,7 +690,7 @@ class Benchmarker(object):
                         if ds_ind == 0:
                             for auxtype in auxtypes:
                                 if auxtype == 'twoQgate_count':
-                                    auxdata = circ.twoQgate_count()
+                                    auxdata = circ.two_q_gate_count()
                                 elif auxtype == 'depth':
                                     auxdata = circ.depth()
                                 elif auxtype == 'target':

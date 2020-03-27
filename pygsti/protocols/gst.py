@@ -48,27 +48,27 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 class HasTargetModel(object):
     """ Adds to an experiment design a target model """
 
-    def __init__(self, targetModelFilenameOrObj):
-        self.target_model = _load_model(targetModelFilenameOrObj)
+    def __init__(self, target_model_filename_or_obj):
+        self.target_model = _load_model(target_model_filename_or_obj)
         self.auxfile_types['target_model'] = 'pickle'
 
 
 class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
     """ Minimal experiment design needed for GST """
 
-    def __init__(self, targetModelFilenameOrObj, circuit_lists, all_circuits_needing_data=None,
-                 qubit_labels=None, nested=False):
-        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested)
-        HasTargetModel.__init__(self, targetModelFilenameOrObj)
+    def __init__(self, target_model_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
+                 qubit_labels=None, nested=False, remove_duplicates=True):
+        super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
+        HasTargetModel.__init__(self, target_model_filename_or_obj)
 
 
 class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesign):
     """ GST experiment design where circuits are structured by length and germ (typically). """
 
-    def __init__(self, targetModelFilenameOrObj, circuit_structs, qubit_labels=None,
-                 nested=False):
-        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested)
-        HasTargetModel.__init__(self, targetModelFilenameOrObj)
+    def __init__(self, target_model_filename_or_obj, circuit_structs, qubit_labels=None,
+                 nested=False, remove_duplicates=True):
+        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested, remove_duplicates)
+        HasTargetModel.__init__(self, target_model_filename_or_obj)
         #Note: we *don't* need to init GateSetTomographyDesign here, only HasTargetModel,
         # GateSetTomographyDesign's non-target-model data is initialized by CircuitStructuresDesign.
 
@@ -76,45 +76,45 @@ class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesig
 class StandardGSTDesign(StructuredGSTDesign):
     """ Standard GST experiment design consisting of germ-powers sandwiched between fiducials. """
 
-    def __init__(self, targetModelFilenameOrObj, prepStrsListOrFilename, effectStrsListOrFilename,
-                 germsListOrFilename, maxLengths, germLengthLimits=None, fidPairs=None, keepFraction=1,
-                 keepSeed=None, includeLGST=True, nest=True, sequenceRules=None, opLabelAliases=None,
-                 dscheck=None, actionIfMissing="raise", qubit_labels=None, verbosity=0,
+    def __init__(self, target_model_filename_or_obj, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                 germ_list_or_filename, max_lengths, germ_length_limits=None, fiducial_pairs=None, keep_fraction=1,
+                 keep_seed=None, include_lgst=True, nest=True, sequence_rules=None, op_label_aliases=None,
+                 dscheck=None, action_if_missing="raise", qubit_labels=None, verbosity=0,
                  add_default_protocol=False):
 
         #Get/load fiducials and germs
         prep, meas, germs = _load_fiducials_and_germs(
-            prepStrsListOrFilename,
-            effectStrsListOrFilename,
-            germsListOrFilename)
+            prep_fiducial_list_or_filename,
+            meas_fiducial_list_or_filename,
+            germ_list_or_filename)
         self.prep_fiducials = prep
         self.meas_fiducials = meas
         self.germs = germs
-        self.maxlengths = maxLengths
-        self.germ_length_limits = germLengthLimits
-        self.includeLGST = includeLGST
-        self.aliases = opLabelAliases
-        self.sequence_rules = sequenceRules
+        self.maxlengths = max_lengths
+        self.germ_length_limits = germ_length_limits
+        self.includeLGST = include_lgst
+        self.aliases = op_label_aliases
+        self.sequence_rules = sequence_rules
 
         #Hardcoded for now... - include so gets written when serialized
         self.truncation_method = "whole germ powers"
         self.nested = nest
 
         #FPR support
-        self.fiducial_pairs = fidPairs
-        self.fpr_keep_fraction = keepFraction
-        self.fpr_keep_seed = keepSeed
+        self.fiducial_pairs = fiducial_pairs
+        self.fpr_keep_fraction = keep_fraction
+        self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to make_lsgst_structs and pass qubit_labels in?
-        target_model = _load_model(targetModelFilenameOrObj)
+        target_model = _load_model(target_model_filename_or_obj)
         structs = _construction.make_lsgst_structs(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
-            self.aliases, self.sequence_rules, dscheck, actionIfMissing,
+            self.aliases, self.sequence_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
-        # truncScheme=advancedOptions.get('truncScheme', "whole germ powers")
+        # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         super().__init__(target_model, structs, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -132,7 +132,7 @@ class GSTInitialModel(object):
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
     def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
-                 lgst_gaugeopt_tol=None, contractStartToCPTP=False):
+                 lgst_gaugeopt_tol=None, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
         self.model = model
         if starting_point is None:
@@ -141,18 +141,18 @@ class GSTInitialModel(object):
             self.starting_point = starting_point
 
         self.lgst_gaugeopt_tol = lgst_gaugeopt_tol
-        self.contract_start_to_cptp = contractStartToCPTP
+        self.contract_start_to_cptp = contract_start_to_cptp
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
     def get_model(self, target_model, gaugeopt_target, lgst_struct, dataset, qubit_labels, comm):
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
-        startingPt = self.starting_point
-        if startingPt == "User-supplied-Model":
+        starting_pt = self.starting_point
+        if starting_pt == "User-supplied-Model":
             mdl_start = self.model
 
-        elif startingPt in ("LGST", "LGST-if-possible"):
+        elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
             mdl_start = self.model if (self.model is not None) else target_model
             lgst = LGST(mdl_start,
@@ -164,28 +164,28 @@ class GSTInitialModel(object):
                     lgst_data = _proto.ProtocolData(StructuredGSTDesign(mdl_start, [lgst_struct], qubit_labels),
                                                     dataset)
                     lgst.check_if_runnable(lgst_data)
-                    startingPt = "LGST"
+                    starting_pt = "LGST"
                 else:
                     raise ValueError("Experiment design must contain circuit structures in order to run LGST")
             except ValueError as e:
-                if startingPt == "LGST": raise e  # error if we *can't* run LGST
+                if starting_pt == "LGST": raise e  # error if we *can't* run LGST
 
                 #Fall back to target or custom model
                 if self.model is not None:
-                    startingPt = "User-supplied-Model"
+                    starting_pt = "User-supplied-Model"
                     mdl_start = self.model
                 else:
-                    startingPt = "target"
+                    starting_pt = "target"
                     mdl_start = target_model
 
-            if startingPt == "LGST":
+            if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
-        elif startingPt == "target":
+        elif starting_pt == "target":
             mdl_start = target_model
         else:
-            raise ValueError("Invalid starting point: %s" % startingPt)
+            raise ValueError("Invalid starting point: %s" % starting_pt)
 
         #Post-processing mdl_start : done only on root proc in case there is any nondeterminism.
         if comm is None or comm.Get_rank() == 0:
@@ -239,8 +239,8 @@ class GSTObjFnBuilders(object):
         else: raise ValueError("Cannot build a GSTObjFnBuilders object from '%s'" % str(type(obj)))
 
     @classmethod
-    def init_simple(cls, objective='logl', freqWeightedChi2=False, alwaysPerformMLE=False, onlyPerformMLE=False):
-        chi2_builder = _objfns.ObjectiveFunctionBuilder.simple('chi2', freqWeightedChi2)
+    def init_simple(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+        chi2_builder = _objfns.ObjectiveFunctionBuilder.simple('chi2', freq_weighted_chi2)
         mle_builder = _objfns.ObjectiveFunctionBuilder.simple('logl')
 
         if objective == "chi2":
@@ -248,8 +248,8 @@ class GSTObjFnBuilders(object):
             final_builders = []
 
         elif objective == "logl":
-            if alwaysPerformMLE:
-                iteration_builders = [mle_builder] if onlyPerformMLE else [chi2_builder, mle_builder]
+            if always_perform_mle:
+                iteration_builders = [mle_builder] if only_perform_mle else [chi2_builder, mle_builder]
                 final_builders = []
             else:
                 iteration_builders = [chi2_builder]
@@ -309,10 +309,9 @@ class GateSetTomography(_proto.Protocol):
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
-
     #TODO: Maybe make methods like this separate functions??
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
     #    return self.run(_proto.ProtocolData(design, dataset))
     #
     #def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
@@ -325,7 +324,7 @@ class GateSetTomography(_proto.Protocol):
 
     def run(self, data, memlimit=None, comm=None):
 
-        tRef = _time.time()
+        tref = _time.time()
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
@@ -356,12 +355,12 @@ class GateSetTomography(_proto.Protocol):
         bulk_circuit_lists = [_objfns.BulkCircuitList(lst, aliases, self.circuit_weights)
                               for lst in circuit_lists_or_structs]
 
-        tNxt = _time.time(); profiler.add_time('GST: loading', tRef); tRef = tNxt
+        tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
 
         mdl_start = self.initial_model.get_model(data.edesign.target_model, self.gaugeopt_target,
                                                  first_struct, data.dataset, data.edesign.qubit_labels, comm)
 
-        tNxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tRef); tRef = tNxt
+        tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
         #Run Long-sequence GST on data
         mdl_lsgst_list, optimums_list, final_cache = _alg.do_iterative_gst(
@@ -369,7 +368,7 @@ class GateSetTomography(_proto.Protocol):
             self.iteration_builders, self.final_builders,
             resource_alloc, printer)
 
-        tNxt = _time.time(); profiler.add_time('GST: total iterative optimization', tRef); tRef = tNxt
+        tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
 
         #set parameters
         parameters = _collections.OrderedDict()
@@ -399,7 +398,7 @@ class LinearGateSetTomography(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.build(badfit_options)        
+        self.badfit_options = GSTBadFitOptions.build(badfit_options)
         self.verbosity = verbosity
 
         #Advanced options that could be changed by users who know what they're doing
@@ -428,8 +427,8 @@ class LinearGateSetTomography(_proto.Protocol):
             raise ValueError("There should only be one circuit structure in the input exp-design!")
         circuit_struct = edesign.circuit_structs[0]
 
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if not isinstance(circuit_struct, validStructTypes):
+        valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
+        if not isinstance(circuit_struct, valid_struct_types):
             raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
 
     def run(self, data, memlimit=None, comm=None):
@@ -455,13 +454,13 @@ class LinearGateSetTomography(_proto.Protocol):
 
         ds = data.dataset
         aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
-        opLabels = self.oplabels if self.oplabels != "default" else \
+        op_labels = self.oplabels if self.oplabels != "default" else \
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
-                                opLabels, svdTruncateTo=target_model.get_dimension(),
-                                opLabelAliases=aliases, verbosity=printer)
+                                op_labels, svdTruncateTo=target_model.get_dimension(),
+                                op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
@@ -477,6 +476,7 @@ class LinearGateSetTomography(_proto.Protocol):
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
                                         None, None, resource_alloc, printer)
 
+
 #HERE's what we need to do:
 #x continue upgrading this module: StandardGST (similar to others, but need "appendTo" workaround)
 #x upgrade ModelTest
@@ -491,13 +491,13 @@ class StandardGST(_proto.Protocol):
 
     def __init__(self, modes="TP,CPTP,Target",
                  gaugeopt_suite='stdgaugeopt',
-                 gaugeopt_target=None, modelsToTest=None,
+                 gaugeopt_target=None, models_to_test=None,
                  objfn_builders=None, optimizer=None,
                  badfit_options=None, verbosity=2, name=None):
-        
+
         super().__init__(name)
         self.modes = modes.split(',')
-        self.models_to_test = modelsToTest
+        self.models_to_test = models_to_test
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
         self.objfn_builders = objfn_builders
@@ -514,8 +514,8 @@ class StandardGST(_proto.Protocol):
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
 
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, maxLengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
+    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
@@ -523,8 +523,8 @@ class StandardGST(_proto.Protocol):
         printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
 
         modes = self.modes
-        modelsToTest = self.models_to_test
-        if modelsToTest is None: modelsToTest = {}
+        models_to_test = self.models_to_test
+        if models_to_test is None: models_to_test = {}
 
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
@@ -549,8 +549,8 @@ class StandardGST(_proto.Protocol):
                     result = gst.run(data, memlimit, comm)
                     ret.add_estimates(result)
 
-                elif mode in modelsToTest:
-                    mdltest = _ModelTest(modelsToTest[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
+                elif mode in models_to_test:
+                    mdltest = _ModelTest(models_to_test[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
@@ -562,7 +562,7 @@ class StandardGST(_proto.Protocol):
 
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
-def gaugeopt_suite_to_dictionary(gaugeOptSuite, model, unreliableOps=(), verbosity=0):
+def gaugeopt_suite_to_dictionary(gauge_opt_suite, model, unreliable_ops=(), verbosity=0):
     """
     Constructs a dictionary of gauge-optimization parameter dictionaries based
     on "gauge optimization suite" name(s).
@@ -574,12 +574,12 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, model, unreliableOps=(), verbosi
 
     Parameters
     ----------
-    gaugeOptSuite : str or dict, optional
+    gauge_opt_suite : str or dict, optional
         Specifies which gauge optimizations to perform on each estimate.  An
         string (see below) specifies a built-in set of gauge optimizations,
-        otherwise `gaugeOptSuite` should be a dictionary of gauge-optimization
+        otherwise `gauge_opt_suite` should be a dictionary of gauge-optimization
         parameter dictionaries, as specified by the `gaugeOptParams` argument
-        of :func:`do_long_sequence_gst`.  The key names of `gaugeOptSuite` then
+        of :func:`do_long_sequence_gst`.  The key names of `gauge_opt_suite` then
         label the gauge optimizations within the resuling `Estimate` objects.
         The built-in gauge optmization suites are:
 
@@ -616,48 +616,48 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, model, unreliableOps=(), verbosi
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if gaugeOptSuite is None:
-        gaugeOptSuite = {}
-    elif isinstance(gaugeOptSuite, str):
-        gaugeOptSuite = {gaugeOptSuite: gaugeOptSuite}
-    elif isinstance(gaugeOptSuite, tuple):
-        gaugeOptSuite = {nm: nm for nm in gaugeOptSuite}
+    if gauge_opt_suite is None:
+        gauge_opt_suite = {}
+    elif isinstance(gauge_opt_suite, str):
+        gauge_opt_suite = {gauge_opt_suite: gauge_opt_suite}
+    elif isinstance(gauge_opt_suite, tuple):
+        gauge_opt_suite = {nm: nm for nm in gauge_opt_suite}
 
-    assert(isinstance(gaugeOptSuite, dict)), \
-        "Can't convert type '%s' to a gauge optimization suite dictionary!" % str(type(gaugeOptSuite))
+    assert(isinstance(gauge_opt_suite, dict)), \
+        "Can't convert type '%s' to a gauge optimization suite dictionary!" % str(type(gauge_opt_suite))
 
     #Build ordered dict of gauge optimization parameters
-    gaugeOptSuite_dict = _collections.OrderedDict()
-    for lbl, goparams in gaugeOptSuite.items():
+    gauge_opt_suite_dict = _collections.OrderedDict()
+    for lbl, goparams in gauge_opt_suite.items():
         if isinstance(goparams, str):
-            _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, lbl, goparams,
-                                                 model, unreliableOps, printer)
+            _update_gaugeopt_dict_from_suitename(gauge_opt_suite_dict, lbl, goparams,
+                                                 model, unreliable_ops, printer)
         elif hasattr(goparams, 'keys'):
-            gaugeOptSuite_dict[lbl] = goparams.copy()
-            gaugeOptSuite_dict[lbl].update({'verbosity': printer})
+            gauge_opt_suite_dict[lbl] = goparams.copy()
+            gauge_opt_suite_dict[lbl].update({'verbosity': printer})
         else:
             assert(isinstance(goparams, list)), "If not a dictionary, gauge opt params should be a list of dicts!"
-            gaugeOptSuite_dict[lbl] = []
+            gauge_opt_suite_dict[lbl] = []
             for goparams_stage in goparams:
                 dct = goparams_stage.copy()
                 dct.update({'verbosity': printer})
-                gaugeOptSuite_dict[lbl].append(dct)
+                gauge_opt_suite_dict[lbl].append(dct)
 
-    return gaugeOptSuite_dict
+    return gauge_opt_suite_dict
 
 
-def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName, model, unreliableOps, printer):
-    if suiteName in ("stdgaugeopt", "stdgaugeopt-unreliable2Q"):
+def _update_gaugeopt_dict_from_suitename(gauge_opt_suite_dict, root_lbl, suite_name, model, unreliable_ops, printer):
+    if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q"):
 
         stages = []  # multi-stage gauge opt
         gg = model.default_gauge_group
         if isinstance(gg, _objs.TrivialGaugeGroup):
-            if suiteName == "stdgaugeopt-unreliable2Q" and model.dim == 16:
-                if any([gl in model.operations.keys() for gl in unreliableOps]):
-                    gaugeOptSuite_dict[rootLbl] = {'verbosity': printer}
+            if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
+                if any([gl in model.operations.keys() for gl in unreliable_ops]):
+                    gauge_opt_suite_dict[root_lbl] = {'verbosity': printer}
             else:
                 #just do a single-stage "trivial" gauge opts using default group
-                gaugeOptSuite_dict[rootLbl] = {'verbosity': printer}
+                gauge_opt_suite_dict[root_lbl] = {'verbosity': printer}
 
         elif gg is not None:
 
@@ -665,7 +665,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
             if gg.name in ("Full", "TP"):
                 stages.append(
                     {
-                        'itemWeights': {'gates': 1.0, 'spam': 1.0},
+                        'item_weights': {'gates': 1.0, 'spam': 1.0},
                         'verbosity': printer
                     })
 
@@ -673,7 +673,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
             #         expense of spam if needed)
             stages.append(
                 {
-                    'itemWeights': {'gates': 1.0, 'spam': 0.0},
+                    'item_weights': {'gates': 1.0, 'spam': 0.0},
                     'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
                     'verbosity': printer
                 })
@@ -685,129 +685,129 @@ def _update_gaugeopt_dict_from_suitename(gaugeOptSuite_dict, rootLbl, suiteName,
                 _objs.TPSpamGaugeGroup
             stages.append(
                 {
-                    'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                    'item_weights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
                     'gauge_group': s3gg(model.dim),
                     'oob_check_interval': 1,
                     'verbosity': printer
                 })
 
-            if suiteName == "stdgaugeopt-unreliable2Q" and model.dim == 16:
-                if any([gl in model.operations.keys() for gl in unreliableOps]):
+            if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
+                if any([gl in model.operations.keys() for gl in unreliable_ops]):
                     stage2_item_weights = {'gates': 1, 'spam': 0.0}
-                    for gl in unreliableOps:
+                    for gl in unreliable_ops:
                         if gl in model.operations.keys(): stage2_item_weights[gl] = 0.01
-                    stages_2QUR = [stage.copy() for stage in stages]  # ~deep copy of stages
-                    iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                    stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
-                    gaugeOptSuite_dict[rootLbl] = stages_2QUR  # add additional gauge opt
+                    stages_2qubit_unreliable = [stage.copy() for stage in stages]  # ~deep copy of stages
+                    istage2 = 1 if gg.name in ("Full", "TP") else 0
+                    stages_2qubit_unreliable[istage2]['item_weights'] = stage2_item_weights
+                    gauge_opt_suite_dict[root_lbl] = stages_2qubit_unreliable  # add additional gauge opt
                 else:
                     _warnings.warn(("`unreliable2Q` was given as a gauge opt suite, but none of the"
-                                    " gate names in 'unreliableOps', i.e., %s,"
+                                    " gate names in 'unreliable_ops', i.e., %s,"
                                     " are present in the target model.  Omitting 'single-2QUR' gauge opt.")
-                                   % (", ".join(unreliableOps)))
+                                   % (", ".join(unreliable_ops)))
             else:
-                gaugeOptSuite_dict[rootLbl] = stages  # can be a list of stage dictionaries
+                gauge_opt_suite_dict[root_lbl] = stages  # can be a list of stage dictionaries
 
-    elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam") or \
-        suiteName in ("varySpam-unreliable2Q", "varySpamWt-unreliable2Q",
-                      "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q"):
+    elif suite_name in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam") or \
+        suite_name in ("varySpam-unreliable2Q", "varySpamWt-unreliable2Q",
+                       "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q"):
 
-        baseWts = {'gates': 1}
-        if suiteName.endswith("unreliable2Q") and model.dim == 16:
-            if any([gl in model.operations.keys() for gl in unreliableOps]):
+        base_wts = {'gates': 1}
+        if suite_name.endswith("unreliable2Q") and model.dim == 16:
+            if any([gl in model.operations.keys() for gl in unreliable_ops]):
                 base = {'gates': 1}
-                for gl in unreliableOps:
+                for gl in unreliable_ops:
                     if gl in model.operations.keys(): base[gl] = 0.01
-                baseWts = base
+                base_wts = base
 
-        if suiteName == "varySpam":
-            vSpam_range = [0, 1]; spamWt_range = [1e-4, 1e-1]
-        elif suiteName == "varySpamWt":
-            vSpam_range = [0]; spamWt_range = [1e-4, 1e-1]
-        elif suiteName == "varyValidSpamWt":
-            vSpam_range = [1]; spamWt_range = [1e-4, 1e-1]
-        elif suiteName == "toggleValidSpam":
-            vSpam_range = [0, 1]; spamWt_range = [1e-3]
+        if suite_name == "varySpam":
+            valid_spam_range = [0, 1]; spamwt_range = [1e-4, 1e-1]
+        elif suite_name == "varySpamWt":
+            valid_spam_range = [0]; spamwt_range = [1e-4, 1e-1]
+        elif suite_name == "varyValidSpamWt":
+            valid_spam_range = [1]; spamwt_range = [1e-4, 1e-1]
+        elif suite_name == "toggleValidSpam":
+            valid_spam_range = [0, 1]; spamwt_range = [1e-3]
 
-        if suiteName == rootLbl:  # then shorten the root name
-            rootLbl = "2QUR-" if suiteName.endswith("unreliable2Q") else ""
+        if suite_name == root_lbl:  # then shorten the root name
+            root_lbl = "2QUR-" if suite_name.endswith("unreliable2Q") else ""
 
-        for vSpam in vSpam_range:
-            for spamWt in spamWt_range:
-                lbl = rootLbl + "Spam %g%s" % (spamWt, "+v" if vSpam else "")
-                itemWeights = baseWts.copy()
-                itemWeights['spam'] = spamWt
-                gaugeOptSuite_dict[lbl] = {
-                    'itemWeights': itemWeights,
-                    'spam_penalty_factor': vSpam, 'verbosity': printer}
+        for valid_spam in valid_spam_range:
+            for spam_weight in spamwt_range:
+                lbl = root_lbl + "Spam %g%s" % (spam_weight, "+v" if valid_spam else "")
+                item_weights = base_wts.copy()
+                item_weights['spam'] = spam_weight
+                gauge_opt_suite_dict[lbl] = {
+                    'item_weights': item_weights,
+                    'spam_penalty_factor': valid_spam, 'verbosity': printer}
 
-    elif suiteName == "unreliable2Q":
+    elif suite_name == "unreliable2Q":
         raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite name, "
                           "e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
-    elif suiteName == "none":
+    elif suite_name == "none":
         pass  # add nothing
     else:
-        raise ValueError("Unknown gauge-optimization suite '%s'" % suiteName)
+        raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
 
-def _load_model(modelFilenameOrObj):
-    if isinstance(modelFilenameOrObj, str):
-        return _io.load_model(modelFilenameOrObj)
+def _load_model(model_filename_or_obj):
+    if isinstance(model_filename_or_obj, str):
+        return _io.load_model(model_filename_or_obj)
     else:
-        return modelFilenameOrObj  # assume a Model object
+        return model_filename_or_obj  # assume a Model object
 
 
-def _load_fiducials_and_germs(prepStrsListOrFilename,
-                              effectStrsListOrFilename,
-                              germsListOrFilename):
+def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
+                              meas_fiducial_list_or_filename,
+                              germ_list_or_filename):
 
-    if isinstance(prepStrsListOrFilename, str):
-        prepStrs = _io.load_circuit_list(prepStrsListOrFilename)
-    else: prepStrs = prepStrsListOrFilename
+    if isinstance(prep_fiducial_list_or_filename, str):
+        prep_fiducials = _io.load_circuit_list(prep_fiducial_list_or_filename)
+    else: prep_fiducials = prep_fiducial_list_or_filename
 
-    if effectStrsListOrFilename is None:
-        effectStrs = prepStrs  # use same strings for effectStrs if effectStrsListOrFilename is None
+    if meas_fiducial_list_or_filename is None:
+        meas_fiducials = prep_fiducials  # use same strings for meas_fiducials if meas_fiducial_list_or_filename is None
     else:
-        if isinstance(effectStrsListOrFilename, str):
-            effectStrs = _io.load_circuit_list(effectStrsListOrFilename)
-        else: effectStrs = effectStrsListOrFilename
+        if isinstance(meas_fiducial_list_or_filename, str):
+            meas_fiducials = _io.load_circuit_list(meas_fiducial_list_or_filename)
+        else: meas_fiducials = meas_fiducial_list_or_filename
 
     #Get/load germs
-    if isinstance(germsListOrFilename, str):
-        germs = _io.load_circuit_list(germsListOrFilename)
-    else: germs = germsListOrFilename
+    if isinstance(germ_list_or_filename, str):
+        germs = _io.load_circuit_list(germ_list_or_filename)
+    else: germs = germ_list_or_filename
 
-    return prepStrs, effectStrs, germs
+    return prep_fiducials, meas_fiducials, germs
 
 
-def _load_dataset(dataFilenameOrSet, comm, verbosity):
-    """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
+def _load_dataset(data_filename_or_set, comm, verbosity):
+    """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    if isinstance(dataFilenameOrSet, str):
+    if isinstance(data_filename_or_set, str):
         if comm is None or comm.Get_rank() == 0:
-            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
-                with open(dataFilenameOrSet, 'rb') as pklfile:
+            if _os.path.splitext(data_filename_or_set)[1] == ".pkl":
+                with open(data_filename_or_set, 'rb') as pklfile:
                     ds = _pickle.load(pklfile)
             else:
-                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
+                ds = _io.load_dataset(data_filename_or_set, True, "aggregate", printer)
             if comm is not None: comm.bcast(ds, root=0)
         else:
             ds = comm.bcast(None, root=0)
     else:
-        ds = dataFilenameOrSet  # assume a Dataset object
+        ds = data_filename_or_set  # assume a Dataset object
 
     return ds
 
 
-def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
-                     maxLengths, advancedOptions, verbosity):
+def _get_lsgst_lists(dschk, target_model, prep_fiducials, meas_fiducials, germs,
+                     max_lengths, advanced_options, verbosity):
     """
     Sequence construction logic, fatctored into this separate
     function because it's shared do_long_sequence_gst and
     do_model_evaluation.
     """
-    if advancedOptions is None: advancedOptions = {}
+    if advanced_options is None: advanced_options = {}
 
     #Update: now always include LGST strings unless advanced options says otherwise
     #Get starting point (so we know whether to include LGST strings)
@@ -815,32 +815,32 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
     #                            isinstance(g,_objs.TPDenseOp))
     #                           for g in target_model.operations.values()])
     #if  LGSTcompatibleOps:
-    #    startingPt = advancedOptions.get('starting point',"LGST")
+    #    starting_pt = advanced_options.get('starting point',"LGST")
     #else:
-    #    startingPt = advancedOptions.get('starting point',"target")
+    #    starting_pt = advanced_options.get('starting point',"target")
 
     #Construct operation sequences
-    actionIfMissing = advancedOptions.get('missingDataAction', 'drop')
-    opLabels = advancedOptions.get(
+    action_if_missing = advanced_options.get('missingDataAction', 'drop')
+    op_labels = advanced_options.get(
         'opLabels', list(target_model.get_primitive_op_labels()))
-    lsgstLists = _construction.stdlists.make_lsgst_structs(
-        opLabels, prepStrs, effectStrs, germs, maxLengths,
-        truncScheme=advancedOptions.get('truncScheme', "whole germ powers"),
-        nest=advancedOptions.get('nestedCircuitLists', True),
-        includeLGST=advancedOptions.get('includeLGST', True),
-        opLabelAliases=advancedOptions.get('opLabelAliases', None),
-        sequenceRules=advancedOptions.get('stringManipRules', None),
-        dscheck=dschk, actionIfMissing=actionIfMissing,
-        germLengthLimits=advancedOptions.get('germLengthLimits', None),
+    lsgst_lists = _construction.stdlists.make_lsgst_structs(
+        op_labels, prep_fiducials, meas_fiducials, germs, max_lengths,
+        trunc_scheme=advanced_options.get('truncScheme', "whole germ powers"),
+        nest=advanced_options.get('nestedCircuitLists', True),
+        include_lgst=advanced_options.get('includeLGST', True),
+        op_label_aliases=advanced_options.get('op_label_aliases', None),
+        sequence_rules=advanced_options.get('stringManipRules', None),
+        dscheck=dschk, action_if_missing=action_if_missing,
+        germ_length_limits=advanced_options.get('germLengthLimits', None),
         verbosity=verbosity)
-    assert(len(maxLengths) == len(lsgstLists))
+    assert(len(max_lengths) == len(lsgst_lists))
 
-    return lsgstLists
+    return lsgst_lists
 
 
 def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
                              unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
-    tRef = _time.time()
+    tref = _time.time()
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
 
@@ -849,10 +849,10 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
         gaugeopt_target = gaugeopt_target if gaugeopt_target else target_model
         add_gauge_opt(results, estlbl, gaugeopt_suite, gaugeopt_target,
                       model_to_gaugeopt, unreliable_ops, comm, printer - 1)
-    profiler.add_time('%s: gauge optimization' % estlbl, tRef); tRef = _time.time()
+    profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
 
     add_badfit_estimates(results, estlbl, badfit_options, objfn_builder, optimizer, resource_alloc, printer)
-    profiler.add_time('%s: add badfit estimates' % estlbl, tRef); tRef = _time.time()
+    profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
     #   estimate label's "stdout" meta information
@@ -862,74 +862,74 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
     return results
 
 
-#TODO REMOVE
-def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
-                          parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
-                          comm, memLimit, output_pkl, verbosity,
-                          profiler, evaltree_cache=None):
-    # advancedOptions, opt_args, 
-    """
-    Performs all of the post-optimization processing common to
-    do_long_sequence_gst and do_model_evaluation.
-
-    Creates a Results object to be returned from do_long_sequence_gst
-    and do_model_evaluation (passed in as 'callerName').  Performs
-    gauge optimization, and robust data scaling (with re-optimization
-    if needed and opt_args is not None - i.e. only for
-    do_long_sequence_gst).
-    """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    tRef = _time.time()
-    callerName = callerProtocol.name
-
-    #ret = advancedOptions.get('appendTo', None)
-    #if ret is None:
-    ret = ModelEstimateResults(data, callerProtocol)
-    #else:
-    #    # a dummy object to check compatibility w/ret2
-    #    dummy = ModelEstimateResults(data, callerProtocol)
-    #    ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
-
-    #add estimate to Results
-    profiler.add_time('%s: results initialization' % callerName, tRef); tRef = _time.time()
-
-    #Do final gauge optimization to *final* iteration result only
-    if gaugeopt_suite:
-        if gaugeopt_target is None: gaugeopt_target = target_model
-        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
-                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
-        profiler.add_time('%s: gauge optimization' % callerName, tRef)
-
-    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
-    badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
-                                                        'wildcard_smart_init': True})
-    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
-                         comm, memLimit, printer)
-    profiler.add_time('%s: add badfit estimates' % callerName, tRef); tRef = _time.time()
-
-    #Add recorded info (even robust-related info) to the *base*
-    #   estimate label's "stdout" meta information
-    if printer.is_recording():
-        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-
-    #Write results to a pickle file if desired
-    if output_pkl and (comm is None or comm.Get_rank() == 0):
-        if isinstance(output_pkl, str):
-            with open(output_pkl, 'wb') as pklfile:
-                _pickle.dump(ret, pklfile)
-        else:
-            _pickle.dump(ret, output_pkl)
-
-    return ret
+##TODO REMOVE
+#def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
+#                          parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
+#                          comm, memLimit, output_pkl, verbosity,
+#                          profiler, evaltree_cache=None):
+#    # advanced_options, opt_args,
+#    """
+#    Performs all of the post-optimization processing common to
+#    do_long_sequence_gst and do_model_evaluation.
+#
+#    Creates a Results object to be returned from do_long_sequence_gst
+#    and do_model_evaluation (passed in as 'callerName').  Performs
+#    gauge optimization, and robust data scaling (with re-optimization
+#    if needed and opt_args is not None - i.e. only for
+#    do_long_sequence_gst).
+#    """
+#    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+#    tref = _time.time()
+#    callerName = callerProtocol.name
+#
+#    #ret = advancedOptions.get('appendTo', None)
+#    #if ret is None:
+#    ret = ModelEstimateResults(data, callerProtocol)
+#    #else:
+#    #    # a dummy object to check compatibility w/ret2
+#    #    dummy = ModelEstimateResults(data, callerProtocol)
+#    #    ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
+#
+#    #add estimate to Results
+#    profiler.add_time('%s: results initialization' % callerName, tref); tref = _time.time()
+#
+#    #Do final gauge optimization to *final* iteration result only
+#    if gaugeopt_suite:
+#        if gaugeopt_target is None: gaugeopt_target = target_model
+#        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
+#                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
+#        profiler.add_time('%s: gauge optimization' % callerName, tref)
+#
+#    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
+#    badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
+#    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
+#    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
+#                                                        'wildcard_smart_init': True})
+#    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
+#                         comm, memLimit, printer)
+#    profiler.add_time('%s: add badfit estimates' % callerName, tref); tref = _time.time()
+#
+#    #Add recorded info (even robust-related info) to the *base*
+#    #   estimate label's "stdout" meta information
+#    if printer.is_recording():
+#        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
+#
+#    #Write results to a pickle file if desired
+#    if output_pkl and (comm is None or comm.Get_rank() == 0):
+#        if isinstance(output_pkl, str):
+#            with open(output_pkl, 'wb') as pklfile:
+#                _pickle.dump(ret, pklfile)
+#        else:
+#            _pickle.dump(ret, output_pkl)
+#
+#    return ret
 
 
 #def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
 #                  comm=None, verbosity=0):
 
 def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
-                  unreliableOps, comm=None, verbosity=0):
+                  unreliable_ops, comm=None, verbosity=0):
     """
     Add a gauge optimization to an estimate.
     TODO: docstring - more details
@@ -940,45 +940,45 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     #Get gauge optimization dictionary
-    gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
-                                                      unreliableOps, printer - 1)
+    gauge_opt_suite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
+                                                        unreliable_ops, printer - 1)
 
     if target_model is not None:
         assert(isinstance(target_model, _objs.Model)), "`gaugeOptTarget` must be None or a Model"
-        for goparams in gaugeOptSuite_dict.values():
+        for goparams in gauge_opt_suite_dict.values():
             goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
             for goparams_dict in goparams_list:
-                if 'targetModel' in goparams_dict:
+                if 'target_model' in goparams_dict:
                     _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                    "user-defined targetModel in gauge opt"
+                                    "user-defined target_model in gauge opt"
                                     "param dict(s)"))
-                goparams_dict.update({'targetModel': target_model})
+                goparams_dict.update({'target_model': target_model})
 
     #Gauge optimize to list of gauge optimization parameters
-    for goLabel, goparams in gaugeOptSuite_dict.items():
+    for go_label, goparams in gauge_opt_suite_dict.items():
 
-        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel, base_est_label), 2)
+        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (go_label, base_est_label), 2)
 
         #Get starting model
-        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
-        gsStart = results.estimates[base_est_label].get_start_model(goparams)
+        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        mdl_start = results.estimates[base_est_label].get_start_model(goparams)
 
         #Gauge optimize data-scaled estimate also
         for suffix in ROBUST_SUFFIX_LIST:
             robust_est_label = base_est_label + suffix
             if robust_est_label in results.estimates:
-                gsStart_robust = results.estimates[robust_est_label].get_start_model(goparams)
+                mdl_start_robust = results.estimates[robust_est_label].get_start_model(goparams)
 
-                if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
+                if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
                     printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
-                                (goLabel, base_est_label, robust_est_label), 2)
-                    params = results.estimates[base_est_label].goparameters[goLabel]  # no need to copy here
-                    gsopt = results.estimates[base_est_label].models[goLabel].copy()
-                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, goLabel, comm, printer - 3)
+                                (go_label, base_est_label, robust_est_label), 2)
+                    params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
+                    gsopt = results.estimates[base_est_label].models[go_label].copy()
+                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
                 else:
                     printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
-                                (goLabel, robust_est_label), 2)
-                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer - 3)
+                                (go_label, robust_est_label), 2)
+                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
 def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
@@ -993,7 +993,7 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
         return  # nothing to do
 
     comm = resource_alloc.comm if resource_alloc else None
-    memLimit = resource_alloc.memLimit if resource_alloc else None
+    mem_limit = resource_alloc.mem_limit if resource_alloc else None
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     base_estimate = results.estimates[base_estimate_label]
 
@@ -1023,7 +1023,7 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
 
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
             new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuit_list,
-                                                       parameters, cache, comm, memLimit)
+                                                       parameters, cache, comm, mem_limit)
             if badfit_typ in ("Robust", "Robust+") and (optimizer is not None):
                 mdl_reopt = reoptimize_with_weights(mdl, ds, circuit_list, new_params['weights'],
                                                     objfn_builder, optimizer, resource_alloc, cache, printer - 1)
@@ -1031,10 +1031,10 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
 
         elif badfit_typ == "wildcard":
             try:
-                badfit_opts = {'wildcard_budget_includes_spam':  badfit_options.wildcard_budget_includes_spam,
+                badfit_opts = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
                                'wildcard_smart_init': badfit_options.wildcard_smart_init}
                 unmodeled = get_wildcard_budget(mdl, ds, circuit_list, parameters, badfit_opts,
-                                                cache, comm, memLimit, printer - 1)
+                                                cache, comm, mem_limit, printer - 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
             except NotImplementedError as e:
@@ -1064,90 +1064,71 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
                              base_estimate_label + "." + badfit_typ)
 
         #Add gauge optimizations to the new estimate
-        for gokey, gaugeOptParams in base_estimate.goparameters.items():
+        for gokey, gauge_opt_params in base_estimate.goparameters.items():
             if new_final_model is not None:
-                unreliableOps = ()  # pass this in?
-                add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gaugeOptParams},
-                              target_model, new_final_model, unreliableOps, comm, printer - 1)
+                unreliable_ops = ()  # pass this in?
+                add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gauge_opt_params},
+                              target_model, new_final_model, unreliable_ops, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
-                    gaugeOptParams.copy(), go_gs_final, gokey, comm, printer - 1)
+                    gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
+def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
     # Get by-sequence goodness of fit
-    objective = parameters.get('objective', 'logl')
-
-    if objective == "chi2":
-        fitQty = _tools.chi2_terms(model, ds, circuitList,
-                                   parameters.get('minProbClipForWeighting', 1e-4),
-                                   parameters.get('probClipInterval', (-1e6, 1e6)),
-                                   False, False, memLimit,
-                                   parameters.get('opLabelAliases', None),
-                                   evaltree_cache=evaltree_cache, comm=comm)
-    else:  # "logl" or "lgst"
-        maxLogL = _tools.logl_max_terms(model, ds, circuitList,
-                                        opLabelAliases=parameters.get(
-                                            'opLabelAliases', None),
-                                        evaltree_cache=evaltree_cache)
-
-        logL = _tools.logl_terms(model, ds, circuitList,
-                                 parameters.get('minProbClip', 1e-4),
-                                 parameters.get('probClipInterval', (-1e6, 1e6)),
-                                 parameters.get('radius', 1e-4),
-                                 opLabelAliases=parameters.get('opLabelAliases', None),
-                                 evaltree_cache=evaltree_cache, comm=comm)
-        fitQty = 2 * (maxLogL - logL)
-    return fitQty
+    objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+    objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
+    fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+    return fitqty
 
 
-def get_robust_scaling(scale_typ, model, ds, circuitList, parameters, evaltree_cache, comm, memLimit):
+def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, comm, mem_limit):
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
     TODO: docstring - more details
     """
 
-    fitQty = _get_fit_qty(model, ds, circuitList, parameters, evaltree_cache, comm, memLimit)
-    #Note: fitQty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
+    fitqty = _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit)
+    #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
     expected = (len(ds.get_outcome_labels()) - 1)  # == "k"
-    dof_per_box = expected; nboxes = len(circuitList)
+    dof_per_box = expected; nboxes = len(circuit_list)
     pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
 
-    circuitWeights = {}
+    circuit_weights = {}
     if scale_typ in ("robust", "Robust"):
         # Robust scaling V1: drastically scale down weights of especially bad sequences
         threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
-        for i, opstr in enumerate(circuitList):
-            if fitQty[i] > threshold:
-                circuitWeights[opstr] = expected / fitQty[i]  # scaling factor
+        for i, opstr in enumerate(circuit_list):
+            if fitqty[i] > threshold:
+                circuit_weights[opstr] = expected / fitqty[i]  # scaling factor
 
     elif scale_typ in ("robust+", "Robust+"):
         # Robust scaling V2: V1 + rescale to desired chi2 distribution without reordering
         threshold = _np.ceil(_chi2.ppf(1 - pc / nboxes, dof_per_box))
-        scaled_fitQty = fitQty.copy()
-        for i, opstr in enumerate(circuitList):
-            if fitQty[i] > threshold:
-                circuitWeights[opstr] = expected / fitQty[i]  # scaling factor
-                scaled_fitQty[i] = expected  # (fitQty[i]*circuitWeights[opstr])
+        scaled_fitqty = fitqty.copy()
+        for i, opstr in enumerate(circuit_list):
+            if fitqty[i] > threshold:
+                circuit_weights[opstr] = expected / fitqty[i]  # scaling factor
+                scaled_fitqty[i] = expected  # (fitqty[i]*circuitWeights[opstr])
 
-        N = len(fitQty)
-        percentiles = [_chi2.ppf((i + 1) / (N + 1), dof_per_box) for i in range(N)]
-        for iBin, i in enumerate(_np.argsort(scaled_fitQty)):
-            opstr = circuitList[i]
-            fit, expected = scaled_fitQty[i], percentiles[iBin]
+        nelements = len(fitqty)
+        percentiles = [_chi2.ppf((i + 1) / (nelements + 1), dof_per_box) for i in range(nelements)]
+        for ibin, i in enumerate(_np.argsort(scaled_fitqty)):
+            opstr = circuit_list[i]
+            fit, expected = scaled_fitqty[i], percentiles[ibin]
             if fit > expected:
-                if opstr in circuitWeights: circuitWeights[opstr] *= expected / fit
-                else: circuitWeights[opstr] = expected / fit
+                if opstr in circuit_weights: circuit_weights[opstr] *= expected / fit
+                else: circuit_weights[opstr] = expected / fit
 
-    return circuitWeights
+    return circuit_weights
 
 
-def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evaltree_cache, comm, memLimit, verbosity):
+def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opts, cache, comm, mem_limit, verbosity):
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    fitQty = _get_fit_qty(model, ds, circuitsToUse, parameters, evaltree_cache, comm, memLimit)
+    fitqty = _get_fit_qty(model, ds, circuits_to_use, parameters, cache, comm, mem_limit)
     badfit_opts = badfit_opts or {}
 
     printer.log("******************* Adding Wildcard Budget **************************")
@@ -1156,107 +1137,87 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evalt
     # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1                                     # noqa
     # and minimize this for different eta (binary search) to find that largest eta for which the
     # first two terms is are zero.  This Wvec is our keeper.
-    if evaltree_cache and 'evTree' in evaltree_cache:
-        #use cache dictionary to speed multiple calls which use
-        # the same model, operation sequences, comm, memlim, etc.
-        evTree = evaltree_cache['evTree']
-    else:
-        # Note: simplify_circuits doesn't support aliased dataset (yet)
-        dstree = ds if (parameters.get('opLabelAliases', None) is None) else None
-        evTree, _, _, lookup, outcomes_lookup = \
-            model.bulk_evaltree_from_resources(
-                circuitsToUse, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
+    if cache is None:
+        cache = _objfns.ComputationCache()  # ensure we have a cache since we need its lookup dict below
 
-        #Fill cache dict if one was given
-        if evaltree_cache is not None:
-            evaltree_cache['evTree'] = evTree
-            evaltree_cache['lookup'] = lookup
-            evaltree_cache['outcomes_lookup'] = outcomes_lookup
-
-    nDataParams = ds.get_degrees_of_freedom(circuitsToUse)  # number of independent parameters
+    ds_dof = ds.get_degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
-    nModelParams = model.num_params()  # just use total number of params
-    percentile = 0.05; nBoxes = len(circuitsToUse)
-    twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams - nModelParams)
-    redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
+    nparams = model.num_params()  # just use total number of params
+    percentile = 0.05; nboxes = len(circuits_to_use)
+    two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
+    redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
     eta = 10.0  # some default starting value - this *shouldn't* really matter
     #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
     objective = parameters.get('objective', 'logl')
     assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
-    twoDeltaLogL_terms = fitQty
-    twoDeltaLogL = sum(twoDeltaLogL_terms)
+    two_dlogl_terms = fitqty
+    two_dlogl = sum(two_dlogl_terms)
 
     budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels() + model.get_primitive_instrument_labels(),
                                               add_spam=badfit_opts.get('wildcard_budget_includes_spam', True),
                                               start_budget=0.0)
 
-    if twoDeltaLogL <= twoDeltaLogL_threshold \
-       and sum(_np.clip(twoDeltaLogL_terms - redbox_threshold, 0, None)) < 1e-6:
+    if two_dlogl <= two_dlogl_threshold \
+       and sum(_np.clip(two_dlogl_terms - redbox_threshold, 0, None)) < 1e-6:
         printer.log("No need to add budget!")
-        Wvec = _np.zeros(len(budget.to_vector()), 'd')
+        wvec = _np.zeros(len(budget.to_vector()), 'd')
     else:
-        pci = parameters.get('probClipInterval', (-1e6, 1e6))
-        min_p = parameters.get('minProbClip', 1e-4)
-        a = parameters.get('radius', 1e-4)
+        objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        objfn = objfn_builder.build(model, ds, circuits_to_use, {'comm': comm}, cache)
+        # assert this is a logl function?
 
-        loglFn = _objfns.LogLFunction.simple_init(model, ds, circuitsToUse, min_p, pci, a,
-                                                  poissonPicture=True, evaltree_cache=evaltree_cache,
-                                                  comm=comm)
-        sqrt_dlogl_elements = loglFn.fn(model.to_vector())  # must evaluate loglFn before using it to init loglWCFn
-        loglWCFn = _objfns.LogLWildcardFunction(loglFn, model.to_vector(), budget)
-        nCircuits = len(circuitsToUse)
-        dlogl_terms = _np.empty(nCircuits, 'd')
-        # b/c loglFn gives sqrt of terms (for use in leastsq optimizer)
-        dlogl_elements = sqrt_dlogl_elements**2
-        for i in range(nCircuits):
-            dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
-        #print("INITIAL 2DLogL (before any wildcard) = ", sum(2 * dlogl_terms), max(2 * dlogl_terms))
-        #print("THRESHOLDS = ", twoDeltaLogL_threshold, redbox_threshold, nBoxes)
+        # Note: evaluate objfn before passing to wildcard fn init so internal probs are init;
+        #  this also ensures that `cache` has a valid eval tree & lookup (used below)
+        dlogl_percircuit = objfn.percircuit(model.to_vector())
+        logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
+        num_circuits = len(circuits_to_use)
+        assert(len(dlogl_percircuit) == num_circuits)
 
-        def _wildcard_objective_firstTerms(Wv):
-            dlogl_elements = loglWCFn.fn(Wv)**2  # b/c loglWCFn gives sqrt of terms (for use in leastsq optimizer)
-            for i in range(nCircuits):
-                dlogl_terms[i] = _np.sum(dlogl_elements[loglFn.lookup[i]], axis=0)
+        def _wildcard_objective_firstterms(wv):
+            dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+            for i in range(num_circuits):
+                dlogl_percircuit[i] = _np.sum(dlogl_elements[cache.lookup[i]], axis=0)
 
-            twoDLogL_terms = 2 * dlogl_terms
-            twoDLogL = sum(twoDLogL_terms)
-            return max(0, twoDLogL - twoDeltaLogL_threshold) \
-                + sum(_np.clip(twoDLogL_terms - redbox_threshold, 0, None))
+            two_dlogl_percircuit = 2 * dlogl_percircuit
+            two_dlogl = sum(two_dlogl_percircuit)
+            return max(0, two_dlogl - two_dlogl_threshold) \
+                + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
 
-        nIters = 0
-        Wvec_init = budget.to_vector()
+        num_iters = 0
+        wvec_init = budget.to_vector()
 
         # Optional: set initial wildcard budget by pushing on each Wvec component individually
         if badfit_opts.get('wildcard_smart_init', True):
-            probe = Wvec_init.copy(); MULT = 2
-            for i in range(len(Wvec_init)):
+            MULT = 2                                                                                                    # noqa
+            probe = wvec_init.copy()
+            for i in range(len(wvec_init)):
                 #print("-------- Index ----------", i)
-                Wv = Wvec_init.copy()
+                wv = wvec_init.copy()
                 #See how big Wv[i] needs to get before penalty stops decreasing
                 last_penalty = 1e100; penalty = 0.9e100
                 delta = 1e-6
                 while penalty < last_penalty:
-                    Wv[i] = delta
+                    wv[i] = delta
                     last_penalty = penalty
-                    penalty = _wildcard_objective_firstTerms(Wv)
+                    penalty = _wildcard_objective_firstterms(wv)
                     #print("  delta=%g  => penalty = %g" % (delta, penalty))
                     delta *= MULT
                 probe[i] = delta / MULT**2
                 #print(" ==> Probe[%d] = %g" % (i, probe[i]))
 
-            probe /= len(Wvec_init)  # heuristic: set as new init point
+            probe /= len(wvec_init)  # heuristic: set as new init point
             budget.from_vector(probe)
-            Wvec_init = budget.to_vector()
+            wvec_init = budget.to_vector()
 
         printer.log("INITIAL Wildcard budget = %s" % str(budget))
 
         # Find a value of eta that is small enough that the "first terms" are 0.
-        while nIters < 10:
-            printer.log("  Iter %d: trying eta = %g" % (nIters, eta))
+        while num_iters < 10:
+            printer.log("  Iter %d: trying eta = %g" % (num_iters, eta))
 
-            def _wildcard_objective(Wv):
-                return _wildcard_objective_firstTerms(Wv) + eta * _np.linalg.norm(Wv, ord=1)
+            def _wildcard_objective(wv):
+                return _wildcard_objective_firstterms(wv) + eta * _np.linalg.norm(wv, ord=1)
 
             #TODO REMOVE
             #import bpdb; bpdb.set_trace()
@@ -1269,30 +1230,30 @@ def get_wildcard_budget(model, ds, circuitsToUse, parameters, badfit_opts, evalt
                 printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
                              " - this *increases* the runtime significantly."), 2)
 
-                def callbackF(Wv):
-                    a, b = _wildcard_objective_firstTerms(Wv), eta * _np.linalg.norm(Wv, ord=1)
-                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(Wv)), 2)
+                def callbackf(wv):
+                    a, b = _wildcard_objective_firstterms(wv), eta * _np.linalg.norm(wv, ord=1)
+                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(wv)), 2)
             else:
-                callbackF = None
-            soln = _spo.minimize(_wildcard_objective, Wvec_init,
-                                 method='Nelder-Mead', callback=callbackF, tol=1e-6)
+                callbackf = None
+            soln = _spo.minimize(_wildcard_objective, wvec_init,
+                                 method='Nelder-Mead', callback=callbackf, tol=1e-6)
             if not soln.success:
                 _warnings.warn("Nelder-Mead optimization failed to converge!")
-            Wvec = soln.x
-            firstTerms = _wildcard_objective_firstTerms(Wvec)
+            wvec = soln.x
+            firstterms = _wildcard_objective_firstterms(wvec)
             #printer.log("  Firstterms value = %g" % firstTerms)
-            meets_conditions = bool(firstTerms < 1e-4)  # some zero-tolerance here
+            meets_conditions = bool(firstterms < 1e-4)  # some zero-tolerance here
             if meets_conditions:  # try larger eta
                 break
             else:  # nonzero objective => take Wvec as new starting point; try smaller eta
-                Wvec_init = Wvec
+                wvec_init = wvec
                 eta /= 10
 
             printer.log("  Trying eta = %g" % eta)
-            nIters += 1
-    #print("Wildcard budget found for Wvec = ",Wvec)
+            num_iters += 1
+    #print("Wildcard budget found for wvec = ",wvec)
     #print("FINAL Wildcard budget = ", str(budget))
-    budget.from_vector(Wvec)
+    budget.from_vector(wvec)
     printer.log(str(budget))
     return budget
 
@@ -1364,11 +1325,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
                 circuit_lists['iteration'] = [_objfns.BulkCircuitList(cs) for cs in edesign.circuit_structs]
 
                 #Set "Ls and germs" info: gives particular structure
-                finalStruct = edesign.circuit_structs[-1]
-                if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something w/ a *LsGermsSerialStructure*
-                    circuit_lists['prep fiducials'] = finalStruct.prepStrs
-                    circuit_lists['meas fiducials'] = finalStruct.effectStrs
-                    circuit_lists['germs'] = finalStruct.germs
+                final_struct = edesign.circuit_structs[-1]
+                if isinstance(final_struct, _LsGermsStructure):  # FUTURE: do something w/ a *LsGermsSerialStructure*
+                    circuit_lists['prep fiducials'] = final_struct.prep_fiducials
+                    circuit_lists['meas fiducials'] = final_struct.meas_fiducials
+                    circuit_lists['germs'] = final_struct.germs
 
             elif isinstance(edesign, _proto.CircuitListsDesign):
                 circuit_lists['iteration'] = [_objfns.BulkCircuitList(cl) for cl in edesign.circuit_lists]
@@ -1412,7 +1373,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimatesToAdd=None):
+    def add_estimates(self, results, estimates_to_add=None):
         """
         Add some or all of the estimates from `results` to this `Results` object.
 
@@ -1423,7 +1384,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             the same data set and gate sequence information as the importing object
             or an error is raised.
 
-        estimatesToAdd : list, optional
+        estimates_to_add : list, optional
             A list of estimate keys to import from `results`.  If None, then all
             the estimates contained in `results` are imported.
 
@@ -1444,7 +1405,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             "Iteration count inconsistency: cannot import estimates!"
 
         for estimate_key in results.estimates:
-            if estimatesToAdd is None or estimate_key in estimatesToAdd:
+            if estimates_to_add is None or estimate_key in estimates_to_add:
                 if estimate_key in self.estimates:
                     _warnings.warn("Re-initializing the %s estimate" % estimate_key
                                    + " of this Results object!  Usually you don't"
@@ -1502,8 +1463,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
                               "*before* adding estimates"))
 
         if 'iteration' in self.circuit_lists:
-            modelsByIter = estimate.models.get('iteration estimates', [])
-            la, lb = len(self.circuit_lists['iteration']), len(modelsByIter)
+            models_by_iter = estimate.models.get('iteration estimates', [])
+            la, lb = len(self.circuit_lists['iteration']), len(models_by_iter)
             assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
 
         if estimate_key in self.estimates:
@@ -1518,19 +1479,19 @@ class ModelEstimateResults(_proto.ProtocolResults):
         #self.estimates[estimate_key].parameters['max length list'] = \
         #    self.circuit_structs['final'].Ls
 
-    def add_model_test(self, targetModel, themodel,
+    def add_model_test(self, target_model, themodel,
                        estimate_key='test', gauge_opt_keys="auto"):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
         Parameters
         ----------
-        targetModel : Model
+        target_model : Model
             The target model used for comparison to the model.
 
         themodel : Model
             The "model" model whose fit to the data and distance from
-            `targetModel` are assessed.
+            `target_model` are assessed.
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
@@ -1547,11 +1508,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
         -------
         None
         """
-        nIter = len(self.circuit_lists['iteration'])
+        niters = len(self.circuit_lists['iteration'])
 
         # base parameter values off of existing estimate parameters
         defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
-                    'minProbClipForWeighting': 1e-4, 'opLabelAliases': None,
+                    'minProbClipForWeighting': 1e-4, 'op_label_aliases': None,
                     'truncScheme': "whole germ powers"}
         for est in self.estimates.values():
             for ky in defaults:
@@ -1568,7 +1529,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         else:
             raise ValueError("Invalid objective: %s" % parameters['objective'])
         parameters['profiler'] = None
-        parameters['opLabelAliases'] = defaults['opLabelAliases']
+        parameters['op_label_aliases'] = defaults['op_label_aliases']
         parameters['weights'] = None  # Hardcoded
 
         #Set default gate group to trival group to mimic do_model_test (an to
@@ -1577,7 +1538,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         themodel = themodel.copy()
         themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
 
-        self.add_estimate(targetModel, themodel, [themodel] * nIter,
+        self.add_estimate(target_model, themodel, [themodel] * niters,
                           parameters, estimate_key=estimate_key)
 
         #add gauge optimizations (always trivial)
@@ -1590,10 +1551,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         est = self.estimates[estimate_key]
         for gokey in gauge_opt_keys:
-            trivialEl = _TrivialGaugeGroupElement(themodel.dim)
+            trivial_el = _TrivialGaugeGroupElement(themodel.dim)
             goparams = {'model': themodel,
-                        'targetModel': targetModel,
-                        '_gaugeGroupEl': trivialEl}
+                        'target_model': target_model,
+                        '_gaugeGroupEl': trivial_el}
             est.add_gaugeoptimized(goparams, themodel, gokey)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
@@ -1636,8 +1597,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
             cpy.estimates[est_key] = est.copy()
         return cpy
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
         for est in self.estimates.values():
             est.set_parent(self)
 

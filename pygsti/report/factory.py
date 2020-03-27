@@ -120,7 +120,7 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     return None
 
 
-def create_offline_zip(outputDir="."):
+def create_offline_zip(output_dir="."):
     """
     Creates a zip file containing the a directory ("offline") of files
     need to display "offline" reports (generated with `connected=False`).
@@ -135,7 +135,7 @@ def create_offline_zip(outputDir="."):
 
     Parameters
     ----------
-    outputDir : str, optional
+    output_dir : str, optional
         The directory in which "offline.zip" should be place.
 
     Returns
@@ -145,7 +145,7 @@ def create_offline_zip(outputDir="."):
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates")
 
-    zipFName = _os.path.join(outputDir, "offline.zip")
+    zipFName = _os.path.join(output_dir, "offline.zip")
     zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)
     for root, _, files in _os.walk(_os.path.join(templatePath, "offline")):
         for f in files:
@@ -180,7 +180,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     return toggles
 
 
-def _create_master_switchboard(ws, results_dict, confidenceLevel,
+def _create_master_switchboard(ws, results_dict, confidence_level,
                                nmthreshold, printer, fmt,
                                combine_robust, idt_results_dict=None, embed_figures=True):
     """
@@ -265,7 +265,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
     switchBd.add("idtresults", (0,))
 
-    if confidenceLevel is not None:
+    if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("criGIRep", (0, 1))
 
@@ -327,7 +327,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.meta_stdout[d, i] = est_modvi.meta.get('stdout', [('LOG', 1, "No standard output recorded")])
 
             GIRepLbl = 'final iteration estimate'  # replace with a gauge-opt label if it has a CI factory
-            if confidenceLevel is not None:
+            if confidence_level is not None:
                 if _get_viewable_crf(est, lbl, GIRepLbl) is None:
                     for l in gauge_opt_labels:
                         if _get_viewable_crf(est, lbl, l) is not None:
@@ -380,8 +380,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsAllL[d, i] = est.models['iteration estimates']
             switchBd.gsAllL_modvi[d, i] = est_modvi.models['iteration estimates']
 
-            if confidenceLevel is not None:
-                misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
+            if confidence_level is not None:
+                misfit_sigma = est.misfit_sigma(use_accurate_np=True)
 
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
@@ -395,7 +395,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                             # experimental non-markovian error bars.
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
-                            switchBd.cri[d, i, il] = crf.view(confidenceLevel, region_type)
+                            switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
 
                     else: switchBd.cri[d, i, il] = NA
 
@@ -407,7 +407,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 if crf is not None:
                     region_type = "normal" if misfit_sigma <= nmthreshold \
                                   else "non-markovian"
-                    switchBd.criGIRep[d, i] = crf.view(confidenceLevel, region_type)
+                    switchBd.criGIRep[d, i] = crf.view(confidence_level, region_type)
 
     results_list = [results_dict[dslbl] for dslbl in dataset_labels]
     for i, gokey in enumerate(gauge_opt_labels):
@@ -434,19 +434,19 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
 
-def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
+def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printer):
     """
     Constructs a dictionary of idle tomography results, parallel
     to the GST results in `gst_results_dict`, where possible.
     """
-    if idtPauliDicts is None:
+    if idt_pauli_dicts is None:
         return {}
 
     idt_results_dict = {}
-    GiStr = _objs.Circuit((idtIdleOp,))
+    GiStr = _objs.Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
-    autodict = bool(idtPauliDicts == "auto")
+    autodict = bool(idt_pauli_dicts == "auto")
     for ky, results in gst_results_dict.items():
 
         if autodict:
@@ -455,8 +455,8 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
                     idt_target = est.models['target']
                     break
             else: continue  # can't find any target models
-            idtPauliDicts = _idt.determine_paulidicts(idt_target)
-            if idtPauliDicts is None:
+            idt_pauli_dicts = _idt.determine_paulidicts(idt_target)
+            if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
 
         gss = results.circuit_structs['final']
@@ -475,10 +475,10 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
         maxLengths = gss.Ls
         # just use "L0" (first maxLength) - all should have same fidpairs
         plaq = gss.get_plaquette(maxLengths[0], GiStr)
-        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
-        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
+        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
                                              maxweight=2,  # HARDCODED for now (FUTURE)
                                              idle_string=idStr, advancedOptions=idt_advanced)
         idt_results_dict[ky] = idtresults
@@ -486,7 +486,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
     return idt_results_dict
 
 
-def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
+def _create_single_metric_switchboard(ws, results_dict, b_gauge_inv,
                                       dataset_labels, est_labels=None, embed_figures=True):
     op_labels = None
     for results in results_dict.values():
@@ -495,7 +495,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
                 op_labels = _add_new_labels(op_labels,
                                             list(est.models['target'].operations.keys()))
 
-    if bGaugeInv:
+    if b_gauge_inv:
         metric_abbrevs = ["evinf", "evagi", "evnuinf", "evnuagi", "evdiamond",
                           "evnudiamond"]
     else:
@@ -533,8 +533,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
 
 @_deprecated_fn('pygsti.report.construct_standard_report(...).write_html(...)')
 def create_general_report(results, filename, title="auto",
-                          confidenceLevel=None,
-                          linlogPercentile=5, errgen_type="logGTi",
+                          confidence_level=None,
+                          linlog_percentile=5, errgen_type="logGTi",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False,
@@ -555,9 +555,9 @@ def create_general_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_standard_report(...).write_html(...)')
 def create_standard_report(results, filename, title="auto",
-                           confidenceLevel=None, comm=None, ws=None,
+                           confidence_level=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
-                           advancedOptions=None, verbosity=1):
+                           advanced_options=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
@@ -596,7 +596,7 @@ def create_standard_report(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -634,9 +634,9 @@ def create_standard_report(results, filename, title="auto",
         - 3: Germ-level estimate tables disappear at brevity=3
         - 4: Everything but summary figures disappears at brevity=4
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
@@ -727,28 +727,28 @@ def create_standard_report(results, filename, title="auto",
     ws = ws or _ws.Workspace()
 
     report = construct_standard_report(
-        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
+        results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 auto_open=auto_open, verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
@@ -759,9 +759,9 @@ def create_standard_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_nqnoise_report(...).write_html(...)')
 def create_nqnoise_report(results, filename, title="auto",
-                          confidenceLevel=None, comm=None, ws=None,
+                          confidence_level=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
-                          advancedOptions=None, verbosity=1):
+                          advanced_options=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -791,7 +791,7 @@ def create_nqnoise_report(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -829,9 +829,9 @@ def create_nqnoise_report(results, filename, title="auto",
         - 3: Germ-level estimate tables disappear at brevity=3
         - 4: Everything but summary figures disappears at brevity=4
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
@@ -902,28 +902,28 @@ def create_nqnoise_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
     report = construct_nqnoise_report(
-        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
+        results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 auto_open=auto_open, verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
@@ -934,7 +934,7 @@ def create_nqnoise_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_standard_report(...).write_notebook(...)')
 def create_report_notebook(results, filename, title="auto",
-                           confidenceLevel=None,
+                           confidence_level=None,
                            auto_open=False, connected=False, verbosity=0):
     """
     Create a "report notebook": a Jupyter ipython notebook file which, when its
@@ -966,7 +966,7 @@ def create_report_notebook(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -992,7 +992,7 @@ def create_report_notebook(results, filename, title="auto",
         `create_report_notebook` will be removed in the next major release of pyGSTi. It is replaced by
         the `Report.write_notebook`
     """
-    report = construct_standard_report(results, title=title, confidenceLevel=confidenceLevel, verbosity=verbosity)
+    report = construct_standard_report(results, title=title, confidence_level=confidence_level, verbosity=verbosity)
     report.write_notebook(filename, auto_open=auto_open, connected=connected, verbosity=verbosity)
 
 
@@ -1086,8 +1086,8 @@ def find_std_clifford_compilation(model, verbosity=0):
 
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
-                              confidenceLevel=None, comm=None, ws=None,
-                              advancedOptions=None, verbosity=1):
+                              confidence_level=None, comm=None, ws=None,
+                              advanced_options=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
@@ -1107,7 +1107,7 @@ def construct_standard_report(results, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -1122,9 +1122,9 @@ def construct_standard_report(results, title="auto",
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
@@ -1167,13 +1167,13 @@ def construct_standard_report(results, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
-    advancedOptions = advancedOptions or {}
-    linlogPercentile = advancedOptions.get('linlog percentile', 5)
-    nmthreshold = advancedOptions.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    embed_figures = advancedOptions.get('embed_figures', True)
-    combine_robust = advancedOptions.get('combine_robust', True)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    advanced_options = advanced_options or {}
+    linlogPercentile = advanced_options.get('linlog percentile', 5)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    embed_figures = advanced_options.get('embed_figures', True)
+    combine_robust = advanced_options.get('combine_robust', True)
+    idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
@@ -1251,7 +1251,7 @@ def construct_standard_report(results, title="auto",
 
     printer.log("Computing switchable properties")
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-        _create_master_switchboard(ws, results, confidenceLevel,
+        _create_master_switchboard(ws, results, confidence_level,
                                    nmthreshold, printer, None,
                                    combine_robust, idt_results, embed_figures)
 
@@ -1274,7 +1274,7 @@ def construct_standard_report(results, title="auto",
 
     report_params = {
         'linlog_percentile': linlogPercentile,
-        'confidence_level': confidenceLevel,
+        'confidence_level': confidence_level,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
         'combine_robust': combine_robust,
@@ -1312,8 +1312,8 @@ def construct_standard_report(results, title="auto",
 
 
 def construct_nqnoise_report(results, title="auto",
-                             confidenceLevel=None, comm=None, ws=None,
-                             advancedOptions=None, verbosity=1):
+                             confidence_level=None, comm=None, ws=None,
+                             advanced_options=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -1338,7 +1338,7 @@ def construct_nqnoise_report(results, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -1353,9 +1353,9 @@ def construct_nqnoise_report(results, title="auto",
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
@@ -1393,13 +1393,13 @@ def construct_nqnoise_report(results, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
-    advancedOptions = advancedOptions or {}
-    linlogPercentile = advancedOptions.get('linlog percentile', 5)
-    nmthreshold = advancedOptions.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    embed_figures = advancedOptions.get('embed_figures', True)
-    combine_robust = advancedOptions.get('combine_robust', True)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    advanced_options = advanced_options or {}
+    linlogPercentile = advanced_options.get('linlog percentile', 5)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    embed_figures = advanced_options.get('embed_figures', True)
+    combine_robust = advanced_options.get('combine_robust', True)
+    idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
@@ -1470,7 +1470,7 @@ def construct_nqnoise_report(results, title="auto",
 
     printer.log("Computing switchable properties")
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-        _create_master_switchboard(ws, results, confidenceLevel,
+        _create_master_switchboard(ws, results, confidence_level,
                                    nmthreshold, printer, None,
                                    combine_robust, idt_results, embed_figures)
 
@@ -1494,7 +1494,7 @@ def construct_nqnoise_report(results, title="auto",
 
     report_params = {
         'linlog_percentile': linlogPercentile,
-        'confidence_level': confidenceLevel,
+        'confidence_level': confidence_level,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
         'combine_robust': combine_robust,
@@ -1601,7 +1601,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     averaging_allowed = singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1)
     sections = [
-        _section.DriftSection(GlobalPowerSpectraPlot=averaging_allowed)
+        _section.DriftSection(global_power_spectra_plot=averaging_allowed)
     ]
 
     templates = dict(

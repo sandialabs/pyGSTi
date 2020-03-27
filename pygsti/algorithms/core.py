@@ -716,30 +716,30 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
             def _jacobian(vectorGS):
                 mdl.from_vector(vectorGS)
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-                # shape == nCircuits*nFlatOp, nDerivCols
-                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                # shape == n_circuits*nFlatOp, nDerivCols
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 return jac
         else:
             def _jacobian(vectorGS):
                 mdl.from_vector(vectorGS)
                 gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
                 jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-                # shape == nCircuits*nFlatOp, nDerivCols
-                jac = _np.concatenate((jac, gsVecGrad), axis=0)  # shape == nCircuits*nFlatOp+nDerivCols, nDerivCols
-                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                # shape == n_circuits*nFlatOp, nDerivCols
+                jac = _np.concatenate((jac, gsVecGrad), axis=0)  # shape == n_circuits*nFlatOp+nDerivCols, nDerivCols
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 return jac
 
     else:
         def _jacobian(vectorGS):
             mdl.from_vector(vectorGS)
             jac = mdl.bulk_dproduct(evTree, flat=True, comm=comm)
-            # shape == nCircuits*nFlatOp, nDerivCols
+            # shape == n_circuits*nFlatOp, nDerivCols
             if regularizeFactor > 0:
                 gsVecGrad = _np.diag([(regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS])
                 jac = _np.concatenate((jac, gsVecGrad), axis=0)
 
             if check_jacobian:
-                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, err_type='abs')
                 printer.log("Jacobian has error %g and %d of %d indices with error > tol" %
                             (errSum, len(errs), jac.shape[0]), 3)
                 if len(errs) > 0:
@@ -751,13 +751,13 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
 
             return jac
 
-    #def checked_jacobian(vectorGS):
+    #def checked_jacobian(vector_gs):
     #  def obj_i(x, i): return _objective_func(x)[i]
     #  def jac_i(x, i): return (_jacobian(x))[i]
-    #  y = _objective_func(vectorGS)
-    #  jac = _jacobian(vectorGS); nJ = _np.linalg.norm(jac)
+    #  y = _objective_func(vector_gs)
+    #  jac = _jacobian(vector_gs); nJ = _np.linalg.norm(jac)
     #  for i in range(len(y)):
-    #    err = _spo.check_grad(obj_i, jac_i, vectorGS, i)
+    #    err = _spo.check_grad(obj_i, jac_i, vector_gs, i)
     #    if err/nJ > 1e-6: print "Jacobian(%d) Error = %g (jac norm = %g)" % (i,err,nJ)
     #  return jac
 
@@ -922,7 +922,7 @@ def do_iterative_exlgst(
         extraMessages = ["(%s)" % circuitSetLabels[i]] if circuitSetLabels else []
         printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ',
                               suffix='; %s operation sequences ---' % len(stringsToEstimate),
-                              verboseMessages=extraMessages)
+                              verbose_messages=extraMessages)
 
         minErr, elgstModel = do_exlgst(
             dataset, elgstModel, stringsToEstimate, prepStrs, effectStrs,
@@ -1333,7 +1333,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
         if circuitWeights is not None:
             for i in range(len(circuitsToUse)):
-                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = nCircuits )
+                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = n_circuits )
                 N[lookup[i]] *= circuitWeights[i]  # multiply N's by weights
 
         if evaltree_cache is not None:
@@ -1417,7 +1417,7 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
         if hasattr(mdl, 'num_elements'):
             memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
-                * FLOATSIZE  # see Model._buildup_dPG (this is mem for dPG)
+                * FLOATSIZE  # see Model._buildup_dpg (this is mem for dPG)
 
             if resource_alloc.memLimit is None or 0.1 * resource_alloc.memLimit < memForNumGaugeParams:
                 try:
@@ -1637,7 +1637,7 @@ def do_mc2gst_with_model_selection(
     origMDL = bestGS = mdl
     bestMinErr = minErr
 
-    printer.log("Dim %d: chi^2 = %g, nCircuits=%d, nParams=%d (so expected mean = %d)" %
+    printer.log("Dim %d: chi^2 = %g, n_circuits=%d, nParams=%d (so expected mean = %d)" %
                 (dim, chiSqBest, nStrings, nParamsBest, nStrings - nParamsBest))
 
     #Notes on Model selection test:
@@ -1891,7 +1891,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
         for (i, stringsToEstimate) in enumerate(circuitLists):
             #printer.log('', 2)
             extraMessages = ["(%s)" % circuitSetLabels[i]] if circuitSetLabels else []
-            printer.show_progress(i, nIters, verboseMessages=extraMessages, prefix="--- Iterative MC2GST:",
+            printer.show_progress(i, nIters, verbose_messages=extraMessages, prefix="--- Iterative MC2GST:",
                                   suffix=" %d operation sequences ---" % len(stringsToEstimate))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
@@ -2084,7 +2084,7 @@ def do_iterative_mc2gst_with_model_selection(
             #printer.log('', 2)
             extraMessages = (["(%s) "] % circuitSetLabels[i]) if circuitSetLabels else []
             printer.show_progress(i, nIters, prefix="--- Iterative MC2GST:", suffix="%d operation sequences ---" %
-                                  (len(stringsToEstimate)), verboseMessages=extraMessages)
+                                  (len(stringsToEstimate)), verbose_messages=extraMessages)
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -2269,8 +2269,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         `comm`, and `distributeMethod`.
 
     forcefn_grad : numpy array, optional
-        An array of shape `(D,nParams)`, where `D` is the dimension of the
-        (unspecified) forcing function and `nParams=startModel.num_params()`.
+        An array of shape `(D,n_params)`, where `D` is the dimension of the
+        (unspecified) forcing function and `n_params=startModel.num_params()`.
         This array gives the gradient of the forcing function with respect to
         each model parameter and is used for the computation of "linear
         response error bars".
@@ -2375,7 +2375,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             #From this point downward, scaling cntVecMx, totalCntVec and
             # minusCntVecMx will scale the corresponding logL terms, as desired.
             for i in range(len(circuitsToUse)):
-                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = nCircuits )
+                cntVecMx[lookup[i]] *= circuitWeights[i]  # dim KM (K = nSpamLabels, M = n_circuits )
                 totalCntVec[lookup[i]] *= circuitWeights[i]  # multiply N's by weights
 
         if evaltree_cache is not None:
@@ -2632,7 +2632,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         for (i, stringsToEstimate) in enumerate(circuitLists):
             #printer.log('', 2)
             extraMessages = [("(%s) " % circuitSetLabels[i])] if circuitSetLabels else []
-            printer.show_progress(i, nIters, verboseMessages=extraMessages,
+            printer.show_progress(i, nIters, verbose_messages=extraMessages,
                                   prefix="--- Iterative MLGST:",
                                   suffix=" %d operation sequences ---" % len(stringsToEstimate))
             #print("DB: OPCACHE len = ",len(mleModel._opcache))
@@ -2846,7 +2846,7 @@ def find_closest_unitary_opmx(operationMx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
+    gate_JMx = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
     # d = _np.sqrt(operationMx.shape[0])
     # I = _np.identity(d)
 
@@ -2869,7 +2869,7 @@ def find_closest_unitary_opmx(operationMx):
 
     def _objective_func(basisVec):
         operationMx = getGateMx(basisVec)
-        JU = _tools.jamiolkowski_iso(operationMx, choiMxBasis="std")
+        JU = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
         # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
         #U = getU(basisVec)
         #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U

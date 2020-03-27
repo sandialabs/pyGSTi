@@ -35,7 +35,6 @@ class TreeNode(object):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
         self._childcategory = child_category
-        self._loaded_from = None
 
     @property
     def child_category(self):
@@ -104,20 +103,20 @@ class TreeNode(object):
 
     def filter_paths(self, paths, paths_are_sorted=False):
         sorted_paths = paths if paths_are_sorted else sorted(paths)
-        nPaths = len(sorted_paths)
+        npaths = len(sorted_paths)
 
-        if nPaths == 1 and len(sorted_paths[0]) == 0:
+        if npaths == 1 and len(sorted_paths[0]) == 0:
             return self  # special case when this TreeNode itself is selected
 
         i = 0
         children_to_keep = {}
-        while i < nPaths:
+        while i < npaths:
             assert(len(sorted_paths[i]) > 0), \
                 "Cannot select a TreeNode *and* some/all of its elements using filter_paths!"
             ky = sorted_paths[i][0]
 
             paths_starting_with_ky = []
-            while i < nPaths and sorted_paths[i][0] == ky:
+            while i < npaths and sorted_paths[i][0] == ky:
                 paths_starting_with_ky.append(sorted_paths[i][1:])
                 i += 1
             children_to_keep[ky] = self[ky].filter_paths(paths_starting_with_ky, True)

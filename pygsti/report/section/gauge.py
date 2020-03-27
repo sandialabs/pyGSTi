@@ -78,14 +78,14 @@ class GaugeInvariantsGatesSection(_Section):
                 gi_switchboard.metric, switchboard.gsFinalGrid,
                 switchboard.gsTargetGrid, est_labels, dataset_labels,
                 gi_switchboard.cmpTableTitle, gi_switchboard.opLabel,
-                confidenceRegionInfo=None
+                confidence_region_info=None
             )
         else:
             return workspace.GatesSingleMetricTable(
                 gi_switchboard.metric, switchboard.gsFinalGrid,
                 switchboard.gsTargetGrid, est_labels, None,
                 gi_switchboard.cmpTableTitle,
-                confidenceRegionInfo=None
+                confidence_region_info=None
             )
 
     @_Section.figure_factory(4)
@@ -168,14 +168,14 @@ class GaugeVariantSection(_Section):
                 gv_switchboard.metric, switchboard.gsFinalGrid,
                 switchboard.gsTargetGrid, est_labels, dataset_labels,
                 gv_switchboard.cmpTableTitle, gv_switchboard.opLabel,
-                confidenceRegionInfo=None
+                confidence_region_info=None
             )
         else:
             return workspace.GatesSingleMetricTable(
                 gv_switchboard.metric, switchboard.gsFinalGrid,
                 switchboard.gsTargetGrid, est_labels, None,
                 gv_switchboard.cmpTableTitle,
-                confidenceRegionInfo=None
+                confidence_region_info=None
             )
 
 
@@ -237,7 +237,7 @@ class GaugeVariantsRawSection(_Section):
     def bestGatesetSpamBriefTable(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.SpamTable(
             switchboard.gsTargetAndFinal, ['Target', 'Estimated'], 'boxes',
-            _cri(1, switchboard, confidence_level, ci_brevity), includeHSVec=False
+            _cri(1, switchboard, confidence_level, ci_brevity), include_hs_vec=False
         )
 
 
