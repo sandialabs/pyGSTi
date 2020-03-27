@@ -481,7 +481,8 @@ class EvalTree(list):
         """
         raise NotImplementedError("split(...) not implemented!")
 
-    def _finish_split(self, el_indices_dict, sub_tree_set_list, permute_parent_element, create_subtree, all_final=False):
+    def _finish_split(self, el_indices_dict, sub_tree_set_list, permute_parent_element,
+                      create_subtree, all_final=False):
         # Create subtrees from index sets
         import time as _time
         need_to_compute = _np.zeros(len(self), 'bool')  # flags so we don't duplicate computation of needed quantities

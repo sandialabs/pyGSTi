@@ -127,7 +127,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
 
     if alias_dict:
         alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
-                     for ky, val in alias_dict.items()}  # convert to use Labels
+                      for ky, val in alias_dict.items()}  # convert to use Labels
 
     if gsGen and times is None:
         if alias_dict is not None:

@@ -1086,7 +1086,7 @@ class LindbladPOVM(POVM):
         memo.add(id(self))
 
         assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
-        num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as this SPAMVec
+        num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
         _gm.ModelMember.set_gpindices(
             self, self.error_map.gpindices, parent)
         return num_new_params

@@ -110,7 +110,7 @@ def write_dataset(filename, dataset, circuit_list=None,
 
     if outcome_label_order is not None:  # convert to tuples if needed
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcome_label_order]
+                               for ol in outcome_label_order]
 
     outcomeLabels = dataset.get_outcome_labels()
     if outcome_label_order is not None:
@@ -204,7 +204,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
 
     if outcome_label_order is not None:  # convert to tuples if needed
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcome_label_order]
+                               for ol in outcome_label_order]
 
     outcomeLabels = multidataset.get_outcome_labels()
     if outcome_label_order is not None:

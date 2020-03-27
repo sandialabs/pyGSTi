@@ -105,7 +105,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
-                  maxiter=100000, tol=1e-10):
+                    maxiter=100000, tol=1e-10):
 
     CLIFF = 10000
 
@@ -143,7 +143,7 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
 
 
 def _contract_to_cp(model, verbosity, method='Nelder-Mead',
-                  maxiter=100000, tol=1e-2):
+                    maxiter=100000, tol=1e-2):
 
     CLIFF = 10000
     printer = _objs.VerbosityPrinter.build_printer(verbosity)

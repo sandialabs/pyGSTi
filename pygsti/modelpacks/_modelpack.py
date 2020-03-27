@@ -123,10 +123,10 @@ class GSTModelPack(ModelPack):
     _prepfiducials = None
     _measfiducials = None
 
-    global_fidPairs = None
-    global_fidPairs_lite = None
-    _pergerm_fidPairsDict = None
-    _pergerm_fidPairsDict_lite = None
+    global_fidpairs = None
+    global_fidpairs_lite = None
+    _pergerm_fidpairsdict = None
+    _pergerm_fidpairsdict_lite = None
 
     def __init__(self):
         self._gscache = {}
@@ -159,10 +159,10 @@ class GSTModelPack(ModelPack):
         return self._indexed_circuits(self._measfiducials, qubit_labels)
 
     def pergerm_fidpair_dict(self, qubit_labels=None):
-        return self._indexed_circuitdict(self._pergerm_fidPairsDict, qubit_labels)
+        return self._indexed_circuitdict(self._pergerm_fidpairsdict, qubit_labels)
 
     def pergerm_fidpair_dict_lite(self, qubit_labels=None):
-        return self._indexed_circuitdict(self._pergerm_fidPairsDict_lite, qubit_labels)
+        return self._indexed_circuitdict(self._pergerm_fidpairsdict_lite, qubit_labels)
 
     def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack

@@ -1,12 +1,12 @@
 <h1>Gate Decompositions</h1>
 <p>This tab presents several <q>decompositions</q> of the process matrices shown on the <q>Raw Estimates</q> tab.  These are derived properties of the process matrices that aren't directly interpretable as error metrics, but help understand both the overall observed/estimated behavior of the gates <em>and</em> how they differ from the targets.  Although the tables on this page do not compare the estimated gates' properties directly to those of the ideal targets, many reports include an analysis of the target gates as well, which can be accessed (and compared directly to the GST estimates) through the <q>Estimates</q> dropdown menu on the sidebar.  Also, since these properties are all at least mildly gauge-dependent, it may be useful to examine different gauge-optimization choices using that dropdown menu on the sidebar.</p>
 
-<figure id="bestGatesetDecompTable" class='tbl'>
+<figure id="final_model_decomposition_table" class='tbl'>
 	<figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">This table attempts to describe each gate as a rotation operator (this interpretation is more reliable for single qubits than for other systems).   From each gate, a rotation axis and angle are extracted by considering the projection of its logarithm onto the Pauli Hamiltonian projectors.  The rotation axis and angle are (respectively) given by the direction and the magnitude (up to a conventional constant) of this projected logarithm.  In other words, the <q>rotation axis</q> is basically the Hamiltonian that generated the gate.  The angles between the various gates' rotation axes are computed from the dot products between them.</span></figcaption>
-	{{ bestGatesetDecompTable|render }}
+	{{ final_model_decomposition_table|render }}
 </figure>
 
 <figure id="bestGatesetChoiTable" class='tbl'>
 	<figcaption><span class="captiontitle">Estimated gates' Choi representation and spectra</span> <span class="captiondetail"> These plots show each gate's Choi-Jamiolkowski representation and that representation's eigenvalues.  Every completely positive (CP) map has a non-negative Choi spectrum, so any negative eigenvalues (shown in <span style="color:red">red</span>) indicate that the estimate violates positivity.  If a gate is perfectly unitary, its Choi spectrum will be rank-1, and real-world gates often have many Choi eigenvalues that are very close to zero.  Therefore, although negative eigenvalues indicate that the estimate is non-physical, this can easily stem from statistical fluctuations.  If statistically significant, though, it usually indicates either non-Markovianity or a failed gauge optimization.  Since the Choi matrix is Hermitian, it is displayed using colored boxes by placing the real and imaginary parts of the upper-triangle's off-diagonal elements in the upper and lower triangles of the color box plot, respectively.</span></figcaption>
-	{{ bestGatesetChoiEvalTable|render }}
+	{{ final_model_choi_eigenvalue_table|render }}
 </figure>

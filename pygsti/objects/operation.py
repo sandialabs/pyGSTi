@@ -2812,8 +2812,8 @@ class LindbladOp(LinearOperator):
 
                 mu, m_star, s, eta = 1.0, 0, 0, 1.0  # initial values - will be updated by call to _update_rep below
                 rep = replib.DMOpRepLindblad(self.errorgen._rep,
-                                              mu, eta, m_star, s,
-                                              Udata, Uindices, Uindptr)
+                                             mu, eta, m_star, s,
+                                             Udata, Uindices, Uindptr)
 
         else:  # Term-based evolution
 
@@ -3041,7 +3041,7 @@ class LindbladOp(LinearOperator):
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
             dexpL = _d_exp_x(self.errorgen.todense(), derrgen, self.exp_err_gen,
-                           self.unitary_postfactor)
+                             self.unitary_postfactor)
             derivMx = dexpL.reshape(d2**2, self.num_params())  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
@@ -4093,13 +4093,13 @@ class ComposedOp(LinearOperator):
         if evotype == "densitymx":
             if dense_rep:
                 rep = replib.DMOpRepDense(_np.require(_np.identity(dim, 'd'),
-                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
+                                                      requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.DMOpRepComposed(factor_op_reps, dim)
         elif evotype == "statevec":
             if dense_rep:
                 rep = replib.SVOpRepDense(_np.require(_np.identity(dim, complex),
-                                                       requirements=['OWNDATA', 'C_CONTIGUOUS']))
+                                                      requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 rep = replib.SVOpRepComposed(factor_op_reps, dim)
         elif evotype == "stabilizer":
@@ -4813,7 +4813,7 @@ class EmbeddedOp(LinearOperator):
 
             nQubits = int(round(_np.log2(opDim)))
             rep = replib.SBOpRepEmbedded(self.embedded_op._rep,
-                                          nQubits, qubit_indices)
+                                         nQubits, qubit_indices)
 
         elif evotype in ("statevec", "densitymx"):
 
@@ -4840,10 +4840,10 @@ class EmbeddedOp(LinearOperator):
                 #maybe cache items to speed up _iter_matrix_elements in FUTURE here?
                 if evotype == "statevec":
                     rep = replib.SVOpRepDense(_np.require(_np.identity(opDim, complex),
-                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
+                                                          requirements=['OWNDATA', 'C_CONTIGUOUS']))
                 else:  # "densitymx"
                     rep = replib.DMOpRepDense(_np.require(_np.identity(opDim, 'd'),
-                                                           requirements=['OWNDATA', 'C_CONTIGUOUS']))
+                                                          requirements=['OWNDATA', 'C_CONTIGUOUS']))
             else:
                 nBlocks = self.state_space_labels.num_tensor_prod_blocks()
                 iActiveBlock = iTensorProdBlk
@@ -4853,12 +4853,12 @@ class EmbeddedOp(LinearOperator):
                                         for k in range(nBlocks)], _np.int64)
                 if evotype == "statevec":
                     rep = replib.SVOpRepEmbedded(self.embedded_op._rep,
-                                                  numBasisEls, actionInds, blocksizes, embeddedDim,
-                                                  nComponents, iActiveBlock, nBlocks, opDim)
+                                                 numBasisEls, actionInds, blocksizes, embeddedDim,
+                                                 nComponents, iActiveBlock, nBlocks, opDim)
                 else:  # "densitymx"
                     rep = replib.DMOpRepEmbedded(self.embedded_op._rep,
-                                                  numBasisEls, actionInds, blocksizes, embeddedDim,
-                                                  nComponents, iActiveBlock, nBlocks, opDim)
+                                                 numBasisEls, actionInds, blocksizes, embeddedDim,
+                                                 nComponents, iActiveBlock, nBlocks, opDim)
 
         elif evotype in ("svterm", "cterm"):
             assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
@@ -5450,8 +5450,8 @@ class CliffordOp(LinearOperator):
 
         #Create representation
         rep = replib.SBOpRepClifford(self.smatrix, self.svector,
-                                      self.inv_smatrix, self.inv_svector,
-                                      self._dense_unitary)
+                                     self.inv_smatrix, self.inv_svector,
+                                     self._dense_unitary)
         LinearOperator.__init__(self, rep, "stabilizer")
 
     #NOTE: if this gate had parameters, we'd need to clear inv_smatrix & inv_svector
@@ -5739,7 +5739,9 @@ class ComposedErrorgen(LinearOperator):
             for d, coeffs in zip(perfactor_Ltermdicts, factor_coeffs_list):
                 if k in coeffs:
                     d[k] = val; unused_Lterm_keys.remove(k)
-                    break  # only apply a given lindblad_term_dict entry once, even if it can be applied to multiple factors
+                    # only apply a given lindblad_term_dict entry once,
+                    # even if it can be applied to multiple factors
+                    break
 
         if len(unused_Lterm_keys) > 0:
             raise KeyError("Invalid L-term descriptor key(s): %s" % str(unused_Lterm_keys))
@@ -6695,8 +6697,8 @@ class LindbladErrorgen(LinearOperator):
         self.param_mode = param_mode
 
         # lindblad_term_dict, basis => bases + parameter values
-        # but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
-        # since the latter is what set_errgen needs
+        # but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs,
+        #  then projections/coeffs => paramvals? since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis = \
             _gt.lindblad_terms_to_projections(lindblad_term_dict, basis, self.nonham_mode)
 
@@ -6772,8 +6774,8 @@ class LindbladErrorgen(LinearOperator):
 
                 self._data_scratch = _np.zeros(len(indices), complex)  # *complex* scratch space for updating rep
                 rep = replib.DMOpRepSparse(_np.ascontiguousarray(_np.zeros(len(indices), 'd')),
-                                            _np.ascontiguousarray(indices, _np.int64),
-                                            _np.ascontiguousarray(indptr, _np.int64))
+                                           _np.ascontiguousarray(indices, _np.int64),
+                                           _np.ascontiguousarray(indptr, _np.int64))
             else:
                 rep = replib.DMOpRepDense(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
 

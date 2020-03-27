@@ -17,16 +17,16 @@ class SummarySection(_Section):
     _HTML_TEMPLATE = 'tabs/Summary.html'
 
     @_Section.figure_factory()
-    def progressBarPlot_sum(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_bar_plot_sum(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
-            Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi,
             'L', comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory()
-    def bestEstimateColorHistogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                   **kwargs):
+    def final_model_fit_histogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
+                                  **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
@@ -36,8 +36,8 @@ class SummarySection(_Section):
         )
 
     @_Section.figure_factory()
-    def bestGatesVsTargetTable_sum(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
-                                   show_unmodeled_error=False, **kwargs):
+    def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
+                                              show_unmodeled_error=False, **kwargs):
         summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
         wildcardBudget = None
         if show_unmodeled_error:
@@ -55,9 +55,9 @@ class SummarySection(_Section):
         )
 
     @_Section.figure_factory()
-    def finalFitComparePlot(workspace, switchboard=None, est_labels=None, dataset_labels=None, comm=None,
-                            **kwargs):
-        # Build finalFitComparePlot
+    def final_fits_comparison_plot(workspace, switchboard=None, est_labels=None, dataset_labels=None, comm=None,
+                                   **kwargs):
+        # Build final_fits_comparison_plot
         # Don't display "Target" in model violation summary, as it's often
         # huge and messes up the plot scale.
         est_inds_mt = [i for i, l in enumerate(est_labels) if l != "Target"]

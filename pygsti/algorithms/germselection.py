@@ -328,7 +328,7 @@ def setup_model_list(model_list, randomize, randomization_strength,
 
     if randomize:
         model_list = randomize_model_list(model_list, randomization_strength,
-                                         num_copies, seed)
+                                          num_copies, seed)
 
     return model_list
 
@@ -961,7 +961,7 @@ def build_up(model_list, germs_list, randomize=True,
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     model_list = setup_model_list(model_list, randomize,
-                                 randomization_strength, num_copies, seed)
+                                  randomization_strength, num_copies, seed)
 
     (reducedModelList,
      numGaugeParams, _, _) = get_model_params(model_list)
@@ -982,9 +982,9 @@ def build_up(model_list, germs_list, randomize=True,
             goodGerms = force[:]
 
     undercompleteModelNum = check_germs_list_completeness(model_list,
-                                                       germs_list,
-                                                       score_func,
-                                                       threshold)
+                                                          germs_list,
+                                                          score_func,
+                                                          threshold)
     if undercompleteModelNum > -1:
         printer.warning("Complete initial germ set FAILS on model "
                         + str(undercompleteModelNum) + ". Aborting search.")
@@ -1138,7 +1138,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     model_list = setup_model_list(model_list, randomize,
-                                 randomization_strength, num_copies, seed)
+                                  randomization_strength, num_copies, seed)
 
     dim = model_list[0].dim
     #Np = model_list[0].num_params() #wrong:? includes spam...
@@ -1169,9 +1169,9 @@ def build_up_breadth(model_list, germs_list, randomize=True,
 
     if pretest:
         undercompleteModelNum = check_germs_list_completeness(model_list,
-                                                           germs_list,
-                                                           score_func,
-                                                           threshold)
+                                                              germs_list,
+                                                              score_func,
+                                                              threshold)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
@@ -1464,7 +1464,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     model_list = setup_model_list(model_list, randomize,
-                                 randomization_strength, num_copies, seed)
+                                  randomization_strength, num_copies, seed)
 
     if (fixed_slack and slack_frac) or (not fixed_slack and not slack_frac):
         raise ValueError("Either fixed_slack *or* slack_frac should be specified")
@@ -1482,8 +1482,8 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
 #        lessWeightOnly = True # we're starting at the max-weight vector
 
     undercompleteModelNum = check_germs_list_completeness(model_list,
-                                                       germs_list, score_func,
-                                                       threshold)
+                                                          germs_list, score_func,
+                                                          threshold)
     if undercompleteModelNum > -1:
         printer.log("Complete initial germ set FAILS on model "
                     + str(undercompleteModelNum) + ".", 1)
@@ -1771,7 +1771,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     model_list = setup_model_list(model_list, randomize,
-                                 randomization_strength, num_copies, seed)
+                                  randomization_strength, num_copies, seed)
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = get_model_params(model_list)
@@ -1792,9 +1792,9 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         weights, forced_weights=initialWeights, shuffle=shuffle)
 
     undercompleteModelNum = check_germs_list_completeness(model_list,
-                                                       germs_list,
-                                                       score_func,
-                                                       threshold)
+                                                          germs_list,
+                                                          score_func,
+                                                          threshold)
     if undercompleteModelNum > -1:
         printer.warning("Complete initial germ set FAILS on model "
                         + str(undercompleteModelNum) + ".")

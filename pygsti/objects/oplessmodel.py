@@ -151,8 +151,8 @@ class OplessModel(_Model):
 
     def bulk_probs(self, circuit_list, clip_to=None, check=False,
                    comm=None, mem_limit=None, dataset=None, smartc=None):
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, mem_limit, "default",
-                                                                                [], dataset)
+        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, mem_limit,
+                                                                                "default", [], dataset)
         vp = _np.empty(evalTree.num_final_elements(), 'd')
         self.bulk_fill_probs(vp, evalTree, clip_to, check, comm)
 

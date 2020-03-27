@@ -405,7 +405,8 @@ class StdInputParser(object):
                                 # fill_in_empty_dataset_with_fake_data).
                                 pass
 
-                        dataset.add_count_dict(circuit, countDict, aux=commentDict, record_zero_counts=record_zero_counts,
+                        dataset.add_count_dict(circuit, countDict, aux=commentDict,
+                                               record_zero_counts=record_zero_counts,
                                                update_ol=False)  # for performance - to this once at the end.
                     else:
                         current_item['circuit'] = circuit
@@ -416,7 +417,8 @@ class StdInputParser(object):
                         #add current item & look for next one
                         dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
                                                     current_item['times'], current_item.get('repetitions', None),
-                                                    record_zero_counts=record_zero_counts, aux=current_item.get('aux', None),
+                                                    record_zero_counts=record_zero_counts,
+                                                    aux=current_item.get('aux', None),
                                                     update_ol=False)  # for performance - to this once at the end.
                         current_item.clear()
                         looking_for = "circuit_line"

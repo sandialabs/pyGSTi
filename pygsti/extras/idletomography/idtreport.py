@@ -158,7 +158,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
     observed rates.
     """
 
-    def __init__(self, ws, idtresults, typ, errorOp, threshold=1.0,
+    def __init__(self, ws, idtresults, typ, error_op, threshold=1.0,
                  mdl_simulator=None):
         """
         Create a IdleTomographyObservedRatesForIntrinsicRateTable.
@@ -172,7 +172,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         typ : {"hamiltonian", "stochastic", "affine"}
             The type of the intrinsic rate to target.
 
-        errorOp : NQPauliOp
+        error_op : NQPauliOp
             The intrinsic error (of the given `typ`), specified as
             a N-qubit Pauli operator.
 
@@ -180,7 +180,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
             Specifies how many observed error rates to consider.
             If an integer, display the top `threshold` rates of *all* the
             observed rates.  For example, if `threshold=10` and none of the
-            top 10 rates are applicable to the given `typ`,`errorOp` error,
+            top 10 rates are applicable to the given `typ`,`error_op` error,
             then nothing is displayed.  If a float, display the top `threshold`
             fraction, again of *all* the rates (e.g. 0.2 means the top 20%).
 
@@ -193,16 +193,16 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         ReportTable
         """
         super(IdleTomographyObservedRatesForIntrinsicRateTable, self).__init__(
-            ws, self._create, idtresults, typ, errorOp, threshold,
+            ws, self._create, idtresults, typ, error_op, threshold,
             mdl_simulator)
 
-    def _create(self, idtresults, typ, errorOp, threshold, mdl_simulator):
+    def _create(self, idtresults, typ, error_op, threshold, mdl_simulator):
         colHeadings = ['Jacobian El', 'Observable Rate']
 
-        if not isinstance(errorOp, _pobjs.NQPauliOp):
-            errorOp = _pobjs.NQPauliOp(errorOp)  # try to init w/whatever we've been given
+        if not isinstance(error_op, _pobjs.NQPauliOp):
+            error_op = _pobjs.NQPauliOp(error_op)  # try to init w/whatever we've been given
 
-        intrinsicIndx = idtresults.error_list.index(errorOp)
+        intrinsicIndx = idtresults.error_list.index(error_op)
 
         if typ in ('stochastic', 'affine') and \
                 'stochastic/affine' in idtresults.pauli_fidpairs:
@@ -230,7 +230,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
             rate_threshold = -1e100  # include everything
 
         #get all the observable rates that contribute to the intrinsic
-        # rate specified by `typ` and `errorOp`
+        # rate specified by `typ` and `error_op`
         obs_rate_specs = []; nBelowThreshold = 0
         #print("DB: err list = ",idtresults.error_list, " LEN=",len(idtresults.error_list))
         #print("DB: Intrinsic index = ",intrinsicIndx)
@@ -273,7 +273,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
     of observed data to a simple polynomial.
     """
 
-    def __init__(self, ws, idtresults, typ, fidpair, obsORoutcome, title="auto",
+    def __init__(self, ws, idtresults, typ, fidpair, obs_or_outcome, title="auto",
                  scale=1.0, mdl_simulator=None):
         """
         Create a IdleTomographyObservedRatePlot.
@@ -294,7 +294,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             the fiducial pair (a constant) for the data used to obtain the
             observed rate being plotted.
 
-        obsORoutcome : NQPauliOp or NQOutcome
+        obs_or_outcome : NQPauliOp or NQOutcome
             The observable (if `typ` == "diffbasis") or outcome (if `typ`
             == "samebasis") identifying the observed rate to plot.
 
@@ -310,10 +310,10 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             points and plot these simulated values alongside the data.
         """
         super(IdleTomographyObservedRatePlot, self).__init__(
-            ws, self._create, idtresults, typ, fidpair, obsORoutcome,
+            ws, self._create, idtresults, typ, fidpair, obs_or_outcome,
             title, scale, mdl_simulator)
 
-    def _create(self, idtresults, typ, fidpair, obsORoutcome,
+    def _create(self, idtresults, typ, fidpair, obs_or_outcome,
                 title, scale, mdl_simulator):
 
         maxLens = idtresults.max_lengths
@@ -322,14 +322,14 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         measStr = fidpair[1].to_circuit(idtresults.meas_basis_strs)
 
         ifidpair = idtresults.pauli_fidpairs[typ].index(fidpair)
-        info_dict = idtresults.observed_rate_infos[typ][ifidpair][obsORoutcome]
+        info_dict = idtresults.observed_rate_infos[typ][ifidpair][obs_or_outcome]
         obs_rate = info_dict['rate']
         data_pts = info_dict['data']
         errorbars = info_dict['errbars']
         fitCoeffs = info_dict['fitCoeffs']
         fitOrder = info_dict['fitOrder']
         if idtresults.predicted_obs_rates is not None:
-            predictedRate = idtresults.predicted_obs_rates[typ][fidpair][obsORoutcome]
+            predictedRate = idtresults.predicted_obs_rates[typ][fidpair][obs_or_outcome]
         else:
             predictedRate = None
 
@@ -338,9 +338,9 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                                                       measStr.str, str(fidpair[1]))
         xlabel = "Length"
         if typ == "diffbasis":
-            ylabel = "<" + str(obsORoutcome).strip() + ">"  # Expectation value
+            ylabel = "<" + str(obs_or_outcome).strip() + ">"  # Expectation value
         else:
-            ylabel = "Prob(" + str(obsORoutcome).strip() + ")"  # Outcome probability
+            ylabel = "Prob(" + str(obs_or_outcome).strip() + ")"  # Outcome probability
 
         traces = []
         x = _np.linspace(maxLens[0], maxLens[-1], 50)
@@ -371,7 +371,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
 
                 #Expectation value - assume weight at most 2 for now
                 if typ == "diffbasis":
-                    obs_indices = [i for i, letter in enumerate(obsORoutcome.rep) if letter != 'I']
+                    obs_indices = [i for i, letter in enumerate(obs_or_outcome.rep) if letter != 'I']
                     minus_sign = _np.prod([fidpair[1].signs[i] for i in obs_indices])
 
                     # <Z> = p0 - p1 (* minus_sign)
@@ -397,7 +397,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
 
                 #Outcome probability
                 else:
-                    outcomeStr = str(obsORoutcome)
+                    outcomeStr = str(obs_or_outcome)
                     val = ps[outcomeStr]
                 sim_data.append(val)
 
@@ -706,7 +706,7 @@ def _create_switchboard(ws, results_dict):
 
 def create_idletomography_report(results, filename, title="auto",
                                  ws=None, auto_open=False, link_to=None,
-                                 brevity=0, advancedOptions=None, verbosity=1):
+                                 brevity=0, advanced_options=None, verbosity=1):
     """
     Creates an Idle Tomography report, summarizing the results of running
     idle tomography on a data set.
@@ -749,9 +749,9 @@ def create_idletomography_report(results, filename, title="auto",
         Python versions of plots (pickled python data) and tables (pickled
         pandas DataFrams).
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values aer usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
@@ -790,13 +790,13 @@ def create_idletomography_report(results, filename, title="auto",
     tStart = _time.time()
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
 
-    if advancedOptions is None: advancedOptions = {}
-    precision = advancedOptions.get('precision', None)
-    cachefile = advancedOptions.get('cachefile', None)
-    connected = advancedOptions.get('connected', False)
-    resizable = advancedOptions.get('resizable', True)
-    autosize = advancedOptions.get('autosize', 'initial')
-    mdl_sim = advancedOptions.get('simulator', None)  # a model
+    if advanced_options is None: advanced_options = {}
+    precision = advanced_options.get('precision', None)
+    cachefile = advanced_options.get('cachefile', None)
+    connected = advanced_options.get('connected', False)
+    resizable = advanced_options.get('resizable', True)
+    autosize = advanced_options.get('autosize', 'initial')
+    mdl_sim = advanced_options.get('simulator', None)  # a model
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -937,7 +937,7 @@ def create_idletomography_report(results, filename, title="auto",
 
             qtys['dscmpSwitchboard'] = dscmp_switchBd
             addqty(4, 'ds_comparison_summary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-            #addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+            #addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp,display='pvalue')
             addqty(4, 'ds_comparison_histogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")

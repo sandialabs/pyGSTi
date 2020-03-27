@@ -80,13 +80,14 @@ class DataComparisonSection(_Section):
         }
 
     @_Section.figure_factory(4)
-    def dsComparisonSummary(workspace, switchboard=None, dataset_labels=None, all_dscomps=None, **kwargs):
+    def dataset_comparison_summary(workspace, switchboard=None, dataset_labels=None, all_dscomps=None, **kwargs):
         return workspace.DatasetComparisonSummaryPlot(
             dataset_labels, all_dscomps
         )
 
     @_Section.figure_factory(4)
-    def dsComparisonHistogram(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white', **kwargs):
+    def dataset_comparison_histogram(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
+                                     **kwargs):
         return workspace.ColorBoxPlot(
             'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, typ='histogram',
@@ -94,7 +95,8 @@ class DataComparisonSection(_Section):
         )
 
     @_Section.figure_factory(4)
-    def dsComparisonBoxPlot(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white', **kwargs):
+    def dataset_comparison_box_plot(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
+                                    **kwargs):
         return workspace.ColorBoxPlot(
             'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, comm=comm,

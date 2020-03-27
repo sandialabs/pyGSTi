@@ -345,7 +345,7 @@ class VerbosityPrinter(object):
             message_level = self.defaultVerbosity
         if message_level <= self.verbosity:
             indent = (indent_char * (message_level - 1 + indent_offset
-                                    + self.extra_indents)) if do_indent else ''
+                                     + self.extra_indents)) if do_indent else ''
             # message_level-1 so no indent at verbosity == 1
             statusType = 'Status Level %s:' % message_level if show_statustype else ''
             if end == '\n':

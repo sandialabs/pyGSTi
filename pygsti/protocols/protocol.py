@@ -854,7 +854,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             for lst in circuits_per_edesign:
                 if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
 
-            def PAD(subcs):
+            def pad(subcs):
                 maxLen = max([len(c) if (c is not None) else 0 for c in subcs])
                 padded = []
                 for c in subcs:
@@ -871,7 +871,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
                 c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
-                padded_subcircuits = PAD(subcircuits)
+                padded_subcircuits = pad(subcircuits)
                 for subc in padded_subcircuits:
                     if subc is not None:
                         c.tensor_circuit(subc)
@@ -1015,8 +1015,8 @@ class ProtocolData(_TreeNode):
             to_pickle['_passdatas'] = None
         return to_pickle
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
         if self._passdatas is None:
             self._passdatas = {None: self}
 

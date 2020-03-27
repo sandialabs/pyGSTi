@@ -318,7 +318,7 @@ class ConfidenceRegionFactory(object):
             projected_hessian = _np.dot(proj_non_gauge, _np.dot(self.hessian, proj_non_gauge))
         elif projection_type == 'optimal gate CIs':
             projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
-                                                                   tol, verbosity=3)  # verbosity for DEBUG
+                                                                       tol, verbosity=3)  # verbosity for DEBUG
         elif projection_type == 'intrinsic error':
             projected_hessian = self._opt_projection_from_split(verbosity=3)  # verbosity for DEBUG
         else:
@@ -474,7 +474,7 @@ class ConfidenceRegionFactory(object):
         #                   + " not match.  This indicates an internal logic error.")
 
     def _opt_projection_for_operation_cis(self, method="L-BFGS-B", maxiter=10000,
-                                      maxfev=10000, tol=1e-6, verbosity=0):
+                                          maxfev=10000, tol=1e-6, verbosity=0):
         printer = _VerbosityPrinter.build_printer(verbosity)
         model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
@@ -954,9 +954,9 @@ class ConfidenceRegionFactoryView(object):
                 elif fDims == 1:
                     for i in range(f0.shape[0]):
                         gradFdag = _np.transpose(grad_f[i])  # conjugate?
-                        df[i] = _np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, grad_f[i].real)))) \
-                            + 1j * \
-                            _np.sqrt(abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, grad_f[i].imag))))
+                        df[i] = (_np.sqrt(abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, grad_f[i].real))))
+                                 + 1j * _np.sqrt(abs(_np.dot(gradFdag.imag,
+                                                             _np.dot(self.invRegionQuadcForm, grad_f[i].imag)))))
                 elif fDims == 2:
                     for i in range(f0.shape[0]):
                         for j in range(f0.shape[1]):

@@ -116,7 +116,7 @@ class CircuitLexer:
         return _lbl.Label(nm, sslbls, time, args)
 
     @staticmethod
-    def n(t):
+    def t_GATE(t):                                                                       # noqa
         r'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'
         #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
@@ -125,7 +125,7 @@ class CircuitLexer:
         return t
 
     @staticmethod
-    def n(t):
+    def t_INSTRMT(t):                                                                    # noqa
         r'I[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
@@ -133,7 +133,7 @@ class CircuitLexer:
         return t
 
     @staticmethod
-    def n(t):
+    def t_PREP(t):                                                                       # noqa
         r'rho[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
@@ -141,7 +141,7 @@ class CircuitLexer:
         return t
 
     @staticmethod
-    def n(t):
+    def t_POVM(t):                                                                       # noqa
         r'M[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
@@ -149,35 +149,35 @@ class CircuitLexer:
         return t
 
     @staticmethod
-    def n(t):
+    def t_STRINGIND(t):                                                                  # noqa
         r'S(?=\s*\<)'
         return t
 
     @staticmethod
-    def n(t):
+    def t_REFLBL(t):                                                                     # noqa
         r'<\s*[a-zA-Z0-9_]+\s*>'
         t.value = t.value[1:-1].strip()
         return t
 
     # Regular expression rules for simple tokens
-    n = r'\^'
-    n = r'\*'
-    n = r'\['
-    n = r'\]'
-    n = r'\('
-    n = r'\)'
-    n = r'\:'
-    n = r'\;'
-    n = r'\!'
+    t_EXPOP = r'\^'                                                                      # noqa
+    t_MULTOP = r'\*'                                                                     # noqa
+    t_OPENBR = r'\['                                                                     # noqa
+    t_CLOSEBR = r'\]'                                                                    # noqa
+    t_LPAREN = r'\('                                                                     # noqa
+    t_RPAREN = r'\)'                                                                     # noqa
+    t_COLON = r'\:'                                                                      # noqa
+    t_SEMICOLON = r'\;'                                                                  # noqa
+    t_EXCLAM = r'\!'                                                                     # noqa
 
     @staticmethod
-    def n(t):
+    def t_NOP(t):                                                                        # noqa
         r'\{\}'
         t.value = tuple()
         return t
 
     @staticmethod
-    def n(t):
+    def t_INTEGER(t):                                                                    # noqa
         r'\d+'
         t.value = int(t.value)
         return t

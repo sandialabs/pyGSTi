@@ -87,7 +87,8 @@ def extract_rotation_hat(xhat, yhat, k, nx, ny, angle_name="epsilon",
         return angle_j
 
 
-def est_angle_list(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon", length_list=None, rpeconfig_inst=None):
+def est_angle_list(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon",
+                   length_list=None, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
@@ -176,7 +177,8 @@ def sin_phi2_func(theta, phi, epsilon, rpeconfig_inst=None):
     return sinPhi2FuncVal
 
 
-def est_theta_list(dataset, angle_sin_strs, angle_cos_strs, epsilon_list, return_phi_fun_list=False, rpeconfig_inst=None):
+def est_theta_list(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
+                   return_phi_fun_list=False, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
     along with already-made estimates of epsilon, return a list of theta

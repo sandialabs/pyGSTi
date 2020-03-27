@@ -27,13 +27,13 @@ MACH_PRECISION = 1e-12
 
 
 class OptimizerResult(object):
-    def __init__(self, objective_func, opt_x, opt_f=None, opt_JTJ=None,
+    def __init__(self, objective_func, opt_x, opt_f=None, opt_jtj=None,
                  opt_unpenalized_f=None, chi2_k_distributed_qty=None,
                  optimizer_specific_qtys=None):
         self.objective_func = objective_func
         self.x = opt_x
         self.f = opt_f
-        self.JTJ = opt_JTJ
+        self.jtj = opt_jtj  # jacobian.T * jacobian
         self.f_no_penalties = opt_unpenalized_f
         self.optimizer_specific_qtys = optimizer_specific_qtys
         self.chi2_k_distributed_qty = chi2_k_distributed_qty
@@ -74,7 +74,7 @@ class CustomLMOptimizer(Optimizer):
         jacobian = objective.dlsvec
         x0 = objective.mdl.to_vector()
 
-        opt_x, converged, msg, mu, nu, norm_f, f, opt_JTJ = custom_leastsq(
+        opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
             num_fd_iters=self.fditer,
@@ -100,7 +100,7 @@ class CustomLMOptimizer(Optimizer):
         unpenalized_normf = sum(unpenalized_f**2)  # objective function without penalty factors
         chi2k_qty = objective.get_chi2k_distributed_qty(norm_f)
 
-        return OptimizerResult(objective, opt_x, norm_f, opt_JTJ, unpenalized_normf, chi2k_qty,
+        return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
 
 #Scipy version...
@@ -371,7 +371,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 #Jac_Uproj = Jac_U[:,0:num_large_svals]
                 #JTJ_evals, JTJ_U = _np.linalg.eig(JTJ)
                 #printer.log("JTJ (dim=%d) eval min/max=%g, %g; %d large svals (of %d)" % (
-                #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)), num_large_svals, len(Jac_s)))
+                #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)),
+                #                          num_large_svals, len(Jac_s)))
 
                 #TODO REMOVE
                 #JTJ_U, JTJ_s, JTJ_Vh = _np.linalg.svd(JTJ)
@@ -403,7 +404,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #tries to avoid making mu so large that dx is tiny and we declare victory prematurely
                 else:
                     mu, nu = init_munu
-                rawJTJ_scratch = JTJ.copy() # allocates the memory for a copy of JTJ so only update mem elsewhere
+                rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
                 best_x_state = mu, nu, norm_f, f, rawJTJ_scratch  # update mu,nu,JTJ of initial "best state"
             else:
                 #on all other iterations, upate JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
@@ -423,14 +424,14 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
                     if damping_basis == "singular_values":
                         reg_Jac_s = Jac_s + mu
-                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
                     else:
                         JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
 
                 elif damping_mode == 'JTJ':
                     if damping_basis == "singular_values":
                         reg_Jac_s = Jac_s + mu * dclip(Jac_s)
-                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
                     else:
                         add_to_diag = mu * dclip(undamped_JTJ_diag)
                         JTJ[idiag] = undamped_JTJ_diag + add_to_diag
@@ -438,27 +439,28 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 elif damping_mode == 'invJTJ':
                     if damping_basis == "singular_values":
                         reg_Jac_s = Jac_s + mu * dclip(1.0 / Jac_s)
-                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1/reg_Jac_s**2), Jac_V.T))
+                        inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
                     else:
                         add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
                         JTJ[idiag] = undamped_JTJ_diag + add_to_diag
 
                 elif damping_mode == 'adaptive':
                     if damping_basis == "singular_values":
-                        reg_Jac_s_lst = [Jac_s + mu * dclip(Jac_s**(spow+0.1)),
+                        reg_Jac_s_lst = [Jac_s + mu * dclip(Jac_s**(spow + 0.1)),
                                          Jac_s + mu * dclip(Jac_s**spow),
-                                         Jac_s + mu * dclip(Jac_s**(spow-0.1))]
-                        inv_JTJ_lst = [_np.dot(Jac_V, _np.dot(_np.diag(1/s**2), Jac_V.T)) for s in reg_Jac_s_lst]
+                                         Jac_s + mu * dclip(Jac_s**(spow - 0.1))]
+                        inv_JTJ_lst = [_np.dot(Jac_V, _np.dot(_np.diag(1 / s**2), Jac_V.T)) for s in reg_Jac_s_lst]
 
                         #DEBUG TODO REMOVE
                         #JTJ_lst = [_np.dot(Jac_V.T, _np.dot(_np.diag(s**2), Jac_V)) for s in reg_Jac_s_lst]
                         #JTJ_evals2_lst = [_np.linalg.eigvals(jtj) for jtj in JTJ_lst]
                         #for ii,jtje in enumerate(JTJ_evals2_lst):
-                        #    printer.log("%d: JTJ POST-damping (spow=%g) eval min/max=%g, %g" % (ii, spow, _np.min(_np.abs(jtje)), _np.max(_np.abs(jtje))))
+                        #    printer.log("%d: JTJ POST-damping (spow=%g) eval min/max=%g, %g"
+                        #                % (ii, spow, _np.min(_np.abs(jtje)), _np.max(_np.abs(jtje))))
                     else:
-                        add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow+0.1)),
+                        add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow + 0.1)),
                                            mu * dclip(undamped_JTJ_diag**spow),
-                                           mu * dclip(undamped_JTJ_diag**(spow-0.1))]
+                                           mu * dclip(undamped_JTJ_diag**(spow - 0.1))]
                 else:
                     raise ValueError("Invalid damping mode: %s" % damping_mode)
 
@@ -490,7 +492,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     elif damping_basis == 'singular_values':
                         #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
                         # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
-                        # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K) * (K,K) * (K,N) if use psuedoinv
+                        # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K)*(K,K)*(K,N) if use psuedoinv
                         if damping_mode == 'adaptive':
                             dx_lst = [_np.dot(ijtj, -JTf) for ijtj in inv_JTJ_lst]  # special case
                         else:
@@ -612,13 +614,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
                         if damping_mode == 'adaptive':
                             norm_new_f_lst = [_np.dot(new_f, new_f) for new_f in new_f_lst]
-                            if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid infinite loop...
+                            if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
                                 msg = "Infinite norm of objective function!"; break
 
                             #iMin = _np.argmin(norm_new_f_lst)  # pick lowest (best) objective
-                            gain_ratio_lst = [ (norm_f - nnf) / _np.dot(dx, mu * dx - JTf) for (nnf,dx) in zip(norm_new_f_lst, dx_lst) ]
-                            iMin = _np.argmax(gain_ratio_lst) # pick highest (best) gain ratio
-                            # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx = (JT*f + fT*J) * dx
+                            gain_ratio_lst = [(norm_f - nnf) / _np.dot(dx, mu * dx - JTf)
+                                              for (nnf, dx) in zip(norm_new_f_lst, dx_lst)]
+                            iMin = _np.argmax(gain_ratio_lst)  # pick highest (best) gain ratio
+                            # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx
+                            #                                                 = (JT*f + fT*J) * dx
                             # <<more explanation>>
                             norm_new_f = norm_new_f_lst[iMin]
                             new_f = new_f_lst[iMin]
@@ -639,8 +643,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                         #DEBUG - see if cos_phi < 0.001, say, might work as a convergence criterion
                         #if damping_basis == 'singular_values':
-                        #    new_f_proj = _np.dot(Jac_Uproj, _np.dot(Jac_Uproj.T, new_f))  # projection of new_f onto solution tangent plane
-                        #    cos_phi = _np.sqrt(_np.dot(new_f_proj, new_f_proj) / norm_new_f)  # angle between residual vec and tangent plane
+                        #    # projection of new_f onto solution tangent plane
+                        #    new_f_proj = _np.dot(Jac_Uproj, _np.dot(Jac_Uproj.T, new_f))
+                        #    # angle between residual vec and tangent plane
+                        #    cos_phi = _np.sqrt(_np.dot(new_f_proj, new_f_proj) / norm_new_f)
                         #    #grad_f_norm = _np.linalg.norm(mu * dx - JTf)
                         #else:
                         #    cos_phi = 0

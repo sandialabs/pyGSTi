@@ -15,8 +15,8 @@ class GoodnessSection(_Section):
     _HTML_TEMPLATE = 'tabs/Goodness.html'
 
     @_Section.figure_factory(1)
-    def bestEstimateColorScatterPlot(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                     **kwargs):
+    def final_model_fit_colorscatter_plot(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
+                                          **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
@@ -26,17 +26,17 @@ class GoodnessSection(_Section):
         )
 
     @_Section.figure_factory(4)
-    def progressTable(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_table(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
-            Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi, 'L',
             comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory(4)
-    def progressBarPlot(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_bar_plot(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
-            Ls, switchboard.gssAllL, switchboard.gsAllL_modvi,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL_modvi,
             switchboard.modvi_ds, switchboard.objective_modvi, 'L',
             comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
@@ -46,8 +46,8 @@ class GoodnessColorBoxPlotSection(_Section):
     _HTML_TEMPLATE = 'tabs/Goodness_colorboxplot.html'
 
     @_Section.figure_factory(1)
-    def bestEstimateColorBoxPlot(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
-                                 bgcolor='white', **kwargs):
+    def final_model_fit_colorbox_plot(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
+                                      bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL_modvi,
@@ -60,7 +60,7 @@ class GoodnessColorBoxPlotSection(_Section):
         return qty
 
     @_Section.figure_factory(1)
-    def bestEstimateTVDColorBoxPlot(workspace, switchboard=None, brevity=0, comm=None, bgcolor='white', **kwargs):
+    def final_model_tvd_colorbox_plot(workspace, switchboard=None, brevity=0, comm=None, bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
             'tvd', switchboard.gss, switchboard.modvi_ds, switchboard.gsL_modvi, comm=comm, bgcolor=bgcolor
         )
@@ -69,8 +69,8 @@ class GoodnessColorBoxPlotSection(_Section):
         return qty
 
     @_Section.figure_factory()
-    def maxLSwitchboard1(workspace, switchboard=None, swLs=None, **kwargs):
-        maxLView = [False, False, False, len(swLs) > 1]
+    def maxlength_switchboard1(workspace, switchboard=None, switchbd_maxlengths=None, **kwargs):
+        maxLView = [False, False, False, len(switchbd_maxlengths) > 1]
         return switchboard.view(maxLView, 'v6')
 
 
@@ -78,8 +78,8 @@ class GoodnessScalingSection(_Section):
     _HTML_TEMPLATE = 'tabs/Goodness_scaling.html'
 
     @_Section.figure_factory(1)
-    def bestEstimateColorScatterPlot_scl(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                         **kwargs):
+    def final_model_fit_colorscatter_plot_scl(workspace, switchboard=None, linlog_percentile=5, comm=None,
+                                              bgcolor='white', **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
@@ -89,8 +89,8 @@ class GoodnessScalingSection(_Section):
         )
 
     @_Section.figure_factory(1)
-    def bestEstimateColorBoxPlot_scl(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
-                                     bgcolor='white', **kwargs):
+    def final_model_fit_colorbox_plot_scl(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
+                                          bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
@@ -103,8 +103,8 @@ class GoodnessScalingSection(_Section):
         return qty
 
     @_Section.figure_factory()
-    def bestEstimateColorHistogram_scl(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                       **kwargs):
+    def final_model_fit_histogram_scl(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
+                                      **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.eff_ds, switchboard.gsL,
@@ -114,21 +114,21 @@ class GoodnessScalingSection(_Section):
         )
 
     @_Section.figure_factory(4)
-    def progressTable_scl(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_table_scl(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
-            Ls, switchboard.gssAllL, switchboard.gsAllL,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.eff_ds, switchboard.objective, 'L', comm=comm, min_prob_clip=switchboard.mpc
         )
 
     @_Section.figure_factory(4)
-    def progressBarPlot_scl(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_bar_plot_scl(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
-            Ls, switchboard.gssAllL, switchboard.gsAllL,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.eff_ds, switchboard.objective, 'L', comm=comm, min_prob_clip=switchboard.mpc
         )
 
     @_Section.figure_factory(1)
-    def dataScalingColorBoxPlot(workspace, switchboard=None, comm=None, bgcolor='white', **kwargs):
+    def data_scaling_colorbox_plot(workspace, switchboard=None, comm=None, bgcolor='white', **kwargs):
         return workspace.ColorBoxPlot(
             'scaling', switchboard.gssFinal, switchboard.eff_ds, None,
             submatrices=switchboard.scaledSubMxsDict, comm=comm,
@@ -140,28 +140,28 @@ class GoodnessUnmodeledSection(_Section):
     _HTML_TEMPLATE = 'tabs/Goodness_unmodeled.html'
 
     @_Section.figure_factory(1)
-    def unmodeledErrorBudgetTable(workspace, switchboard=None, **kwargs):
+    def unmodeled_error_budget_table(workspace, switchboard=None, **kwargs):
         return workspace.WildcardBudgetTable(switchboard.wildcardBudget)
 
     @_Section.figure_factory(4)
-    def progressBarPlot_ume(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_bar_plot_ume(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
-            Ls, switchboard.gssAllL, switchboard.gsAllL,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.modvi_ds, switchboard.objective, 'L',
             wildcard=switchboard.wildcardBudget, comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory(4)
-    def progressTable_ume(workspace, switchboard=None, Ls=None, comm=None, **kwargs):
+    def final_model_fit_progress_table_ume(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
-            Ls, switchboard.gssAllL, switchboard.gsAllL,
+            max_lengths, switchboard.gssAllL, switchboard.gsAllL,
             switchboard.modvi_ds, switchboard.objective, 'L',
             wildcard=switchboard.wildcardBudget, comm=comm, min_prob_clip=switchboard.mpc_modvi
         )
 
     @_Section.figure_factory()
-    def bestEstimateColorHistogram_ume(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                       **kwargs):
+    def final_model_fit_histogram_ume(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
+                                      **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,
@@ -172,8 +172,8 @@ class GoodnessUnmodeledSection(_Section):
         )
 
     @_Section.figure_factory(1)
-    def bestEstimateColorBoxPlot_ume(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
-                                     bgcolor='white', **kwargs):
+    def final_model_fit_colorbox_plot_ume(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
+                                          bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,
@@ -187,8 +187,8 @@ class GoodnessUnmodeledSection(_Section):
         return qty
 
     @_Section.figure_factory(1)
-    def bestEstimateColorScatterPlot_ume(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
-                                         **kwargs):
+    def final_model_fit_colorscatter_plot_ume(workspace, switchboard=None, linlog_percentile=5, comm=None,
+                                              bgcolor='white', **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objective, switchboard.gss,
             switchboard.modvi_ds, switchboard.gsL,

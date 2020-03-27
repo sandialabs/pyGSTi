@@ -1746,7 +1746,7 @@ class TensorProdSPAMVec(SPAMVec):
                 #sometimes: return replib.SVEffectRepDense(self.todense()) ???
             else:  # "effect"
                 rep = replib.SVEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
-                                                    len(self.factors), self._fast_kron_array.shape[1], dim)
+                                                   len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "densitymx":
             if typ == "prep":
                 vec = _np.require(_np.zeros(dim, 'd'), requirements=['OWNDATA', 'C_CONTIGUOUS'])
@@ -1754,7 +1754,7 @@ class TensorProdSPAMVec(SPAMVec):
                 #sometimes: return replib.DMEffectRepDense(self.todense()) ???
             else:  # "effect"
                 rep = replib.DMEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
-                                                    len(self.factors), self._fast_kron_array.shape[1], dim)
+                                                   len(self.factors), self._fast_kron_array.shape[1], dim)
         elif evotype == "stabilizer":
             if typ == "prep":
                 #Rep is stabilizer-rep tuple, just like StabilizerSPAMVec

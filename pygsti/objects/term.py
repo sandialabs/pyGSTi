@@ -217,7 +217,7 @@ def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
 
         nQubits = int(round(_np.log2(opDim)))
         rep = replib.SBOpRepEmbedded(rep_to_embed,
-                                      nQubits, qubit_indices)
+                                     nQubits, qubit_indices)
 
     elif evotype in ("statevec", "densitymx"):
 
@@ -248,12 +248,12 @@ def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
                                 for k in range(nBlocks)], _np.int64)
         if evotype == "statevec":
             rep = replib.SVOpRepEmbedded(rep_to_embed,
-                                          numBasisEls, actionInds, blocksizes, embeddedDim,
-                                          nComponents, iActiveBlock, nBlocks, opDim)
+                                         numBasisEls, actionInds, blocksizes, embeddedDim,
+                                         nComponents, iActiveBlock, nBlocks, opDim)
         else:  # "densitymx"
             rep = replib.DMOpRepEmbedded(rep_to_embed,
-                                          numBasisEls, actionInds, blocksizes, embeddedDim,
-                                          nComponents, iActiveBlock, nBlocks, opDim)
+                                         numBasisEls, actionInds, blocksizes, embeddedDim,
+                                         nComponents, iActiveBlock, nBlocks, opDim)
     else:
         raise ValueError("Invalid evotype `%s`" % evotype)
     return rep

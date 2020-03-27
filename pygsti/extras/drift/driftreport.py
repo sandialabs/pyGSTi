@@ -442,7 +442,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None,
+    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
                  estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
@@ -452,10 +452,10 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             and maximum lengths.
         """
         super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ,
-                                                               meas, outcome, minL, times, dskey, estimatekey,
+                                                               meas, outcome, min_length, times, dskey, estimatekey,
                                                                estimator, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey,
+    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
                 estimator, showlegend, scale):
 
         if isinstance(germ, str):
@@ -472,12 +472,12 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
 
         truncatedL = []
         for L in gss.Ls:
-            if L >= minL:
+            if L >= min_length:
                 truncatedL.append(L)
 
         #numL = len(gss.Ls)
         for Lind, L in enumerate(gss.Ls):
-            if L >= minL:
+            if L >= min_length:
                 #trace_pt = None
                 for j, k, circuit in gss.get_plaquette(L, germ):
                     if j == prepind:
@@ -573,38 +573,38 @@ def _create_drift_switchboard(ws, results, gss):
 # TODO deprecate in favor of `report.factory.construct_drift_report`
 def create_drift_report(results, gss, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
-                        brevity=0, advancedOptions=None, verbosity=1):
+                        brevity=0, advanced_options=None, verbosity=1):
     """
     Creates a Drift report.
     """
     from pygsti.report.factory import construct_drift_report
     # Wrap a call to the new factory method
-    advancedOptions = advancedOptions or {}
-    ws = ws or _ws.Workspace(advancedOptions.get('cachefile', None))
+    advanced_options = advanced_options or {}
+    ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
     report = construct_drift_report(
         results, gss, title, ws, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision, auto_open=auto_open,
                 verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity

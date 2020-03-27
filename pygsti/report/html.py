@@ -46,7 +46,7 @@ def table(custom_headings, col_headings_formatted, rows, spec):
     if custom_headings is not None \
             and "html" in custom_headings:
         html += custom_headings['html'] % {'tableclass': tableclass,
-                                          'tableid': tableID}
+                                           'tableid': tableID}
     else:
         html += "<table"
         if tableclass: html += ' class="%s"' % tableclass

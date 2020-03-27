@@ -224,7 +224,7 @@ def circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=1, mode
 
 
 def circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gates='all',
-                                  two_q_gates='all', modelname='clifford'):
+                                   two_q_gates='all', modelname='clifford'):
     """
     Samples a random circuit layer by eliminating qubits one by one. This sampler works
     with any connectivity, but the expected number of 2-qubit gates in a layer depends
@@ -405,7 +405,7 @@ def circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one
 
 
 def circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_prob='uniform', two_q_prob=1.0,
-                               one_q_gate_names='all', modelname='clifford'):
+                                 one_q_gate_names='all', modelname='clifford'):
     """
     Samples a random circuit layer using the specified list of "compatible two-qubit gates"
     (co2_q_gates). That is, the user inputs a list (`co2_q_gates`) specifying 2-qubit gates that are
@@ -565,7 +565,7 @@ def circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_p
 
 
 def circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_names='all', pdist='uniform',
-                               modelname='clifford'):
+                                 modelname='clifford'):
     """
     Samples a random circuit layer containing only 1-qubit gates. The allowed
     1-qubit gates are specified by `one_q_gate_names`, and the 1-qubit gates are
@@ -2331,8 +2331,8 @@ def mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
 
 
 def one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=False, interleaved=None,
-                                 group_inverse_only=False, group_prep=False, compilation=None,
-                                 generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
+                                  group_inverse_only=False, group_prep=False, compilation=None,
+                                  generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
     """
     Makes a random 1-qubit RB sequence, with RB over an arbitrary group and with a range of other
     options that allow circuits for many types of RB to be generated, including:

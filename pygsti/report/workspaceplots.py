@@ -2652,12 +2652,12 @@ class FitComparisonBarPlot(WorkspacePlot):
         if np_by_x is None:
             try:
                 np_by_x = [mdl.num_nongauge_params() if (mdl is not None) else 0
-                         for mdl in model_by_x]  # Note: models can be None => N/A
+                           for mdl in model_by_x]  # Note: models can be None => N/A
             except:  # numpy can throw a LinAlgError
                 _warnings.warn(("FigComparisonBarPlot could not obtain number of"
                                 " *non-gauge* parameters - using total params instead"))
                 np_by_x = [mdl.num_params() if (mdl is not None) else 0
-                         for mdl in model_by_x]
+                           for mdl in model_by_x]
 
         if isinstance(dataset_by_x, _objs.DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)

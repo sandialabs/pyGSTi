@@ -694,7 +694,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
 
     printer = _VerbosityPrinter.build_printer(verbosity)
     template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                     "templates", template_filename)
+                                      "templates", template_filename)
     output_dir = _os.path.dirname(output_filename)
     output_base = _os.path.splitext(_os.path.basename(output_filename))[0]
 

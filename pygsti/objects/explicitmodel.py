@@ -201,7 +201,7 @@ class ExplicitOpModel(_mdl.OpModel):
         simplified_preps = self.preps
 
         return _explicitcalc.ExplicitOpModelCalc(self.dim, simplified_preps, simplified_ops,
-                                                  simplified_effects, self.num_params())
+                                                 simplified_effects, self.num_params())
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
     #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
@@ -1191,7 +1191,7 @@ class ExplicitOpModel(_mdl.OpModel):
         copy_into.operations = self.operations.copy(copy_into)
         copy_into.instruments = self.instruments.copy(copy_into)
         copy_into._shlp = _sh.MemberDictSimplifierHelper(copy_into.preps, copy_into.povms, copy_into.instruments,
-                                                        self.state_space_labels)
+                                                         self.state_space_labels)
 
         copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 

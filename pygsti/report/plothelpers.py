@@ -430,8 +430,8 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
 
 def _compute_probabilities(gss, model, dataset, prob_clip_interval=(-1e6, 1e6),
-                          check=False, op_label_aliases=None,
-                          comm=None, smartc=None, wildcard=None):
+                           check=False, op_label_aliases=None,
+                           comm=None, smartc=None, wildcard=None):
     """
     Returns a dictionary of probabilities for each gate sequence in
     CircuitStructure `gss`.
@@ -745,7 +745,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 
 
 def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return_all=False,
-                comm=None, smartc=None, min_prob_clip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
+                  comm=None, smartc=None, min_prob_clip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `model` model at the "points" (sequences)

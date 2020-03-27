@@ -997,7 +997,8 @@ def compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iteratio
             circuit = circuit.copy(editable=True)
             if qubit_labels is None:
                 # ,identity=pspec.identity
-                circuit.change_gate_library(pspec.compilations['paulieq'], one_q_gate_relations=pspec.oneQgate_relations)
+                circuit.change_gate_library(pspec.compilations['paulieq'],
+                                            one_q_gate_relations=pspec.oneQgate_relations)
             else:
                 # identity=pspec.identity,
                 circuit.change_gate_library(pspec.compilations['paulieq'], allowed_filter=set(qubit_labels),

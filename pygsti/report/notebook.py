@@ -52,7 +52,7 @@ class Notebook(object):
             Name of an existing notebook file to build from
         '''
         template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                         'templates', template_filename)
+                                          'templates', template_filename)
         with open(str(template_filename), 'r') as infile:
             notebookDict = _json.load(infile)
         notebookDict['cells'].extend([c.to_json_dict() for c in self.cells])

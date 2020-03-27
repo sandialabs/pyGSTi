@@ -767,7 +767,7 @@ class Benchmarker(object):
                         rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
     def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, sampler=None,
-                           twoQgateprob=None, prefilter=None, benchmarktype=None):
+                           two_qubit_gate_prob=None, prefilter=None, benchmarktype=None):
         """
         todo
 
@@ -806,8 +806,8 @@ class Benchmarker(object):
                             keep = False
 
                 if keep:
-                    if twoQgateprob is not None:
-                        if not _np.allclose(twoQgateprob, spec.get_twoQgate_rate()):
+                    if two_qubit_gate_prob is not None:
+                        if not _np.allclose(two_qubit_gate_prob, spec.get_twoQgate_rate()):
                             keep = False
 
                 if keep:

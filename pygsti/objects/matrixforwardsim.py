@@ -1797,7 +1797,7 @@ class MatrixForwardSimulator(ForwardSimulator):
     #                                num_e_params=self.tot_e_params)
 
     def _hprobs_from_rho_e(self, spam_tuple, rho, e, gs, d_gs1, d_gs2, h_gs, scale_vals,
-                          wrt_slice1=None, wrt_slice2=None):
+                           wrt_slice1=None, wrt_slice2=None):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
 
         rholabel, elabel = spam_tuple
@@ -2397,13 +2397,15 @@ class MatrixForwardSimulator(ForwardSimulator):
         """
 
         if wrt_filter1 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
+                "Cannot specify both wrt_filter and wrt_block_size"
             wrtSlice1 = _slct.list_to_slice(wrt_filter1)
         else:
             wrtSlice1 = None
 
         if wrt_filter2 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
+                "Cannot specify both wrt_filter and wrt_block_size"
             wrtSlice2 = _slct.list_to_slice(wrt_filter2)
         else:
             wrtSlice2 = None
@@ -2433,7 +2435,8 @@ class MatrixForwardSimulator(ForwardSimulator):
                 rho, E = self._rho_e_from_spam_tuple(spam_tuple)
 
                 if pr_mx_to_fill is not None:
-                    _fas(pr_mx_to_fill, [f_inds], self._probs_from_rho_e(rho, E, Gs[g_inds], scaleVals[g_inds]), add=sum_into)
+                    _fas(pr_mx_to_fill, [f_inds], self._probs_from_rho_e(rho, E, Gs[g_inds], scaleVals[g_inds]),
+                         add=sum_into)
 
                 if deriv1_mx_to_fill is not None:
                     _fas(deriv1_mx_to_fill, [f_inds, pslc1], self._dprobs_from_rho_e(

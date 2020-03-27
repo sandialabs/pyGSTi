@@ -249,7 +249,7 @@ class SpamParametersTable(WorkspaceTable):
 
         for gstitle, model in zip(titles, models):
             cri = confidence_region_info if (confidence_region_info
-                                           and confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
+                                             and confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
             DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
             assert(DPs.shape[1] == len(effectLbls)), \
@@ -811,7 +811,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2,
                             confidence_region_info)
                         el2 = _reportables.evaluate_opfn_by_name(
-                            metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl, confidence_region_info)
+                            metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
+                            confidence_region_info)
                         el = _objs.reportableqty.minimum(el1, el2)
                     except Exception:
                         _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
@@ -1807,7 +1808,8 @@ class OldRotationAxisTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(OldRotationAxisTable, self).__init__(ws, self._create, model, confidence_region_info, show_axis_angle_err_bars)
+        super(OldRotationAxisTable, self).__init__(ws, self._create, model, confidence_region_info,
+                                                   show_axis_angle_err_bars)
 
     def _create(self, model, confidence_region_info, show_axis_angle_err_bars):
 
@@ -2036,7 +2038,8 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
                     if isinstance(gl, _objs.Label) or isinstance(gl, str):
-                        rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, target_model, gl), confidence_region_info)
+                        rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, target_model, gl),
+                                        confidence_region_info)
                     else:
                         rel_evals = _ev(_reportables.Rel_circuit_eigenvalues(
                             model, target_model, gl), confidence_region_info)
@@ -2458,7 +2461,7 @@ class CircuitTable(WorkspaceTable):
             html_head += "</thead><tbody>"
             table = _ReportTable(colHeadings, formatters,
                                  custom_header={'latex': latex_head,
-                                               'html': html_head})
+                                                'html': html_head})
 
         formatters = (('Normal',) + ('Circuit',) * len(gs_lists)) * n_cols
 
@@ -2595,7 +2598,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
             table = _ReportTable(colHeadings, formatters,
                                  custom_header={'latex': latex_head,
-                                               'html': html_head})
+                                                'html': html_head})
         else:
             table = _ReportTable(colHeadings, formatters)
 

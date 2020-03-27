@@ -750,13 +750,15 @@ class MapForwardSimulator(ForwardSimulator):
         """
 
         if wrt_filter1 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
+                "Cannot specify both wrt_filter and wrt_block_size"
             wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
         else:
             wrtSlice1 = None
 
         if wrt_filter2 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None)  # Cannot specify both wrt_filter and wrt_block_size
+            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
+                "Cannot specify both wrt_filter and wrt_block_size"
             wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
         else:
             wrtSlice2 = None
@@ -814,7 +816,7 @@ class MapForwardSimulator(ForwardSimulator):
 
                 #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
                 # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                derivMxToFill = deriv1_mx_to_fill if (deriv1_mx_to_fill is not None) else deriv2_mx_to_fill  # first non-None
+                derivMxToFill = deriv1_mx_to_fill if (deriv1_mx_to_fill is not None) else deriv2_mx_to_fill  # not None
 
                 for iBlk1 in myBlk1Indices:
                     paramSlice1 = blocks1[iBlk1]
@@ -1100,7 +1102,8 @@ class MapForwardSimulator(ForwardSimulator):
 
         def chi2(dest_mx, dest_indices, num_tot_outcomes, eval_sub_tree, dataset_rows, fill_comm):
             return replib.DM_mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, eval_sub_tree,
-                                                  dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
+                                                  dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
+                                                  fill_comm)
 
         return self.bulk_fill_timedep_deriv(eval_tree, dataset, ds_circuits_to_use, num_total_outcomes,
                                             mx_to_fill, dchi2, chi2_mx_to_fill, chi2,

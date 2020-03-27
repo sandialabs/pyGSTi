@@ -980,7 +980,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idle_str, model, single_q_f
     if effect_lbls is None:
         povmLbl = model._shlp.get_default_povm_lbl(sslbls=None)
         effect_lbls = [_Lbl("%s_%s" % (povmLbl, l))
-                      for l in model._shlp.get_effect_labels_for_povm(povmLbl)]
+                       for l in model._shlp.get_effect_labels_for_povm(povmLbl)]
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -1790,7 +1790,8 @@ def tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weigh
     return final_fidpairs
 
 
-def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, max_len, template_germ, clouds, qubit_labels):
+def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, max_len, template_germ,
+                        clouds, qubit_labels):
     """
     Take a "cloud template", giving the fiducial pairs for a germ power acting
     on qubits labeled 0 to `cloudsize-1`, and map those fiducial pairs into
@@ -1914,7 +1915,8 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, max
                 merge_into(germPowerStr, germPowerStr_qubits, germPower)
 
             germs.append(_objs.Circuit(germStr, line_labels=qubit_labels))
-            sequences.append((_objs.Circuit(prepStr + germPowerStr + measStr, line_labels=qubit_labels), max_len, germs[-1],
+            sequences.append((_objs.Circuit(prepStr + germPowerStr + measStr, line_labels=qubit_labels),
+                              max_len, germs[-1],
                               _objs.Circuit(prepStr, line_labels=qubit_labels),
                               _objs.Circuit(measStr, line_labels=qubit_labels)))
             # circuit, max_len, germ, prepFidIndex, measFidIndex??
@@ -2103,7 +2105,8 @@ def create_standard_localnoise_sequences(n_qubits, max_lengths, single_q_fiducia
     return create_standard_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
                                                 gate_names, nonstd_gate_unitaries,
                                                 availability, geometry,
-                                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
+                                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0,
+                                                extra_gate_weight=0,
                                                 paramroot=paramroot, sparse=sparse, verbosity=verbosity,
                                                 cache=cache, idle_only=idle_only,
                                                 idt_pauli_dicts=idt_pauli_dicts, algorithm=algorithm,

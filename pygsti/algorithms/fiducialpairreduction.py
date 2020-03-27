@@ -20,7 +20,7 @@ from ..tools import slicetools as _slct
 from .. import objects as _objs
 
 
-def _nCr(n, r):
+def _nCr(n, r):                                                                           # noqa
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
     #f = _math.factorial; return f(n) / f(r) / f(n-r)
     return _spspecial.comb(n, r)
@@ -130,7 +130,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_strs, effect_strs, germ_li
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
     pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                     for prepLbl, povmLbl in pre_povm_tuples]
+                       for prepLbl, povmLbl in pre_povm_tuples]
 
     def get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
@@ -358,7 +358,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_strs, effect_strs
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
     pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                     for prepLbl, povmLbl in pre_povm_tuples]
+                       for prepLbl, povmLbl in pre_povm_tuples]
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
 
@@ -545,7 +545,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_strs, effect_strs, germ_li
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
     pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                     for prepLbl, povmLbl in pre_povm_tuples]
+                       for prepLbl, povmLbl in pre_povm_tuples]
 
     nModelParams = target_model.num_params()
 
