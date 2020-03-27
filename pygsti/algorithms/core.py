@@ -39,8 +39,8 @@ FLOATSIZE = 8  # TODO: better way?
 ###################################################################################
 
 
-def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases=None,
-            guessModelForGauge=None, svdTruncateTo=None, verbosity=0):
+def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
+            guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
 
@@ -49,39 +49,39 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     dataset : DataSet
         The data used to generate the LGST estimates
 
-    prepStrs,effectStrs : list of Circuits
+    prep_fiducials,effect_fiducials : list of Circuits
         Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetModel : Model
+    target_model : Model
         A model used to specify which operation labels should be estimated, a
         guess for which gauge these estimates should be returned in, and
         used to simplify operation sequences.
 
-    opLabels : list, optional
+    op_labels : list, optional
         A list of which operation labels (or aliases) should be estimated.
-        Overrides the operation labels in targetModel.
+        Overrides the operation labels in target_model.
         e.g. ['Gi','Gx','Gy','Gx2']
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
         the dataset.  Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        e.g. op_label_aliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
-    guessModelForGauge : Model, optional
+    guess_model_for_gauge : Model, optional
         A model used to compute a gauge transformation that is applied to
         the LGST estimates before they are returned.  This gauge transformation
         is computed such that if the estimated gates matched the model given,
         then the operation matrices would match, i.e. the gauge would be the same as
         the model supplied.
-        Defaults to targetModel.
+        Defaults to target_model.
 
-    svdTruncateTo : int, optional
+    svd_truncate_to : int, optional
         The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetModel`.
+        Defaults to dimension of `target_model`.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -117,42 +117,43 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     # B       = (gsDim, nRhoSpecs)
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    if targetModel is None:
+    if target_model is None:
         raise ValueError("Must specify a target model for LGST!")
 
     #printer.log('', 2)
     printer.log("--- LGST ---", 1)
 
     #Process input parameters
-    if opLabels is not None:
-        opLabelsToEstimate = opLabels
+    if op_labels is not None:
+        op_labelsToEstimate = op_labels
     else:
-        opLabelsToEstimate = list(targetModel.operations.keys()) + \
-            list(targetModel.instruments.keys())
+        op_labelsToEstimate = list(target_model.operations.keys()) + \
+            list(target_model.instruments.keys())
 
-    rhoLabelsToEstimate = list(targetModel.preps.keys())
-    povmLabelsToEstimate = list(targetModel.povms.keys())
+    rhoLabelsToEstimate = list(target_model.preps.keys())
+    povmLabelsToEstimate = list(target_model.povms.keys())
 
-    if guessModelForGauge is None:
-        guessModelForGauge = targetModel
+    if guess_model_for_gauge is None:
+        guess_model_for_gauge = target_model
 
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
     # are determined by the number of outcomes obtained by compiling the
     # all prepStr * effectStr sequences:
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        targetModel, prepStrs, effectStrs)
+        target_model, prep_fiducials, effect_fiducials)
     K = min(nRhoSpecs, nESpecs)
 
     #Create truncation projector -- just trims columns (Pj) or rows (Pjt) of a matrix.
     # note K = min(nRhoSpecs,nESpecs), and dot(Pjt,Pj) == identity(trunc)
-    if svdTruncateTo is None: svdTruncateTo = targetModel.dim
-    trunc = svdTruncateTo if svdTruncateTo > 0 else K
+    if svd_truncate_to is None: svd_truncate_to = target_model.dim
+    trunc = svd_truncate_to if svd_truncate_to > 0 else K
     assert(trunc <= K)
     Pj = _np.zeros((K, trunc), 'd')  # shape = (K, trunc) projector with only trunc columns
     for i in range(trunc): Pj[i, i] = 1.0
     Pjt = _np.transpose(Pj)         # shape = (trunc, K)
 
-    ABMat = _constructAB(prepStrs, effectStrs, targetModel, dataset, opLabelAliases)  # shape = (nESpecs, nRhoSpecs)
+    ABMat = _construct_ab(prep_fiducials, effect_fiducials, target_model, dataset, op_label_aliases)
+    # shape = (nESpecs, nRhoSpecs)
 
     U, s, V = _np.linalg.svd(ABMat, full_matrices=False)
     printer.log("Singular values of I_tilde (truncating to first %d of %d) = " % (trunc, len(s)), 2)
@@ -172,42 +173,42 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     #print "DEBUG: Evals(ABmat) = \n",_np.linalg.eigvals(ABMat)
     rankAB = _np.linalg.matrix_rank(ABMat_p)
     if rankAB < ABMat_p.shape[0]:
-        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prepStrs and/or effectStrs, "
-                         "or decrease svdTruncateTo" % (rankAB, ABMat_p.shape[0]))
+        raise ValueError("LGST AB matrix is rank %d < %d. Choose better prep_fiducials and/or effect_fiducials, "
+                         "or decrease svd_truncate_to" % (rankAB, ABMat_p.shape[0]))
 
     invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0 / s), Pj))  # (trunc,trunc)
     # check inverse is correct (TODO: comment out later)
     assert(_np.linalg.norm(_np.linalg.inv(ABMat_p) - invABMat_p) < 1e-8)
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
-    if svdTruncateTo is None or svdTruncateTo == targetModel.dim:  # use target sslbls and basis
-        lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
+    if svd_truncate_to is None or svd_truncate_to == target_model.dim:  # use target sslbls and basis
+        lgstModel = _objs.ExplicitOpModel(target_model.state_space_labels, target_model.basis)
     else:  # construct a default basis for the requested dimension
         # - just act on diagonal density mx
-        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svdTruncateTo)
-        lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svdTruncateTo)], dumb_basis)
+        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svd_truncate_to)
+        lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
-    for opLabel in opLabelsToEstimate:
-        Xs = _constructXMatrix(prepStrs, effectStrs, targetModel, (opLabel,),
-                               dataset, opLabelAliases)  # shape (nVariants, nESpecs, nRhoSpecs)
+    for opLabel in op_labelsToEstimate:
+        Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
+                                 dataset, op_label_aliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
         X_ps = []
         for X in Xs:
-            # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
+            # shape (K,K) this should be close to rank "svd_truncate_to" (which is <= K) -- TODO: check this
             X2 = _np.dot(Ud, _np.dot(X, Vd))
 
-            #if svdTruncateTo > 0:
-            #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (opLabel,svdTruncateTo), 3)
+            #if svd_truncate_to > 0:
+            #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (opLabel,svd_truncate_to), 3)
             #    if printer.verbosity >= 3:
             #        _tools.print_mx(X2)
             X_p = _np.dot(Pjt, _np.dot(X2, Pj))  # truncate X => X', shape (trunc, trunc)
             X_ps.append(X_p)
 
-        if opLabel in targetModel.instruments:
+        if opLabel in target_model.instruments:
             #Note: we assume leading dim of X matches instrument element ordering
             lgstModel.instruments[opLabel] = _objs.Instrument(
                 [(lbl, _np.dot(invABMat_p, X_ps[i]))
-                 for i, lbl in enumerate(targetModel.instruments[opLabel])])
+                 for i, lbl in enumerate(target_model.instruments[opLabel])])
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
@@ -220,11 +221,11 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     #Form POVMs
     for povmLabel in povmLabelsToEstimate:
         povm_effects = []
-        for effectLabel in targetModel.povms[povmLabel]:
+        for effectLabel in target_model.povms[povmLabel]:
             EVec = _np.zeros((1, nRhoSpecs))
-            for i, rhostr in enumerate(prepStrs):
+            for i, rhostr in enumerate(prep_fiducials):
                 circuit = rhostr + _objs.Circuit((povmLabel,), line_labels=rhostr.line_labels)
-                if circuit not in dataset and len(targetModel.povms) == 1:
+                if circuit not in dataset and len(target_model.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
                 dsRow = dataset[circuit]
@@ -238,13 +239,13 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs, 1)); eoff = 0
-        for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
+        for i, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
             circuit = _objs.Circuit((prepLabel,), line_labels=estr.line_labels) + estr
-            if circuit not in dataset and len(targetModel.preps) == 1:
+            if circuit not in dataset and len(target_model.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
             dsRow = dataset[circuit]
-            rhoVec[eoff:eoff + povmLen, 0] = [dsRow.fraction((ol,)) for ol in targetModel.povms[povmLbl]]
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow.fraction((ol,)) for ol in target_model.povms[povmLbl]]
             eoff += povmLen
         rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
@@ -252,8 +253,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
 
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
-    if guessModelForGauge is not None:
-        guessTrunc = guessModelForGauge.get_dimension()  # the truncation to apply to it's B matrix
+    if guess_model_for_gauge is not None:
+        guessTrunc = guess_model_for_gauge.get_dimension()  # the truncation to apply to it's B matrix
         # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
         assert(guessTrunc <= trunc)
 
@@ -261,10 +262,10 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         for i in range(guessTrunc): guessPj[i, i] = 1.0
         # guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
 
-        AMat = _constructA(effectStrs, guessModelForGauge)    # shape = (nESpecs, gsDim)
+        AMat = _construct_a(effect_fiducials, guess_model_for_gauge)    # shape = (nESpecs, gsDim)
         # AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
 
-        BMat = _constructB(prepStrs, guessModelForGauge)  # shape = (gsDim, nRhoSpecs)
+        BMat = _construct_b(prep_fiducials, guess_model_for_gauge)  # shape = (gsDim, nRhoSpecs)
         BMat_p = _np.dot(_np.dot(BMat, Vd), guessPj)  # truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
 
         guess_ABMat = _np.dot(AMat, BMat)
@@ -292,25 +293,25 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             lgstModel.transform(ggEl)
 
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
-        # guessModelForGauge, but we only know how to do this when the dimensions of the target and
+        # guess_model_for_gauge, but we only know how to do this when the dimensions of the target and
         # created model match.  If they don't, it doesn't make sense to increase the target model
         # dimension, as this will generally not preserve its parameterization.
         if guessTrunc == trunc:
-            for opLabel in opLabelsToEstimate:
-                if opLabel in guessModelForGauge.operations:
-                    new_op = guessModelForGauge.operations[opLabel].copy()
+            for opLabel in op_labelsToEstimate:
+                if opLabel in guess_model_for_gauge.operations:
+                    new_op = guess_model_for_gauge.operations[opLabel].copy()
                     _objs.operation.optimize_operation(new_op, lgstModel.operations[opLabel])
                     lgstModel.operations[opLabel] = new_op
 
             for prepLabel in rhoLabelsToEstimate:
-                if prepLabel in guessModelForGauge.preps:
-                    new_vec = guessModelForGauge.preps[prepLabel].copy()
+                if prepLabel in guess_model_for_gauge.preps:
+                    new_vec = guess_model_for_gauge.preps[prepLabel].copy()
                     _objs.spamvec.optimize_spamvec(new_vec, lgstModel.preps[prepLabel])
                     lgstModel.preps[prepLabel] = new_vec
 
             for povmLabel in povmLabelsToEstimate:
-                if povmLabel in guessModelForGauge.povms:
-                    povm = guessModelForGauge.povms[povmLabel]
+                if povmLabel in guess_model_for_gauge.povms:
+                    povm = guess_model_for_gauge.povms[povmLabel]
                     new_effects = []
 
                     if isinstance(povm, _objs.TPPOVM):  # preserve *identity* of guess
@@ -340,10 +341,10 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                             new_effects.append((effectLabel, new_vec))
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
 
-            #Also convey default gauge group & calc class from guessModelForGauge
+            #Also convey default gauge group & calc class from guess_model_for_gauge
             lgstModel.default_gauge_group = \
-                guessModelForGauge.default_gauge_group
-            lgstModel._calcClass = guessModelForGauge._calcClass
+                guess_model_for_gauge.default_gauge_group
+            lgstModel._calcClass = guess_model_for_gauge._calcClass
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -356,26 +357,26 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     return lgstModel
 
 
-def _lgst_matrix_dims(mdl, prepStrs, effectStrs):
+def _lgst_matrix_dims(mdl, prep_fiducials, effect_fiducials):
     assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
-    nRhoSpecs = len(prepStrs)  # no instruments allowed in prepStrs
+    nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
     povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
-                for s in effectStrs]
+                for s in effect_fiducials]
     povmLens = ([len(mdl.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
 
-def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
+def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_aliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        model, prepStrs, effectStrs)
+        model, prep_fiducials, effect_fiducials)
 
     AB = _np.empty((nESpecs, nRhoSpecs))
     eoff = 0
-    for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
-        for j, rhostr in enumerate(prepStrs):
+    for i, (estr, povmLen) in enumerate(zip(effect_fiducials, povmLens)):
+        for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
+            dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
@@ -388,22 +389,22 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
     return AB
 
 
-def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabelAliases=None):
+def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple, dataset, op_label_aliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        model, prepStrs, effectStrs)
+        model, prep_fiducials, effect_fiducials)
 
     nVariants = 1
-    for g in opLabelTuple:
+    for g in op_label_tuple:
         if g in model.instruments:
             nVariants *= len(model.instruments[g])
 
     X = _np.empty((nVariants, nESpecs, nRhoSpecs))  # multiple "X" matrix variants b/c of instruments
 
     eoff = 0  # effect-dimension offset
-    for i, (estr, povmLen) in enumerate(zip(effectStrs, povmLens)):
-        for j, rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + _objs.Circuit(opLabelTuple, line_labels=rhostr.line_labels) + estr
-            dsStr = opLabelString.replace_layers_with_aliases(opLabelAliases)
+    for i, (estr, povmLen) in enumerate(zip(effect_fiducials, povmLens)):
+        for j, rhostr in enumerate(prep_fiducials):
+            opLabelString = rhostr + _objs.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
+            dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
             raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
@@ -419,16 +420,16 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     return X
 
 
-def _constructA(effectStrs, mdl):
+def _construct_a(effect_fiducials, mdl):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
-        mdl, [], effectStrs)
+        mdl, [], effect_fiducials)
 
     dim = mdl.get_dimension()
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
 
     basis_st = _np.zeros((dim, 1), 'd'); eoff = 0
-    for k, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
+    for k, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
         #Build fiducial < E_k | := < EVec[ effectSpec[0] ] | Circuit(effectSpec[1:])
         #st = dot(Ek.T, Estr) = ( dot(Estr.T,Ek)  ).T
         #A[k,:] = st[0,:] # E_k == kth row of A
@@ -444,8 +445,8 @@ def _constructA(effectStrs, mdl):
     return A
 
 
-def _constructB(prepStrs, mdl):
-    n = len(prepStrs)
+def _construct_b(prep_fiducials, mdl):
+    n = len(prep_fiducials)
     dim = mdl.get_dimension()
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
@@ -459,7 +460,7 @@ def _constructB(prepStrs, mdl):
     mdl.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
         [("E%d" % i, E) for i, E in enumerate(basis_Es)])
 
-    for k, rhostr in enumerate(prepStrs):
+    for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
         probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
@@ -469,18 +470,18 @@ def _constructB(prepStrs, mdl):
     return B
 
 
-def _constructTargetAB(prepStrs, effectStrs, targetModel):
+def _construct_target_ab(prep_fiducials, effect_fiducials, target_model):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        targetModel, prepStrs, effectStrs)
+        target_model, prep_fiducials, effect_fiducials)
 
     AB = _np.empty((nESpecs, nRhoSpecs))
     eoff = 0
-    for i, (estr, povmLbl, povmLen) in enumerate(zip(effectStrs, povmLbls, povmLens)):
-        for j, rhostr in enumerate(prepStrs):
+    for i, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
+        for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            probs = targetModel.probs(opLabelString)
+            probs = target_model.probs(opLabelString)
             AB[eoff:eoff + povmLen, j] = \
-                [probs[(ol,)] for ol in targetModel.povms[povmLbl]]
+                [probs[(ol,)] for ol in target_model.povms[povmLbl]]
             # outcomes (keys of probs) should just be povm effect labels
             # since no instruments are allowed in fiducial strings.
         eoff += povmLen
@@ -488,7 +489,7 @@ def _constructTargetAB(prepStrs, effectStrs, targetModel):
     return AB
 
 
-def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetModel):
+def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model):
     """
     Returns the rank and singular values of the Gram matrix for a dataset.
 
@@ -497,10 +498,10 @@ def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetModel):
     dataset : DataSet
         The data used to populate the Gram matrix
 
-    prepStrs, effectStrs : list
+    prep_fiducials, effect_fiducials : list
         Lists of preparation and measurement fiducial sequences.
 
-    targetModel : Model
+    target_model : Model
         A model used to make sense of operation sequence elements, and to compute the
         theoretical gram matrix eigenvalues (returned as `svalues_target`).
 
@@ -512,13 +513,13 @@ def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetModel):
         the singular values of the Gram matrix
     svalues_target : numpy array
         the corresponding singular values of the Gram matrix
-        generated by targetModel.
+        generated by target_model.
     """
-    if targetModel is None: raise ValueError("Must supply `targetModel`")
-    ABMat = _constructAB(prepStrs, effectStrs, targetModel, dataset)
+    if target_model is None: raise ValueError("Must supply `target_model`")
+    ABMat = _construct_ab(prep_fiducials, effect_fiducials, target_model, dataset)
     _, s, _ = _np.linalg.svd(ABMat)
 
-    ABMat_tgt = _constructTargetAB(prepStrs, effectStrs, targetModel)
+    ABMat_tgt = _construct_target_ab(prep_fiducials, effect_fiducials, target_model)
     _, s_tgt, _ = _np.linalg.svd(ABMat_tgt)
 
     return _np.linalg.matrix_rank(ABMat), s, s_tgt  # _np.linalg.eigvals(ABMat)
@@ -528,7 +529,7 @@ def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetModel):
 #                 Long sequence GST
 ##################################################################################
 
-def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function_builder,
+def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
                resource_alloc, cache, verbosity=0):
     """
     Performs Gate Set Tomography on the dataset by optimizing the objective function
@@ -539,11 +540,11 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
     dataset : DataSet
         The dataset to obtain counts from.
 
-    startModel : Model
+    start_model : Model
         The Model used as a starting point for the least-squares
         optimization.
 
-    circuitsToUse : list of (tuples or Circuits)
+    circuit_list : list of (tuples or Circuits)
         Each tuple contains operation labels and specifies a operation sequence whose
         probabilities are considered when trying to least-squares-fit the
         probabilities given in the dataset.
@@ -581,7 +582,7 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     tStart = _time.time()
-    mdl = startModel  # .copy()  # to allow caches in startModel to be retained
+    mdl = start_model  # .copy()  # to allow caches in start_model to be retained
 
     if comm is not None:
         #assume all models at least have same parameters - so just compare vecs
@@ -590,7 +591,7 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
-    objective = objective_function_builder.build(mdl, dataset, circuitsToUse, resource_alloc, cache, printer)
+    objective = objective_function_builder.build(mdl, dataset, circuit_list, resource_alloc, cache, printer)
     profiler.add_time("do_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
@@ -603,8 +604,8 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
-    #if targetModel is not None:
-    #  target_vec = targetModel.to_vector()
+    #if target_model is not None:
+    #  target_vec = target_model.to_vector()
     #  targetErrVec = _objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
     profiler.add_time("do_mc2gst: total time", tStart)
@@ -614,7 +615,7 @@ def do_gst_fit(dataset, startModel, circuitsToUse, optimizer, objective_function
     return opt_result, mdl
 
 
-def do_iterative_gst(dataset, startModel, circuitLists,
+def do_iterative_gst(dataset, start_model, circuit_lists,
                      optimizer, iteration_objfn_builders, final_objfn_builders,
                      resource_alloc, verbosity=0):
     """
@@ -625,11 +626,11 @@ def do_iterative_gst(dataset, startModel, circuitLists,
     dataset : DataSet
         The data used to generate MLGST gate estimates
 
-    startModel : Model
+    start_model : Model
         The Model used as a starting point for the least-squares
         optimization.
 
-    circuitLists : list of lists of (tuples or Circuits)
+    circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the operation sequences to be used in the i-th iteration
         of the optimization.  Each element of these lists is a circuit, specifed as
         either a Circuit object or as a tuple of operation labels (but all must be specified
@@ -669,12 +670,12 @@ def do_iterative_gst(dataset, startModel, circuitLists,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     models = []; optimums = []
-    mdl = startModel.copy(); nIters = len(circuitLists)
+    mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
 
     with printer.progress_logging(1):
-        for (i, circuitsToEstimate) in enumerate(circuitLists):
+        for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
             if isinstance(circuitsToEstimate, _objfns.BulkCircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
@@ -684,7 +685,7 @@ def do_iterative_gst(dataset, startModel, circuitLists,
 
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
-            mdl.basis = startModel.basis  # set basis in case of CPTP constraints (needed?)
+            mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
             cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
@@ -698,12 +699,12 @@ def do_iterative_gst(dataset, startModel, circuitLists,
             printer.log("Iteration %d took %.1fs\n" % (i + 1, tNxt - tRef), 2)
             tRef = tNxt
 
-            if i == len(circuitLists) - 1:  # the last iteration
+            if i == len(circuit_lists) - 1:  # the last iteration
                 printer.log("Last iteration:", 2)
 
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
-                    mdl.basis = startModel.basis
+                    mdl.basis = start_model.basis
                     opt_result, mdl = do_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
                                                  resource_alloc, cache, printer - 1)
                     profiler.add_time('do_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
@@ -754,7 +755,7 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
         #Get number of maximal-model parameter ("dataset params") if needed for print messages
         # -> number of independent parameters in dataset (max. model # of params)
         tm = _time.time()
-        nDataParams = objective.get_num_data_params()  #TODO - cache this somehow in term-based calcs...
+        nDataParams = objective.get_num_data_params()  # TODO - cache this somehow in term-based calcs...
         profiler.add_time("do_gst_fit: num data params", tm)
 
         chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
@@ -825,14 +826,14 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
 ###################################################################################
 
 
-def find_closest_unitary_opmx(operationMx):
+def find_closest_unitary_opmx(operation_mx):
     """
     Get the closest operation matrix (by maximizing fidelity)
-      to operationMx that describes a unitary quantum gate.
+      to operation_mx that describes a unitary quantum gate.
 
     Parameters
     ----------
-    operationMx : numpy array
+    operation_mx : numpy array
         The operation matrix to act on.
 
     Returns
@@ -841,18 +842,18 @@ def find_closest_unitary_opmx(operationMx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
-    # d = _np.sqrt(operationMx.shape[0])
+    gate_JMx = _tools.jamiolkowski_iso(operation_mx, choi_mx_basis="std")
+    # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
-    def _get_gate_mx_1q(basisVec):  # 1 qubit version
-        return _pc.single_qubit_gate(basisVec[0],
-                                     basisVec[1],
-                                     basisVec[2])
+    def _get_gate_mx_1q(basis_vec):  # 1 qubit version
+        return _pc.single_qubit_gate(basis_vec[0],
+                                     basis_vec[1],
+                                     basis_vec[2])
 
-    if operationMx.shape[0] == 4:
+    if operation_mx.shape[0] == 4:
         #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)
         initialBasisVec = [0, 0, 0]  # start with I until we figure out how to extract target unitary
         #getU = getu_1q
@@ -862,11 +863,11 @@ def find_closest_unitary_opmx(operationMx):
     else:
         raise ValueError("Can't get closest unitary for > 1 qubits yet -- need to generalize.")
 
-    def _objective_func(basisVec):
-        operationMx = getGateMx(basisVec)
-        JU = _tools.jamiolkowski_iso(operationMx, choi_mx_basis="std")
+    def _objective_func(basis_vec):
+        operation_mx = getGateMx(basis_vec)
+        JU = _tools.jamiolkowski_iso(operation_mx, choi_mx_basis="std")
         # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
-        #U = getU(basisVec)
+        #U = getU(basis_vec)
         #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
         #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
         return -_tools.fidelity(gate_JMx, JU)
@@ -874,11 +875,11 @@ def find_closest_unitary_opmx(operationMx):
     # print_obj_func = _opt.create_obj_func_printer(_objective_func)
     solution = _spo.minimize(_objective_func, initialBasisVec, options={'maxiter': 10000},
                              method='Nelder-Mead', callback=None, tol=1e-8)  # if verbosity > 2 else None
-    operationMx = getGateMx(solution.x)
+    operation_mx = getGateMx(solution.x)
 
     #print "DEBUG: Best fidelity = ",-solution.fun
     #print "DEBUG: Using vector = ", solution.x
-    #print "DEBUG: Gate Mx = \n", operationMx
-    #print "DEBUG: Chi Mx = \n", _tools.jamiolkowski_iso( operationMx)
-    #return -solution.fun, operationMx
-    return operationMx
+    #print "DEBUG: Gate Mx = \n", operation_mx
+    #print "DEBUG: Chi Mx = \n", _tools.jamiolkowski_iso( operation_mx)
+    #return -solution.fun, operation_mx
+    return operation_mx
