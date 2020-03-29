@@ -124,17 +124,17 @@ def do_model_test(model_filename_or_object,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     ds = _load_dataset(data_filename_or_set, comm, printer)
-    advanced_options = advanced_options or {}
+    advanced_options = GSTAdvancedOptions(advanced_options or {})
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
-                                          advanced_options.get('germLengthLimits', None),
+                                          advanced_options.get('germ_length_limits', None),
                                           None, 1, None,  # fidPairs, keepFraction, keepSeed
-                                          advanced_options.get('includeLGST', True),
-                                          advanced_options.get('nestedCircuitLists', True),
-                                          advanced_options.get('stringManipRules', None),
-                                          advanced_options.get('opLabelAliases', None),
+                                          advanced_options.get('include_lgst', True),
+                                          advanced_options.get('nested_circuit_lists', True),
+                                          advanced_options.get('string_manipulation_rules', None),
+                                          advanced_options.get('op_label_aliases', None),
                                           ds, 'drop', verbosity=printer)
     # Note: no advancedOptions['truncScheme'] support anymore
 
@@ -142,7 +142,7 @@ def do_model_test(model_filename_or_object,
 
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     builder = _objfns.ObjectiveFunctionBuilder.simple(advanced_options.get('objective', 'logl'),
-                                                      advanced_options.get('useFreqWeightedChiSq', False))
+                                                      advanced_options.get('use_freq_weighted_chi2', False))
     _update_objfn_builders([builder], advanced_options)
 
     #Create the protocol
@@ -152,9 +152,9 @@ def do_model_test(model_filename_or_object,
 
     #Set more advanced options
     proto.profile = advanced_options.get('profile', 1)
-    proto.oplabel_aliases = advanced_options.get('opLabelAliases', None)
-    proto.circuit_weights = advanced_options.get('circuitWeights', None)
-    proto.unreliable_ops = advanced_options.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
+    proto.circuit_weights = advanced_options.get('circuit_weights', None)
+    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -234,7 +234,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = advanced_options or {}
+    advanced_options = GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
@@ -243,8 +243,8 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
 
     exp_design = _proto.StandardGSTDesign(target_model, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs, max_lengths,
-                                          sequenceRules=advanced_options.get('stringManipRules', None),
-                                          opLabelAliases=advanced_options.get('opLabelAliases', None),
+                                          sequenceRules=advanced_options.get('string_manipulation_rules', None),
+                                          op_label_aliases=advanced_options.get('op_label_aliases', None),
                                           dscheck=ds, actionIfMissing='raise', verbosity=printer)
 
     data = _proto.ProtocolData(exp_design, ds)
@@ -256,10 +256,10 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
                                            _get_badfit_options(advanced_options), printer)
     proto.profile = advanced_options.get('profile', 1)
-    proto.record_output = advanced_options.get('recordOutput', 1)
-    proto.oplabels = advanced_options.get('opLabels', 'default')
-    proto.oplabel_aliases = advanced_options.get('opLabelAliases', None)
-    proto.unreliable_ops = advanced_options.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+    proto.record_output = advanced_options.get('record_output', 1)
+    proto.oplabels = advanced_options.get('op_labels', 'default')
+    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
+    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -338,37 +338,37 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         the objective function or expert-level functionality.  The allowed keys
         and values include:
         - objective = {'chi2', 'logl'}
-        - opLabels = list of strings
-        - circuitWeights = dict or None
-        - starting point = "LGST-if-possible" (default), "LGST", or "target"
-        - depolarizeStart = float (default == 0)
-        - randomizeStart = float (default == 0)
-        - contractStartToCPTP = True / False (default)
+        - op_labels = list of strings
+        - circuit_weights = dict or None
+        - starting_point = "LGST-if-possible" (default), "LGST", or "target"
+        - depolarize_start = float (default == 0)
+        - randomize_start = float (default == 0)
+        - contract_start_to_cptp = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
         - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
-        - maxIterations = int
-        - fdIterations = int
-        - minProbClip = float
-        - minProbClipForWeighting = float (default == 1e-4)
-        - probClipInterval = tuple (default == (-1e6,1e6)
+        - max_iterations = int
+        - finitediff_iterations = int
+        - min_prob_clip = float
+        - min_prob_clip_for_weighting = float (default == 1e-4)
+        - prob_clip_interval = tuple (default == (-1e6,1e6)
         - radius = float (default == 1e-4)
-        - useFreqWeightedChiSq = True / False (default)
-        - XX nestedCircuitLists = True (default) / False
-        - XX includeLGST = True / False (default is True)
-        - distributeMethod = "default", "circuits" or "deriv"
+        - use_freq_weighted_chi2 = True / False (default)
+        - XX nested_circuit_lists = True (default) / False
+        - XX include_lgst = True / False (default is True)
+        - distribute_method = "default", "circuits" or "deriv"
         - profile = int (default == 1)
         - check = True / False (default)
-        - XX opLabelAliases = dict (default = None)
-        - alwaysPerformMLE = bool (default = False)
-        - onlyPerformMLE = bool (default = False)
+        - XX op_label_aliases = dict (default = None)
+        - always_perform_mle = bool (default = False)
+        - only_perform_mle = bool (default = False)
         - XX truncScheme = "whole germ powers" (default) or "truncated germ powers"
                           or "length as exponent"
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
         - XX missingDataAction = {'drop','raise'} (default = 'drop')
-        - XX stringManipRules = list of (find,replace) tuples
-        - germLengthLimits = dict of form {germ: maxlength}
-        - recordOutput = bool (default = True)
+        - XX string_manipulation_rules = list of (find,replace) tuples
+        - germ_length_limits = dict of form {germ: maxlength}
+        - record_output = bool (default = True)
         - timeDependent = bool (default = False)
 
     comm : mpi4py.MPI.Comm, optional
@@ -399,18 +399,18 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = advanced_options or {}
+    advanced_options = GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
-                                          advanced_options.get('germLengthLimits', None),
+                                          advanced_options.get('germ_length_limits', None),
                                           None, 1, None,  # fidPairs, keepFraction, keepSeed
-                                          advanced_options.get('includeLGST', True),
-                                          advanced_options.get('nestedCircuitLists', True),
-                                          advanced_options.get('stringManipRules', None),
-                                          advanced_options.get('opLabelAliases', None),
+                                          advanced_options.get('include_lgst', True),
+                                          advanced_options.get('nested_circuit_lists', True),
+                                          advanced_options.get('string_manipulation_rules', None),
+                                          advanced_options.get('op_label_aliases', None),
                                           ds, 'drop', verbosity=printer)
 
     data = _proto.ProtocolData(exp_design, ds)
@@ -424,11 +424,11 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                                      _get_badfit_options(advanced_options), printer)
 
     proto.profile = advanced_options.get('profile', 1)
-    proto.record_output = advanced_options.get('recordOutput', 1)
-    proto.distribute_method = advanced_options.get('distributeMethod', "default")
-    proto.oplabel_aliases = advanced_options.get('opLabelAliases', None)
-    proto.circuit_weights = advanced_options.get('circuitWeights', None)
-    proto.unreliable_ops = advanced_options.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+    proto.record_output = advanced_options.get('record_output', 1)
+    proto.distribute_method = advanced_options.get('distribute_method', "default")
+    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
+    proto.circuit_weights = advanced_options.get('circuit_weights', None)
+    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -482,8 +482,8 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  See
         :func:`do_long_sequence_gst` for a list of the allowed keys, with the
-        exception  "nestedCircuitLists", "opLabelAliases",
-        "includeLGST", and "truncScheme".
+        exception  "nested_circuit_lists", "op_label_aliases",
+        "include_lgst", and "truncScheme".
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -532,11 +532,11 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
                                      _get_badfit_options(advanced_options), printer)
 
     proto.profile = advanced_options.get('profile', 1)
-    proto.record_output = advanced_options.get('recordOutput', 1)
-    proto.distribute_method = advanced_options.get('distributeMethod', "default")
-    proto.oplabel_aliases = advanced_options.get('opLabelAliases', None)
-    proto.circuit_weights = advanced_options.get('circuitWeights', None)
-    proto.unreliable_ops = advanced_options.get('unreliableOps', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
+    proto.record_output = advanced_options.get('record_output', 1)
+    proto.distribute_method = advanced_options.get('distribute_method', "default")
+    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
+    proto.circuit_weights = advanced_options.get('circuit_weights', None)
+    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -643,11 +643,8 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
         used (per core when run on multi-CPUs).
 
     advanced_options : dict, optional
-        Specifies advanced options most of which deal with numerical details of
-        the objective function or expert-level functionality.  Keys of this
-        dictionary can be any of the modes being computed (see the `modes`
-        argument) or 'all', which applies to all modes.  Values are
-        dictionaries of advanced arguements - see :func:`do_long_sequence_gst`
+        Specifies advanced options most of which deal with numerical details of the
+        objective function or expert-level functionality. See :func:`do_long_sequence_gst`
         for a list of the allowed keys for each such dictionary.
 
     output_pkl : str or file, optional
@@ -663,19 +660,20 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = advanced_options or {}
-    all_advanced = advanced_options.get('all', {})
+    if advanced_options and 'all' in advanced_options and len(advanced_options) == 1:
+        advanced_options = advanced_options['all']  # backward compatibility
+    advanced_options = GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
-                                          all_advanced.get('germLengthLimits', None),
+                                          advanced_options.get('germ_length_limits', None),
                                           None, 1, None,  # fidPairs, keepFraction, keepSeed
-                                          all_advanced.get('includeLGST', True),
-                                          all_advanced.get('nestedCircuitLists', True),
-                                          all_advanced.get('stringManipRules', None),
-                                          all_advanced.get('opLabelAliases', None),
+                                          advanced_options.get('include_lgst', True),
+                                          advanced_options.get('nested_circuit_lists', True),
+                                          advanced_options.get('string_manipulation_rules', None),
+                                          advanced_options.get('op_label_aliases', None),
                                           ds, 'drop', verbosity=printer)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
@@ -728,18 +726,20 @@ def _update_objfn_builders(builders, advanced_options):
             builder.penalties[nm] = advanced_options[nm]
 
     for builder in builders:
-        _update_regularization(builder, 'probClipInterval')
-        _update_regularization(builder, 'minProbClip')
+        _update_regularization(builder, 'prob_clip_interval')
+        _update_regularization(builder, 'min_prob_clip')
         _update_regularization(builder, 'radius')
-        _update_regularization(builder, 'minProbClipForWeighting')
+        _update_regularization(builder, 'min_prob_clip_for_weighting')
         _update_penalty(builder, 'cptp_penalty_factor')
         _update_penalty(builder, 'spam_penalty_factor')
 
 
 def _get_badfit_options(advanced_options):
     old_badfit_options = advanced_options.get('badFitOptions', {})
-    return _proto.GSTBadFitOptions(advanced_options.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD),
-                                   advanced_options.get('onBadFit', []),
+    assert(set(old_badfit_options.keys()).issubset(('wildcard_budget_includes_spam', 'wildcard_smart_init'))), \
+        "Invalid keys in badFitOptions sub-dictionary!"
+    return _proto.GSTBadFitOptions(advanced_options.get('bad_fit_threshold', DEFAULT_BAD_FIT_THRESHOLD),
+                                   advanced_options.get('on_bad_fit', []),
                                    old_badfit_options.get('wildcard_budget_includes_spam', True),
                                    old_badfit_options.get('wildcard_smart_init', True))
 
@@ -754,21 +754,21 @@ def _output_to_pickle(obj, output_pkl, comm):
 
 
 def _get_gst_initial_model(advanced_options):
-    if advanced_options.get("starting point", None) is None:
-        advanced_options["starting point"] = "LGST-if-possible"  # to keep backward compatibility
-    return _proto.GSTInitialModel(None, advanced_options.get("starting point", None),
-                                  advanced_options.get('depolarizeStart', 0),
-                                  advanced_options.get('randomizeStart', 0),
+    if advanced_options.get("starting_point", None) is None:
+        advanced_options["starting_point"] = "LGST-if-possible"  # to keep backward compatibility
+    return _proto.GSTInitialModel(None, advanced_options.get("starting_point", None),
+                                  advanced_options.get('depolarize_start', 0),
+                                  advanced_options.get('randomize_start', 0),
                                   advanced_options.get('lgst_gaugeopt_tol', 1e-6),
-                                  advanced_options.get('contractStartToCPTP', 0))
+                                  advanced_options.get('contract_start_to_cptp', 0))
 
 
 def _get_gst_builders(advanced_options):
     objfn_builders = _proto.GSTObjFnBuilders.init_simple(
         advanced_options.get('objective', 'logl'),
-        advanced_options.get('useFreqWeightedChiSq', False),
-        advanced_options.get('alwaysPerformMLE', False),
-        advanced_options.get('onlyPerformMLE', False))
+        advanced_options.get('use_freq_weighted_chi2', False),
+        advanced_options.get('always_perform_mle', False),
+        advanced_options.get('only_perform_mle', False))
     _update_objfn_builders(objfn_builders.iteration_builders, advanced_options)
     _update_objfn_builders(objfn_builders.final_builders, advanced_options)
     return objfn_builders
@@ -776,7 +776,40 @@ def _get_gst_builders(advanced_options):
 
 def _get_optimizer(advanced_options, exp_design):
     default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
-    optimizer = {'maxiter': advanced_options.get('maxIterations', 100000),
+    optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
-                 'fditer': advanced_options.get('fdIterations', default_fditer)}
+                 'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
+
+
+class AdvancedOptions(dict):
+    valid_keys = ()
+
+    def __init__(self, items=None):
+        super().__init__()
+        self.update(items or {})
+
+    def __setitem__(self, key, val):
+        if key not in self.valid_keys:
+            raise ValueError("Invalid key '%s'. Valid keys are: '%s'" % (str(key), "', '".join(self.valid_keys)))
+        super().__setitem__(key, val)
+
+    def update(self, d):
+        invalid_keys = [k for k in d.keys() if k not in self.valid_keys]
+        if invalid_keys:
+            raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
+                             "', '".join(self.valid_keys)))
+
+
+class GSTAdvancedOptions(dict):
+    valid_keys = ('germ_length_limits', 'include_lgst', 'nested_circuit_lists',
+                  'string_manipulation_rules', 'op_label_aliases', 'circuit_weights',
+                  'profile', 'record_output', 'distribute_method',
+                  'objective', 'use_freq_weighted_chi2', 'prob_clip_interval', 'min_prob_clip',
+                  'min_prob_clip_for_weighting', 'radius', 'cptp_penalty_factor', 'spam_penalty_factor',
+                  'bad_fit_threshold', 'on_bad_fit',
+                  'starting_point', 'depolarize_start', 'randomize_start', 'lgst_gaugeopt_tol',
+                  'contract_start_to_cptp',
+                  'always_perform_mle', 'only_perform_mle',
+                  'max_iterations', 'tolerance', 'finitediff_iterations', 'extra_lm_opts',
+                  'set trivial_gauge_group', 'op_labels', 'unreliable_ops')

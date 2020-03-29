@@ -680,7 +680,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
             if isinstance(circuitsToEstimate, _objfns.BulkCircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
 
-            printer.show_progress(i, nIters, verboseMessages=extraMessages,
+            printer.show_progress(i, nIters, verbose_messages=extraMessages,
                                   prefix="--- Iterative GST:", suffix=" %d circuits ---" % len(circuitsToEstimate))
 
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
@@ -740,7 +740,7 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
             memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
                 * FLOATSIZE  # see Model._buildup_dpg (this is mem for dPG)
 
-            if resource_alloc.memLimit is None or 0.1 * resource_alloc.memLimit < memForNumGaugeParams:
+            if resource_alloc.mem_limit is None or 0.1 * resource_alloc.mem_limit < memForNumGaugeParams:
                 try:
                     nModelParams = mdl.num_nongauge_params()  # len(x0)
                 except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
@@ -781,7 +781,7 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
     evTree = objective.evTree
-    comm, memLimit = resource_alloc.comm, resource_alloc.memLimit
+    comm, memLimit = resource_alloc.comm, resource_alloc.mem_limit
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.get_allowed_path_fraction()
