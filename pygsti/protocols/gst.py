@@ -731,6 +731,9 @@ def _update_gaugeopt_dict_from_suitename(gauge_opt_suite_dict, root_lbl, suite_n
             valid_spam_range = [1]; spamwt_range = [1e-4, 1e-1]
         elif suite_name == "toggleValidSpam":
             valid_spam_range = [0, 1]; spamwt_range = [1e-3]
+        else:
+            valid_spam_range = []
+            spamwt_range = []
 
         if suite_name == root_lbl:  # then shorten the root name
             root_lbl = "2QUR-" if suite_name.endswith("unreliable2Q") else ""

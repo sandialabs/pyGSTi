@@ -2,8 +2,6 @@ from ...util import BaseCase
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std, std1Q_XYI as stdXY
 import pygsti.construction as pc
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_gxpi2_gypi2_updn
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_gxpi2_gypi2_00
 from pygsti.extras.rpe import rpetools as tools, rpeconstruction as rpc
 
 _SEED = 1969
@@ -95,8 +93,8 @@ class RPEToolsFuncBase(object):
 
 
 class RPETools00ConfigTester(RPEToolsFuncBase, BaseCase):
-    from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_gxpi2_gypi2_00 as config
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00 as config
 
 
 class RPEToolsUpDnConfigTester(RPEToolsFuncBase, BaseCase):
-    from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_gxpi2_gypi2_updn as config
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn as config

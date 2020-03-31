@@ -64,7 +64,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         with self.assertRaises(ValueError):
             core.do_lgst(
                 self.ds, self.fiducials, self.fiducials, None,
-                opLabels=list(self.model.operations.keys()), svd_truncate_to=4
+                op_labels=list(self.model.operations.keys()), svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_bad_fiducials(self):

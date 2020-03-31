@@ -339,6 +339,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
         # Memory check
         persistent_mem = self.get_persistent_memory_estimate()
+        in_gb = 1.0 / 1024.0**3  # in gigabytes
         if self.raw_objfn.mem_limit:
             in_gb = 1.0 / 1024.0**3  # in gigabytes
             if self.raw_objfn.mem_limit < persistent_mem:
