@@ -513,6 +513,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advanced_options = advanced_options or {}
 
     valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
     if isinstance(lsgst_lists, valid_struct_types) or isinstance(lsgst_lists[0], valid_struct_types):
@@ -526,6 +527,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
+
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, exp_design),
@@ -735,6 +737,7 @@ def _update_objfn_builders(builders, advanced_options):
 
 
 def _get_badfit_options(advanced_options):
+    advanced_options = advanced_options or {}
     old_badfit_options = advanced_options.get('badFitOptions', {})
     assert(set(old_badfit_options.keys()).issubset(('wildcard_budget_includes_spam', 'wildcard_smart_init'))), \
         "Invalid keys in badFitOptions sub-dictionary!"
@@ -754,6 +757,7 @@ def _output_to_pickle(obj, output_pkl, comm):
 
 
 def _get_gst_initial_model(advanced_options):
+    advanced_options = advanced_options or {}
     if advanced_options.get("starting_point", None) is None:
         advanced_options["starting_point"] = "LGST-if-possible"  # to keep backward compatibility
     return _proto.GSTInitialModel(None, advanced_options.get("starting_point", None),
@@ -764,6 +768,7 @@ def _get_gst_initial_model(advanced_options):
 
 
 def _get_gst_builders(advanced_options):
+    advanced_options = advanced_options or {}
     objfn_builders = _proto.GSTObjFnBuilders.init_simple(
         advanced_options.get('objective', 'logl'),
         advanced_options.get('use_freq_weighted_chi2', False),
@@ -775,6 +780,7 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, exp_design):
+    advanced_options = advanced_options or {}
     default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
