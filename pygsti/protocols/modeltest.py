@@ -96,7 +96,7 @@ class ModelTest(_proto.Protocol):
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
         printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler, distributeMethod='default')
+        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler, distribute_method='default')
 
         try:  # take structs if available
             circuit_lists_or_structs = data.edesign.circuit_structs
@@ -116,19 +116,20 @@ class ModelTest(_proto.Protocol):
         bulk_circuit_lists = [_objfns.BulkCircuitList(lst, aliases, self.circuit_weights)
                               for lst in circuit_lists_or_structs]
         objfn_vals = []
-        chi2d_vals = []
+        chi2k_distributed_vals = []
         assert(len(self.objfn_builders) == 1), "Only support for a single objective function so far."
         for circuit_list in bulk_circuit_lists:
             cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
             objective = self.objfn_builders[0].build(the_model, ds, circuit_list, resource_alloc, cache, printer)
             f = objective.fn(the_model.to_vector())
             objfn_vals.append(f)
-            chi2d_vals.append(objective.get_chi2k_distributed_qty(f))
+            chi2k_distributed_vals.append(objective.get_chi2k_distributed_qty(f))
 
         parameters = _collections.OrderedDict()
         parameters['raw_objective_values'] = objfn_vals
-        parameters['model_test_values'] = chi2d_vals
+        parameters['model_test_values'] = chi2k_distributed_vals
         parameters['final_objfn_builder'] = self.objfn_builders[-1]
+        parameters['profiler'] = profiler
 
         from .gst import _add_gaugeopt_and_badfit
         from .gst import ModelEstimateResults as _ModelEstimateResults

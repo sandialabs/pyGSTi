@@ -13,6 +13,7 @@ import copy as _copy
 import uuid as _uuid
 import itertools as _itertools
 from ..tools import listtools as _lt
+from .circuit import Circuit as _Circuit
 
 
 class CircuitPlaquette(object):
@@ -111,7 +112,7 @@ class CircuitPlaquette(object):
     def simplify_circuits(self, model, dataset=None):
         """
         Simplified this plaquette so that the `num_simplified_elements` property and
-        the `iter_simplified()` method may be used.
+        the `iter_simplified()` and `elementvec_to_matrix` methods may be used.
 
         Parameters
         ----------
@@ -144,6 +145,44 @@ class CircuitPlaquette(object):
 
     def __len__(self):
         return len(self.elements)
+
+    def elementvec_to_matrix(self, elementvec, mergeop="sum"):
+        """
+        Form a matrix of values for this plaquette from  a given vector,
+        `elementvec` of individual-outcome elements (e.g. the bulk probabilities
+        computed by a model).
+
+        Parameters
+        ----------
+        elementvec : numpy array
+            An array of length `self.num_simplified_elements` containting the
+            values to use when constructing a matrix of values for this plaquette.
+
+        mergeop : "sum" or format string, optional
+            Dictates how to combine the `elementvec` components corresponding to a single
+            plaquette entry (circuit).  If "sum", the returned array contains summed
+            values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
+            are joined together with separating commas, and the resulting array contains
+            string (object-type) entries.
+
+        Returns
+        -------
+        numpy array
+        """
+        if mergeop == "sum":
+            ret = _np.nan * _np.ones((self.rows, self.cols), 'd')
+            for i, j, opstr, elIndices, _ in self.iter_simplified():
+                ret[i, j] = sum(elementvec[elIndices])
+        elif '%' in mergeop:
+            fmt = mergeop
+            ret = _np.nan * _np.ones((self.rows, self.cols), dtype=_np.object)
+            for i, j, opstr, elIndices, _ in self.iter_simplified():
+                ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+                                       (fmt % x) for x in elementvec[elIndices]])
+        else:
+            raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
+        return ret
+
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -312,7 +351,7 @@ class LsGermsStructure(CircuitStructure):
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
 
-    def __init__(self, max_lengths, germs, prep_strs, effect_strs, aliases=None,
+    def __init__(self, max_lengths, germs, prep_fiducials, meas_fiducials, aliases=None,
                  sequence_rules=None):
         """
         Create an empty operation sequence structure.
@@ -325,7 +364,7 @@ class LsGermsStructure(CircuitStructure):
         germs : list of Circuits
             List of germ sequences (y values)
 
-        prep_strs : list of Circuits
+        prep_fiducials : list of Circuits
             List of preparation fiducial sequences (minor x values)
 
         effecStrs : list of Circuits
@@ -341,8 +380,8 @@ class LsGermsStructure(CircuitStructure):
         """
         self.Ls = max_lengths[:]
         self.germs = germs[:]
-        self.prepStrs = prep_strs[:]
-        self.effectStrs = effect_strs[:]
+        self.prep_fiducials = prep_fiducials[:]
+        self.meas_fiducials = meas_fiducials[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
         self.sequenceRules = sequence_rules[:] if (sequence_rules is not None) else None
 
@@ -365,11 +404,11 @@ class LsGermsStructure(CircuitStructure):
 
     def minor_xvals(self):
         """ Returns a list of the minor x-values"""
-        return self.prepStrs
+        return self.prep_fiducials
 
     def minor_yvals(self):
         """ Returns a list of the minor y-values"""
-        return self.effectStrs
+        return self.meas_fiducials
 
     def add_plaquette(self, basestr, max_length, germ, fidpairs=None, dsfilter=None):
         """
@@ -406,15 +445,15 @@ class LsGermsStructure(CircuitStructure):
         from ..construction import circuitconstruction as _gstrc  # maybe move used routines to a circuittools.py?
 
         if fidpairs is None:
-            fidpairs = list(_itertools.product(range(len(self.prepStrs)),
-                                               range(len(self.effectStrs))))
+            fidpairs = list(_itertools.product(range(len(self.prep_fiducials)),
+                                               range(len(self.meas_fiducials))))
         if dsfilter:
             inds_to_remove = []
             for k, (i, j) in enumerate(fidpairs):
-                el = self.prepStrs[i] + basestr + self.effectStrs[j]
+                el = self.prep_fiducials[i] + basestr + self.meas_fiducials[j]
                 trans_el = _gstrc.translate_circuit(el, self.aliases)
                 if trans_el not in dsfilter:
-                    missing_list.append((self.prepStrs[i], germ, max_length, self.effectStrs[j], el))
+                    missing_list.append((self.prep_fiducials[i], germ, max_length, self.meas_fiducials[j], el))
                     inds_to_remove.append(k)
 
             if len(inds_to_remove) > 0:
@@ -519,7 +558,7 @@ class LsGermsStructure(CircuitStructure):
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-    def truncate(self, max_lengths=None, germs=None, prep_strs=None, effect_strs=None, seqs=None):
+    def truncate(self, max_lengths=None, germs=None, prep_fiducials=None, meas_fiducials=None, seqs=None):
         """
         Truncate this operation sequence structure to a subset of its current strings.
 
@@ -531,8 +570,8 @@ class LsGermsStructure(CircuitStructure):
         germs : list, optional
             The (Circuit) germs to keep.  If None, then all are kept.
 
-        prep_strs, effect_strs : list, optional
-            The (Circuit) preparation and effect fiducial sequences to keep.
+        prep_fiducials, meas_fiducials : list, optional
+            The (Circuit) preparation and measurement fiducial sequences to keep.
             If None, then all are kept.
 
         seqs : list
@@ -544,15 +583,15 @@ class LsGermsStructure(CircuitStructure):
         """
         max_lengths = self.Ls if (max_lengths is None) else max_lengths
         germs = self.germs if (germs is None) else germs
-        prep_strs = self.prepStrs if (prep_strs is None) else prep_strs
-        effect_strs = self.effectStrs if (effect_strs is None) else effect_strs
-        cpy = LsGermsStructure(max_lengths, germs, prep_strs,
-                               effect_strs, self.aliases, self.sequenceRules)
+        prep_fiducials = self.prep_fiducials if (prep_fiducials is None) else prep_fiducials
+        meas_fiducials = self.meas_fiducials if (meas_fiducials is None) else meas_fiducials
+        cpy = LsGermsStructure(max_lengths, germs, prep_fiducials,
+                               meas_fiducials, self.aliases, self.sequenceRules)
 
-        #OLD iPreps = [i for i, prepStr in enumerate(self.prepStrs) if prepStr in prep_strs]
-        #OLD iEffects = [i for i, eStr in enumerate(self.effectStrs) if eStr in effect_strs]
+        #OLD iPreps = [i for i, prepStr in enumerate(self.prep_fiducials) if prepStr in prep_fiducials]
+        #OLD iEffects = [i for i, eStr in enumerate(self.meas_fiducials) if eStr in meas_fiducials]
         #OLD fidpairs = list(_itertools.product(iPreps, iEffects))
-        all_fidpairs = list(_itertools.product(list(range(len(prep_strs))), list(range(len(effect_strs)))))
+        all_fidpairs = list(_itertools.product(list(range(len(prep_fiducials))), list(range(len(meas_fiducials)))))
 
         for (L, germ), plaq in self._plaquettes.items():
             basestr = plaq.base
@@ -561,7 +600,7 @@ class LsGermsStructure(CircuitStructure):
             else:
                 fidpairs = []
                 for i, j in all_fidpairs:
-                    if prep_strs[i] + basestr + effect_strs[j] in seqs:
+                    if prep_fiducials[i] + basestr + meas_fiducials[j] in seqs:
                         fidpairs.append((i, j))
 
             if (L in max_lengths) and (germ in germs):
@@ -588,15 +627,15 @@ class LsGermsStructure(CircuitStructure):
         CircuitPlaquette
         """
         if fidpairs is None:
-            fidpairs = list(_itertools.product(range(len(self.prepStrs)),
-                                               range(len(self.effectStrs))))
+            fidpairs = list(_itertools.product(range(len(self.prep_fiducials)),
+                                               range(len(self.meas_fiducials))))
 
-        elements = [(j, i, self.prepStrs[i] + base_str + self.effectStrs[j])
+        elements = [(j, i, self.prep_fiducials[i] + base_str + self.meas_fiducials[j])
                     for i, j in fidpairs]  # note preps are *cols* not rows
-        real_fidpairs = [(self.prepStrs[i], self.effectStrs[j]) for i, j in fidpairs]  # strings, not just indices
+        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # strings, not just indices
 
-        return CircuitPlaquette(base_str, len(self.effectStrs),
-                                len(self.prepStrs), elements,
+        return CircuitPlaquette(base_str, len(self.meas_fiducials),
+                                len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
     def plaquette_rows_cols(self):
@@ -608,7 +647,7 @@ class LsGermsStructure(CircuitStructure):
         -------
         rows, cols : int
         """
-        return len(self.effectStrs), len(self.prepStrs)
+        return len(self.meas_fiducials), len(self.prep_fiducials)
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -633,7 +672,7 @@ class LsGermsStructure(CircuitStructure):
         """
         P = processor_fn  # shorhand
         cpy = LsGermsStructure(self.Ls, list(map(P, self.germs)),
-                               list(map(P, self.prepStrs)), list(map(P, self.effectStrs)),
+                               list(map(P, self.prep_fiducials)), list(map(P, self.meas_fiducials)),
                                updated_aliases, self.sequenceRules)
         cpy.allstrs = list(map(P, self.allstrs))
         cpy.allstrs_set = set(cpy.allstrs)
@@ -647,8 +686,8 @@ class LsGermsStructure(CircuitStructure):
         """
         Returns a copy of this `LsGermsStructure`.
         """
-        cpy = LsGermsStructure(self.Ls, self.germs, self.prepStrs,
-                               self.effectStrs, self.aliases, self.sequenceRules)
+        cpy = LsGermsStructure(self.Ls, self.germs, self.prep_fiducials,
+                               self.meas_fiducials, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
         cpy.allstrs_set = self.allstrs_set.copy()
         cpy.unindexed = self.unindexed[:]
@@ -663,6 +702,23 @@ class LsGermsSerialStructure(CircuitStructure):
     A type of operation sequence structure whereby sequences can be
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
+
+    @classmethod
+    def from_list(cls, circuit_list, dsfilter=None):
+        """
+        Creates a LsGermsSerialStructure out of a simple circuit list.
+
+        This factory method is used when a default structure is required for a
+        given simple list of circuits.
+        """
+        max_length = 0  # just a single "0" length
+        empty_circuit = _Circuit((), line_labels=circuit_list[0].line_labels if len(circuit_list) > 0 else "auto")
+        square_side = int(_np.ceil(_np.sqrt(len(circuit_list))))
+        ret = cls([max_length], [empty_circuit], square_side, square_side)
+
+        fidpairs = [(c, empty_circuit) for c in circuit_list]
+        ret.add_plaquette(empty_circuit, max_length, empty_circuit, fidpairs, dsfilter)
+        return ret
 
     def __init__(self, max_lengths, germs, n_minor_rows, n_minor_cols, aliases=None,
                  sequence_rules=None):

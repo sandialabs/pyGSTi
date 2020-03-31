@@ -114,11 +114,11 @@ class BulkCircuitList(list):
         #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_list_or_structure, (list, tuple)):
             self.circuits_to_use = circuit_list_or_structure
-            self.circuitStructure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
-            self.circuitStructure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
+            self.circuit_structure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
+            self.circuit_structure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
         else:
-            self.circuitStructure = circuit_list_or_structure
-            self.circuits_to_use = self.circuitStructure.allstrs
+            self.circuit_structure = circuit_list_or_structure
+            self.circuits_to_use = self.circuit_structure.allstrs
 
         self.op_label_aliases = op_label_aliases
         self.circuit_weights = circuit_weights
@@ -161,22 +161,28 @@ class ObjectiveFunctionBuilder(object):
                 builder = FreqWeightedChi2Function.builder(
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'minProbClipForWeighting': 1e-4,
+                    regularization={'min_prob_clip_for_weighting': 1e-4,
                                     'radius': 1e-4})
             else:
                 builder = Chi2Function.builder(
                     name='chi2',
                     description="Sum of Chi^2",
-                    regularization={'minProbClipForWeighting': 1e-4})
+                    regularization={'min_prob_clip_for_weighting': 1e-4})
 
         elif objective == "logl":
             builder = PoissonPicDeltaLogLFunction.builder(
                 name='dlogl',
                 description="2*Delta(log(L))",
-                regularization={'minProbClip': 1e-4,
+                regularization={'min_prob_clip': 1e-4,
                                 'radius': 1e-4},
                 penalties={'cptp_penalty_factor': 0,
                            'spam_penalty_factor': 0})
+
+        elif objective == "tvd":
+            builder = TVDFunction.builder(
+                name='tvd',
+                description="Total Variational Distance (TVD)")
+                
         else:
             raise ValueError("Invalid objective: %s" % objective)
         assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"
@@ -201,7 +207,7 @@ class ObjectiveFunction(object):
     """So far, this is just a base class for organizational purposes"""
 
     def get_chi2k_distributed_qty(self, objective_function_value):
-        return objective_function_value  # default is to assume the value *is* chi2_k distributed
+        raise ValueError("This objective function does not have chi2_k distributed values!")
 
 
 class RawObjectiveFunction(ObjectiveFunction):
@@ -537,7 +543,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
             #compute probs separately
             self.mdl.bulk_fill_probs(probs, eval_subtree,
-                                     clipTo=prob_clip_interval, check=self.check,
+                                     clip_to=prob_clip_interval, check=self.check,
                                      comm=my_subcomm)
 
             num_cols = self.mdl.num_params()
@@ -607,6 +613,9 @@ class RawChi2Function(RawObjectiveFunction):
     def __init__(self, regularization=None, resource_alloc=None, name="chi2", description="Sum of Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
+    def get_chi2k_distributed_qty(self, objective_function_value):
+        return objective_function_value
+
     def set_regularization(self, min_prob_clip_for_weighting=1e-4):
         self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
 
@@ -630,7 +639,7 @@ class RawChi2Function(RawObjectiveFunction):
         # => d2v/dp2 = 2N*dt - 2N*t*dt = 2N(1-t)*dt
         cprobs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         iclip = (cprobs == self.min_prob_clip_for_weighting)
-        t = ((self.probs - self.f) / cprobs)  # should think of as (p-f)/p
+        t = ((probs - freqs) / cprobs)  # should think of as (p-f)/p
         dtdp = (1.0 - t) / cprobs  # 1/p - (p-f)/p**2 => 1/cp - (p-f)/cp**2 = (1-t)/cp
         d2v_dp2 = 2 * total_counts * (1.0 - t) * dtdp
         d2v_dp2[iclip] = 2 * total_counts[iclip] / self.min_prob_clip_for_weighting
@@ -674,6 +683,9 @@ class RawChiAlphaFunction(RawObjectiveFunction):
                  verbosity=0, alpha=1):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         self.alpha = alpha
+
+    def get_chi2k_distributed_qty(self, objective_function_value):
+        return objective_function_value
 
     def set_regularization(self, pfratio_stitchpt=0.01, pfratio_derivpt=0.01, radius=None):
         self.x0 = pfratio_stitchpt
@@ -771,6 +783,9 @@ class RawFreqWeightedChi2Function(RawChi2Function):
     def __init__(self, regularization=None, resource_alloc=None, name="fwchi2",
                  description="Sum of freq-weighted Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
+
+    def get_chi2k_distributed_qty(self, objective_function_value):
+        return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
     def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
         super().set_regularization(min_prob_clip_for_weighting)
@@ -1185,9 +1200,6 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         self.poisson_picture = poisson_picture
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
-        raise ValueError("This objective function does not have chi2_k distributed values!")
-
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
         if self.poisson_picture:
@@ -1226,6 +1238,31 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         return _np.zeros(len(probs), 'd')
 
 
+class RawTVDFunction(RawObjectiveFunction):
+    def __init__(self, regularization=None,
+                 resource_alloc=None, name='tvd', description="Total Variational Distance (TVD)", verbosity=0):
+        super().__init__(regularization, resource_alloc, name, description, verbosity)
+
+    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+        return 0.5 * _np.abs(probs - freqs)
+
+    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+
+    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+
+    #Required zero-term methods for omitted probs support in model-based objective functions
+    def zero_freq_terms(self, total_counts, probs):
+        return 0.5 * _np.abs(probs)
+
+    def zero_freq_dterms(self, total_counts, probs):
+        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+
+    def zero_freq_hterms(self, total_counts, probs):
+        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+
+
 class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
     @classmethod
@@ -1248,7 +1285,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
         self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if self.enable_hessian else None
         self.counts, self.N = self.compute_count_vectors()
-        self.f = self.counts / self.N
+        self.freqs = self.counts / self.N
         self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
         self.precompute_omitted_freqs()  # sets self.first
 
@@ -1408,7 +1445,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
                                                             verbosity=1):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
-        lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.N, self.f)
+        lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.N, self.freqs)
         lsvec = _np.concatenate((lsvec, self.lspenaltyvec(paramvec)))
 
         if self.firsts is not None:
@@ -1424,7 +1461,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
-        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.f)
+        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)
         terms = _np.concatenate((terms, self.penaltyvec(paramvec)))
 
         if self.firsts is not None:
@@ -1441,9 +1478,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         dprobs.shape = (self.nelements, self.nparams)
         if paramvec is not None: self.mdl.from_vector(paramvec)
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
-                                  prMxToFill=self.probs, clipTo=self.prob_clip_interval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrt_blk_size,
-                                  profiler=self.raw_objfn.profiler, gatherMemLimit=self.gthrMem)
+                                  pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
+                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                  profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         #DEBUG TODO REMOVE - test dprobs to make sure they look right.
         #eps = 1e-7
@@ -1467,7 +1504,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
 
-        dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.N, self.f)
+        dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.N, self.freqs)
         dprobs *= dg_dprobs[:, None]
         # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
@@ -1493,15 +1530,15 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         dprobs.shape = (self.nelements, self.nparams)
         if paramvec is not None: self.mdl.from_vector(paramvec)
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
-                                  prMxToFill=self.probs, clipTo=self.prob_clip_interval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrtBlockSize=self.wrt_blk_size,
-                                  profiler=self.raw_objfn.profiler, gatherMemLimit=self.gthrMem)
+                                  pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
+                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                  profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                 self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
 
-        dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.N, self.f)[:, None]
+        dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.N, self.freqs)[:, None]
         # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
         # this multiply also computes jac, which is just dprobs
         # with a different shape (jac.shape == [nelements,nparams])
@@ -1536,8 +1573,8 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.mdl.bulk_fill_hprobs(self.hprobs, self.eval_tree, self.probs, dprobs,
                                   self.prob_clip_interval, self.check, self.comm)  # use cache?
 
-        dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.N, self.f)[:, None, None]
-        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.f)[:, None, None]
+        dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.N, self.freqs)[:, None, None]
+        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.freqs)[:, None, None]
         dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
         dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
@@ -1559,7 +1596,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.mld.bulk_fill_dprobs(dprobs, self.eval_tree, self.probs, self.prob_clip_interval,
                                   self.check, self.comm)  # use cache?
 
-        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.f)[:, None, None]
+        d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.freqs)[:, None, None]
         dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
         dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
@@ -1655,6 +1692,13 @@ class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
+class TVDFunction(TimeIndependentMDSObjectiveFunction):
+    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
+                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+        super().__init__(RawTVDFunction, mdl, dataset, circuit_list, regularization, penalties,
+                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+
+
 class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
 
     #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
@@ -1731,8 +1775,8 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dchi2(dprobs, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     self.comm, wrtBlockSize=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
-                                     gatherMemLimit=self.gthrMem)
+                                     self.comm, wrt_block_size=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
+                                     gather_mem_limit=self.gthrMem)
 
         self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -1785,8 +1829,8 @@ class TimeDependentPoissonPicLogLFunction(ObjectiveFunction):
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
                                        self.dataset, self.min_p, self.a, self.prob_clip_interval, self.v,
-                                       self.comm, wrtBlockSize=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
-                                       gatherMemLimit=self.gthrMem)
+                                       self.comm, wrt_block_size=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
+                                       gather_mem_limit=self.gthrMem)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)
@@ -2020,9 +2064,15 @@ class LogLWildcardFunction(ObjectiveFunction):
     #    """The default point to evaluate functions at """
     #    return self.wildcard_budget.to_vector()
 
-    def lsvec(self, w_vec):
+    def fn(self, wvec=None):
+        return sum(self.terms(wvec))
+
+    def terms(self, wvec=None):
+        return self.lsvec(wvec)**2
+
+    def lsvec(self, w_vec=None):
         tm = _time.time()
-        self.wildcard_budget.from_vector(w_vec)
+        if w_vec is not None: self.wildcard_budget.from_vector(w_vec)
         self.wildcard_budget.update_probs(self.probs,
                                           self.logl_objfn.probs,
                                           self.logl_objfn.freqs,

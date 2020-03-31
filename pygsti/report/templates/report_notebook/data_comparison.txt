@@ -2,7 +2,7 @@
 ### Histogram of per-circuit $2\Delta\log(\mathcal{L})$ values between two data sets.
 Each gate sequence is assigned a log-likelihood-ratio value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.
 @@code
-ws.ColorBoxPlot('dscmp', dscmp_gss, None, None,
+ws.ColorBoxPlot('dscmp', dscmp_circuits, None, None,
                 dscomparator=dscmp, typ="histogram")
 
 @@markdown
@@ -10,4 +10,4 @@ ws.ColorBoxPlot('dscmp', dscmp_gss, None, None,
 In a similar fashion to other color box plots, this plot shows two times the log-likelihood-ratio for each gate sequence corresponding to how consistent that sequences' counts are between the two selected data sets.  The likelihood ratio is between a models that supposes there is either one or two separate probability distributions from which the data counts are drawn.
 
 @@code
-ws.ColorBoxPlot('dscmp', dscmp_gss, None, None, dscomparator=dscmp)
+ws.ColorBoxPlot('dscmp', dscmp_circuits, None, None, dscomparator=dscmp)

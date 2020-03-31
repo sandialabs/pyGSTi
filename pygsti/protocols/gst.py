@@ -337,7 +337,7 @@ class GateSetTomography(_proto.Protocol):
             printer.start_recording()
 
         resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distributeMethod=self.distribute_method)
+                                                    distribute_method=self.distribute_method)
 
         try:  # take structs if available
             circuit_lists_or_structs = data.edesign.circuit_structs
@@ -375,6 +375,7 @@ class GateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.final_builders[-1]
         parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
+        parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
@@ -464,7 +465,7 @@ class LinearGateSetTomography(_proto.Protocol):
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
-        #parameters['objective'] = 'lgst'
+        parameters['profiler'] = profiler
 
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate(ret, {'target': target_model, 'lgst': mdl_lgst,
@@ -481,9 +482,9 @@ class LinearGateSetTomography(_proto.Protocol):
 #x continue upgrading this module: StandardGST (similar to others, but need "appendTo" workaround)
 #x upgrade ModelTest
 #x fix do_XXX driver functions in longsequence.py
-# (maybe upgraded advancedOptions there to a class w/validation, etc)
-# upgrade likelihoodfns.py and chi2.py to use objective funtions -- should be lots of consolidation, and maybe
-# add hessian & non-poisson-pic logl to objective fns.
+#x (maybe upgraded advancedOptions there to a class w/validation, etc)
+#x upgrade likelihoodfns.py and chi2.py to use objective funtions -- should be lots of consolidation, and maybe
+#x add hessian & non-poisson-pic logl to objective fns.
 # fix report generation (changes to ModelEstimateResults)
 # run/update tests - test out custom/new objective functions.
 class StandardGST(_proto.Protocol):
@@ -800,44 +801,6 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
     return ds
 
 
-def _get_lsgst_lists(dschk, target_model, prep_fiducials, meas_fiducials, germs,
-                     max_lengths, advanced_options, verbosity):
-    """
-    Sequence construction logic, fatctored into this separate
-    function because it's shared do_long_sequence_gst and
-    do_model_evaluation.
-    """
-    if advanced_options is None: advanced_options = {}
-
-    #Update: now always include LGST strings unless advanced options says otherwise
-    #Get starting point (so we know whether to include LGST strings)
-    #LGSTcompatibleOps = all([(isinstance(g,_objs.FullDenseOp) or
-    #                            isinstance(g,_objs.TPDenseOp))
-    #                           for g in target_model.operations.values()])
-    #if  LGSTcompatibleOps:
-    #    starting_pt = advanced_options.get('starting point',"LGST")
-    #else:
-    #    starting_pt = advanced_options.get('starting point',"target")
-
-    #Construct operation sequences
-    action_if_missing = advanced_options.get('missingDataAction', 'drop')
-    op_labels = advanced_options.get(
-        'opLabels', list(target_model.get_primitive_op_labels()))
-    lsgst_lists = _construction.stdlists.make_lsgst_structs(
-        op_labels, prep_fiducials, meas_fiducials, germs, max_lengths,
-        trunc_scheme=advanced_options.get('truncScheme', "whole germ powers"),
-        nest=advanced_options.get('nestedCircuitLists', True),
-        include_lgst=advanced_options.get('includeLGST', True),
-        op_label_aliases=advanced_options.get('op_label_aliases', None),
-        sequence_rules=advanced_options.get('stringManipRules', None),
-        dscheck=dschk, action_if_missing=action_if_missing,
-        germ_length_limits=advanced_options.get('germLengthLimits', None),
-        verbosity=verbosity)
-    assert(len(max_lengths) == len(lsgst_lists))
-
-    return lsgst_lists
-
-
 def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
                              unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
     tref = _time.time()
@@ -998,7 +961,7 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
     base_estimate = results.estimates[base_estimate_label]
 
     if badfit_options.threshold is not None and \
-       base_estimate.misfit_sigma(use_accurate_Np=True, comm=comm) <= badfit_options.threshold:
+       base_estimate.misfit_sigma(use_accurate_np=True, comm=comm) <= badfit_options.threshold:
         return  # fit is good enough - no need to add any estimates
 
     circuit_list = results.circuit_lists['final']
@@ -1508,54 +1471,25 @@ class ModelEstimateResults(_proto.ProtocolResults):
         -------
         None
         """
-        niters = len(self.circuit_lists['iteration'])
-
-        # base parameter values off of existing estimate parameters
-        defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
-                    'minProbClipForWeighting': 1e-4, 'op_label_aliases': None,
-                    'truncScheme': "whole germ powers"}
+        # fill in what we can with info from existing estimates
+        gaugeopt_suite = gaugeopt_target = None
+        objfn_builder = None
+        badfit_options = None
         for est in self.estimates.values():
-            for ky in defaults:
-                if ky in est.parameters: defaults[ky] = est.parameters[ky]
+            proto = est.parameters.get('protocol', None)
+            if proto:
+                if hasattr(proto, 'gaugeopt_suite') and hasattr(proto, 'gaugeopt_target'):
+                    gaugeopt_suite = proto.gaugeopt_suite
+                    gaugeopt_target = proto.gaugeopt_target
+                if hasattr(proto, 'badfit_options'):
+                    badfit_options = proto.badfit_options
+            objfn_builder = est.parameters.get('final_objfn_builder', objfn_builder)
 
-        #Construct a parameters dict, similar to do_model_test(...)
-        parameters = _collections.OrderedDict()
-        parameters['objective'] = defaults['objective']
-        if parameters['objective'] == 'logl':
-            parameters['minProbClip'] = defaults['minProbClip']
-            parameters['radius'] = defaults['radius']
-        elif parameters['objective'] == 'chi2':
-            parameters['minProbClipForWeighting'] = defaults['minProbClipForWeighting']
-        else:
-            raise ValueError("Invalid objective: %s" % parameters['objective'])
-        parameters['profiler'] = None
-        parameters['op_label_aliases'] = defaults['op_label_aliases']
-        parameters['weights'] = None  # Hardcoded
-
-        #Set default gate group to trival group to mimic do_model_test (an to
-        # be consistent with this function creating "gauge-optimized" models
-        # by just copying the initial one).
-        themodel = themodel.copy()
-        themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
-
-        self.add_estimate(target_model, themodel, [themodel] * niters,
-                          parameters, estimate_key=estimate_key)
-
-        #add gauge optimizations (always trivial)
-        if gauge_opt_keys == "auto":
-            gauge_opt_keys = []
-            for est in self.estimates.values():
-                for gokey in est.goparameters:
-                    if gokey not in gauge_opt_keys:
-                        gauge_opt_keys.append(gokey)
-
-        est = self.estimates[estimate_key]
-        for gokey in gauge_opt_keys:
-            trivial_el = _TrivialGaugeGroupElement(themodel.dim)
-            goparams = {'model': themodel,
-                        'target_model': target_model,
-                        '_gaugeGroupEl': trivial_el}
-            est.add_gaugeoptimized(goparams, themodel, gokey)
+        from .modeltest import ModelTest as _ModelTest
+        mdltest = _ModelTest(themodel, target_model, gaugeopt_suite, gaugeopt_target,
+                             objfn_builder, badfit_options, name=estimate_key)
+        test_result = mdltest.run(self.data)
+        self.add_estimates(test_result)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """

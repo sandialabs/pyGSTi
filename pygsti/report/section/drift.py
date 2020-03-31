@@ -27,30 +27,32 @@ class DriftSection(_Section):
         return workspace.PowerSpectraPlot(results, {'dataset': dskey})
 
     @_Section.figure_factory()
-    def germ_fiducial_power_spectra_plot(workspace, results=None, gss=None, switchboard=None, dskey=None, **kwargs):
+    def germ_fiducial_power_spectra_plot(workspace, results=None, circuit_list=None, switchboard=None,
+                                         dskey=None, **kwargs):
         return workspace.germ_fiducial_power_spectra_plot(
-            results, gss, switchboard.prepStrs, switchboard.germs,
-            switchboard.effectStrs, dskey, None, True
+            results, circuit_list, switchboard.prep_fiducials, switchboard.germs,
+            switchboard.meas_fiducials, dskey, None, True
         )
 
     @_Section.figure_factory()
-    def germ_fiducial_prob_trajectories_plot(workspace, results=None, gss=None, switchboard=None, dskey=None, **kwargs):
+    def germ_fiducial_prob_trajectories_plot(workspace, results=None, circuit_list=None, switchboard=None,
+                                             dskey=None, **kwargs):
         return workspace.germ_fiducial_prob_trajectories_plot(
-            results, gss, switchboard.prepStrs, switchboard.germs,
-            switchboard.effectStrs, switchboard.outcomes, 1, None,
+            results, circuit_list, switchboard.prep_fiducials, switchboard.germs,
+            switchboard.meas_fiducials, switchboard.outcomes, 1, None,
             dskey, None, None, True
         )
 
     @_Section.figure_factory()
-    def drift_detector_colorbox_plot(workspace, results=None, gss=None, **kwargs):
+    def drift_detector_colorbox_plot(workspace, results=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftdetector', gss, None, None, False, False, True,
+            'driftdetector', circuit_list, None, None, False, False, True,
             False, 'compact', .05, 1e-4, None, None, results
         )
 
     @_Section.figure_factory()
-    def drift_size_colorbox_plot(workspace, results=None, gss=None, **kwargs):
+    def drift_size_colorbox_plot(workspace, results=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftsize', gss, None, None, False, False, True, False,
+            'driftsize', circuit_list, None, None, False, False, True, False,
             'compact', .05, 1e-4, None, None, results
         )

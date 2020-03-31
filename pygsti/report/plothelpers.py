@@ -13,7 +13,7 @@ import warnings as _warnings
 
 from .. import tools as _tools
 from .. import objects as _objs
-
+from ..objects import objectivefns as _objfns
 from ..objects.smartcache import smart_cached
 
 
@@ -481,125 +481,126 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
     return subMxs
 
 
-@smart_cached
-def direct_chi2_matrix(gsplaq, gss, dataset, direct_model,
-                       min_prob_clip_for_weighting=1e-4):
-    """
-    Computes the Direct-X chi^2 matrix for a base circuit sigma.
-
-    Similar to chi2_matrix, except the probabilities used to compute
-    chi^2 values come from using the "composite gate" of directModels[sigma],
-    a Model assumed to contain some estimate of sigma stored under the
-    operation label "GsigmaLbl".
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        (for accessing the dataset) they correspond to.
-
-    gss : CircuitStructure
-        The operation sequence structure object containing `gsplaq`.  The structure is
-        neede to create a special plaquette for computing probabilities from the
-        direct model containing a "GsigmaLbl" gate.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    direct_model : Model
-        Model which contains an estimate of sigma stored
-        under the operation label "GsigmaLbl".
-
-    min_prob_clip_for_weighting : float, optional
-        defines the clipping interval for the statistical weight (see chi2fn).
-
-
-    Returns
-    -------
-    numpy array of shape ( len(effect_strs), len(prep_strs) )
-        Direct-X chi^2 values corresponding to operation sequences where
-        circuit is sandwiched between the each (effectStr,prepStr) pair.
-    """
-    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
-        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
-        plaq_pr.simplify_circuits(direct_model)
-
-        cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
-        freqs = frequency_matrices(plaq_ds, dataset)
-
-        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
-        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
-                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
-            chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
-                                   freqs[elIndices_ds], min_prob_clip_for_weighting)
-            ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
-
-        return ret
-    else:
-        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
-
-
-@smart_cached
-def direct_logl_matrix(gsplaq, gss, dataset, direct_model,
-                       min_prob_clip=1e-6):
-    """
-    Computes the Direct-X log-likelihood matrix, containing the values
-     of 2*( log(L)_upperbound - log(L) ) for a base circuit sigma.
-
-    Similar to logl_matrix, except the probabilities used to compute
-    LogL values come from using the "composite gate" of directModels[sigma],
-    a Model assumed to contain some estimate of sigma stored under the
-    operation label "GsigmaLbl".
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        (for accessing the dataset) they correspond to.
-
-    gss : CircuitStructure
-        The operation sequence structure object containing `gsplaq`.  The structure is
-        neede to create a special plaquette for computing probabilities from the
-        direct model containing a "GsigmaLbl" gate.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    direct_model : Model
-        Model which contains an estimate of sigma stored
-        under the operation label "GsigmaLbl".
-
-    min_prob_clip : float, optional
-        defines the minimum probability clipping.
-
-    Returns
-    -------
-    numpy array of shape ( len(effect_strs), len(prep_strs) )
-        Direct-X logL values corresponding to operation sequences where
-        circuit is sandwiched between the each (effectStr,prepStr) pair.
-    """
-    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
-        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
-        plaq_pr.simplify_circuits(direct_model)
-
-        cnts = total_count_matrix(plaq_ds, dataset)
-        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
-        freqs = frequency_matrices(plaq_ds, dataset)
-
-        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
-        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
-                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
-            logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
-                                            freqs[elIndices_ds], min_prob_clip)
-            ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
-        return ret
-    else:
-        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#TODO REMOVE
+#@smart_cached
+#def direct_chi2_matrix(gsplaq, gss, dataset, direct_model,
+#                       min_prob_clip_for_weighting=1e-4):
+#    """
+#    Computes the Direct-X chi^2 matrix for a base circuit sigma.
+#
+#    Similar to chi2_matrix, except the probabilities used to compute
+#    chi^2 values come from using the "composite gate" of directModels[sigma],
+#    a Model assumed to contain some estimate of sigma stored under the
+#    operation label "GsigmaLbl".
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        (for accessing the dataset) they correspond to.
+#
+#    gss : CircuitStructure
+#        The operation sequence structure object containing `gsplaq`.  The structure is
+#        neede to create a special plaquette for computing probabilities from the
+#        direct model containing a "GsigmaLbl" gate.
+#
+#    dataset : DataSet
+#        The data used to specify frequencies and counts
+#
+#    direct_model : Model
+#        Model which contains an estimate of sigma stored
+#        under the operation label "GsigmaLbl".
+#
+#    min_prob_clip_for_weighting : float, optional
+#        defines the clipping interval for the statistical weight (see chi2fn).
+#
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(effect_strs), len(prep_strs) )
+#        Direct-X chi^2 values corresponding to operation sequences where
+#        circuit is sandwiched between the each (effectStr,prepStr) pair.
+#    """
+#    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
+#        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
+#        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
+#        plaq_pr.simplify_circuits(direct_model)
+#
+#        cnts = total_count_matrix(plaq_ds, dataset)
+#        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
+#        freqs = frequency_matrices(plaq_ds, dataset)
+#
+#        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
+#        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+#                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
+#            chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
+#                                   freqs[elIndices_ds], min_prob_clip_for_weighting)
+#            ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
+#
+#        return ret
+#    else:
+#        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#
+#
+#@smart_cached
+#def direct_logl_matrix(gsplaq, gss, dataset, direct_model,
+#                       min_prob_clip=1e-6):
+#    """
+#    Computes the Direct-X log-likelihood matrix, containing the values
+#     of 2*( log(L)_upperbound - log(L) ) for a base circuit sigma.
+#
+#    Similar to logl_matrix, except the probabilities used to compute
+#    LogL values come from using the "composite gate" of directModels[sigma],
+#    a Model assumed to contain some estimate of sigma stored under the
+#    operation label "GsigmaLbl".
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        (for accessing the dataset) they correspond to.
+#
+#    gss : CircuitStructure
+#        The operation sequence structure object containing `gsplaq`.  The structure is
+#        neede to create a special plaquette for computing probabilities from the
+#        direct model containing a "GsigmaLbl" gate.
+#
+#    dataset : DataSet
+#        The data used to specify frequencies and counts
+#
+#    direct_model : Model
+#        Model which contains an estimate of sigma stored
+#        under the operation label "GsigmaLbl".
+#
+#    min_prob_clip : float, optional
+#        defines the minimum probability clipping.
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(effect_strs), len(prep_strs) )
+#        Direct-X logL values corresponding to operation sequences where
+#        circuit is sandwiched between the each (effectStr,prepStr) pair.
+#    """
+#    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
+#        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
+#        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
+#        plaq_pr.simplify_circuits(direct_model)
+#
+#        cnts = total_count_matrix(plaq_ds, dataset)
+#        probs = probability_matrices(plaq_pr, direct_model)  # no probs_precomp_dict
+#        freqs = frequency_matrices(plaq_ds, dataset)
+#
+#        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
+#        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+#                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
+#            logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+#                                            freqs[elIndices_ds], min_prob_clip)
+#            ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
+#        return ret
+#    else:
+#        return _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
 
 
 @smart_cached
@@ -744,12 +745,12 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 #     return ret
 
 
-def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return_all=False,
-                  comm=None, smartc=None, min_prob_clip=1e-4):  # TODO: pipe down minprobclip, radius, probclipinterval?
+def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard=None, return_all=False,
+                  comm=None, cache=None):
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `model` model at the "points" (sequences)
-    specified by `gss`.
+    specified by `circuit_list`.
 
     Parameters
     ----------
@@ -759,14 +760,13 @@ def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return
     model : Model
         The model (model).
 
-    gss : CircuitStructure
-        A operation sequence structure whose `.allstrs` member contains a list of
-        `Circuits` specifiying the sequences used to compare the data and
-        model.  Its `.aliases` member optionally specifies operation label aliases
-        to be used when querying `dataset`.
+    circuit_list : BulkCircuitList or list of Circuits
+        The circuits to use when computing the model violation.  A
+        :class:`BulkCircuitList` object may be given to include additional information
+        (e.g. aliases) along with the list of circuits.
 
-    objective : {"logl", "chi2"}
-        Which objective function is used to compute the model violation.
+    objfn_builder: ObjectiveFunctionBuilder
+        Builds the objective function to be used to compute the model violation.
 
     np : int, optional
         The number of free parameters in the model.  If None, then
@@ -787,15 +787,9 @@ def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    smartc : SmartCache, optional
-        A cache object to cache & use previously cached values inside this
-        function.
-
-    min_prob_clip : float, optional
-        The minimum probability treated normally in the evaluation of the log-likelihood.
-        A penalty function replaces the true log-likelihood for probabilities that lie
-        below this threshold so that the log-likelihood never becomes undefined (which improves
-        optimizer performance).
+    cache : ComputationCache, optional
+        A cache object form computing values with the same model, dataset,
+        and circuit list as are given to this function.
 
     Returns
     -------
@@ -819,28 +813,16 @@ def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return
         returned when `return_all==True`.
 
     """
-    gstrs = gss.allstrs
-    if objective == "chi2":
-        assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
-        fitQty = _tools.chi2(model, dataset, gstrs,
-                             min_prob_clip_for_weighting=min_prob_clip,
-                             op_label_aliases=gss.aliases,
-                             comm=comm, smartc=smartc)
-    elif objective == "logl":
-        logL_upperbound = _tools.logl_max(model, dataset, gstrs, op_label_aliases=gss.aliases,
-                                          smartc=smartc)
-        logl = _tools.logl(model, dataset, gstrs, op_label_aliases=gss.aliases,
-                           min_prob_clip=min_prob_clip, comm=comm, smartc=smartc,
-                           wildcard=wildcard)
-        fitQty = 2 * (logL_upperbound - logl)  # twoDeltaLogL
+    if isinstance(objfn_builder, str):
+        objfn_builder = _objfns.ObjectiveFunctionBuilder.simple(objfn_builder)
 
-        if(logL_upperbound < logl):
-            if _np.isclose(logL_upperbound, logl):
-                logl = logL_upperbound; fitQty = 0.0
-            else:
-                raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+    objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache)
+    if wildcard:
+        objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
+    fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
 
-    ds_gstrs = _tools.apply_aliases_to_circuit_list(gstrs, gss.aliases)
+    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _objfns.BulkCircuitList) else None
+    ds_gstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
 
     if hasattr(model, 'num_nongauge_params'):
         np = model.num_nongauge_params()
@@ -848,7 +830,7 @@ def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return
         np = model.num_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
-    Nsig = (fitQty - k) / _np.sqrt(2 * k)
+    Nsig = (fitqty - k) / _np.sqrt(2 * k)
     if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))
     #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
@@ -859,6 +841,6 @@ def rated_n_sigma(dataset, model, gss, objective, np=None, wildcard=None, return
     else: rating = 1
 
     if return_all:
-        return Nsig, rating, fitQty, k, Ns, np
+        return Nsig, rating, fitqty, k, Ns, np
     else:
         return Nsig, rating

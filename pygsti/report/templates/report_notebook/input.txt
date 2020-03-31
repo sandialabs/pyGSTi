@@ -11,7 +11,7 @@ ws.SpamTable(target_model, None, 'boxes', includeHSVec=False)
 ### Fiducial sequences.
 A list of the preparation and measurement "fiducial" gate sequences.
 @@code
-ws.CircuitTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+ws.CircuitTable((prep_fiducials, meas_fiducials),["Prep.","Measure"], commonTitle="Fiducials")
 
 @@markdown
 ### Germ sequences.

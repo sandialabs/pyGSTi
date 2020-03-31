@@ -19,6 +19,7 @@ from . import reportables as _reportables
 from .reportables import evaluate as _ev
 from ..objects.label import Label as _Lbl
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
+from ..objects import objectivefns as _objfns
 from ..algorithms import gaugeopt as _gopt
 
 from .table import ReportTable as _ReportTable
@@ -2288,8 +2289,8 @@ class DataSetOverviewTable(WorkspaceTable):
 class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
 
-    def __init__(self, ws, xs, gss_by_x, model_by_x, dataset, objective="logl",
-                 x_label='L', np_by_x=None, comm=None, wildcard=None, min_prob_clip=1e-4):
+    def __init__(self, ws, xs, circuits_by_x, model_by_x, dataset, objfn_builder='logl',
+                 x_label='L', np_by_x=None, comm=None, wildcard=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -2300,8 +2301,8 @@ class FitComparisonTable(WorkspaceTable):
             List of X-values. Typically these are the maximum lengths or
             exponents used to index the different iterations of GST.
 
-        gss_by_x : list of LsGermsStructure
-            Specifies the set (& structure) of the operation sequences used at each X.
+        circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+            Specifies the set of circuits used at each X.
 
         model_by_x : list of Models
             `Model`s corresponding to each X value.
@@ -2309,8 +2310,9 @@ class FitComparisonTable(WorkspaceTable):
         dataset : DataSet
             The data set to compare each model against.
 
-        objective : {"logl", "chi2"}, optional
-            Whether to use log-likelihood or chi^2 values.
+        objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+            The objective function to use, or one of the given strings
+            to use a defaut log-likelihood or chi^2 function.
 
         x_label : str, optional
             A label for the 'X' variable which indexes the different models.
@@ -2331,23 +2333,18 @@ class FitComparisonTable(WorkspaceTable):
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
 
-        min_prob_clip : float, optional
-            The minimum probability treated normally in the evaluation of the log-likelihood.
-            A penalty function replaces the true log-likelihood for probabilities that lie
-            below this threshold so that the log-likelihood never becomes undefined (which improves
-            optimizer performance).
-
         Returns
         -------
         ReportTable
         """
-        super(FitComparisonTable, self).__init__(ws, self._create, xs, gss_by_x, model_by_x,
-                                                 dataset, objective, x_label, np_by_x, comm,
-                                                 wildcard, min_prob_clip)
+        super(FitComparisonTable, self).__init__(ws, self._create, xs, circuits_by_x, model_by_x,
+                                                 dataset, objfn_builder, x_label, np_by_x, comm,
+                                                 wildcard)
 
-    def _create(self, xs, gss_by_x, model_by_x, dataset, objective, x_label, np_by_x, comm, wildcard, min_prob_clip):
+    def _create(self, xs, circuits_by_x, model_by_x, dataset, objfn_builder, x_label, np_by_x, comm, wildcard):
 
-        if objective == "chi2":
+        if objfn_builder == "chi2" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
+                                       and objfn_builder.cls_to_build == _objfns.Chi2Function):
             colHeadings = {
                 'latex': (x_label, '$\\chi^2$', '$k$', '$\\chi^2-k$', '$\sqrt{2k}$',
                           '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
@@ -2357,7 +2354,8 @@ class FitComparisonTable(WorkspaceTable):
                 'python': (x_label, 'chi^2', 'k', 'chi^2-k', 'sqrt{2k}', 'N_{sigma}', 'N_s', 'N_p', 'Rating')
             }
 
-        elif objective == "logl":
+        elif objfn_builder == "logl" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
+                                         and objfn_builder.cls_to_build == _objfns.PoissonPicDeltaLogLFunction):
             colHeadings = {
                 'latex': (x_label, '$2\Delta\\log(\\mathcal{L})$', '$k$', '$2\Delta\\log(\\mathcal{L})-k$',
                           '$\sqrt{2k}$', '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
@@ -2368,7 +2366,7 @@ class FitComparisonTable(WorkspaceTable):
                            'N_{sigma}', 'N_s', 'N_p', 'Rating')
             }
         else:
-            raise ValueError("Invalid `objective` argument: %s" % objective)
+            raise ValueError("Invalid `objfn_builder` argument: %s" % str(objfn_builder))
 
         if np_by_x is None:
             try:
@@ -2389,11 +2387,12 @@ class FitComparisonTable(WorkspaceTable):
                     'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
 
-        for X, mdl, gss, Np in zip(xs, model_by_x, gss_by_x, np_by_x):
+        CACHE = None
+        for X, mdl, circuit_list, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
-                _ph.rated_n_sigma, dataset, mdl, gss,
-                objective, Np, wildcard, return_all=True,
-                comm=comm, smartc=self.ws.smartCache, min_prob_clip=min_prob_clip)
+                _ph.rated_n_sigma, dataset, mdl, circuit_list,
+                objfn_builder, Np, wildcard, return_all=True,
+                comm=comm, cache=CACHE)  # self.ws.smartCache derived?
             table.addrow((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
                          (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 
@@ -2404,13 +2403,13 @@ class FitComparisonTable(WorkspaceTable):
 class CircuitTable(WorkspaceTable):
     """ Table which simply displays list(s) of operation sequences """
 
-    def __init__(self, ws, gs_lists, titles, n_cols=1, common_title=None):
+    def __init__(self, ws, circuit_lists, titles, n_cols=1, common_title=None):
         """
         Creates a table of enumerating one or more sets of operation sequences.
 
         Parameters
         ----------
-        gs_lists : Circuit list or list of Circuit lists
+        circuit_lists : Circuit list or list of Circuit lists
             List(s) of operation sequences to put in table.
 
         titles : string or list of strings
@@ -2429,18 +2428,18 @@ class CircuitTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(CircuitTable, self).__init__(ws, self._create, gs_lists, titles,
+        super(CircuitTable, self).__init__(ws, self._create, circuit_lists, titles,
                                            n_cols, common_title)
 
-    def _create(self, gs_lists, titles, n_cols, common_title):
+    def _create(self, circuit_lists, titles, n_cols, common_title):
 
-        if len(gs_lists) == 0:
-            gs_lists = [[]]
-        elif isinstance(gs_lists[0], _objs.Circuit) or \
-                (isinstance(gs_lists[0], tuple) and isinstance(gs_lists[0][0], str)):
-            gs_lists = [gs_lists]
+        if len(circuit_lists) == 0:
+            circuit_lists = [[]]
+        elif isinstance(circuit_lists[0], _objs.Circuit) or \
+                (isinstance(circuit_lists[0], tuple) and isinstance(circuit_lists[0][0], str)):
+            circuit_lists = [circuit_lists]
 
-        if isinstance(titles, str): titles = [titles] * len(gs_lists)
+        if isinstance(titles, str): titles = [titles] * len(circuit_lists)
 
         colHeadings = (('#',) + tuple(titles)) * n_cols
         formatters = (('Conversion',) + ('Normal',) * len(titles)) * n_cols
@@ -2463,18 +2462,18 @@ class CircuitTable(WorkspaceTable):
                                  custom_header={'latex': latex_head,
                                                 'html': html_head})
 
-        formatters = (('Normal',) + ('Circuit',) * len(gs_lists)) * n_cols
+        formatters = (('Normal',) + ('Circuit',) * len(circuit_lists)) * n_cols
 
-        maxListLength = max(list(map(len, gs_lists)))
+        maxListLength = max(list(map(len, circuit_lists)))
         nRows = (maxListLength + (n_cols - 1)) // n_cols  # ceiling
 
-        #for i in range( max([len(gsl) for gsl in gs_lists]) ):
+        #for i in range( max([len(gsl) for gsl in circuit_lists]) ):
         for i in range(nRows):
             rowData = []
             for k in range(n_cols):
                 l = i + nRows * k  # index of circuit
                 rowData.append(l + 1)
-                for gsList in gs_lists:
+                for gsList in circuit_lists:
                     if l < len(gsList):
                         rowData.append(gsList[l])
                     else:

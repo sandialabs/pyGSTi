@@ -22,5 +22,5 @@ class IdleTomographySection(_Section):
     def idt_observed_rates_table(workspace, switchboard=None, **kwargs):
         # HARDCODED - show only top 20 rates
         return workspace.IdleTomographyObservedRatesTable(
-            switchboard.idtresults, 20, switchboard.gsGIRep
+            switchboard.idtresults, 20, switchboard.mdl_gaugeinv
         )

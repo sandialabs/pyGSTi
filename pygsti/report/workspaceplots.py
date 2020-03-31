@@ -18,6 +18,7 @@ from scipy.stats import chi2 as _chi2
 from .. import algorithms as _alg
 from .. import tools as _tools
 from .. import objects as _objs
+from ..objects import objectivefns as _objfns
 
 from .workspace import WorkspacePlot
 from .figure import ReportFigure
@@ -1430,10 +1431,10 @@ class ColorBoxPlot(WorkspacePlot):
     for each gate sequence in an analysis.
     """
 
-    def __init__(self, ws, plottype, gss, dataset, model,
+    def __init__(self, ws, plottype, circuit_list, dataset, model,
                  sum_up=False, box_labels=False, hover_info=True, invert=False,
-                 prec='compact', linlg_pcntle=.05, min_prob_clip_for_weighting=1e-4,
-                 direct_gst_models=None, dscomparator=None, stabilityanalyzer=None,
+                 prec='compact', linlg_pcntle=.05, direct_gst_models=None,
+                 dscomparator=None, stabilityanalyzer=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
                  wildcard=None, colorbar=False, bgcolor="white"):
         """
@@ -1444,13 +1445,13 @@ class ColorBoxPlot(WorkspacePlot):
 
         Parameters
         ----------
-        plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp",
+        plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
                     "driftdetector", "driftsize"}
-            Specifies the type of plot. "errorate", "directchi2" and
-            "directlogl" require that `direct_gst_models` be set.
+            Specifies the type of plot. "errorate" requires that
+            `direct_gst_models` be set.
 
-        gss : CircuitStructure
-            Specifies the set of operation sequences along with their structure, e.g.
+        circuit_list : BulkCircuitList or list of Circuits
+            Specifies the set of circuits, usually along with their structure, e.g.
             fiducials, germs, and maximum lengths.
 
         dataset : DataSet
@@ -1485,10 +1486,6 @@ class ColorBoxPlot(WorkspacePlot):
         linlg_pcntle : float, optional
             Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
-        min_prob_clip_for_weighting : float, optional
-            Defines a clipping point for the statistical weight used
-            within the chi^2 or logl functions.
-
         direct_gst_models : dict, optional
             A dictionary of "direct" Models used when displaying certain plot
             types.  Keys are operation sequences and values are corresponding gate
@@ -1515,7 +1512,7 @@ class ColorBoxPlot(WorkspacePlot):
             A dictionary whose keys correspond to other potential plot
             types and whose values are each a list-of-lists of the sub
             matrices to plot, corresponding to the used x and y values
-            of `gss`.
+            of the structure of `circuit_list`.
 
         typ : {"boxes","scatter","histogram"}
             Which type of plot to make: the standard grid of "boxes", a
@@ -1544,27 +1541,20 @@ class ColorBoxPlot(WorkspacePlot):
             `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
-        super(ColorBoxPlot, self).__init__(ws, self._create, plottype, gss, dataset, model,
+        super(ColorBoxPlot, self).__init__(ws, self._create, plottype, circuit_list, dataset, model,
                                            prec, sum_up, box_labels, hover_info,
-                                           invert, linlg_pcntle, min_prob_clip_for_weighting,
+                                           invert, linlg_pcntle,
                                            direct_gst_models, dscomparator, stabilityanalyzer,
                                            submatrices, typ, scale, comm, wildcard, colorbar, bgcolor)
 
-    def _create(self, plottypes, gss, dataset, model,
+    def _create(self, plottypes, circuit_list, dataset, model,
                 prec, sum_up, box_labels, hover_info,
-                invert, linlg_pcntle, min_prob_clip_for_weighting,
+                invert, linlg_pcntle,
                 direct_gst_models, dscomparator, stabilityanalyzer, submatrices,
                 typ, scale, comm, wildcard, colorbar, bgcolor):
 
-        probs_precomp_dict = None
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
-
-        #TODO REMOVE?
-        # Could do this to get counts for all spam labels
-        #spamlabels = model.get_spam_labels()
-        #cntMxs  = _ph.count_matrices( plaq_ds, dataset, spamlabels)
-        #return _list_spam_dimension(cntMxs, "%d")
 
         #DEBUG: for checking
         #def _addl_mx_fn_chk(plaq,x,y):
@@ -1579,61 +1569,80 @@ class ColorBoxPlot(WorkspacePlot):
 
         # End "Additional sub-matrix" functions
 
-        if isinstance(plottypes, str):
+        if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
 
-        plottypes_that_need_precomp = ('chi2', 'logl', 'tvd')
-        if any([(t in plottypes) for t in plottypes_that_need_precomp]):  # bulk-compute probabilities for performance
-            probs_precomp_dict = self._ccompute(_ph._compute_probabilities,
-                                                gss, model, dataset,
-                                                comm=comm, smartc=self.ws.smartCache,
-                                                wildcard=wildcard)
+        #probs_precomp_dict = None
+        #plottypes_that_need_precomp = ('chi2', 'logl', 'tvd')
+        #if any([(t in plottypes) for t in plottypes_that_need_precomp]):  # bulk-compute probabilities for performance
+        #    probs_precomp_dict = self._ccompute(_ph._compute_probabilities,
+        #                                        gss, model, dataset,
+        #                                        comm=comm, smartc=self.ws.smartCache,
+        #                                        wildcard=wildcard)
 
         for ptyp in plottypes:
-            if ptyp == "chi2":
-                colormapType = "linlog"
-                linlog_color = "red"
-                ytitle = "chi<sup>2</sup>"
-                mx_fn = _mx_fn_chi2  # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, model, min_prob_clip_for_weighting, probs_precomp_dict)
+            if ptyp in ("logl", "chi2", "tvd"):
+                ptyp = _objfns.ObjectiveFunctionBuilder.simple(ptyp)
+                
+            if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
+                objfn_builder = ptyp
+                CACHE = None
+                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE) # self.ws.smartCache,
+                if wildcard:
+                    objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
+                terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
+
+                if isinstance(objfn, (_objfns.PoissonPicDeltaLogLFunction, _objfns.DeltaLogLFunction)):
+                    terms *= 2.0  # show 2 * deltaLogL values, not just deltaLogL
+
+                if isinstance(objfn, _objfns.TVDFunction):
+                    colormapType = "blueseq"
+                else:
+                    colormapType = "linlog"
+                    linlog_color = "red"
+                    
+                ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
+
+                mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
+                extra_arg = (terms, "sum")
 
                 # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
-                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
-                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
-                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, None)
+                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, "%.5g"))
+                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, "%.5g"))
+                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, "%d"))
 
-            elif ptyp == "logl":
-                colormapType = "linlog"
-                linlog_color = "red"
-                ytitle = "2 log(L ratio)"
-                mx_fn = _mx_fn_logl  # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, model, min_prob_clip_for_weighting, probs_precomp_dict)
-
-                # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
-                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
-                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
-                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
-                #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
-
-            elif ptyp == "tvd":
-                colormapType = "blueseq"
-                ytitle = "Total Variational Distance (TVD)"
-                mx_fn = _mx_fn_tvd  # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, model, probs_precomp_dict)
-
-                # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
-                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
-                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
-                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
+            #TODO REMOVE
+            #elif ptyp == "logl":
+            #    colormapType = "linlog"
+            #    linlog_color = "red"
+            #    ytitle = "2 log(L ratio)"
+            #    mx_fn = _mx_fn_logl  # use a *global* function so cache can tell it's the same
+            #    extra_arg = (dataset, model, min_prob_clip_for_weighting, probs_precomp_dict)
+            #
+            #    # (function, extra_arg) tuples
+            #    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
+            #    addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
+            #    addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
+            #    addl_hover_info_fns['counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
+            #    #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
+            #elif ptyp == "tvd":
+            #    colormapType = "blueseq"
+            #    ytitle = "Total Variational Distance (TVD)"
+            #    mx_fn = _mx_fn_tvd  # use a *global* function so cache can tell it's the same
+            #    extra_arg = (dataset, model, probs_precomp_dict)
+            #
+            #    # (function, extra_arg) tuples
+            #    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
+            #    addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
+            #    addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
+            #    addl_hover_info_fns['counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
 
             elif ptyp == "blank":
                 colormapType = "trivial"
                 ytitle = ""
                 mx_fn = _mx_fn_blank  # use a *global* function so cache can tell it's the same
-                extra_arg = gss
+                extra_arg = circuit_list
 
             elif ptyp == "errorrate":
                 colormapType = "seq"
@@ -1641,20 +1650,6 @@ class ColorBoxPlot(WorkspacePlot):
                 mx_fn = _mx_fn_errorrate  # use a *global* function so cache can tell it's the same
                 extra_arg = direct_gst_models
                 assert(sum_up is True), "Can only use 'errorrate' plot with sum_up == True"
-
-            elif ptyp == "directchi2":
-                colormapType = "linlog"
-                linlog_color = "yellow"
-                ytitle = "chi<sup>2</sup>"
-                mx_fn = _mx_fn_directchi2  # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, direct_gst_models, min_prob_clip_for_weighting, gss)
-
-            elif ptyp == "directlogl":
-                colormapType = "linlog"
-                linlog_color = "yellow"
-                ytitle = "Direct 2 log(L ratio)"
-                mx_fn = _mx_fn_directlogl  # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, direct_gst_models, min_prob_clip_for_weighting, gss)
 
             elif ptyp == "dscmp":
                 assert(dscomparator is not None), \
@@ -1749,17 +1744,21 @@ class ColorBoxPlot(WorkspacePlot):
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
+            circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _objfns.BulkCircuitList) \
+                else _objs.LsGermsSerialStructure.from_list(circuit_list, dataset)  # default struct
+                
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = self._ccompute(_ph._compute_sub_mxs, gss, model, mx_fn, dataset, extra_arg)
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl]  # ever useful?
                 else:
-                    addl_subMxs = self._ccompute(_ph._compute_sub_mxs, gss, model, addl_mx_fn, dataset, addl_extra_arg)
+                    addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                 addl_mx_fn, dataset, addl_extra_arg)
                 addl_hover_info[lbl] = addl_subMxs
 
             if colormapType == "linlog":
@@ -1770,7 +1769,7 @@ class ColorBoxPlot(WorkspacePlot):
                     #element_dof = len(dataset.get_outcome_labels()) - 1
                     #Instead of the above, which doesn't work well when there are circuits with different
                     # outcomes, the line below just takes the average degrees of freedom per circuit
-                    element_dof = dataset.get_degrees_of_freedom(gss.allstrs) / len(gss.allstrs)
+                    element_dof = dataset.get_degrees_of_freedom(circuit_list) / len(circuit_list)
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sum_up, element_dof)
                 # NOTE: currently dof_per_box is constant, and takes the total
@@ -1795,8 +1794,8 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
                     max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(gss.used_xvals()))
-                                   for iy in range(len(gss.used_yvals()))])
+                                   for ix in range(len(circuit_struct.used_xvals()))
+                                   for iy in range(len(circuit_struct.used_yvals()))])
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -1808,17 +1807,17 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False), "Internal logic error"  # pragma: no cover
 
             if typ == "boxes":
-                newfig = circuit_color_boxplot(gss, subMxs, colormap,
+                newfig = circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                colorbar, box_labels, prec,
                                                hover_info, sum_up, invert,
                                                scale, bgcolor, addl_hover_info)
 
             elif typ == "scatter":
-                newfig = circuit_color_scatterplot(gss, subMxs, colormap,
+                newfig = circuit_color_scatterplot(circuit_struct, subMxs, colormap,
                                                    colorbar, hover_info, sum_up, ytitle,
                                                    scale, addl_hover_info)
             elif typ == "histogram":
-                newfig = circuit_color_histogram(gss, subMxs, colormap,
+                newfig = circuit_color_histogram(circuit_struct, subMxs, colormap,
                                                  ytitle, scale)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
@@ -1862,25 +1861,29 @@ class ColorBoxPlot(WorkspacePlot):
         #    )
         return fig
 
+    
 #Helper function for ColorBoxPlot matrix computation
+def _mx_fn_from_elements(plaq, x, y, extra):
+    return plaq.elementvec_to_matrix(extra[0], mergeop=extra[1])
 
 
-def _mx_fn_chi2(plaq, x, y, extra):
-    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
-    return _ph.chi2_matrix(plaq, dataset, model, minProbClipForWeighting,
-                           probs_precomp_dict)
-
-
-def _mx_fn_logl(plaq, x, y, extra):
-    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
-    return _ph.logl_matrix(plaq, dataset, model, minProbClipForWeighting,
-                           probs_precomp_dict)
-
-
-def _mx_fn_tvd(plaq, x, y, extra):
-    dataset, model, probs_precomp_dict = extra
-    return _ph.tvd_matrix(plaq, dataset, model,
-                          probs_precomp_dict)
+#TODO REMOVE
+#def _mx_fn_chi2(plaq, x, y, extra):
+#    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
+#    return _ph.chi2_matrix(plaq, dataset, model, minProbClipForWeighting,
+#                           probs_precomp_dict)
+#
+#
+#def _mx_fn_logl(plaq, x, y, extra):
+#    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
+#    return _ph.logl_matrix(plaq, dataset, model, minProbClipForWeighting,
+#                           probs_precomp_dict)
+#
+#
+#def _mx_fn_tvd(plaq, x, y, extra):
+#    dataset, model, probs_precomp_dict = extra
+#    return _ph.tvd_matrix(plaq, dataset, model,
+#                          probs_precomp_dict)
 
 
 def _mx_fn_blank(plaq, x, y, gss):
@@ -1924,12 +1927,13 @@ def _mx_fn_drifttvd(plaq, x, y, instabilityanalyzertuple):
 # Begin "Additional sub-matrix" functions for adding more info to hover text
 
 
-def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
-    list_mx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
-    for i, j, _, elIndices, _ in plaq.iter_simplified():
-        list_mx[i, j] = ", ".join(["NaN" if _np.isnan(x) else
-                                   (fmt % x) for x in elements[elIndices]])
-    return list_mx
+#TODO REMOVE
+#def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
+#    list_mx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
+#    for i, j, _, elIndices, _ in plaq.iter_simplified():
+#        list_mx[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+#                                   (fmt % x) for x in elements[elIndices]])
+#    return list_mx
 
 
 def _outcome_to_str(x):  # same function as in writers.py
@@ -1937,34 +1941,36 @@ def _outcome_to_str(x):  # same function as in writers.py
     else: return ":".join([str(i) for i in x])
 
 
-def _addl_mx_fn_sl(plaq, x, y, extra):
+def _addl_mx_fn_outcomes(plaq, x, y, extra):
     slmx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
     for i, j, opstr, elIndices, outcomes in plaq.iter_simplified():
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in outcomes])
     return slmx
 
 
-def _addl_mx_fn_p(plaq, x, y, extra):
-    model, probs_precomp_dict = extra
-    probs = _ph.probability_matrices(plaq, model,
-                                     probs_precomp_dict)
-    return _separate_outcomes_matrix(plaq, probs, "%.5g")
-
-
-def _addl_mx_fn_f(plaq, x, y, extra):
-    model, dataset, smartc = extra
-    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
-                                    (dataset,), dict(circuit_simplifier=model))[1]  # doesn't seem to work yet...
-    freqs = _ph.frequency_matrices(plaq_ds, dataset)
-    return _separate_outcomes_matrix(plaq, freqs, "%.5g")
-
-
-def _addl_mx_fn_cnt(plaq, x, y, extra):
-    model, dataset, smartc = extra
-    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
-                                    (dataset,), dict(circuit_simplifier=model))[1]
-    cnts = _ph.total_count_matrix(plaq_ds, dataset)
-    return _separate_outcomes_matrix(plaq, cnts, "%d")
+#TODO REMOVE
+#def _addl_mx_fn_p(plaq, x, y, extra):
+#    objfn, = extra
+#    
+#    probs = _ph.probability_matrices(plaq, model,
+#                                     probs_precomp_dict)
+#    return _separate_outcomes_matrix(plaq, probs, "%.5g")
+#
+#
+#def _addl_mx_fn_f(plaq, x, y, extra):
+#    model, dataset, smartc = extra
+#    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
+#                                    (dataset,), dict(circuit_simplifier=model))[1]  # doesn't seem to work yet...
+#    freqs = _ph.frequency_matrices(plaq_ds, dataset)
+#    return _separate_outcomes_matrix(plaq, freqs, "%.5g")
+#
+#
+#def _addl_mx_fn_cnt(plaq, x, y, extra):
+#    model, dataset, smartc = extra
+#    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
+#                                    (dataset,), dict(circuit_simplifier=model))[1]
+#    cnts = _ph.total_count_matrix(plaq_ds, dataset)
+#    return _separate_outcomes_matrix(plaq, cnts, "%d")
 
 
 #def gate_matrix_boxplot(op_matrix, size=None, color_min=-1.0, color_max=1.0,
@@ -2584,38 +2590,40 @@ class FitComparisonBarPlot(WorkspacePlot):
     """ Bar plot showing the overall (aggregate) goodness of fit
         (along one dimension)"""
 
-    def __init__(self, ws, xs, gss_by_x, model_by_x, dataset_by_x,
-                 objective="logl", x_label='L', np_by_x=None, scale=1.0,
-                 comm=None, wildcard=None, min_prob_clip=1e-4):
+    def __init__(self, ws, x_names, circuits_by_x, model_by_x, dataset_by_x,
+                 objfn_builder="logl", x_label='L', np_by_x=None, scale=1.0,
+                 comm=None, wildcard=None):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
 
         Parameters
         ----------
-        xs : list of integers
-            List of X-values. Typically these are the maximum lengths or
-            exponents used to index the different iterations of GST.
+        x_names : list
+            List of x-values. Typically these are the integer maximum lengths or
+            exponents used to index the different iterations of GST, but they
+            can also be strings.
 
-        gss_by_x : list of LsGermsStructure
-            Specifies the set (& structure) of the operation sequences used at each X.
+        circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+            Specifies the set of circuits used at each x-value.
 
         model_by_x : list of Models
-            `Model`s corresponding to each X value.
+            `Model`s corresponding to each x-value.
 
         dataset_by_x : DataSet or list of DataSets
             The data sets to compare each model against.  If a single
             :class:`DataSet` is given, then it is used for all comparisons.
 
-        objective : {"logl", "chi2"}, optional
-            Whether to use log-likelihood or chi^2 values.
+        objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+            The objective function to use, or one of the given strings
+            to use a defaut log-likelihood or chi^2 function.
 
         x_label : str, optional
-            A label for the 'X' variable which indexes the different models.
+            A label for the 'x' variable which indexes the different models.
             This string will be the x-label of the resulting bar plot.
 
         np_by_x : list of ints, optional
-            A list of parameter counts to use for each X.  If None, then
+            A list of parameter counts to use for each x.  If None, then
             the number of non-gauge parameters for each model is used.
 
         scale : float, optional
@@ -2631,22 +2639,16 @@ class FitComparisonBarPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
-
-        min_prob_clip : float, optional
-            The minimum probability treated normally in the evaluation of the log-likelihood.
-            A penalty function replaces the true log-likelihood for probabilities that lie
-            below this threshold so that the log-likelihood never becomes undefined (which improves
-            optimizer performance).
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
-                                                   xs, gss_by_x, model_by_x, dataset_by_x,
-                                                   objective, x_label, np_by_x, scale,
-                                                   comm, wildcard, min_prob_clip)
+                                                   x_names, circuits_by_x, model_by_x, dataset_by_x,
+                                                   objfn_builder, x_label, np_by_x, scale,
+                                                   comm, wildcard)
 
-    def _create(self, xs, gss_by_x, model_by_x, dataset_by_x, objective, x_label,
-                np_by_x, scale, comm, wildcard, min_prob_clip):
+    def _create(self, x_names, circuits_by_x, model_by_x, dataset_by_x, objfn_builder, x_label,
+                np_by_x, scale, comm, wildcard):
 
-        xs = list(range(len(xs)))
+        xs = list(range(len(x_names)))
         xtics = []; ys = []; colors = []; texts = []
 
         if np_by_x is None:
@@ -2662,14 +2664,14 @@ class FitComparisonBarPlot(WorkspacePlot):
         if isinstance(dataset_by_x, _objs.DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)
 
-        for X, mdl, gss, dataset, Np in zip(xs, model_by_x, gss_by_x, dataset_by_x, np_by_x):
-            if gss is None or mdl is None:
+        for X, mdl, circuit_list, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):
+            if circuit_list is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
+                CACHE = None
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
-                                                          gss, objective, Np, return_all=True,
-                                                          comm=comm, smartc=self.ws.smartCache,
-                                                          wildcard=wildcard, min_prob_clip=min_prob_clip)
+                                                          circuit_list, objfn_builder, Np, wildcard,
+                                                          return_all=True, comm=comm, cache=CACHE)  # self.ws.smartCache,
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
@@ -2744,9 +2746,9 @@ class FitComparisonBoxPlot(WorkspacePlot):
     """ Box plot showing the overall (aggregate) goodness of fit
         (along 2 dimensions)"""
 
-    def __init__(self, ws, xs, ys, gs_by_y_then_x, model_by_y_then_x, dataset_by_y_then_x,
-                 objective="logl", x_label=None, y_label=None, scale=1.0, comm=None,
-                 wildcard=None, min_prob_clip=1e-4):
+    def __init__(self, ws, xs, ys, circuits_by_y_then_x, model_by_y_then_x, dataset_by_y_then_x,
+                 objfn_builder="logl", x_label=None, y_label=None, scale=1.0, comm=None,
+                 wildcard=None):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -2756,9 +2758,9 @@ class FitComparisonBoxPlot(WorkspacePlot):
         xs, ys : list
             List of X-values and Y-values (converted to strings).
 
-        gs_by_y_then_x : list of lists of LsGermsStructure objects
-            Specifies the set (& structure) of the operation sequences used at each Y
-            and X value, indexed as `gs_by_y_then_x[iY][iX]`, where `iX` and `iY`
+        circuits_by_y_then_x : list of lists of LsGermsStructure objects
+            Specifies the circuits used at each Y and X value, indexed as
+            `circuits_by_y_then_x[iY][iX]`, where `iX` and `iY`
             are X and Y indices, respectively.
 
         model_by_y_then_x : list of lists of Models
@@ -2767,8 +2769,9 @@ class FitComparisonBoxPlot(WorkspacePlot):
         dataset_by_y_then_x : list of lists of DataSets
             `DataSet`s corresponding to each X and Y value.
 
-        objective : {"logl", "chi2"}, optional
-            Whether to use log-likelihood or chi^2 values.
+        objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+            The objective function to use, or one of the given strings
+            to use a defaut log-likelihood or chi^2 function.
 
         x_label, y_label : str, optional
             Labels for the 'X' and 'Y' variables which index the different gate
@@ -2788,20 +2791,14 @@ class FitComparisonBoxPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
-
-        min_prob_clip : float, optional
-            The minimum probability treated normally in the evaluation of the log-likelihood.
-            A penalty function replaces the true log-likelihood for probabilities that lie
-            below this threshold so that the log-likelihood never becomes undefined (which improves
-            optimizer performance).
         """
         super(FitComparisonBoxPlot, self).__init__(
-            ws, self._create, xs, ys, gs_by_y_then_x, model_by_y_then_x,
-            dataset_by_y_then_x, objective, x_label, y_label, scale, comm,
-            wildcard, min_prob_clip)
+            ws, self._create, xs, ys, circuits_by_y_then_x, model_by_y_then_x,
+            dataset_by_y_then_x, objfn_builder, x_label, y_label, scale, comm,
+            wildcard)
 
-    def _create(self, xs, ys, gss_by_yx, model_by_yx, dataset_by_yx, objective,
-                x_label, y_label, scale, comm, wildcard, min_prob_clip):
+    def _create(self, xs, ys, circuits_by_yx, model_by_yx, dataset_by_yx, objfn_builder,
+                x_label, y_label, scale, comm, wildcard):
 
         xlabels = list(map(str, xs))
         ylabels = list(map(str, ys))
@@ -2818,16 +2815,16 @@ class FitComparisonBoxPlot(WorkspacePlot):
             for iX, X in enumerate(xs):
                 dataset = dataset_by_yx[iY][iX]
                 mdl = model_by_yx[iY][iX]
-                gss = gss_by_yx[iY][iX]
+                circuit_list = circuits_by_yx[iY][iX]
 
-                if dataset is None or gss is None or mdl is None:
+                if dataset is None or circuit_list is None or mdl is None:
                     NsigMx[iY][iX] = _np.nan
                     continue
 
+                CACHE = None
                 Nsig, rating, _, _, _, _ = self._ccompute(
-                    _ph.rated_n_sigma, dataset, mdl, gss, objective,
-                    return_all=True, comm=comm, smartc=self.ws.smartCache,
-                    wildcard=wildcard, min_prob_clip=min_prob_clip)
+                    _ph.rated_n_sigma, dataset, mdl, circuit_list, objfn_builder,
+                    None, wildcard, return_all=True, comm=comm, cache=CACHE)  # self.ws.smartCache,
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(

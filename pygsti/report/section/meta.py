@@ -17,7 +17,7 @@ class InputSection(_Section):
     @_Section.figure_factory(2)
     def fiducial_list_table(workspace, switchboard=None, **kwargs):
         return workspace.CircuitTable(
-            switchboard.strs, ["Prep.", "Measure"], common_title="Fiducials"
+            switchboard.fiducials_tup, ["Prep.", "Measure"], common_title="Fiducials"
         )
 
     @_Section.figure_factory(2)
@@ -30,12 +30,12 @@ class InputSection(_Section):
 
     @_Section.figure_factory(2)
     def target_gates_box_table(workspace, switchboard=None, **kwargs):
-        return workspace.GatesTable(switchboard.gsTarget, display_as="boxes")
+        return workspace.GatesTable(switchboard.mdl_target, display_as="boxes")
 
     @_Section.figure_factory(2)
     def target_spam_brief_table(workspace, switchboard=None, **kwargs):
         return workspace.SpamTable(
-            switchboard.gsTarget, None, display_as='boxes', include_hs_vec=False
+            switchboard.mdl_target, None, display_as='boxes', include_hs_vec=False
         )
 
 
@@ -44,7 +44,7 @@ class MetaSection(_Section):
 
     @_Section.figure_factory(2)
     def metadata_table(workspace, switchboard=None, **kwargs):
-        return workspace.MetadataTable(switchboard.gsFinal, switchboard.params)
+        return workspace.MetadataTable(switchboard.mdl_final, switchboard.params)
 
     @_Section.figure_factory(2)
     def stdout_block(workspace, switchboard=None, **kwargs):

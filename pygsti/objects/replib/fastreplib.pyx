@@ -112,10 +112,10 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMOpCRep_Embedded(DMOpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
-        INT _ncomponents
+        INT _nComponents
         INT _embeddedDim
-        INT _active_block_index
-        INT _nblocks
+        INT _iActiveBlock
+        INT _nBlocks
 
     cdef cppclass DMOpCRep_Composed(DMOpCRep):
         DMOpCRep_Composed(vector[DMOpCRep*], INT) except +
@@ -209,10 +209,10 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVOpCRep_Embedded(SVOpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
-        INT _ncomponents
+        INT _nComponents
         INT _embeddedDim
-        INT _active_block_index
-        INT _nblocks
+        INT _iActiveBlock
+        INT _nBlocks
 
     cdef cppclass SVOpCRep_Composed(SVOpCRep):
         SVOpCRep_Composed(vector[SVOpCRep*], INT) except +
@@ -681,9 +681,9 @@ cdef class DMOpRepEmbedded(DMOpRep):
         return (DMOpRepEmbedded, (self.embedded,
                                    self.data_ref5, self.data_ref6, self.data_ref4,
                                    (<DMOpCRep_Embedded*>self.c_gate)._embeddedDim,
-                                   (<DMOpCRep_Embedded*>self.c_gate)._ncomponents,
-                                   (<DMOpCRep_Embedded*>self.c_gate)._active_block_index,
-                                   (<DMOpCRep_Embedded*>self.c_gate)._nblocks,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._nComponents,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._iActiveBlock,
+                                   (<DMOpCRep_Embedded*>self.c_gate)._nBlocks,
                                    self.c_gate._dim))
 
 
@@ -1047,9 +1047,9 @@ cdef class SVOpRepEmbedded(SVOpRep):
         return (SVOpRepEmbedded, (self.embedded,
                                    self.data_ref5, self.data_ref6, self.data_ref4,
                                    (<SVOpCRep_Embedded*>self.c_gate)._embeddedDim,
-                                   (<SVOpCRep_Embedded*>self.c_gate)._ncomponents,
-                                   (<SVOpCRep_Embedded*>self.c_gate)._active_block_index,
-                                   (<SVOpCRep_Embedded*>self.c_gate)._nblocks,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._nComponents,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._iActiveBlock,
+                                   (<SVOpCRep_Embedded*>self.c_gate)._nBlocks,
                                    self.c_gate._dim))
 
 

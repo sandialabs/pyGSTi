@@ -25,10 +25,10 @@ class DataComparisonSection(_Section):
             use_loadable_items=embed_figures
         )
         dscmp_switchBd.add("dscmp", (0, 1))
-        dscmp_switchBd.add("dscmp_gss", (0,))
+        dscmp_switchBd.add("dscmp_circuits", (0,))
         dscmp_switchBd.add("refds", (0,))
         for d1, dslbl1 in enumerate(dataset_labels):
-            dscmp_switchBd.dscmp_gss[d1] = results[dslbl1].circuit_structs['final']
+            dscmp_switchBd.dscmp_circuits[d1] = results[dslbl1].circuit_lists['final']
             dscmp_switchBd.refds[d1] = results[dslbl1].dataset  # only used for #of spam labels below
 
         dsComp = dict()
@@ -89,7 +89,7 @@ class DataComparisonSection(_Section):
     def dataset_comparison_histogram(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
                                      **kwargs):
         return workspace.ColorBoxPlot(
-            'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
+            'dscmp', ds_switchboard.dscmp_circuits, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, typ='histogram',
             comm=comm, bgcolor=bgcolor
         )
@@ -98,7 +98,7 @@ class DataComparisonSection(_Section):
     def dataset_comparison_box_plot(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
                                     **kwargs):
         return workspace.ColorBoxPlot(
-            'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
+            'dscmp', ds_switchboard.dscmp_circuits, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, comm=comm,
             bgcolor=bgcolor
         )
