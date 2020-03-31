@@ -452,7 +452,7 @@ class LinearGateSetTomography(_proto.Protocol):
             printer.start_recording()
 
         resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distributeMethod="default")
+                                                    distribute_method="default")
 
         ds = data.dataset
         aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
@@ -460,8 +460,8 @@ class LinearGateSetTomography(_proto.Protocol):
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
-        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
-                                op_labels, svdTruncateTo=target_model.get_dimension(),
+        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
+                                op_labels, svd_truncate_to=target_model.get_dimension(),
                                 op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()

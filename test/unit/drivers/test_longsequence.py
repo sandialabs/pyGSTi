@@ -27,35 +27,6 @@ class LongSequenceBase(BaseCase):
         self.ds = self.ds.copy()
 
 
-class LongSequenceUtilTester(LongSequenceBase):
-    def test_gaugeopt_suite_to_dictionary(self):
-        model_2Q = std2Q.target_model()
-        model_trivialgg = model_2Q.copy()
-        model_trivialgg.default_gauge_group = TrivialGaugeGroup(4)
-
-        d = ls.gaugeopt_suite_to_dictionary("single", self.model, verbosity=1)
-        d2 = ls.gaugeopt_suite_to_dictionary(d, self.model, verbosity=1)  # with dictionary - basically a pass-through
-
-        d = ls.gaugeopt_suite_to_dictionary(["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "none"],
-                                            self.model, verbosity=1)
-        d = ls.gaugeopt_suite_to_dictionary(
-            ["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "unreliable2Q"],
-            model_trivialgg, verbosity=1
-        )
-
-        d = ls.gaugeopt_suite_to_dictionary(["single", "unreliable2Q"], self.model, verbosity=1)  # non-2Q gates
-        d = ls.gaugeopt_suite_to_dictionary(["single", "unreliable2Q"], model_2Q, verbosity=1)
-
-        advOpts = {'all': {'unreliableOps': ['Gx', 'Gcnot']}}
-        d = ls.gaugeopt_suite_to_dictionary(["single", "unreliable2Q"], model_2Q, advOpts, verbosity=1)
-        d = ls.gaugeopt_suite_to_dictionary(["varySpam", "unreliable2Q"], model_2Q, advOpts, verbosity=1)
-        # TODO assert correctness
-
-    def test_gaugeopt_suite_to_dictionary_raises_on_bad_suite(self):
-        with self.assertRaises(ValueError):
-            ls.gaugeopt_suite_to_dictionary(["foobar"], self.model, verbosity=1)
-
-
 class ModelTestTester(LongSequenceBase):
     def setUp(self):
         super(ModelTestTester, self).setUp()

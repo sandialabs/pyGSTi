@@ -250,7 +250,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
 
     proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
@@ -416,7 +416,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
@@ -524,7 +524,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
