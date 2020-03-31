@@ -79,4 +79,4 @@ class EmptyEstimateTester(EstimateBase, BaseCase):
         with self.assertRaises(ValueError):
             goparams = {'item_weights': {'gates': 1.0, 'spam': 0.1}, 'model': self.model}
             self.est.add_gaugeoptimized(goparams, label="test", comm=None,
-                                        verbosity=None)  # goparams must have 'targetModel'
+                                        verbosity=None)  # goparams must have 'target_model'

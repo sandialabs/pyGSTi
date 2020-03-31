@@ -40,14 +40,14 @@ class CoreLGSTTester(CoreStdData, BaseCase):
     def test_do_lgst(self):
         mdl_lgst = core.do_lgst(
             self.ds, self.fiducials, self.fiducials, self.model,
-            svdTruncateTo=4
+            svd_truncate_to=4
         )
         # TODO assert correctness
 
         # XXX is this neccessary? EGN: tests higher verbosity printing.
         mdl_lgst_2 = core.do_lgst(
             self.ds, self.fiducials, self.fiducials, self.model,
-            svdTruncateTo=4, verbosity=10
+            svd_truncate_to=4, verbosity=10
         )
         # TODO assert correctness
 
@@ -57,21 +57,21 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         # XXX is this neccessary?
         with self.assertRaises(ValueError):
             core.do_lgst(
-                self.ds, self.fiducials, self.fiducials, None, svdTruncateTo=4
+                self.ds, self.fiducials, self.fiducials, None, svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_no_spam_dict(self):
         with self.assertRaises(ValueError):
             core.do_lgst(
                 self.ds, self.fiducials, self.fiducials, None,
-                opLabels=list(self.model.operations.keys()), svdTruncateTo=4
+                opLabels=list(self.model.operations.keys()), svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_bad_fiducials(self):
         bad_fids = pc.circuit_list([('Gx',), ('Gx',), ('Gx',), ('Gx',)])
         with self.assertRaises(ValueError):
             core.do_lgst(
-                self.ds, bad_fids, bad_fids, self.model, svdTruncateTo=4
+                self.ds, bad_fids, bad_fids, self.model, svd_truncate_to=4
             )  # bad fiducials (rank deficient)
 
     def test_do_lgst_raises_on_incomplete_ab_matrix(self):
@@ -82,7 +82,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         with self.assertRaises(KeyError):
             core.do_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,
-                svdTruncateTo=4
+                svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_incomplete_x_matrix(self):
@@ -93,7 +93,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         with self.assertRaises(KeyError):
             core.do_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,
-                svdTruncateTo=4
+                svd_truncate_to=4
             )
 
 
@@ -106,7 +106,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
     def test_do_exlgst(self):
         err_vec, model = core.do_exlgst(
             self.ds, self.mdl_clgst, self.elgstStrings[0], self.fiducials,
-            self.fiducials, self.model, regularizeFactor=1e-3, svdTruncateTo=4
+            self.fiducials, self.model, regularize_factor=1e-3, svd_truncate_to=4
         )
         model._check_paramvec()
         # TODO assert correctness
@@ -114,7 +114,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
         # XXX is this neccesary? (verbosity increase)
         err_vec_2, model_2 = core.do_exlgst(
             self.ds, self.mdl_clgst, self.elgstStrings[0], self.fiducials,
-            self.fiducials, self.model, regularizeFactor=1e-3, svdTruncateTo=4,
+            self.fiducials, self.model, regularize_factor=1e-3, svd_truncate_to=4,
             verbosity=10
         )
         model_2._check_paramvec()
@@ -125,14 +125,14 @@ class CoreELGSTTester(CoreStdData, BaseCase):
     def test_do_iterative_exlgst(self):
         mdl_exlgst = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            self.elgstStrings, targetModel=self.model, svdTruncateTo=4
+            self.elgstStrings, target_model=self.model, svd_truncate_to=4
         )
         # TODO assert correctness
 
         # XXX this doesn't really look useful...
         mdl_exlgst_2 = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            self.elgstStrings, targetModel=self.model, svdTruncateTo=4,
+            self.elgstStrings, target_model=self.model, svd_truncate_to=4,
             verbosity=10
         )
         # TODO assert correctness
@@ -142,7 +142,7 @@ class CoreELGSTTester(CoreStdData, BaseCase):
         all_min_errs, all_gs_exlgst_tups = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
             [[cir.tup for cir in gsList] for gsList in self.elgstStrings],
-            targetModel=self.model, svdTruncateTo=4,
+            target_model=self.model, svd_truncate_to=4,
             returnAll=True, returnErrorVec=True
         )
         # TODO assert correctness
@@ -151,15 +151,15 @@ class CoreELGSTTester(CoreStdData, BaseCase):
     def test_do_iterative_exlgst_with_regularize_factor(self):
         mdl_exlgst = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            self.elgstStrings, targetModel=self.model, svdTruncateTo=4,
-            regularizeFactor=10
+            self.elgstStrings, target_model=self.model, svd_truncate_to=4,
+            regularize_factor=10
         )
         # TODO assert correctness
 
     def test_do_iterative_exlgst_check_jacobian(self):
         mdl_exlgst = core.do_iterative_exlgst(
             self.ds, self.mdl_clgst, self.fiducials, self.fiducials,
-            self.elgstStrings, targetModel=self.model, svdTruncateTo=4,
+            self.elgstStrings, target_model=self.model, svd_truncate_to=4,
             check_jacobian=True
         )
         # TODO assert correctness
@@ -182,7 +182,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         mdl_lsgst = core.do_mc2gst(
             self.ds, self.mdl_clgst, self.lsgstStrings[0],
             minProbClipForWeighting=1e-4, probClipInterval=(-1e6, 1e6),
-            regularizeFactor=1e-3
+            regularize_factor=1e-3
         )
         # TODO assert correctness
 
@@ -255,7 +255,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         mdl_lsgst = core.do_iterative_mc2gst(
             self.ds, self.mdl_clgst, self.lsgstStrings,
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6, 1e6),
-            regularizeFactor=10
+            regularize_factor=10
         )
         # TODO assert correctness
 
@@ -304,7 +304,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             core.do_mc2gst(
                 self.ds, self.mdl_clgst, self.lsgstStrings[0],
                 minProbClipForWeighting=1e-4, probClipInterval=(-1e6, 1e6),
-                regularizeFactor=1e-3, cptp_penalty_factor=1.0
+                regularize_factor=1e-3, cptp_penalty_factor=1.0
             )
 
 

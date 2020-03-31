@@ -35,7 +35,7 @@ def dataset(self):
 
 @ns.memo
 def mdl_lgst(self):
-    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
+    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
 
 
 @ns.memo
