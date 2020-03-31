@@ -774,13 +774,13 @@ class GaugeRobustMetricTable(WorkspaceTable):
             try:
                 _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric=gmetric,
                                                             item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
-                                                            return_all=True)  # ADDITIONAL GOPT
+                                                            return_all=True, tol=1e-5, maxiter=100)  # ADDITIONAL GOPT
             except Exception as e:
                 _warnings.warn(("GaugeRobustMetricTable gauge opt failed for %s label - "
                                 "falling back to frobenius metric! Error was:\n%s") % (lbl, str(e)))
                 _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric="frobenius",
                                                             item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
-                                                            return_all=True)  # ADDITIONAL GOPT
+                                                            return_all=True, tol=1e-5, maxiter=100)  # ADDITIONAL GOPT
 
             #print("PT2:\n",mdl.strdiff(target_model))
             #print("PT2b:\n",mdl.strdiff(target_model, 'inf'))

@@ -17,283 +17,283 @@ from ..objects import objectivefns as _objfns
 from ..objects.smartcache import smart_cached
 
 
-def total_count_matrix(gsplaq, dataset):
-    """
-    Computes the total count matrix for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify the counts
-
-    Returns
-    -------
-    numpy array of shape (M,N)
-        total count values (sum of count values for each SPAM label)
-        corresponding to operation sequences where circuit is sandwiched
-        between the specified set of N prep-fiducial and M effect-fiducial
-        operation sequences.
-    """
-    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
-    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
-        ret[elIndices] = dataset[opstr].total
-        # OR should it sum only over outcomes, i.e.
-        # = sum([dataset[opstr][ol] for ol in outcomes])
-    return ret
-
-
-def count_matrices(gsplaq, dataset):
-    """
-    Computes spamLabel's count matrix for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify the counts
-
-    spamlabels : list of strings
-        The spam labels to extract counts for, e.g. ['plus']
-
-    Returns
-    -------
-    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-        count values corresponding to spamLabel and operation sequences
-        where circuit is sandwiched between the each prep-fiducial and
-        effect-fiducial pair.
-    """
-    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
-    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
-        datarow = dataset[opstr]
-        ret[elIndices] = [datarow[ol] for ol in outcomes]
-    return ret
-
-
-def frequency_matrices(gsplaq, dataset):
-    """
-    Computes spamLabel's frequency matrix for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify the frequencies
-
-    spamlabels : list of strings
-        The spam labels to extract frequencies for, e.g. ['plus']
-
-
-    Returns
-    -------
-    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-        frequency values corresponding to spamLabel and operation sequences
-        where circuit is sandwiched between the each prep-fiducial,
-        effect-fiducial pair.
-    """
-    return count_matrices(gsplaq, dataset) \
-        / total_count_matrix(gsplaq, dataset)
-
-
-def probability_matrices(gsplaq, model,
-                         probs_precomp_dict=None):
-    """
-    Computes spamLabel's probability matrix for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    model : Model
-        The model used to specify the probabilities
-
-    spamlabels : list of strings
-        The spam labels to extract probabilities for, e.g. ['plus']
-
-    probs_precomp_dict : dict, optional
-        A dictionary of precomputed probabilities.  Keys are operation sequences
-        and values are prob-dictionaries (as returned from Model.probs)
-        corresponding to each operation sequence.
-
-    Returns
-    -------
-    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-        probability values corresponding to spamLabel and operation sequences
-        where circuit is sandwiched between the each prep-fiducial,
-        effect-fiducial pair.
-    """
-    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
-    if probs_precomp_dict is None:
-        if model is not None:
-            for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
-                probs = model.probs(opstr)
-                ret[elIndices] = [probs[ol] for ol in outcomes]
-    else:
-        for i, j, opstr, elIndices, _ in gsplaq.iter_simplified():
-            ret[elIndices] = probs_precomp_dict[opstr]  # precomp is already in element-array form
-    return ret
-
-
-@smart_cached
-def chi2_matrix(gsplaq, dataset, model, min_prob_clip_for_weighting=1e-4,
-                probs_precomp_dict=None):
-    """
-    Computes the chi^2 matrix for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    model : Model
-        The model used to specify the probabilities and SPAM labels
-
-    min_prob_clip_for_weighting : float, optional
-        defines the clipping interval for the statistical weight (see chi2fn).
-
-    probs_precomp_dict : dict, optional
-        A dictionary of precomputed probabilities.  Keys are operation sequences
-        and values are prob-dictionaries (as returned from Model.probs)
-        corresponding to each operation sequence.
-
-    Returns
-    -------
-    numpy array of shape ( len(effect_strs), len(prep_strs) )
-        chi^2 values corresponding to operation sequences where
-        circuit is sandwiched between the each prep-fiducial,
-        effect-fiducial pair.
-    """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
-    cnts = total_count_matrix(gsplaq_ds, dataset)
-    probs = probability_matrices(gsplaq, model,
-                                 probs_precomp_dict)
-    freqs = frequency_matrices(gsplaq_ds, dataset)
-
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
-    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
-            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
-        chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
-                               freqs[elIndices_ds], min_prob_clip_for_weighting)
-        ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
-    return ret
-
-
-@smart_cached
-def logl_matrix(gsplaq, dataset, model, min_prob_clip=1e-6,
-                probs_precomp_dict=None):
-    """
-    Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
-    values for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    model : Model
-        The model used to specify the probabilities and SPAM labels
-
-    min_prob_clip : float, optional
-        defines the minimum probability "patch-point" of the log-likelihood function.
-
-    probs_precomp_dict : dict, optional
-        A dictionary of precomputed probabilities.  Keys are operation sequences
-        and values are prob-dictionaries (as returned from Model.probs)
-        corresponding to each operation sequence.
-
-
-    Returns
-    -------
-    numpy array of shape ( len(effect_strs), len(prep_strs) )
-        logl values corresponding to operation sequences where
-        circuit is sandwiched between the each prep-fiducial,
-        effect-fiducial pair.
-    """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
-
-    cnts = total_count_matrix(gsplaq_ds, dataset)
-    probs = probability_matrices(gsplaq, model,
-                                 probs_precomp_dict)
-    freqs = frequency_matrices(gsplaq_ds, dataset)
-
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
-    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
-            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
-        logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
-                                        freqs[elIndices_ds], min_prob_clip)
-        ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
-    return ret
-
-
-@smart_cached
-def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
-    """
-    Computes the total-variational distance matrix of `0.5 * |p-f|`
-    values for a base circuit.
-
-    Parameters
-    ----------
-    gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
-        they correspond to.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    model : Model
-        The model used to specify the probabilities and SPAM labels
-
-    probs_precomp_dict : dict, optional
-        A dictionary of precomputed probabilities.  Keys are operation sequences
-        and values are prob-dictionaries (as returned from Model.probs)
-        corresponding to each operation sequence.
-
-
-    Returns
-    -------
-    numpy array of shape ( len(effect_strs), len(prep_strs) )
-        logl values corresponding to operation sequences where
-        circuit is sandwiched between the each prep-fiducial,
-        effect-fiducial pair.
-    """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
-
-    probs = probability_matrices(gsplaq, model,
-                                 probs_precomp_dict)
-    freqs = frequency_matrices(gsplaq_ds, dataset)
-
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
-    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
-            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
-        TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
-        ret[i, j] = sum(TVDs)  # sum all elements for each (i,j) pair
-    return ret
+#def total_count_matrix(gsplaq, dataset):
+#    """
+#    Computes the total count matrix for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify the counts
+#
+#    Returns
+#    -------
+#    numpy array of shape (M,N)
+#        total count values (sum of count values for each SPAM label)
+#        corresponding to operation sequences where circuit is sandwiched
+#        between the specified set of N prep-fiducial and M effect-fiducial
+#        operation sequences.
+#    """
+#    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
+#    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
+#        ret[elIndices] = dataset[opstr].total
+#        # OR should it sum only over outcomes, i.e.
+#        # = sum([dataset[opstr][ol] for ol in outcomes])
+#    return ret
+#
+#
+#def count_matrices(gsplaq, dataset):
+#    """
+#    Computes spamLabel's count matrix for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify the counts
+#
+#    spamlabels : list of strings
+#        The spam labels to extract counts for, e.g. ['plus']
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
+#        count values corresponding to spamLabel and operation sequences
+#        where circuit is sandwiched between the each prep-fiducial and
+#        effect-fiducial pair.
+#    """
+#    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
+#    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
+#        datarow = dataset[opstr]
+#        ret[elIndices] = [datarow[ol] for ol in outcomes]
+#    return ret
+#
+#
+#def frequency_matrices(gsplaq, dataset):
+#    """
+#    Computes spamLabel's frequency matrix for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify the frequencies
+#
+#    spamlabels : list of strings
+#        The spam labels to extract frequencies for, e.g. ['plus']
+#
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
+#        frequency values corresponding to spamLabel and operation sequences
+#        where circuit is sandwiched between the each prep-fiducial,
+#        effect-fiducial pair.
+#    """
+#    return count_matrices(gsplaq, dataset) \
+#        / total_count_matrix(gsplaq, dataset)
+#
+#
+#def probability_matrices(gsplaq, model,
+#                         probs_precomp_dict=None):
+#    """
+#    Computes spamLabel's probability matrix for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    model : Model
+#        The model used to specify the probabilities
+#
+#    spamlabels : list of strings
+#        The spam labels to extract probabilities for, e.g. ['plus']
+#
+#    probs_precomp_dict : dict, optional
+#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        and values are prob-dictionaries (as returned from Model.probs)
+#        corresponding to each operation sequence.
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
+#        probability values corresponding to spamLabel and operation sequences
+#        where circuit is sandwiched between the each prep-fiducial,
+#        effect-fiducial pair.
+#    """
+#    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
+#    if probs_precomp_dict is None:
+#        if model is not None:
+#            for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
+#                probs = model.probs(opstr)
+#                ret[elIndices] = [probs[ol] for ol in outcomes]
+#    else:
+#        for i, j, opstr, elIndices, _ in gsplaq.iter_simplified():
+#            ret[elIndices] = probs_precomp_dict[opstr]  # precomp is already in element-array form
+#    return ret
+#
+#
+#@smart_cached
+#def chi2_matrix(gsplaq, dataset, model, min_prob_clip_for_weighting=1e-4,
+#                probs_precomp_dict=None):
+#    """
+#    Computes the chi^2 matrix for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify frequencies and counts
+#
+#    model : Model
+#        The model used to specify the probabilities and SPAM labels
+#
+#    min_prob_clip_for_weighting : float, optional
+#        defines the clipping interval for the statistical weight (see chi2fn).
+#
+#    probs_precomp_dict : dict, optional
+#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        and values are prob-dictionaries (as returned from Model.probs)
+#        corresponding to each operation sequence.
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(effect_strs), len(prep_strs) )
+#        chi^2 values corresponding to operation sequences where
+#        circuit is sandwiched between the each prep-fiducial,
+#        effect-fiducial pair.
+#    """
+#    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
+#    cnts = total_count_matrix(gsplaq_ds, dataset)
+#    probs = probability_matrices(gsplaq, model,
+#                                 probs_precomp_dict)
+#    freqs = frequency_matrices(gsplaq_ds, dataset)
+#
+#    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+#            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
+#        chiSqs = _tools.chi2fn(cnts[elIndices_ds], probs[elIndices],
+#                               freqs[elIndices_ds], min_prob_clip_for_weighting)
+#        ret[i, j] = sum(chiSqs)  # sum all elements for each (i,j) pair
+#    return ret
+#
+#
+#@smart_cached
+#def logl_matrix(gsplaq, dataset, model, min_prob_clip=1e-6,
+#                probs_precomp_dict=None):
+#    """
+#    Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
+#    values for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify frequencies and counts
+#
+#    model : Model
+#        The model used to specify the probabilities and SPAM labels
+#
+#    min_prob_clip : float, optional
+#        defines the minimum probability "patch-point" of the log-likelihood function.
+#
+#    probs_precomp_dict : dict, optional
+#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        and values are prob-dictionaries (as returned from Model.probs)
+#        corresponding to each operation sequence.
+#
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(effect_strs), len(prep_strs) )
+#        logl values corresponding to operation sequences where
+#        circuit is sandwiched between the each prep-fiducial,
+#        effect-fiducial pair.
+#    """
+#    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
+#
+#    cnts = total_count_matrix(gsplaq_ds, dataset)
+#    probs = probability_matrices(gsplaq, model,
+#                                 probs_precomp_dict)
+#    freqs = frequency_matrices(gsplaq_ds, dataset)
+#
+#    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+#            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
+#        logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+#                                        freqs[elIndices_ds], min_prob_clip)
+#        ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
+#    return ret
+#
+#
+#@smart_cached
+#def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
+#    """
+#    Computes the total-variational distance matrix of `0.5 * |p-f|`
+#    values for a base circuit.
+#
+#    Parameters
+#    ----------
+#    gsplaq : CircuitPlaquette
+#        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+#        specifies which matrix indices should be computed and which operation sequences
+#        they correspond to.
+#
+#    dataset : DataSet
+#        The data used to specify frequencies and counts
+#
+#    model : Model
+#        The model used to specify the probabilities and SPAM labels
+#
+#    probs_precomp_dict : dict, optional
+#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        and values are prob-dictionaries (as returned from Model.probs)
+#        corresponding to each operation sequence.
+#
+#
+#    Returns
+#    -------
+#    numpy array of shape ( len(effect_strs), len(prep_strs) )
+#        logl values corresponding to operation sequences where
+#        circuit is sandwiched between the each prep-fiducial,
+#        effect-fiducial pair.
+#    """
+#    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
+#
+#    probs = probability_matrices(gsplaq, model,
+#                                 probs_precomp_dict)
+#    freqs = frequency_matrices(gsplaq_ds, dataset)
+#
+#    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+#    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
+#            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
+#        TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
+#        ret[i, j] = sum(TVDs)  # sum all elements for each (i,j) pair
+#    return ret
 
 
 def small_eigval_err_rate(sigma, direct_gst_models):
@@ -429,47 +429,48 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
     return n_boxes, dof_per_box
 
 
-def _compute_probabilities(gss, model, dataset, prob_clip_interval=(-1e6, 1e6),
-                           check=False, op_label_aliases=None,
-                           comm=None, smartc=None, wildcard=None):
-    """
-    Returns a dictionary of probabilities for each gate sequence in
-    CircuitStructure `gss`.
-    """
-    def smart(fn, *args, **kwargs):
-        if smartc:
-            return smartc.cached_compute(fn, args, kwargs)[1]
-        else:
-            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
-            return fn(*args, **kwargs)
-
-    circuitList = gss.allstrs
-
-    #compute probabilities
-    #OLD: evt,lookup,_ = smart(model.bulk_evaltree, circuitList, dataset=dataset)
-    evt, _, _, lookup, outcomes_lookup = smart(model.bulk_evaltree_from_resources,
-                                               circuitList, comm, dataset=dataset)
-
-    # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
-    bulk_probs = _np.zeros(evt.num_final_elements(), 'd')
-    smart(model.bulk_fill_probs, bulk_probs, evt, prob_clip_interval, check, comm, _filledarrays=(0,))
-    # bulk_probs indexed by [element_index]
-
-    if wildcard:
-        freqs = _np.empty(evt.num_final_elements(), 'd')
-        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, op_label_aliases)
-        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, op_label_aliases)
-        for (i, opStr) in enumerate(ds_circuit_list):
-            cnts = dataset[opStr].counts; total = sum(cnts.values())
-            freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
-
-        probs_in = bulk_probs.copy()
-        wildcard.update_probs(probs_in, bulk_probs, freqs, circuitList, lookup)
-
-    probs_dict = \
-        {circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
-         for i in range(len(circuitList))}
-    return probs_dict
+#TODO REMOVE
+#def _compute_probabilities(gss, model, dataset, prob_clip_interval=(-1e6, 1e6),
+#                           check=False, op_label_aliases=None,
+#                           comm=None, smartc=None, wildcard=None):
+#    """
+#    Returns a dictionary of probabilities for each gate sequence in
+#    CircuitStructure `gss`.
+#    """
+#    def smart(fn, *args, **kwargs):
+#        if smartc:
+#            return smartc.cached_compute(fn, args, kwargs)[1]
+#        else:
+#            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+#            return fn(*args, **kwargs)
+#
+#    circuitList = gss.allstrs
+#
+#    #compute probabilities
+#    #OLD: evt,lookup,_ = smart(model.bulk_evaltree, circuitList, dataset=dataset)
+#    evt, _, _, lookup, outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+#                                               circuitList, comm, dataset=dataset)
+#
+#    # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
+#    bulk_probs = _np.zeros(evt.num_final_elements(), 'd')
+#    smart(model.bulk_fill_probs, bulk_probs, evt, prob_clip_interval, check, comm, _filledarrays=(0,))
+#    # bulk_probs indexed by [element_index]
+#
+#    if wildcard:
+#        freqs = _np.empty(evt.num_final_elements(), 'd')
+#        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, op_label_aliases)
+#        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, op_label_aliases)
+#        for (i, opStr) in enumerate(ds_circuit_list):
+#            cnts = dataset[opStr].counts; total = sum(cnts.values())
+#            freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
+#
+#        probs_in = bulk_probs.copy()
+#        wildcard.update_probs(probs_in, bulk_probs, freqs, circuitList, lookup)
+#
+#    probs_dict = \
+#        {circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
+#         for i in range(len(circuitList))}
+#    return probs_dict
 
 
 #@smart_cached

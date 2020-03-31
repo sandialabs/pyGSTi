@@ -182,7 +182,7 @@ class ObjectiveFunctionBuilder(object):
             builder = TVDFunction.builder(
                 name='tvd',
                 description="Total Variational Distance (TVD)")
-                
+
         else:
             raise ValueError("Invalid objective: %s" % objective)
         assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"

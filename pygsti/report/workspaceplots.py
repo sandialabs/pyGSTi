@@ -1245,7 +1245,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     tmargin *= scale
     bmargin *= scale
 
-    layout = go.Layout(
+    layout = dict(  # go.Layout(  #use dict for speed (no plotly validation)
         title=title,
         titlefont=dict(size=10 * scale),
         width=width,
@@ -1286,7 +1286,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         annotations=annotations
     )
 
-    return ReportFigure(go.Figure(data=data, layout=layout),
+    return ReportFigure(dict(data=data, layout=layout),  # go.Figure - use dict for speed (no validation)
                         colormap, flipped_mx, plt_data=flipped_mx)
 
 
@@ -1572,6 +1572,7 @@ class ColorBoxPlot(WorkspacePlot):
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
 
+        #TODO REMOVE
         #probs_precomp_dict = None
         #plottypes_that_need_precomp = ('chi2', 'logl', 'tvd')
         #if any([(t in plottypes) for t in plottypes_that_need_precomp]):  # bulk-compute probabilities for performance
@@ -1583,11 +1584,11 @@ class ColorBoxPlot(WorkspacePlot):
         for ptyp in plottypes:
             if ptyp in ("logl", "chi2", "tvd"):
                 ptyp = _objfns.ObjectiveFunctionBuilder.simple(ptyp)
-                
+
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 objfn_builder = ptyp
-                CACHE = None
-                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE) # self.ws.smartCache,
+                CACHE = None  # use self.ws.smartCache?
+                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE)
                 if wildcard:
                     objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
@@ -1600,7 +1601,7 @@ class ColorBoxPlot(WorkspacePlot):
                 else:
                     colormapType = "linlog"
                     linlog_color = "red"
-                    
+
                 ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
 
                 mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
@@ -1746,7 +1747,7 @@ class ColorBoxPlot(WorkspacePlot):
 
             circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _objfns.BulkCircuitList) \
                 else _objs.LsGermsSerialStructure.from_list(circuit_list, dataset)  # default struct
-                
+
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
             else:
@@ -1857,11 +1858,10 @@ class ColorBoxPlot(WorkspacePlot):
         #fig2 = circuit_color_boxplot(gss, subMxs, colormap2,
         #                                False, box_labels, prec, hover_info, sum_up, invert)
         #fig['data'].append(fig2['data'][0])
-        #fig['layout'].update(
-        #    )
+        #fig['layout'].update( )
         return fig
 
-    
+
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
     return plaq.elementvec_to_matrix(extra[0], mergeop=extra[1])
@@ -1951,7 +1951,7 @@ def _addl_mx_fn_outcomes(plaq, x, y, extra):
 #TODO REMOVE
 #def _addl_mx_fn_p(plaq, x, y, extra):
 #    objfn, = extra
-#    
+#
 #    probs = _ph.probability_matrices(plaq, model,
 #                                     probs_precomp_dict)
 #    return _separate_outcomes_matrix(plaq, probs, "%.5g")
@@ -2668,10 +2668,10 @@ class FitComparisonBarPlot(WorkspacePlot):
             if circuit_list is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
-                CACHE = None
+                CACHE = None  # use self.ws.smartCache?
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuit_list, objfn_builder, Np, wildcard,
-                                                          return_all=True, comm=comm, cache=CACHE)  # self.ws.smartCache,
+                                                          return_all=True, comm=comm, cache=CACHE)
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"

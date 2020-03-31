@@ -183,7 +183,6 @@ class CircuitPlaquette(object):
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
         return ret
 
-
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
         Manipulate this object's circuits according to `processor_fn`
@@ -632,7 +631,7 @@ class LsGermsStructure(CircuitStructure):
 
         elements = [(j, i, self.prep_fiducials[i] + base_str + self.meas_fiducials[j])
                     for i, j in fidpairs]  # note preps are *cols* not rows
-        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # strings, not just indices
+        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # circuits, not indices
 
         return CircuitPlaquette(base_str, len(self.meas_fiducials),
                                 len(self.prep_fiducials), elements,

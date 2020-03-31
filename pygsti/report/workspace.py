@@ -30,7 +30,7 @@ from . import merge_helpers as _merge
 from pprint import pprint as _pprint
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
-DEFAULT_PLOTLY_TEMPLATE = 'none'
+VALIDATE_PLOTLY = False  # False increases performance of report rendering; set to True to debug
 
 
 def in_ipython_notebook():
@@ -2379,10 +2379,10 @@ class WorkspacePlot(WorkspaceOutput):
                     fig_dict = fig.render(typ, plotDivID)
                 else:
                     #use auto-sizing (fluid layout)
-                    fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)
+                    #fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)  #slow: set default theme in plot_ex
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
-                        lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
+                        lock_aspect_ratio=True, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
                         rel_figure_dir=_os.path.basename(

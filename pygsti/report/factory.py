@@ -313,7 +313,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.simple('logl'))
             switchBd.params[d, i] = est.parameters
-            
+
             #REMOVE
             #def rpt_objective(opt_objective):
             #    """ If optimized using just LGST, compute logl values """
@@ -374,7 +374,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
-                                                                               est.models['target'])
+                                                                                     est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.mdl_gaugeinv_ep[d, i] = None
             except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion

@@ -69,6 +69,7 @@ class GaugeInvariantsGatesSection(_Section):
 
     @_Section.figure_factory(4)
     def final_gauge_inv_model_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
+        #return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
         return workspace.GaugeRobustModelTable(
             switchboard.mdl_final, switchboard.mdl_target, 'boxes', _cri(1, switchboard, confidence_level, ci_brevity)
         )
@@ -95,6 +96,7 @@ class GaugeInvariantsGatesSection(_Section):
     @_Section.figure_factory(4)
     def final_gauge_inv_metric_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                      gr_switchboard=None, **kwargs):
+        #return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
         return workspace.GaugeRobustMetricTable(
             switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
             _cri(1, switchboard, confidence_level, ci_brevity)
