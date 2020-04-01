@@ -363,7 +363,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
 
             if damping_basis == "singular_values":
-                Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac)
+                Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac, full_matrices=False)
                 Jac_V = _np.conjugate(Jac_Vh.T)
 
                 #DEBUG

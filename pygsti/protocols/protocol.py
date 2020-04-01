@@ -704,7 +704,7 @@ class CircuitStructuresDesign(CircuitListsDesign):
         validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_structs, validStructTypes):
             master = circuit_structs
-            circuit_structs = [master.truncate(Ls=master.Ls[0:i + 1])
+            circuit_structs = [master.truncate(max_lengths=master.Ls[0:i + 1])
                                for i in range(len(master.Ls))]
             nested = True  # (by this construction)
 

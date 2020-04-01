@@ -340,12 +340,12 @@ class MDSObjectiveFunction(ObjectiveFunction):
         # Memory check
         persistent_mem = self.get_persistent_memory_estimate()
         if self.raw_objfn.mem_limit:
+            in_gb = 1.0 / 1024.0**3  # in gigabytes
             if self.raw_objfn.mem_limit < persistent_mem:
-                in_gb = 1.0 / 1024.0**3  # in gigabytes
                 raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
                                   "({} GB)".format(self.raw_objfn.mem_limit * in_gb, persistent_mem * in_gb))
 
-            cur_mem = _profiler._get_max_mem_usage(self.comm)  # is this what we want??
+            cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
             self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem))
             evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
             self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
@@ -960,6 +960,9 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             terms = _np.where(probs < self.min_p,
                               terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
+            if _np.min(terms) < 0.0:
+                raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
+                                  "(it should be smaller than the smallest frequency)") % self.min_p)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 

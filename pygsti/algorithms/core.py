@@ -780,7 +780,7 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
 
     #assume a path set has already been chosen, as one should have been chosen
     # when evTree was created.
-    evTree = objective.evTree
+    evTree = objective.eval_tree
     comm, memLimit = resource_alloc.comm, resource_alloc.mem_limit
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
@@ -799,7 +799,7 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
         optimizer.oob_action = "reject" if bFinalIter else "stop"
         opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
 
-        if not opt_result.msg == "Objective function out-of-bounds! STOP":
+        if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
                 printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             elif pathFraction > pathFractionThreshold:
