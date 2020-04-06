@@ -801,7 +801,7 @@ class AdvancedOptions(dict):
                              "', '".join(self.valid_keys)))
 
 
-class GSTAdvancedOptions(dict):
+class GSTAdvancedOptions(AdvancedOptions):
     valid_keys = ('germ_length_limits', 'include_lgst', 'nested_circuit_lists',
                   'string_manipulation_rules', 'op_label_aliases', 'circuit_weights',
                   'profile', 'record_output', 'distribute_method',
