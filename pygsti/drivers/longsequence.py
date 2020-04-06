@@ -26,6 +26,7 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
+from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -124,7 +125,7 @@ def do_model_test(model_filename_or_object,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     ds = _load_dataset(data_filename_or_set, comm, printer)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -234,7 +235,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
@@ -399,7 +400,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
@@ -664,7 +665,7 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if advanced_options and 'all' in advanced_options and len(advanced_options) == 1:
         advanced_options = advanced_options['all']  # backward compatibility
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
@@ -786,36 +787,3 @@ def _get_optimizer(advanced_options, exp_design):
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
-
-
-class AdvancedOptions(dict):
-    valid_keys = ()
-
-    def __init__(self, items=None):
-        super().__init__()
-        self.update(items or {})
-
-    def __setitem__(self, key, val):
-        if key not in self.valid_keys:
-            raise ValueError("Invalid key '%s'. Valid keys are: '%s'" % (str(key), "', '".join(self.valid_keys)))
-        super().__setitem__(key, val)
-
-    def update(self, d):
-        invalid_keys = [k for k in d.keys() if k not in self.valid_keys]
-        if invalid_keys:
-            raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
-                             "', '".join(self.valid_keys)))
-
-
-class GSTAdvancedOptions(AdvancedOptions):
-    valid_keys = ('germ_length_limits', 'include_lgst', 'nested_circuit_lists',
-                  'string_manipulation_rules', 'op_label_aliases', 'circuit_weights',
-                  'profile', 'record_output', 'distribute_method',
-                  'objective', 'use_freq_weighted_chi2', 'prob_clip_interval', 'min_prob_clip',
-                  'min_prob_clip_for_weighting', 'radius', 'cptp_penalty_factor', 'spam_penalty_factor',
-                  'bad_fit_threshold', 'on_bad_fit',
-                  'starting_point', 'depolarize_start', 'randomize_start', 'lgst_gaugeopt_tol',
-                  'contract_start_to_cptp',
-                  'always_perform_mle', 'only_perform_mle',
-                  'max_iterations', 'tolerance', 'finitediff_iterations', 'extra_lm_opts',
-                  'set trivial_gauge_group', 'op_labels', 'unreliable_ops')
