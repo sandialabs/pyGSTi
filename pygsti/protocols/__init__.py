@@ -10,6 +10,7 @@
 
 from .protocol import *
 from .gst import *
+from .vb import *
 from .rb import *
 from .rpe import *
 from .modeltest import *
