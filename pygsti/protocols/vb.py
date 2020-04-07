@@ -108,7 +108,7 @@ class Benchmark(_proto.Protocol):
     """ A benchmarking protocol that can construct "summary" quantities from the raw data. """
 
     summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts',
-                         'success_probabilities', 'adjusted_success_probabilities')
+                         'success_probabilities', 'polarization', 'adjusted_success_probabilities')
     circuit_datatypes = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
     dscmp_datatypes = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
@@ -134,7 +134,6 @@ class Benchmark(_proto.Protocol):
         def adjusted_success_probability(hamming_distance_counts):
             """ TODO: docstring """
             hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
-            #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
             adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
             return adjSP
 
@@ -142,10 +141,13 @@ class Benchmark(_proto.Protocol):
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
-
+            sp = _np.nan if tc == 0 else sc / tc
+            nQ = len(circ.line_labels)
+            pol = (sp - 1 / 2**nQ) / (1 - 1 / 2**nQ)
             ret = {'success_counts': sc,
                    'total_counts': tc,
-                   'success_probabilities': _np.nan if tc == 0 else sc / tc,
+                   'success_probabilities': sp,
+                   'polarization': pol,
                    'hamming_distance_counts': hdc,
                    'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
@@ -294,45 +296,46 @@ class Benchmark(_proto.Protocol):
 #class PassStabilityTest(_proto.Protocol):
 #    pass
 
+# Currently unused so Tim has commented out for now.
+# class VolumetricBenchmarkGrid(Benchmark):
+#     """ A protocol that creates an entire depth vs. width grid of volumetric benchmark values """
 
-class VolumetricBenchmarkGrid(Benchmark):
-    """ A protocol that creates an entire depth vs. width grid of volumetric benchmark values """
+#     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
+#                  paths='all', statistic='mean', aggregate=True, rescaler='auto',
+#                  dscomparator=None, name=None):
 
-    def __init__(self, depths='all', widths='all', datatype='success_probabilities',
-                 paths='all', statistic='mean', aggregate=True, rescaler='auto',
-                 dscomparator=None, name=None):
+#         super().__init__(name)
+#         self.postproc = VolumetricBenchmarkGridPP(depths, widths, datatype, paths, statistic, aggregate, self.name)
+#         self.dscomparator = dscomparator
+#         self.rescaler = rescaler
 
-        super().__init__(name)
-        self.postproc = VolumetricBenchmarkGridPP(depths, widths, datatype, paths, statistic, aggregate, self.name)
-        self.dscomparator = dscomparator
-        self.rescaler = rescaler
+#         self.auxfile_types['postproc'] = 'protocolobj'
+#         self.auxfile_types['dscomparator'] = 'pickle'
+#         self.auxfile_types['rescaler'] = 'reset'  # punt for now - fix later
 
-        self.auxfile_types['postproc'] = 'protocolobj'
-        self.auxfile_types['dscomparator'] = 'pickle'
-        self.auxfile_types['rescaler'] = 'reset'  # punt for now - fix later
+#     def run(self, data, memlimit=None, comm=None):
+#         #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
+#         # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
+#         # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
+#         # only contains data for a single width), we can just "merge" the VB results of all
+#         # the underlying by-depth datas, so long as they're all for different widths.
 
-    def run(self, data, memlimit=None, comm=None):
-        #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
-        # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
-        # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
-        # only contains data for a single width), we can just "merge" the VB results of all
-        # the underlying by-depth datas, so long as they're all for different widths.
-
-        #Then run resulting data normally, giving a results object
-        # with "top level" dicts correpsonding to different paths
-        VB = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
-                                 self.rescaler, self.dscomparator, name=self.name)
-        separate_results = _proto.SimpleRunner(VB).run(data, memlimit, comm)
-        pp_results = self.postproc.run(separate_results, memlimit, comm)
-        pp_results.protocol = self
-        return pp_results
+#         #Then run resulting data normally, giving a results object
+#         # with "top level" dicts correpsonding to different paths
+#         VB = ByDepthBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
+#                               self.rescaler, self.dscomparator, name=self.name)
+#         separate_results = _proto.SimpleRunner(VB).run(data, memlimit, comm)
+#         pp_results = self.postproc.run(separate_results, memlimit, comm)
+#         pp_results.protocol = self
+#         return pp_results
 
 
-class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
-    """ A postprocesor that constructs a grid of volumetric benchmarks from existing results. """
+class VolumetricBenchmark(_proto.ProtocolPostProcessor):
+    """ A postprocesor that constructs a volumetric benchmark from existing results. """
 
-    def __init__(self, depths='all', widths='all', datatype='success_probabilities',
-                 paths='all', statistic='mean', aggregate=True, name=None):
+    def __init__(self, depths='all', widths='all', datatype='polarization',
+                 statistic='mean', paths='all', edesigntype=None, aggregate=True,
+                 name=None):
 
         super().__init__(name)
         self.depths = depths
@@ -341,6 +344,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
         self.paths = paths if paths == 'all' else sorted(paths)  # need to ensure paths are grouped by common prefix
         self.statistic = statistic
         self.aggregate = aggregate
+        self.edesigntype = edesigntype
 
     def run(self, results, memlimit=None, comm=None):
         data = results.data
@@ -370,8 +374,12 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                 if passname:  # then we expect final Results are MultiPassResults
                     root = root.passes[passname]  # now root should be a BenchmarkingResults
                 assert(isinstance(root, VolumetricBenchmarkingResults))
-                assert(isinstance(root.data.edesign, ByDepthDesign)), \
-                    "All paths must lead to by-depth exp. design, not %s!" % str(type(root.data.edesign))
+                if self.edesigntype is None:
+                    assert(isinstance(root.data.edesign, ByDepthDesign)), \
+                        "All paths must lead to by-depth exp. design, not %s!" % str(type(root.data.edesign))
+                else:
+                    if not isinstance(root.data.edsign, self.edesigntype):
+                        continue
 
                 #Get the list of depths we'll extract from this (`root`) sub-results
                 depths = root.data.edesign.depths if (self.depths == 'all') else \
@@ -403,29 +411,12 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
             results.failure_counts = fails
             passresults.append(results)
 
+        agg_fn = _get_statistic_function(self.statistic)
+
         if self.aggregate and len(passnames) > 1:  # aggregate pass data into a single set of qty dicts
             agg_vb = _tools.NamedDict('Depth', 'int', None)
             agg_fails = _tools.NamedDict('Depth', 'int', None)
             template = passresults[0].volumetric_benchmarks  # to get widths and depths
-
-            #Get function to aggregate the different per-circuit datatype values
-            if self.statistic == 'max' or self.statistic == 'maxmax':
-                np_fn = _np.nanmax
-            elif self.statistic == 'mean':
-                np_fn = _np.nanmean
-            elif self.statistic == 'min' or self.statistic == 'minmin':
-                np_fn = _np.nanmin
-            elif self.statistic == 'dist':
-                def np_fn(v): return v  # identity
-            else: raise ValueError("Invalid statistic '%s'!" % self.statistic)
-
-            def agg_fn(percircuitdata, width, rescale=True):
-                """ Aggregates datatype-data for all circuits at same depth """
-                rescaled = self.rescale_function(percircuitdata, width) if rescale else percircuitdata
-                if _np.isnan(rescaled).all():
-                    return _np.nan
-                else:
-                    return np_fn(rescaled)
 
             for depth, template_by_width_data in template.items():
                 agg_vb[depth] = _tools.NamedDict('Width', 'int', 'float')
@@ -446,7 +437,7 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                     if self.statistic == 'dist':
                         agg_vb[depth][width] = [item for sublist in vb_ppd for item in sublist]
                     else:
-                        agg_vb[depth][width] = agg_fn(vb_ppd, width, rescale=False)
+                        agg_vb[depth][width] = agg_fn(vb_ppd)
 
             aggregated_results = VolumetricBenchmarkingResults(data, self)
             aggregated_results.volumetric_benchmarks = agg_vb
@@ -473,53 +464,62 @@ class VolumetricBenchmarkGridPP(_proto.ProtocolPostProcessor):
                             vb[d][w] = vb[d2][w2]
 
 
-class VolumetricBenchmark(Benchmark):
-    """ A volumetric benchmark protocol """
+def _get_statistic_function(stat):
+    """
+    Get function to aggregate the different per-circuit datatype values
+    """
+    if stat == 'max' or stat == 'maxmax':
+        def fn(v):
+            if _np.isnan(v).all():
+                return _np.nan
+            else:
+                return _np.nanmax(v)
+    elif stat == 'mean':
+        def fn(v):
+            if _np.isnan(v).all():
+                return _np.nan
+            else:
+                return _np.nanmean(v)
+    elif stat == 'min' or stat == 'minmin':
+        def fn(v):
+            if _np.isnan(v).all():
+                return _np.nan
+            else:
+                return _np.nanmin(v)
+    elif stat == 'dist':
+        def fn(v):
+            return v  # identity
+    elif stat == 'sum':  # Should this be nansum?
+        fn = _np.sum
+    else: raise ValueError("Invalid statistic '%s'!" % stat)
+    return fn
 
-    def __init__(self, depths='all', datatype='success_probabilities',
-                 statistic='mean', rescaler='auto', dscomparator=None,
-                 custom_data_src=None, name=None):
 
-        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin', 'sum'))
+class ByDepthBenchmark(Benchmark):
+    """ TODO """
+
+    def __init__(self, depths='all', datatype='polarization', statistic='mean',
+                 dscomparator=None, custom_data_src=None, name=None):
+
+        assert(statistic in ('max', 'mean', 'min', 'dist', 'sum'))
 
         super().__init__(name)
         self.depths = depths
-        #self.widths = widths  # widths='all',
         self.datatype = datatype
         self.statistic = statistic
         self.dscomparator = dscomparator
-        self.rescaler = rescaler
         self.custom_data_src = custom_data_src
 
         self.auxfile_types['dscomparator'] = 'pickle'
         # because this *could* be a model or a qty dict (or just a string?)
         self.auxfile_types['custom_data_src'] = 'pickle'
-        self.auxfile_types['rescale_function'] = 'none'  # don't serialize this, so need _set_rescale_function
-        self._set_rescale_function()
+        #self.auxfile_types['rescale_function'] = 'none'  # don't serialize this, so need _set_rescale_function
+        #self._set_rescale_function()
         self._nameddict_attributes += (('datatype', 'Data Type', 'category'),
                                        ('statistic', 'Statistic', 'category'))
 
-    def _init_unserialized_attributes(self):
-        self._set_rescale_function()
-
-    def _set_rescale_function(self):
-        rescaler = self.rescaler
-        if isinstance(rescaler, str):
-            if rescaler == 'auto':
-                if self.datatype == 'success_probabilities':
-                    def rescale_function(data, width):
-                        return list((_np.array(data) - 1 / 2**width) / (1 - 1 / 2**width))
-                else:
-                    def rescale_function(data, width):
-                        return data
-            elif rescaler == 'none':
-                def rescale_function(data, width):
-                    return data
-            else:
-                raise ValueError("Unknown rescaling option!")
-        else:
-            rescale_function = rescaler
-        self.rescale_function = rescale_function
+    #def _init_unserialized_attributes(self):
+    #    self._set_rescale_function()
 
     def run(self, data, memlimit=None, comm=None):
 
@@ -564,26 +564,8 @@ class VolumetricBenchmark(Benchmark):
         else:
             raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
 
-        #Get function to aggregate the different per-circuit datatype values
-        if self.statistic == 'max' or self.statistic == 'maxmax':
-            np_fn = _np.nanmax
-        elif self.statistic == 'mean':
-            np_fn = _np.nanmean
-        elif self.statistic == 'min' or self.statistic == 'minmin':
-            np_fn = _np.nanmin
-        elif self.statistic == 'dist':
-            def np_fn(v): return v  # identity
-        elif self.statistic == 'sum':
-            np_fn = _np.sum
-        else: raise ValueError("Invalid statistic '%s'!" % self.statistic)
-
-        def agg_fn(percircuitdata, width, rescale=True):
-            """ Aggregates datatype-data for all circuits at same depth """
-            rescaled = self.rescale_function(percircuitdata, width) if rescale else percircuitdata
-            if _np.isnan(rescaled).all():
-                return _np.nan
-            else:
-                return np_fn(rescaled)
+        # The function we use to aggregate datatype-data for all circuits at same depth
+        agg_fn = _get_statistic_function(self.statistic)
 
         def failcnt_fn(percircuitdata):
             """ Returns (nSucceeded, nFailed) for all circuits at same depth """
@@ -605,7 +587,7 @@ class VolumetricBenchmark(Benchmark):
         for depth in depths:
             percircuitdata = data_per_depth[depth]
             successes[depth][width], fails[depth][width] = failcnt_fn(percircuitdata)
-            vb[depth][width] = agg_fn(percircuitdata, width)
+            vb[depth][width] = agg_fn(percircuitdata)
 
         results = VolumetricBenchmarkingResults(data, self)  # 'Qty', 'category'
         results.volumetric_benchmarks = vb
@@ -614,12 +596,12 @@ class VolumetricBenchmark(Benchmark):
         return results
 
 
-class PredictedVolumetricBenchmark(VolumetricBenchmark):
+class PredictedByDepthBenchmark(ByDepthBenchmark):
     """Runs a volumetric benchmark on success/fail data predicted from a model"""
 
     def __init__(self, model_or_summary_data, depths='all', statistic='mean',
-                 rescaler='auto', dscomparator=None, name=None):
-        super().__init__(depths, 'success_probabilities', statistic, rescaler,
+                 dscomparator=None, name=None):
+        super().__init__(depths, 'success_probabilities', statistic,
                          dscomparator, model_or_summary_data, name)
 
 
@@ -642,6 +624,6 @@ class VolumetricBenchmarkingResults(_proto.ProtocolResults):
         self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDict don't json
 
 
-VB = VolumetricBenchmark
-VBGrid = VolumetricBenchmarkGrid
+#BDB = ByDepthBenchmark
+#VBGrid = VolumetricBenchmarkGrid
 VBResults = VolumetricBenchmarkingResults  # shorthand
