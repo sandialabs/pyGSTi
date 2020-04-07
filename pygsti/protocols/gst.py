@@ -31,7 +31,7 @@ from .. import optimize as _opt
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
-from ..objects.estimate import Estimate as _Estimate
+from pygsti.protocols.estimate import Estimate as _Estimate
 from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
 from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup

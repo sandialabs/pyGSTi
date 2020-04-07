@@ -24,7 +24,7 @@ from .. import construction as _construction
 from .. import io as _io
 from .. import tools as _tools
 
-from ..objects.estimate import Estimate as _Estimate
+from pygsti.protocols.estimate import Estimate as _Estimate
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns

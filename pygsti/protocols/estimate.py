@@ -13,13 +13,13 @@ import collections as _collections
 import warnings as _warnings
 import copy as _copy
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .. import tools as _tools
-from . import objectivefns as _objfns
-from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
-from .circuit import Circuit as _Circuit
-from .explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti import tools as _tools
+from ..objects import objectivefns as _objfns
+from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
+from ..objects.circuit import Circuit as _Circuit
+from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])

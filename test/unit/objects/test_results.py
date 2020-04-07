@@ -3,8 +3,9 @@ import pickle
 from ..util import BaseCase, Namespace
 from . import fixtures as pkg
 
-from pygsti.objects import results, estimate
+from pygsti.objects import results
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.protocols import estimate
 
 
 class ResultsBase(object):

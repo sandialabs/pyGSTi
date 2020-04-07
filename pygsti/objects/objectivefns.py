@@ -21,7 +21,6 @@ from .computationcache import ComputationCache as _ComputationCache
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
-_dummy_profiler = _profiler.DummyProfiler()
 CHECK = False
 CHECK_JACOBIAN = False
 FLOATSIZE = 8  # TODO - get bytes-in-float a better way!

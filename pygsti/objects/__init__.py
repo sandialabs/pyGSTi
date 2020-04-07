@@ -93,7 +93,10 @@ from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
 from .labeldicts import StateSpaceLabels
 
-from .objectivefns import ComputationCache, BulkCircuitList, ResourceAllocation, ObjectiveFunctionBuilder, \
+from .computationcache import ComputationCache
+from .bulkcircuitlist import BulkCircuitList
+from .resourceallocation import ResourceAllocation
+from .objectivefns import ObjectiveFunctionBuilder, \
     ObjectiveFunction, RawChi2Function, RawChiAlphaFunction, RawFreqWeightedChi2Function, \
     RawPoissonPicDeltaLogLFunction, RawDeltaLogLFunction, RawMaxLogLFunction, RawTVDFunction, \
     Chi2Function, ChiAlphaFunction, FreqWeightedChi2Function, PoissonPicDeltaLogLFunction, DeltaLogLFunction, \

@@ -6,7 +6,7 @@ from . import fixtures as pkg
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects.results import Results
-from pygsti.objects import estimate
+from pygsti.protocols import estimate
 
 
 class EstimateBase(object):
