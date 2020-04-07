@@ -1,52 +1,13 @@
 """A python implementation of Gate Set Tomography"""
 
+from warnings import warn
+
 try:
     from setuptools import setup
     from setuptools import Extension
 except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
-
-try:
-    import numpy as np
-    from Cython.Build import cythonize
-    ext_modules = [
-        Extension(
-            "pygsti.tools.fastcalc",
-            sources=["packages/pygsti/tools/fastcalc.pyx"],  # , "fastcalc.c
-            # # Cython docs on NumPy usage should mention this!
-            # define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
-            # # leave above commented
-            # # see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
-            # define_macros = [('CYTHON_TRACE','1')], #for profiling
-            include_dirs=['.', np.get_include()]
-            # libraries=['m'] #math lib?
-        ),
-        Extension(
-            "pygsti.objects.fastopcalc",
-            sources=["packages/pygsti/objects/fastopcalc.pyx"],
-            include_dirs=['.', np.get_include()],
-            language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
-            extra_link_args=["-std=c++11"]
-        ),
-        Extension(
-            "pygsti.objects.fastreplib",
-            sources=[
-                "packages/pygsti/objects/fastreplib.pyx",
-                "packages/pygsti/objects/fastreps.cpp"
-            ],
-            include_dirs=['.', np.get_include()],
-            language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
-            extra_link_args=["-std=c++11"]
-        )
-    ]
-    ext_modules = cythonize(ext_modules)
-except ImportError:  # if Cython isn't available (e.g. in readthedocs) just skip
-    # print warning??
-    ext_modules = []
-
 
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
@@ -72,8 +33,8 @@ The primary goals of the pyGSTi project are to:
 # Extra requirements
 extras = {
     'diamond norm computation': [
-        'cvxpy',
-        'cvxopt'
+        'cvxopt',
+        'cvxpy'
     ],
     'nose testing': ['nose'],
     'accurate memory profiling': ['psutil'],
@@ -81,6 +42,7 @@ extras = {
     'evolutionary optimization algorithm': ['deap'],
     'pickling report tables': ['pandas'],
     'generating PDFs of report figures': ['matplotlib'],
+    'generating html reports': ['jinja2'],
     'generating report notebooks': [
         'ipython',
         'notebook'
@@ -92,18 +54,20 @@ extras = {
         'flake8'
     ],
     'testing': [
+        'coverage',
+        'cvxopt',
+        'cvxpy',
+        'cython',
+        'matplotlib',
+        'mpi4py',
+        'msgpack',
         'nose',
         'nose-timer',
-        'cython',
-        'cvxpy',
-        'cvxopt',
-        'psutil',
-        'mpi4py',
         'pandas',
-        'msgpack',
-        'coverage',
+        'psutil',
+        'rednose',
         'zmq',
-        'rednose'
+        'jinja2'
     ]
 }
 
@@ -118,80 +82,154 @@ def custom_version():
     return {'version_scheme': postrelease_version}
 
 
-setup(name='pyGSTi',
-      use_scm_version=custom_version,
-      description='A python implementation of Gate Set Tomography',
-      long_description=descriptionTxt,
-      author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
-      author_email='pygsti@sandia.gov',
-      packages=[
-          'pygsti',
-          'pygsti.algorithms',
-          'pygsti.baseobjs',
-          'pygsti.construction',
-          'pygsti.drivers',
-          'pygsti.extras',
-          'pygsti.extras.rb',
-          'pygsti.extras.rpe',
-          'pygsti.extras.drift',
-          'pygsti.extras.idletomography',
-          'pygsti.io',
-          'pygsti.objects',
-          'pygsti.optimize',
-          'pygsti.report',
-          'pygsti.tools'
-      ],
-      package_dir={'': 'packages'},
-      package_data={
-          'pygsti.tools': ['fastcalc.pyx'],
-          'pygsti.objects': [
-              'fastopcalc.pyx',
-              'fastreplib.pyx',
-              'fastreps.cpp',
-              'fastreps.h'
-          ],
-          'pygsti.report': [
-              'templates/*.tex',
-              'templates/*.html',
-              'templates/*.json',
-              'templates/report_notebook/*.txt',
-              'templates/standard_html_report/*.html',
-              'templates/offline/README.txt',
-              'templates/offline/*.js',
-              'templates/offline/*.css',
-              'templates/offline/fonts/*',
-              'templates/offline/images/*'
-          ]
-      },
-      setup_requires=['setuptools_scm'],
-      install_requires=[
-          'numpy>=1.15.0',
-          'scipy',
-          'plotly==3.10.0',
-          'ply'
-      ],
-      extras_require=extras,
-      platforms=["any"],
-      url='http://www.pygsti.info',
-      download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',
-      keywords=[
-          'pygsti',
-          'tomography',
-          'gate set',
-          'pigsty',
-          'pig',
-          'quantum',
-          'qubit'
-      ],
-      classifiers=[
-          "Development Status :: 4 - Beta",
-          "Intended Audience :: Science/Research",
-          "License :: OSI Approved :: Apache Software License",
-          "Programming Language :: Python",
-          "Topic :: Scientific/Engineering :: Physics",
-          "Operating System :: Microsoft :: Windows",
-          "Operating System :: MacOS :: MacOS X",
-          "Operating System :: Unix"
-      ],
-      ext_modules=ext_modules,
-)
+def setup_with_extensions(extensions=None):
+    setup(
+        name='pyGSTi',
+        use_scm_version=custom_version,
+        description='A python implementation of Gate Set Tomography',
+        long_description=descriptionTxt,
+        author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
+        author_email='pygsti@sandia.gov',
+        packages=[
+            'pygsti',
+            'pygsti.algorithms',
+            'pygsti.construction',
+            'pygsti.drivers',
+            'pygsti.extras',
+            'pygsti.extras.rb',
+            'pygsti.extras.rpe',
+            'pygsti.extras.drift',
+            'pygsti.extras.idletomography',
+            'pygsti.extras.crosstalk',
+            'pygsti.extras.devices',
+            'pygsti.io',
+            'pygsti.io.circuitparser',
+            'pygsti.modelpacks',
+            'pygsti.modelpacks.legacy',
+            'pygsti.objects',
+            'pygsti.objects.replib',
+            'pygsti.objects.opcalc',
+            'pygsti.optimize',
+            'pygsti.protocols',
+            'pygsti.report',
+            'pygsti.report.section',
+            'pygsti.tools'
+        ],
+        package_dir={'': '.'},
+        package_data={
+            'pygsti.tools': ['fastcalc.pyx'],
+            'pygsti.objects.replib': [
+                'fastreplib.pyx',
+                'fastreps.cpp',
+                'fastreps.h'
+            ],
+            'pygsti.objects.opcalc': ['fastopcalc.pyx'],
+            'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
+            'pygsti.report': [
+                'templates/*.tex',
+                'templates/*.html',
+                'templates/*.json',
+                'templates/*.ipynb',
+                'templates/report_notebook/*.txt',
+                'templates/standard_html_report/*.html',
+                'templates/standard_html_report/tabs/*.html',
+                'templates/idletomography_html_report/*.html',
+                'templates/idletomography_html_report/tabs/*.html',
+                'templates/drift_html_report/*.html',
+                'templates/drift_html_report/tabs/*.html',
+                'templates/offline/README.txt',
+                'templates/offline/*.js',
+                'templates/offline/*.css',
+                'templates/offline/fonts/*',
+                'templates/offline/images/*'
+            ]
+        },
+        setup_requires=['setuptools_scm'],
+        install_requires=[
+            'numpy>=1.15.0',
+            'scipy',
+            'plotly',
+            'ply'
+        ],
+        extras_require=extras,
+        python_requires='>=3.5',
+        platforms=["any"],
+        url='http://www.pygsti.info',
+        download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',
+        keywords=[
+            'pygsti',
+            'tomography',
+            'gate set',
+            'pigsty',
+            'pig',
+            'quantum',
+            'qubit'
+        ],
+        classifiers=[
+            "Development Status :: 4 - Beta",
+            "Intended Audience :: Science/Research",
+            "License :: OSI Approved :: Apache Software License",
+            "Programming Language :: Python",
+            "Topic :: Scientific/Engineering :: Physics",
+            "Operating System :: Microsoft :: Windows",
+            "Operating System :: MacOS :: MacOS X",
+            "Operating System :: Unix"
+        ],
+        ext_modules=extensions or [],
+    )
+
+
+try:
+    # Try to compile extensions first
+
+    import numpy as np
+    from Cython.Build import cythonize
+    ext_modules = [
+        Extension(
+            "pygsti.tools.fastcalc",
+            sources=["pygsti/tools/fastcalc.pyx"],  # , "fastcalc.c
+            # # Cython docs on NumPy usage should mention this!
+            # define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
+            # # leave above commented
+            # # see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+            # define_macros = [('CYTHON_TRACE','1')], #for profiling
+            include_dirs=['.', np.get_include()]
+            # libraries=['m'] #math lib?
+        ),
+        Extension(
+            "pygsti.objects.opcalc.fastopcalc",
+            sources=["pygsti/objects/opcalc/fastopcalc.pyx"],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.objects.replib.fastreplib",
+            sources=[
+                "pygsti/objects/replib/fastreplib.pyx",
+                "pygsti/objects/replib/fastreps.cpp"
+            ],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.io.circuitparser.fastcircuitparser",
+            sources=["pygsti/io/circuitparser/fastcircuitparser.pyx"],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        )
+    ]
+    setup_with_extensions(cythonize(ext_modules, exclude_failures=True))
+except ImportError:
+    # Cython or numpy is not available
+    warn("Extensions build tools are not available. Installing without Cython extensions...")
+    setup_with_extensions()
+except SystemExit:
+    # Extension compilation failed
+    warn("Error in extension compilation. Installing without Cython extensions...")
+    setup_with_extensions()

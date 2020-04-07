@@ -1,9 +1,9 @@
-from __future__ import print_function
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 import unittest
 import numpy as np
 import pickle
-import time, os, warnings
+import time
+import warnings
 
 import pygsti
 from pygsti.extras import idletomography as idt
@@ -45,27 +45,27 @@ def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErr
 
 def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001), spamMag=0,
                               nSamplesList=(100,'inf'), simtype="map"):
-    
+
     base_param = []
     if hamiltonian: base_param.append('H')
     if stochastic: base_param.append('S')
     if affine: base_param.append('A')
     base_param = '+'.join(base_param)
     parameterization = base_param+" terms" if simtype.startswith('termorder') else base_param # "H+S+A"
-    
+
     gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=True)
     gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=False)
-    
+
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
                     include_hamiltonian=hamiltonian, include_stochastic=stochastic, include_affine=affine)
-    
+
     base_vec = None
     for errMag in errMags:
-        
+
         #ky = 'A(Z%s)' % ('I'*(nQubits-1)); debug_errdict = {ky: 0.01 }
         #ky = 'A(ZZ%s)' % ('I'*(nQubits-2)); debug_errdict = {ky: 0.01 }
         debug_errdict = {}
@@ -73,19 +73,19 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             rand_vec = idt.set_idle_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=errMag,
                                         hamiltonian=hamiltonian, stochastic=stochastic, affine=affine)
             base_vec = rand_vec / errMag
-            
+
         err_vec = base_vec * errMag # for different errMags just scale the *same* random rates
         idt.set_idle_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=err_vec,
                           hamiltonian=hamiltonian, stochastic=stochastic, affine=affine)
         idt.set_idle_errors(nQubits, gateset_noIdleInFids, debug_errdict, rand_default=err_vec,
                           hamiltonian=hamiltonian, stochastic=stochastic, affine=affine) # same errors for w/ and w/out idle fiducial error
-    
+
         for nSamples in nSamplesList:
             if nSamples == 'inf':
                 sampleError = 'none'; Nsamp = 100
             else:
                 sampleError = 'multinomial'; Nsamp = nSamples
-                                
+
             ds_idleInFids = pygsti.construction.generate_fake_data(
                                 gateset_idleInFids, listOfExperiments, nSamples=Nsamp,
                                 sampleError=sampleError, seed=8675309)
@@ -93,12 +93,12 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             pickle.dump(gateset_idleInFids, open("%s_gs.pkl" % fileroot, "wb"))
             pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
             print("Wrote fileroot ",fileroot)
-            
+
             ds_noIdleInFids = pygsti.construction.generate_fake_data(
                                 gateset_noIdleInFids, listOfExperiments, nSamples=Nsamp,
                                 sampleError=sampleError, seed=8675309)
-                
-            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, False) 
+
+            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, False)
             pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))
             pickle.dump(ds_noIdleInFids, open("%s_ds.pkl" % fileroot, "wb"))
 
@@ -113,28 +113,28 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             #print("EQUAL!")
 
             print("Wrote fileroot ",fileroot)
-            
+
 def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.01, spamMag=0, nSamples=100,
-                         simtype="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):   
+                         simtype="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):
     if fileroot is None:
-        fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials) 
-            
+        fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials)
+
     mdl_datagen = pickle.load(open("%s_gs.pkl" % fileroot, "rb"))
     ds = pickle.load(open("%s_ds.pkl" % fileroot, "rb"))
-    
+
     #print("DB: ",ds[ ('Gi',) ])
     #print("DB: ",ds[ ('Gi','Gi') ])
     #print("DB: ",ds[ ((('Gx',0),('Gx',1)),(('Gx',0),('Gx',1)),'Gi',(('Gx',0),('Gx',1)),(('Gx',0),('Gx',1))) ])
-    
+
     advanced = {'fit order': fitOrder}
     results = idt.do_idle_tomography(nQubits, ds, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
                                      advancedOptions=advanced, include_hamiltonian=hamiltonian,
                                      include_stochastic=stochastic, include_affine=affine)
-        
+
     if hamiltonian: ham_intrinsic_rates = results.intrinsic_rates['hamiltonian']
-    if stochastic:  sto_intrinsic_rates = results.intrinsic_rates['stochastic'] 
-    if affine:      aff_intrinsic_rates = results.intrinsic_rates['affine'] 
-        
+    if stochastic:  sto_intrinsic_rates = results.intrinsic_rates['stochastic']
+    if affine:      aff_intrinsic_rates = results.intrinsic_rates['affine']
+
     maxErrWeight=2 # hardcoded for now
     datagen_ham_rates, datagen_sto_rates, datagen_aff_rates = \
         idt.predicted_intrinsic_rates(nQubits, maxErrWeight, mdl_datagen, hamiltonian, stochastic, affine)
@@ -144,12 +144,12 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
     print("Intrinsic HAM = ",ham_intrinsic_rates)
     print("Intrinsic STO = ",sto_intrinsic_rates)
     print("Intrinsic AFF = ",aff_intrinsic_rates)
-    
+
     ham_diff = sto_diff = aff_diff = [0] # so max()=0 below for types we exclude
     if hamiltonian: ham_diff = np.abs(ham_intrinsic_rates - datagen_ham_rates)
     if stochastic:  sto_diff = np.abs(sto_intrinsic_rates - datagen_sto_rates)
     if affine:      aff_diff = np.abs(aff_intrinsic_rates - datagen_aff_rates)
-    
+
     print("Err labels:", [ x.rep for x in results.error_list])
     if hamiltonian: print("Ham diffs:", ham_diff)
     if stochastic:  print("Sto diffs:", sto_diff)
@@ -160,7 +160,7 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
     print("%s\n MAX DIFFS: " % fileroot, max(ham_diff),max(sto_diff),max(aff_diff))
     return max(ham_diff),max(sto_diff),max(aff_diff)
 
-#OLD - leftover from when we put data into a pandas data frame    
+#OLD - leftover from when we put data into a pandas data frame
 #     #add hamiltonian data to df
 #     N = len(labels) # number of hamiltonian/stochastic rates
 #     data = pd.DataFrame({'nQubits': [nQubits]*N, 'maxL':[maxLengths[-1]]*N,
@@ -171,7 +171,7 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
 #             'diff': ham_intrinsic_rates - datagen_ham_rates, 'abs_diff': ham_diff,
 #             'fitOrder': [fitOrder]*N, 'idleErrorInFiducials': [idleErrorInFiducials]*N })
 #     df = df.append(data, ignore_index=True)
-    
+
 #     #add stochastic data to df
 #     data = pd.DataFrame({'nQubits': [nQubits]*N, 'maxL':[maxLengths[-1]]*N,
 #             'errMag': [errMag]*N, 'spamMag': [spamMag]*N,
@@ -186,41 +186,41 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
 
 class IDTTestCase(BaseTestCase):
 
-    def test_idletomography_1Q(self):        
+    def test_idletomography_1Q(self):
         nQ = 1
-        
+
         #make perfect data - using termorder:1 here means the data is not CPTP and
         # therefore won't be in [0,1], and creating a data set with sampleError="none"
-        # means that probabilities *won't* be clipped to [0,1] - so we get really 
-        # funky and unphysical data here, but data that idle tomography should be 
+        # means that probabilities *won't* be clipped to [0,1] - so we get really
+        # funky and unphysical data here, but data that idle tomography should be
         # able to fit *exactly* (with any errMags, so be pick a big one).
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder:1")
+                                  nSamplesList=('inf',), simtype="termorder")  # how specify order
 
         # Note: no spam error, as accounting for this isn't build into idle tomography yet.
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder:1")
+                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder")  # how specify order
 
         #Make sure exact identification of errors was possible
         self.assertLess(maxH, 1e-6)
         self.assertLess(maxS, 1e-6)
         self.assertLess(maxA, 1e-6)
 
-    def test_idletomography_2Q(self):        
+    def test_idletomography_2Q(self):
         #Same thing but for 2 qubits
         nQ = 2
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder:1")
+                                  nSamplesList=('inf',), simtype="termorder")  #How specify order?
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder:1")
+                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder") # how specify order?
         self.assertLess(maxH, 1e-6)
         self.assertLess(maxS, 1e-6)
         self.assertLess(maxA, 1e-6)
 
     def test_idletomog_gstdata_std1Q(self):
-        from pygsti.construction import std1Q_XYI as std
+        from pygsti.modelpacks.legacy import std1Q_XYI as std
         std = pygsti.construction.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
@@ -238,11 +238,11 @@ class IDTTestCase(BaseTestCase):
 
     def test_idletomog_gstdata_1Qofstd2Q(self):
         # perform idle tomography on first qubit of 2Q
-        from pygsti.construction import std2Q_XYICNOT as std2Q
-        from pygsti.construction import std1Q_XYI as std
+        from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
+        from pygsti.modelpacks.legacy import std1Q_XYI as std
         std2Q = pygsti.construction.stdmodule_to_smqmodule(std2Q)
         std = pygsti.construction.stdmodule_to_smqmodule(std)
-        
+
         maxLens = [1,2,4]
         expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model(), std2Q.prepStrs,
                                                                  std2Q.effectStrs, std2Q.germs_lite, maxLens)
@@ -263,13 +263,13 @@ class IDTTestCase(BaseTestCase):
                                              verbosity=3, auto_open=False)
 
     def test_idletomog_gstdata_nQ(self):
-        
+
         try: from pygsti.objects import fastreplib
         except ImportError:
             warnings.warn("Skipping test_idletomog_gstdata_nQ b/c no fastreps!")
             return
 
-        
+
         #Global dicts describing how to prep and measure in various bases
         prepDict = { 'X': ('Gy',), 'Y': ('Gx',)*3, 'Z': (),
                      '-X': ('Gy',)*3, '-Y': ('Gx',), '-Z': ('Gx','Gx')}
@@ -278,28 +278,28 @@ class IDTTestCase(BaseTestCase):
 
         nQubits = 2
         maxLengths = [1,2,4]
-        
+
         ## ----- Generate n-qubit operation sequences -----
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        if regenerate_references():
             c = {} #Uncomment to re-generate cache SAVE
         else:
-            c = pickle.load(open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'rb'))
-        
+            c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
+
         t = time.time()
         gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
             nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
             idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
         #print("GSS STRINGS: ")
         #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
-        
+
         gss_strs = gss.allstrs
         print("%.1fs" % (time.time()-t))
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"):
-            pickle.dump(c, open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'wb'))
+        if regenerate_references():
+            pickle.dump(c, open(compare_files+"/idt_nQsequenceCache.pkl", 'wb'))
               #Uncomment to re-generate cache
 
         # To run idle tomography, we need "pauli fiducial pairs", so
-        #  get fiducial pairs for Gi germ from gss and convert 
+        #  get fiducial pairs for Gi germ from gss and convert
         #  to "Pauli fidicual pairs" (which pauli state/basis is prepared or measured)
         GiStr = pygsti.obj.Circuit(((),), num_lines=nQubits)
         self.assertTrue(GiStr in gss.germs)
@@ -335,29 +335,29 @@ class IDTTestCase(BaseTestCase):
         idtresults = idt.do_idle_tomography(nQubits, ds, maxLengths, (prepDict,measDict), maxweight=2,
                                      advancedOptions=advanced, include_hamiltonian='auto',
                                      include_stochastic='auto', include_affine='auto')
-        #Note: inclue_affine="auto" should have detected that we don't have the sequences to 
+        #Note: inclue_affine="auto" should have detected that we don't have the sequences to
         # determine the affine intrinsic rates:
         self.assertEqual(set(idtresults.intrinsic_rates.keys()), set(['hamiltonian','stochastic']))
 
         idt.create_idletomography_report(idtresults, temp_files + "/idleTomographyGSTSeqTestReport",
                                  "Test idle tomography report w/GST seqs", auto_open=False)
 
-        
+
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.do_long_sequence_gst_base(ds, target_model, gss,
                                                       advancedOptions={'tolerance': 1e-1}, verbosity=3)
-
+        
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
             gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)
             gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis.cast("pp",16)
-        #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport", 
+        #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport",
         #                                    "Test GST Report w/Idle Tomography Tab",
         #                                    verbosity=3, auto_open=False)
         pygsti.report.create_nqnoise_report(gstresults, temp_files + "/gstWithIdleTomogTestReport",
                                             "Test nQNoise Report w/Idle Tomography Tab",
                                             verbosity=3, auto_open=False)
-        
+
 
     def test_automatic_paulidicts(self):
         expected_prepDict = { 'X': ('Gy',), 'Y': ('Gx',)*3, 'Z': (),
@@ -370,10 +370,7 @@ class IDTTestCase(BaseTestCase):
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)
         self.assertEqual(measDict, expected_measDict)
-        
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
-
-
-

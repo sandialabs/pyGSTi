@@ -1,10 +1,9 @@
-from __future__ import print_function
 
 from ..testutils import BaseTestCase, temp_files, compare_files
 import unittest
 import pygsti as gst
 import numpy as np
-import pygsti.construction.std1Q_XY as Std1Q_XY
+from pygsti.modelpacks.legacy import std1Q_XY as Std1Q_XY
 
 from pygsti.extras import rpe
 RPE = rpe

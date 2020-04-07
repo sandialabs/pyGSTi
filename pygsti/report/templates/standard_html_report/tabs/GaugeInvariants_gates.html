@@ -1,0 +1,48 @@
+<h1>Gauge Invariant Error Metrics</h1>
+<p>GST can estimate gates <em>up to an overall gauge</em>.  PyGSTi tries to find a good gauge in which to report process matrices and gauge-variant metrics like fidelity -- but sometimes this goes wrong.  The most reliable error metrics and gate properties are <em>gauge-invariant</em> ones, and these are listed on this tab.</p>
+
+<figure id="bestGatesetVsTargetTable" class='tbl'>
+	<figcaption><span class="captiontitle">RB error metrics</span> <span class="captiondetail">This table shows estimates for the error rate that would be obtained using two different Randomized Benchmarking (RB) protocols . The Clifford RB number corresponds to the most standard form of RB, Clifford RB (CRB), where random Clifford gate sequences are performed. This number is dependent on how the Clifford operations are compiled into the primitive gates, and so if you didn't specify a Clifford compilation and pygsti couldn't deduce one, this quantity will be absent. Note that this is the error rate per-Clifford; it has not been rescaled to a per-primitive error rate. The primitive RB number corresponds to performing RB on random sequences of the primitive gates, rather than the Cliffords, which is known as <q>Direct RB</q> (DRB). DRB allows for sampling layers of primitives according to a general probability distribution over the primitive gates; the number reported here corresponds to uniformly sampling the primitive gates. This number does not require any compilation table and is always be computed by pyGSTi. Two caveats regarding these RB numbers: 1) The primitive RB number is not meaningful for arbitrary gate sets; if the gate set generates the Clifford group or it is a universal gate set then it is definitely meaningful, modulo the second caveat. 2) These predicted RB numbers rely on a perturbative technique, and if the estimated gates are far from their ideal counterparts the predicted numbers may be very inaccurate (and the empirical RB error rate itself may even be ill-defined: the RB decay could be non-exponential). For both of these RB protocols there is also more than one definition of the RB number, as a function of the p obtained from fitting RB data to <span class="math">A + Bp^m</span>. Here we use the definition <span class="math">r = (4^n - 1)(1-p)/4^n</span> for an n-qubit gate set, which means that <span class="math">r</span> = entanglement infidelity = 1/2 diamond distance if there are uniform depolarizing errors on all the gates (where these two quantities are w.r.t. the gate set benchmarked, so the Clifford gates for CRB and the primitive gates for DRB). For more general errors, these first two quantities will often be roughly equal, although that is not guaranteed. Note that these numbers should not be directly compared to RB numbers derived using the commonly-used alternative formula <span class="math">r = (2^n - 1)(1-p)/2^n</span> (which is related to average gate infidelity, rather than entanglement infidelity).</span></figcaption>
+    {{ bestGatesetVsTargetTable|render }}
+</figure>
+
+<figure id="bestGatesetSpamParametersTable" class='tbl'>
+	<figcaption><span class="captiontitle">SPAM probabilities</span> <span class="captiondetail"> This table shows estimated SPAM probabilities for each measurement outcome.  These are computed as <span class="math">\mathrm{Tr}[\rho E_i]</span>, where <span class="math">\rho</span> is an estimated initial state (often labelled <span class="math">\rho_0</span>), and <span class="math">\{E_i\}</span> is the estimated <em>n</em>-outcome POVM.  The symbol <span class="math">E_C</span> denotes the <em>n</em>th POVM effect, which is not allowed to vary freely but is defined by subtracting the sum of the other effects (which <em>are</em> freely varied) from the identity.</span></figcaption>
+    {{ bestGatesetSpamParametersTable|render }}
+</figure>
+
+
+<figure id="gramBarPlot">
+	<figcaption><span class="captiontitle">Gram matrix spectrum.</span> <span class="captiondetail">The GST Gram matrix is not a standard error metric, but it is gauge-invariant and critical to the GST process.  It provides some insight into generalized SPAM.  It is the (estimated) matrix of inner products between all the input states prepared by the various preparation fiducials, and all the measured effects prepared by the various measurement fiducials.  LGST involves inverting the Gram matrix, so it needs to be full rank.  In the plot, each pair of bars shows the <em>n</em>th  eigenvalues of the estimated Gram matrix and the Gram matrix predicted by the ideal targets (respectively).  Larger eigenvalues indicate better sensitivity, and the number of non-zero values indicates the dimension of the state (density matrix) space being probed (e.g., for a single qubit, the Gram matrix should have 4 O(1) eigenvalues).</span> </figcaption>
+    {{ gramBarPlot|render }}
+</figure>
+
+<figure id="bestGatesVsTargetTable_gi" class='tbl'>
+	<figcaption><span class="captiontitle">Spectral error metrics between estimated gates and ideal targets</span> <span class="captiondetail">This table presents a variety of gauge-invariant quantities that quantify the distance or discrepancy between (1) an estimated gate, and (2) the ideal corresponding target operation.  Each of these error metrics depends <em>only</em> on a specific gate's spectrum (eigenvalues), which are gauge-invariant and non-relational (i.e., they pertain to a single gate).  Hovering over a column header will pop up a mathematical description of the corresponding metric.</span></figcaption>
+    {{ bestGatesVsTargetTable_gi|render }}
+</figure>
+
+<figure id="singleMetricTable_gi" class='tbl'>
+	<figcaption><span class="captiontitle">Single metric comparison.</span> <span class="captiondetail">TODO: caption</span> </figcaption>
+    {{ metricSwitchboard_gi|render }}
+    {{ singleMetricTable_gi|render }}
+</figure>
+
+<figure id="bestGIMetricTable" class='tbl'>
+  <figcaption><span class="captiontitle">Gauge-robust gate metrics.</span> <span class="captiondetail"> This table gives gauge-robust metrics indicating the intrinsic errors on a gate due to its eigenvalues not being perfect (the diagonal elements) and the relational errors between pairs of gates, due to having imperfect eigenspaces.</span></figcaption>
+  {{ metricSwitchboard_gr|render }}
+  {{ bestGIMetricTable|render }}
+</figure>
+
+
+<figure id="bestGatesetEigenvalueTable" class='tbl'>
+	<figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> This table lists the spectrum of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, <em>and</em> it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.  To do these comparisons, each estimated eigenvalue needs to be matched up with a target eigenvalue, and pyGSTi does this independently for each metric by computing a minimum-weight matching based on that metric.  Hovering over a column header will pop up a mathematical description of the corresponding metric.</span></figcaption>
+    {{ bestGatesetEvalTable|render }}
+</figure>
+
+
+<figure id="bestGIGatesetTable" class='tbl'>
+  <figcaption><span class="captiontitle">Gauge-robust gate set.</span> <span class="captiondetail"> This table gives a first-order gauge-invariant description of a gate set by decomposing each gate <span class="math">G</span> as <span class="math">G = F^{-1} M G_0 F</span> where <span class="math">M</span> commutes with <span class="math">G_0</span> and <span class="math">F = exp(r)</span> where <span class="math">r</span> is zero on the diagonal blocks corresponding to the degenerate eigenvalues of <span class="math">G_0</span>.</span></figcaption>
+  {{ bestGIGatesetTable|render }}
+</figure>
+

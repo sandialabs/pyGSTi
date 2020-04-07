@@ -1,23 +1,25 @@
 dist: xenial
 language: python
 
-python: 3.7
-
-if: (branch IN (master, beta, develop, ci-fixes)) OR (tag IS present)
+python:
+  - 3.8
+  - 3.7
+  - 3.6
+  - 3.5
 
 env:
   global:
-    - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
-    - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
-    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
+    - SKIP_DEAP=1 # skip evolutionary optimization
+    - NOSE_VERBOSE=2
+    - NOSE_WITH_TIMER=1
+    - NOSE_WITH_ID=1
+    - NOSE_REDNOSE=1
+    - NOSE_WITH_COVERAGE=1
+    - NOSE_COVER_PACKAGE="pygsti"
+    - NOSE_PROCESSES=-1
+    - NOSE_PROCESS_TIMEOUT=2400 # timeout after 40 minutes (travis job timeout is 50 minutes)
   matrix:
-    - NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL # first in build mx because long duration
-    - NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
-    - NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_DEFAULT # cannot be run in parallel
+    - NOSE_WHERE="test/unit/"
 
 # Install native package dependencies & initialize build environment
 before_install:
@@ -30,15 +32,20 @@ before_install:
   - gcc --version
 
 install:
+  # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
+  - pip install cython
   # Install base dependencies
-  - pip install -e .
+  - pip install .
   # Install test dependencies
-  - pip install -e .[testing]
+  - pip install .[testing]
+  # Show pip environment, for diagnostics
+  - pip freeze
 
 # Default `test' stage script
 script:
-  - cd test/test_packages
-  - nosetests $NOSEOPTS $NOSETESTS
+  - mv "pygsti" "do-not-import-this-pygsti"
+  - echo "nosetests $NOSETESTS"
+  - nosetests $NOSETESTS
 
 # Cache pip packages
 cache:
@@ -51,9 +58,9 @@ stages:
   - name: lint-comprehensive
     if: branch IN (master, beta)
   - test
-  # Run tests on python 2.7 & 3.5, but only on master/beta
+  # Run extra tests, but only on master/beta
   - name: test-extra
-    if: branch IN (master, beta)
+    if: branch IN (master, beta, ci-debug)
   - name: push
     if: (branch = develop) AND (NOT (type = pull_request))
   - name: deploy
@@ -69,7 +76,7 @@ jobs:
       install:
         - pip install flake8
       script:
-        - python -m flake8 --statistics $LINTOPTS packages/pygsti
+        - python -m flake8 --statistics $LINTOPTS pygsti
     - <<: *lint-job
       name: "Critical errors"
       env: LINTOPTS="--config=.flake8-critical"
@@ -80,47 +87,16 @@ jobs:
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
       python: 3.5
-      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="algorithms algorithmsb"
     - stage: test-extra
       python: 3.5
-      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="report reportb"
     - stage: test-extra
       python: 3.5
-      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
     - stage: test-extra
       python: 3.5
-      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 3.5
-      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 3.5
-      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 3.5
-      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
-
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
-    - stage: test-extra
-      python: 2.7
-      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+      env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
 
     - stage: push
       env: PUSH_BRANCH="beta"
@@ -145,7 +121,6 @@ jobs:
         - pip install -e .[extension_modules]
       script:
         - echo "Pushing $TRAVIS_TAG to PyPI"
-
 
   allow_failures:
     - stage: lint

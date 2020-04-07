@@ -4,8 +4,8 @@ import pickle
 import collections
 import pygsti
 import os
-from pygsti.construction import std1Q_XYI as std
-from ..testutils import BaseTestCase, compare_files, temp_files
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 import numpy as np
 
@@ -14,7 +14,7 @@ class ReportBaseCase(BaseTestCase):
 
     @classmethod
     def setUpClass(cls):
-        """ 
+        """
         Handle all once-per-class (slow) computation and loading,
          to avoid calling it for each test (like setUp).  Store
          results in class variable for use within setUp.
@@ -42,24 +42,18 @@ class ReportBaseCase(BaseTestCase):
             opLabels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
 
-        try:
-            basestring #Only defined in Python 2
-            cls.versionsuffix = "" #Python 2
-        except NameError:
-            cls.versionsuffix = "v3" #Python 3
-        
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+        if regenerate_references():
             ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
                                                         sampleError='binomial', seed=100)
-            ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+            ds.save(compare_files + "/reportgen.dataset")
             ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], nSamples=1000,
                                                          sampleError='binomial', seed=100)
-            ds2.save(compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
+            ds2.save(compare_files + "/reportgen2.dataset")
 
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
-        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
+        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, targetModel, svdTruncateTo=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, targetModel, {'gates': 1.0, 'spam': 0.0})
@@ -83,7 +77,7 @@ class ReportBaseCase(BaseTestCase):
                                   'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                   'weights': None, 'defaultDirectory': temp_files + "",
                                   'defaultBasename': "MyDefaultReportName"})
-        
+
         gaugeOptParams = collections.OrderedDict([
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
                 ('targetModel', targetModel),       #so can gauge-propagate CIs
@@ -102,11 +96,11 @@ class ReportBaseCase(BaseTestCase):
         # Use do_long_sequence_gst with a non-mark dataset to trigger data scaling
         tp_target = targetModel.copy(); tp_target.set_all_parameterizations("TP")
 
-        
+
         cls.ds3 = cls.ds.copy_nonstatic()
         cls.ds3.add_counts_from_dataset(cls.ds2)
         cls.ds3.done_adding_data()
-        
+
         cls.results_logL = pygsti.do_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
                                                        std.germs, cls.maxLengthList, verbosity=0,
                                                        advancedOptions={'tolerance': 1e-6, 'starting point': 'LGST',
@@ -138,11 +132,11 @@ class ReportBaseCase(BaseTestCase):
         #
         ##self.results_logL.options.precision = 3
         ##self.results_logL.options.polar_precision = 2
-                                                       
+
         os.chdir(orig_cwd)
 
 
-            
+
     def setUp(self):
         super(ReportBaseCase, self).setUp()
 
@@ -152,7 +146,7 @@ class ReportBaseCase(BaseTestCase):
         self.fiducials = std.fiducials[:]
         self.germs = std.germs[:]
         self.opLabels = std.gates
-        
+
         #self.specs = cls.specs
         self.maxLengthList = cls.maxLengthList[:]
         self.lgstStrings = cls.lgstStrings

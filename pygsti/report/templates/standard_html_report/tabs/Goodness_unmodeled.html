@@ -1,0 +1,57 @@
+<h1>Model Violation Analysis: quantifying un-modeled error</h1>
+<p>GST datasets are often <em>very</em> inconsistent with the Markovian gateset model.  This is relatively unsurprising, and means only that real qubits often drift or experience other forms of noise that aren't stationary and Markovian.  A standard way of measuring the amount of this model violation is to express the degree to which we would expect the model to generate the observed data, given as a number of standard deviations (<span class="math">N_\sigma</span>) or p-value.  Large <span class="math">N_\sigma</span> or small p-value indicate high certainty that the model is incorrect (violated) but do not express how much would need to be done to "fix" the model.  In this tab, we attempt to quantify the un-modeled error by allowing an amount of slack, measured in total variational distance (TVD) in the probabilities predicted by the model.  With enough slack the model will be able to predict, and therefore "fit" any data; we answer the question "What is the minimum amount of slack needed to predict the data?", and allocate slack on a per-gate basis. (TODO: MORE DESCRIPTION)</p>
+
+<!-- Toggle over essentially the remainder of the tab -->
+{% if config['ShowUnmodeledError'] %}
+
+<!-- Toggle descriptive text -->
+{% if config['CombineRobust'] %}
+
+<p>If the estimate currently selected on the sidebar used this technique (often denoted by a <q>.wildcard</q> suffix), then this tab shows several important quantities.  Before describing these, however, it is important to note that <b>all of the other model violation tabs</b> (and relevant figures in the <q>Summary</q> tab) <b>show you the model violation <em>without</em> allowing any slack in the predicted probabilities.  <em>This tab</em> shows the model violation <em>with</em> the TVD slack described (WHERE?)</b>, and so, by construction, the fit metrics shown here should always look pretty good.  The first several figures replicate those of the other model violation tabs (except they allow for slack in the probabilities!), and the final table shows how much TVD slack was allowed per gate.  When a figure shows up as <q>N/A</q> then it means that the currently-selected estimate has not had any slack applied to it at all, and so there's nothing to show.</p>
+
+{% else %}
+
+<p>If the estimate currently selected on the sidebar used this technique (often denoted by a <q>.wildcard</q> suffix), then this tab shows how much TVD slack was allowed per gate.  When a figure shows up as <q>N/A</q> then it means that the currently-selected estimate has not been altered at all.</p>
+
+{% endif %}
+
+
+<figure id="unmodeledErrorBudgetTable" class='tbl'>
+	{{ unmodeledErrorBudgetTable|render }}
+	<figcaption><span class="captiontitle">Per-gate unmodeled error budget.</span> <span class="captiondetail">The model violation plots on this tab are computed using probabilities that aren't those exactly predicted by the chosen model.  Instead, the TVD between the model&#8217;s exact probabilities for a circuit&#8217;s outcomes and those used to compute the model violation may be as large as the circuit&#8217;s <em>unmodeled error budget</em>.  This budget computed by simply adding the amount given in this table for each gate occurrence in the circuit.</span></figcaption>
+</figure>
+
+<!-- Toggle showing of post-scaling plots -->
+{% if config['CombineRobust'] %}
+<figure id="progressBarPlot_ume">
+	<figcaption><span class="captiontitle">RELAXED Model violation summary.</span> <span class="captiondetail">This plot summarizes how well GST was able to fit the data -- or subsets of it -- to a gateset.  Bars indicate the difference between the actual and expected log-likelihood values, and are given in units of standard deviations of the appropriate <span class="math">\chi^2</span> distribution. Each bar corresponds to a <em>subset</em> of the data including only circuits of length up to <span class="math">\sim L</span>; the rightmost bar corresponds to the full dataset.  Low values are better (less model violation), and bars are colored according to the <q>star</q> rating found in a later table detailing the overall model violation.</span></figcaption>
+	{{ progressBarPlot_ume|render }}
+</figure>
+
+<figure id="bestEstimateColorHistogram_ume">
+	<figcaption><span class="captiontitle">RELAXED Histogram of per-circuit model violation.</span> <span class="captiondetail">This figure is about goodness-of-fit.  When the estimate doesn't fit the data perfectly, we can quantify how well it fails to predict each individual circuit in the dataset, using the excess loglikelihood (<span class="math">-2\log\mathrm{Pr}(\mathrm{data}|\mathrm{gateset})</span>) above and beyond the minimum value (<span class="math">-2 \log \mathrm{Pr}(\mathrm{data}|\mathrm{observed\ frequencies})</span>).  This plot shows a histogram of the those values for all the circuits in the dataset.  Ideally, they should have the <span class="math">\chi^2</span> distribution shown by the solid line.  Red indicates data that are inconsistent with the model at the 0.95 confidence level, as shown in more detail in the Model Violation tab.</span> </figcaption>
+	{{ bestEstimateColorHistogram_ume|render }}
+</figure>
+
+<figure id="progressTable_ume" class='tbl'>
+	<figcaption><span class="captiontitle">RELAXED Detailed overall model violation.</span> <span class="captiondetail"> This table provides a detailed look at how the observed model violation -- defined by how badly the GST model fits the data -- evolves as more and more of the data are incorporated into the fit.  PyGSTi fits the data iteratively, starting by just fitting data from the shortest circuits (<span class="math">L=1</span>), and then adding longer and longer sequences.  Each subset of the data, defined by its maximum sequence length <span class="math">L</span>, yields an independent fit that is analyzed here.  The key quantity is the difference between the observed and expected maximum loglikelihood (<span class="math">\log(\mathcal{L})</span>).  If the model fits, then <span class="math">2\Delta\log(\mathcal{L})</span> should be a <span class="math">\chi^2_k</span> random variable, where <span class="math">k</span> (the degrees of freedom) is the difference between <span class="math">N_S</span> (the number of independent data points) and <span class="math">N_p</span> (the number of model parameters).  So <span class="math">2\Delta\log(\mathcal{L})</span> should lie in <span class="math">[k-\sqrt{2k},k+\sqrt{2k}]</span>, and <span class="math">N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}</span> quantifies how many standard deviations it falls above the mean (a <span class="math">p</span>-value can be straightforwardly derived from <span class="math">N_\sigma</span>).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit.  Heading tool tips provide descriptions of each column's value.</span></figcaption>
+	<!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
+	{{ progressTable_ume|render }}
+</figure>
+
+<figure id="bestEstimateColorScatterPlot_ume">
+	<figcaption><span class="captiontitle">RELAXED Per-circuit model violation vs. circuit length</span> <span class="captiondetail">The fit's total <span class="math">2\Delta\log(\mathcal{L})</span> is a sum over all <span class="math">N_s</span> circuits used for GST.  This plot shows <span class="math">2\Delta\log(\mathcal{L})</span> for each individual circuit, plotted against that circuit's length (on the X axis).  Certain forms of non-Markovian noise, like slow drift, produce a characteristic linear relationship.  Note that the length plotted here is the <em>actual</em> length of the circuit, not its nominal <span class="math">L</span>.</span> </figcaption>
+	{{ bestEstimateColorScatterPlot_ume|render }}
+</figure>
+
+
+<figure id="bestEstimateColorBoxPlot_ume">
+	{{ bestEstimateColorBoxPlot_ume|render }}
+	<figcaption><span class="captiontitle">RELAXED Per-sequence model violation box plot.</span><span class="captiondetail"> This plot shows the <span class="math">2\Delta\log(\mathcal{L})</span> contribution for each individual circuit in the dataset.  Each box represents a single gate sequence, and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray indicate typical (within the expected) values. Red squares represent statistically significant evidence for model violation (non-Markovianity), and the probabilty that <i>any</i> red squares appear is {{ linlg_pcntle|render }}% when the data really are Markovian. Each square block of pixels (<q>plaquette</q>) corresponds to a particular germ-power "base sequence", and each pixel within a block corresponds to a specific "fiducial pair" -- i.e., choice of pre- and post-fiducial sequences.  The base sequences are arranged by germ (varying from row to row), and by power/length (varying from column to column).  Hovering over a colored box will pop up the exact circuit to which it corresponds, the observed frequencies, and the corresponding probabilities predicted by the GST estimate of the gateset.  The slider below the figure permits switching between different estimates, labeled by <span class="math">L</span>, which were obtained from subsets of the data that included only base sequences of length up to <span class="math">L</span>. </span></figcaption>
+</figure>
+
+{% endif %}
+
+{% else %}
+<p>Note: Unmodeled error figures are not shown because none of the estimates in this report have significant unmodeled error.</p>
+{% endif %}

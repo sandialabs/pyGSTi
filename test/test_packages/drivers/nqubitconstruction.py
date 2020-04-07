@@ -1,4 +1,3 @@
-from __future__ import print_function
 import collections as _collections
 import itertools as _itertools
 import numpy as _np
@@ -6,8 +5,8 @@ import scipy as _scipy
 import scipy.sparse as _sps
 
 import pygsti
-from pygsti.construction import std1Q_XY
-from pygsti.construction import std2Q_XYICNOT
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYICNOT
 import pygsti.objects as _objs
 
 class QubitGraph(object):

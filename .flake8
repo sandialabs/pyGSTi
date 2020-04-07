@@ -24,7 +24,8 @@ ignore=E265,E266,E402,E701,E702,E704,E722,E741,W503,W605,F401,F403,F405
 
 exclude=
     # automatically generated
-    packages/pygsti/baseobjs/parsetab_string.py
+    pygsti/io/parsetab_string.py
+    pygsti/modelpacks/smq*.py
 
 # 120 characters is a more agreeable max line length for modern displays
 max-line-length=120

@@ -5,7 +5,7 @@ import warnings
 import pickle
 import os
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -14,18 +14,8 @@ class LabelDictTestCase(BaseTestCase):
     def setUp(self):
         super(LabelDictTestCase, self).setUp()
 
-    def testOutcomeLabelDict(self):
-        d = pygsti.objects.labeldicts.OutcomeLabelDict([( ('0',), 90 ), ( ('1',), 10)])
-        self.assertEqual(d['0'], 90) #don't need tuple when they're 1-tuples
-        self.assertEqual(d['1'], 10) #don't need tuple when they're 1-tuples
-
-        s = pickle.dumps(d)
-        d2 = pickle.loads(s)
-
-        d3 = d.copy()
-
     def test_classical_statespacelabels(self):
-        
+
         mdl1Q = std1Q_XYI.target_model()
         mdl = pygsti.obj.ExplicitOpModel(['Q0','C0'])  # one qubit, one classical bit
         self.assertEqual(mdl.dim, 8)
@@ -42,19 +32,19 @@ class LabelDictTestCase(BaseTestCase):
         mdl.povms['Mboth'] = pygsti.obj.UnconstrainedPOVM( EffectVecs )
         EffectVecs = [ (elbl, np.kron([[1.0],[1.0]], evec)) for elbl,evec in mdl1Q.povms['Mdefault'].items() ]
         mdl.povms['Mqubit'] = pygsti.obj.UnconstrainedPOVM( EffectVecs )
-        
+
         G = np.kron([[1.0,0],[0,1.0]], mdl1Q.operations['Gx'])
         mdl.operations['Gx'] = G
-        
+
         G = np.kron([[1.0,0],[0,1.0]], mdl1Q.operations['Gy'])
         mdl.operations['Gy'] = G
-        
+
         G = np.kron([[0,1.0],[1.0,0]], mdl1Q.operations['Gi'])
         mdl.operations['Gcflip'] = G
-        
+
         G = np.kron([[0.8,0.2],[0.2,0.8]], mdl1Q.operations['Gi'])
         mdl.operations['Gcmix'] = G
-        
+
         p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Gx','Mboth') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0c0',), 0.0), (('1c0',), 0.2), (('0c1',), 0.0), (('1c1',), 0.8)]))
         p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Gx','Mqubit') )

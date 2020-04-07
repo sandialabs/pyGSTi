@@ -6,7 +6,7 @@ exclude = ['__pycache__']
 
 print('Generating html reports of duplicated code')
 
-with directory('../packages/pygsti'):
+with directory('../pygsti'):
     for package in get_packages(os.getcwd()):
         if package not in exclude:
             print('Finding duplicated code in %s' % package)

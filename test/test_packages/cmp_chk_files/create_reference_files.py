@@ -1,25 +1,19 @@
-from __future__ import print_function
 import pygsti
-from pygsti.construction import std1Q_XYI
-import pickle, os
-
-try:
-    basestring #Only defined in Python 2
-    versionsuffix = ".v2" #Python 2
-except NameError:
-    versionsuffix = ".v3" #Python 3
+from pygsti.modelpacks.legacy import std1Q_XYI
+import pickle
+import os
 
 pv = pygsti.__version__
 if len(pv.split('.')) > 3:
     pv = '.'.join(pv.split('.')[0:3])
-print("PyGSTi version ",pv)
+print("PyGSTi version ", pv)
 
 target_model = std1Q_XYI.target_model()
 
 # 2) get the building blocks needed to specify which operation sequences are needed
 prep_fiducials, meas_fiducials = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs
 germs = std1Q_XYI.germs
-maxLengths = [1,2,4] # roughly gives the length of the sequences used by GST
+maxLengths = [1, 2, 4]  # roughly gives the length of the sequences used by GST
 
 # 3) generate "fake" data from a depolarized version of target_model
 mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
@@ -28,26 +22,29 @@ listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
 ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, nSamples=1000,
                                             sampleError="binomial", seed=1234)
 
-results = pygsti.do_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials, 
+results = pygsti.do_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                     germs, maxLengths, verbosity=3)
 
-def outname(typ, vs=True):
-    nm = "pygsti" + pv + "." + typ + (versionsuffix if vs else "")
+
+def outname(typ):
+    nm = "pygsti" + pv + "." + typ
     if os.path.exists(nm):
         raise ValueError("File %s already exists! Will not overwrite it - you must remove it first." % nm)
-    print("Writing ",nm)
+    print("Writing ", nm)
     return nm
 
-if versionsuffix == "v3": # only write text files for version 3 case
-    pygsti.io.write_dataset(outname("dataset.txt",False), ds) # text dataset
-ds.save(outname("dataset")) # binary dataset
-with open(outname("dataset.pkl"),"wb") as f: # pickled dataset
+
+# Dataset object
+pygsti.io.write_dataset(outname("dataset.txt"), ds)  # text dataset
+ds.save(outname("dataset"))  # binary dataset
+with open(outname("dataset.pkl"), "wb") as f:  # pickled dataset
     pickle.dump(ds, f)
 
-if versionsuffix == "v3": # only write text files for version 3 case
-    pygsti.io.write_model(mdl_datagen, outname("gateset.txt",False)) # text model
-with open(outname("gateset.pkl"),"wb") as f: # pickled model
+# Model object
+pygsti.io.write_model(mdl_datagen, outname("gateset.txt"))  # text model
+with open(outname("gateset.pkl"), "wb") as f:  # pickled model
     pickle.dump(mdl_datagen, f)
 
-with open(outname("results.pkl"),"wb") as f: # pickled results
+# Results object
+with open(outname("results.pkl"), "wb") as f:  # pickled results
     pickle.dump(results, f)

@@ -1,0 +1,27 @@
+<h1>Input Summary</h1>
+<p>This tab presents a grab bag of potentially-useful information about the target gate set and the data set(s).</p>
+
+<figure id='targetGatesetSPAMTable' class='tbl'>
+	<figcaption><span class="captiontitle">Ideal SPAM operations</span> <span class="captiondetail"> The <em>ideal</em> <q>target</q> state preparations (<span class="math">\rho_i</span>) and POVM effects <span class="math">E_i</span> for the device analyzed in this report.  SPAM (state preparation and measurement) operations are given as <span class="math">d\times d</span> matrices in the standard (matrix unit) basis of Hilbert space.</span></figcaption>
+    {{ targetSpamBriefTable|render }}
+</figure>
+
+<figure id="fiducialListTable" class='tbl'>
+	<figcaption><span class="captiontitle">Fiducial circuits</span> <span class="captiondetail">  A list of the preparation and measurement <q>fiducial</q> circuits. These circuits precede and follow, respectively, the potentially long germ-to-some-power portion of GST gate sequences, and generate informationally complete input/output ensembles from the native state preparation[s] and measurement. </span></figcaption>
+    {{ fiducialListTable|render }}
+</figure>
+
+<figure id="germListTable" class='tbl'>
+	<figcaption><span class="captiontitle">Germs</span> <span class="captiondetail"> A list of the <q>germ</q> circuits used in this experiment.  Germs are relatively short circuits that get repeated (perhaps many times) in order to amplify various types of qubit errors.  The list of germs is often chosen so that <i>all</i> possible types of in-model errors are amplified by <i>at least one</i> germ.  Note: it's generally impossible to find a single germ that amplifies all possible errors, except when the gate being studied is the identity operation.</span></figcaption>
+    {{ germList2ColTable|render }}
+</figure>
+
+<figure id="datasetOverviewTable" class='tbl'>
+	<figcaption><span class="captiontitle">Dataset properties</span> <span class="captiondetail"> This table lists various properties of the data set used in the analysis.  It is useful for sanity checks.</span></figcaption>
+    {{ datasetOverviewTable|render }}
+</figure>
+
+<figure id='targetGatesetGatesTable' class='tbl'>
+	<figcaption><span class="captiontitle">Ideal logic gates</span> <span class="captiondetail"> The <em>ideal</em> <q>target</q> (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).</span></figcaption>
+    {{ targetGatesBoxTable|render }}
+</figure>

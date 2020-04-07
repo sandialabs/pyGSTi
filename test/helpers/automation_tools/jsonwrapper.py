@@ -1,4 +1,3 @@
-from __future__ import print_function
 import json
 
 def read_json(filename):

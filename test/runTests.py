@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__                  import print_function, division, unicode_literals, absolute_import
 from helpers.automation_tools    import directory, get_changed_packages
 import subprocess, argparse, shutil, sys, os
 import webbrowser

@@ -1,282 +1,114 @@
+{% macro navlink(display, tab_id, style='') %}
+<a href="#"
+   class="tablink {{ style }}"
+   onclick="openTab('{{ tab_id }}')"
+   >{{ display }}</a>
+{% endmacro %}
+
+{% macro cdn_jslib(local_filename, cdn_url, libobj, integrity=None) %}
+<script src="{{ cdn_url }}" crossorigin="anonymous"
+        {% if integrity is not none %}
+        integrity="{{ integrity }}"
+        {% endif %}
+        ></script>
+<script>jsFallbackFromCDN('{{ libobj }}', '{{ local_filename }}');</script>
+{% endmacro %}
+
+{% macro embed_jslib(local_filename) %}
+<!-- INSERTED {{ local_filename }} -->
+<script type="text/javascript">{{ offline_file(local_filename) }}</script>
+{% endmacro %}
+
+{% macro cdn_stylesheet(local_filename, cdn_url) %}
+<link rel="stylesheet" href="{{ cdn_url }}">
+<link rel="stylesheet" href="{{ static_ref(local_filename) }}">
+{% endmacro %}
+
+{% macro embed_stylesheet(local_filename) %}
+<!-- INSERTED {{ local_filename }} -->
+<style>{{ offline_file(local_filename) }}</style>
+{% endmacro %}
+
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>%(title)s</title>
-    <meta charset="UTF-8" />
+    <head>
+        <title>{{ title }}</title>
+        <meta charset="utf-8">
 
-    %(favicon)s
-    
-    %(jqueryLIB)s
-    %(jqueryUILIB)s
-    %(plotlyLIB)s
-    %(plotlyexLIB)s
-    %(dashboardLIB)s
-    %(katexLIB)s
-    <!-- XXX(mathjaxLIB)s -->
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ static_ref('images/favicon-16x16.png') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ static_ref('images/favicon-32x32.png') }}">
+        <link rel="icon" type="image/png" sizes="96x96" href="{{ static_ref('images/favicon-96x96.png') }}">
 
-    %(CSS)s
+        <script>
+          function jsFallbackFromCDN(libname_to_check, localFilename) {
+              var parts = libname_to_check.split('.')
+              if (((parts.length == 1) && (typeof window[parts[0]] == "undefined")) ||
+                  ((parts.length == 2) && (typeof window[parts[0]][parts[1]] == "undefined"))) {
+                  console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
+                  document.write(unescape(`%3Cscript src="./offline/${localFilename}" type="text/javascript"%3E%3C/script%3E`));
+              }
+            }
+        </script>
+        
+        {{ cdn_jslib("jquery-3.2.1.min.js", "https://code.jquery.com/jquery-3.2.1.min.js", "jQuery",
+        integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=") }}
 
-    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> -->
-    
-  </head>
+        {{ cdn_jslib("jquery-ui.min.js", "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jQuery.ui",
+        integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=") }}
+
+        {{ cdn_jslib("plotly-latest.min.js", "https://cdn.plot.ly/plotly-latest.min.js", "Plotly") }}
+        {{ cdn_jslib("katex.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js", "katex") }}
+        {{ cdn_jslib("auto-render.min.js", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js", "renderMathInElement") }}
+        {{ embed_jslib("pygsti_plotly_ex.js") }}
+        {{ embed_jslib("pygsti_dashboard.js") }}
+
+        {{ cdn_stylesheet("smoothness-jquery-ui.css", "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css") }}
+        {{ cdn_stylesheet("katex.css", "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css") }}
+        {{ embed_stylesheet("pygsti_dataviz.css") }}
+        {{ embed_stylesheet("pygsti_dashboard.css") }}
+        {{ embed_stylesheet("pygsti_fonts.css") }}
+
+    </head>
   
-  <body>
+    <body>
 
-    <div id="theSidenav" class="sidenav">
-      <a href="javascript:void(0)" id="tackbtn" onclick="tackNav()">&#8859;</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Summary')" id="defaultOpen">Summary</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Model Violation</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants')">Gauge Invariant</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants')">Gauge Variant</a>
-      #iftoggle(CompareDatasets)
-      <a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Set Comparison</a>
-      #endtoggle
-      <a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
-      %(topSwitchboard)s
-    </div>
+      <div id="content-wrapper">
+        <div id="theSidenav" class="sidenav loadable notloaded">
+          <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a>
+          <div class="linkgroup">
+            {{ navlink('Custom', 'Custom', style='linkgroupheading active') }}
+          </div>
+        </div>
+
+        <div id="main-wrapper">
+          <header class="header" role="banner">
+      	    <H1 class="title">{{ title }}</h1>
+	        <h2 class="author">generated by pyGSTi on {{ date }}</h2>
+          </header>
+          <div id="main">
+
+            <div id="Custom" class="tabcontent">
+	          <h1>Custom Report</h1>
+
+	          <figure id="targetGatesBoxTable" class='tbl'>
+	            <figcaption><span class="captiontitle">Test figure.</span> <span class="captiondetail">This is how you could put a figure in a custom report.</span></figcaption>
+                {{ targetGatesBoxTable|render }}
+	          </figure>
+
+      
+            </div> <!-- end tab content -->
+            <div id="status">
+              No message
+            </div>
+          </div>
+        </div>
+    </body>
     
-    
-    <header class="header" role="banner">
-      	<h1 class="title">%(title)s</h1>
-	<h2 class="author">generated by pyGSTi on %(date)s</h2>
-    </header>
-
-    <div id="main">
-
-      <div id="Summary" class="tabcontent">
-	<h1>Summary</h1>
-	<!-- (goSwitchboard1)s -->
-
-	<figure id="progressBarPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Model Violation summary.</span> <span class="captiondetail">The aggregate log-likelihood as a function of GST iteration.</span></figcaption>
-	  %(progressBarPlot)s
-	</figure>
-
-	<figure id="bestEstimateColorHistogram" class='tbl'>
-	  <figcaption><span class="captiontitle">Histogram of per-sequence model violation.</span> <span class="captiondetail"> This histogram shows the distribution of the per-sequence goodness-of-fit values (one count equals one gate sequence).</span> </figcaption>
-	  %(bestEstimateColorHistogram)s
-	</figure>
-
-	<figure id="bestGatesVsTargetTable_sum" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated gates to target gates.</span> <span class="captiondetail"> This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</span></figcaption>
-	  %(bestGatesVsTargetTable_sum)s
-	</figure>
-
-      </div>
-      
-      <div id="Input" class="tabcontent">
-	<h1>Input Summary</h1>
-	<p>Information pertaining to the target gate set and the data set(s).</p>
-	
-	<figure id='targetGatesetSPAMTable' class='tbl'>
-	  <figcaption><span class="captiontitle">Target gate set: SPAM (state preparation and measurement).</span> <span class="captiondetail"> The <em>ideal</em> input state (<span class="math">\rho_0</span>) and `plus' POVM effect <span class="math">E_0</span> for the device on which we report.  SPAM gates are given here as <span class="math">d\times d</span> matrices.</span></figcaption>
-	  %(targetSpamBriefTable)s
-	</figure>
-		    
-	<figure id="fiducialListTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Fiducial sequences.</span> <span class="captiondetail">  A list of the preparation and measurement <q>fiducial</q> gate sequences. See discussion in text.</span></figcaption>
-	  %(fiducialListTable)s
-	</figure>
-
-	<figure id="germListTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Germ sequences.</span> <span class="captiondetail"> A list of the <q>germ</q> gate sequences.  See discussion in text.</span></figcaption>
-	  %(germList2ColTable)s
-	</figure>
-	
-	<figure id="datasetOverviewTable" class='tbl'>
-	  <figcaption><span class="captiontitle">General dataset properties.</span> <span class="captiondetail"> See discussion in text.</span></figcaption>
-	  %(datasetOverviewTable)s
-	</figure>
-
-	<figure id='targetGatesetGatesTable' class='tbl'>
-	  <figcaption><span class="captiontitle">Target gate set: logic gates.</span> <span class="captiondetail"> The <em>ideal</em> (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).</span></figcaption>
-	  %(targetGatesBoxTable)s
-	</figure>
-
-	
-      </div> <!-- end tab content -->
-
-
-      <div id="Goodness" class="tabcontent">
-	<h1>Model Violation Analysis</h1>
-	<p>Metrics indicating how well the estimated gate set can be trusted -- i.e., how well it fits the data.</p>
-
-        <figure id="progressTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison between the computed and expected maximum <span class="math">\log(\mathcal{L})</span> for different values of <span class="math">L</span>.</span> <span class="captiondetail"> <span class="math">N_S</span> and <span class="math">N_p</span> are the number of gate strings and parameters, respectively.  The quantity <span class="math">2\Delta\log(\mathcal{L})</span> measures the goodness of fit of the GST model (small is better) and is expected to lie within <span class="math">[k-\sqrt{2k},k+\sqrt{2k}]</span> where <span class="math">k = N_s-N_p</span>. <span class="math">N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}</span> is the number of standard deviations from the mean (a <span class="math">p</span>-value can be straightforwardly derived from <span class="math">N_\sigma</span>).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit.</span></figcaption>
-	  <!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
-	  %(progressTable)s
-	</figure>
-
-	<figure id="bestEstimateColorScatterPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Per-sequence model violation.</span> <span class="captiondetail"> Each point displays the goodness of fit for a single gate sequence.</span> </figcaption>
-	  %(bestEstimateColorScatterPlot)s
-	</figure>
-
-	<figure id="bestEstimateColorBoxPlot">
-	  %(bestEstimateColorBoxPlotPages)s
-	  %(maxLSwitchboard1)s
-	  <figcaption><span class="captiontitle"><span class="math">2\Delta\log(\mathcal{L})</span> contributions for every individual experiment in the dataset.</span> <span class="captiondetail"> Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most %(linlg_pcntle)s%% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.</span></figcaption>
-	</figure>
-
-	<p class="clear"></p>
-		
-	#iftoggle(ShowScaling)
-	
-	<figure id="dataScalingColorBoxPlot">
-	  %(dataScalingColorBoxPlot)s
-	  <figcaption><span class="captiontitle">Data scaling factor for every individual experiment in the dataset.</span> <span class="captiondetail">  Each pixel represents a single experiment (gate sequence), and its color indicates the amount of scaling that was applied to the original data counts when computing the log-likelihood or <span class="math">\chi^2</span> for this estimate.  Values of 1.0 indicate all of the original data was used, whereas numbers between 0 and 1 indicate that the data counts for the experiement were artificially decreased (usually to improve the fit).</span></figcaption>
-	</figure>
-	
-	#elsetoggle
-        <p>Note: data-scaling color box figure is not shown because none of the estimates in this report have scaled data.</p>
-	#endtoggle    
-	<!-- End Ls and Germs only section -->
-
-      </div> <!-- end tab content -->
-
-      
-      <div id="GaugeInvariants" class="tabcontent">
-	<h1>Gauge Invariant Outputs</h1>
-	<p>Quantities which are <em>gauge-invariant</em> are the most reliable means of assessing the quality of the gates, as these do not depend on any unphysical gauge degrees of freedom</p>
-
-	<figure id="bestGatesetEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates and germs.</span> <span class="captiondetail"> The spectrum (Eigenvalues column) of each estimated gate and estimated germ.</span></figcaption>
-	  %(bestGatesetEvalTable)s
-	</figure>
-
-	<figure id="gramBarPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Gram Matrix Eigenvales.</span> <span class="captiondetail">Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.</span> </figcaption>
-	  %(gramBarPlot)s
-	</figure>
-
-
-      </div>
-
-      
-      <div id="GaugeVariants" class="tabcontent">
-	<h1>Gauge Variant Outputs</h1>
-	<p>The raw estimated gate set, and then some useful derived quantities.  These quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom using the parameters in Table <a href="#bestGatesetGaugeParamsTable" class="table"></a>.</p>
-
-	<!-- (goSwitchboard2)s -->
-
-	<figure id="bestGatesetGaugeParamsTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Gauge Optimization Details.</span> <span class="captiondetail"> A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.</span></figcaption>
-	  %(bestGatesetGaugeOptParamsTable)s
-	</figure>
-
-	<p class="clear"></p>
-
-	<figure id="bestGatesetSpamTable" class='tbl'>
-	  <figcaption><span class="captiontitle">The GST estimate of the SPAM operations.</span> <span class="captiondetail"> Compares the estimated SPAM operations to those desired (repeated from Table <a href="#targetGatesetTable"></a> for convenience.</span></figcaption>
-	  %(bestGatesetSpamBriefTable)s
-	</figure>
-	
-	<figure id="bestGatesetSpamParametersTable" class='tbl'>
-	  <figcaption><span class="captiontitle">GST estimate of SPAM probabilities.</span> <span class="captiondetail"> Computed by taking the dot products of vectors in Table <a href="#bestGatesetSpamTable" class="table"></a>.  The symbol <span class="math">E_C</span>, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</span></figcaption>
-	  %(bestGatesetSpamParametersTable)s
-	</figure>
-
-	<figure class='tbl' id="bestGatesetDecompTable">
-	  <figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">  A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto a the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle respectively.</span></figcaption>
-	  %(bestGatesetDecompTable)s
-	</figure>
-
-	<!-- <figure id="bestGatesetEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Relative Eigenvalues of estimated gates.</span> <span class="captiondetail"> The spectrum of each estimated gate pre-multiplied by the inverse of it's ideal (target) counterpart.  The second column displays these eigenvalues over the complex disc.</span></figcaption>
-	  (bestGatesetRelEvalTable)s
-	</figure> -->
-
-	<p class="clear"></p>
-
-	<figure id="bestGatesetVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated gate set to target gate set.</span> <span class="captiondetail"> This table displays the values of metrics which measure the aggregated <q>distance</q> between entire gate sets.  In this case, the two gate sets under consideration are the GST estimate and the target.</span></figcaption>
-	  %(bestGatesetVsTargetTable)s
-	</figure>
-	
-	
-	<figure id="bestGatesVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated gates to target gates.</span> <span class="captiondetail"> This table presents, for each of the gates, different measures of distance or discrepancy from the GST estimate to the ideal target operation.</span></figcaption>
-	  %(bestGatesVsTargetTable)s
-	</figure>
-	
-	<figure id="bestGatesetSpamVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated SPAM to target SPAM.</span> <span class="captiondetail"> This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</span></figcaption>
-	  %(bestGatesetSpamVsTargetTable)s
-	</figure>
-
-	<p class="clear"></p>
-	
-	<figure id="bestGatesetGatesTable" class='tbl'>
-	  <figcaption><span class="captiontitle">The GST estimate of the logic gate operations.</span> <span class="captiondetail"> Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</span></figcaption>
-	  %(bestGatesetGatesBoxTable)s
-	</figure>
-		
-	<figure id="bestGatesetErrGenTable" class='tbl'>
-	  <figcaption><span class="captiontitle">The GST estimate of the logic gate operation generators.</span> <span class="captiondetail"> A heat map of the <q>Error Generator</q> for each gate, which is the Lindbladian <span class="math">\mathbb{L}</span> that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all elements of these matrices is zero, the estimated gates match the target gates (Table <a href="#targetGatesetTable" class="table"></a>).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the <q>Hamiltonian generators</q> given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the <q>Stochastic generators</q> given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.</span></figcaption>
-	  %(bestGatesetErrGenBoxTable)s
-	</figure>
-		
-	<figure id="bestGatesetChoiTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Choi matrix spectrum of the GST estimated gate set.</span> <span class="captiondetail"> The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of <em>negative</em> values are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum <span class="math">(1,0,0\ldots)</span>, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</span></figcaption>
-	  %(bestGatesetChoiEvalTable)s
-	</figure>
-	
-      </div> <!-- end tab content -->
-
-      #iftoggle(CompareDatasets)
-      <div id="DataComparison" class="tabcontent">
-	<h1>Dataset comparisons</h1>
-	<p>This report contains information for more than one data set.  This page shows comparisons between different data sets.</p>
-
-	<figure id="dsComparisonSummary">
-	  %(dsComparisonSummary)s
-	  <figcaption><span class="captiontitle">For every pair of data sets, the likelihood is computed for two different models: 1) the model in which a single set of probabilities (one per gate sequence, obtained by the combined outcome frequencies) generates both data sets, and 2) the model in which each data is generated from different sets of probabilities.  Twice the ratio of these log-likelihoods can be compared to the value that is expected when model 1) is valid.  This plot shows the difference between the expected and actual twice-log-likelihood ratio in units of  standard deviations.  Zero or negative values indicate the data sets appear to be generated by the same underlying probabilities.  Large positive values indicate the data sets appear to be generated by different underlying probabilities.</span></figcaption>
-	</figure>
-
-	<figure id="dsComparisonHistogram">
-	  %(dsComparisonHistogram)s
-	  %(dscmpSwitchboard)s
-	  <figcaption><span class="captiontitle">Histogram of p-values comparing two data sets.</span> <span class="captiondetail">  Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
-	</figure>
-	
-	<figure id="dsComparisonBoxPlot">
-	  %(dsComparisonBoxPlot)s
-	  <figcaption><span class="captiontitle">Per-sequence <span class="math">2\Delta\log(\mathcal{L})</span> values comparing two data sets.</span> <span class="captiondetail"> In a similar fashion to other color box plots, this plot shows two times the log-likelihood-ratio for each gate sequence corresponding to how consistent that sequences' counts are between the two selected data sets.  The likelihood ratio is between a models that supposes there is either one or two separate probability distributions from which the data counts are drawn.</span></figcaption>
-	</figure>
-
-	<p class="clear"></p>
-
-      </div> <!-- end tab content -->
-      #endtoggle
-
-
-      <div id="Meta" class="tabcontent">
-	<h1>System and pyGSTi parameters</h1>
-	<p>This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.</p>
-
-	<figure id="metadataTable" class='tbl'>
-          <figcaption><span class="captiontitle">Listing of GST parameters and meta-data.</span> <span class="captiondetail"> These parameters and related metadata describe how the GST computation was performed which led to this report.</span></figcaption>
-          %(metadataTable)s
-	</figure>
-
-	<figure id="softwareEnvTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimation.</span></figcaption>
-	  %(softwareEnvTable)s
-	</figure>
-      
-      </div> <!-- end tab content -->
-
-      <!-- <div id="NEWTAB" class="tabcontent">
-	<h1>TAB Title</h1>
-	<p>Tab text.</p>
-      </div> <!-- end tab content --> 
-
-    </div>
-
-    <div id="status">
-      Status Bar!
-    </div>
-    
-  </body>
+    <script>
+      $(document).ready(function() {
+          initNav(); // so sidebar is loaded and can hide/show
+          initBanner(); // so banner can hide/show
+          openTab('Custom'); // the active tab (see 'active' class above)
+      });
+    </script>
 </html>

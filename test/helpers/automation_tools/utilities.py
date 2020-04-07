@@ -1,4 +1,3 @@
-from __future__ import print_function
 from contextlib import contextmanager
 import subprocess, os, sys
 
@@ -82,7 +81,7 @@ def get_changed_files():
     output = get_output(['git', 'diff', '--name-only'])
     return output.splitlines()
 
-# Changed files in packages/pygsti (not tests/repotools)
+# Changed files in /pygsti (not tests/repotools)
 def get_changed_core_files(core='pygsti'):
     return (filename.split(core, 1)[1] for filename in get_changed_files() if core in filename)
 

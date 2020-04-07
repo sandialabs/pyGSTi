@@ -1,8 +1,8 @@
 import unittest
 import warnings
 import pygsti
-from pygsti.construction import std1Q_XYI as stdxyi
-from pygsti.construction import std1Q_XY as stdxy
+from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
+from pygsti.modelpacks.legacy import std1Q_XY as stdxy
 from pygsti.objects import modelfunction as gsf
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L
@@ -20,7 +20,7 @@ class TestHessianMethods(BaseTestCase):
         super(TestHessianMethods, self).setUp()
 
         self.model = pygsti.io.load_model(compare_files + "/analysis.model")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
 
 
         fiducials = stdxyi.fiducials
@@ -108,38 +108,21 @@ class TestHessianMethods(BaseTestCase):
 
         print("eigvals = ",eigvals)
 
-        eigvals_chk =  np.array([1.22771144e-10, 5.09703519e-10, 7.77414421e-10, 7.77414421e-10,
-                                 9.54941949e-10, 9.54941949e-10, 1.31838597e-09, 1.68301591e-09,
-                                 1.68301591e-09, 1.90734690e-09, 1.90734690e-09, 2.49398698e-09,
-                                 2.63214649e-09, 5.55011910e-09, 8.25271609e-09, 1.79101190e-08,
-                                 9.23263305e+05, 1.05796436e+06, 1.16544156e+06, 1.39483644e+06,
-                                 1.83988792e+06, 2.10385396e+06, 2.37875879e+06, 2.47138866e+06,
-                                 2.64517713e+06, 2.68781067e+06, 2.82400957e+06, 2.86645483e+06,
-                                 2.94682035e+06, 2.96132874e+06, 3.08410148e+06, 3.29632639e+06,
-                                 3.66669038e+06, 3.76286040e+06, 3.81791306e+06, 3.86566785e+06,
-                                 3.88861934e+06, 4.72670353e+06, 4.96458456e+06, 6.53314879e+06,
-                                 1.01442686e+07, 1.11366689e+07, 1.26150705e+07, 1.30030291e+07,
-                                 1.36655922e+07, 1.49308924e+07, 1.58259068e+07, 1.81000865e+07,
-                                 2.09105990e+07, 2.17439110e+07, 2.46822193e+07, 2.64512967e+07,
-                                 2.72379830e+07, 3.34861817e+07, 3.44988014e+07, 3.68957880e+07,
-                                 5.08236925e+07, 9.43118724e+07, 1.36087264e+08, 6.30301385e+08] )
-            
-            #OLD
-            #[6.11142452e-11, 5.84760068e-10, 6.73066231e-10, 6.89070172e-10,
-            # 6.89070172e-10, 1.16844369e-09, 1.99649746e-09, 1.99649746e-09,
-            # 2.41697718e-09, 2.41697718e-09, 2.80832759e-09, 4.29148412e-09,
-            # 4.29148412e-09, 6.59655396e-09, 6.59655396e-09, 6.76915973e-09,
-            # 9.23087831e+05, 1.05783101e+06, 1.16457705e+06, 1.39492929e+06,
-            # 1.84015484e+06, 2.10613947e+06, 2.37963392e+06, 2.47192689e+06,
-            # 2.64566761e+06, 2.68722871e+06, 2.82383377e+06, 2.86584033e+06,
-            # 2.94590436e+06, 2.96180212e+06, 3.08322015e+06, 3.29389050e+06,
-            # 3.66581786e+06, 3.76266448e+06, 3.81921738e+06, 3.86624688e+06,
-            # 3.89045873e+06, 4.72831630e+06, 4.96416855e+06, 6.53286834e+06,
-            # 1.01424911e+07, 1.11347312e+07, 1.26152967e+07, 1.30081040e+07,
-            # 1.36647082e+07, 1.49293583e+07, 1.58234599e+07, 1.80999182e+07,
-            # 2.09155048e+07, 2.17444267e+07, 2.46870311e+07, 2.64427393e+07,
-            # 2.72410297e+07, 3.34988002e+07, 3.45005948e+07, 3.69040745e+07,
-            # 5.08647137e+07, 9.43153151e+07, 1.36088308e+08, 6.30304807e+08] )
+        eigvals_chk = np.array([2.51663034e-10, 2.51663034e-10, 6.81452335e-10, 7.72039792e-10,
+                                8.76915081e-10, 8.76915081e-10, 1.31455011e-09, 3.03808236e-09,
+                                3.03808236e-09, 3.13457752e-09, 3.21805358e-09, 3.21805358e-09,
+                                4.78549720e-09, 7.83389490e-09, 1.82493106e-08, 1.82493106e-08,
+                                9.23087831e+05, 1.05783101e+06, 1.16457705e+06, 1.39492929e+06,
+                                1.84015484e+06, 2.10613947e+06, 2.37963392e+06, 2.47192689e+06,
+                                2.64566761e+06, 2.68722871e+06, 2.82383377e+06, 2.86584033e+06,
+                                2.94590436e+06, 2.96180212e+06, 3.08322015e+06, 3.29389050e+06,
+                                3.66581786e+06, 3.76266448e+06, 3.81921738e+06, 3.86624688e+06,
+                                3.89045873e+06, 4.72831630e+06, 4.96416855e+06, 6.53286834e+06,
+                                1.01424911e+07, 1.11347312e+07, 1.26152967e+07, 1.30081040e+07,
+                                1.36647082e+07, 1.49293583e+07, 1.58234599e+07, 1.80999182e+07,
+                                2.09155048e+07, 2.17444267e+07, 2.46870311e+07, 2.64427393e+07,
+                                2.72410297e+07, 3.34988002e+07, 3.45005948e+07, 3.69040745e+07,
+                                5.08647137e+07, 9.43153151e+07, 1.36088308e+08, 6.30304807e+08])
 
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
@@ -158,7 +141,7 @@ class TestHessianMethods(BaseTestCase):
         res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
-        
+
         est = res.estimates['default']
         est.add_confidence_region_factory('final iteration estimate', 'final')
         self.assertWarns(est.add_confidence_region_factory, 'final iteration estimate','final') #overwrites former
@@ -183,7 +166,7 @@ class TestHessianMethods(BaseTestCase):
             cfctry.project_hessian(95.0, 'normal', 'FooBar') #bad hessianProjection
 
         self.assertTrue( cfctry.can_construct_views() )
-        
+
         ci_std = cfctry.view( 95.0, 'normal', 'std')
         ci_noproj = cfctry.view( 95.0, 'normal', 'none')
         ci_intrinsic = cfctry.view( 95.0, 'normal', 'intrinsic error')
@@ -194,14 +177,14 @@ class TestHessianMethods(BaseTestCase):
 
         self.assertWarns(cfctry.view, 0.95, 'normal', 'none') # percentage < 1.0
 
-        
+
         #Add estimate for linresponse-based CI --------------------------------------------------
         res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="linresponse")
 
         estLR = res.estimates['linresponse']
-        
+
         #estLR.add_confidence_region_factory('final iteration estimate', 'final') #Could do this, but use alt. method for more coverage
         with self.assertRaises(KeyError):
             estLR.get_confidence_region_factory('final iteration estimate', 'final') #won't create by default
@@ -212,9 +195,9 @@ class TestHessianMethods(BaseTestCase):
         self.assertFalse( cfctryLR.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctryLR.enable_linear_response_errorbars() #parent results object is used to automatically populate params
 
-        #self.assertTrue( cfctryLR.can_construct_views() )         
+        #self.assertTrue( cfctryLR.can_construct_views() )
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
-        
+
         mdl_dummy = cfctryLR.get_model() # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
@@ -228,7 +211,7 @@ class TestHessianMethods(BaseTestCase):
         est.add_confidence_region_factory('final iteration estimate', 'final')
         with self.assertRaises(ValueError): # bad objective
             est.get_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
-        
+
 
 
         # Now test each of the views we created above ------------------------------------------------
@@ -236,7 +219,7 @@ class TestHessianMethods(BaseTestCase):
 
             s = pickle.dumps(ci_cur) # test pickle
             pickle.loads(s)
-            
+
             #linear response CI doesn't support profile likelihood intervals
             if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
                 ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals(L("Gx"))
@@ -246,7 +229,7 @@ class TestHessianMethods(BaseTestCase):
 
                 with self.assertRaises(ValueError):
                     ci_cur.get_profile_likelihood_confidence_intervals("foobar") #invalid label
-    
+
             def fnOfGate_float(mx,b):
                 return float(mx[0,0])
             def fnOfGate_complex(mx,b):
@@ -280,7 +263,7 @@ class TestHessianMethods(BaseTestCase):
 
             ##SHORT-CIRCUIT linear reponse here to reduce run time
             if ci_cur is ci_linresponse: continue
-    
+
             def fnOfVec_float(v,b):
                 return float(v[0])
             def fnOfVec_0D(v,b):
@@ -291,7 +274,7 @@ class TestHessianMethods(BaseTestCase):
                 return np.dot(v.T,v)
             def fnOfVec_3D(v,b):
                 return np.zeros( (2,2,2), 'd') #just to test for error
-    
+
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
                 FnObj = FnClass(self.model, 'rho0', 'prep')
@@ -313,8 +296,8 @@ class TestHessianMethods(BaseTestCase):
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
                                             FnObj, returnFnVal=True, verbosity=4)
-    
-    
+
+
             def fnOfSpam_float(rhoVecs, povms):
                 lbls = list(povms[0].keys())
                 return float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) )
@@ -341,7 +324,7 @@ class TestHessianMethods(BaseTestCase):
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
                                             FnObj, returnFnVal=True, verbosity=4)
 
-    
+
             def fnOfGateSet_float(mdl):
                 return float( mdl.operations['Gx'][0,0] )
             def fnOfGateSet_0D(mdl):
@@ -373,7 +356,7 @@ class TestHessianMethods(BaseTestCase):
         res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
-        
+
         res.add_confidence_region_factory('final iteration estimate', 'final')
         self.assertTrue( res.has_confidence_region_factory('final iteration estimate', 'final'))
 
@@ -386,20 +369,20 @@ class TestHessianMethods(BaseTestCase):
 
         s = pickle.dumps(cfctry)
         cifctry2 = pickle.loads(s)
-        
+
         s = pickle.dumps(ci_std)
         ci_std2 = pickle.loads(s)
-        
+
         #TODO: make sure ci_std and ci_std2 are the same
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds, 
+        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
                                         returnHessian=True)
-        
+
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds, 
+        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
                                         returnHessian=True)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)

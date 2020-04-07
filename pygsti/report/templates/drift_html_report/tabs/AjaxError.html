@@ -1,0 +1,21 @@
+<div id="AjaxError" style="display: none">
+  <p><b>Report loading failed!</b><p>
+  <p>You're probably seeing this because this report was created <i>without</i> embedded figures and your browser does not allow locally-loaded html files to load other local files (i.e. the figures).  This is a security restriction present in many common browsers.  There are several things you can do to fix this problem:
+  	<ul>
+  	  <li> <b>Switch to Firefox and cross your fingers</b>: some versions of Firefox allow files to load other files by default, so if you're not using Firefox right now just switching to Firefox may cause this report to load properly.</li>
+      <li> <b>Run a local web server</b>: Running a local web server and loading this page (main.html) through the web server instead of by opening the file directly (so the address bar begins with <q>http://</q> instead of <q>file://</q> will almost certainly fix any problems.  A couple fairly simple ways of doing this are:
+  	    <ol>
+  		  <li><b>If you have Python installed</b>, running <pre>python3 -m http.server</pre> from a command line will start a local web server rooted in the current directory.  Access this server from a browser by typing <pre>localhost:8000</pre> in the address bar.  Navigate from there to main.html and you should be all set.</li>
+  		  <li><b>If you have the Google Chrome browser</b> (even if you're not using it), then download the <b>Web Server for Chrome</b> app (do a web search to find the app on Google's web store) and follow the instructions to start a local web server running out of a given local directory.</li> 
+  	    </ol>
+  	  </li>
+    </ul>		  
+  </p>
+</div>
+<script type="text/javascript">
+  testLocalAjax("figures/test.html", function(errstatus) {
+      console.log("AJAX ERROR: " + errstatus);
+      $('#main').find('.tabcontent').remove()
+      $('#AjaxError').show()
+  });
+</script>

@@ -4,8 +4,9 @@ import numpy as np
 import pickle
 import time
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 import pygsti.construction as pc
+from pygsti.objects import profiler
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -16,11 +17,11 @@ class ProfilerTestCase(BaseTestCase):
 
     def test_profler_methods(self):
         comm=None
-        mem = pygsti.baseobjs.profiler._get_root_mem_usage(comm)
-        mem = pygsti.baseobjs.profiler._get_max_mem_usage(comm)
+        mem = profiler._get_root_mem_usage(comm)
+        mem = profiler._get_max_mem_usage(comm)
 
         start_time = time.time()
-        p = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
+        p = profiler.Profiler(comm, default_print_memcheck=True)
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)
@@ -35,7 +36,7 @@ class ProfilerTestCase(BaseTestCase):
         s = p.format_times(sortBy="time")
         with self.assertRaises(ValueError):
             p.format_times(sortBy="foobar")
-            
+
         s = p.format_counts(sortBy="name")
         s = p.format_counts(sortBy="count")
         with self.assertRaises(ValueError):
@@ -47,13 +48,13 @@ class ProfilerTestCase(BaseTestCase):
             p.format_memory(sortBy="foobar")
         with self.assertRaises(NotImplementedError):
             p.format_memory(sortBy="timestamp")
-        empty = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
+        empty = profiler.Profiler(comm, default_print_memcheck=True)
         self.assertEqual(empty.format_memory(sortBy="timestamp"),"No memory checkpoints")
 
     def test_profiler_pickling(self):
         comm=None
         start_time = time.time()
-        p = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
+        p = profiler.Profiler(comm, default_print_memcheck=True)
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)

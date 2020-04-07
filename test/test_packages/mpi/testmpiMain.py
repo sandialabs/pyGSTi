@@ -4,10 +4,11 @@ import time
 import sys
 import pickle
 import numpy as np
-from .mpinoseutils import *
+from mpinoseutils import *
 
 import pygsti
-from pygsti.construction import std1Q_XYI as std
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.objects import profiler
 
 g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
@@ -18,7 +19,7 @@ def assertGatesetsInSync(mdl, comm):
         mdl_cmp = comm.bcast(bc, root=0)
         assert(mdl.frobeniusdist(mdl_cmp) < 1e-6)
 
-        
+
 def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
                 minProbClipForWeighting=1e-4, fidPairList=None,
@@ -31,7 +32,7 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
 
     assertGatesetsInSync(mdl_lgst, comm)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,gsTarget)
-    
+
     assertGatesetsInSync(mdl_lgst_go, comm)
 
     #Run full iterative LSGST
@@ -105,14 +106,14 @@ def create_fake_dataset(comm):
 
 @mpitest(4)
 def test_MPI_products(comm):
-
+    assert(comm.Get_size() == 4)
     #Create some model
     mdl = std.target_model()
 
     #Remove spam elements so product calculations have element indices <=> product indices
     del mdl.preps['rho0']
     del mdl.povms['Mdefault']
-    
+
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
@@ -508,7 +509,7 @@ def test_MPI_fills(comm):
 def test_MPI_compute_cache(comm):
     #try to run hard-to-reach cases where there are lots of processors compared to
     # the number of elements being computed:
-    from pygsti.construction import std1Q_XY #nice b/c only 2 gates
+    from pygsti.modelpacks.legacy import std1Q_XY #nice b/c only 2 gates
 
     #Create some model
     mdl = std.target_model()
@@ -541,7 +542,7 @@ def test_MPI_compute_cache(comm):
     hcache_chk = mdl._fwdsim()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
                                                 comm=None, wrtSlice1=slc1, wrtSlice2=slc2)
     assert(np.linalg.norm(hcache-hcache_chk) < 1e-6)
-    
+
 
 
 @mpitest(4)
@@ -767,7 +768,7 @@ def test_MPI_mlgst_forcefn(comm):
     else:
         ds = comm.bcast(None, root=0)
 
-    
+
     mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svdTruncateTo=4, verbosity=0)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
@@ -803,12 +804,12 @@ def test_MPI_derivcols(comm):
 
 @mpitest(4)
 def test_run1Q_end2end(comm):
-    from pygsti.construction import std1Q_XYI
+    from pygsti.modelpacks.legacy import std1Q_XYI
     target_model = std1Q_XYI.target_model()
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
     maxLengths = [1,2,4]
-    
+
     mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
@@ -852,7 +853,7 @@ def test_MPI_germsel(comm):
     #                                    randomize=False, seed=2018, scoreFunc='all',
     #                                    threshold=1e6, verbosity=1, opPenalty=1.0,
     #                                    memLimit=3*(1024**3), comm=comm)
-    
+
     germs_lowmem = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
                                                randomize=False, seed=2018, scoreFunc='all',
                                                threshold=1e6, verbosity=1, opPenalty=1.0,
@@ -860,11 +861,11 @@ def test_MPI_germsel(comm):
 
 @mpitest(4)
 def test_MPI_profiler(comm):
-    mem = pygsti.baseobjs.profiler._get_root_mem_usage(comm)
-    mem = pygsti.baseobjs.profiler._get_max_mem_usage(comm)
-    
+    mem = profiler._get_root_mem_usage(comm)
+    mem = profiler._get_max_mem_usage(comm)
+
     start_time = time.time()
-    p = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
+    p = profiler.Profiler(comm, default_print_memcheck=True)
     p.add_time("My Name", start_time, prefix=1)
     p.add_count("My Count", inc=1, prefix=1)
     p.add_count("My Count", inc=2, prefix=1)
@@ -874,12 +875,12 @@ def test_MPI_profiler(comm):
     p.print_mem("My Memcheck just to print", show_minmax=True)
     p.print_msg("My Message")
     p.print_msg("My Message", all_ranks=True)
-    
+
     s = p.format_times(sortBy="name")
     s = p.format_times(sortBy="time")
     #with self.assertRaises(ValueError):
     #    p.format_times(sortBy="foobar")
-        
+
     s = p.format_counts(sortBy="name")
     s = p.format_counts(sortBy="count")
     #with self.assertRaises(ValueError):
@@ -902,7 +903,7 @@ def test_MPI_tools(comm):
     rank = comm.Get_rank()
 
     # ------------------ distribute_indices_base --------------------------------
-    
+
     #case of procs < nIndices
     loc_indices, owners = mpit.distribute_indices_base(indices, nprocs, rank, allow_split_comm=True)
     if nprocs == 4: #should always be the case
@@ -949,8 +950,8 @@ def test_MPI_tools(comm):
     loc_indices, owners = mpit.distribute_indices_base([], nprocs, rank, allow_split_comm=False)
     assert(loc_indices == [])
     assert(owners == {})
-    
-        
+
+
     # ------------------ slice_up_slice --------------------------------
     slices = mpit.slice_up_slice( slice(0,4), num_slices=2)
     assert(slices[0] == slice(0,2))
@@ -967,7 +968,7 @@ def test_MPI_tools(comm):
         slices, loc_slice, owners, loc_comm = mpit.distribute_slice(slc,comm,allow_split_comm)
         my_array = np.zeros(100,'d')
         my_array[loc_slice] = master[loc_slice] # ~ computation (just copy from "master")
-        mpit.gather_slices(slices, owners, my_array, 
+        mpit.gather_slices(slices, owners, my_array,
                            arToFillInds=[], axes=0, comm=comm,
                            max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array[slc] - master[slc]) < 1e-6)
@@ -994,16 +995,16 @@ def test_MPI_tools(comm):
     test(slice(0,10),maxbuf=0) #with max-buffer that cannot be attained - should WARN
 
     master2D = np.arange(100).reshape((10,10))
-    
+
     def test2D(slc1,slc2, allow_split_comm=True, maxbuf=None):
         slices1, loc_slice1, owners1, loc_comm1 = mpit.distribute_slice(slc1,comm,allow_split_comm)
         slices2, loc_slice2, owners2, loc_comm2 = mpit.distribute_slice(slc2,loc_comm1,allow_split_comm)
-        
+
         my_array = np.zeros((10,10),'d')
         my_array[loc_slice1,loc_slice2] = master2D[loc_slice1,loc_slice2].copy() # ~ computation (just copy from "master")
 
     #Can't do this until distribute_slice gets upgraded to work with multiple dims...
-    #     mpit.gather_slices(slices, owners, my_array, 
+    #     mpit.gather_slices(slices, owners, my_array,
     #                        arToFillInds=[], axes=0, comm=comm,
     #                        max_buffer_size=maxbuf)
     #     assert(np.linalg.norm(my_array[slc] - master2D[slc]) < 1e-6)
@@ -1015,13 +1016,13 @@ def test_MPI_tools(comm):
         #print("Rank %d: locslc1 = %s, locslc2 = %s, loc_comm1_size=%d" % (rank, str(loc_slice1),str(loc_slice2),
         #                                                                  loc_comm1.Get_size() if loc_comm1 else -1))
         assert(np.linalg.norm(my_array2[slc1,slc2] - master2D[slc1,slc2]) < 1e-6)
-        
+
 
     test2D(slice(0,8),slice(0,4)) #more indices than processors
     test2D(slice(0,3),slice(0,3)) #fewer indices than processors
     test2D(slice(0,3),slice(0,3),False) #fewer indices than processors w/split comm
     test2D(slice(0,10), slice(0,5), maxbuf=20) #with max-buffer
-    
+
     #trivial case with comm = None => nothing to do
     mpit.gather_slices(None, None, master, arToFillInds=[], axes=0, comm=None)
     mpit.gather_slices_by_owner(slice(0,100), master, arToFillInds=[], axes=0, comm=None)
@@ -1042,16 +1043,16 @@ def test_MPI_tools(comm):
     # convenience method to avoid importing mpi4py at the top level
     c = mpit.get_comm()
 
-    
+
 @mpitest(4)
 def test_MPI_printer(comm):
     #Test output of each rank to separate file:
     pygsti.obj.VerbosityPrinter._commPath = "./"
-    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"    
+    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"
     printer = pygsti.obj.VerbosityPrinter(verbosity=1, comm=comm)
     printer.log("HELLO!")
     pygsti.obj.VerbosityPrinter._commPath = "./"
-    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"    
+    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"
 
 
 if __name__ == "__main__":

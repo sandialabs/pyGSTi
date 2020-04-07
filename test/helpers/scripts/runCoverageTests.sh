@@ -17,5 +17,5 @@ echo "MPI Output written to coverage_tests_mpi.out"
 cp output/coverage.serial .coverage.serial
 cp output/coverage.mpi    .coverage.mpi
 coverage combine
-coverage report -m --include="*/pyGSTi/packages/pygsti/*" > output/coverage_tests.out 2>&1
+coverage report -m --include="*/pyGSTi/pygsti/*" > output/coverage_tests.out 2>&1
 echo "Combined Output written to coverage_tests.out"

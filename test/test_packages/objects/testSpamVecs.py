@@ -6,7 +6,7 @@ import itertools
 
 from numpy.random import random,seed
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 from  pygsti.objects import SPAMVec, DenseSPAMVec
 import pygsti.construction as pc
 
@@ -14,167 +14,7 @@ import pygsti.construction as pc
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 class SPAMVecTestCase(BaseTestCase):
-
-    def setUp(self):
-        super(SPAMVecTestCase, self).setUp()
-        self.spamvec = DenseSPAMVec(np.array([1,0]),"densitymx")
-
-    def test_slice(self):
-        self.spamvec[:]
-
-    def test_bad_vec(self):
-        bad_vecs = [
-            'akdjsfaksdf',
-            [[], [1, 2]],
-            [[[]], [[1, 2]]]
-        ]
-        for bad_vec in bad_vecs:
-            with self.assertRaises(ValueError):
-                SPAMVec.convert_to_vector(bad_vec)
-
-    def test_base_spamvec(self):
-        raw = pygsti.objects.SPAMVec(4,"densitymx")
-
-        T = pygsti.objects.FullGaugeGroupElement(
-                np.array( [ [0,1,0,0],
-                            [1,0,0,0],
-                            [0,0,1,0],
-                            [0,0,0,1] ], 'd') )
-
-
-        with self.assertRaises(NotImplementedError):
-            raw.todense()
-        with self.assertRaises(NotImplementedError):
-            raw.transform(T,"prep")
-        with self.assertRaises(NotImplementedError):
-            raw.depolarize(0.01)
-        with self.assertRaises(ValueError):
-            pygsti.objects.SPAMVec.convert_to_vector(0.0) # something with no len()
-        
-    def test_methods(self):
-        v = np.ones((4,1),'d')
-        v_tp = np.zeros((4,1),'d'); v_tp[0] = 1.0/np.sqrt(2); v_tp[3] = 1.0/np.sqrt(2) - 0.05
-        v_id = np.zeros((4,1),'d'); v_id[0] = 1.0/np.sqrt(2)
-        povm = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.obj.FullSPAMVec(v))] )
-        tppovm = pygsti.obj.TPPOVM( [('0',pygsti.obj.FullSPAMVec(v)),
-                                     ('1',pygsti.obj.FullSPAMVec(v_id-v))] )
-        compSV = tppovm['1'] #complement POVM
-        self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
-
-        dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
-        dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
-        dummyGS.to_vector() # builds & cleans paramvec for tests below
-        assert(povm.gpindices is not None)
-        
-        vecs = [ pygsti.obj.FullSPAMVec(v),
-                 pygsti.obj.TPSPAMVec(v_tp),
-                 pygsti.obj.CPTPSPAMVec(v_tp, "pp"),
-                 pygsti.obj.StaticSPAMVec(v),
-                 compSV,
-                 pygsti.obj.TensorProdSPAMVec("prep", [pygsti.obj.FullSPAMVec(v),
-                                                       pygsti.obj.FullSPAMVec(v)]),
-                 pygsti.obj.TensorProdSPAMVec("effect", [povm], ['0'])
-                ]
-
-        with self.assertRaises(ValueError):
-            pygsti.obj.TensorProdSPAMVec("foobar",
-                                         [pygsti.obj.FullSPAMVec(v),
-                                          pygsti.obj.FullSPAMVec(v)])
-
-        for sv in vecs:
-            print("Testing %s spam vec -------------- " % type(sv))
-
-            try:
-                Np = sv.num_params()
-            except NotImplementedError:
-                Np = 0 # OK, b/c complement spam vec isn't a true spamvec...
-                
-            sv.size
-            sv_str = str(sv)
-
-            try:
-                deriv = sv.deriv_wrt_params()
-            except NotImplementedError:
-                pass #OK - some not implemented yet... (like TensorProdSPAMVec)
-            
-            if Np > 0:
-                try:
-                    deriv = sv.deriv_wrt_params([0])
-                except NotImplementedError:
-                    pass #OK - some not implemented yet...
-
-            if sv.has_nonzero_hessian():
-                try:
-                    sv.hessian_wrt_params()
-                    sv.hessian_wrt_params([0])
-                    sv.hessian_wrt_params([0],[0])
-                except NotImplementedError:
-                    pass #OK for NOW -- later this should always be implemented when there's a nonzero hessian!!
-
-            
-            sv.frobeniusdist2(sv,"prep")
-            sv.frobeniusdist2(sv,"effect")
-            with self.assertRaises(ValueError):
-                sv.frobeniusdist2(sv,"foobar")
-
-            sv2 = sv.copy()
-            try:
-                vec = sv.to_vector()
-                sv2.from_vector(vec)
-            except ValueError:
-                assert(isinstance(sv, (pygsti.obj.TensorProdSPAMVec,pygsti.obj.ComplementSPAMVec)))
-                # OK for TensorProd case and Complement case (when one should *not* call to_vector)
-
-            T = pygsti.objects.FullGaugeGroupElement(
-                np.array( [ [0,1],
-                            [1,0] ], 'd') )
-            T2 = pygsti.objects.UnitaryGaugeGroupElement(
-                np.array( [ [1,0],
-                            [0,1] ], 'd') )
-
-            try:
-                sv.transform(T,"prep")
-                sv.transform(T,"effect")
-            except ValueError: pass #OK, as this is unallowed for some gate types
-            except NotImplementedError: pass #also OK, as this signifies derived class doesn't even implement it
-            
-            try:
-                sv.transform(T2, "prep")
-                sv.transform(T2, "effect")
-            except ValueError: pass #OK, as this is unallowed for some gate types
-            except NotImplementedError: pass #also OK, as this signifies derived class doesn't even implement it
-
-            try:
-                with self.assertRaises(ValueError):
-                    sv.transform(T,"foobar") #invalid type
-            except NotImplementedError: pass #also OK
-                
-            try:
-                sv.depolarize(0.05)
-            except ValueError: pass #OK, as this is unallowed for some gate types
-            except NotImplementedError: pass #also OK, as this signifies derived class doesn't even implement it
-
-
-            try:
-                sv.set_value( np.zeros( (sv.dim,1), 'd') )
-            except ValueError:
-                pass #OK - some don't allow setting value
-            
-
-    def test_convert(self):
-        v_tp = np.zeros((4,1),'d'); v_tp[0] = 1.0/np.sqrt(2); v_tp[3] = 1.0/np.sqrt(2) - 0.05
-        s = pygsti.obj.FullSPAMVec(v_tp)
-
-        for toType in ("full","TP","static"):
-            s2 = pygsti.objects.spamvec.convert(s, toType, "pp")
-            pygsti.objects.spamvec.convert(s2, toType, "pp") #no conversion necessary
-        # todo add Lindblad types: "CPTP"
-
-        ssv = pygsti.obj.StaticSPAMVec(v_tp)
-        pygsti.objects.spamvec.optimize_spamvec(ssv, s) #test opt of static spamvec (nothing to do)
-
     def test_cptp_spamvec(self):
-
         vec = pygsti.obj.CPTPSPAMVec([1/np.sqrt(2),0,0,1/np.sqrt(2) - 0.1], "pp")
         print(vec)
         print(vec.base.shape)
@@ -224,8 +64,8 @@ class SPAMVecTestCase(BaseTestCase):
         print("OK2")
 
         vec.depolarize(0.01)
-        vec.depolarize((0.1,0.09,0.08))        
-        
+        vec.depolarize((0.1,0.09,0.08))
+
 
     #TODO
     def test_complement_spamvec(self):
@@ -244,7 +84,7 @@ class SPAMVecTestCase(BaseTestCase):
         model.povms['Mtest'] = pygsti.obj.TPPOVM( [('+',E0),('-',E1)] )
         E0 = model.povms['Mtest']['+']
         Ec = model.povms['Mtest']['-']
-        
+
         v = model.to_vector()
         model.from_vector(v)
 
@@ -305,7 +145,7 @@ class SPAMVecTestCase(BaseTestCase):
             Nels = p.num_elements()
             cpy = p.copy()
             s = str(p)
-            
+
             s = pickle.dumps(p)
             x = pickle.loads(s)
 
@@ -362,15 +202,15 @@ class SPAMVecTestCase(BaseTestCase):
 
         nqubits = 3
         iterover = [(0,1)]*nqubits
-        items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx"))
+        items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx",'effect'))
                   for outcomes in itertools.product(*iterover) ]
         povm = pygsti.obj.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params(),0)
 
         mdl = std1Q_XYI.target_model()
         mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
-        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
-                                                             '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx')})
+        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx','effect'),
+                                                             '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx','effect')})
 
         ps0 = mdl.probs(())
         ps1 = mdl.probs(('Gx',))
@@ -378,12 +218,7 @@ class SPAMVecTestCase(BaseTestCase):
         self.assertAlmostEqual(ps0['1'], 0.0)
         self.assertAlmostEqual(ps1['0'], 0.5)
         self.assertAlmostEqual(ps1['1'], 0.5)
-            
 
-        
-
-        
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
-

@@ -5,7 +5,7 @@ import warnings
 import pickle
 import os
 
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -35,8 +35,8 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def __init__(self, target_angle, initial_params=(0,0)):
         #initialize with no noise
         self.target_angle = target_angle
-        self.from_vector(np.array(initial_params,'d')) 
-        super(XRotationOp,self).__init__(self.base, "densitymx") # this is *super*-operator, so "densitymx"
+        super(XRotationOp,self).__init__(np.identity(4,'d'), "densitymx") # this is *super*-operator, so "densitymx"
+        self.from_vector(np.array(initial_params,'d'))         
         
     def num_params(self): 
         return 2 # we have two parameters
@@ -44,7 +44,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_amt, self.over_rotation],'d') #our parameter vector
         
-    def from_vector(self,v):
+    def from_vector(self,v, close=False, nodirty=False):
         #initialize from parameter vector v
         self.depol_amt = v[0]
         self.over_rotation = v[1]
@@ -56,10 +56,10 @@ class XRotationOp(pygsti.obj.DenseOperator):
         
         # .base is a member of DenseOperator and is a numpy array that is 
         # the dense Pauli transfer matrix of this operator
-        self.base = np.array([[1,   0,   0,   0],
-                              [0,   a,   0,   0],
-                              [0,   0,   c,  -b],
-                              [0,   0,   b,   c]],'d')
+        self.base[:,:] = np.array([[1,   0,   0,   0],
+                                   [0,   a,   0,   0],
+                                   [0,   0,   c,  -b],
+                                   [0,   0,   b,   c]],'d')
 
         
 class ParamXRotationOpFactory(pygsti.obj.OpFactory):
@@ -79,7 +79,7 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
     def to_vector(self):
         return self.params #our parameter vector
         
-    def from_vector(self,v):
+    def from_vector(self,v, close=False, nodirty=False):
         self.params[:] = v
 
     
@@ -136,7 +136,7 @@ class OpFactoryTestCase(BaseTestCase):
         p = mdl.probs(c)
         self.assertAlmostEqual(p[('10',)], 0.2681106285986824)
 
-    def test_parameteriized_opfactory(self):
+    def test_parameterized_opfactory(self):
         # check to make sure gpindices is set correctly
         std_mdl = std1Q_XYI.target_model()
         Gxrot_param_factory = ParamXRotationOpFactory()

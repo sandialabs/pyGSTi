@@ -5,7 +5,7 @@ import os
 import pygsti
 
 from pygsti.extras import drift
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI
 
 class DriftTestCase(BaseTestCase):
 
@@ -101,6 +101,7 @@ class DriftTestCase(BaseTestCase):
         trmodel.set_parameters([0.2])
         trmodel.hyperparameters
 
+    @unittest.skip("Need to update this test - do_stability_analysis no longer exists")
     def test_core_and_stabilityanalyzer(self):
 
         ds = pygsti.io.load_tddataset("cmp_chk_files/timeseries_data_trunc.txt")
