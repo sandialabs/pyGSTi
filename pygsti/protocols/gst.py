@@ -31,14 +31,17 @@ from .. import optimize as _opt
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
-
-
-#For results object:
 from ..objects.estimate import Estimate as _Estimate
 from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
 from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+from ..objects.computationcache import ComputationCache as _ComputationCache
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+
+
+#For results object:
 
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -336,8 +339,8 @@ class GateSetTomography(_proto.Protocol):
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distribute_method=self.distribute_method)
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
+                                             distribute_method=self.distribute_method)
 
         try:  # take structs if available
             circuit_lists_or_structs = data.edesign.circuit_structs
@@ -352,7 +355,7 @@ class GateSetTomography(_proto.Protocol):
         if self.oplabel_aliases:  # override any other aliases with ones specifically given
             aliases = self.oplabel_aliases
 
-        bulk_circuit_lists = [_objfns.BulkCircuitList(lst, aliases, self.circuit_weights)
+        bulk_circuit_lists = [_BulkCircuitList(lst, aliases, self.circuit_weights)
                               for lst in circuit_lists_or_structs]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
@@ -374,7 +377,7 @@ class GateSetTomography(_proto.Protocol):
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
-                                            else self.iteration_builders[-1]
+            else self.iteration_builders[-1]
         parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
         parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
@@ -451,8 +454,8 @@ class LinearGateSetTomography(_proto.Protocol):
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distribute_method="default")
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
+                                             distribute_method="default")
 
         ds = data.dataset
         aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
@@ -1105,7 +1108,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opts, cac
     # and minimize this for different eta (binary search) to find that largest eta for which the
     # first two terms is are zero.  This Wvec is our keeper.
     if cache is None:
-        cache = _objfns.ComputationCache()  # ensure we have a cache since we need its lookup dict below
+        cache = _ComputationCache()  # ensure we have a cache since we need its lookup dict below
 
     ds_dof = ds.get_degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
@@ -1232,7 +1235,7 @@ def reoptimize_with_weights(model, ds, circuit_list, circuit_weights, objfn_buil
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
-    bulk_circuit_list = _objfns.BulkCircuitList(circuit_list, circuitWeights=circuit_weights)
+    bulk_circuit_list = _BulkCircuitList(circuit_list, circuitWeights=circuit_weights)
     opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
                                             resource_alloc, cache, printer - 1)
     return mdl_reopt
@@ -1289,7 +1292,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         if init_circuits:
             edesign = self.data.edesign
             if isinstance(edesign, _proto.CircuitStructuresDesign):
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(cs) for cs in edesign.circuit_structs]
+                circuit_lists['iteration'] = [_BulkCircuitList(cs) for cs in edesign.circuit_structs]
 
                 #Set "Ls and germs" info: gives particular structure
                 final_struct = edesign.circuit_structs[-1]
@@ -1299,11 +1302,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
                     circuit_lists['germs'] = final_struct.germs
 
             elif isinstance(edesign, _proto.CircuitListsDesign):
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(cl) for cl in edesign.circuit_lists]
+                circuit_lists['iteration'] = [_BulkCircuitList(cl) for cl in edesign.circuit_lists]
 
             else:
                 #Single iteration
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(edesign.all_circuits_needing_data)]
+                circuit_lists['iteration'] = [_BulkCircuitList(edesign.all_circuits_needing_data)]
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 

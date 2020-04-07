@@ -15,6 +15,7 @@ from .. import tools as _tools
 from .. import objects as _objs
 from ..objects import objectivefns as _objfns
 from ..objects.smartcache import smart_cached
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 
 #def total_count_matrix(gsplaq, dataset):
@@ -822,7 +823,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
     fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
 
-    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _objfns.BulkCircuitList) else None
+    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
     ds_gstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
 
     if hasattr(model, 'num_nongauge_params'):

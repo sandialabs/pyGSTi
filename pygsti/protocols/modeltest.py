@@ -28,6 +28,9 @@ from ..objects.estimate import Estimate as _Estimate
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
+from ..objects.computationcache import ComputationCache as _ComputationCache
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 class ModelTest(_proto.Protocol):
@@ -96,7 +99,7 @@ class ModelTest(_proto.Protocol):
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
         printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler, distribute_method='default')
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler, distribute_method='default')
 
         try:  # take structs if available
             circuit_lists_or_structs = data.edesign.circuit_structs
@@ -113,13 +116,13 @@ class ModelTest(_proto.Protocol):
         if self.oplabel_aliases:  # override any other aliases with ones specifically given
             aliases = self.oplabel_aliases
 
-        bulk_circuit_lists = [_objfns.BulkCircuitList(lst, aliases, self.circuit_weights)
+        bulk_circuit_lists = [_BulkCircuitList(lst, aliases, self.circuit_weights)
                               for lst in circuit_lists_or_structs]
         objfn_vals = []
         chi2k_distributed_vals = []
         assert(len(self.objfn_builders) == 1), "Only support for a single objective function so far."
         for circuit_list in bulk_circuit_lists:
-            cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
+            cache = _ComputationCache()  # store objects for this particular model, dataset, and circuit list
             objective = self.objfn_builders[0].build(the_model, ds, circuit_list, resource_alloc, cache, printer)
             f = objective.fn(the_model.to_vector())
             objfn_vals.append(f)

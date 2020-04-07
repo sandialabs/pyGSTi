@@ -14,13 +14,12 @@ import itertools as _itertools
 import sys as _sys
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .. import optimize as _opt
-from .. import tools as _tools
-from ..tools import listtools as _lt
-from ..tools import slicetools as _slct
-from ..tools import mpitools as _mpit
+from .. import optimize as _opt, tools as _tools
+from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
-from .circuitstructure import LsGermsStructure as _LsGermsStructure
+from .computationcache import ComputationCache as _ComputationCache
+from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 _dummy_profiler = _profiler.DummyProfiler()
 CHECK = False
@@ -37,120 +36,15 @@ def objfn(objfn_cls, model, dataset, circuits=None,
         circuits = list(dataset.keys())
 
     if op_label_aliases:
-        circuits = BulkCircuitList(circuits, op_label_aliases)
+        circuits = _BulkCircuitList(circuits, op_label_aliases)
 
-    resource_alloc = ResourceAllocation(comm, mem_limit)
+    resource_alloc = _ResourceAllocation(comm, mem_limit)
     ofn = objfn_cls(model, dataset, circuits, regularization, penalties, cache,
                     resource_alloc, verbosity=0, *addl_args)
     return ofn
 
-
-class ComputationCache(object):
-    def __init__(self,
-                 eval_tree=None, lookup=None, outcomes_lookup=None, wrt_blk_size=None, wrt_blk_size2=None,
-                 counts=None, total_counts=None):
-        self.eval_tree = eval_tree
-        self.lookup = lookup
-        self.outcomes_lookup = outcomes_lookup
-        self.wrt_blk_size = wrt_blk_size
-        self.wrt_blk_size2 = wrt_blk_size2
-        self.counts = counts
-        self.total_counts = total_counts
-
-    def has_evaltree(self):
-        return (self.eval_tree is not None)
-
-    def add_evaltree(self, model, dataset=None, circuits_to_use=None, resource_alloc=None, subcalls=(), verbosity=0):
-        """TODO: docstring """
-        comm = resource_alloc.comm if resource_alloc else None
-        mlim = resource_alloc.mem_limit if resource_alloc else None
-        distribute_method = resource_alloc.distribute_method
-        self.eval_tree, self.wrt_blk_size, self.wrt_blk_size2, self.lookup, self.outcomes_lookup = \
-            model.bulk_evaltree_from_resources(circuits_to_use, comm, mlim, distribute_method,
-                                               subcalls, dataset, verbosity)
-
-    def has_count_vectors(self):
-        return (self.counts is not None) and (self.total_counts is not None)
-
-    def add_count_vectors(self, dataset, circuits_to_use, ds_circuits_to_use, circuit_weights=None):
-        assert(self.has_evaltree()), "Must `add_evaltree` before calling `add_count_vectors`!"
-        nelements = self.eval_tree.num_final_elements()
-        counts = _np.empty(nelements, 'd')
-        totals = _np.empty(nelements, 'd')
-
-        for (i, circuit) in enumerate(ds_circuits_to_use):
-            cnts = dataset[circuit].counts
-            totals[self.lookup[i]] = sum(cnts.values())  # dataset[opStr].total
-            counts[self.lookup[i]] = [cnts.get(x, 0) for x in self.outcomes_lookup[i]]
-
-        if circuit_weights is not None:
-            for i in range(len(circuits_to_use)):
-                counts[self.lookup[i]] *= circuit_weights[i]  # dim nelements (K = nSpamLabels, M = nCircuits )
-                totals[self.lookup[i]] *= circuit_weights[i]  # multiply N's by weights
-
-        self.counts = counts
-        self.total_counts = totals
-
-
-class BulkCircuitList(list):
-
-    #TODO REMOVE
-    #@classmethod
-    #def from_circuit_list(cls, circuit_list, model, dataset=None, resource_alloc=None,
-    #                      subcalls=(), verbosity=0): # cache=None
-    #    if circuit_list is None and dataset is not None:
-    #        circuit_list = list(dataset.keys())
-    #    comm = resource_alloc.comm if resource_alloc else None
-    #    mlim = resource_alloc.mem_limit
-    #    distribute_method = resource_alloc.distribute_method
-    #    evalTree, wrt_blk_size, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
-    #        circuit_list, comm, mlim, distribute_method, subcalls, dataset, verbosity)
-    #
-    #    # Note: evalTree.generate_circuit_list() != circuit_list, as the tree holds *simplified* circuits
-    #    return cls(circuit_list, evalTree, lookup, outcomes_lookup)
-
-    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
-
-        #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_list_or_structure, (list, tuple)):
-            self.circuits_to_use = circuit_list_or_structure
-            self.circuit_structure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
-            self.circuit_structure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
-        else:
-            self.circuit_structure = circuit_list_or_structure
-            self.circuits_to_use = self.circuit_structure.allstrs
-
-        self.op_label_aliases = op_label_aliases
-        self.circuit_weights = circuit_weights
-        self.name = name  # an optional name for this circuit list
-        self[:] = self.circuits_to_use  # maybe get rid of self.circuits_to_use in the future...
-
     #def __len__(self):
     #    return len(self.circuits_to_use)
-
-
-class ResourceAllocation(object):
-    @classmethod
-    def build_resource_allocation(cls, arg):
-        if arg is None:
-            return cls()
-        elif isinstance(arg, ResourceAllocation):
-            return arg
-        else:  # assume argument is a dict of args
-            return cls(arg.get('comm', None), arg.get('mem_limit', None),
-                       arg.get('profiler', None), arg.get('distribute_method', 'default'))
-
-    def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default"):
-        self.comm = comm
-        self.mem_limit = mem_limit
-        if profiler is not None:
-            self.profiler = profiler
-        else:
-            self.profiler = _dummy_profiler
-        self.distribute_method = distribute_method
-
-    def copy(self):
-        return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
 
 
 class ObjectiveFunctionBuilder(object):
@@ -217,7 +111,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         TODO: docstring
         """
-        resource_alloc = ResourceAllocation.build_resource_allocation(resource_alloc)
+        resource_alloc = _ResourceAllocation.build_resource_allocation(resource_alloc)
         self.comm = resource_alloc.comm
         self.profiler = resource_alloc.profiler
         self.mem_limit = resource_alloc.mem_limit
@@ -331,7 +225,8 @@ class MDSObjectiveFunction(ObjectiveFunction):
         self.check_jacobian = CHECK_JACOBIAN
 
         circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
-        bulk_circuit_list = circuit_list if isinstance(circuit_list, BulkCircuitList) else BulkCircuitList(circuit_list)
+        bulk_circuit_list = circuit_list if isinstance(
+            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
         self.circuits_to_use = bulk_circuit_list[:]
         self.circuit_weights = bulk_circuit_list.circuit_weights
         self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
@@ -356,11 +251,11 @@ class MDSObjectiveFunction(ObjectiveFunction):
         else:
             evt_mlim = None
 
-        self.cache = cache if (cache is not None) else ComputationCache()
+        self.cache = cache if (cache is not None) else _ComputationCache()
         if not self.cache.has_evaltree():
             subcalls = self.get_evaltree_subcalls()
-            evt_resource_alloc = ResourceAllocation(self.raw_objfn.comm, evt_mlim,
-                                                    self.raw_objfn.profiler, self.raw_objfn.distribute_method)
+            evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
+                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
             self.cache.add_evaltree(self.mdl, self.dataset, self.circuits_to_use, evt_resource_alloc,
                                     subcalls, self.raw_objfn.printer - 1)
 

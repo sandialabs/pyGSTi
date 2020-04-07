@@ -37,6 +37,7 @@ from . import section as _section
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -201,7 +202,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
         loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
-            if isinstance(results.circuit_lists['final'], _objfns.BulkCircuitList) else [0]
+            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
@@ -286,7 +287,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
         switchBd.circuits_final[d] = results.circuit_lists['final']
 
         loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
-            if isinstance(results.circuit_lists['final'], _objfns.BulkCircuitList) else [0]
+            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
 
         for iL, L in enumerate(swLs):  # allow different results to have different Ls
             if L in loc_Ls:
@@ -474,7 +475,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
                 continue  # automatic creation failed -> skip
 
         circuits_final = results.circuit_lists['final']
-        if not isinstance(circuits_final, _objfns.BulkCircuitList): continue
+        if not isinstance(circuits_final, _BulkCircuitList): continue
 
         circuit_struct = circuits_final.circuit_structure
         if GiStr not in circuit_struct.germs: continue

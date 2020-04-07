@@ -100,11 +100,7 @@ from .objectivefns import ComputationCache, BulkCircuitList, ResourceAllocation,
     MaxLogLFunction, TVDFunction, TimeDependentChi2Function, TimeDependentPoissonPicLogLFunction, LogLWildcardFunction
 
 from .results import Results
-
-#Functions
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
-
-#Important Base Objects
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler

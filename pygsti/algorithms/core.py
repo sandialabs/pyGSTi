@@ -21,6 +21,9 @@ from .. import objects as _objs
 from .. import construction as _pc
 from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
+from ..objects.computationcache import ComputationCache as _ComputationCache
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 _dummy_profiler = _DummyProfiler()
 
 
@@ -576,7 +579,7 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
     model : Model
         the best-fit model.
     """
-    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    resource_alloc = _ResourceAllocation.build_resource_allocation(resource_alloc)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -664,7 +667,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     final_cache : ComputationCache
         The final iteration's computation cache.
     """
-    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    resource_alloc = _ResourceAllocation.build_resource_allocation(resource_alloc)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -677,7 +680,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
-            if isinstance(circuitsToEstimate, _objfns.BulkCircuitList) and circuitsToEstimate.name:
+            if isinstance(circuitsToEstimate, _BulkCircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
 
             printer.show_progress(i, nIters, verbose_messages=extraMessages,
@@ -686,7 +689,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
-            cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
+            cache = _ComputationCache()  # store objects for this particular model, dataset, and circuit list
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
