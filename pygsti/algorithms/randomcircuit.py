@@ -2806,63 +2806,6 @@ def random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, localclif
     #return circuit, idealout
     return circlist, outlist, aux
 
-
-def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_length, qubit_labels=None,
-                                               sampler='edgegrab', samplerargs=[1 / 4], localclifford=True,
-                                               paulirandomize=True, fixed_versus_depth=False, descriptor=''):
-
-    assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
-    experiment_dict = {}
-    experiment_dict['spec'] = {}
-    experiment_dict['spec']['depths'] = depths
-    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
-    experiment_dict['spec']['qubit_labels'] = qubit_labels
-    experiment_dict['spec']['sampler'] = sampler
-    experiment_dict['spec']['samplerargs'] = samplerargs
-    experiment_dict['spec']['localclifford'] = localclifford
-    experiment_dict['spec']['paulirandomize'] = paulirandomize
-    experiment_dict['spec']['descriptor'] = descriptor
-    if qubit_labels is not None: experiment_dict['qubitordering'] = tuple(qubit_labels)
-    else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
-    experiment_dict['circuits'] = {}
-    experiment_dict['target'] = {}
-    experiment_dict['germs'] = {}
-    #experiment_dict['germ_powers'] = {}
-    #experiment_dict['subgerm_depths'] = {}
-    #experiment_dict['max_subgerm_depth'] = {}
-
-    circlist = {}
-    outlist = {}
-    aux = {}
-    for j in range(circuits_per_length):
-        circlist[j], outlist[j], aux[j] = random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
-                                                                           localclifford=localclifford,
-                                                                           paulirandomize=paulirandomize,
-                                                                           interactingQs_density=samplerargs[0],
-                                                                           fixed_versus_depth=fixed_versus_depth)
-
-    #print(aux[0])
-    #for l in depths:
-    for lind in range(len(depths)):
-        for j in range(circuits_per_length):
-            #c, iout = random_germpower_mirror_circuit(pspec, l, qubit_labels=qubit_labels,
-            #                            localclifford=localclifford, paulirandomize=paulirandomize,
-            #                           interactingQs_density=samplerargs[0])
-            #             experiment_dict['circuits'][l, j] = c
-            #             experiment_dict['target'][l, j] = iout
-            experiment_dict['circuits'][depths[lind], j] = circlist[j][lind]
-            experiment_dict['target'][depths[lind], j] = outlist[j][lind]
-            if fixed_versus_depth:
-                experiment_dict['germs'][depths[lind], j] = aux[j]['germ']
-            else:
-                experiment_dict['germs'][depths[lind], j] = aux[j]['germ'][lind]
-            #experiment_dict['germ_powers'][depths[lind], j] = aux[j]['germ_powers'][lind]
-            #experiment_dict['subgerm_depths'][depths[lind], j] = aux[j]['subgerm_depth']
-            #experiment_dict['max_subgerm_depth'][depths[lind], j] = aux[j]['max_subgerm_depth']
-
-    return experiment_dict
-
-
 # Future : possibly add this back in, but only if the other function it is a wrap-around
 # for has been tested.
 # def oneQ_generalized_rb_experiment(m_list, K_m, group_or_model, inverse=True,
