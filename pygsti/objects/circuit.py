@@ -2776,6 +2776,7 @@ class Circuit(object):
 
     def convert_to_cirq(self,
                         qubit_conversion,
+                        wait_duration=None,
                         gatename_conversion=None):
         """
         Converts this circuit to a Cirq circuit.
@@ -2783,10 +2784,16 @@ class Circuit(object):
         Parameters
         ----------
         qubit_conversion : dict
-            Mapping from qubit labels (e.g. integers) to Cirq qubits.
+            Mapping from qubit labels (e.g. integers) to Cirq qubit objects.
+        wait_duration: cirq.Duration, optional
+            NOT CURRENTLY WORKING
+            If no gatename_conversion dict is given, the idle operation is not
+            converted to a gate. If wait_diration is specified and gatename_conversion
+            is not specified, then the idle operation will be converted to a
+            `cirq.WaitGate` with the specified duration.
         gatename_conversion : dict, optional
             If not None, a dictionary that converts the gatenames in the circuit to the
-            gatenames that will appear in the Cirq output. If only standard pyGSTi names
+            Cirq gates that will appear in the Cirq circuit. If only standard pyGSTi names
             are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
             be specified, and an automatic conversion to the standard Cirq names will be
             implemented.
@@ -2797,10 +2804,12 @@ class Circuit(object):
         """
 
         if not _has_cirq:
-          raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+            raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
         if gatename_conversion is None:
-          gatename_conversion = _itgs.std_gatenames_to_cirq
+            gatename_conversion = _itgs.get_standard_gatenames_cirq_conversions()
+            if wait_duration is not None:
+                gatename_conversion['Gi'] = cirq.WaitGate(wait_duration)
 
         moments = []
         for i in range(self.num_layers()):

@@ -259,37 +259,35 @@ def get_standard_gatename_unitaries():
 
     return std_unitaries
 
-
-std_gatenames_to_cirq = {
-    'Gi': None, # TODO: How to handle idle?
-    'Gxpi2': cirq.XPowGate(exponent=1/2),
-    'Gxmpi2': cirq.XPowGate(exponent=-1/2),
-    'Gxpi': cirq.X,
-    'Gzpi2': cirq.ZPowGate(exponent=1/2),
-    'Gzmpi2': cirq.ZPowGate(exponent=-1/2),
-    'Gzpi': cirq.Z,
-    'Gypi2': cirq.YPowGate(exponent=1/2),
-    'Gympi2': cirq.YPowGate(exponent=-1/2),
-    'Gypi': cirq.Y,
-    'Gp': cirq.Z,  # todo : check that this is correct
-    'Gpdag': cirq.ZPowGate(exponent=-1/2),  # todo : check that this is correct
-    'Gh': cirq.H,
-    'Gt': cirq.T,  # todo : check that this is correct
-    'Gtdag': cirq.T**-1,  # todo : check that this is correct
-    'Gcphase': cirq.CZ,
-    'Gcnot': cirq.CNOT,
-    'Gswap': cirq.SWAP,
-    }
-
 def get_standard_gatenames_cirq_conversions():
     """
-      blah
+    A dictionary converting the gates with standard names
+    (see get_standard_gatename_unitaries()) to the cirq
+    names for these gates.
+
+    By default, an idle operation will not be converted to a gate.
+    If you want an idle to be converted to a `cirq.WaitGate`, you will have
+    to modify this dictionary.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Currently there are some standard gate names with no conversion to cirq.
+
+    TODO: add Clifford gates with
+    https://cirq.readthedocs.io/en/latest/generated/cirq.SingleQubitCliffordGate.html
+
+    Returns
+    -------
+    dict mapping strings to string
     """
     if not _has_cirq:
       raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
     std_gatenames_to_cirq = {}
-    std_gatenames_to_cirq['Gi'] = None # TODO: How to handle idle?
+    std_gatenames_to_cirq['Gi'] = None
     std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1/2)
     std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1/2)
     std_gatenames_to_cirq['Gxpi'] = cirq.X
