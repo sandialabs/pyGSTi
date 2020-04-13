@@ -2895,9 +2895,13 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
             box_labels=True, prec=1, colormap=colormap, scale=scale)
 
         #Combine plotly figures into one
-        nSigma_figdict = nSigma_fig.plotlyfig.to_dict()  # so we can work with normal dicts
-        # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
-        logL_figdict = logL_fig.plotlyfig.to_dict()
+        nSigma_figdict = nSigma_fig.plotlyfig
+        if hasattr(nSigma_figdict, 'to_dict'):
+            nSigma_figdict = nSigma_figdict.to_dict()  # so we can work with normal dicts
+            # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
+        logL_figdict = logL_fig.plotlyfig
+        if hasattr(logL_figdict, 'to_dict'):
+            logL_figdict = logL_figdict.to_dict()
         combined_fig_data = list(nSigma_figdict['data']) + [logL_figdict['data'][0]]
         combined_fig_data[-1].update(visible=False)
         combined_fig = ReportFigure(go.Figure(data=combined_fig_data, layout=nSigma_figdict['layout']),
