@@ -341,13 +341,14 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
     """
     TODO
     """
-    def __init__(self, depths='all', datatype='polarization', statistic='mean',
-                 custom_data_src=None, name=None):
+    def __init__(self, depths='all', datatype='polarization', statistic='mean', custom_data_src=None, name=None):
         """
         todo
+
         """
         assert(statistic in ('max', 'mean', 'min', 'dist', 'sum'))
-
+        if name is None:
+            name = statistic + ' ' + datatype
         super().__init__(name)
         self.depths = depths
         self.datatype = datatype
@@ -359,7 +360,10 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
                                        ('statistic', 'Statistic', 'category'))
 
     def run(self, data, memlimit=None, comm=None, dscomparator=None):
+        """
+        TODO
 
+        """
         design = data.edesign
 
         if self.custom_data_src is None:  # then use the data in `data`
@@ -383,7 +387,7 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
             src_data = data.cache[self.datatype]
 
         elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
-            assert(self.datatype == 'success_probabilities'), "Only success probabailities can be simulated."
+            assert(self.datatype == 'success_probabilities' or self.datatype == 'polarization'), "Only success probabilities or polarizations can be simulated!"
             sfmodel = self.custom_data_src
             depths = data.edesign.depths if self.depths == 'all' else self.depths
             src_data = _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
@@ -392,11 +396,17 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
             for depth in depths:
                 for circ in circuit_lists_for_depths[depth]:
                     predicted_success_prob = sfmodel.probs(circ)[('success',)]
-                    src_data[depth].append(predicted_success_prob)
+                    if self.datatype == 'success_probabilities':
+                        src_data[depth].append(predicted_success_prob)
+                    elif self.datatype == 'polarization':
+                        nQ = len(circ.line_labels)
+                        pol = (predicted_success_prob - 1 / 2**nQ) / (1 - 1 / 2**nQ)
+                        src_data[depth].append(pol)
 
-        elif isinstance(self.custom_data_src, dict):  # Assume this is a "summary dataset"
-            summary_data = self.custom_data_src
-            src_data = summary_data['success_probabilities']
+        # Note sure this is used anywhere, so commented out for now.
+        #elif isinstance(custom_data_src, dict):  # Assume this is a "summary dataset"
+        #    summary_data = self.custom_data_src
+        #    src_data = summary_data['success_probabilities']
 
         else:
             raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
