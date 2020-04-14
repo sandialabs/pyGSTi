@@ -3,6 +3,7 @@ from nose.plugins.attrib import attr
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import shutil
+import logging
 
 
 # All tutorials to be tested are under this directory
@@ -17,6 +18,7 @@ _TUTORIAL_FILES = [
 
 
 def test_tutorials():
+    logging.getLogger('traitlets').setLevel(logging.CRITICAL)
     with TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
