@@ -855,9 +855,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             terms = _np.where(probs < self.min_p,
                               terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
-            if _np.min(terms) < 0.0:
-                raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
-                                  "(it should be smaller than the smallest frequency)") % self.min_p)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
@@ -865,6 +862,15 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         # special handling for f == 0 terms
         # using cubit rounding of function that smooths N*p for p>0:
         #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
+
+        if _np.min(terms) < 0.0:
+            #Since we set terms = _np.maximum(terms, 0) above we know it was the regularization that caused this
+            if self.regtype == 'minp':
+                raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
+                                  "(it should be smaller than the smallest frequency)") % self.min_p)
+            else:
+                raise ValueError("Regularization => negative terms!")
+
 
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
