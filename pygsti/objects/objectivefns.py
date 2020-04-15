@@ -1704,6 +1704,10 @@ class TVDFunction(TimeIndependentMDSObjectiveFunction):
 
 class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
 
+    @classmethod
+    def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
+        return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
+
     #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
@@ -1785,7 +1789,7 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
         return self.jac
 
 
-class TimeDependentPoissonPicLogLFunction(ObjectiveFunction):
+class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
 
     def set_regularization(self, min_prob_clip=1e-4, radius=1e-4):
         self.min_p = min_prob_clip
