@@ -3163,8 +3163,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         if decay:
             lengths = _np.linspace(0, max(rb_r.depths), 200)
-            A = rb_r.fits[fitkey].estimates['A']
-            B = rb_r.fits[fitkey].estimates['B']
+            A = rb_r.fits[fitkey].estimates['a']
+            B = rb_r.fits[fitkey].estimates['b']
             p = rb_r.fits[fitkey].estimates['p']
 
             data.append(go.Scatter(

@@ -185,7 +185,7 @@ def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, 
     # First perform a fit with a fixed asymptotic value
     FAF_results = custom_least_squares_data_fitting(lengths, asps, n, a=A, seed=seed)
     # Full fit is seeded by the fixed asymptote fit.
-    seed_full = [FAF_results['estimates']['A'], FAF_results['estimates']['B'], FAF_results['estimates']['p']]
+    seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
     FF_results = custom_least_squares_data_fitting(lengths, asps, n, seed=seed_full)
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
