@@ -18,14 +18,15 @@ class AdvancedOptions(dict):
 
     def __setitem__(self, key, val):
         if key not in self.valid_keys:
-            raise ValueError("Invalid key '%s'. Valid keys are: '%s'" % (str(key), "', '".join(self.valid_keys)))
+            raise ValueError("Invalid key '%s'. Valid keys are: '%s'" %
+                             (str(key), "', '".join(sorted(self.valid_keys))))
         super().__setitem__(key, val)
 
     def update(self, d):
         invalid_keys = [k for k in d.keys() if k not in self.valid_keys]
         if invalid_keys:
             raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
-                             "', '".join(self.valid_keys)))
+                                                                          "', '".join(sorted(self.valid_keys))))
 
 
 class GSTAdvancedOptions(AdvancedOptions):
@@ -39,4 +40,4 @@ class GSTAdvancedOptions(AdvancedOptions):
                   'contract_start_to_cptp',
                   'always_perform_mle', 'only_perform_mle',
                   'max_iterations', 'tolerance', 'finitediff_iterations', 'extra_lm_opts',
-                  'set trivial_gauge_group', 'op_labels', 'unreliable_ops')
+                  'set trivial_gauge_group', 'op_labels', 'unreliable_ops', 'estimate_label')

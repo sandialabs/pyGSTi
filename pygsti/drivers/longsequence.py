@@ -149,7 +149,8 @@ def do_model_test(model_filename_or_object,
     #Create the protocol
     proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite, None,
                              builder, _get_badfit_options(advanced_options),
-                             advanced_options.get('set trivial gauge group', True), printer)
+                             advanced_options.get('set trivial gauge group', True), printer,
+                             name=advanced_options.get('estimate_label', None))
 
     #Set more advanced options
     proto.profile = advanced_options.get('profile', 1)
@@ -255,7 +256,8 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
 
     proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
-                                           _get_badfit_options(advanced_options), printer)
+                                           _get_badfit_options(advanced_options), printer,
+                                           name=advanced_options.get('estimate_label', None))
     proto.profile = advanced_options.get('profile', 1)
     proto.record_output = advanced_options.get('record_output', 1)
     proto.oplabels = advanced_options.get('op_labels', 'default')
@@ -532,7 +534,8 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, exp_design),
-                                     _get_badfit_options(advanced_options), printer)
+                                     _get_badfit_options(advanced_options), printer,
+                                     name=advanced_options.get('estimate_label', None))
 
     proto.profile = advanced_options.get('profile', 1)
     proto.record_output = advanced_options.get('record_output', 1)
@@ -684,7 +687,8 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     proto = _proto.StandardGST(modes, gauge_opt_suite, gauge_opt_target, models_to_test,
                                _get_gst_builders(advanced_options),
                                _get_optimizer(advanced_options, exp_design),
-                               _get_badfit_options(advanced_options), printer)
+                               _get_badfit_options(advanced_options), printer,
+                               name=advanced_options.get('estimate_label', None))
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
