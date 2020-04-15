@@ -12,17 +12,19 @@ import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
 from ..tools import listtools as _lt
+from ..tools.legacytools import deprecated_fn as _deprecated_fn
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import Model as _Model
 from ..objects import Circuit as _Circuit
+from ..objects import BulkCircuitList as _BulkCircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
 
-def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                     fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
-                     keep_fraction=1, keep_seed=None, include_lgst=True,
-                     germ_length_limits=None):
+def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                         fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                         keep_fraction=1, keep_seed=None, include_lgst=True,
+                         germ_length_limits=None):
     """
     Create a set of operation sequence lists for LSGST based on germs and max-lengths.
 
@@ -227,14 +229,29 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
     return lsgst_listOfLists
 
 
+@_deprecated_fn('make_lsgst_lists(...)')
 def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                        fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
                        keep_fraction=1, keep_seed=None, include_lgst=True,
                        op_label_aliases=None, sequence_rules=None,
                        dscheck=None, action_if_missing="raise", germ_length_limits=None,
                        verbosity=0):
+    bulk_circuit_lists = make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                                          fid_pairs, trunc_scheme, nest,
+                                          keep_fraction, keep_seed, include_lgst,
+                                          op_label_aliases, sequence_rules,
+                                          dscheck, action_if_missing, germ_length_limits, verbosity)
+    return [bcl.circuit_structure for bcl in bulk_circuit_lists]
+
+
+def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                     fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                     keep_fraction=1, keep_seed=None, include_lgst=True,
+                     op_label_aliases=None, sequence_rules=None,
+                     dscheck=None, action_if_missing="raise", germ_length_limits=None,
+                     verbosity=0):
     """
-    Create a set of operation sequence structures for LSGST.
+    Create a set of long-sequence GST circuit lists (including structure).
 
     Constructs a series (a list) of operation sequence structures used by long-sequence
     GST (LSGST) algorithms.  If `include_lgst == True` then the starting
@@ -413,7 +430,7 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
     if include_lgst: germ_list = [empty_germ] + germ_list
 
     #running structure of all strings so far (LGST strings or empty)
-    running_gss = _LsGermsStructure([], germ_list, prep_strs,
+    running_cs = _LsGermsStructure([], germ_list, prep_strs,
                                     effect_strs, op_label_aliases,
                                     sequence_rules)
 
@@ -421,32 +438,32 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
 
     if include_lgst and len(max_length_list) == 0:
         #Add *all* LGST sequences as unstructured if we don't add them below
-        missing_lgst = running_gss.add_unindexed(lgst_list, dscheck)
+        missing_lgst = running_cs.add_unindexed(lgst_list, dscheck)
 
     lsgst_listOfStructs = []  # list of operation sequence structures to return
     missing_list = []
-    totStrs = len(running_gss.allstrs)
+    totStrs = len(running_cs.allstrs)
     #import time as _time; t0=_time.time() # DEBUG
 
     for i, maxLen in enumerate(max_length_list):
         #print("Maxlen = ",maxLen, " %.2fs" % (_time.time()-t0)) # DEBUG - and remove import time above
-        if nest:  # add to running_gss and copy at end
-            gss = running_gss  # don't copy (yet)
-            gss.Ls.append(maxLen)
-        else:  # create a new gss for just this maxLen
-            gss = _LsGermsStructure([maxLen], germ_list, prep_strs,
+        if nest:  # add to running_cs and copy at end
+            cs = running_cs  # don't copy (yet)
+            cs.Ls.append(maxLen)
+        else:  # create a new cs for just this maxLen
+            cs = _LsGermsStructure([maxLen], germ_list, prep_strs,
                                     effect_strs, op_label_aliases,
                                     sequence_rules)
         if maxLen == 0:
             #Special LGST case
-            missing_lgst = gss.add_unindexed(lgst_list, dscheck)
+            missing_lgst = cs.add_unindexed(lgst_list, dscheck)
         else:
             if include_lgst and i == 0:  # first maxlen, so add LGST seqs as empty germ
                 #Note: no FPR on LGST strings
-                missing_list.extend(gss.add_plaquette(empty_germ, maxLen, empty_germ,
+                missing_list.extend(cs.add_plaquette(empty_germ, maxLen, empty_germ,
                                                       allPossiblePairs, dscheck))
-                missing_lgst = gss.add_unindexed(lgst_list, dscheck)  # only adds those not already present
-                #assert(('Gx','Gi0','Gi0') not in gss.allstrs) # DEBUG
+                missing_lgst = cs.add_unindexed(lgst_list, dscheck)  # only adds those not already present
+                #assert(('Gx','Gi0','Gi0') not in cs.allstrs) # DEBUG
 
             #Typical case of germs repeated to maxLen using r_fn
             for ii, germ in enumerate(germ_list):
@@ -484,16 +501,16 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
                         [allPossiblePairs[k] for k in
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
-                missing_list.extend(gss.add_plaquette(germ_power, maxLen, germ,
+                missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
                                                       fiducialPairsThisIter, dscheck))
 
-        if nest: gss = gss.copy()  # pinch off a copy of running_gss
-        gss.done_adding_strings()
-        lsgst_listOfStructs.append(gss)
-        totStrs += len(gss.allstrs)  # only relevant for non-nested case
+        if nest: cs = cs.copy()  # pinch off a copy of running_cs
+        cs.done_adding_strings()
+        lsgst_listOfStructs.append(cs)
+        totStrs += len(cs.allstrs)  # only relevant for non-nested case
 
     if nest:  # then totStrs computation about overcounts -- just take string count of final stage
-        totStrs = len(running_gss.allstrs)
+        totStrs = len(running_cs.allstrs)
 
     printer.log("--- Circuit Creation ---", 1)
     printer.log(" %d sequences created" % totStrs, 2)
@@ -521,7 +538,10 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
             assert(struct.Ls == max_length_list[0:i + 1])  # Make sure lengths are correct!
         else:
             assert(struct.Ls == max_length_list[i:i + 1])  # Make sure lengths are correct!
-    return lsgst_listOfStructs
+
+    #Turn circuit structures into BulkCircuitList objects
+    bulk_circuit_lists = [_BulkCircuitList(cs, op_label_aliases) for cs in lsgst_listOfStructs]
+    return bulk_circuit_lists
 
 
 def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,

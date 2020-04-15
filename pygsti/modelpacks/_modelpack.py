@@ -18,7 +18,7 @@ from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_p
 from ..objects.circuit import Circuit as _Circuit
 from ..construction.circuitconstruction import circuit_list as _circuit_list
 from ..construction.modelconstruction import build_explicit_model as _build_explicit_model
-from ..construction.stdlists import make_lsgst_structs as _make_lsgst_structs
+from ..construction.stdlists import make_lsgst_lists as _make_lsgst_lists
 from ..protocols import gst as _gst
 
 
@@ -232,8 +232,8 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits_struct(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
-        """ Construct a :class:`pygsti.objects.LsGermsStructure` from this modelpack.
+    def get_gst_circuits_list(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+        """ Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
 
         Parameters
         ----------
@@ -256,11 +256,11 @@ class GSTModelPack(ModelPack):
             leave this set to True.
 
         **kwargs :
-            Additional arguments to pass to :function:`make_lsgst_structs`
+            Additional arguments to pass to :function:`make_lsgst_lists`
 
         Returns
         -------
-        :class:`pygsti.objects.LsGermsStructure`
+        :class:`pygsti.objects.BulkCircuitList`
         """
         if fpr:
             fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
@@ -274,13 +274,13 @@ class GSTModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        structs = _make_lsgst_structs(self._target_model(qubit_labels),  # Note: only need gate names here
-                                      self.prep_fiducials(qubit_labels),
-                                      self.meas_fiducials(qubit_labels),
-                                      self.germs(qubit_labels, lite),
-                                      list(_gen_max_length(max_max_length)),
-                                      fidpairs,
-                                      **kwargs)
+        structs = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
+                                    self.prep_fiducials(qubit_labels),
+                                    self.meas_fiducials(qubit_labels),
+                                    self.germs(qubit_labels, lite),
+                                    list(_gen_max_length(max_max_length)),
+                                    fidpairs,
+                                    **kwargs)
         return structs[-1]  # just return final struct (for longest sequences)
 
 
