@@ -1623,7 +1623,7 @@ class DataSet(object):
         circuitIndices = _OrderedDict()
         for key, dsrow in self.items():
 
-            last_t = dsrow.time[0]
+            last_t = dsrow.time[0] if len(dsrow.time) > 0 else None
 
             if len(dsrow.oli) < len(oli_map):
                 mapped_oli = _np.array([oli_map[x] for x in dsrow.oli])
