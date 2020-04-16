@@ -91,7 +91,7 @@ class CircuitLexer:
     )
 
     @staticmethod
-    def makeLabel(s):
+    def make_label(s):
         if '!' in s:
             s, time = s.split('!')  # must be only two parts (only 1 exclamation pt)
             time = float(time)
@@ -116,68 +116,68 @@ class CircuitLexer:
         return _lbl.Label(nm, sslbls, time, args)
 
     @staticmethod
-    def t_GATE(t):
+    def t_GATE(t):                                                                       # noqa
         r'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'
         #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        lbl = CircuitLexer.makeLabel(t.value)
+        lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
-    def t_INSTRMT(t):
+    def t_INSTRMT(t):                                                                    # noqa
         r'I[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        lbl = CircuitLexer.makeLabel(t.value)
+        lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
-    def t_PREP(t):
+    def t_PREP(t):                                                                       # noqa
         r'rho[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        lbl = CircuitLexer.makeLabel(t.value)
+        lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
-    def t_POVM(t):
+    def t_POVM(t):                                                                       # noqa
         r'M[a-z0-9_]+(![0-9\.]+)?'
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
-        lbl = CircuitLexer.makeLabel(t.value)
+        lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
         return t
 
     @staticmethod
-    def t_STRINGIND(t):
+    def t_STRINGIND(t):                                                                  # noqa
         r'S(?=\s*\<)'
         return t
 
     @staticmethod
-    def t_REFLBL(t):
+    def t_REFLBL(t):                                                                     # noqa
         r'<\s*[a-zA-Z0-9_]+\s*>'
         t.value = t.value[1:-1].strip()
         return t
 
     # Regular expression rules for simple tokens
-    t_EXPOP = r'\^'
-    t_MULTOP = r'\*'
-    t_OPENBR = r'\['
-    t_CLOSEBR = r'\]'
-    t_LPAREN = r'\('
-    t_RPAREN = r'\)'
-    t_COLON = r'\:'
-    t_SEMICOLON = r'\;'
-    t_EXCLAM = r'\!'
+    t_EXPOP = r'\^'                                                                      # noqa
+    t_MULTOP = r'\*'                                                                     # noqa
+    t_OPENBR = r'\['                                                                     # noqa
+    t_CLOSEBR = r'\]'                                                                    # noqa
+    t_LPAREN = r'\('                                                                     # noqa
+    t_RPAREN = r'\)'                                                                     # noqa
+    t_COLON = r'\:'                                                                      # noqa
+    t_SEMICOLON = r'\;'                                                                  # noqa
+    t_EXCLAM = r'\!'                                                                     # noqa
 
     @staticmethod
-    def t_NOP(t):
+    def t_NOP(t):                                                                        # noqa
         r'\{\}'
         t.value = tuple()
         return t
 
     @staticmethod
-    def t_INTEGER(t):
+    def t_INTEGER(t):                                                                    # noqa
         r'\d+'
         t.value = int(t.value)
         return t

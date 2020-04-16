@@ -50,7 +50,7 @@ def ds(self):
     )
     return pc.generate_fake_data(
         self.datagen_gateset, expList,
-        nSamples=1000, sampleError='binomial', seed=_SEED
+        n_samples=1000, sample_error='binomial', seed=_SEED
     )
 
 
@@ -58,7 +58,7 @@ def ds(self):
 def ds_lgst(self):
     return pc.generate_fake_data(
         self.datagen_gateset, self.lgstStrings,
-        nSamples=10000, sampleError='binomial', seed=_SEED
+        n_samples=10000, sample_error='binomial', seed=_SEED
     )
 
 
@@ -66,14 +66,14 @@ def ds_lgst(self):
 def mdl_lgst(self):
     return alg.do_lgst(
         self.ds, self.fiducials, self.fiducials, self.model,
-        svdTruncateTo=4, verbosity=0
+        svd_truncate_to=4, verbosity=0
     )
 
 
 @ns.memo
 def mdl_lgst_go(self):
     return alg.gaugeopt_to_target(
-        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, checkJac=True
+        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True
     )
 
 

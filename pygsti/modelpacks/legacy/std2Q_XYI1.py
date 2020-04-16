@@ -32,7 +32,7 @@ germs = _strc.circuit_list([('Gii',), ('Gxi',), ('Gyi',), ('Gxi', 'Gyi'),
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
 _target_model = _setc.build_explicit_model([('Q0',)], ['Gii', 'Gxi', 'Gyi'],
                                            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                           effectLabels=['0', '1'], effectExpressions=["0", "1"])
+                                           effect_labels=['0', '1'], effect_expressions=["0", "1"])
 
 _gscache = {("full", "auto"): _target_model}
 

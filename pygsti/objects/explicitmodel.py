@@ -200,8 +200,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 simplified_ops[k] = g
         simplified_preps = self.preps
 
-        return _explicitcalc.ExplicitOpModel_Calc(self.dim, simplified_preps, simplified_ops,
-                                                  simplified_effects, self.num_params())
+        return _explicitcalc.ExplicitOpModelCalc(self.dim, simplified_preps, simplified_ops,
+                                                 simplified_effects, self.num_params())
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
     #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
@@ -211,26 +211,26 @@ class ExplicitOpModel(_mdl.OpModel):
     #            for elbl in self.povms[povm_lbl]:
     #                if simplified_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
     #                    return (elbl,) # outcome "label" (a tuple)
-    #    raise ValueError("No outcome label found for simplified spamTuple: ", simplified_spamTuple)
+    #    raise ValueError("No outcome label found for simplified spam_tuple: ", simplified_spamTuple)
 
-    def _embedOperation(self, opTargetLabels, opVal, force=False):
+    def _embed_operation(self, op_target_labels, op_val, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
-        object that embeds `opVal` into the sub-space of
-        `self.state_space_labels` given by `opTargetLabels`.
+        object that embeds `op_val` into the sub-space of
+        `self.state_space_labels` given by `op_target_labels`.
 
         Parameters
         ----------
-        opTargetLabels : list
-            A list of `opVal`'s target state space labels.
+        op_target_labels : list
+            A list of `op_val`'s target state space labels.
 
-        opVal : LinearOperator
+        op_val : LinearOperator
             The gate object to embed.  Note this should be a legitimate
             LinearOperator-derived object and not just a numpy array.
 
         force : bool, optional
             Always wrap with an embedded LinearOperator, even if the
-            dimension of `opVal` is the full model dimension.
+            dimension of `op_val` is the full model dimension.
 
         Returns
         -------
@@ -242,13 +242,13 @@ class ExplicitOpModel(_mdl.OpModel):
         if self.state_space_labels is None:
             raise ValueError("Must set model.state_space_labels before adding auto-embedded gates.")
 
-        if opVal.dim == self.dim and not force:
-            return opVal  # if gate operates on full dimension, no need to embed.
+        if op_val.dim == self.dim and not force:
+            return op_val  # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
-            return _op.EmbeddedDenseOp(self.state_space_labels, opTargetLabels, opVal)
+            return _op.EmbeddedDenseOp(self.state_space_labels, op_target_labels, op_val)
         elif self._sim_type in ("map", "termorder"):
-            return _op.EmbeddedOp(self.state_space_labels, opTargetLabels, opVal)
+            return _op.EmbeddedOp(self.state_space_labels, op_target_labels, op_val)
         else:
             assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
@@ -454,36 +454,36 @@ class ExplicitOpModel(_mdl.OpModel):
     #def __getstate__(self):
     #    #Returns self.__dict__ by default, which is fine
 
-    def __setstate__(self, stateDict):
+    def __setstate__(self, state_dict):
 
-        if "gates" in stateDict:
+        if "gates" in state_dict:
             #Unpickling an OLD-version Model (or GateSet)
             _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
-            self.operations = stateDict['gates']
-            self._state_space_labels = stateDict['stateSpaceLabels']
+            self.operations = state_dict['gates']
+            self._state_space_labels = state_dict['stateSpaceLabels']
             self._paramlbls = None
             self._shlp = _sh.MemberDictSimplifierHelper(
-                stateDict['preps'], stateDict['povms'], stateDict['instruments'], self._state_space_labels)
-            del stateDict['gates']
-            del stateDict['_autogator']
-            del stateDict['auto_idle_gatename']
-            del stateDict['stateSpaceLabels']
+                state_dict['preps'], state_dict['povms'], state_dict['instruments'], self._state_space_labels)
+            del state_dict['gates']
+            del state_dict['_autogator']
+            del state_dict['auto_idle_gatename']
+            del state_dict['stateSpaceLabels']
 
-        if "effects" in stateDict:
+        if "effects" in state_dict:
             raise ValueError(("This model (GateSet) object is too old to unpickle - "
                               "try using pyGSTi v0.9.6 to upgrade it to a version "
                               "that this version can upgrade to the current version."))
 
         #Backward compatibility:
-        if 'basis' in stateDict:
-            stateDict['_basis'] = stateDict['basis']; del stateDict['basis']
-        if 'state_space_labels' in stateDict:
-            stateDict['_state_space_labels'] = stateDict['state_space_labels']; del stateDict['_state_space_labels']
+        if 'basis' in state_dict:
+            state_dict['_basis'] = state_dict['basis']; del state_dict['basis']
+        if 'state_space_labels' in state_dict:
+            state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
 
         #TODO REMOVE
-        #if "effects" in stateDict: #
+        #if "effects" in state_dict: #
         #    #unpickling an OLD-version Model - like a re-__init__
-        #    #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",stateDict.keys())
+        #    #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",state_dict.keys())
         #    default_param = "full"
         #    self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
         #    self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
@@ -493,37 +493,37 @@ class ExplicitOpModel(_mdl.OpModel):
         #    self._paramvec = _np.zeros(0, 'd')
         #    self._rebuild_paramvec()
         #
-        #    self._dim = stateDict['_dim']
-        #    self._calcClass = stateDict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
+        #    self._dim = state_dict['_dim']
+        #    self._calcClass = state_dict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
         #    self._evotype = "densitymx"
-        #    self.basis = stateDict.get('basis', _Basis('unknown', None))
-        #    if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
-        #        self.basis = _Basis(stateDict['_basisNameAndDim'][0],
-        #                            stateDict['_basisNameAndDim'][1])
+        #    self.basis = state_dict.get('basis', _Basis('unknown', None))
+        #    if self.basis.name == "unknown" and '_basisNameAndDim' in state_dict:
+        #        self.basis = _Basis(state_dict['_basisNameAndDim'][0],
+        #                            state_dict['_basisNameAndDim'][1])
         #
-        #    self._default_gauge_group = stateDict['_default_gauge_group']
+        #    self._default_gauge_group = state_dict['_default_gauge_group']
         #
-        #    assert(len(stateDict['preps']) <= 1), "Cannot convert Models with multiple preps!"
-        #    for lbl,gate in stateDict['gates'].items(): self.operations[lbl] = gate
-        #    for lbl,vec in stateDict['preps'].items(): self.preps[lbl] = vec
+        #    assert(len(state_dict['preps']) <= 1), "Cannot convert Models with multiple preps!"
+        #    for lbl,gate in state_dict['gates'].items(): self.operations[lbl] = gate
+        #    for lbl,vec in state_dict['preps'].items(): self.preps[lbl] = vec
         #
-        #    effect_vecs = []; remL = stateDict['_remainderlabel']
+        #    effect_vecs = []; remL = state_dict['_remainderlabel']
         #    comp_lbl = None
-        #    for sl,(prepLbl,ELbl) in stateDict['spamdefs'].items():
+        #    for sl,(prepLbl,ELbl) in state_dict['spamdefs'].items():
         #        assert((prepLbl,ELbl) != (remL,remL)), "Cannot convert sum-to-one spamlabel!"
         #        if ELbl == remL:  comp_lbl = str(sl)
-        #        else: effect_vecs.append( (str(sl), stateDict['effects'][ELbl]) )
+        #        else: effect_vecs.append( (str(sl), state_dict['effects'][ELbl]) )
         #    if comp_lbl is not None:
-        #        comp_vec = stateDict['_povm_identity'] - sum([v for sl,v in effect_vecs])
+        #        comp_vec = state_dict['_povm_identity'] - sum([v for sl,v in effect_vecs])
         #        effect_vecs.append( (comp_lbl, comp_vec) )
         #        self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
         #    else:
         #        self.povms['Mdefault'] = _povm.UnconstrainedPOVM(effect_vecs)
         #
         #else:
-        self.__dict__.update(stateDict)
+        self.__dict__.update(state_dict)
 
-        if 'uuid' not in stateDict:
+        if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 
         #Additionally, must re-connect this model as the parent
@@ -584,7 +584,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         if self._evotype not in ("densitymx", "statevec"):
             return 0  # punt on computing number of gauge parameters for other evotypes
-        dPG = self._excalc()._buildup_dPG()
+        dPG = self._excalc()._buildup_dpg()
         gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
         if gaugeDirs.size == 0:  # if there are *no* gauge directions
             return 0  # calling matrix_rank on a length-0 array => error
@@ -609,7 +609,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().deriv_wrt_params()
 
-    def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
+    def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
         Construct a projector onto the non-gauge parameter space, useful for
         isolating the gauge degrees of freedom from the non-gauge degrees of
@@ -617,7 +617,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         Parameters
         ----------
-        itemWeights : dict, optional
+        item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
             special strings "gates" or "spam" whic represent the entire set of gate
@@ -625,8 +625,8 @@ class ExplicitOpModel(_mdl.OpModel):
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.
 
-        nonGaugeMixMx : numpy array, optional
-            An array of shape (nNonGaugeParams,nGaugeParams) specifying how to
+        non_gauge_mix_mx : numpy array, optional
+            An array of shape (n_non_gauge_params,n_gauge_params) specifying how to
             mix the non-gauge degrees of freedom into the gauge degrees of
             freedom that are projected out by the returned object.  This argument
             essentially sets the off-diagonal block of the metric used for
@@ -642,34 +642,34 @@ class ExplicitOpModel(_mdl.OpModel):
            parameter-space, and has rank equal to the number of non-gauge
            degrees of freedom.
         """
-        return self._excalc().get_nongauge_projector(itemWeights, nonGaugeMixMx)
+        return self._excalc().get_nongauge_projector(item_weights, non_gauge_mix_mx)
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update each of the operation matrices G in this model with inv(S) * G * S,
-        each rhoVec with inv(S) * rhoVec, and each EVec with EVec * S
+        Update each of the operation matrices G in this model with inv(s) * G * s,
+        each rhoVec with inv(s) * rhoVec, and each EVec with EVec * s
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         for rhoVec in self.preps.values():
-            rhoVec.transform(S, 'prep')
+            rhoVec.transform(s, 'prep')
 
         for povm in self.povms.values():
-            povm.transform(S)
+            povm.transform(s)
 
         for opObj in self.operations.values():
-            opObj.transform(S)
+            opObj.transform(s)
 
         for instrument in self.instruments.values():
-            instrument.transform(S)
+            instrument.transform(s)
 
         self._clean_paramvec()  # transform may leave dirty members
 
-    def product(self, circuit, bScale=False):
+    def product(self, circuit, scale=False):
         """
         Compute the product of a specified sequence of operation labels.
 
@@ -682,7 +682,7 @@ class ExplicitOpModel(_mdl.OpModel):
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels.
 
-        bScale : bool, optional
+        scale : bool, optional
             When True, return a scaling factor (see below).
 
         Returns
@@ -691,13 +691,13 @@ class ExplicitOpModel(_mdl.OpModel):
             The product or scaled product of the operation matrices.
 
         scale : float
-            Only returned when bScale == True, in which case the
+            Only returned when scale == True, in which case the
             actual product == product * scale.  The purpose of this
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
         circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().product(circuit, bScale)
+        return self._fwdsim().product(circuit, scale)
 
     def dproduct(self, circuit, flat=False):
         """
@@ -767,23 +767,23 @@ class ExplicitOpModel(_mdl.OpModel):
         circuit = _cir.Circuit(circuit)  # cast to Circuit
         return self._fwdsim().hproduct(circuit, flat)
 
-    def bulk_product(self, evalTree, bScale=False, comm=None):
+    def bulk_product(self, eval_tree, scale=False, comm=None):
         """
         Compute the products of many operation sequences at once.
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
-        bScale : bool, optional
+        scale : bool, optional
            When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  This is done over operation sequences when a
-           *split* evalTree is given, otherwise no parallelization is performed.
+           *split* eval_tree is given, otherwise no parallelization is performed.
 
 
         Returns
@@ -795,30 +795,30 @@ class ExplicitOpModel(_mdl.OpModel):
             - G == the linear dimension of a operation matrix (G x G operation matrices).
 
         scaleValues : numpy array
-            Only returned when bScale == True. A length-S array specifying
+            Only returned when scale == True. A length-S array specifying
             the scaling that needs to be applied to the resulting products
             (final_product[i] = scaleValues[i] * prods[i]).
         """
-        return self._fwdsim().bulk_product(evalTree, bScale, comm)
+        return self._fwdsim().bulk_product(eval_tree, scale, comm)
 
-    def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
-                      bScale=False, comm=None):
+    def bulk_dproduct(self, eval_tree, flat=False, return_prods=False,
+                      scale=False, comm=None):
         """
         Compute the derivative of many operation sequences at once.
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
 
-        bReturnProds : bool, optional
+        return_prods : bool, optional
           when set to True, additionally return the products.
 
-        bScale : bool, optional
+        scale : bool, optional
           When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
@@ -826,7 +826,7 @@ class ExplicitOpModel(_mdl.OpModel):
            across multiple processors.  Distribution is first done over the set
            of parameters being differentiated with respect to.  If there are
            more processors than model parameters, distribution over a split
-           evalTree (if given) is possible.
+           eval_tree (if given) is possible.
 
 
         Returns
@@ -854,36 +854,36 @@ class ExplicitOpModel(_mdl.OpModel):
             respect to the j-th model parameter.
 
         products : numpy array
-          Only returned when `bReturnProds` is ``True``.  An array of shape
+          Only returned when `return_prods` is ``True``.  An array of shape
           S x G x G; ``products[i]`` is the i-th operation sequence product.
 
-        scaleVals : numpy array
-          Only returned when `bScale` is ``True``.  An array of shape S such
-          that ``scaleVals[i]`` contains the multiplicative scaling needed for
+        scale_vals : numpy array
+          Only returned when `scale` is ``True``.  An array of shape S such
+          that ``scale_vals[i]`` contains the multiplicative scaling needed for
           the derivatives and/or products for the i-th operation sequence.
         """
-        return self._fwdsim().bulk_dproduct(evalTree, flat, bReturnProds,
-                                            bScale, comm)
+        return self._fwdsim().bulk_dproduct(eval_tree, flat, return_prods,
+                                            scale, comm)
 
-    def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
-                      bScale=False, comm=None):
+    def bulk_hproduct(self, eval_tree, flat=False, return_dprods_and_prods=False,
+                      scale=False, comm=None):
         """
         Return the Hessian of many operation sequence products at once.
 
         Parameters
         ----------
-        evalTree : EvalTree
+        eval_tree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
 
-        bReturnDProdsAndProds : bool, optional
+        return_dprods_and_prods : bool, optional
           when set to True, additionally return the probabilities and
           their derivatives.
 
-        bScale : bool, optional
+        scale : bool, optional
           When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
@@ -891,7 +891,7 @@ class ExplicitOpModel(_mdl.OpModel):
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to when the
            *second* derivative is taken.  If there are more processors than
-           model parameters, distribution over a split evalTree (if given)
+           model parameters, distribution over a split eval_tree (if given)
            is possible.
 
 
@@ -918,7 +918,7 @@ class ExplicitOpModel(_mdl.OpModel):
               the k-th then j-th model parameters.
 
         derivs : numpy array
-          Only returned if bReturnDProdsAndProds == True.
+          Only returned if return_dprods_and_prods == True.
 
           * if flat == False, an array of shape S x M x G x G, where
 
@@ -941,44 +941,44 @@ class ExplicitOpModel(_mdl.OpModel):
             the j-th model parameter.
 
         products : numpy array
-          Only returned when bReturnDProdsAndProds == True.  An array of shape
+          Only returned when return_dprods_and_prods == True.  An array of shape
           S x G x G; products[i] is the i-th operation sequence product.
 
-        scaleVals : numpy array
-          Only returned when bScale == True.  An array of shape S such that
-          scaleVals[i] contains the multiplicative scaling needed for
+        scale_vals : numpy array
+          Only returned when scale == True.  An array of shape S such that
+          scale_vals[i] contains the multiplicative scaling needed for
           the hessians, derivatives, and/or products for the i-th operation sequence.
         """
         ret = self._fwdsim().bulk_hproduct(
-            evalTree, flat, bReturnDProdsAndProds, bScale, comm)
-        if bReturnDProdsAndProds:
+            eval_tree, flat, return_dprods_and_prods, scale, comm)
+        if return_dprods_and_prods:
             return ret[0:2] + ret[3:]  # remove ret[2] == deriv wrt filter2,
             # which isn't an input param for Model version
         else: return ret
 
-    def frobeniusdist(self, otherModel, transformMx=None,
-                      itemWeights=None, normalize=True):
+    def frobeniusdist(self, other_model, transform_mx=None,
+                      item_weights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        model and otherModel.  Differences in each corresponding gate
+        model and other_model.  Differences in each corresponding gate
         matrix and spam vector element are squared, weighted (using
-        `itemWeights` as applicable), then summed.  The value returned is the
+        `item_weights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
         number of summands if normalize == True.
 
         Parameters
         ----------
-        otherModel : Model
+        other_model : Model
             the other model to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
-        itemWeights : dict, optional
+        item_weights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights are applied multiplicatively to the squared
            differences, i.e., (*before* the final square root is taken).  Keys
@@ -997,27 +997,27 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         float
         """
-        return self._excalc().frobeniusdist(otherModel._excalc(), transformMx,
-                                            itemWeights, normalize)
+        return self._excalc().frobeniusdist(other_model._excalc(), transform_mx,
+                                            item_weights, normalize)
 
-    def residuals(self, otherModel, transformMx=None, itemWeights=None):
+    def residuals(self, other_model, transform_mx=None, item_weights=None):
         """
         Compute the weighted residuals between two models (the differences
         in corresponding operation matrix and spam vector elements).
 
         Parameters
         ----------
-        otherModel : Model
+        other_model : Model
             the other model to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
-        itemWeights : dict, optional
+        item_weights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights applied such that they act multiplicatively on
            the *squared* differences, so that the residuals themselves are
@@ -1035,23 +1035,23 @@ class ExplicitOpModel(_mdl.OpModel):
         nSummands : int
             The (weighted) number of elements accounted for by the residuals.
         """
-        return self._excalc().residuals(otherModel._excalc(), transformMx, itemWeights)
+        return self._excalc().residuals(other_model._excalc(), transform_mx, item_weights)
 
-    def jtracedist(self, otherModel, transformMx=None, include_spam=True):
+    def jtracedist(self, other_model, transform_mx=None, include_spam=True):
         """
         Compute the Jamiolkowski trace distance between this
-        model and otherModel, defined as the maximum
+        model and other_model, defined as the maximum
         of the trace distances between each corresponding gate,
         including spam gates.
 
         Parameters
         ----------
-        otherModel : Model
+        other_model : Model
             the other model to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
@@ -1064,23 +1064,23 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         float
         """
-        return self._excalc().jtracedist(otherModel._excalc(), transformMx, include_spam)
+        return self._excalc().jtracedist(other_model._excalc(), transform_mx, include_spam)
 
-    def diamonddist(self, otherModel, transformMx=None, include_spam=True):
+    def diamonddist(self, other_model, transform_mx=None, include_spam=True):
         """
         Compute the diamond-norm distance between this
-        model and otherModel, defined as the maximum
+        model and other_model, defined as the maximum
         of the diamond-norm distances between each
         corresponding gate, including spam gates.
 
         Parameters
         ----------
-        otherModel : Model
+        other_model : Model
             the other model to difference against.
 
-        transformMx : numpy array, optional
+        transform_mx : numpy array, optional
             if not None, transform this model by
-            G => inv(transformMx) * G * transformMx, for each operation matrix G
+            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
@@ -1094,7 +1094,7 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         float
         """
-        return self._excalc().diamonddist(otherModel._excalc(), transformMx, include_spam)
+        return self._excalc().diamonddist(other_model._excalc(), transform_mx, include_spam)
 
     def tpdist(self):
         """
@@ -1116,7 +1116,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _np.sqrt(penalty)
 
-    def strdiff(self, otherModel, metric='frobenius'):
+    def strdiff(self, other_model, metric='frobenius'):
         """
         Return a string describing
         the distances between
@@ -1125,7 +1125,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         Parameters
         ----------
-        otherModel : Model
+        other_model : Model
             the other model to difference against.
 
         metric : {'frobenius', 'infidelity', 'diamond'}
@@ -1137,14 +1137,14 @@ class ExplicitOpModel(_mdl.OpModel):
         """
 
         if metric == 'frobenius':
-            def dist(A, B): return _np.linalg.norm(A - B)
-            def vecdist(A, B): return _np.linalg.norm(A - B)
+            def dist(a, b): return _np.linalg.norm(a - b)
+            def vecdist(a, b): return _np.linalg.norm(a - b)
         elif metric == 'infidelity':
-            def dist(A, B): return _gt.entanglement_infidelity(A, B, self.basis)
-            def vecdist(A, B): return _np.linalg.norm(A - B)
+            def dist(a, b): return _gt.entanglement_infidelity(a, b, self.basis)
+            def vecdist(a, b): return _np.linalg.norm(a - b)
         elif metric == 'diamond':
-            def dist(A, B): return 0.5 * _gt.diamondist(A, B, self.basis)
-            def vecdist(A, B): return _np.linalg.norm(A - B)
+            def dist(a, b): return 0.5 * _gt.diamondist(a, b, self.basis)
+            def vecdist(a, b): return _np.linalg.norm(a - b)
         else:
             raise ValueError("Invalid `metric` argument: %s" % metric)
 
@@ -1152,19 +1152,19 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (str(lbl), vecdist(self.preps[lbl].todense(), otherModel.preps[lbl].todense()))
+                (str(lbl), vecdist(self.preps[lbl].todense(), other_model.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
             s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, vecdist(povm[lbl].todense(), otherModel.povms[povm_lbl][lbl].todense()))
+                     (lbl, vecdist(povm[lbl].todense(), other_model.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (str(lbl), dist(self.operations[lbl].todense(), otherModel.operations[lbl].todense()))
+                (str(lbl), dist(self.operations[lbl].todense(), other_model.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -1172,28 +1172,28 @@ class ExplicitOpModel(_mdl.OpModel):
                 s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
                     s += "    %s = %g\n" % (str(lbl), dist(
-                        inst[lbl].todense(), otherModel.instruments[inst_lbl][lbl].todense()))
+                        inst[lbl].todense(), other_model.instruments[inst_lbl][lbl].todense()))
 
         return s
 
-    def _init_copy(self, copyInto):
+    def _init_copy(self, copy_into):
         """
-        Copies any "tricky" member of this model into `copyInto`, before
+        Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
 
         # Copy special base class members first
-        super(ExplicitOpModel, self)._init_copy(copyInto)
+        super(ExplicitOpModel, self)._init_copy(copy_into)
 
         # Copy our "tricky" members
-        copyInto.preps = self.preps.copy(copyInto)
-        copyInto.povms = self.povms.copy(copyInto)
-        copyInto.operations = self.operations.copy(copyInto)
-        copyInto.instruments = self.instruments.copy(copyInto)
-        copyInto._shlp = _sh.MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments,
-                                                        self.state_space_labels)
+        copy_into.preps = self.preps.copy(copy_into)
+        copy_into.povms = self.povms.copy(copy_into)
+        copy_into.operations = self.operations.copy(copy_into)
+        copy_into.instruments = self.instruments.copy(copy_into)
+        copy_into._shlp = _sh.MemberDictSimplifierHelper(copy_into.preps, copy_into.povms, copy_into.instruments,
+                                                         self.state_space_labels)
 
-        copyInto._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
+        copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):
         s = ""
@@ -1379,7 +1379,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, randState=None):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None):
         """
         Create a new model with random unitary perturbations.
 
@@ -1397,7 +1397,7 @@ class ExplicitOpModel(_mdl.OpModel):
           if not None, seed numpy's random number generator with this value
           before generating random depolarizations.
 
-        randState : numpy.random.RandomState
+        rand_state : numpy.random.RandomState
             A RandomState object to generate samples from. Can be useful to set
             instead of `seed` if you want reproducible distribution samples
             across multiple random function calls but you don't want to bother
@@ -1408,10 +1408,10 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the randomized Model
         """
-        if randState is None:
+        if rand_state is None:
             rndm = _np.random.RandomState(seed)
         else:
-            rndm = randState
+            rndm = rand_state
 
         op_dim = self.get_dimension()
         unitary_dim = int(round(_np.sqrt(op_dim)))
@@ -1437,7 +1437,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return mdl_randomized
 
-    def increase_dimension(self, newDimension):
+    def increase_dimension(self, new_dimension):
         """
         Enlarge the spam vectors and operation matrices of model to a specified
         dimension, and return the resulting inflated model.  Spam vectors
@@ -1446,11 +1446,11 @@ class ExplicitOpModel(_mdl.OpModel):
 
         Parameters
         ----------
-        newDimension : int
+        new_dimension : int
           the dimension of the returned model.  That is,
           the returned model will have rho and E vectors that
-          have shape (newDimension,1) and operation matrices with shape
-          (newDimension,newDimension)
+          have shape (new_dimension,1) and operation matrices with shape
+          (new_dimension,new_dimension)
 
         Returns
         -------
@@ -1459,19 +1459,19 @@ class ExplicitOpModel(_mdl.OpModel):
         """
 
         curDim = self.get_dimension()
-        assert(newDimension > curDim)
+        assert(new_dimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
-        sslbls = [('L%d' % i,) for i in range(newDimension)]  # interpret as independent classical levels
-        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * newDimension,
+        sslbls = [('L%d' % i,) for i in range(new_dimension)]  # interpret as independent classical levels
+        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * new_dimension,
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim_type)
-        #new_model._dim = newDimension # dim will be set when elements are added
+        #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
-        addedDim = newDimension - curDim
+        addedDim = new_dimension - curDim
         vec_zeroPad = _np.zeros((addedDim, 1), 'd')
 
         #Increase dimension of rhoVecs and EVecs by zero-padding
@@ -1493,34 +1493,34 @@ class ExplicitOpModel(_mdl.OpModel):
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for opLabel, gate in self.operations.items():
             assert(gate.shape == (curDim, curDim))
-            newOp = _np.zeros((newDimension, newDimension))
+            newOp = _np.zeros((new_dimension, new_dimension))
             newOp[0:curDim, 0:curDim] = gate[:, :]
-            for i in range(curDim, newDimension): newOp[i, i] = 1.0
+            for i in range(curDim, new_dimension): newOp[i, i] = 1.0
             new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
-                newOp = _np.zeros((newDimension, newDimension))
+                newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[0:curDim, 0:curDim] = gate[:, :]
-                for i in range(curDim, newDimension): newOp[i, i] = 1.0
+                for i in range(curDim, new_dimension): newOp[i, i] = 1.0
                 inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         return new_model
 
-    def decrease_dimension(self, newDimension):
+    def decrease_dimension(self, new_dimension):
         """
         Shrink the spam vectors and operation matrices of model to a specified
         dimension, and return the resulting model.
 
         Parameters
         ----------
-        newDimension : int
+        new_dimension : int
           the dimension of the returned model.  That is,
           the returned model will have rho and E vectors that
-          have shape (newDimension,1) and operation matrices with shape
-          (newDimension,newDimension)
+          have shape (new_dimension,1) and operation matrices with shape
+          (new_dimension,new_dimension)
 
         Returns
         -------
@@ -1528,27 +1528,27 @@ class ExplicitOpModel(_mdl.OpModel):
             the decreased-dimension Model
         """
         curDim = self.get_dimension()
-        assert(newDimension < curDim)
+        assert(new_dimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
-        sslbls = [('L%d' % i,) for i in range(newDimension)]  # interpret as independent classical levels
-        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * newDimension,
+        sslbls = [('L%d' % i,) for i in range(new_dimension)]  # interpret as independent classical levels
+        dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * new_dimension,
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim_type)
-        #new_model._dim = newDimension # dim will be set when elements are added
+        #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _sv.FullSPAMVec(rhoVec[0:newDimension, :])
+                _sv.FullSPAMVec(rhoVec[0:new_dimension, :])
 
         for lbl, povm in self.povms.items():
             assert(povm.dim == curDim)
-            effects = [(elbl, EVec[0:newDimension, :]) for elbl, EVec in povm.items()]
+            effects = [(elbl, EVec[0:new_dimension, :]) for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_model.povms[lbl] = _povm.TPPOVM(effects)
@@ -1558,15 +1558,15 @@ class ExplicitOpModel(_mdl.OpModel):
         #Decrease dimension of gates by truncation
         for opLabel, gate in self.operations.items():
             assert(gate.shape == (curDim, curDim))
-            newOp = _np.zeros((newDimension, newDimension))
-            newOp[:, :] = gate[0:newDimension, 0:newDimension]
+            newOp = _np.zeros((new_dimension, new_dimension))
+            newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
             new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
-                newOp = _np.zeros((newDimension, newDimension))
-                newOp[:, :] = gate[0:newDimension, 0:newDimension]
+                newOp = _np.zeros((new_dimension, new_dimension))
+                newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
                 inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 

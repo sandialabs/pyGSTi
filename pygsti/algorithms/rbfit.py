@@ -139,7 +139,7 @@ from ..tools import rbtools as _rbt
 #     return results
 
 
-def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, ftype='full', rtype='EI'):
+def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, ftype='full', rtype='EI'):
     """
     Implements a "standard" least-squares fit of RB data. Fits the average success probabilities to
     the exponential decay A + Bp^m, using least-squares fitting.
@@ -149,7 +149,7 @@ def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, 
     lengths : list
         The RB lengths to fit to (the 'm' values in A + Bp^m).
 
-    ASPs : list
+    asps : list
         The average survival probabilities to fit (the observed P_m values to fit
         to P_m = A + Bp^m).
 
@@ -183,10 +183,10 @@ def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, 
     if asymptote is not None: A = asymptote
     else: A = 1 / 2**n
     # First perform a fit with a fixed asymptotic value
-    FAF_results = custom_least_squares_data_fitting(lengths, ASPs, n, A=A, seed=seed)
+    FAF_results = custom_least_squares_data_fitting(lengths, asps, n, a=A, seed=seed)
     # Full fit is seeded by the fixed asymptote fit.
-    seed_full = [FAF_results['estimates']['A'], FAF_results['estimates']['B'], FAF_results['estimates']['p']]
-    FF_results = custom_least_squares_data_fitting(lengths, ASPs, n, seed=seed_full)
+    seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
+    FF_results = custom_least_squares_data_fitting(lengths, asps, n, seed=seed_full)
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
     elif ftype == 'FA': return FAF_results
@@ -194,30 +194,30 @@ def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, 
     else: raise ValueError("The `ftype` value is invalid!")
 
 
-def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=None, rtype='EI'):
+def custom_least_squares_data_fitting(lengths, asps, n, a=None, b=None, seed=None, rtype='EI'):
     """
-    Fits RB average success probabilities to the exponential decay A + Bp^m using least-squares fitting.
+    Fits RB average success probabilities to the exponential decay a + Bp^m using least-squares fitting.
 
     Parameters
     ----------
     lengths : list
-        The RB lengths to fit to (the 'm' values in A + Bp^m).
+        The RB lengths to fit to (the 'm' values in a + Bp^m).
 
-    ASPs : list
+    asps : list
         The average survival probabilities to fit (the observed P_m values to fit
-        to P_m = A + Bp^m).
+        to P_m = a + Bp^m).
 
     n : int
         The number of qubits the data is on..
 
-    A : float, optional
-        If not None, a value to fix A to.
+    a : float, optional
+        If not None, a value to fix a to.
 
-    B : float, optional
-        If not None, a value to fix B to.
+    b : float, optional
+        If not None, a value to fix b to.
 
     seed : list, optional
-        Seeds for variables in the fit, in the order [A,B,p] (with A and/or B dropped if it is set
+        Seeds for variables in the fit, in the order [a,b,p] (with a and/or b dropped if it is set
         to a fixed value).
 
     rtype : {'EI','AGI'}, optional
@@ -233,32 +233,32 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
     """
     seed_dict = {}
     variable = {}
-    variable['A'] = True
-    variable['B'] = True
+    variable['a'] = True
+    variable['b'] = True
     variable['p'] = True
     lengths = _np.array(lengths, int)
-    ASPs = _np.array(ASPs, 'd')
+    asps = _np.array(asps, 'd')
 
-    # The fit to do if a fixed value for A is given
-    if A is not None:
+    # The fit to do if a fixed value for a is given
+    if a is not None:
 
-        variable['A'] = False
+        variable['a'] = False
 
-        if B is not None:
+        if b is not None:
 
-            variable['B'] = False
+            variable['b'] = False
 
             def curve_to_fit(m, p):
-                return A + B * p**m
+                return a + b * p**m
 
             if seed is None:
                 seed = 0.9
-                seed_dict['A'] = None
-                seed_dict['B'] = None
+                seed_dict['a'] = None
+                seed_dict['b'] = None
                 seed_dict['p'] = seed
 
             try:
-                fitout, junk = _curve_fit(curve_to_fit, lengths, ASPs, p0=seed, bounds=([0.], [1.]))
+                fitout, junk = _curve_fit(curve_to_fit, lengths, asps, p0=seed, bounds=([0.], [1.]))
                 p = fitout
                 success = True
             except:
@@ -266,41 +266,41 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
 
         else:
 
-            def curve_to_fit(m, B, p):
-                return A + B * p**m
+            def curve_to_fit(m, b, p):
+                return a + b * p**m
 
             if seed is None:
-                seed = [1. - A, 0.9]
-                seed_dict['A'] = None
-                seed_dict['B'] = 1. - A
+                seed = [1. - a, 0.9]
+                seed_dict['a'] = None
+                seed_dict['b'] = 1. - a
                 seed_dict['p'] = 0.9
             try:
-                fitout, junk = _curve_fit(curve_to_fit, lengths, ASPs, p0=seed, bounds=([-_np.inf, 0.], [+_np.inf, 1.]))
-                B = fitout[0]
+                fitout, junk = _curve_fit(curve_to_fit, lengths, asps, p0=seed, bounds=([-_np.inf, 0.], [+_np.inf, 1.]))
+                b = fitout[0]
                 p = fitout[1]
                 success = True
             except:
                 success = False
 
-    # The fit to do if a fixed value for A is not given
+    # The fit to do if a fixed value for a is not given
     else:
 
-        if B is not None:
+        if b is not None:
 
-            variable['B'] = False
+            variable['b'] = False
 
-            def curve_to_fit(m, A, p):
-                return A + B * p**m
+            def curve_to_fit(m, a, p):
+                return a + b * p**m
 
             if seed is None:
                 seed = [1 / 2**n, 0.9]
-                seed_dict['A'] = 1 / 2**n
-                seed_dict['B'] = None
+                seed_dict['a'] = 1 / 2**n
+                seed_dict['b'] = None
                 seed_dict['p'] = 0.9
 
             try:
-                fitout, junk = _curve_fit(curve_to_fit, lengths, ASPs, p0=seed, bounds=([0., 0.], [1., 1.]))
-                A = fitout[0]
+                fitout, junk = _curve_fit(curve_to_fit, lengths, asps, p0=seed, bounds=([0., 0.], [1., 1.]))
+                a = fitout[0]
                 p = fitout[1]
                 success = True
             except:
@@ -308,20 +308,20 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
 
         else:
 
-            def curve_to_fit(m, A, B, p):
-                return A + B * p**m
+            def curve_to_fit(m, a, b, p):
+                return a + b * p**m
 
             if seed is None:
                 seed = [1 / 2**n, 1 - 1 / 2**n, 0.9]
-                seed_dict['A'] = 1 / 2**n
-                seed_dict['B'] = 1 - 1 / 2**n
+                seed_dict['a'] = 1 / 2**n
+                seed_dict['b'] = 1 - 1 / 2**n
                 seed_dict['p'] = 0.9
 
             try:
-                fitout, junk = _curve_fit(curve_to_fit, lengths, ASPs, p0=seed,
+                fitout, junk = _curve_fit(curve_to_fit, lengths, asps, p0=seed,
                                           bounds=([0., -_np.inf, 0.], [1., +_np.inf, 1.]))
-                A = fitout[0]
-                B = fitout[1]
+                a = fitout[0]
+                b = fitout[1]
                 p = fitout[2]
                 success = True
             except:
@@ -329,8 +329,8 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
 
     estimates = {}
     if success:
-        estimates['A'] = A
-        estimates['B'] = B
+        estimates['a'] = a
+        estimates['b'] = b
         estimates['p'] = p
         estimates['r'] = _rbt.p_to_r(p, 2**n)
 

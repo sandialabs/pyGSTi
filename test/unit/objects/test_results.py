@@ -3,8 +3,9 @@ import pickle
 from ..util import BaseCase, Namespace
 from . import fixtures as pkg
 
-from pygsti.objects import results, estimate
+from pygsti.objects import results
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.protocols import estimate
 
 
 class ResultsBase(object):
@@ -119,17 +120,3 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
         mdl_guess = std.target_model().depolarize(op_noise=0.07, spam_noise=0.03)
         self.res.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
         # TODO assert correctness
-
-    def test_results_warns_on_deprecated(self):
-        #deprecated functions that issue warnings
-        res = results.Results()
-        with self.assertWarns(Warning):
-            res.create_full_report_pdf()
-        with self.assertWarns(Warning):
-            res.create_brief_report_pdf()
-        with self.assertWarns(Warning):
-            res.create_presentation_pdf()
-        with self.assertWarns(Warning):
-            res.create_presentation_ppt()
-        with self.assertWarns(Warning):
-            res.create_general_report_pdf()

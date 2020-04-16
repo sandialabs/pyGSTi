@@ -12,33 +12,35 @@ import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
 from ..tools import listtools as _lt
+from ..tools.legacytools import deprecated_fn as _deprecated_fn
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import Model as _Model
 from ..objects import Circuit as _Circuit
+from ..objects import BulkCircuitList as _BulkCircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
 
-def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
-                     fidPairs=None, truncScheme="whole germ powers", nest=True,
-                     keepFraction=1, keepSeed=None, includeLGST=True,
-                     germLengthLimits=None):
+def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                         fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                         keep_fraction=1, keep_seed=None, include_lgst=True,
+                         germ_length_limits=None):
     """
     Create a set of operation sequence lists for LSGST based on germs and max-lengths.
 
     Constructs a series (a list) of operation sequence lists used by long-sequence GST
-    (LSGST) algorithms.  If `includeLGST == True` then the starting list is the
+    (LSGST) algorithms.  If `include_lgst == True` then the starting list is the
     list of LGST strings, otherwise the starting list is empty.  For each
-    nonzero element of maxLengthList, call it L, a list of operation sequences is
+    nonzero element of max_length_list, call it L, a list of operation sequences is
     created with the form:
 
-    Case: truncScheme == 'whole germ powers':
+    Case: trunc_scheme == 'whole germ powers':
       prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
 
-    Case: truncScheme == 'truncated germ powers':
+    Case: trunc_scheme == 'truncated germ powers':
       prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
 
-    Case: truncScheme == 'length as exponent':
+    Case: trunc_scheme == 'length as exponent':
       prepStr + germ^L + effectStr
 
     If nest == True, the above list is iteratively *added* (w/duplicates
@@ -49,37 +51,37 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
 
     Parameters
     ----------
-    opLabelSrc : list or Model
+    op_label_src : list or Model
         List of operation labels to determine needed LGST strings.  If a Model,
         then the model's gate and instrument labels are used. Only
-        relevant when `includeLGST == True`.
+        relevant when `include_lgst == True`.
 
-    prepStrs : list of Circuits
+    prep_strs : list of Circuits
         List of the preparation fiducial operation sequences, which follow state
         preparation.
 
-    effectStrs : list of Circuits
+    effect_strs : list of Circuits
         List of the measurement fiducial operation sequences, which precede
         measurement.
 
-    germList : list of Circuits
+    germ_list : list of Circuits
         List of the germ operation sequences.
 
-    maxLengthList : list of ints
+    max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the LGST sequences.
 
-    fidPairs : list of 2-tuples or dict, optional
+    fid_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
         to be used in the operation sequence lists.  If a list, each element of
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
-        indexing a string within prepStrs and effectStrs, respectively, so
-        that prepStr = prepStrs[iPrepStr] and effectStr =
-        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
-        of germList) and values are lists of 2-tuples specifying the pairs
+        fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prep_strs and effect_strs, respectively, so
+        that prepStr = prep_strs[iPrepStr] and effectStr =
+        effect_strs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germ_list) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
 
-    truncScheme : str, optional
+    trunc_scheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
 
@@ -98,85 +100,85 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
         length == L contains *only* those operation sequences specified in the
         description above, and *not* those for previous values of L.
 
-    keepFraction : float, optional
+    keep_fraction : float, optional
         The fraction of fiducial pairs selected for each germ-power base
         string.  The default includes all fiducial pairs.  Note that
         for each germ-power the selected pairs are *different* random
-        sets of all possible pairs (unlike fidPairs, which specifies the
+        sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs
-        specified by fidPairs are always selected, and any additional
+        fid_pairs is used in conjuction with keep_fraction, the pairs
+        specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
-    keepSeed : int, optional
+    keep_seed : int, optional
         The seed used for random fiducial pair selection (only relevant
-        when keepFraction < 1).
+        when keep_fraction < 1).
 
-    includeLGST : boolean, optional
+    include_lgst : boolean, optional
         If true, then the starting list (only applicable when
         `nest == True`) is the list of LGST strings rather than the
         empty list.  This means that when `nest == True`, the LGST
         sequences will be included in all the lists.
 
-    germLengthLimits : dict, optional
+    germ_length_limits : dict, optional
         A dictionary limiting the max-length values used for specific germs.
         Keys are germ sequences and values are integers.  For example, if
-        this argument is `{('Gx',): 4}` and `maxLengthList = [1,2,4,8,16]`,
+        this argument is `{('Gx',): 4}` and `max_length_list = [1,2,4,8,16]`,
         then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
-        and 4 (whereas other germs use all the values in `maxLengthList`).
+        and 4 (whereas other germs use all the values in `max_length_list`).
 
 
     Returns
     -------
     list of (lists of Circuits)
         The i-th list corresponds to a operation sequence list containing repeated
-        germs limited to length maxLengthList[i].  If nest == True, then
+        germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
-    if germLengthLimits is None: germLengthLimits = {}
-    if nest and includeLGST and len(maxLengthList) > 0 and maxLengthList[0] == 0:
+    if germ_length_limits is None: germ_length_limits = {}
+    if nest and include_lgst and len(max_length_list) > 0 and max_length_list[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
-                       + " replaced by the `includeLGST` parameter which"
+                       + " replaced by the `include_lgst` parameter which"
                        + " defaults to `True`.  Thus, in most cases, you can"
                        + " simply remove the leading 0 and start your"
                        + " max-length list at 1 now."
                        + "")
 
-    if isinstance(opLabelSrc, _Model):
-        opLabels = opLabelSrc.get_primitive_op_labels() + opLabelSrc.get_primitive_instrument_labels()
-    else: opLabels = opLabelSrc
+    if isinstance(op_label_src, _Model):
+        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+    else: opLabels = op_label_src
 
-    lgst_list = _gsc.list_lgst_circuits(prepStrs, effectStrs, opLabels)
+    lgst_list = _gsc.list_lgst_circuits(prep_strs, effect_strs, opLabels)
 
-    if keepFraction < 1.0:
-        rndm = _rndm.RandomState(keepSeed)  # ok if seed is None
-        nPairs = len(prepStrs) * len(effectStrs)
-        nPairsToKeep = int(round(float(keepFraction) * nPairs))
+    if keep_fraction < 1.0:
+        rndm = _rndm.RandomState(keep_seed)  # ok if seed is None
+        nPairs = len(prep_strs) * len(effect_strs)
+        nPairsToKeep = int(round(float(keep_fraction) * nPairs))
     else: rndm = None
 
-    if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
-        fiducialPairs = {germ: [(prepStrs[i], effectStrs[j])
-                                for (i, j) in fidPairs[germ]]
-                         for germ in germList}
-        fidPairDict = fidPairs
+    if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
+        fiducialPairs = {germ: [(prep_strs[i], effect_strs[j])
+                                for (i, j) in fid_pairs[germ]]
+                         for germ in germ_list}
+        fidPairDict = fid_pairs
     else:
-        if fidPairs is not None:  # assume fidPairs is a list
-            fidPairDict = {germ: fidPairs for germ in germList}
-            lst = [(prepStrs[i], effectStrs[j]) for (i, j) in fidPairs]
+        if fid_pairs is not None:  # assume fid_pairs is a list
+            fidPairDict = {germ: fid_pairs for germ in germ_list}
+            lst = [(prep_strs[i], effect_strs[j]) for (i, j) in fid_pairs]
         else:
             fidPairDict = None
-            lst = list(_itertools.product(prepStrs, effectStrs))
-        fiducialPairs = {germ: lst for germ in germList}
+            lst = list(_itertools.product(prep_strs, effect_strs))
+        fiducialPairs = {germ: lst for germ in germ_list}
 
     #running list of all strings so far (LGST strings or empty)
-    lsgst_list = lgst_list[:] if includeLGST else _gsc.circuit_list([()])
+    lsgst_list = lgst_list[:] if include_lgst else _gsc.circuit_list([()])
     lsgst_listOfLists = []  # list of lists to return
 
-    Rfn = _getTruncFunction(truncScheme)
+    Rfn = _get_trunc_function(trunc_scheme)
 
-    for maxLen in maxLengthList:
+    for maxLen in max_length_list:
 
         lst = []
         if maxLen == 0:
@@ -184,17 +186,17 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
             lst += lgst_list[:]
         else:
             #Typical case of germs repeated to maxLen using Rfn
-            for germ in germList:
-                if maxLen > germLengthLimits.get(germ, 1e100): continue
+            for germ in germ_list:
+                if maxLen > germ_length_limits.get(germ, 1e100): continue
 
                 if rndm is None:
                     fiducialPairsThisIter = fiducialPairs[germ]
 
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict[germ]
-                    remainingPairs = [(prepStrs[i], effectStrs[j])
-                                      for i in range(len(prepStrs))
-                                      for j in range(len(effectStrs))
+                    remainingPairs = [(prep_strs[i], effect_strs[j])
+                                      for i in range(len(prep_strs))
+                                      for j in range(len(effect_strs))
                                       if (i, j) not in pair_indx_tups]
                     nPairsRemaining = len(remainingPairs)
                     nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
@@ -208,7 +210,7 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                                             replace=False))]
 
                 else:  # rndm is not None and fidPairDict is None
-                    assert(nPairsToKeep <= nPairs)  # keepFraction must be <= 1.0
+                    assert(nPairsToKeep <= nPairs)  # keep_fraction must be <= 1.0
                     fiducialPairsThisIter = \
                         [fiducialPairs[germ][k] for k in
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
@@ -227,28 +229,43 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
     return lsgst_listOfLists
 
 
-def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
-                       fidPairs=None, truncScheme="whole germ powers", nest=True,
-                       keepFraction=1, keepSeed=None, includeLGST=True,
-                       opLabelAliases=None, sequenceRules=None,
-                       dscheck=None, actionIfMissing="raise", germLengthLimits=None,
+@_deprecated_fn('make_lsgst_lists(...)')
+def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                       fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                       keep_fraction=1, keep_seed=None, include_lgst=True,
+                       op_label_aliases=None, sequence_rules=None,
+                       dscheck=None, action_if_missing="raise", germ_length_limits=None,
                        verbosity=0):
+    bulk_circuit_lists = make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                                          fid_pairs, trunc_scheme, nest,
+                                          keep_fraction, keep_seed, include_lgst,
+                                          op_label_aliases, sequence_rules,
+                                          dscheck, action_if_missing, germ_length_limits, verbosity)
+    return [bcl.circuit_structure for bcl in bulk_circuit_lists]
+
+
+def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                     fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                     keep_fraction=1, keep_seed=None, include_lgst=True,
+                     op_label_aliases=None, sequence_rules=None,
+                     dscheck=None, action_if_missing="raise", germ_length_limits=None,
+                     verbosity=0):
     """
-    Create a set of operation sequence structures for LSGST.
+    Create a set of long-sequence GST circuit lists (including structure).
 
     Constructs a series (a list) of operation sequence structures used by long-sequence
-    GST (LSGST) algorithms.  If `includeLGST == True` then the starting
+    GST (LSGST) algorithms.  If `include_lgst == True` then the starting
     structure contains the LGST strings, otherwise the starting structure is
-    empty.  For each nonzero element of maxLengthList, call it L, a set of
+    empty.  For each nonzero element of max_length_list, call it L, a set of
     operation sequences is created with the form:
 
-    Case: truncScheme == 'whole germ powers':
+    Case: trunc_scheme == 'whole germ powers':
       prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
 
-    Case: truncScheme == 'truncated germ powers':
+    Case: trunc_scheme == 'truncated germ powers':
       prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
 
-    Case: truncScheme == 'length as exponent':
+    Case: trunc_scheme == 'length as exponent':
       prepStr + germ^L + effectStr
 
     If nest == True, the above set is iteratively *added* (w/duplicates
@@ -259,37 +276,37 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 
     Parameters
     ----------
-    opLabelSrc : list or Model
+    op_label_src : list or Model
         List of operation labels to determine needed LGST strings.  If a Model,
         then the model's gate and instrument labels are used. Only
-        relevant when `includeLGST == True`.
+        relevant when `include_lgst == True`.
 
-    prepStrs : list of Circuits
+    prep_strs : list of Circuits
         List of the preparation fiducial operation sequences, which follow state
         preparation.
 
-    effectStrs : list of Circuits
+    effect_strs : list of Circuits
         List of the measurement fiducial operation sequences, which precede
         measurement.
 
-    germList : list of Circuits
+    germ_list : list of Circuits
         List of the germ operation sequences.
 
-    maxLengthList : list of ints
+    max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the LGST sequences.
 
-    fidPairs : list of 2-tuples or dict, optional
+    fid_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
         to be used in the operation sequence lists.  If a list, each element of
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
-        indexing a string within prepStrs and effectStrs, respectively, so
-        that prepStr = prepStrs[iPrepStr] and effectStr =
-        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
-        of germList) and values are lists of 2-tuples specifying the pairs
+        fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prep_strs and effect_strs, respectively, so
+        that prepStr = prep_strs[iPrepStr] and effectStr =
+        effect_strs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germ_list) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
 
-    truncScheme : str, optional
+    trunc_scheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
 
@@ -308,34 +325,34 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         length == L contains *only* those operation sequences specified in the
         description above, and *not* those for previous values of L.
 
-    keepFraction : float, optional
+    keep_fraction : float, optional
         The fraction of fiducial pairs selected for each germ-power base
         string.  The default includes all fiducial pairs.  Note that
         for each germ-power the selected pairs are *different* random
-        sets of all possible pairs (unlike fidPairs, which specifies the
+        sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs
-        specified by fidPairs are always selected, and any additional
+        fid_pairs is used in conjuction with keep_fraction, the pairs
+        specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
-    keepSeed : int, optional
+    keep_seed : int, optional
         The seed used for random fiducial pair selection (only relevant
-        when keepFraction < 1).
+        when keep_fraction < 1).
 
-    includeLGST : boolean, optional
+    include_lgst : boolean, optional
         If true, then the starting list (only applicable when
         `nest == True`) is the list of LGST strings rather than the
         empty list.  This means that when `nest == True`, the LGST
         sequences will be included in all the lists.
 
-    opLabelAliases : dictionary, optional
+    op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
         the dataset.  This information is stored within the returned operation sequence
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    sequenceRules : list, optional
+    sequence_rules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement
         rules.  Both `find` and `replace` are tuples of operation labels
         (or `Circuit` objects).
@@ -343,20 +360,20 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     dscheck : DataSet, optional
         A data set which is checked for each of the generated operation sequences. When
         a generated sequence is missing from this `DataSet`, action is taken
-        according to `actionIfMissing`.
+        according to `action_if_missing`.
 
-    actionIfMissing : {"raise","drop"}, optional
+    action_if_missing : {"raise","drop"}, optional
         The action to take when a generated gate sequence is missing from
         `dscheck` (only relevant when `dscheck` is not None).  "raise" causes
         a ValueError to be raised; "drop" causes the missing sequences to be
         dropped from the returned set.
 
-    germLengthLimits : dict, optional
+    germ_length_limits : dict, optional
         A dictionary limiting the max-length values used for specific germs.
         Keys are germ sequences and values are integers.  For example, if
-        this argument is `{('Gx',): 4}` and `maxLengthList = [1,2,4,8,16]`,
+        this argument is `{('Gx',): 4}` and `max_length_list = [1,2,4,8,16]`,
         then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
-        and 4 (whereas other germs use all the values in `maxLengthList`).
+        and 4 (whereas other germs use all the values in `max_length_list`).
 
     verbosity : int, optional
         The level of output to print to stdout.
@@ -366,92 +383,92 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     -------
     list of LsGermsStructure objects
         The i-th object corresponds to a operation sequence list containing repeated
-        germs limited to length maxLengthList[i].  If nest == True, then
+        germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity)
-    if germLengthLimits is None: germLengthLimits = {}
+    if germ_length_limits is None: germ_length_limits = {}
 
-    if nest and includeLGST and len(maxLengthList) > 0 and maxLengthList[0] == 0:
+    if nest and include_lgst and len(max_length_list) > 0 and max_length_list[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
-                       + " replaced by the `includeLGST` parameter which"
+                       + " replaced by the `include_lgst` parameter which"
                        + " defaults to `True`.  Thus, in most cases, you can"
                        + " simply remove the leading 0 and start your"
                        + " max-length list at 1 now."
                        + "")
 
-    if isinstance(opLabelSrc, _Model):
-        opLabels = opLabelSrc.get_primitive_op_labels() + opLabelSrc.get_primitive_instrument_labels()
-    else: opLabels = opLabelSrc
+    if isinstance(op_label_src, _Model):
+        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+    else: opLabels = op_label_src
 
-    lgst_list = _gsc.list_lgst_circuits(prepStrs, effectStrs, opLabels)
+    lgst_list = _gsc.list_lgst_circuits(prep_strs, effect_strs, opLabels)
 
-    allPossiblePairs = list(_itertools.product(range(len(prepStrs)),
-                                               range(len(effectStrs))))
+    allPossiblePairs = list(_itertools.product(range(len(prep_strs)),
+                                               range(len(effect_strs))))
 
-    if keepFraction < 1.0:
-        rndm = _rndm.RandomState(keepSeed)  # ok if seed is None
-        nPairs = len(prepStrs) * len(effectStrs)
-        nPairsToKeep = int(round(float(keepFraction) * nPairs))
+    if keep_fraction < 1.0:
+        rndm = _rndm.RandomState(keep_seed)  # ok if seed is None
+        nPairs = len(prep_strs) * len(effect_strs)
+        nPairsToKeep = int(round(float(keep_fraction) * nPairs))
     else: rndm = None
 
-    if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
-        fidPairDict = fidPairs  # assume a dict of per-germ pairs
+    if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
+        fidPairDict = fid_pairs  # assume a dict of per-germ pairs
     else:
-        if fidPairs is not None:  # assume fidPairs is a list
-            fidPairDict = {germ: fidPairs for germ in germList}
+        if fid_pairs is not None:  # assume fid_pairs is a list
+            fidPairDict = {germ: fid_pairs for germ in germ_list}
         else:
             fidPairDict = None
 
-    truncFn = _getTruncFunction(truncScheme)
+    truncFn = _get_trunc_function(trunc_scheme)
 
     #TODO: if an empty germ list, base line_labels off of fiducials?
-    empty_germ = _Circuit((), germList[0].line_labels, stringrep="{}")
-    if includeLGST: germList = [empty_germ] + germList
+    empty_germ = _Circuit((), germ_list[0].line_labels, stringrep="{}")
+    if include_lgst: germ_list = [empty_germ] + germ_list
 
     #running structure of all strings so far (LGST strings or empty)
-    running_gss = _LsGermsStructure([], germList, prepStrs,
-                                    effectStrs, opLabelAliases,
-                                    sequenceRules)
+    running_cs = _LsGermsStructure([], germ_list, prep_strs,
+                                    effect_strs, op_label_aliases,
+                                    sequence_rules)
 
     missing_lgst = []
 
-    if includeLGST and len(maxLengthList) == 0:
+    if include_lgst and len(max_length_list) == 0:
         #Add *all* LGST sequences as unstructured if we don't add them below
-        missing_lgst = running_gss.add_unindexed(lgst_list, dscheck)
+        missing_lgst = running_cs.add_unindexed(lgst_list, dscheck)
 
     lsgst_listOfStructs = []  # list of operation sequence structures to return
     missing_list = []
-    totStrs = len(running_gss.allstrs)
+    totStrs = len(running_cs.allstrs)
     #import time as _time; t0=_time.time() # DEBUG
 
-    for i, maxLen in enumerate(maxLengthList):
+    for i, maxLen in enumerate(max_length_list):
         #print("Maxlen = ",maxLen, " %.2fs" % (_time.time()-t0)) # DEBUG - and remove import time above
-        if nest:  # add to running_gss and copy at end
-            gss = running_gss  # don't copy (yet)
-            gss.Ls.append(maxLen)
-        else:  # create a new gss for just this maxLen
-            gss = _LsGermsStructure([maxLen], germList, prepStrs,
-                                    effectStrs, opLabelAliases,
-                                    sequenceRules)
+        if nest:  # add to running_cs and copy at end
+            cs = running_cs  # don't copy (yet)
+            cs.Ls.append(maxLen)
+        else:  # create a new cs for just this maxLen
+            cs = _LsGermsStructure([maxLen], germ_list, prep_strs,
+                                    effect_strs, op_label_aliases,
+                                    sequence_rules)
         if maxLen == 0:
             #Special LGST case
-            missing_lgst = gss.add_unindexed(lgst_list, dscheck)
+            missing_lgst = cs.add_unindexed(lgst_list, dscheck)
         else:
-            if includeLGST and i == 0:  # first maxlen, so add LGST seqs as empty germ
+            if include_lgst and i == 0:  # first maxlen, so add LGST seqs as empty germ
                 #Note: no FPR on LGST strings
-                missing_list.extend(gss.add_plaquette(empty_germ, maxLen, empty_germ,
+                missing_list.extend(cs.add_plaquette(empty_germ, maxLen, empty_germ,
                                                       allPossiblePairs, dscheck))
-                missing_lgst = gss.add_unindexed(lgst_list, dscheck)  # only adds those not already present
-                #assert(('Gx','Gi0','Gi0') not in gss.allstrs) # DEBUG
+                missing_lgst = cs.add_unindexed(lgst_list, dscheck)  # only adds those not already present
+                #assert(('Gx','Gi0','Gi0') not in cs.allstrs) # DEBUG
 
-            #Typical case of germs repeated to maxLen using Rfn
-            for ii, germ in enumerate(germList):
+            #Typical case of germs repeated to maxLen using r_fn
+            for ii, germ in enumerate(germ_list):
                 if germ == empty_germ: continue  # handled specially above
-                if maxLen > germLengthLimits.get(germ, 1e100): continue
+                if maxLen > germ_length_limits.get(germ, 1e100): continue
                 germ_power = truncFn(germ, maxLen)
 
                 if rndm is None:
@@ -464,8 +481,8 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict.get(germ, allPossiblePairs)
                     remainingPairs = [(i, j)
-                                      for i in range(len(prepStrs))
-                                      for j in range(len(effectStrs))
+                                      for i in range(len(prep_strs))
+                                      for j in range(len(effect_strs))
                                       if (i, j) not in pair_indx_tups]
                     nPairsRemaining = len(remainingPairs)
                     nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
@@ -479,21 +496,21 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                                             replace=False))]
 
                 else:  # rndm is not None and fidPairDict is None
-                    assert(nPairsToKeep <= nPairs)  # keepFraction must be <= 1.0
+                    assert(nPairsToKeep <= nPairs)  # keep_fraction must be <= 1.0
                     fiducialPairsThisIter = \
                         [allPossiblePairs[k] for k in
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
-                missing_list.extend(gss.add_plaquette(germ_power, maxLen, germ,
+                missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
                                                       fiducialPairsThisIter, dscheck))
 
-        if nest: gss = gss.copy()  # pinch off a copy of running_gss
-        gss.done_adding_strings()
-        lsgst_listOfStructs.append(gss)
-        totStrs += len(gss.allstrs)  # only relevant for non-nested case
+        if nest: cs = cs.copy()  # pinch off a copy of running_cs
+        cs.done_adding_strings()
+        lsgst_listOfStructs.append(cs)
+        totStrs += len(cs.allstrs)  # only relevant for non-nested case
 
     if nest:  # then totStrs computation about overcounts -- just take string count of final stage
-        totStrs = len(running_gss.allstrs)
+        totStrs = len(running_cs.allstrs)
 
     printer.log("--- Circuit Creation ---", 1)
     printer.log(" %d sequences created" % totStrs, 2)
@@ -509,32 +526,35 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
             missing_msgs.append(" ... (more missing sequences not show) ... ")
         printer.log("The following sequences were missing from the dataset:", 4)
         printer.log("\n".join(missing_msgs), 4)
-        if actionIfMissing == "raise":
+        if action_if_missing == "raise":
             raise ValueError("Missing data! %d missing operation sequences" % len(missing_msgs))
-        elif actionIfMissing == "drop":
+        elif action_if_missing == "drop":
             pass
         else:
-            raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
+            raise ValueError("Invalid `action_if_missing` argument: %s" % action_if_missing)
 
     for i, struct in enumerate(lsgst_listOfStructs):
         if nest:
-            assert(struct.Ls == maxLengthList[0:i + 1])  # Make sure lengths are correct!
+            assert(struct.Ls == max_length_list[0:i + 1])  # Make sure lengths are correct!
         else:
-            assert(struct.Ls == maxLengthList[i:i + 1])  # Make sure lengths are correct!
-    return lsgst_listOfStructs
+            assert(struct.Ls == max_length_list[i:i + 1])  # Make sure lengths are correct!
+
+    #Turn circuit structures into BulkCircuitList objects
+    bulk_circuit_lists = [_BulkCircuitList(cs, op_label_aliases) for cs in lsgst_listOfStructs]
+    return bulk_circuit_lists
 
 
-def make_lsgst_experiment_list(opLabelSrc, prepStrs, effectStrs, germList,
-                               maxLengthList, fidPairs=None,
-                               truncScheme="whole germ powers", keepFraction=1,
-                               keepSeed=None, includeLGST=True):
+def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
+                               max_length_list, fid_pairs=None,
+                               trunc_scheme="whole germ powers", keep_fraction=1,
+                               keep_seed=None, include_lgst=True):
     """
     Create a list of all the operation sequences (i.e. the experiments) required for
     long-sequence GST (LSGST) algorithms.
 
     Returns a single list containing, without duplicates, all the gate
     strings required throughout all the iterations of LSGST given by
-    maxLengthList.  Thus, the returned list is equivalently the list of
+    max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run LSGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
     data sets.  The breakdown of which operation sequences are used for which
@@ -542,36 +562,36 @@ def make_lsgst_experiment_list(opLabelSrc, prepStrs, effectStrs, germList,
 
     Parameters
     ----------
-    opLabelSrc : list or Model
+    op_label_src : list or Model
         List of operation labels to determine needed LGST strings.  If a Model,
         then the model's gate and instrument labels are used. Only
-        relevant when `includeLGST == True`.
+        relevant when `include_lgst == True`.
 
-    prepStrs : list of Circuits
+    prep_strs : list of Circuits
         List of the preparation fiducial operation sequences, which follow state
         preparation.
 
-    effectStrs : list of Circuits
+    effect_strs : list of Circuits
         List of the measurement fiducial operation sequences, which precede
         measurement.
 
-    germList : list of Circuits
+    germ_list : list of Circuits
         List of the germ operation sequences.
 
-    maxLengthList : list of ints
+    max_length_list : list of ints
         List of maximum lengths.
 
-    fidPairs : list of 2-tuples, optional
+    fid_pairs : list of 2-tuples, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
         to be used in the operation sequence lists.  If a list, each element of
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
-        indexing a string within prepStrs and effectStrs, respectively, so
-        that prepStr = prepStrs[iPrepStr] and effectStr =
-        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
-        of germList) and values are lists of 2-tuples specifying the pairs
+        fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prep_strs and effect_strs, respectively, so
+        that prepStr = prep_strs[iPrepStr] and effectStr =
+        effect_strs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germ_list) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
 
-    truncScheme : str, optional
+    trunc_scheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
 
@@ -582,21 +602,21 @@ def make_lsgst_experiment_list(opLabelSrc, prepStrs, effectStrs, germList,
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
-    keepFraction : float, optional
+    keep_fraction : float, optional
         The fraction of fiducial pairs selected for each germ-power base
         string.  The default includes all fiducial pairs.  Note that
         for each germ-power the selected pairs are *different* random
-        sets of all possible pairs (unlike fidPairs, which specifies the
+        sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiduicial pairs for *all* same-germ base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs
-        specified by fidPairs are always selected, and any additional
+        fid_pairs is used in conjuction with keep_fraction, the pairs
+        specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
-    keepSeed : int, optional
+    keep_seed : int, optional
         The seed used for random fiducial pair selection (only relevant
-        when keepFraction < 1).
+        when keep_fraction < 1).
 
-    includeLGST : boolean, optional
+    include_lgst : boolean, optional
         If true, then ensure that LGST sequences are included in the
         returned list.
 
@@ -606,30 +626,30 @@ def make_lsgst_experiment_list(opLabelSrc, prepStrs, effectStrs, germList,
     list of Circuits
     """
     nest = True  # => the final list contains all of the strings
-    return make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList,
-                            maxLengthList, fidPairs, truncScheme, nest,
-                            keepFraction, keepSeed, includeLGST)[-1]
+    return make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list,
+                            max_length_list, fid_pairs, trunc_scheme, nest,
+                            keep_fraction, keep_seed, include_lgst)[-1]
 
 
-def make_elgst_lists(opLabelSrc, germList, maxLengthList,
-                     truncScheme="whole germ powers", nest=True,
-                     includeLGST=True):
+def make_elgst_lists(op_label_src, germ_list, max_length_list,
+                     trunc_scheme="whole germ powers", nest=True,
+                     include_lgst=True):
     """
     Create a set of operation sequence lists for eLGST based on germs and max-lengths
 
     Constructs a series (a list) of operation sequence lists used by the extended LGST
-    (eLGST) algorithm.  If `includeLGST == True` then the starting list is the
+    (eLGST) algorithm.  If `include_lgst == True` then the starting list is the
     list of length-1 operation label strings, otherwise the starting list is empty.
-    For each nonzero element of maxLengthList, call it L, a list of operation sequences is
+    For each nonzero element of max_length_list, call it L, a list of operation sequences is
     created with the form:
 
-    Case: truncScheme == 'whole germ powers':
+    Case: trunc_scheme == 'whole germ powers':
       pygsti.construction.repeat_with_max_length(germ,L)
 
-    Case: truncScheme == 'truncated germ powers':
+    Case: trunc_scheme == 'truncated germ powers':
       pygsti.construction.repeat_and_truncate(germ,L)
 
-    Case: truncScheme == 'length as exponent':
+    Case: trunc_scheme == 'length as exponent':
       germ^L
 
     If nest == True, the above list is iteratively *added* (w/duplicates
@@ -640,19 +660,19 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
 
     Parameters
     ----------
-    opLabelSrc : list or Model
+    op_label_src : list or Model
         List of operation labels to determine needed LGST strings.  If a Model,
         then the model's gate and instrument labels are used. Only
-        relevant when `includeLGST == True`.
+        relevant when `include_lgst == True`.
 
-    germList : list of Circuits
+    germ_list : list of Circuits
         List of the germ operation sequences.
 
-    maxLengthList : list of ints
+    max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the length-1 operation label strings.
 
-    truncScheme : str, optional
+    trunc_scheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means.  If unsure, leave as default. Allowed values are:
 
@@ -671,7 +691,7 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
         length == L contains *only* those operation sequences specified in the
         description above, and *not* those for previous values of L.
 
-    includeLGST : boolean, optional
+    include_lgst : boolean, optional
         If true, then the starting list (only applicable when
         `nest == True`) is the list of length-1 operation label strings
         rather than the empty list.  This means that when
@@ -683,30 +703,30 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
     -------
     list of (lists of Circuits)
         The i-th list corresponds to a operation sequence list containing repeated
-        germs limited to length maxLengthList[i].  If nest == True, then
+        germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
-    if isinstance(opLabelSrc, _Model):
-        opLabels = opLabelSrc.get_primitive_op_labels() + opLabelSrc.get_primitive_instrument_labels()
-    else: opLabels = opLabelSrc
+    if isinstance(op_label_src, _Model):
+        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+    else: opLabels = op_label_src
 
     singleOps = _gsc.circuit_list([(g,) for g in opLabels])
 
     #running list of all strings so far (length-1 strs or empty)
-    elgst_list = singleOps[:] if includeLGST else _gsc.circuit_list([()])
+    elgst_list = singleOps[:] if include_lgst else _gsc.circuit_list([()])
     elgst_listOfLists = []  # list of lists to return
 
-    Rfn = _getTruncFunction(truncScheme)
+    Rfn = _get_trunc_function(trunc_scheme)
 
-    for maxLen in maxLengthList:
+    for maxLen in max_length_list:
         if maxLen == 0:
             #Special length-1 string case
             lst = singleOps[:]
         else:
             #Typical case of germs repeated to maxLen using Rfn
-            lst = _gsc.create_circuit_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
+            lst = _gsc.create_circuit_list("R(germ,N)", germ=germ_list, N=maxLen, R=Rfn)
 
         if nest:
             elgst_list += lst  # add new strings to running list
@@ -718,16 +738,16 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
     return elgst_listOfLists
 
 
-def make_elgst_experiment_list(opLabelSrc, germList, maxLengthList,
-                               truncScheme="whole germ powers",
-                               includeLGST=True):
+def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
+                               trunc_scheme="whole germ powers",
+                               include_lgst=True):
     """
     Create a list of all the operation sequences (i.e. the experiments) required for
     the extended LGST (eLGST) algorithm.
 
     Returns a single list containing, without duplicates, all the gate
     strings required throughout all the iterations of eLGST given by
-    maxLengthList.  Thus, the returned list is equivalently the list of
+    max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run eLGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
     data sets.  The breakdown of which operation sequences are used for which
@@ -735,19 +755,19 @@ def make_elgst_experiment_list(opLabelSrc, germList, maxLengthList,
 
     Parameters
     ----------
-    opLabelSrc : list or Model
+    op_label_src : list or Model
         List of operation labels to determine needed LGST strings.  If a Model,
         then the model's gate and instrument labels are used. Only
-        relevant when `includeLGST == True`.
+        relevant when `include_lgst == True`.
 
-    germList : list of Circuits
+    germ_list : list of Circuits
         List of the germ operation sequences.
 
-    maxLengthList : list of ints
+    max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the length-1 operation label strings.
 
-    truncScheme : str, optional
+    trunc_scheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
 
@@ -758,7 +778,7 @@ def make_elgst_experiment_list(opLabelSrc, germList, maxLengthList,
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
-    includeLGST : boolean, optional
+    include_lgst : boolean, optional
         If true, then ensure that length-1 sequences are included in
         the returned list.
 
@@ -770,18 +790,18 @@ def make_elgst_experiment_list(opLabelSrc, germList, maxLengthList,
 
     #When nest == True the final list contains all of the strings
     nest = True
-    return make_elgst_lists(opLabelSrc, germList,
-                            maxLengthList, truncScheme, nest,
-                            includeLGST)[-1]
+    return make_elgst_lists(op_label_src, germ_list,
+                            max_length_list, trunc_scheme, nest,
+                            include_lgst)[-1]
 
 
-def _getTruncFunction(truncScheme):
-    if truncScheme == "whole germ powers":
-        Rfn = _gsc.repeat_with_max_length
-    elif truncScheme == "truncated germ powers":
-        Rfn = _gsc.repeat_and_truncate
-    elif truncScheme == "length as exponent":
-        def Rfn(germ, N): return germ * N
+def _get_trunc_function(trunc_scheme):
+    if trunc_scheme == "whole germ powers":
+        r_fn = _gsc.repeat_with_max_length
+    elif trunc_scheme == "truncated germ powers":
+        r_fn = _gsc.repeat_and_truncate
+    elif trunc_scheme == "length as exponent":
+        def r_fn(germ, n): return germ * n
     else:
-        raise ValueError("Invalid truncation scheme: %s" % truncScheme)
-    return Rfn
+        raise ValueError("Invalid truncation scheme: %s" % trunc_scheme)
+    return r_fn

@@ -25,10 +25,10 @@ class DataComparisonSection(_Section):
             use_loadable_items=embed_figures
         )
         dscmp_switchBd.add("dscmp", (0, 1))
-        dscmp_switchBd.add("dscmp_gss", (0,))
+        dscmp_switchBd.add("dscmp_circuits", (0,))
         dscmp_switchBd.add("refds", (0,))
         for d1, dslbl1 in enumerate(dataset_labels):
-            dscmp_switchBd.dscmp_gss[d1] = results[dslbl1].circuit_structs['final']
+            dscmp_switchBd.dscmp_circuits[d1] = results[dslbl1].circuit_lists['final']
             dscmp_switchBd.refds[d1] = results[dslbl1].dataset  # only used for #of spam labels below
 
         dsComp = dict()
@@ -48,7 +48,7 @@ class DataComparisonSection(_Section):
 
                     ds1 = results[dslbl1].dataset
                     ds2 = results[dslbl2].dataset
-                    dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                    dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                     dsc.implement()  # to perform processing
                     dsComp[(d1, d2)] = dsc
             dicts = comm.gather(dsComp, root=0)
@@ -64,7 +64,7 @@ class DataComparisonSection(_Section):
                 dslbl2 = dataset_labels[d2]
                 ds1 = results[dslbl1].dataset
                 ds2 = results[dslbl2].dataset
-                dsc = _DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+                dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
                 dsc.implement()  # to perform processing
                 all_dsComps[(d1, d2)] = dsc
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
@@ -80,23 +80,25 @@ class DataComparisonSection(_Section):
         }
 
     @_Section.figure_factory(4)
-    def dsComparisonSummary(workspace, switchboard=None, dataset_labels=None, all_dscomps=None, **kwargs):
+    def dataset_comparison_summary(workspace, switchboard=None, dataset_labels=None, all_dscomps=None, **kwargs):
         return workspace.DatasetComparisonSummaryPlot(
             dataset_labels, all_dscomps
         )
 
     @_Section.figure_factory(4)
-    def dsComparisonHistogram(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white', **kwargs):
+    def dataset_comparison_histogram(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
+                                     **kwargs):
         return workspace.ColorBoxPlot(
-            'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
+            'dscmp', ds_switchboard.dscmp_circuits, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, typ='histogram',
             comm=comm, bgcolor=bgcolor
         )
 
     @_Section.figure_factory(4)
-    def dsComparisonBoxPlot(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white', **kwargs):
+    def dataset_comparison_box_plot(workspace, switchboard=None, ds_switchboard=None, comm=None, bgcolor='white',
+                                    **kwargs):
         return workspace.ColorBoxPlot(
-            'dscmp', ds_switchboard.dscmp_gss, ds_switchboard.refds,
+            'dscmp', ds_switchboard.dscmp_circuits, ds_switchboard.refds,
             None, dscomparator=ds_switchboard.dscmp, comm=comm,
             bgcolor=bgcolor
         )

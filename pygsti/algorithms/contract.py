@@ -16,7 +16,7 @@ from .. import tools as _tools
 from .. import optimize as _opt
 
 
-def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead",
+def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct_cp=True, method="Nelder-Mead",
              verbosity=0):
     """
     Contract a Model to a specified space.
@@ -30,7 +30,7 @@ def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP
     model : Model
         The model to contract
 
-    toWhat : string
+    to_what : string
         Specifies which space is the model is contracted to.
         Allowed values are:
 
@@ -53,7 +53,7 @@ def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP
     tol : float, optional
         Tolerance for iterative contraction routines.
 
-    useDirectCP : bool, optional
+    use_direct_cp : bool, optional
         Whether to use a faster direct-contraction method for CP
         contraction.  This method essentially transforms to the
         Choi matrix, truncates any negative eigenvalues to zero,
@@ -61,7 +61,7 @@ def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP
 
     method : string, optional
         The method used when contracting to XP and non-directly to CP
-        (i.e. useDirectCP == False).
+        (i.e. use_direct_cp == False).
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -74,38 +74,38 @@ def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if toWhat == 'CPTP':
-        if useDirectCP:
-            _, contractedModel = _contractToCP_direct(model, printer, TPalso=True, maxiter=maxiter)
+    if to_what == 'CPTP':
+        if use_direct_cp:
+            _, contractedModel = _contract_to_cp_direct(model, printer, tp_also=True, maxiter=maxiter)
         else:
-            _, contractedModel = _contractToTP(model, verbosity)
-            _, contractedModel = _contractToCP(contractedModel, printer, method, maxiter, tol)
-    elif toWhat == 'XPTP':
-        if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        _, contractedModel = _contractToTP(model, verbosity)
-        _, contractedModel = _contractToXP(contractedModel, dataset, verbosity, method, maxiter, tol)
-    elif toWhat == 'CP':
-        if useDirectCP:
-            _, contractedModel = _contractToCP_direct(model, printer, TPalso=False, maxiter=maxiter)
+            _, contractedModel = _contract_to_tp(model, verbosity)
+            _, contractedModel = _contract_to_cp(contractedModel, printer, method, maxiter, tol)
+    elif to_what == 'XPTP':
+        if dataset is None: raise ValueError("dataset must be given to contract to " + to_what)
+        _, contractedModel = _contract_to_tp(model, verbosity)
+        _, contractedModel = _contract_to_xp(contractedModel, dataset, verbosity, method, maxiter, tol)
+    elif to_what == 'CP':
+        if use_direct_cp:
+            _, contractedModel = _contract_to_cp_direct(model, printer, tp_also=False, maxiter=maxiter)
         else:
-            _, contractedModel = _contractToCP(model, printer, method, maxiter, tol)
-    elif toWhat == 'TP':
-        _, contractedModel = _contractToTP(model, verbosity)
-    elif toWhat == 'XP':
-        if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        _, contractedModel = _contractToXP(model, dataset, verbosity, method, maxiter, tol)
-    elif toWhat == 'vSPAM':
-        contractedModel = _contractToValidSPAM(model, printer)
-    elif toWhat == 'nothing':
+            _, contractedModel = _contract_to_cp(model, printer, method, maxiter, tol)
+    elif to_what == 'TP':
+        _, contractedModel = _contract_to_tp(model, verbosity)
+    elif to_what == 'XP':
+        if dataset is None: raise ValueError("dataset must be given to contract to " + to_what)
+        _, contractedModel = _contract_to_xp(model, dataset, verbosity, method, maxiter, tol)
+    elif to_what == 'vSPAM':
+        contractedModel = _contract_to_valid_spam(model, printer)
+    elif to_what == 'nothing':
         contractedModel = model.copy()
-    else: raise ValueError("Invalid contract argument: %s" % toWhat)
+    else: raise ValueError("Invalid contract argument: %s" % to_what)
 
     return contractedModel
 
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
-def _contractToXP(model, dataset, verbosity, method='Nelder-Mead',
-                  maxiter=100000, tol=1e-10):
+def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
+                    maxiter=100000, tol=1e-10):
 
     CLIFF = 10000
 
@@ -115,8 +115,8 @@ def _contractToXP(model, dataset, verbosity, method='Nelder-Mead',
     printer.log("--- Contract to XP ---", 1)
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
 
-    def _objective_func(vectorGS):
-        mdl.from_vector(vectorGS)
+    def _objective_func(vector_gs):
+        mdl.from_vector(vector_gs)
         forbiddenProbPenalty = _tools.forbidden_prob(mdl, dataset)
         return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) \
             + mdl.frobeniusdist(model)
@@ -142,8 +142,8 @@ def _contractToXP(model, dataset, verbosity, method='Nelder-Mead',
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 
 
-def _contractToCP(model, verbosity, method='Nelder-Mead',
-                  maxiter=100000, tol=1e-2):
+def _contract_to_cp(model, verbosity, method='Nelder-Mead',
+                    maxiter=100000, tol=1e-2):
 
     CLIFF = 10000
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
@@ -153,8 +153,8 @@ def _contractToCP(model, verbosity, method='Nelder-Mead',
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
     mxBasis = mdl.basis
 
-    def _objective_func(vectorGS):
-        mdl.from_vector(vectorGS)
+    def _objective_func(vector_gs):
+        mdl.from_vector(vector_gs)
         mdl.basis = mxBasis  # set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(mdl) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + mdl.frobeniusdist(model)
@@ -179,22 +179,22 @@ def _contractToCP(model, verbosity, method='Nelder-Mead',
 
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
-def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-8):
+def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=1e-8):
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
-    printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
+    printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if tp_also else "CP")), 1)
 
     for (opLabel, gate) in model.operations.items():
         new_op = gate.copy()
-        if(TPalso):
+        if(tp_also):
             for k in range(new_op.shape[1]): new_op[0, k] = 1.0 if k == 0 else 0.0
 
-        Jmx = _tools.jamiolkowski_iso(new_op, opMxBasis=mdl.basis, choiMxBasis="gm")
+        Jmx = _tools.jamiolkowski_iso(new_op, op_mx_basis=mdl.basis, choi_mx_basis="gm")
         evals, evecs = _np.linalg.eig(Jmx)
 
-        if TPalso:
+        if tp_also:
             assert(abs(sum(evals) - 1.0) < 1e-8)  # check that Jmx always has trace == 1
         #if abs( sum(evals) - 1.0 ) >= 1e-8: #DEBUG
         #  print "WARNING: JMx given with evals = %s (sum = %s != 1)" % (evals,sum(evals))
@@ -264,13 +264,13 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
             # Check that trace-trunc above didn't mess up positivity
             assert(min(evals) >= -1e-10 and abs(sum(evals) - 1.0) < 1e-8)
 
-            new_op = _tools.jamiolkowski_iso_inv(new_Jmx, opMxBasis=mdl.basis, choiMxBasis="gm")
+            new_op = _tools.jamiolkowski_iso_inv(new_Jmx, op_mx_basis=mdl.basis, choi_mx_basis="gm")
 
             # # Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just
             # # in case.
             #  new_op = _tools.jamiolkowski_iso_inv(new_Jmx)
             #
-            #  if(TPalso):
+            #  if(tp_also):
             #    for k in range(new_op.shape[1]):
             #      #if k == 0: assert( abs(new_op[0,k] - 1.0) < 1e-8 )
             #      #else: assert( abs(new_op[0,k]) < 1e-8 )
@@ -291,11 +291,11 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
         printer.log("Direct CP contraction of %s gate gives frobenius diff of %g" %
                     (opLabel, _tools.frobeniusdist(mdl.operations[opLabel], gate)), 2)
 
-    #mdl.log("Choi-Truncate to %s" % ("CPTP" if TPalso else "CP"), { 'maxiter': maxiter } )
+    #mdl.log("Choi-Truncate to %s" % ("CPTP" if tp_also else "CP"), { 'maxiter': maxiter } )
     distance = mdl.frobeniusdist(model)
     printer.log(('The closest legal point found was distance: %s' % str(distance)), 1)
 
-    if TPalso:  # TP also constrains prep vectors
+    if tp_also:  # TP also constrains prep vectors
         op_dim = mdl.get_dimension()
         for rhoVec in list(mdl.preps.values()):
             rhoVec[0, 0] = 1.0 / op_dim**0.25
@@ -305,7 +305,7 @@ def _contractToCP_direct(model, verbosity, TPalso=False, maxiter=100000, tol=1e-
 
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
-def _contractToTP(model, verbosity):
+def _contract_to_tp(model, verbosity):
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
@@ -327,7 +327,7 @@ def _contractToTP(model, verbosity):
 
 
 #modifies rhoVecs and EVecs (SPAM) only (not gates)
-def _contractToValidSPAM(model, verbosity=0):
+def _contract_to_valid_spam(model, verbosity=0):
     """
     Contract the surface preparation and measurement operations of
     a Model to the space of valid quantum operations.

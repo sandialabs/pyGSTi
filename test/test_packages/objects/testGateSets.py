@@ -19,7 +19,7 @@ from pygsti.objects import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.io import enable_old_object_unpickling
-from pygsti.tools.compattools import patched_UUID
+from pygsti.tools.compattools import patched_uuid
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -69,7 +69,7 @@ class TestGateSetMethods(GateSetTestCase):
         p2 = np.dot( self.model['Gy'], np.dot( self.model['Gy'], self.model['Gx'] ))
 
         bulk_prods = self.model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[ 0 ],p1)
         self.assertArraysAlmostEqual(bulk_prods[ 1 ],p2)
@@ -79,7 +79,7 @@ class TestGateSetMethods(GateSetTestCase):
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
         PORIG = pygsti.objects.matrixforwardsim.PSMALL; pygsti.objects.matrixforwardsim.PSMALL = 10
-        bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, scale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
         pygsti.objects.matrixforwardsim.PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
@@ -105,7 +105,7 @@ class TestGateSetMethods(GateSetTestCase):
         dprobs_to_fill = np.empty( (nElements,nParams), 'd')
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
         self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill, evt,
-                              prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
+                              pr_mx_to_fill=probs_to_fill, deriv_mx_to_fill=dprobs_to_fill, check=True)
 
 
         nP = self.model.num_params()
@@ -284,16 +284,16 @@ class TestGateSetMethods(GateSetTestCase):
                     print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distributeMethod, memLimit))
                     try:
                         evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, memLimit=memLimit, distributeMethod=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
                             subcalls=['bulk_fill_dprobs'], comm=fake_comm) #where bNp2Matters == False
 
                     except MemoryError:
@@ -302,7 +302,7 @@ class TestGateSetMethods(GateSetTestCase):
         #balanced not implemented
         with self.assertRaises(NotImplementedError):
             evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                circuits, memLimit=memLimit, distributeMethod="balanced", subcalls=['bulk_fill_hprobs'])
+                circuits, mem_limit=memLimit, distribute_method="balanced", subcalls=['bulk_fill_hprobs'])
 
 
 
@@ -320,14 +320,14 @@ class TestGateSetMethods(GateSetTestCase):
         evtA,lookupA,outcome_lookupA = self.model.bulk_evaltree( circuits )
 
         evtB,lookupB,outcome_lookupB = self.model.bulk_evaltree( circuits )
-        lookupB = evtB.split(lookupB, maxSubTreeSize=4)
+        lookupB = evtB.split(lookupB, max_sub_tree_size=4)
 
         evtC,lookupC,outcome_lookupC = self.model.bulk_evaltree( circuits )
-        lookupC = evtC.split(lookupC, numSubTrees=3)
+        lookupC = evtC.split(lookupC, num_sub_trees=3)
 
         with self.assertRaises(ValueError):
             evtBad,lkup,_ = self.model.bulk_evaltree( circuits )
-            evtBad.split(lkup, numSubTrees=3, maxSubTreeSize=4) #can't specify both
+            evtBad.split(lkup, num_sub_trees=3, max_sub_tree_size=4) #can't specify both
 
         self.assertFalse(evtA.is_split())
         self.assertTrue(evtB.is_split())
@@ -357,7 +357,7 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_load_old_gateset(self):
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        with enable_old_object_unpickling(), patched_UUID():
+        with enable_old_object_unpickling(), patched_uuid():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
@@ -365,7 +365,7 @@ class TestGateSetMethods(GateSetTestCase):
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)
 
-        with enable_old_object_unpickling("0.9.7"), patched_UUID():
+        with enable_old_object_unpickling("0.9.7"), patched_uuid():
             with open(compare_files + "/pygsti0.9.7.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
@@ -391,7 +391,7 @@ Gx^4  0:100
         with open(temp_files + "/SparseDataset.txt",'w') as f:
             f.write(dataset_txt)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt", recordZeroCnts=False)
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt", record_zero_counts=False)
         self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',), ('2',)])
         self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
@@ -430,7 +430,7 @@ Gx^4 100 0
         with open(temp_files + "/SparseDataset2.txt",'w') as f:
             f.write(dataset_txt2)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt", recordZeroCnts=True)
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt", record_zero_counts=True)
         self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',)])
         self.assertEqual(ds[()].outcomes, [('0',),('1',)]) # both outcomes even though only nonzero count is 1-count
         with self.assertRaises(KeyError):

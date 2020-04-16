@@ -26,13 +26,13 @@ X = _np.matrix([[0, 1], [1, 0]])
 Y = _np.matrix([[0, -1j], [1j, 0]])
 
 
-def X2qubit(theta):
+def x_2qubit(theta):
     """ Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)"""
     x = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, 1], [1, 0]])))
     return _np.kron(x, x)
 
 
-def Y2qubit(theta):
+def y_2qubit(theta):
     """ Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)"""
     y = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, -1j], [1j, 0]])))
     return _np.kron(y, y)
@@ -50,51 +50,51 @@ def ms2qubit(theta, phi):
 #(state space ordering is |0> = |00>, |1> ~ |01>+|10>,|2>=|11>, so state |i> corresponds to i detector counts
 
 
-#Removes columns and rows from inputArr
-def _remove_from_matrix(inputArr, columns, rows, outputType=_np.matrix):
-    inputArr = _np.array(inputArr)
-    return outputType([
-        [inputArr[row_num][col_num]
-            for col_num in range(len(inputArr[row_num]))
+#Removes columns and rows from input_arr
+def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
+    input_arr = _np.array(input_arr)
+    return output_type([
+        [input_arr[row_num][col_num]
+            for col_num in range(len(input_arr[row_num]))
             if col_num not in columns]
 
-        for row_num in range(len(inputArr))
+        for row_num in range(len(input_arr))
         if row_num not in rows])
 
 
-def to_qutrit_space(inputMat):
+def to_qutrit_space(input_mat):
     """ Projects a 2-qubit unitary matrix onto the symmetric "qutrit space" """
-    inputMat = _np.matrix(inputMat)
-    return _remove_from_matrix(A * inputMat * A**-1, [2], [2])
-#    return (A * inputMat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
+    input_mat = _np.matrix(input_mat)
+    return _remove_from_matrix(A * input_mat * A**-1, [2], [2])
+#    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
 
-def MS3(theta, phi):
+def ms_3(theta, phi):
     """ Returns Qutrit Molmer-Sorenson unitary """
     return to_qutrit_space(ms2qubit(theta, phi))
 
 
-def XX3(theta):
+def xx_3(theta):
     """ Returns Qutrit XX unitary """
-    return to_qutrit_space(X2qubit(theta))
+    return to_qutrit_space(x_2qubit(theta))
 
 
-def YY3(theta):
+def yy_3(theta):
     """ Returns Qutrit YY unitary """
-    return to_qutrit_space(Y2qubit(theta))
+    return to_qutrit_space(y_2qubit(theta))
 
 
-def _random_rot(scale, arrType=_np.array, seed=None):
+def _random_rot(scale, arr_type=_np.array, seed=None):
     rndm = _np.random.RandomState(seed)
     randH = scale * (rndm.randn(3, 3) + 1j * rndm.randn(3, 3))
     randH = _np.dot(_np.conj(randH.T), randH)
     randU = _linalg.expm(-1j * randH)
-    return arrType(randU)
+    return arr_type(randU)
 
 
-def make_qutrit_model(errorScale, Xangle=_np.pi / 2, Yangle=_np.pi / 2,
-                      MSglobal=_np.pi / 2, MSlocal=0,
+def make_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
+                      ms_global=_np.pi / 2, ms_local=0,
                       similarity=False, seed=None, basis='qt'):
     """
     Constructs a standard qutrit :class:`Model` containing the identity,
@@ -102,26 +102,26 @@ def make_qutrit_model(errorScale, Xangle=_np.pi / 2, Yangle=_np.pi / 2,
 
     Parameters
     ----------
-    errorScale : float
+    error_scale : float
         Magnitude of random rotations to apply to the returned model.  If
         zero, then perfect "ideal" gates are constructed.
 
-    Xangle, Yangle : float
+    x_angle, y_angle : float
         The angle of the single-qubit 'X' and 'Y' rotations in the 'XX' and 'YY'
         gates.  An X-rotation by `theta` is given by `U = exp(-i/2 * theta * X)`
         where `X` is a Pauli matrix, and likewise for the Y-rotation.
 
-    MSglobal, MSlocal : float
+    ms_global, ms_local : float
         "Global" and "local" angles for the Molmer-Sorenson gate, defined by
         the corresponding 2-qubit unitary:
 
-        `U = exp(-i/2 * MSglobal * (cos(MSlocal)*X + sin(MSlocal)*Y)^2)`
+        `U = exp(-i/2 * ms_global * (cos(ms_local)*X + sin(ms_local)*Y)^2)`
 
         where `x^2` means the *tensor product* of `x` with itself.
 
     similarity : bool, optional
         If true, then apply the random rotations (whose strengths are given
-        by `errorScale`) as similarity transformations rather than just as
+        by `error_scale`) as similarity transformations rather than just as
         post-multiplications to the ideal operation matrices.
 
     seed : int, optional
@@ -150,13 +150,13 @@ def make_qutrit_model(errorScale, Xangle=_np.pi / 2, Yangle=_np.pi / 2,
 
     #Define gates as unitary ops on Hilbert space
     gateImx = arrType(identity3)
-    gateXmx = arrType(XX3(Xangle))
-    gateYmx = arrType(YY3(Yangle))
-    gateMmx = arrType(MS3(MSglobal, MSlocal))
+    gateXmx = arrType(xx_3(x_angle))
+    gateYmx = arrType(yy_3(y_angle))
+    gateMmx = arrType(ms_3(ms_global, ms_local))
 
     #Now introduce unitary noise.
 
-    scale = errorScale
+    scale = error_scale
     Xrand = _random_rot(scale, seed=seed)
     Yrand = _random_rot(scale)
     Mrand = _random_rot(scale)

@@ -13,14 +13,14 @@ import itertools as _itertools
 import warnings as _warnings
 import copy as _copy
 
+import pygsti
 from .. import tools as _tools
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
-from .estimate import Estimate as _Estimate
 from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
-#A flag to enable fast-loading of old results files (should
+#a flag to enable fast-loading of old results files (should
 # only be changed by experts)
 _SHORTCUT_OLD_RESULTS_LOAD = False
 
@@ -71,7 +71,7 @@ class Results(object):
                             "  Usually you don't want to do this."))
         self.dataset = dataset
 
-    def init_circuits(self, structsByIter):
+    def init_circuits(self, structs_by_iter):
         """
         Initialize the common set operation sequences used to form the
         estimates of this Results object.
@@ -81,7 +81,7 @@ class Results(object):
 
         Parameters
         ----------
-        structsByIter : list
+        structs_by_iter : list
             The operation sequences used at each iteration. Ideally, elements are
             `LsGermsStruct` objects, which contain the structure needed to
             create color box plots in reports.  Elements may also be
@@ -98,7 +98,7 @@ class Results(object):
 
         #Set circuit structures
         self.circuit_structs['iteration'] = []
-        for gss in structsByIter:
+        for gss in structs_by_iter:
             if isinstance(gss, (_LsGermsStructure, _LsGermsSerialStructure)):
                 self.circuit_structs['iteration'].append(gss)
             elif isinstance(gss, list):
@@ -137,7 +137,7 @@ class Results(object):
             self.circuit_lists['meas fiducials'] = []
             self.circuit_lists['germs'] = []
 
-    def add_estimates(self, results, estimatesToAdd=None):
+    def add_estimates(self, results, estimates_to_add=None):
         """
         Add some or all of the estimates from `results` to this `Results` object.
 
@@ -148,7 +148,7 @@ class Results(object):
             the same data set and gate sequence information as the importing object
             or an error is raised.
 
-        estimatesToAdd : list, optional
+        estimates_to_add : list, optional
             A list of estimate keys to import from `results`.  If None, then all
             the estimates contained in `results` are imported.
 
@@ -169,7 +169,7 @@ class Results(object):
             "Iteration count inconsistency: cannot import estimates!"
 
         for estimate_key in results.estimates:
-            if estimatesToAdd is None or estimate_key in estimatesToAdd:
+            if estimates_to_add is None or estimate_key in estimates_to_add:
                 if estimate_key in self.estimates:
                     _warnings.warn("Re-initializing the %s estimate" % estimate_key
                                    + " of this Results object!  Usually you don't"
@@ -202,22 +202,22 @@ class Results(object):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, targetModel, seedModel, modelsByIter,
+    def add_estimate(self, target_model, seed_model, models_by_iter,
                      parameters, estimate_key='default'):
         """
         Add a set of `Model` estimates to this `Results` object.
 
         Parameters
         ----------
-        targetModel : Model
+        target_model : Model
             The target model used when optimizing the objective.
 
-        seedModel : Model
+        seed_model : Model
             The initial model used to seed the iterative part
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        modelsByIter : list of Models
+        models_by_iter : list of Models
             The estimated model at each GST iteration. Typically these are the
             estimated models *before* any gauge optimization is performed.
 
@@ -240,7 +240,7 @@ class Results(object):
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
-        la, lb = len(self.circuit_structs['iteration']), len(modelsByIter)
+        la, lb = len(self.circuit_structs['iteration']), len(models_by_iter)
         assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
 
         if estimate_key in self.estimates:
@@ -248,26 +248,26 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
-                                                 modelsByIter, parameters)
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate(self, target_model, seed_model,
+                                                                          models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \
             self.circuit_structs['final'].Ls
 
-    def add_model_test(self, targetModel, themodel,
+    def add_model_test(self, target_model, themodel,
                        estimate_key='test', gauge_opt_keys="auto"):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
         Parameters
         ----------
-        targetModel : Model
+        target_model : Model
             The target model used for comparison to the model.
 
         themodel : Model
             The "model" model whose fit to the data and distance from
-            `targetModel` are assessed.
+            `target_model` are assessed.
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
@@ -314,7 +314,7 @@ class Results(object):
         themodel = themodel.copy()
         themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
 
-        self.add_estimate(targetModel, themodel, [themodel] * nIter,
+        self.add_estimate(target_model, themodel, [themodel] * nIter,
                           parameters, estimate_key=estimate_key)
 
         #add gauge optimizations (always trivial)
@@ -329,7 +329,7 @@ class Results(object):
         for gokey in gauge_opt_keys:
             trivialEl = _TrivialGaugeGroupElement(themodel.dim)
             goparams = {'model': themodel,
-                        'targetModel': targetModel,
+                        'target_model': target_model,
                         '_gaugeGroupEl': trivialEl}
             est.add_gaugeoptimized(goparams, themodel, gokey)
 
@@ -376,22 +376,22 @@ class Results(object):
             cpy.estimates[est_key] = est.copy()
         return cpy
 
-    def __setstate__(self, stateDict):
+    def __setstate__(self, state_dict):
 
-        if '_bEssentialResultsSet' in stateDict:
+        if '_bEssentialResultsSet' in state_dict:
             raise ValueError(("This Results object is too old to unpickle - "
                               "try using pyGSTi v0.9.6 to upgrade it to a version "
                               "that this version can upgrade to the current version."))
 
-        if 'gatestring_lists' in stateDict:
+        if 'gatestring_lists' in state_dict:
             _warnings.warn("Unpickling deprecated-format Results.  Please re-save/pickle asap.")
-            self.circuit_lists = stateDict['gatestring_lists']
-            self.circuit_structs = stateDict['gatestring_structs']
-            del stateDict['gatestring_lists']
-            del stateDict['gatestring_structs']
+            self.circuit_lists = state_dict['gatestring_lists']
+            self.circuit_structs = state_dict['gatestring_structs']
+            del state_dict['gatestring_lists']
+            del state_dict['gatestring_structs']
 
         #unpickle normally
-        self.__dict__.update(stateDict)
+        self.__dict__.update(state_dict)
         for est in self.estimates.values():
             est.set_parent(self)
 
@@ -415,75 +415,3 @@ class Results(object):
         s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
         s += "\n"
         return s
-
-    #OLD Methods for generating reports which have been removed - show alert
-    # message directing users to new factory functions
-
-    def create_full_report_pdf(self, confidenceLevel=None, filename="auto",
-                               title="auto", datasetLabel="auto", suffix="",
-                               debugAidsAppendix=False, gaugeOptAppendix=False,
-                               pixelPlotAppendix=False, whackamoleAppendix=False,
-                               pureDataAppendix=False, m=0, M=10, tips=False,
-                               verbosity=0, comm=None):
-        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
-        _warnings.warn(
-            ('create_full_report_pdf(...) has been removed from pyGSTi.\n'
-             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  significantly upgraded.  As a part of this change,\n'
-             '  the functions that generate reports are now separate functions.\n'
-             '  Please update this call with one to:\n'
-             '  pygsti.report.create_standard_report(...)\n'))
-
-    def create_brief_report_pdf(self, confidenceLevel=None,
-                                filename="auto", title="auto", datasetLabel="auto",
-                                suffix="", m=0, M=10, tips=False, verbosity=0,
-                                comm=None):
-        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
-        _warnings.warn(
-            ('create_brief_report_pdf(...) has been removed from pyGSTi.\n'
-             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  significantly upgraded.  As a part of this change,\n'
-             '  the functions that generate reports are now separate functions.\n'
-             '  Please update this call with one to:\n'
-             '  pygsti.report.create_standard_report(...)\n'))
-
-    def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
-                                title="auto", datasetLabel="auto", suffix="",
-                                debugAidsAppendix=False,
-                                pixelPlotAppendix=False, whackamoleAppendix=False,
-                                m=0, M=10, verbosity=0, comm=None):
-        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
-        _warnings.warn(
-            ('create_presentation_pdf(...) has been removed from pyGSTi.\n'
-             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  significantly upgraded.  As a part of this change,\n'
-             '  the functions that generate reports are now separate functions.\n'
-             '  Please update this call with one to:\n'
-             '  pygsti.report.create_standard_report(...)\n'))
-
-    def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
-                                title="auto", datasetLabel="auto", suffix="",
-                                debugAidsAppendix=False,
-                                pixelPlotAppendix=False, whackamoleAppendix=False,
-                                m=0, M=10, verbosity=0, pptTables=False, comm=None):
-        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
-        _warnings.warn(
-            ('create_presentation_ppt(...) has been removed from pyGSTi.\n'
-             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  significantly upgraded.  As a part of this change,\n'
-             '  the functions that generate reports are now separate functions.\n'
-             '  Please update this call with one to:\n'
-             '  pygsti.report.create_standard_report(...)\n'))
-
-    def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
-                                  title="auto", datasetLabel="auto", suffix="",
-                                  tips=False, verbosity=0, comm=None,
-                                  showAppendix=False):
-        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
-        _warnings.warn(
-            ('create_general_report_pdf(...) has been removed from pyGSTi.\n'
-             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  significantly upgraded.  As a part of this change,\n'
-             '  the functions that generate reports are now separate functions.\n'
-             '  Please update this call with one to:\n'
-             '  pygsti.report.create_standard_report(...)\n'))

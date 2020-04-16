@@ -17,15 +17,15 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
+def table(custom_headings, col_headings_formatted, rows, spec):
     '''
     Create a "Python table" - really a pandas DataFrame
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+    col_headings_formatted : list
         formatted column headings
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
@@ -45,11 +45,11 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     def getval(lbl):
         return lbl.value if isinstance(lbl, _ReportableQty) else lbl
 
-    if customHeadings is not None \
-            and "python" in customHeadings:
-        colLabels = customHeadings['python']
+    if custom_headings is not None \
+            and "python" in custom_headings:
+        colLabels = custom_headings['python']
     else:
-        colLabels = [getval(x) for x in colHeadingsFormatted]
+        colLabels = [getval(x) for x in col_headings_formatted]
     nCols = len(colLabels)
 
     if nCols == 0: return {'python': _pd.DataFrame()}

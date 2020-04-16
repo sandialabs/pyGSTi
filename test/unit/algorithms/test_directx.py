@@ -17,7 +17,7 @@ class DirectXTester(BaseCase):
         cls.effectStrs = fixtures.fiducials
         cls.strs = pc.circuit_list([
             (),  # always need empty string
-            ('Gx',), ('Gy',), ('Gi',),  # need these for includeTargetOps=True
+            ('Gx',), ('Gy',), ('Gi',),  # need these for include_target_ops=True
             ('Gx', 'Gx'), ('Gx', 'Gy', 'Gx')  # additional
         ])
         expstrs = pc.create_circuit_list(
@@ -33,13 +33,13 @@ class DirectXTester(BaseCase):
     def test_model_with_lgst_circuit_estimates(self):
         model = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            svdTruncateTo=4, verbosity=10
+            svd_truncate_to=4, verbosity=10
         )
         # TODO assert correctness
 
         model = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            includeTargetOps=False, svdTruncateTo=4, verbosity=10
+            include_target_ops=False, svd_truncate_to=4, verbosity=10
         )
         # TODO assert correctness
 
@@ -47,8 +47,8 @@ class DirectXTester(BaseCase):
         # circuit_labels = [L('G0'), L('G1'), L('G2'), L('G3')]
         model = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            circuitLabels=circuit_labels,
-            includeTargetOps=False, svdTruncateTo=4, verbosity=10
+            circuit_labels=circuit_labels,
+            include_target_ops=False, svd_truncate_to=4, verbosity=10
         )
         self.assertEqual(
             set(model.operations.keys()),
@@ -58,26 +58,26 @@ class DirectXTester(BaseCase):
     def test_direct_lgst_models(self):
         gslist = directx.direct_lgst_models(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            opLabelAliases=None, svdTruncateTo=4, verbosity=10)
+            op_label_aliases=None, svd_truncate_to=4, verbosity=10)
         # TODO assert correctness
 
     def test_direct_mc2gst_models(self):
         gslist = directx.direct_mc2gst_models(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            opLabelAliases=None, minProbClipForWeighting=1e-4,
-            probClipInterval=(-1e6, 1e6), svdTruncateTo=4, verbosity=10)
+            op_label_aliases=None, min_prob_clip_for_weighting=1e-4,
+            prob_clip_interval=(-1e6, 1e6), svd_truncate_to=4, verbosity=10)
         # TODO assert correctness
 
     def test_direct_mlgst_models(self):
         gslist = directx.direct_mlgst_models(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            opLabelAliases=None, minProbClip=1e-6, probClipInterval=(-1e6, 1e6),
-            svdTruncateTo=4, verbosity=10)
+            op_label_aliases=None, min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6),
+            svd_truncate_to=4, verbosity=10)
         # TODO assert correctness
 
     def test_focused_mc2gst_models(self):
         gslist = directx.focused_mc2gst_models(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
-            opLabelAliases=None, minProbClipForWeighting=1e-4,
-            probClipInterval=(-1e6, 1e6), verbosity=10)
+            op_label_aliases=None, min_prob_clip_for_weighting=1e-4,
+            prob_clip_interval=(-1e6, 1e6), verbosity=10)
         # TODO assert correctness

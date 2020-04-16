@@ -30,17 +30,17 @@ _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
 FINITE_DIFF_EPS = 1e-7
 
 
-def _nullFn(*arg):
+def _null_fn(*arg):
     return None
 
 
-def _projectToValidProb(p, tol=1e-9):
+def _project_to_valid_prob(p, tol=1e-9):
     if p < tol: return tol
     if p > 1 - tol: return 1 - tol
     return p
 
 
-def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
+def _make_reportable_qty_or_dict(f0, df=None, non_markovian_ebs=False):
     """ Just adds special processing with f0 is a dict, where we
         return a dict or ReportableQtys rather than a single
         ReportableQty of the dict.
@@ -49,20 +49,20 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         #special processing for dict -> df is dict of error bars
         # and we return a dict of ReportableQtys
         if df:
-            return {ky: _ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0}
+            return {ky: _ReportableQty(f0[ky], df[ky], non_markovian_ebs) for ky in f0}
         else:
             return {ky: _ReportableQty(f0[ky], None, False) for ky in f0}
     else:
-        return _ReportableQty(f0, df, nonMarkovianEBs)
+        return _ReportableQty(f0, df, non_markovian_ebs)
 
 
-def evaluate(modelFn, cri=None, verbosity=0):
+def evaluate(model_fn, cri=None, verbosity=0):
     """
     Evaluate a ModelFunction object using confidence region information
 
     Parameters
     ----------
-    modelFn : ModelFunction
+    model_fn : ModelFunction
         The function to evaluate
 
     cri : ConfidenceRegionFactoryView, optional
@@ -74,27 +74,27 @@ def evaluate(modelFn, cri=None, verbosity=0):
     Returns
     -------
     ReportableQty or dict
-        If `modelFn` does returns a dict of ReportableQty objects, otherwise
+        If `model_fn` does returns a dict of ReportableQty objects, otherwise
         a single ReportableQty.
     """
-    if modelFn is None:  # so you can set fn to None when they're missing (e.g. diamond norm)
+    if model_fn is None:  # so you can set fn to None when they're missing (e.g. diamond norm)
         return _ReportableQty(_np.nan)
 
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
         df, f0 = cri.get_fn_confidence_interval(
-            modelFn, returnFnVal=True,
+            model_fn, return_fn_val=True,
             verbosity=verbosity)
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
     else:
-        return _make_reportable_qty_or_dict(modelFn.evaluate(modelFn.base_model))
+        return _make_reportable_qty_or_dict(model_fn.evaluate(model_fn.base_model))
 
 
-def spam_dotprods(rhoVecs, povms):
+def spam_dotprods(rho_vecs, povms):
     """SPAM dot products (concatenates POVMS)"""
     nEVecs = sum(len(povm) for povm in povms)
-    ret = _np.empty((len(rhoVecs), nEVecs), 'd')
-    for i, rhoVec in enumerate(rhoVecs):
+    ret = _np.empty((len(rho_vecs), nEVecs), 'd')
+    for i, rhoVec in enumerate(rho_vecs):
         j = 0
         for povm in povms:
             for EVec in povm.values():
@@ -106,34 +106,34 @@ def spam_dotprods(rhoVecs, povms):
 Spam_dotprods = _modf.spamfn_factory(spam_dotprods)  # init args == (model)
 
 
-def choi_matrix(gate, mxBasis):
+def choi_matrix(gate, mx_basis):
     """Choi matrix"""
-    return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    return _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
 
 
-Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, opLabel)
+Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, op_label)
 
 
-def choi_evals(gate, mxBasis):
+def choi_evals(gate, mx_basis):
     """Choi matrix eigenvalues"""
-    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
 
 
-Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, opLabel)
+Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, op_label)
 
 
-def choi_trace(gate, mxBasis):
+def choi_trace(gate, mx_basis):
     """Trace of the Choi matrix"""
-    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
     return _np.trace(choi)
 
 
-Choi_trace = _modf.opfn_factory(choi_trace)  # init args == (model, opLabel)
+Choi_trace = _modf.opfn_factory(choi_trace)  # init args == (model, op_label)
 
 
-class Gate_eigenvalues(_modf.ModelFunction):
+class GateEigenvalues(_modf.ModelFunction):
     """Gate eigenvalues"""
 
     def __init__(self, model, oplabel):
@@ -166,7 +166,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
-class Circuit_eigenvalues(_modf.ModelFunction):
+class CircuitEigenvalues(_modf.ModelFunction):
     """Circuit eigenvalues"""
 
     def __init__(self, model, circuit):
@@ -204,79 +204,79 @@ class Circuit_eigenvalues(_modf.ModelFunction):
 #def circuit_eigenvalues(model, circuit):
 #    return _np.array(sorted(_np.linalg.eigvals(model.product(circuit)),
 #                            key=lambda ev: abs(ev), reverse=True))
-#Circuit_eigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
+#CircuitEigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
 ## init args == (model, circuit)
 
 
-def rel_circuit_eigenvalues(modelA, modelB, circuit):
+def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """Eigenvalues of dot(productB(circuit)^-1, productA(circuit))"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
     rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op)
 
 
 Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_fro_diff(modelA, modelB, circuit):
+def circuit_fro_diff(model_a, model_b, circuit):
     """ Frobenius distance btwn productA(circuit) and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return fro_diff(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return fro_diff(A, B, model_b.basis)
 
 
 Circuit_fro_diff = _modf.modelfn_factory(circuit_fro_diff)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_entanglement_infidelity(model_a, model_b, circuit):
     """ Entanglement infidelity btwn productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return entanglement_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return entanglement_infidelity(A, B, model_b.basis)
 
 
 Circuit_entanglement_infidelity = _modf.modelfn_factory(circuit_entanglement_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_avg_gate_infidelity(model_a, model_b, circuit):
     """ Average gate infidelity between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return avg_gate_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return avg_gate_infidelity(A, B, model_b.basis)
 
 
 Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_jt_diff(modelA, modelB, circuit):
+def circuit_jt_diff(model_a, model_b, circuit):
     """ Jamiolkowski trace distance between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return jt_diff(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return jt_diff(A, B, model_b.basis)
 
 
 Circuit_jt_diff = _modf.modelfn_factory(circuit_jt_diff)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 if _CVXPY_AVAILABLE:
 
-    class Circuit_half_diamond_norm(_modf.ModelFunction):
+    class CircuitHalfDiamondNorm(_modf.ModelFunction):
         """ 1/2 diamond norm of difference between productA(circuit)
             and productB(circuit)"""
 
-        def __init__(self, modelA, modelB, circuit):
+        def __init__(self, model_a, model_b, circuit):
             self.circuit = circuit
-            self.B = modelB.product(circuit)
-            self.d = int(round(_np.sqrt(modelA.dim)))
-            _modf.ModelFunction.__init__(self, modelA, ["all"])
+            self.B = model_b.product(circuit)
+            self.d = int(round(_np.sqrt(model_a.dim)))
+            _modf.ModelFunction.__init__(self, model_a, ["all"])
 
         def evaluate(self, model):
             """Evaluate this function at `model`"""
@@ -295,157 +295,157 @@ if _CVXPY_AVAILABLE:
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
 
-    #def circuit_half_diamond_norm(modelA, modelB, circuit):
-    #    A = modelA.product(circuit) # "gate"
-    #    B = modelB.product(circuit) # "target gate"
-    #    return half_diamond_norm(A, B, modelB.basis)
-    #Circuit_half_diamond_norm = _modf.modelfn_factory(circuit_half_diamond_norm)
-    #  # init args == (modelA, modelB, circuit)
+    #def circuit_half_diamond_norm(model_a, model_b, circuit):
+    #    A = model_a.product(circuit) # "gate"
+    #    B = model_b.product(circuit) # "target gate"
+    #    return half_diamond_norm(A, B, model_b.basis)
+    #CircuitHalfDiamondNorm = _modf.modelfn_factory(circuit_half_diamond_norm)
+    #  # init args == (model_a, model_b, circuit)
 
 else:
     circuit_half_diamond_norm = None
-    Circuit_half_diamond_norm = _nullFn
+    CircuitHalfDiamondNorm = _null_fn
 
 
-def circuit_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
     """ Nonunitary entanglement infidelity between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return nonunitary_entanglement_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return nonunitary_entanglement_infidelity(A, B, model_b.basis)
 
 
 Circuit_nonunitary_entanglement_infidelity = _modf.modelfn_factory(circuit_nonunitary_entanglement_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
     """ Nonunitary average gate infidelity between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return nonunitary_avg_gate_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return nonunitary_avg_gate_infidelity(A, B, model_b.basis)
 
 
 Circuit_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(circuit_nonunitary_avg_gate_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_entanglement_infidelity(model_a, model_b, circuit):
     """ Eigenvalue entanglement infidelity between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_entanglement_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_entanglement_infidelity(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_entanglement_infidelity = _modf.modelfn_factory(circuit_eigenvalue_entanglement_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_avg_gate_infidelity(model_a, model_b, circuit):
     """ Eigenvalue average gate infidelity between productA(circuit)
         and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_avg_gate_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_avg_gate_infidelity(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_avg_gate_infidelity = _modf.modelfn_factory(circuit_eigenvalue_avg_gate_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
     """ Eigenvalue nonunitary entanglement infidelity between
         productA(circuit) and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_nonunitary_entanglement_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_nonunitary_entanglement_infidelity(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_nonunitary_entanglement_infidelity = _modf.modelfn_factory(
     circuit_eigenvalue_nonunitary_entanglement_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
     """ Eigenvalue nonunitary average gate infidelity between
         productA(circuit) and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_nonunitary_avg_gate_infidelity(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_nonunitary_avg_gate_infidelity(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(
     circuit_eigenvalue_nonunitary_avg_gate_infidelity)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_diamondnorm(modelA, modelB, circuit):
+def circuit_eigenvalue_diamondnorm(model_a, model_b, circuit):
     """ Eigenvalue diamond distance between
         productA(circuit) and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_diamondnorm(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_diamondnorm(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_diamondnorm)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_diamondnorm(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_diamondnorm(model_a, model_b, circuit):
     """ Eigenvalue nonunitary diamond distance between
         productA(circuit) and productB(circuit)"""
-    A = modelA.product(circuit)  # "gate"
-    B = modelB.product(circuit)  # "target gate"
-    return eigenvalue_nonunitary_diamondnorm(A, B, modelB.basis)
+    A = model_a.product(circuit)  # "gate"
+    B = model_b.product(circuit)  # "target gate"
+    return eigenvalue_nonunitary_diamondnorm(A, B, model_b.basis)
 
 
 Circuit_eigenvalue_nonunitary_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_nonunitary_diamondnorm)
-# init args == (modelA, modelB, circuit)
+# init args == (model_a, model_b, circuit)
 
 
-def povm_entanglement_infidelity(modelA, modelB, povmlbl):
+def povm_entanglement_infidelity(model_a, model_b, povmlbl):
     """
-    POVM entanglement infidelity between `modelA` and `modelB`, equal to
+    POVM entanglement infidelity between `model_a` and `model_b`, equal to
     `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
     """
-    return 1.0 - _tools.povm_fidelity(modelA, modelB, povmlbl)
+    return 1.0 - _tools.povm_fidelity(model_a, model_b, povmlbl)
 
 
 POVM_entanglement_infidelity = _modf.povmfn_factory(povm_entanglement_infidelity)
-# init args == (model1, modelB, povmlbl)
+# init args == (model1, model_b, povmlbl)
 
 
-def povm_jt_diff(modelA, modelB, povmlbl):
+def povm_jt_diff(model_a, model_b, povmlbl):
     """
-    POVM Jamiolkowski trace distance between `modelA` and `modelB`, equal to
+    POVM Jamiolkowski trace distance between `model_a` and `model_b`, equal to
     `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
     """
-    return _tools.povm_jtracedist(modelA, modelB, povmlbl)
+    return _tools.povm_jtracedist(model_a, model_b, povmlbl)
 
 
 POVM_jt_diff = _modf.povmfn_factory(povm_jt_diff)
-# init args == (model1, modelB, povmlbl)
+# init args == (model1, model_b, povmlbl)
 
 if _CVXPY_AVAILABLE:
 
-    def povm_half_diamond_norm(modelA, modelB, povmlbl):
+    def povm_half_diamond_norm(model_a, model_b, povmlbl):
         """
-        Half the POVM diamond distance between `modelA` and `modelB`, equal
+        Half the POVM diamond distance between `model_a` and `model_b`, equal
         to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
         of the POVM from the classical space of k-outcomes to the space of
         (diagonal) k by k density matrices.
         """
-        return 0.5 * _tools.povm_diamonddist(modelA, modelB, povmlbl)
+        return 0.5 * _tools.povm_diamonddist(model_a, model_b, povmlbl)
     POVM_half_diamond_norm = _modf.povmfn_factory(povm_half_diamond_norm)
 else:
     povm_half_diamond_norm = None
-    POVM_half_diamond_norm = _nullFn
+    POVM_half_diamond_norm = _null_fn
 
 
 def decomposition(gate):
@@ -465,47 +465,47 @@ def decomposition(gate):
         return _ReportableQty({})
 
 
-def upper_bound_fidelity(gate, mxBasis):
+def upper_bound_fidelity(gate, mx_basis):
     """ Upper bound on entanglement fidelity """
     return _tools.fidelity_upper_bound(gate)[0]
 
 
 Upper_bound_fidelity = _modf.opfn_factory(upper_bound_fidelity)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
-def closest_ujmx(gate, mxBasis):
+def closest_ujmx(gate, mx_basis):
     """ Jamiolkowski state of closest unitary to `gate` """
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
-    return _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
+    return _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
 
 
 Closest_ujmx = _modf.opfn_factory(closest_ujmx)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
-def maximum_fidelity(gate, mxBasis):
+def maximum_fidelity(gate, mx_basis):
     """ Fidelity between `gate` and its closest unitary"""
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
-    closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
-    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
     return _tools.fidelity(closestUJMx, choi)
 
 
 Maximum_fidelity = _modf.opfn_factory(maximum_fidelity)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
-def maximum_trace_dist(gate, mxBasis):
+def maximum_trace_dist(gate, mx_basis):
     """ Jamiolkowski trace distance between `gate` and its closest unitary"""
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
-    #closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
-    _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
+    #closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     return _tools.jtracedist(gate, closestUOpMx)
 
 
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
-# init args == (model, opLabel)
+# init args == (model, op_label)
 
 
 def angles_btwn_rotn_axes(model):
@@ -548,36 +548,36 @@ Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 # init args == (model)
 
 
-def entanglement_fidelity(A, B, mxBasis):
-    """Entanglement fidelity between A and B"""
-    return _tools.entanglement_fidelity(A, B, mxBasis)
+def entanglement_fidelity(a, b, mx_basis):
+    """Entanglement fidelity between a and b"""
+    return _tools.entanglement_fidelity(a, b, mx_basis)
 
 
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def entanglement_infidelity(A, B, mxBasis):
-    """Entanglement infidelity between A and B"""
-    return 1 - _tools.entanglement_fidelity(A, B, mxBasis)
+def entanglement_infidelity(a, b, mx_basis):
+    """Entanglement infidelity between a and b"""
+    return 1 - _tools.entanglement_fidelity(a, b, mx_basis)
 
 
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def closest_unitary_fidelity(A, B, mxBasis):  # assume vary model1, model2 fixed
-    """Entanglement infidelity between closest unitaries to A and B"""
-    decomp1 = _tools.decompose_gate_matrix(A)
-    decomp2 = _tools.decompose_gate_matrix(B)
+def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
+    """Entanglement infidelity between closest unitaries to a and b"""
+    decomp1 = _tools.decompose_gate_matrix(a)
+    decomp2 = _tools.decompose_gate_matrix(b)
 
     if decomp1['isUnitary']:
-        closestUGateMx1 = A
-    else: closestUGateMx1 = _alg.find_closest_unitary_opmx(A)
+        closestUGateMx1 = a
+    else: closestUGateMx1 = _alg.find_closest_unitary_opmx(a)
 
     if decomp2['isUnitary']:
-        closestUGateMx2 = B
-    else: closestUGateMx2 = _alg.find_closest_unitary_opmx(A)
+        closestUGateMx2 = b
+    else: closestUGateMx2 = _alg.find_closest_unitary_opmx(a)
 
     closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
@@ -585,41 +585,41 @@ def closest_unitary_fidelity(A, B, mxBasis):  # assume vary model1, model2 fixed
 
 
 Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def fro_diff(A, B, mxBasis):  # assume vary model1, model2 fixed
-    """ Frobenius distance between A and B """
-    return _tools.frobeniusdist(A, B)
+def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+    """ Frobenius distance between a and b """
+    return _tools.frobeniusdist(a, b)
 
 
 Fro_diff = _modf.opsfn_factory(fro_diff)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def jt_diff(A, B, mxBasis):  # assume vary model1, model2 fixed
-    """ Jamiolkowski trace distance between A and B"""
-    return _tools.jtracedist(A, B, mxBasis)
+def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+    """ Jamiolkowski trace distance between a and b"""
+    return _tools.jtracedist(a, b, mx_basis)
 
 
 Jt_diff = _modf.opsfn_factory(jt_diff)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
 if _CVXPY_AVAILABLE:
 
-    class Half_diamond_norm(_modf.ModelFunction):
-        """Half the diamond distance bewteen `modelA.operations[opLabel]` and
-           `modelB.operations[opLabel]` """
+    class HalfDiamondNorm(_modf.ModelFunction):
+        """Half the diamond distance bewteen `model_a.operations[op_label]` and
+           `model_b.operations[op_label]` """
 
-        def __init__(self, modelA, modelB, oplabel):
+        def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = modelB.operations[oplabel].todense()
-            self.d = int(round(_np.sqrt(modelA.dim)))
-            _modf.ModelFunction.__init__(self, modelA, [("gate", oplabel)])
+            self.B = model_b.operations[oplabel].todense()
+            self.d = int(round(_np.sqrt(model_a.dim)))
+            _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
         def evaluate(self, model):
-            """Evaluate at `modelA = model` """
+            """Evaluate at `model_a = model` """
             gl = self.oplabel
             dm, W = _tools.diamonddist(model.operations[gl].todense(),
                                        self.B, model.basis, return_x=True)
@@ -635,79 +635,79 @@ if _CVXPY_AVAILABLE:
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
 
-    def half_diamond_norm(A, B, mxBasis):
-        return 0.5 * _tools.diamonddist(A, B, mxBasis)
-    #Half_diamond_norm = _modf.opsfn_factory(half_diamond_norm)
-    ## init args == (model1, model2, opLabel)
+    def half_diamond_norm(a, b, mx_basis):
+        return 0.5 * _tools.diamonddist(a, b, mx_basis)
+    #HalfDiamondNorm = _modf.opsfn_factory(half_diamond_norm)
+    ## init args == (model1, model2, op_label)
 
 else:
     half_diamond_norm = None
-    Half_diamond_norm = _nullFn
+    HalfDiamondNorm = _null_fn
 
 
-def std_unitarity(A, B, mxBasis):
-    """ A gauge-invariant quantity that behaves like the unitarity """
-    Lambda = _np.dot(A, _np.linalg.inv(B))
-    return _tools.unitarity(Lambda, mxBasis)
+def std_unitarity(a, b, mx_basis):
+    """ a gauge-invariant quantity that behaves like the unitarity """
+    Lambda = _np.dot(a, _np.linalg.inv(b))
+    return _tools.unitarity(Lambda, mx_basis)
 
 
-def eigenvalue_unitarity(A, B):
-    """ A gauge-invariant quantity that behaves like the unitarity """
-    Lambda = _np.dot(A, _np.linalg.inv(B))
+def eigenvalue_unitarity(a, b):
+    """ a gauge-invariant quantity that behaves like the unitarity """
+    Lambda = _np.dot(a, _np.linalg.inv(b))
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
     return float(_np.real(_np.vdot(lmb, lmb)) - 1.0) / (d2 - 1.0)
 
 
-def nonunitary_entanglement_infidelity(A, B, mxBasis):
-    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
-    if isinstance(mxBasis, _DirectSumBasis): return -1  # deal w/block-dims later
-    d2 = A.shape[0]; U = std_unitarity(A, B, mxBasis)
+def nonunitary_entanglement_infidelity(a, b, mx_basis):
+    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of a*b^{-1} """
+    if isinstance(mx_basis, _DirectSumBasis): return -1  # deal w/block-dims later
+    d2 = a.shape[0]; U = std_unitarity(a, b, mx_basis)
     return (d2 - 1.0) / d2 * (1.0 - _np.sqrt(U))
 
 
 Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def nonunitary_avg_gate_infidelity(A, B, mxBasis):
-    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
-    if isinstance(mxBasis, _DirectSumBasis): return -1  # deal w/block-dims later
-    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
-    U = std_unitarity(A, B, mxBasis)
+def nonunitary_avg_gate_infidelity(a, b, mx_basis):
+    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of a*b^{-1} """
+    if isinstance(mx_basis, _DirectSumBasis): return -1  # deal w/block-dims later
+    d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = std_unitarity(a, b, mx_basis)
     return (d - 1.0) / d * (1.0 - _np.sqrt(U))
 
 
 Nonunitary_avg_gate_infidelity = _modf.opsfn_factory(nonunitary_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_entanglement_infidelity(A, B, mxBasis):
-    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
-    d2 = A.shape[0]; U = eigenvalue_unitarity(A, B)
+def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis):
+    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1} """
+    d2 = a.shape[0]; U = eigenvalue_unitarity(a, b)
     return (d2 - 1.0) / d2 * (1.0 - _np.sqrt(U))
 
 
 Eigenvalue_nonunitary_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_avg_gate_infidelity(A, B, mxBasis):
-    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
-    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
-    U = eigenvalue_unitarity(A, B)
+def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis):
+    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1} """
+    d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = eigenvalue_unitarity(a, b)
     return (d - 1.0) / d * (1.0 - _np.sqrt(U))
 
 
 Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_entanglement_infidelity(A, B, mxBasis):
-    """ Eigenvalue entanglement infidelity between A and B """
-    d2 = A.shape[0]
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
+def eigenvalue_entanglement_infidelity(a, b, mx_basis):
+    """ Eigenvalue entanglement infidelity between a and b """
+    d2 = a.shape[0]
+    evA = _np.linalg.eigvals(a)
+    evB = _np.linalg.eigvals(b)
     _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                       return_pairs=True)  # just to get pairing
     mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
@@ -715,14 +715,14 @@ def eigenvalue_entanglement_infidelity(A, B, mxBasis):
 
 
 Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
-    """ Eigenvalue average gate infidelity between A and B """
-    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
+def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
+    """ Eigenvalue average gate infidelity between a and b """
+    d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
+    evA = _np.linalg.eigvals(a)
+    evB = _np.linalg.eigvals(b)
     _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                       return_pairs=True)  # just to get pairing
     mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
@@ -730,48 +730,48 @@ def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
 
 
 Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_diamondnorm(A, B, mxBasis):
-    """ Eigenvalue diamond distance between A and B """
-    d2 = A.shape[0]
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
+def eigenvalue_diamondnorm(a, b, mx_basis):
+    """ Eigenvalue diamond distance between a and b """
+    d2 = a.shape[0]
+    evA = _np.linalg.eigvals(a)
+    evB = _np.linalg.eigvals(b)
     return (d2 - 1.0) / d2 * _np.max(_tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                                             return_pairs=False))
 
 
 Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_diamondnorm(A, B, mxBasis):
-    """ Eigenvalue nonunitary diamond distance between A and B """
-    d2 = A.shape[0]
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
+def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
+    """ Eigenvalue nonunitary diamond distance between a and b """
+    d2 = a.shape[0]
+    evA = _np.linalg.eigvals(a)
+    evB = _np.linalg.eigvals(b)
     return (d2 - 1.0) / d2 * _np.max(_tools.minweight_match(evA, evB, lambda x, y: abs(abs(x) - abs(y)),
                                                             return_pairs=False))
 
 
 Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_diamondnorm)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def avg_gate_infidelity(A, B, mxBasis):
-    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
-    return _tools.average_gate_infidelity(A, B, mxBasis)
+def avg_gate_infidelity(a, b, mx_basis):
+    """ Returns the average gate infidelity between a and b, where b is the "target" operation."""
+    return _tools.average_gate_infidelity(a, b, mx_basis)
 
 
 Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def model_model_angles_btwn_axes(A, B, mxBasis):  # Note: default 'gm' basis
-    """ Angle between the rotation axes of A and B (1-qubit gates)"""
-    decomp = _tools.decompose_gate_matrix(A)
-    decomp2 = _tools.decompose_gate_matrix(B)
+def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
+    """ Angle between the rotation axes of a and b (1-qubit gates)"""
+    decomp = _tools.decompose_gate_matrix(a)
+    decomp2 = _tools.decompose_gate_matrix(b)
     axisOfRotn = decomp.get('axis of rotation', None)
     rotnAngle = decomp.get('pi rotations', 'X')
     axisOfRotn2 = decomp2.get('axis of rotation', None)
@@ -792,61 +792,61 @@ def model_model_angles_btwn_axes(A, B, mxBasis):  # Note: default 'gm' basis
 
 
 Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def rel_eigvals(A, B, mxBasis):
-    """ Eigenvalues of B^{-1} * A"""
-    target_op_inv = _np.linalg.inv(B)
-    rel_op = _np.dot(target_op_inv, A)
+def rel_eigvals(a, b, mx_basis):
+    """ Eigenvalues of b^{-1} * a"""
+    target_op_inv = _np.linalg.inv(b)
+    rel_op = _np.dot(target_op_inv, a)
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
 Rel_eigvals = _modf.opsfn_factory(rel_eigvals)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def rel_logTiG_eigvals(A, B, mxBasis):
-    """ Eigenvalues of log(B^{-1} * A)"""
-    rel_op = _tools.error_generator(A, B, mxBasis, "logTiG")
+def rel_log_tig_eigvals(a, b, mx_basis):
+    """ Eigenvalues of log(b^{-1} * a)"""
+    rel_op = _tools.error_generator(a, b, mx_basis, "logTiG")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logTiG_eigvals = _modf.opsfn_factory(rel_logTiG_eigvals)
-# init args == (model1, model2, opLabel)
+Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigvals)
+# init args == (model1, model2, op_label)
 
 
-def rel_logGTi_eigvals(A, B, mxBasis):
-    """ Eigenvalues of log(A * B^{-1})"""
-    rel_op = _tools.error_generator(A, B, mxBasis, "logGTi")
+def rel_log_gti_eigvals(a, b, mx_basis):
+    """ Eigenvalues of log(a * b^{-1})"""
+    rel_op = _tools.error_generator(a, b, mx_basis, "logGTi")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logGTi_eigvals = _modf.opsfn_factory(rel_logGTi_eigvals)
-# init args == (model1, model2, opLabel)
+Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigvals)
+# init args == (model1, model2, op_label)
 
 
-def rel_logGmlogT_eigvals(A, B, mxBasis):
-    """ Eigenvalues of log(A) - log(B)"""
-    rel_op = _tools.error_generator(A, B, mxBasis, "logG-logT")
+def rel_log_diff_eigvals(a, b, mx_basis):
+    """ Eigenvalues of log(a) - log(b)"""
+    rel_op = _tools.error_generator(a, b, mx_basis, "logG-logT")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_logGmlogT_eigvals)
-# init args == (model1, model2, opLabel)
+Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigvals)
+# init args == (model1, model2, op_label)
 
 
-def rel_gate_eigenvalues(A, B, mxBasis):  # DUPLICATE of rel_eigvals TODO
-    """ Eigenvalues of B^{-1} * A """
-    rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
+def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigvals TODO
+    """ Eigenvalues of b^{-1} * a """
+    rel_op = _np.dot(_np.linalg.inv(b), a)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
 Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
-# init args == (model1, model2, opLabel)
+# init args == (model1, model2, op_label)
 
 
-def errgen_and_projections(errgen, mxBasis):
+def errgen_and_projections(errgen, mx_basis):
     """
     Project `errgen` on all of the standard sets of error generators.
 
@@ -862,7 +862,7 @@ def errgen_and_projections(errgen, mxBasis):
     ret['error generator'] = errgen
     proj, scale = \
         _tools.std_errgen_projections(
-            errgen, "hamiltonian", mxBasis, mxBasis, return_scale_fctr=True)
+            errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
     ret['hamiltonian projections'] = proj
     ret['hamiltonian projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -870,7 +870,7 @@ def errgen_and_projections(errgen, mxBasis):
 
     proj, scale = \
         _tools.std_errgen_projections(
-            errgen, "stochastic", mxBasis, mxBasis, return_scale_fctr=True)
+            errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
     ret['stochastic projections'] = proj
     ret['stochastic projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -878,7 +878,7 @@ def errgen_and_projections(errgen, mxBasis):
 
     proj, scale = \
         _tools.std_errgen_projections(
-            errgen, "affine", mxBasis, mxBasis, return_scale_fctr=True)
+            errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
     ret['affine projections'] = proj
     ret['affine projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -886,49 +886,49 @@ def errgen_and_projections(errgen, mxBasis):
     return ret
 
 
-def logTiG_and_projections(A, B, mxBasis):
+def log_tig_and_projections(a, b, mx_basis):
     """
-    Projections of `log(B^{-1}*A)`.  Returns a dictionary of quantities with
+    Projections of `log(b^{-1}*a)`.  Returns a dictionary of quantities with
     keys 'error generator', '*X* projections', and '*X* projection power',
     where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
-    errgen = _tools.error_generator(A, B, mxBasis, "logTiG")
-    return errgen_and_projections(errgen, mxBasis)
+    errgen = _tools.error_generator(a, b, mx_basis, "logTiG")
+    return errgen_and_projections(errgen, mx_basis)
 
 
-LogTiG_and_projections = _modf.opsfn_factory(logTiG_and_projections)
-# init args == (model1, model2, opLabel)
+LogTiG_and_projections = _modf.opsfn_factory(log_tig_and_projections)
+# init args == (model1, model2, op_label)
 
 
-def logGTi_and_projections(A, B, mxBasis):
+def log_gti_and_projections(a, b, mx_basis):
     """
-    Projections of `log(A*B^{-1})`.  Returns a dictionary of quantities with
+    Projections of `log(a*b^{-1})`.  Returns a dictionary of quantities with
     keys 'error generator', '*X* projections', and '*X* projection power',
     where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
-    errgen = _tools.error_generator(A, B, mxBasis, "logGTi")
-    return errgen_and_projections(errgen, mxBasis)
+    errgen = _tools.error_generator(a, b, mx_basis, "logGTi")
+    return errgen_and_projections(errgen, mx_basis)
 
 
-LogGTi_and_projections = _modf.opsfn_factory(logGTi_and_projections)
-# init args == (model1, model2, opLabel)
+LogGTi_and_projections = _modf.opsfn_factory(log_gti_and_projections)
+# init args == (model1, model2, op_label)
 
 
-def logGmlogT_and_projections(A, B, mxBasis):
+def log_diff_and_projections(a, b, mx_basis):
     """
-    Projections of `log(A)-log(B)`.  Returns a dictionary of quantities with
+    Projections of `log(a)-log(b)`.  Returns a dictionary of quantities with
     keys 'error generator', '*X* projections', and '*X* projection power',
     where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
-    errgen = _tools.error_generator(A, B, mxBasis, "logG-logT")
-    return errgen_and_projections(errgen, mxBasis)
+    errgen = _tools.error_generator(a, b, mx_basis, "logG-logT")
+    return errgen_and_projections(errgen, mx_basis)
 
 
-LogGmlogT_and_projections = _modf.opsfn_factory(logGmlogT_and_projections)
-# init args == (model1, model2, opLabel)
+LogGmlogT_and_projections = _modf.opsfn_factory(log_diff_and_projections)
+# init args == (model1, model2, op_label)
 
 
-def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
+def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_strs):
     """
     Projections of `log(A*B^{-1})` using a gauge-robust technique.
     Returns a dictionary of quantities with keys '*G* error generator',
@@ -937,22 +937,22 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     'affine'.
     """
     ret = {}
-    mxBasis = modelB.basis  # target model is more likely to have a valid basis
-    Id = _np.identity(modelA.dim, 'd')
-    opLabels = [gl for gl, gate in modelB.operations.items() if not _np.allclose(gate, Id)]
+    mxBasis = model_b.basis  # target model is more likely to have a valid basis
+    Id = _np.identity(model_a.dim, 'd')
+    opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
     nOperations = len(opLabels)
 
     error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}
     error_labels = []
     for ptype in ("hamiltonian", "stochastic", "affine"):
-        lindbladMxs = _tools.std_error_generators(modelA.dim, ptype,
+        lindbladMxs = _tools.std_error_generators(model_a.dim, ptype,
                                                   mxBasis)
-        lindbladMxBasis = _Basis.cast(mxBasis, modelA.dim)
+        lindbladMxBasis = _Basis.cast(mxBasis, model_a.dim)
 
         lindbladMxs = lindbladMxs[1:]  # skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
 
-        scaleFctr = _tools.std_scale_factor(modelA.dim, ptype)
+        scaleFctr = _tools.std_scale_factor(model_a.dim, ptype)
         #if ptype == "hamiltonian": scaleFctr *= 2.0 #HACK (DEAL LATER)
         #if ptype == "affine": scaleFctr *= 0.5 #HACK
         ptype_counts[ptype] = len(lindbladMxs)
@@ -979,24 +979,24 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
                 errgen, ptype, mxBasis, mxBasis)[1:])  # skip [0] == Identity
         return _np.concatenate(proj)
 
-    def firstOrderNoise(opstr, errSupOp, glWithErr):
-        noise = _np.zeros((modelB.dim, modelB.dim), 'd')
+    def first_order_noise(opstr, err_sup_op, gl_with_err):
+        noise = _np.zeros((model_b.dim, model_b.dim), 'd')
         for n, gl in enumerate(opstr):
-            if gl == glWithErr:
-                noise += _np.dot(modelB.product(opstr[n + 1:]),
-                                 _np.dot(errSupOp, modelB.product(opstr[:n + 1])))
+            if gl == gl_with_err:
+                noise += _np.dot(model_b.product(opstr[n + 1:]),
+                                 _np.dot(err_sup_op, model_b.product(opstr[:n + 1])))
         #DEBUG
-        #print("first order noise (%s,%s) Choi superop : " % (str(opstr),glWithErr))
+        #print("first order noise (%s,%s) Choi superop : " % (str(opstr),gl_with_err))
         #_tools.print_mx( _tools.jamiolkowski_iso(noise, mxBasis, mxBasis) ,width=4,prec=1)
 
         return noise  # _tools.jamiolkowski_iso(noise, mxBasis, mxBasis)
 
-    def errorGeneratorJacobian(opstr):
+    def error_generator_jacobian(opstr):
         jac = _np.empty((nSuperOps, nSuperOps * nOperations), 'complex')  # should be real, but we'll check
 
         for i, gl in enumerate(opLabels):
             for k, errOnGate in enumerate(error_superops):
-                noise = firstOrderNoise(opstr, errOnGate, gl)
+                noise = first_order_noise(opstr, errOnGate, gl)
                 jac[:, i * nSuperOps + k] = [_np.vdot(errOut.flatten(), noise.flatten()) for errOut in error_superops]
 
                 #DEBUG CHECK
@@ -1010,14 +1010,14 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
         return jac.real
 
     runningJac = None; runningY = None
-    for s in syntheticIdleStrs:
-        Sa = modelA.product(s)
-        Sb = modelB.product(s)
-        assert(_np.linalg.norm(Sb - _np.identity(modelB.dim, 'd')) < 1e-6), \
+    for s in synthetic_idle_strs:
+        Sa = model_a.product(s)
+        Sb = model_b.product(s)
+        assert(_np.linalg.norm(Sb - _np.identity(model_b.dim, 'd')) < 1e-6), \
             "Synthetic idle %s is not an idle!!" % str(s)
         SIerrgen = _tools.error_generator(Sa, Sb, mxBasis, "logGTi")
         SIproj = get_projection_vec(SIerrgen)
-        jacSI = errorGeneratorJacobian(s)
+        jacSI = error_generator_jacobian(s)
         #print("DB jacobian for %s = \n" % str(s)); _tools.print_mx(jacSI, width=4, prec=1) #DEBUG
         if runningJac is None:
             runningJac = jacSI
@@ -1056,13 +1056,13 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     return ret
 
 
-Robust_LogGTi_and_projections = _modf.modelfn_factory(robust_logGTi_and_projections)
-# init args == (modelA, modelB, syntheticIdleStrs)
+Robust_LogGTi_and_projections = _modf.modelfn_factory(robust_log_gti_and_projections)
+# init args == (model_a, model_b, synthetic_idle_strs)
 
 
-def general_decomposition(modelA, modelB):
+def general_decomposition(model_a, model_b):
     """
-    Decomposition of gates in `modelA` using those in `modelB` as their
+    Decomposition of gates in `model_a` using those in `model_b` as their
     targets.  This function uses a generalized decomposition algorithm that
     can gates acting on a Hilbert space of any dimension.
 
@@ -1072,12 +1072,12 @@ def general_decomposition(modelA, modelB):
     """
     # B is target model usually but must be "gatsetB" b/c of decorator coding...
     decomp = {}
-    opLabels = list(modelA.operations.keys())  # operation labels
-    mxBasis = modelB.basis  # B is usually the target which has a well-defined basis
+    opLabels = list(model_a.operations.keys())  # operation labels
+    mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = modelA.operations[gl].todense()
-        targetOp = modelB.operations[gl].todense()
+        gate = model_a.operations[gl].todense()
+        targetOp = model_b.operations[gl].todense()
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -1130,38 +1130,38 @@ def general_decomposition(modelA, modelB):
 
 
 General_decomposition = _modf.modelfn_factory(general_decomposition)
-# init args == (modelA, modelB)
+# init args == (model_a, model_b)
 
 
-def average_gateset_infidelity(modelA, modelB):
+def average_gateset_infidelity(model_a, model_b):
     """ Average model infidelity """
-    # B is target model usually but must be "modelB" b/c of decorator coding...
+    # B is target model usually but must be "model_b" b/c of decorator coding...
     #TEMPORARILY disabled b/c RB analysis is broken
     #from ..extras.rb import theory as _rbtheory
-    return -1.0  # _rbtheory.gateset_infidelity(modelA, modelB)
+    return -1.0  # _rbtheory.gateset_infidelity(model_a, model_b)
 
 
 Average_gateset_infidelity = _modf.modelfn_factory(average_gateset_infidelity)
-# init args == (modelA, modelB)
+# init args == (model_a, model_b)
 
 
-def predicted_rb_number(modelA, modelB):
+def predicted_rb_number(model_a, model_b):
     """
     Prediction of RB number based on estimated (A) and target (B) models
     """
     #TEMPORARILY disabled b/c RB analysis is broken
     #from ..extras.rb import theory as _rbtheory
-    return -1.0  # _rbtheory.predicted_RB_number(modelA, modelB)
+    return -1.0  # _rbtheory.predicted_rb_number(model_a, model_b)
 
 
 Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
-# init args == (modelA, modelB)
+# init args == (model_a, model_b)
 
 
-def vec_fidelity(A, B, mxBasis):
-    """ State fidelity between SPAM vectors A and B """
-    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
-    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+def vec_fidelity(a, b, mx_basis):
+    """ State fidelity between SPAM vectors a and b """
+    rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
+    rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return _tools.fidelity(rhoMx1, rhoMx2)
 
 
@@ -1169,10 +1169,10 @@ Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 # init args == (model1, model2, label, typ)
 
 
-def vec_infidelity(A, B, mxBasis):
-    """ State infidelity fidelity between SPAM vectors A and B """
-    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
-    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+def vec_infidelity(a, b, mx_basis):
+    """ State infidelity fidelity between SPAM vectors a and b """
+    rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
+    rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return 1 - _tools.fidelity(rhoMx1, rhoMx2)
 
 
@@ -1180,10 +1180,10 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 # init args == (model1, model2, label, typ)
 
 
-def vec_tr_diff(A, B, mxBasis):  # assume vary model1, model2 fixed
-    """ Trace distance between SPAM vectors A and B """
-    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
-    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+def vec_tr_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+    """ Trace distance between SPAM vectors a and b """
+    rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
+    rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return _tools.tracedist(rhoMx1, rhoMx2)
 
 
@@ -1191,18 +1191,18 @@ Vec_tr_diff = _modf.vecsfn_factory(vec_tr_diff)
 # init args == (model1, model2, label, typ)
 
 
-def vec_as_stdmx(vec, mxBasis):
+def vec_as_stdmx(vec, mx_basis):
     """ SPAM vectors as a standard density matrix """
-    return _tools.vec_to_stdmx(vec, mxBasis)
+    return _tools.vec_to_stdmx(vec, mx_basis)
 
 
 Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 # init args == (model, label, typ)
 
 
-def vec_as_stdmx_eigenvalues(vec, mxBasis):
+def vec_as_stdmx_eigenvalues(vec, mx_basis):
     """ Eigenvalues of the density matrix corresponding to a SPAM vector """
-    mx = _tools.vec_to_stdmx(vec, mxBasis)
+    mx = _tools.vec_to_stdmx(vec, mx_basis)
     return _np.linalg.eigvals(mx)
 
 
@@ -1280,8 +1280,8 @@ def info_of_opfn_by_name(name):
         raise ValueError("Invalid name: %s" % name)
 
 
-def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
-                          confidenceRegionInfo):
+def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
+                          confidence_region_info):
     """
     Evaluates that gate-function named by the abbreviation `name`.
 
@@ -1291,16 +1291,16 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
         An appreviation for a gate-function name.  Allowed values are the
         same as those of :func:`info_of_opfn_by_name`.
 
-    model, targetModel : Model
+    model, target_model : Model
         The models to compare.  Only the element or product given by
-        `opLabelOrString` is compared using the named gate-function.
+        `op_label_or_string` is compared using the named gate-function.
 
-    opLabelOrString : str or Circuit or tuple
+    op_label_or_string : str or Circuit or tuple
         The operation label or sequence of labels to compare.  If a sequence
         of labels is given, then the "virtual gate" computed by taking the
         product of the specified gate matrices is compared.
 
-    confidenceRegionInfo : ConfidenceRegion, optional
+    confidence_region_info : ConfidenceRegion, optional
         If not None, specifies a confidence-region  used to compute error
         intervals.
 
@@ -1308,7 +1308,7 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
     -------
     ReportableQty
     """
-    gl = opLabelOrString
+    gl = op_label_or_string
     b = bool(isinstance(gl, _Lbl) or isinstance(gl, str))  # whether this is a operation label or a string
 
     if name == "inf":
@@ -1321,8 +1321,8 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
         fn = Jt_diff if b else \
             Circuit_jt_diff
     elif name == "diamond":
-        fn = Half_diamond_norm if b else \
-            Circuit_half_diamond_norm
+        fn = HalfDiamondNorm if b else \
+            CircuitHalfDiamondNorm
     elif name == "nuinf":
         fn = Nonunitary_entanglement_infidelity if b else \
             Circuit_nonunitary_entanglement_infidelity
@@ -1351,4 +1351,4 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
         fn = Fro_diff if b else \
             Circuit_fro_diff
 
-    return evaluate(fn(model, targetModel, gl), confidenceRegionInfo)
+    return evaluate(fn(model, target_model, gl), confidence_region_info)

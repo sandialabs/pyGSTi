@@ -20,12 +20,24 @@
 # F401: module imported but unused
 # F403: 'from module import *' used; unable to detect undefined names
 # F405: name may be undefined, or defined from star imports: module
-ignore=E265,E266,E402,E701,E702,E704,E722,E741,W503,W605,F401,F403,F405
+# N806: variable in function should be lowercase 
+ignore=E265,E266,E402,E701,E702,E704,E722,E741,W503,W605,F401,F403,F405,N806
 
 exclude=
     # automatically generated
     pygsti/io/parsetab_string.py
     pygsti/modelpacks/smq*.py
+    pygsti/modelpacks/legacy/std*.py
+
+#Allow legacyio to have names like 'GateString_setstate' and classes like 'dummy_GateString'
+#Also allow report sections to have figure-factory methods whose first arg is 'workspace', not 'self'
+# N801 : class name should not be mixed case
+# N802 : function name should be lowercase
+# N805 : first argument to method should be called 'self'
+per-file-ignores =
+    pygsti/io/legacyio.py:N801,N802
+    pygsti/objects/replib/slowreplib.py:N802
+    pygsti/report/section/*.py:N805
 
 # 120 characters is a more agreeable max line length for modern displays
 max-line-length=120

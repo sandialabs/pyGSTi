@@ -113,14 +113,14 @@ class TestStdInputParser(BaseTestCase):
         from pygsti.objects import Label as L
         from pygsti.objects import CircuitLabel as CL
 
-        self.assertEqual( std.parse_dataline(dataline_tests[0],expectedCounts=2), (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[1],expectedCounts=2), (['G1', 'G2', 'G3'], 'G1*G2*G3', None, [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2],expectedCounts=2), (['G1', CL('',('G2', 'G3'),None,2), 'G4'], 'G1*(G2*G3)^2*G4', None, [1.0, 100.0]))
-        self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
+        self.assertEqual( std.parse_dataline(dataline_tests[0],expected_counts=2), (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[1],expected_counts=2), (['G1', 'G2', 'G3'], 'G1*G2*G3', None, [0.798, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2],expected_counts=2), (['G1', CL('',('G2', 'G3'),None,2), 'G4'], 'G1*(G2*G3)^2*G4', None, [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expected_counts=2),
                           (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
         with self.assertRaises(ValueError):
-            std.parse_dataline("G1G2G3  1.0", expectedCounts=2) #too few cols == error
+            std.parse_dataline("G1G2G3  1.0", expected_counts=2) #too few cols == error
         with self.assertRaises(ValueError):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 

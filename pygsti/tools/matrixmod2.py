@@ -61,7 +61,7 @@ def inv_mod2(m):
     return _np.array(gaussian_elimination_mod2(c)[:, t:])
 
 
-def Axb_mod2(A, b):
+def Axb_mod2(A, b):  # noqa N803
     """
     Solves Ax = b over GF(2)
 
@@ -71,27 +71,27 @@ def Axb_mod2(A, b):
     return _np.array([gaussian_elimination_mod2(C)[:, -1]]).T
 
 
-def gaussian_elimination_mod2(A):
+def gaussian_elimination_mod2(a):
     """
-    Gaussian elimination mod2 of A.
+    Gaussian elimination mod2 of a.
 
     """
 
-    A = _np.array(A, dtype='int')
-    m, n = A.shape
+    a = _np.array(a, dtype='int')
+    m, n = a.shape
     i, j = 0, 0
 
     while (i < m) and (j < n):
-        k = A[i:m, j].argmax() + i
-        A[_np.array([i, k]), :] = A[_np.array([k, i]), :]
-        aijn = _np.array([A[i, j:]])
-        col = _np.array([A[:, j]]).T
+        k = a[i:m, j].argmax() + i
+        a[_np.array([i, k]), :] = a[_np.array([k, i]), :]
+        aijn = _np.array([a[i, j:]])
+        col = _np.array([a[:, j]]).T
         col[i] = 0
         flip = _np.dot(col, aijn)
-        A[:, j:] = _np.bitwise_xor(A[:, j:], flip)
+        a[:, j:] = _np.bitwise_xor(a[:, j:], flip)
         i += 1
         j += 1
-    return A
+    return a
 
 
 def diagonal_as_vec(m):
@@ -140,9 +140,9 @@ def diagonal_as_matrix(m):
 # Vol. 76, No. 2 (Feb., 1969), pp. 152-164
 
 
-def albert_factor(D, failcount=0):
+def albert_factor(d, failcount=0):
     """
-    Returns a matrix M such that D = M M.T for symmetric D, where D and M are
+    Returns a matrix M such that d = M M.T for symmetric d, where d and M are
     matrices over [0,1] mod 2. The algorithm mostly follows the proof in "Orthogonal Matrices
     Over Finite Fields" by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76, No. 2
     (Feb., 1969), pp. 152-164
@@ -150,12 +150,12 @@ def albert_factor(D, failcount=0):
     There is generally not a unique albert factorization, and this algorthm is randomized. It will
     general return a different factorizations from multiple calls.
     """
-    D = _np.array(D, dtype='int')
+    d = _np.array(d, dtype='int')
 
     proper = False
     while not proper:
-        N = onesify(D)
-        aa = multidotmod2([N, D, N.T])
+        N = onesify(d)
+        aa = multidotmod2([N, d, N.T])
         P = proper_permutation(aa)
         A = multidotmod2([P, aa, P.T])
         proper = check_proper_permutation(A)
@@ -211,16 +211,16 @@ def random_symmetric_invertable_matrix(n):
     return dotmod2(M, M.T)
 
 
-def onesify(A, failcount=0, maxfailcount=100):
+def onesify(a, failcount=0, maxfailcount=100):
     """
-    Returns M such that M A M.T has ones along the main diagonal
+    Returns M such that M a M.T has ones along the main diagonal
     """
     assert(failcount < maxfailcount), "The function has failed too many times! Perhaps the input is invalid."
 
     # This is probably the slowest function since it just tries things
-    t = len(A)
+    t = len(a)
     count = 0
-    test_string = _np.diag(A)
+    test_string = _np.diag(a)
 
     M = []
     while (len(M) < t) and (count < 40):
@@ -232,45 +232,45 @@ def onesify(A, failcount=0, maxfailcount=100):
                 count += 1
 
     if len(M) < t:
-        return onesify(A, failcount + 1)
+        return onesify(a, failcount + 1)
 
     M = _np.array(M, dtype='int')
 
     if _np.array_equal(dotmod2(M, inv_mod2(M)), _np.identity(t, int)):
         return _np.array(M)
     else:
-        return onesify(A, failcount + 1, maxfailcount=maxfailcount)
+        return onesify(a, failcount + 1, maxfailcount=maxfailcount)
 
 
-def permute_top(A, i):
+def permute_top(a, i):
     """
     Permutes the first row & col with the i'th row & col
 
     """
-    t = len(A)
+    t = len(a)
     P = _np.eye(t)
     P[0, 0] = 0
     P[i, i] = 0
     P[0, i] = 1
     P[i, 0] = 1
-    return multidotmod2([P, A, P]), P
+    return multidotmod2([P, a, P]), P
 
 
-def fix_top(A):
+def fix_top(a):
     """
     Takes a symmetric binary matrix with ones along the diagonal
     and returns the permutation matrix P such that the [1:t,1:t]
-    submatrix of P A P is invertible
+    submatrix of P a P is invertible
 
     """
-    if A.shape == (1, 1):
+    if a.shape == (1, 1):
         return _np.eye(1, dtype='int')
 
-    t = len(A)
+    t = len(a)
 
     found_B = False
     for ind in range(t):
-        aa, P = permute_top(A, ind)
+        aa, P = permute_top(a, ind)
         B = _np.round_(aa[1:, 1:])
 
         if detmod2(B) == 0:
@@ -285,36 +285,36 @@ def fix_top(A):
     return P
 
 
-def proper_permutation(A):
+def proper_permutation(a):
     """
     Takes a symmetric binary matrix with ones along the diagonal
     and returns the permutation matrix P such that all [n:t,n:t]
-    submatrices of P A P are invertible.
+    submatrices of P a P are invertible.
 
     """
-    t = len(A)
+    t = len(a)
     Ps = []  # permutation matrices
     for ind in range(t):
-        perm = fix_top(A[ind:, ind:])
+        perm = fix_top(a[ind:, ind:])
         zer = _np.zeros([ind, t - ind])
         full_perm = _np.array(_np.bmat([[_np.eye(ind), zer], [zer.T, perm]]))
-        A = multidotmod2([full_perm, A, full_perm.T])
+        a = multidotmod2([full_perm, a, full_perm.T])
         Ps += [full_perm]
 #     return Ps
     return multidotmod2(list(reversed(Ps)))
     #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 
-def check_proper_permutation(A):
+def check_proper_permutation(a):
     """
     Check to see if the matrix has been properly permuted
     This should be redundent to what is already built into
     'fix_top'.
 
     """
-    t = len(A)
+    t = len(a)
     for ind in range(0, t):
-        b = A[ind:, ind:]
+        b = a[ind:, ind:]
         if detmod2(b) == 0:
             return False
     return True

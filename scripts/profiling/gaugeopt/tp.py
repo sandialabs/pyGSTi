@@ -13,7 +13,7 @@ def main():
 
     with timed_block('TP penalty gauge opt'):
         gs_gaugeopt = pygsti.gaugeopt_to_target(gs, gs_target, 
-                itemWeights={'spam' : 0.0001, 'gates':1.0}, 
+                item_weights={'spam' : 0.0001, 'gates':1.0}, 
                 TPpenalty=1.0)
 
 if __name__ == '__main__':

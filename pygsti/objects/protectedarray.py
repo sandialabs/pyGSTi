@@ -19,18 +19,18 @@ class ProtectedArray(object):
     be treated as read-only.
     """
 
-    def __init__(self, input_array, indicesToProtect=None):
+    def __init__(self, input_array, indices_to_protect=None):
         self.base = input_array
 
         #Get protected indices, a specified as:
         self.indicesToProtect = []
-        if indicesToProtect is not None:
-            if not (isinstance(indicesToProtect, tuple)
-                    or isinstance(indicesToProtect, list)):
-                indicesToProtect = (indicesToProtect,)
+        if indices_to_protect is not None:
+            if not (isinstance(indices_to_protect, tuple)
+                    or isinstance(indices_to_protect, list)):
+                indices_to_protect = (indices_to_protect,)
 
-            assert(len(indicesToProtect) <= len(self.base.shape))
-            for ky, L in zip(indicesToProtect, self.base.shape):
+            assert(len(indices_to_protect) <= len(self.base.shape))
+            for ky, L in zip(indices_to_protect, self.base.shape):
                 if isinstance(ky, slice):
                     pindices = range(*ky.indices(L))
                 elif _compat.isint(ky):

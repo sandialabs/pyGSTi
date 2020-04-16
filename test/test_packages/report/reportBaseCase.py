@@ -44,16 +44,16 @@ class ReportBaseCase(BaseTestCase):
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
         if regenerate_references():
-            ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
-                                                        sampleError='binomial', seed=100)
+            ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], n_samples=1000,
+                                                        sample_error='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset")
-            ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], nSamples=1000,
-                                                         sampleError='binomial', seed=100)
+            ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], n_samples=1000,
+                                                         sample_error='binomial', seed=100)
             ds2.save(compare_files + "/reportgen2.dataset")
 
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
-        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset")
+        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
+        cls.ds2 = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, targetModel, svdTruncateTo=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, targetModel, {'gates': 1.0, 'spam': 0.0})
@@ -80,12 +80,12 @@ class ReportBaseCase(BaseTestCase):
 
         gaugeOptParams = collections.OrderedDict([
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
-                ('targetModel', targetModel),       #so can gauge-propagate CIs
+                ('target_model', targetModel),       #so can gauge-propagate CIs
                 ('cptp_penalty_factor', 0),
-                ('gatesMetric',"frobenius"),
-                ('spamMetric',"frobenius"),
-                ('itemWeights', {'gates': 1.0, 'spam': 0.001}),
-                ('returnAll', True) ])
+                ('gates_metric',"frobenius"),
+                ('spam_metric',"frobenius"),
+                ('item_weights', {'gates': 1.0, 'spam': 0.001}),
+                ('return_all', True) ])
 
         _, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl  #so can gauge-propagate CIs
@@ -103,7 +103,7 @@ class ReportBaseCase(BaseTestCase):
 
         cls.results_logL = pygsti.do_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
                                                        std.germs, cls.maxLengthList, verbosity=0,
-                                                       advancedOptions={'tolerance': 1e-6, 'starting point': 'LGST',
+                                                       advanced_options={'tolerance': 1e-6, 'starting point': 'LGST',
                                                                         'onBadFit': ["robust","Robust","robust+","Robust+"],
                                                                         'badFitThreshold': -1.0,
                                                                         'germLengthLimits': {('Gx','Gi','Gi'): 2} })

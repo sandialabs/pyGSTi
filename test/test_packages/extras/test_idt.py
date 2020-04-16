@@ -87,16 +87,16 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
                 sampleError = 'multinomial'; Nsamp = nSamples
 
             ds_idleInFids = pygsti.construction.generate_fake_data(
-                                gateset_idleInFids, listOfExperiments, nSamples=Nsamp,
-                                sampleError=sampleError, seed=8675309)
+                                gateset_idleInFids, listOfExperiments, n_samples=Nsamp,
+                                sample_error=sampleError, seed=8675309)
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, True)
             pickle.dump(gateset_idleInFids, open("%s_gs.pkl" % fileroot, "wb"))
             pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
             print("Wrote fileroot ",fileroot)
 
             ds_noIdleInFids = pygsti.construction.generate_fake_data(
-                                gateset_noIdleInFids, listOfExperiments, nSamples=Nsamp,
-                                sampleError=sampleError, seed=8675309)
+                                gateset_noIdleInFids, listOfExperiments, n_samples=Nsamp,
+                                sample_error=sampleError, seed=8675309)
 
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, False)
             pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))
@@ -255,7 +255,7 @@ class IDTTestCase(BaseTestCase):
         start = std.target_model()
         start.set_all_parameterizations("TP")
         result = pygsti.do_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
-                                             std.germs_lite, maxLens, verbosity=3, advancedOptions={'objective': 'chi2'})
+                                             std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
         #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
@@ -286,9 +286,9 @@ class IDTTestCase(BaseTestCase):
             c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
 
         t = time.time()
-        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
-            nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
-            idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
+        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
+            idle_only=False, paramroot="H+S", cache=c, verbosity=3)
         #print("GSS STRINGS: ")
         #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
 
@@ -345,7 +345,7 @@ class IDTTestCase(BaseTestCase):
 
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.do_long_sequence_gst_base(ds, target_model, gss,
-                                                      advancedOptions={'tolerance': 1e-1}, verbosity=3)
+                                                      advanced_options={'tolerance': 1e-1}, verbosity=3)
         
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'

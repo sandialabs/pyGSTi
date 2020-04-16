@@ -13,23 +13,23 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
     def test_memlimit(self):
         # A very low memlimit
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
-                                                  std.germs, testPairList=[(0,0),(0,1),(1,0)],
-                                                  verbosity=0, memLimit=8192)
+                                                  std.germs, test_pair_list=[(0,0),(0,1),(1,0)],
+                                                  verbosity=0, mem_limit=8192)
         # A significantly higher one
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
-                                                  std.germs, testPairList=[(0,0),(0,1),(1,0)],
-                                                  verbosity=0, memLimit=128000)
+                                                  std.germs, test_pair_list=[(0,0),(0,1),(1,0)],
+                                                  verbosity=0, mem_limit=128000)
 
 
     def test_intelligentFiducialPairReduction(self):
         fidPairs = self.runSilent(
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
                        std.target_model(), std.fiducials, std.fiducials,
-                       std.germs, prepovmTuples="first",
-                       searchMode="sequential",
-                       constrainToTP=True,
-                       nRandom=100, seed=None, verbosity=3,
-                       memLimit=None)
+                       std.germs, pre_povm_tuples="first",
+                       search_mode="sequential",
+                       constrain_to_tp=True,
+                       n_random=100, seed=None, verbosity=3,
+                       mem_limit=None)
 
         cmpFilenm = compare_files + "/IFPR_fidPairs_dict.pkl"
         # Run to SAVE reference fidPairs dictionary
@@ -47,29 +47,29 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         fidPairs2 = self.runSilent(
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
                        std.target_model(), std.fiducials, std.fiducials,
-                       std.germs, prepovmTuples="first",
-                       searchMode="random",
-                       constrainToTP=True,
-                       nRandom=3, seed=None, verbosity=3,
-                       memLimit=1024*10)
+                       std.germs, pre_povm_tuples="first",
+                       search_mode="random",
+                       constrain_to_tp=True,
+                       n_random=3, seed=None, verbosity=3,
+                       mem_limit=1024*10)
 
-        fidPairs3 = self.runSilent( #larger nRandom
+        fidPairs3 = self.runSilent( #larger n_random
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
                        std.target_model(), std.fiducials, std.fiducials,
-                       std.germs, prepovmTuples="first",
-                       searchMode="random",
-                       constrainToTP=True,
-                       nRandom=100, seed=None, verbosity=3,
-                       memLimit=1024*10)
+                       std.germs, pre_povm_tuples="first",
+                       search_mode="random",
+                       constrain_to_tp=True,
+                       n_random=100, seed=None, verbosity=3,
+                       mem_limit=1024*10)
 
-        fidPairs3b = self.runSilent( #huge nRandom (should cap to all pairs)
+        fidPairs3b = self.runSilent( #huge n_random (should cap to all pairs)
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
                        std.target_model(), std.fiducials, std.fiducials,
-                       std.germs, prepovmTuples="first",
-                       searchMode="random",
-                       constrainToTP=True,
-                       nRandom=1000000, seed=None, verbosity=3,
-                       memLimit=1024*10)
+                       std.germs, pre_povm_tuples="first",
+                       search_mode="random",
+                       constrain_to_tp=True,
+                       n_random=1000000, seed=None, verbosity=3,
+                       mem_limit=1024*10)
 
     def test_FPR_test_pairs(self):
         target_model = std.target_model()
@@ -82,8 +82,8 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             target_model, prep_fiducials, meas_fiducials, germs,
-            searchMode="random", nRandom=100, seed=1234,
-            verbosity=1, memLimit=int(2*(1024)**3), minimumPairs=2)
+            search_mode="random", n_random=100, seed=1234,
+            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
 
         # fidPairs is a list of (prepIndex,measIndex) 2-tuples, where
         # prepIndex indexes prep_fiducials and measIndex indexes meas_fiducials
@@ -92,10 +92,10 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         nAmplified = pygsti.alg.test_fiducial_pairs(fidPairs, target_model, prep_fiducials,
                                                     meas_fiducials, germs,
-                                                    verbosity=3, memLimit=None)
+                                                    verbosity=3, mem_limit=None)
 
         #Note: can't amplify SPAM params, so don't count them
-        nTotal = pygsti.alg.removeSPAMVectors(target_model).num_nongauge_params()
+        nTotal = pygsti.alg.remove_spam_vectors(target_model).num_nongauge_params()
         self.assertEqual(nTotal, 34)
 
         print("GFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
@@ -103,13 +103,13 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         fidPairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ(
             target_model, prep_fiducials, meas_fiducials, germs,
-            searchMode="random", constrainToTP=True,
-            nRandom=100, seed=1234, verbosity=1,
-            memLimit=int(2*(1024)**3))
+            search_mode="random", constrain_to_tp=True,
+            n_random=100, seed=1234, verbosity=1,
+            mem_limit=int(2*(1024)**3))
 
         nAmplified = pygsti.alg.test_fiducial_pairs(fidPairsDict, target_model, prep_fiducials,
                                          meas_fiducials, germs,
-                                         verbosity=3, memLimit=None)
+                                         verbosity=3, mem_limit=None)
 
         print("PFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
         self.assertEqual(nAmplified, 34)

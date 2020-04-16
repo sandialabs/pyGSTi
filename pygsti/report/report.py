@@ -148,18 +148,18 @@ class Report:
             assert(embed_figures), \
                 "Single-file mode requires `embed_figures` to be True"
             _merge.merge_jinja_template(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
         else:
             _merge.merge_jinja_template_dir(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, embed_figures=embed_figures,
                 verbosity=verbosity
             )
@@ -250,31 +250,25 @@ class Report:
             gopt      = '{goLabel}'
             ds        = results.dataset
 
-            gssFinal  = results.circuit_structs['final']
-            Ls        = results.circuit_structs['final'].Ls
-            gssPerIter = results.circuit_structs['iteration'] #ALL_L
+            circuits_final = results.circuit_lists['final']
+            circuits_per_iter = results.circuit_lists['iteration']  # All L-values
+            if isinstance(circuits_final, pygsti.objects.BulkCircuitList):
+                Ls = circuits_final.circuit_structure.Ls
 
-            prepStrs = results.circuit_lists['prep fiducials']
-            effectStrs = results.circuit_lists['meas fiducials']
+            prep_fiducials = results.circuit_lists['prep fiducials']
+            meas_fiducials = results.circuit_lists['meas fiducials']
             germs = results.circuit_lists['germs']
-            strs = (prepStrs, effectStrs)
 
             params = estimate.parameters
-            objective = estimate.parameters['objective']
-            if objective == "logl":
-                mpc = estimate.parameters['minProbClip']
-            else:
-                mpc = estimate.parameters['minProbClipForWeighting']
+            objfn_builder = estimate.parameters.get('final_objfn_builder', 'logl')
             clifford_compilation = estimate.parameters.get('clifford_compilation',None)
+            effective_ds, scale_submxs = estimate.get_effective_dataset(True)
 
-            effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
-            scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
-
-            models       = estimate.models
-            mdl          = models[gopt] #FINAL
-            mdl_final    = models['final iteration estimate'] #ITER
-            target_model = models['target']
-            mdlPerIter   = models['iteration estimates']
+            models        = estimate.models
+            mdl           = models[gopt]  # final, gauge-optimized estimate
+            mdl_final     = models['final iteration estimate'] # final estimate before gauge-opt
+            target_model  = models['target']
+            mdl_per_iter  = models['iteration estimates']
 
             mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
 
@@ -310,10 +304,10 @@ class Report:
             nb.add_code("""\
             dslbl1 = '{dsLbl1}'
             dslbl2 = '{dsLbl2}'
-            dscmp_gss = results_dict[dslbl1].circuit_structs['final']
+            dscmp_circuits = results_dict[dslbl1].circuit_lists['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+            dscmp = pygsti.obj.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
                 templatePath / 'data_comparison.txt'])

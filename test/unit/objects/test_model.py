@@ -243,15 +243,15 @@ class ThresholdMethodBase(object):
     def test_product(self):
         circuit = ('Gx', 'Gy')
         p1 = np.dot(self.model['Gy'], self.model['Gx'])
-        p2 = self.model.product(circuit, bScale=False)
-        p3, scale = self.model.product(circuit, bScale=True)
+        p2 = self.model.product(circuit, scale=False)
+        p3, scale = self.model.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
         p1 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
-        p2 = self.model.product(circuit, bScale=False)
-        p3, scale = self.model.product(circuit, bScale=True)
+        p2 = self.model.product(circuit, scale=False)
+        p3, scale = self.model.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
@@ -264,7 +264,7 @@ class ThresholdMethodBase(object):
         p2 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
 
         bulk_prods = self.model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, scale=True)
         bulk_prods2 = scaleVals[:, None, None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[0], p1)
         self.assertArraysAlmostEqual(bulk_prods[1], p2)
@@ -283,7 +283,7 @@ class ThresholdMethodBase(object):
         evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
         dp = self.model.bulk_dproduct(evt)
         dp_flat = self.model.bulk_dproduct(evt, flat=True)
-        dp_scaled, scaleVals = self.model.bulk_dproduct(evt, bScale=True)
+        dp_scaled, scaleVals = self.model.bulk_dproduct(evt, scale=True)
         # TODO assert correctness for all of the above
 
     def test_hproduct(self):
@@ -298,7 +298,7 @@ class ThresholdMethodBase(object):
         evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
         hp = self.model.bulk_hproduct(evt)
         hp_flat = self.model.bulk_hproduct(evt, flat=True)
-        hp_scaled, scaleVals = self.model.bulk_hproduct(evt, bScale=True)
+        hp_scaled, scaleVals = self.model.bulk_hproduct(evt, scale=True)
         # TODO assert correctness for all of the above
 
 
@@ -339,7 +339,7 @@ class SimMethodBase(object):
 
     def test_dprobs(self):
         dprobs = self.model.dprobs(self.gatestring1)
-        dprobs2 = self.model.dprobs(self.gatestring1, returnPr=True)
+        dprobs2 = self.model.dprobs(self.gatestring1, return_pr=True)
         self.assertArraysAlmostEqual(dprobs[('0',)], dprobs2[('0',)][0])
         self.assertArraysAlmostEqual(dprobs[('1',)], dprobs2[('1',)][0])
         # TODO assert correctness
@@ -350,9 +350,9 @@ class SimMethodBase(object):
         # XXX is this necessary?  EGN: maybe testing so many cases is overkill?
         # Cover combinations of arguments
         variants = [
-            self.model.hprobs(self.gatestring1, returnPr=True),
-            self.model.hprobs(self.gatestring1, returnDeriv=True),
-            self.model.hprobs(self.gatestring1, returnPr=True, returnDeriv=True)
+            self.model.hprobs(self.gatestring1, return_pr=True),
+            self.model.hprobs(self.gatestring1, return_deriv=True),
+            self.model.hprobs(self.gatestring1, return_pr=True, return_deriv=True)
         ]
         for hprobs2 in variants:
             self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
@@ -392,7 +392,7 @@ class SimMethodBase(object):
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
         probs_to_fill = np.empty(nElements, 'd')
-        lookup_split = evt.split(lookup, numSubTrees=2)
+        lookup_split = evt.split(lookup, num_sub_trees=2)
 
         with self.assertNoWarns():
             self.model.bulk_fill_probs(probs_to_fill, evt)
@@ -408,11 +408,11 @@ class SimMethodBase(object):
 
     def test_bulk_dprobs(self):
         with self.assertNoWarns():
-            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=False)
+            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], return_pr=False)
         # TODO assert correctness
 
         with self.assertNoWarns():
-            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], returnPr=True)
+            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], return_pr=True)
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
@@ -428,7 +428,7 @@ class SimMethodBase(object):
         probs_to_fill = np.empty(nElements, 'd')
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, prMxToFill=probs_to_fill, check=True)
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, pr_mx_to_fill=probs_to_fill, check=True)
         # TODO assert correctness
 
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
@@ -447,7 +447,7 @@ class SimMethodBase(object):
         nElements = evt.num_final_elements()
         nParams = self.model.num_params()
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
-        lookup_split = evt.split(lookup, numSubTrees=2)
+        lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
             self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
         # TODO assert correctness
@@ -456,17 +456,17 @@ class SimMethodBase(object):
         # call normally
         with self.assertNoWarns():
             bulk_hprobs = self.model.bulk_hprobs(
-                [self.gatestring1, self.gatestring2], returnPr=False, returnDeriv=False)
+                [self.gatestring1, self.gatestring2], return_pr=False, return_deriv=False)
         # TODO assert correctness
 
         # with probabilities
         with self.assertNoWarns():
-            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], returnPr=True, returnDeriv=False)
+            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=True, return_deriv=False)
         # TODO assert correctness
 
         # with derivative probabilities
         with self.assertNoWarns():
-            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], returnPr=False, returnDeriv=True)
+            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=False, return_deriv=True)
         # TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
@@ -483,14 +483,14 @@ class SimMethodBase(object):
         # also fill probabilities
         probs_to_fill = np.empty(nElements, 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, prMxToFill=probs_to_fill, check=True)
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, pr_mx_to_fill=probs_to_fill, check=True)
         # TODO assert correctness
 
         #also fill derivative probabilities
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, derivMxToFill=dprobs_to_fill, check=True)
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, deriv_mx_to_fill=dprobs_to_fill, check=True)
         # TODO assert correctness
 
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
@@ -509,7 +509,7 @@ class SimMethodBase(object):
         nElements = evt.num_final_elements()
         nParams = self.model.num_params()
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
-        lookup_split = evt.split(lookup, numSubTrees=2)
+        lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
             self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
         # TODO assert correctness
@@ -542,10 +542,10 @@ class SimMethodBase(object):
              ('Gx', 'Gy', 'Gy'),
              ('Gy', 'Gy', 'Gy'),
              ('Gy', 'Gx', 'Gx')])
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, maxTreeSize=4)
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, minSubtrees=2, maxTreeSize=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
         with self.assertWarns(Warning):
-            self.model.bulk_evaltree(circuits, minSubtrees=3, maxTreeSize=8)
+            self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
             #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
 
 
@@ -652,10 +652,10 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
              ('Gx', 'Gy', 'Gy'),
              ('Gy', 'Gy', 'Gy'),
              ('Gy', 'Gx', 'Gx')])
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, maxTreeSize=4)
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, minSubtrees=2, maxTreeSize=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
+        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
         with self.assertNoWarns():
-            self.model.bulk_evaltree(circuits, minSubtrees=3, maxTreeSize=8)
+            self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
             #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
 
 
@@ -682,4 +682,4 @@ class FullBadDimensionModelTester(FullModelBase, BaseCase):
 
     def test_randomize_with_unitary_raises(self):
         with self.assertRaises(AssertionError):
-            self.model.randomize_with_unitary(1, randState=np.random.RandomState())  # scale shouldn't matter
+            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter
