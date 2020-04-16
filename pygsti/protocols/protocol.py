@@ -1062,7 +1062,8 @@ class ProtocolData(_TreeNode):
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
                 dataset = _io.load_dataset(dataset_files[0], withTimes=False, ignoreZeroCountLines=False, verbosity=0)
             else:
-                dataset = {pth.stem: _io.load_dataset(pth, withTimes=False, ignoreZeroCountLines=False, verbosity=0) for pth in dataset_files}
+                dataset = {pth.stem: _io.load_dataset(pth, withTimes=False, ignoreZeroCountLines=False, verbosity=0)
+                           for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")

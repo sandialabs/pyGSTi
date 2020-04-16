@@ -353,7 +353,7 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
         statistic = 'dist'
         #assert(statistic in ('dist', )) #'max', 'mean', 'min', 'dist', 'sum'))
         if name is None:
-            name = datatype # statistic + ' ' + 
+            name = datatype  # statistic + ' ' +
         super().__init__(name)
         self.depths = depths
         self.datatype = datatype
@@ -393,7 +393,8 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
             src_data = data.cache[self.datatype]
 
         elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
-            assert(self.datatype == 'success_probabilities' or self.datatype == 'polarization'), "Only success probabilities or polarizations can be simulated!"
+            assert(self.datatype == 'success_probabilities' or self.datatype == 'polarization'), \
+                "Only success probabilities or polarizations can be simulated!"
             sfmodel = self.custom_data_src
             depths = data.edesign.depths if self.depths == 'all' else self.depths
             src_data = _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
@@ -443,8 +444,8 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
         for depth in depths:
             percircuitdata = data_per_depth[depth]
 #            successes[depth][width], fails[depth][width] = failcnt_fn(percircuitdata) # ASSIGN NAMED DICT.
-            summarystat[depth][width] = agg_fn(percircuitdata) # ASSIGN NAMED DICT.
-            # circuitindex[depth][width] = 
+            summarystat[depth][width] = agg_fn(percircuitdata)  # ASSIGN NAMED DICT.
+            # circuitindex[depth][width] =
 
         results = SummaryStats(data, self)  # 'Qty', 'category'
         results.summary_statistic = summarystat
