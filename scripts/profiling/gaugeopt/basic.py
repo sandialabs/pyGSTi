@@ -35,12 +35,12 @@ def main():
             gs, gs_target,
             #method="L-BFGS-B",
             method="auto",
-            itemWeights={'spam' : 0.0001, 'gates':1.0},
-            spamMetric='frobenius',
-            gatesMetric='frobenius',
+            item_weights={'spam' : 0.0001, 'gates':1.0},
+            spam_metric='frobenius',
+            gates_metric='frobenius',
             cptp_penalty_factor=1.0,
             spam_penalty_factor=1.0,
-            comm=comm, verbosity=3, checkJac=True)
+            comm=comm, verbosity=3, check_jac=True)
 
         if comm is None or comm.Get_rank() == 0:
             print("Final Diff = ", gs_gaugeopt.frobeniusdist(gs_target, None, 1.0, 0.0001))

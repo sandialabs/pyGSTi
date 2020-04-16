@@ -235,8 +235,8 @@ legacy_germs_lite = _strc.circuit_list([
 
 
 #Construct a target model: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
-_target_model = _qutrit.make_qutrit_model(errorScale=0, Xangle=_pi / 2, Yangle=_pi / 2,
-                                          MSglobal=_pi / 2, MSlocal=0, basis="qt")
+_target_model = _qutrit.make_qutrit_model(error_scale=0, x_angle=_pi / 2, y_angle=_pi / 2,
+                                          ms_global=_pi / 2, ms_local=0, basis="qt")
 
 _gscache = {("full", "auto"): _target_model}
 
@@ -263,8 +263,8 @@ def target_model(parameterization_type="full", sim_type="auto"):
                                    sim_type, _gscache)
 
 
-legacy_gs_target = _qutrit.make_qutrit_model(errorScale=0, Xangle=-_pi / 2, Yangle=_pi / 2,
-                                             MSglobal=-_pi / 2, MSlocal=0, basis="qt")
+legacy_gs_target = _qutrit.make_qutrit_model(error_scale=0, x_angle=-_pi / 2, y_angle=_pi / 2,
+                                             ms_global=-_pi / 2, ms_local=0, basis="qt")
 #Note: negative signs from weird/incorrect conventions
 
 global_fidPairs = [

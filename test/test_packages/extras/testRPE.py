@@ -43,7 +43,7 @@ class TestRPEMethods(BaseTestCase):
         
         #Load pre-simulated dataset
 #        N=100
-#        DS = gst.construction.generate_fake_data(mdl_real,stringListsRPE['totalStrList'],N,sampleError='binomial',seed=1)
+#        DS = gst.construction.generate_fake_data(mdl_real,stringListsRPE['totalStrList'],N,sample_error='binomial',seed=1)
         DS = gst.io.load_dataset(compare_files + '/rpe_test_ds.txt')
         
         #Analyze dataset

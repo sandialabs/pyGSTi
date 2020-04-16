@@ -13,7 +13,7 @@ from ...objects import processorspec as _pspec
 
 qubits = ['Q' + str(x) for x in [0, 1, 2, 3, 4, 5, 6, 7]] + ['Q' + str(x) for x in [10, 11, 12, 13, 14, 15, 16, 17]]
 
-twoQgate = 'Gcphase'
+two_qubit_gate = 'Gcphase'
 
 edgelist = [
     # Ring 1

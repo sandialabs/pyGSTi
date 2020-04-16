@@ -1,23 +1,23 @@
 <h1>Gauge Variant Error Metrics</h1>
 <p>This tab provides a variety of common (and uncommon) error metrics derived from the estimated gate set.  All of these quanties are <q>gauge-dependent</q>, which means two things.  First, they aren't directly physically measurable, so they can't map directly to observable error rates.  Second, they are only as reliable (as diagnostics) inasmuch as pyGSTi is able to pick a sensible gauge (reference frame) in which to report gates.  PyGSTi does this by first finding an estimate based on the data (and ignoring gauge entirely), then varying over all possible representations of those gates (gauges) to minimize a measure of the gates' implausibility (distance from the targets, combined with violation of positivity).  This measure has parameters -- e.g. the weights placed on different gates -- and reports often include multiple "gauge optimizations".  A dropdown menu in the sidebar allows switching between these options, and the parameters used for the currently-shown estimate are shown below it.</p>
 
-<figure id="bestGatesetSpamVsTargetTable" class='tbl'>
+<figure id="final_model_spam_vs_target_table" class='tbl'>
 	<figcaption><span class="captiontitle">SPAM error metrics</span> <span class="captiondetail"> This table presents (gauge-variant) metrics that quantify errors in the <em>SPAM operations</em> -- the estimated initial state preparation[s] and POVM measurement -- with respect to the ideal target operations,   A description of each metric can be found by hovering the pointer over the column header.</span></figcaption>
-    {{ bestGatesetSpamVsTargetTable|render }}
+    {{ final_model_spam_vs_target_table|render }}
 </figure>
 
-<figure id="bestGatesVsTargetTable_gv" class='tbl'>
+<figure id="final_gates_vs_target_table_gauge_var" class='tbl'>
 	<figcaption><span class="captiontitle">Individual gate error metrics</span> <span class="captiondetail">This table presents various (gauge-variant) metrics that quantify errors in each individual estimated logic gate, with respect to the ideal target gates.  Note that "Entanglement infidelity" and "Average gate infidelity" are two common definitions of process fidelity, and related by a constant dimensional factor.  A description of each metric can be found by  hovering the pointer over the column header.</span></figcaption>
-    {{ bestGatesVsTargetTable_gv|render }}
+    {{ final_gates_vs_target_table_gauge_var|render }}
 </figure>
 
-<figure id="singleMetricTable_gv" class='tbl'>
+<figure id="single_metric_table_gauge_var" class='tbl'>
 	<figcaption><span class="captiontitle">Single metric comparison.</span> <span class="captiondetail">TODO: caption</span> </figcaption>
     {{ metricSwitchboard_gv|render }}
-	{{ singleMetricTable_gv|render }}
+	{{ single_metric_table_gauge_var|render }}
 </figure>
 
-<figure id="bestGatesVsTargetTable_gvgerms" class='tbl'>
+<figure id="final_gates_vs_target_table_gauge_vargerms" class='tbl'>
 	<figcaption><span class="captiontitle">Per-germ error metrics</span> <span class="captiondetail">This table presents various (gauge-variant) metrics that quantify errors in the estimated <em>germs</em>, with respect to their ideal target counterparts (as computed from the ideal target gates).  A description of each metric can be found by  hovering the pointer over the column header..</span></figcaption>
-	{{ bestGatesVsTargetTable_gvgerms|render }}
+	{{ final_gates_vs_target_table_gauge_vargerms|render }}
 </figure>

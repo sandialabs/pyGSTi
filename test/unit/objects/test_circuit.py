@@ -88,8 +88,8 @@ class CircuitTester(BaseCase):
         self.assertEqual(str(cl), "Gx^256000")
         self.assertEqual(cl.components, ('Gx',))
         self.assertEqual(cl.reps, 256000)
-        self.assertEqual(Gi.tup, ('Gi', CircuitLabel(name='', tupOfLayers=('Gx',),
-                                                     stateSpaceLabels=None, reps=256000)))
+        self.assertEqual(Gi.tup, ('Gi', CircuitLabel(name='', tup_of_layers=('Gx',),
+                                                     state_space_labels=None, reps=256000)))
 
     def test_expand_and_factorize_circuitlabel(self):
         c = circuit.Circuit(None, stringrep='Gi(Gx:1)^2', num_lines=3, editable=True, expand_subcircuits=False)
@@ -388,16 +388,16 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(op1, op2)
 
     def test_twoQgate_count(self):
-        self.assertEqual(self.c.twoQgate_count(), 0)
+        self.assertEqual(self.c.two_q_gate_count(), 0)
         labels = circuit.Circuit(None, stringrep="[Gcnot:Q0:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1")
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'])
-        self.assertEqual(c.twoQgate_count(), 2)
+        self.assertEqual(c.two_q_gate_count(), 2)
 
     def test_multiQgate_count(self):
-        self.assertEqual(self.c.multiQgate_count(), 0)
+        self.assertEqual(self.c.multi_q_gate_count(), 0)
         labels = circuit.Circuit(None, stringrep="[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1")
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q2'])
-        self.assertEqual(c.multiQgate_count(), 3)
+        self.assertEqual(c.multi_q_gate_count(), 3)
 
     def test_to_string(self):
         s = str(self.c)
@@ -412,8 +412,8 @@ class CircuitMethodTester(BaseCase):
         c.compress_depth(verbosity=0)
         self.assertEqual(c.depth(), 7)
         # Get a dictionary that relates H, P gates etc.
-        oneQrelations = symplectic.oneQclifford_symplectic_group_relations()
-        c.compress_depth(oneQgate_relations=oneQrelations)
+        oneQrelations = symplectic.one_q_clifford_symplectic_group_relations()
+        c.compress_depth(one_q_gate_relations=oneQrelations)
         self.assertEqual(c.depth(), 3)
 
     @unittest.skip("unused (remove?)")

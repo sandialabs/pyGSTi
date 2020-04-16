@@ -26,45 +26,45 @@ class LogLTester(LikelihoodFunctionsBase):
 
     def test_logl(self):
         L1 = lfn.logl(self.model, self.ds, self.circuits,
-                      probClipInterval=(-1e6, 1e6),
-                      poissonPicture=True, check=False)
+                      prob_clip_interval=(-1e6, 1e6),
+                      poisson_picture=True, check=False)
         # Non-poisson-picture
         L2 = lfn.logl(self.model, self.ds, self.circuits,
-                      probClipInterval=(-1e6, 1e6),
-                      poissonPicture=False, check=False)
+                      prob_clip_interval=(-1e6, 1e6),
+                      poisson_picture=False, check=False)
         # TODO assert correctness
 
     def test_logl_jacobian(self):
         dL1 = lfn.logl_jacobian(self.model, self.ds, self.circuits,
-                                probClipInterval=(-1e6, 1e6), radius=1e-4,
-                                poissonPicture=True, check=False)
+                                prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                                poisson_picture=True, check=False)
         dL2 = lfn.logl_jacobian(self.model, self.ds, self.circuits,
-                                probClipInterval=(-1e6, 1e6), radius=1e-4,
-                                poissonPicture=False, check=False)
+                                prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                                poisson_picture=False, check=False)
         # test None as mdl list
         dL2b = lfn.logl_jacobian(self.model, self.ds, None,
-                                 probClipInterval=(-1e6, 1e6), radius=1e-4,
-                                 poissonPicture=False, check=False)
+                                 prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                                 poisson_picture=False, check=False)
         # TODO assert correctness
 
     def test_logl_hessian(self):
         # TODO optimize
         hL1 = lfn.logl_hessian(self.model, self.ds, self.circuits,
-                               probClipInterval=(-1e6, 1e6), radius=1e-4,
-                               poissonPicture=True, check=False)
+                               prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                               poisson_picture=True, check=False)
 
         hL2 = lfn.logl_hessian(self.model, self.ds, self.circuits,
-                               probClipInterval=(-1e6, 1e6), radius=1e-4,
-                               poissonPicture=False, check=False)
+                               prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                               poisson_picture=False, check=False)
         # test None as mdl list
         hL2b = lfn.logl_hessian(self.model, self.ds, None,
-                                probClipInterval=(-1e6, 1e6), radius=1e-4,
-                                poissonPicture=False, check=False)
+                                prob_clip_interval=(-1e6, 1e6), radius=1e-4,
+                                poisson_picture=False, check=False)
         # TODO assert correctness
 
     def test_logl_max(self):
-        maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poissonPicture=True, check=True)
-        maxL2 = lfn.logl_max(self.model, self.ds, self.circuits, poissonPicture=False, check=True)
+        maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=True, check=True)
+        maxL2 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=False, check=True)
         # TODO assert correctness
 
     def test_cptp_penalty(self):
@@ -72,16 +72,16 @@ class LogLTester(LikelihoodFunctionsBase):
         # TODO assert correctness
 
     def test_two_delta_logl(self):
-        twoDelta1 = lfn.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=True)
-        twoDelta2 = lfn.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=False)
+        twoDelta1 = lfn.two_delta_loglfn(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=True)
+        twoDelta2 = lfn.two_delta_loglfn(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=False)
         # TODO assert correctness
 
     def test_no_gatestrings(self):
         # TODO what edge case does this cover?
         model = std.target_model()
         L1 = lfn.logl(model, self.ds,
-                      probClipInterval=(-1e6, 1e6),
-                      poissonPicture=True, check=False)
+                      prob_clip_interval=(-1e6, 1e6),
+                      poisson_picture=True, check=False)
         self.assertAlmostEqual(L1, -21393568.52986, 2)
 
         L2 = lfn.logl_max(model, self.ds)

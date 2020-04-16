@@ -17,10 +17,10 @@ import collections as _collections
 import numpy as _np
 
 from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
-from .basisconstructors import _basisConstructorDict
+from .basisconstructors import _basis_constructor_dict
 
 
-def basis_matrices(nameOrBasis, dim, sparse=False):
+def basis_matrices(name_or_basis, dim, sparse=False):
     '''
     Get the elements of the specifed basis-type which
     spans the density-matrix space given by dim.
@@ -45,11 +45,11 @@ def basis_matrices(nameOrBasis, dim, sparse=False):
     list
         A list of N numpy arrays each of shape (dmDim, dmDim),
         where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
+        "embedding" density matrix (the sum of dim_or_block_dims)
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     '''
-    return Basis.cast(nameOrBasis, dim, sparse).elements
+    return Basis.cast(name_or_basis, dim, sparse).elements
 
 
 def basis_longname(basis):
@@ -67,7 +67,7 @@ def basis_longname(basis):
     """
     if isinstance(basis, Basis):
         return basis.longname
-    return _basisConstructorDict[basis].longname
+    return _basis_constructor_dict[basis].longname
 
 
 def basis_element_labels(basis, dim):
@@ -85,7 +85,7 @@ def basis_element_labels(basis, dim):
         Pauli-product (pp) and Qutrit (qt).  If the basis is
         not known, then an empty list is returned.
 
-    dimOrBlockDims : int or list, optional
+    dim_or_block_dims : int or list, optional
         Dimension of basis matrices.  If a list of integers,
         then gives the dimensions of the terms in a
         direct-sum decomposition of the density
@@ -100,9 +100,9 @@ def basis_element_labels(basis, dim):
     return Basis.cast(basis, dim).labels
 
 
-def is_sparse_basis(nameOrBasis):
-    if isinstance(nameOrBasis, Basis):
-        return nameOrBasis.sparse
+def is_sparse_basis(name_or_basis):
+    if isinstance(name_or_basis, Basis):
+        return name_or_basis.sparse
     else:  # assume everything else is not sparse
         # (could test for a sparse matrix list in the FUTURE)
         return False
@@ -189,7 +189,7 @@ def change_basis(mx, from_basis, to_basis):
                          (_mt.safenorm(ret, 'imag'), from_basis, to_basis, ret))
     return _mt.safereal(ret)
 
-#def transform_matrix(from_basis, to_basis, dimOrBlockDims=None, sparse=False):
+#def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
 #    '''
 #    Compute the transformation matrix between two bases
 #
@@ -201,7 +201,7 @@ def change_basis(mx, from_basis, to_basis):
 #    to_basis : Basis or str
 #        Basis being converted to
 #
-#    dimOrBlockDims : int or list of ints
+#    dim_or_block_dims : int or list of ints
 #        if strings provided as bases, the dimension of basis to use.
 #
 #    sparse : bool, optional
@@ -214,10 +214,10 @@ def change_basis(mx, from_basis, to_basis):
 #    Basis
 #        the composite basis created
 #    '''
-#    if dimOrBlockDims is None:
+#    if dim_or_block_dims is None:
 #        assert isinstance(from_basis, Basis)
 #    else:
-#        from_basis = Basis(from_basis, dimOrBlockDims, sparse=sparse)
+#        from_basis = Basis(from_basis, dim_or_block_dims, sparse=sparse)
 #    return from_basis.transform_matrix(to_basis)
 
 
@@ -291,94 +291,94 @@ def build_basis_for_matrix(mx, basis):
         return BuiltinBasis(basis, dim)
 
 
-def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
+def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
     """
     Change the basis of `mx`, which is assumed to be in the 'std'-type basis
-    given by `stdBasis1`, to a potentially larger or smaller 'std'-type basis
-    given by `stdBasis2`.
+    given by `std_basis_1`, to a potentially larger or smaller 'std'-type basis
+    given by `std_basis_2`.
 
     This is possible when the two 'std'-type bases have the same "embedding
     dimension", equal to the sum of their block dimensions.  If, for example,
-    `stdBasis1` has block dimensions (kite structure) of (4,2,1) then `mx`,
+    `std_basis_1` has block dimensions (kite structure) of (4,2,1) then `mx`,
     expressed as a sum of `4^2 + 2^2 + 1^2 = 21` basis elements, can be
     "embedded" within a larger 'std' basis having a single block with
     dimension 7 (`7^2 = 49` elements).
 
-    When `stdBasis2` is smaller than `stdBasis1` the reverse happens and `mx`
+    When `std_basis_2` is smaller than `std_basis_1` the reverse happens and `mx`
     is irreversibly truncated, or "contracted" to a basis having a particular
     kite structure.
 
     Parameters
     ----------
     mx : numpy array
-        A square matrix in the `stdBasis1` basis.
+        A square matrix in the `std_basis_1` basis.
 
     resize : {'expand','contract'}
         Whether `mx` can be expanded or contracted.
 
-    stdBasis1 : Basis
+    std_basis_1 : Basis
         The 'std'-type basis that `mx` is currently in.
 
-    stdBasis2 : Basis
+    std_basis_2 : Basis
         The 'std'-type basis that `mx` should be converted to.
 
     Returns
     -------
     numpy.ndarray
     """
-    assert(stdBasis1.elsize == stdBasis2.elsize), '"embedded" space dimensions differ!'
-    if stdBasis1.dim == stdBasis2.dim:
-        return change_basis(mx, stdBasis1, stdBasis2)  # don't just 'return mx' here
+    assert(std_basis_1.elsize == std_basis_2.elsize), '"embedded" space dimensions differ!'
+    if std_basis_1.dim == std_basis_2.dim:
+        return change_basis(mx, std_basis_1, std_basis_2)  # don't just 'return mx' here
         # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
 
-    #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
-    #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
+    #print('{}ing {} to {}'.format(resize, std_basis_1, std_basis_2))
+    #print('Dims: ({} to {})'.format(std_basis_1.dim, std_basis_2.dim))
     if resize == 'expand':
-        assert stdBasis1.dim < stdBasis2.dim
-        right = _np.dot(mx, stdBasis1.get_from_element_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
-        mid = _np.dot(stdBasis1.get_to_element_std(), right)  # want Ai st.   Ai * A = I(dim)
+        assert std_basis_1.dim < std_basis_2.dim
+        right = _np.dot(mx, std_basis_1.get_from_element_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
+        mid = _np.dot(std_basis_1.get_to_element_std(), right)  # want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
-        assert stdBasis1.dim > stdBasis2.dim
-        right = _np.dot(mx, stdBasis2.get_to_element_std())  # (dim,dim) (dim,expdim) => dim,expdim
-        mid = _np.dot(stdBasis2.get_from_element_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
+        assert std_basis_1.dim > std_basis_2.dim
+        right = _np.dot(mx, std_basis_2.get_to_element_std())  # (dim,dim) (dim,expdim) => dim,expdim
+        mid = _np.dot(std_basis_2.get_from_element_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
     return mid
 
 
-def flexible_change_basis(mx, startBasis, endBasis):
+def flexible_change_basis(mx, start_basis, end_basis):
     """
-    Change `mx` from `startBasis` to `endBasis` allowing embedding expansion
+    Change `mx` from `start_basis` to `end_basis` allowing embedding expansion
     and contraction if needed (see :func:`resize_std_mx` for more details).
 
     Parameters
     ----------
     mx : numpy array
-        The operation matrix (a 2D square array) in the `startBasis` basis.
+        The operation matrix (a 2D square array) in the `start_basis` basis.
 
-    startBasis, endBasis : Basis
+    start_basis, end_basis : Basis
         The source and destination bases, respectively.
 
     Returns
     -------
     numpy.ndarray
     """
-    if startBasis.dim == endBasis.dim:  # normal case
-        return change_basis(mx, startBasis, endBasis)
-    if startBasis.dim < endBasis.dim:
+    if start_basis.dim == end_basis.dim:  # normal case
+        return change_basis(mx, start_basis, end_basis)
+    if start_basis.dim < end_basis.dim:
         resize = 'expand'
     else:
         resize = 'contract'
-    stdBasis1 = startBasis.equivalent('std')
-    stdBasis2 = endBasis.equivalent('std')
-    #start = change_basis(mx, startBasis, stdBasis1)
+    stdBasis1 = start_basis.equivalent('std')
+    stdBasis2 = end_basis.equivalent('std')
+    #start = change_basis(mx, start_basis, stdBasis1)
     mid = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
-    end = change_basis(mid, stdBasis2, endBasis)
+    end = change_basis(mid, stdBasis2, end_basis)
     return end
 
 
-def resize_mx(mx, dimOrBlockDims=None, resize=None):
+def resize_mx(mx, dim_or_block_dims=None, resize=None):
     """
     Wrapper for :func:`resize_std_mx` that first constructs two 'std'-type bases
-    using `dimOrBlockDims` and `sum(dimOrBlockDims)`.  The matrix `mx` is converted
+    using `dim_or_block_dims` and `sum(dim_or_block_dims)`.  The matrix `mx` is converted
     from the former to the latter when `resize == "expand"`, and from the latter to
     the former when `resize == "contract"`.
 
@@ -388,7 +388,7 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
         Matrix of size N x N, where N is the dimension
         of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
 
-    dimOrBlockDims : int or list of ints
+    dim_or_block_dims : int or list of ints
         Structure of the density-matrix space.  Gives the *matrix*
         dimensions of each block.
 
@@ -400,10 +400,10 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     numpy.ndarray
     """
     #FUTURE: add a sparse flag?
-    if dimOrBlockDims is None:
+    if dim_or_block_dims is None:
         return mx
-    blkBasis = DirectSumBasis([BuiltinBasis('std', d**2) for d in dimOrBlockDims])
-    simpleBasis = BuiltinBasis('std', sum(dimOrBlockDims)**2)
+    blkBasis = DirectSumBasis([BuiltinBasis('std', d**2) for d in dim_or_block_dims])
+    simpleBasis = BuiltinBasis('std', sum(dim_or_block_dims)**2)
 
     if resize == 'expand':
         a = blkBasis

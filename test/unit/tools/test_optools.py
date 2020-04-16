@@ -265,13 +265,13 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(ot.frobeniusdist2(self.A, self.B), (0.185+0j))
 
     def test_jtrace_distance(self):
-        self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mxBasis="std"), 0.0)
-        self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mxBasis="std"), 0.26430148)  # OLD: 0.2601 ?
+        self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mx_basis="std"), 0.0)
+        self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mx_basis="std"), 0.26430148)  # OLD: 0.2601 ?
 
     @needs_cvxpy
     def test_diamond_distance(self):
-        self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mxBasis="std"), 0.0)
-        self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mxBasis="std"), 0.614258836298)
+        self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mx_basis="std"), 0.0)
+        self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mx_basis="std"), 0.614258836298)
 
     def test_frobenius_norm_equiv(self):
         from pygsti.tools import matrixtools as mt

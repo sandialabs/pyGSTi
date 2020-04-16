@@ -29,12 +29,12 @@ mds_rep = OrderedDict([('ds1', ds1_rep), ('ds2', ds2_rep)])
 
 class MultiDataSetTester(BaseCase):
     def test_construct_with_outcome_label_indices(self):
-        mds = MultiDataSet(mds_oli, mds_time, mds_rep, circuitIndices=gstrInds,
-                           outcomeLabelIndices=olInds)
+        mds = MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
+                           outcome_label_indices=olInds)
         # TODO assert correctness
 
     def test_construct_with_no_data(self):
-        mds4 = MultiDataSet(outcomeLabels=['0', '1'])
+        mds4 = MultiDataSet(outcome_labels=['0', '1'])
         mds5 = MultiDataSet()
         # TODO assert correctness
 
@@ -48,7 +48,7 @@ class MultiDataSetMethodBase(object):
     def test_add_dataset(self):
         expected_length = len(self.mds) + 1
         expected_keys = self.mds.keys() + ['newDS']
-        ds = DataSet(outcomeLabels=['0', '1'])
+        ds = DataSet(outcome_labels=['0', '1'])
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 20, '1': 80})
         ds.add_count_dict(('Gy',), {'0': 20, '1': 80})
@@ -92,14 +92,14 @@ class MultiDataSetMethodBase(object):
             self.mds.get_datasets_aggregate('ds1', 'foobar')
 
     def test_add_dataset_raises_on_gate_mismatch(self):
-        ds = DataSet(outcomeLabels=['0', '1'])  # different operation sequences
+        ds = DataSet(outcome_labels=['0', '1'])  # different operation sequences
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds.done_adding_data()
         with self.assertRaises(ValueError):
             self.mds['newDS'] = ds
 
     def test_add_dataset_raises_on_nonstatic_dataset(self):
-        ds = DataSet(outcomeLabels=['0', '1'])  # different operation sequences
+        ds = DataSet(outcome_labels=['0', '1'])  # different operation sequences
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         with self.assertRaises(ValueError):
             self.mds['newDS'] = ds
@@ -107,11 +107,11 @@ class MultiDataSetMethodBase(object):
 
 class MultiDataSetInstanceTester(MultiDataSetMethodBase, BaseCase):
     def setUp(self):
-        self.mds = MultiDataSet(mds_oli, mds_time, mds_rep, circuitIndices=gstrInds,
-                                outcomeLabels=['0', '1'])
+        self.mds = MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
+                                outcome_labels=['0', '1'])
 
 
 class MultiDataSetNoRepInstanceTester(MultiDataSetMethodBase, BaseCase):
     def setUp(self):
-        self.mds = MultiDataSet(mds_oli, mds_time, None, circuitIndices=gstrInds,
-                                outcomeLabels=['0', '1'])
+        self.mds = MultiDataSet(mds_oli, mds_time, None, circuit_indices=gstrInds,
+                                outcome_labels=['0', '1'])

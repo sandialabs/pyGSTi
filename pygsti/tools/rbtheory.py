@@ -19,7 +19,7 @@ import numpy as _np
 import warnings as _warnings
 
 
-def predicted_RB_number(mdl, target_model, weights=None, d=None, rtype='EI'):
+def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
     """
     Predicts the RB error rate from a model, using the "L-matrix" theory from
     Proctor et al Phys. Rev. Lett. 119, 130502 (2017). Note that this gives the
@@ -87,17 +87,17 @@ def predicted_RB_number(mdl, target_model, weights=None, d=None, rtype='EI'):
         The predicted RB number.
     """
     if d is None: d = int(round(_np.sqrt(mdl.dim)))
-    p = predicted_RB_decay_parameter(mdl, target_model, weights=weights)
+    p = predicted_rb_decay_parameter(mdl, target_model, weights=weights)
     r = _rbtls.p_to_r(p, d=d, rtype=rtype)
     return r
 
 
-def predicted_RB_decay_parameter(mdl, target_model, weights=None):
+def predicted_rb_decay_parameter(mdl, target_model, weights=None):
     """
     Computes the second largest eigenvalue of the 'L matrix' (see the `L_matrix`
     function). For standard Clifford RB and direct RB, this corresponds to the
     RB decay parameter p in Pm = A + Bp^m for "reasonably low error" trace
-    preserving and completely positive gates. See also the `predicted_RB_number`
+    preserving and completely positive gates. See also the `predicted_rb_number`
     function.
 
     Parameters
@@ -142,11 +142,11 @@ def predicted_RB_decay_parameter(mdl, target_model, weights=None):
     return p
 
 
-def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weighting=1.0):
+def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
     Computes the gauge transformation required so that, when the model is transformed
     via this gauge-transformation, the RB number -- as predicted by the function
-    `predicted_RB_number` -- is the average model infidelity between the transformed
+    `predicted_rb_number` -- is the average model infidelity between the transformed
     `mdl` model and the target model `target_model`. This transformation is defined
     Proctor et al Phys. Rev. Lett. 119, 130502 (2017), and see also Wallman Quantum 2,
     47 (2018).
@@ -172,7 +172,7 @@ def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weightin
         on all gates, as this is used in many RB protocols (e.g., Clifford RB).
         But, this weighting is flexible in the "direct RB" protocol.
 
-    mxBasis : {"std","gm","pp"}, optional
+    mx_basis : {"std","gm","pp"}, optional
         The basis of the models. If None, the basis is obtained from the model.
 
     eigenvector_weighting : float, optional
@@ -204,11 +204,11 @@ def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weightin
 
     vec_l_operator = vecs[:, index_max] + eigenvector_weighting * vecs[:, index_2ndmax]
 
-    if mxBasis is None:
-        mxBasis = mdl.basis.name
-    assert(mxBasis == 'pp' or mxBasis == 'gm' or mxBasis == 'std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    if mx_basis is None:
+        mx_basis = mdl.basis.name
+    assert(mx_basis == 'pp' or mx_basis == 'gm' or mx_basis == 'std'), "mx_basis must be 'gm', 'pp' or 'std'."
 
-    if mxBasis in ('pp', 'gm'):
+    if mx_basis in ('pp', 'gm'):
         assert(_np.amax(vec_l_operator.imag) < 10**(-15)), "If 'gm' or 'pp' basis, RB gauge matrix should be real."
         vec_l_operator = vec_l_operator.real
 
@@ -218,7 +218,7 @@ def rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weightin
     return l_operator
 
 
-def transform_to_rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenvector_weighting=1.0):
+def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
     Transforms a Model into the "RB gauge" (see the `RB_gauge` function), as
     introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017). This gauge
@@ -247,7 +247,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenve
         on all gates, as this is used in many RB protocols (e.g., Clifford RB).
         But, this weighting is flexible in the "direct RB" protocol.
 
-    mxBasis : {"std","gm","pp"}, optional
+    mx_basis : {"std","gm","pp"}, optional
         The basis of the models. If None, the basis is obtained from the model.
 
     eigenvector_weighting : float, optional
@@ -263,7 +263,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenve
     mdl_in_RB_gauge: Model
         The model `mdl` transformed into the "RB gauge".
     """
-    l = rb_gauge(mdl, target_model, weights=weights, mxBasis=mxBasis,
+    l = rb_gauge(mdl, target_model, weights=weights, mx_basis=mx_basis,
                  eigenvector_weighting=eigenvector_weighting)
     mdl_in_RB_gauge = mdl.copy()
     S = _objs.FullGaugeGroupElement(_np.linalg.inv(l))
@@ -271,7 +271,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mxBasis=None, eigenve
     return mdl_in_RB_gauge
 
 
-def L_matrix(mdl, target_model, weights=None):
+def L_matrix(mdl, target_model, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'L-matrix' linear operator on superoperators,
     from Proctor et al Phys. Rev. Lett. 119, 130502 (2017), represented as a
@@ -323,7 +323,7 @@ def L_matrix(mdl, target_model, weights=None):
     return L_matrix
 
 
-def R_matrix_predicted_RB_decay_parameter(mdl, group, group_to_model=None, weights=None):
+def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
     Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the
     `R_matrix` function] introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
@@ -374,7 +374,7 @@ def R_matrix_predicted_RB_decay_parameter(mdl, group, group_to_model=None, weigh
     return p
 
 
-def R_matrix(mdl, group, group_to_model=None, weights=None):
+def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'R-matrix' of Proctor et al Phys.
     Rev. Lett. 119, 130502 (2017). This matrix described the exact behaviour
@@ -452,7 +452,7 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):
     return R
 
 
-def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
                   group_to_model=None, weights=None, compilation=None, group_twirled=False):
     """
     Calculates the exact RB average success probablilites (ASP), using some
@@ -559,7 +559,7 @@ def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
     return m, P_m
 
 
-def L_matrix_ASPs(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
                   return_error_bounds=False, norm='diamond'):
     """
@@ -735,7 +735,7 @@ def errormaps(mdl, target_model):
     return errormaps
 
 
-def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None):
+def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=None):
     """
     Computes the "gate-dependence of errors maps" parameter defined by
 
@@ -757,7 +757,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
         The norm used in the calculation. Can be either 'diamond' for
         the diamond norm, or '1to1' for the Hermitian 1 to 1 norm.
 
-    mxBasis : {"std","gm","pp"}, optional
+    mx_basis : {"std","gm","pp"}, optional
         The basis of the models. If None, the basis is obtained from
         the model.
 
@@ -769,19 +769,19 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
     error_gs = errormaps(mdl, target_model)
     delta = []
 
-    if mxBasis is None:
-        mxBasis = mdl.basis.name
-    assert(mxBasis == 'pp' or mxBasis == 'gm' or mxBasis == 'std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    if mx_basis is None:
+        mx_basis = mdl.basis.name
+    assert(mx_basis == 'pp' or mx_basis == 'gm' or mx_basis == 'std'), "mx_basis must be 'gm', 'pp' or 'std'."
 
     for gate in list(target_model.operations.keys()):
         if norm == 'diamond':
             print(error_gs.operations[gate])
             print(error_gs.operations['Gavg'])
             delta.append(_optls.diamonddist(error_gs.operations[gate], error_gs.operations['Gavg'],
-                                            mxBasis=mxBasis))
+                                            mx_basis=mx_basis))
         elif norm == '1to1':
             gate_dif = error_gs.operations[gate] - error_gs.operations['Gavg']
-            delta.append(_optls.norm1to1(gate_dif, n_samples=1000, mxBasis=mxBasis, return_list=False))
+            delta.append(_optls.norm1to1(gate_dif, n_samples=1000, mx_basis=mx_basis, return_list=False))
         else:
             raise ValueError("Only diamond or 1to1 norm available.")
 
@@ -818,7 +818,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mxBasis=None
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),
 #                                     ('1_cm', target_model.povms['Mdefault']['1'])] )
 #    ave_error_gsl = _cnst.circuit_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
-#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, nSamples=1, sampleError="none")#
+#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, n_samples=1, sample_error="none")#
 
 #    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
 #    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]

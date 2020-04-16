@@ -15,7 +15,7 @@ class HelpSection(_Section):
     _HTML_TEMPLATE = 'tabs/Help.html'
 
     @_Section.figure_factory()
-    def exampleTable(workspace, switchboard, **kwargs):
+    def example_table(workspace, switchboard, **kwargs):
         example_table = workspace.ExampleTable()
         example_table.set_render_options(click_to_display=True)
         return example_table

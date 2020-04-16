@@ -22,15 +22,15 @@ from . import circuitconstruction as _gstrc
 from pprint import pprint
 
 
-def generate_fake_data(modelOrDataset, circuit_list, nSamples,
-                       sampleError="multinomial", seed=None, randState=None,
-                       aliasDict=None, collisionAction="aggregate",
-                       recordZeroCnts=True, comm=None, memLimit=None, times=None):
+def generate_fake_data(model_or_dataset, circuit_list, n_samples,
+                       sample_error="multinomial", seed=None, rand_state=None,
+                       alias_dict=None, collision_action="aggregate",
+                       record_zero_counts=True, comm=None, mem_limit=None, times=None):
     """Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
     ----------
-    modelOrDataset : Model or DataSet object
+    model_or_dataset : Model or DataSet object
         If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
 
@@ -39,16 +39,16 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         specifies a gate sequence whose counts are included
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
-    nSamples : int or list of ints or None
+    n_samples : int or list of ints or None
         The simulated number of samples for each operation sequence.  This only has
-        effect when  ``sampleError == "binomial"`` or ``"multinomial"``.  If an
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
         integer, all operation sequences have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        operation sequence.  If ``None``, then `modelOrDataset` must be a
+        operation sequence.  If ``None``, then `model_or_dataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
         (on a per-circuit basis).
 
-    sampleError : string, optional
+    sample_error : string, optional
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
@@ -60,7 +60,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         - "binomial" - the number of counts is taken from a binomial
           distribution.  Distribution has parameters p = (clipped) probability
           of the operation sequence and n = number of samples.  This can only be used
-          when there are exactly two SPAM labels in modelOrDataset.
+          when there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = (clipped) probability of the gate
           string using the k-th SPAM label and n = number of samples.
@@ -69,23 +69,23 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         If not ``None``, a seed for numpy's random number generator, which
         is used to sample from the binomial or multinomial distribution.
 
-    randState : numpy.random.RandomState
+    rand_state : numpy.random.RandomState
         A RandomState object to generate samples from. Can be useful to set
         instead of `seed` if you want reproducible distribution samples across
         multiple random function calls but you don't want to bother with
         manually incrementing seeds between those calls.
 
-    aliasDict : dict, optional
+    alias_dict : dict, optional
         A dictionary mapping single operation labels into tuples of one or more
         other operation labels which translate the given operation sequences before values
-        are computed using `modelOrDataset`.  The resulting Dataset, however,
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
         contains the *un-translated* operation sequences as keys.
 
-    collisionAction : {"aggregate", "keepseparate"}
+    collision_action : {"aggregate", "keepseparate"}
         Determines how duplicate operation sequences are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
         DataSet.  If False, then zero counts are ignored, except for
         potentially registering new outcome labels.
@@ -95,13 +95,13 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         across multiple processors and ensuring that the *same* dataset is
         generated on each processor.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes which is used to determine job allocation
         when there are multiple processors.
 
     times : iterable, optional
         When not None, a list of time-stamps at which data should be sampled.
-        `nSamples` samples will be simulated at each time value, meaning that
+        `n_samples` samples will be simulated at each time value, meaning that
         each circuit in `circuit_list` will be evaluated with the given time
         value as its *start time*.
 
@@ -115,41 +115,41 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
     NTOL = 10
     TOL = 10**-NTOL
 
-    if isinstance(modelOrDataset, _ds.DataSet):
-        dsGen = modelOrDataset
+    if isinstance(model_or_dataset, _ds.DataSet):
+        dsGen = model_or_dataset
         gsGen = None
-        dataset = _ds.DataSet(collisionAction=collisionAction,
-                              outcomeLabelIndices=dsGen.olIndex)  # keep same outcome labels
+        dataset = _ds.DataSet(collision_action=collision_action,
+                              outcome_label_indices=dsGen.olIndex)  # keep same outcome labels
     else:
-        gsGen = modelOrDataset
+        gsGen = model_or_dataset
         dsGen = None
-        dataset = _ds.DataSet(collisionAction=collisionAction)
+        dataset = _ds.DataSet(collision_action=collision_action)
 
-    if aliasDict:
-        aliasDict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
-                     for ky, val in aliasDict.items()}  # convert to use Labels
+    if alias_dict:
+        alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
+                      for ky, val in alias_dict.items()}  # convert to use Labels
 
     if gsGen and times is None:
-        if aliasDict is not None:
-            trans_circuit_list = [_gstrc.translate_circuit(s, aliasDict)
+        if alias_dict is not None:
+            trans_circuit_list = [_gstrc.translate_circuit(s, alias_dict)
                                   for s in circuit_list]
         else:
             trans_circuit_list = circuit_list
-        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
+        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, mem_limit=mem_limit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
     if comm is None or comm.Get_rank() == 0:  # only root rank computes
 
-        if sampleError in ("binomial", "multinomial"):
-            if randState is None:
+        if sample_error in ("binomial", "multinomial"):
+            if rand_state is None:
                 rndm = _rndm.RandomState(seed)  # ok if seed is None
             else:
-                rndm = randState
+                rndm = rand_state
 
         for k, s in enumerate(circuit_list):
 
             #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
-            trans_s = _gstrc.translate_circuit(s, aliasDict)
+            trans_s = _gstrc.translate_circuit(s, alias_dict)
             circuit_times = times if times is not None else ["N/A dummy"]
 
             counts_list = []
@@ -160,7 +160,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     else:
                         ps = gsGen.probs(trans_s, time=tm)
 
-                    if sampleError in ("binomial", "multinomial"):
+                    if sample_error in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
                         for ol in ps:
                             if ps[ol] < 0:
@@ -173,7 +173,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     ps = _collections.OrderedDict([(ol, frac) for ol, frac
                                                    in dsGen[trans_s].fractions.items()])
 
-                if gsGen and sampleError in ("binomial", "multinomial"):
+                if gsGen and sample_error in ("binomial", "multinomial"):
                     #Check that sum ~= 1 (and nudge if needed) since binomial and
                     #  multinomial random calls assume this.
                     OVERTOL = 1.0 + TOL
@@ -194,21 +194,21 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                     if adjusted:
                         _warnings.warn('Adjustment finished')
 
-                if nSamples is None and dsGen is not None:
+                if n_samples is None and dsGen is not None:
                     N = dsGen[trans_s].total  # use the number of samples from the generating dataset
                     #Note: total() accounts for other intermediate-measurment branches automatically
                 else:
                     try:
-                        N = nSamples[k]  # try to treat nSamples as a list
+                        N = n_samples[k]  # try to treat n_samples as a list
                     except:
-                        N = nSamples  # if not indexable, nSamples should be a single number
+                        N = n_samples  # if not indexable, n_samples should be a single number
 
                 nWeightedSamples = N
 
                 counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
                 labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
                 # "outcome labels" - sort by prob for consistent generation
-                if sampleError == "binomial":
+                if sample_error == "binomial":
 
                     if len(labels) == 1:  # Special case when labels[0] == 1.0 (100%)
                         counts[labels[0]] = nWeightedSamples
@@ -218,7 +218,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                         counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
                         counts[ol1] = nWeightedSamples - counts[ol0]
 
-                elif sampleError == "multinomial":
+                elif sample_error == "multinomial":
                     countsArray = rndm.multinomial(nWeightedSamples,
                                                    [ps[ol] for ol in labels], size=1)  # well-ordered list of probs
                     for i, ol in enumerate(labels):
@@ -226,24 +226,24 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 else:
                     for outcomeLabel, p in ps.items():
                         pc = _np.clip(p, 0, 1)  # Note: *not* used in "none" case
-                        if sampleError == "none":
+                        if sample_error == "none":
                             counts[outcomeLabel] = float(nWeightedSamples * p)
-                        elif sampleError == "clip":
+                        elif sample_error == "clip":
                             counts[outcomeLabel] = float(nWeightedSamples * pc)
-                        elif sampleError == "round":
+                        elif sample_error == "round":
                             counts[outcomeLabel] = int(round(nWeightedSamples * pc))
                         else:
                             raise ValueError(
                                 "Invalid sample error parameter: '%s'  "
-                                "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError
+                                "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sample_error
                             )
                 counts_list.append(counts)
 
             if times is None:
                 assert(len(counts_list) == 1)
-                dataset.add_count_dict(s, counts_list[0], recordZeroCnts=recordZeroCnts)
+                dataset.add_count_dict(s, counts_list[0], record_zero_counts=record_zero_counts)
             else:
-                dataset.add_series_data(s, counts_list, times, recordZeroCnts=recordZeroCnts)
+                dataset.add_series_data(s, counts_list, times, record_zero_counts=record_zero_counts)
 
         dataset.done_adding_data()
 
@@ -253,7 +253,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
     return dataset
 
 
-def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
+def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     """
     Creates a DataSet which merges certain outcomes in input DataSet;
     used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
@@ -273,7 +273,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
         to use :function:`filter_dataset` which also updates the operation sequences.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
         (merged) DataSet.  If False, then zero counts are ignored, except for
         potentially registering new outcome labels.
@@ -289,7 +289,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
                         for key, val in label_merge_dict.items()}
 
     new_outcomes = label_merge_dict.keys()
-    merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
+    merged_dataset = _ds.DataSet(outcome_labels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
     if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
         raise ValueError(
@@ -308,7 +308,7 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
                 count_dict[new_outcome] = 0
                 for old_outcome in label_merge_dict[new_outcome]:
                     count_dict[new_outcome] += linecounts[i].get(old_outcome, 0)
-            if recordZeroCnts is False:
+            if record_zero_counts is False:
                 for new_outcome in new_outcomes:
                     if count_dict[new_outcome] == 0:
                         del count_dict[new_outcome]
@@ -325,21 +325,21 @@ def merge_outcomes(dataset, label_merge_dict, recordZeroCnts=True):
     #        for old_outcome in label_merge_dict[new_outcome]:
     #            count_dict[new_outcome] += linecounts.get(old_outcome, 0)
     #    merged_dataset.add_count_dict(key, count_dict, aux=dataset[key].aux,
-    #                                  recordZeroCnts=recordZeroCnts)
+    #                                  record_zero_counts=record_zero_counts)
 
     merged_dataset.done_adding_data()
     return merged_dataset
 
 
-def create_qubit_merge_dict(nQubits, qubits_to_keep):
+def create_qubit_merge_dict(n_qubits, qubits_to_keep):
     """
     Creates a dictionary appropriate for use with :function:`merge_outcomes`,
     that aggregates all but the specified `qubits_to_keep` when the outcome
-    labels are those of `nQubits` qubits (i.e. strings of 0's and 1's).
+    labels are those of `n_qubits` qubits (i.e. strings of 0's and 1's).
 
     Parameters
     ----------
-    nQubits : int
+    n_qubits : int
         The total number of qubits
 
     qubits_to_keep : list
@@ -351,7 +351,7 @@ def create_qubit_merge_dict(nQubits, qubits_to_keep):
     -------
     dict
     """
-    outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=nQubits)]
+    outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=n_qubits)]
     return create_merge_dict(qubits_to_keep, outcome_labels)
 
 
@@ -400,7 +400,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle=((),), recordZeroCnts=True,
+                   new_sectors=None, idle=((),), record_zero_counts=True,
                    filtercircuits=True):
     """
     Creates a DataSet is the restriction of `dataset`to the sectors
@@ -459,7 +459,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         The operation label to be used when there are no kept components of a
         "layer" (element) of a circuit.
 
-    recordZeroCnts : bool, optional
+    record_zero_counts : bool, optional
         Whether zero-counts present in the original `dataset` are recorded
         (stored) in the returned (filtered) DataSet.  If False, then such
         zero counts are ignored, except for potentially registering new
@@ -479,8 +479,8 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
 
     #ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
     #                                                     dataset.get_outcome_labels()),
-    #                                   recordZeroCnts=recordZeroCnts)
-    ds_merged = dataset.merge_std_nqubit_outcomes(sindices_to_keep, recordZeroCnts)
+    #                                   record_zero_counts=record_zero_counts)
+    ds_merged = dataset.merge_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
 
     ds_merged = ds_merged.copy_nonstatic()
     if filtercircuits:

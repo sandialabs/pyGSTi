@@ -6,7 +6,7 @@ from . import fixtures as pkg
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects.results import Results
-from pygsti.objects import estimate
+from pygsti.protocols import estimate
 
 
 class EstimateBase(object):
@@ -26,7 +26,7 @@ class EstimateBase(object):
     def test_get_effective_dataset(self):
         # Get effective estimate dataset
         effds = self.est.get_effective_dataset()
-        effds, subMxs = self.est.get_effective_dataset(return_subMxs=True)
+        effds, subMxs = self.est.get_effective_dataset(return_submxs=True)
         # TODO assert correctness
 
     def test_view(self):
@@ -59,7 +59,7 @@ class ResultsEstimateTester(EstimateBase, BaseCase):
 
     def test_add_gaugeoptimized(self):
         # TODO optimize
-        goparams = {'itemWeights': {'gates': 1.0, 'spam': 0.1},
+        goparams = {'item_weights': {'gates': 1.0, 'spam': 0.1},
                     'method': 'BFGS'}  # method so we don't need a legit comm
         self.est.add_gaugeoptimized(goparams, label="test", comm=None, verbosity=None)
         # TODO assert correctness
@@ -72,11 +72,11 @@ class EmptyEstimateTester(EstimateBase, BaseCase):
 
     def test_add_gaugeoptimized_raises_on_no_model(self):
         with self.assertRaises(ValueError):
-            goparams = {'itemWeights': {'gates': 1.0, 'spam': 0.1}, 'targetModel': self.model}
+            goparams = {'item_weights': {'gates': 1.0, 'spam': 0.1}, 'target_model': self.model}
             self.est.add_gaugeoptimized(goparams, label="test", comm=None, verbosity=None)  # goparams must have 'model'
 
     def test_add_gaugeoptimized_raises_on_no_target_model(self):
         with self.assertRaises(ValueError):
-            goparams = {'itemWeights': {'gates': 1.0, 'spam': 0.1}, 'model': self.model}
+            goparams = {'item_weights': {'gates': 1.0, 'spam': 0.1}, 'model': self.model}
             self.est.add_gaugeoptimized(goparams, label="test", comm=None,
-                                        verbosity=None)  # goparams must have 'targetModel'
+                                        verbosity=None)  # goparams must have 'target_model'

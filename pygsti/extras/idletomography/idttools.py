@@ -50,13 +50,13 @@ def alloutcomes(prep, meas, maxweight):
                [eoutcome.flip(i, j) for i in range(N) for j in range(i + 1, N)]
 
 
-def allerrors(N, maxweight):
+def allerrors(nqubits, maxweight):
     """
-    Lists every Pauli error operator for `N` qubits with weight <= `maxweight`
+    Lists every Pauli error operator for `nqubits` qubits with weight <= `maxweight`
 
     Parameters
     ----------
-    N, maxweight : int
+    nqubits, maxweight : int
 
     Returns
     -------
@@ -65,11 +65,11 @@ def allerrors(N, maxweight):
     """
     if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweigth <= 2 is currently supported")
     if maxweight == 1:
-        return [_pobjs.NQPauliOp.Weight1Pauli(N, loc, p) for loc in range(N) for p in range(3)]
+        return [_pobjs.NQPauliOp.weight_1_pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)]
     else:
-        return [_pobjs.NQPauliOp.Weight1Pauli(N, loc, p) for loc in range(N) for p in range(3)] + \
-               [_pobjs.NQPauliOp.Weight2Pauli(N, loc1, loc2, p1, p2) for loc1 in range(N)
-                for loc2 in range(loc1 + 1, N)
+        return [_pobjs.NQPauliOp.weight_1_pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)] + \
+               [_pobjs.NQPauliOp.weight_2_pauli(nqubits, loc1, loc2, p1, p2) for loc1 in range(nqubits)
+                for loc2 in range(loc1 + 1, nqubits)
                 for p1 in range(3) for p2 in range(3)]
 
 
@@ -100,10 +100,10 @@ def allobservables(meas, maxweight):
                [_pobjs.NQPauliOp(meas.rep).subpauli([i, j]) for i in range(len(meas)) for j in range(i + 1, len(meas))]
 
 
-def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
+def tile_pauli_fidpairs(base_fidpairs, nqubits, maxweight):
     """
     Tiles a set of base fiducial pairs on `maxweight` qubits to a
-    set of fiducial pairs on `nQubits` qubits such that every set
+    set of fiducial pairs on `nqubits` qubits such that every set
     of `maxweight` qubits takes on the values in each base pair in
     at least one of the returned pairs.
 
@@ -113,7 +113,7 @@ def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
         A list of 2-tuples of :class:`NQPauliState` objects (on `maxweight`
         qubits).
 
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     maxweight : int
@@ -123,11 +123,11 @@ def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
     Returns
     -------
     list
-        A list of 2-tuples of :class:`NQPauliState` objects (on `nQubits`
+        A list of 2-tuples of :class:`NQPauliState` objects (on `nqubits`
         qubits).
     """
     nqubit_fidpairs = []
-    tmpl = _nqn.get_kcoverage_template(nQubits, maxweight)
+    tmpl = _nqn.get_kcoverage_template(nqubits, maxweight)
     for base_prep, base_meas in base_fidpairs:
         for tmpl_row in tmpl:
             #Replace 0...weight-1 integers in tmpl_row with Pauli basis
@@ -165,7 +165,7 @@ def nontrivial_paulis(wt):
     return ret
 
 
-def set_idle_errors(nQubits, model, errdict, rand_default=None,
+def set_idle_errors(nqubits, model, errdict, rand_default=None,
                     hamiltonian=True, stochastic=True, affine=True):
     """
     Set specific or random error terms (typically for a data-generating model)
@@ -173,7 +173,7 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     model : CloudNoiseModel
@@ -216,7 +216,7 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
         if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
 
         for k, tup in enumerate(nontrivial_paulis(len(factor.targetLabels))):
-            lst = ['I'] * nQubits
+            lst = ['I'] * nqubits
             for ii, i in enumerate(factor.targetLabels):
                 indx = i if isinstance(i, int) else int(i[1:])  # i is something like "Q0" so int(i[1:]) extracts the 0
                 lst[indx] = tup[ii]
@@ -263,13 +263,13 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
     return _np.array(rand_rates, 'd')  # the random rates that were chosen (to keep track of them for later)
 
 
-def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
+def get_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
     """
     Get error rates on the global idle operation withina :class:`CloudNoiseModel` object.
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     model : CloudNoiseModel
@@ -289,7 +289,7 @@ def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=Tr
     Returns
     -------
     hamiltonian_rates, stochastic_rates, affine_rates : dict
-        Dictionaries of error rates.  Keys are Pauli labels of length `nQubits`,
+        Dictionaries of error rates.  Keys are Pauli labels of length `nqubits`,
         e.g. `"XIX"`, `"IIX"`, `"XZY"`.  Only nonzero rates are returned.
     """
     ham_rates = {}
@@ -312,7 +312,7 @@ def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=Tr
         nTargetQubits = len(factor.targetLabels)
 
         for k, tup in enumerate(nontrivial_paulis(len(factor.targetLabels))):
-            lst = ['I'] * nQubits
+            lst = ['I'] * nqubits
             for ii, i in enumerate(factor.targetLabels):
                 lst[int(i[1:])] = tup[ii]  # i is something like "Q0" so int(i[1:]) extracts the 0
             label = "".join(lst)
@@ -332,7 +332,7 @@ def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=Tr
     return ham_rates, sto_rates, aff_rates
 
 
-def predicted_intrinsic_rates(nQubits, maxweight, model,
+def predicted_intrinsic_rates(nqubits, maxweight, model,
                               hamiltonian=True, stochastic=True, affine=True):
     """
     Get the exact intrinsic rates that would be produced by simulating `model`
@@ -340,7 +340,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     maxweight : int, optional
@@ -360,7 +360,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
         Arrays of intrinsic rates.  None if corresponding `hamiltonian`,
         `stochastic` or `affine` is set to False.
     """
-    error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nQubits, maxweight)]
+    error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nqubits, maxweight)]
     #v = model.to_vector()
 
     if hamiltonian:
@@ -391,7 +391,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
         #if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
 
         for k, tup in enumerate(nontrivial_paulis(len(factor.targetLabels))):
-            lst = ['I'] * nQubits
+            lst = ['I'] * nqubits
             for ii, i in enumerate(factor.targetLabels):
                 indx = i if isinstance(i, int) else int(i[1:])  # i is something like "Q0" so int(i[1:]) extracts the 0
                 lst[indx] = tup[ii]
@@ -416,7 +416,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
             #
             #if stochastic:
             #    # each Stochastic term has two Paulis in it (on either side of rho), each of which is
-            #    # scaled by 1/sqrt(d), so 1/d in total, where d = 2**nQubits
+            #    # scaled by 1/sqrt(d), so 1/d in total, where d = 2**nqubits
             #    sscaled_val = sval**2 / (2**nTargetQubits)  # val**2 b/c it's a *stochastic* term parameter
             #
             #if hamiltonian:
@@ -440,7 +440,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 
 
-def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
+def predicted_observable_rates(idtresults, typ, nqubits, maxweight, model):
     """
     Get the exact observable rates that would be produced by simulating
     `model` (for comparison with idle tomography results).
@@ -455,7 +455,7 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
     typ : {"samebasis","diffbasis"}
         The type of observable rates to predict and return.
 
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     maxweight : int
@@ -488,7 +488,7 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
                     # compute intrinsic (wait for jac row to check length)
                     affine = bool(len(Jrow) == 2 * Ne)  # affine included?
                     _, sto_intrinsic_rates, aff_intrinsic_rates = \
-                        predicted_intrinsic_rates(nQubits, maxweight, model, False, True, affine)
+                        predicted_intrinsic_rates(nqubits, maxweight, model, False, True, affine)
                     intrinsic = _np.concatenate([sto_intrinsic_rates, aff_intrinsic_rates]) \
 
                 predicted_rate = _np.dot(Jrow, intrinsic)
@@ -509,7 +509,7 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
                     # compute intrinsic (wait for jac row to check for affine)
                     affine = bool('affine jacobian row' in info_dict)
                     ham_intrinsic_rates, _, aff_intrinsic_rates = \
-                        predicted_intrinsic_rates(nQubits, maxweight, model, True, False, affine)
+                        predicted_intrinsic_rates(nqubits, maxweight, model, True, False, affine)
 
                 predicted_rate = _np.dot(Jrow, ham_intrinsic_rates)
                 if 'affine jacobian row' in info_dict:

@@ -41,9 +41,9 @@ class _Module(GSTModelPack):
                    (('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0), ('Gxpi4', 0)),
                    (('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0))]
 
-    global_fidPairs = [(0, 3), (3, 2), (4, 0), (5, 3)]
+    global_fidpairs = [(0, 3), (3, 2), (4, 0), (5, 3)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gxpi4', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gzpi2', 0), ('Gxpi4', 0)): [(0, 3), (3, 2), (4, 0), (5, 3)],
@@ -51,9 +51,9 @@ class _Module(GSTModelPack):
         (('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi4', 0), ('Gzpi2', 0), ('Gxpi4', 0), ('Gxpi4', 0)): [(0, 0), (2, 3), (5, 2), (5, 4)]
     }
 
-    global_fidPairs_lite = [(0, 1), (1, 2), (4, 3), (4, 4)]
+    global_fidpairs_lite = [(0, 1), (1, 2), (4, 3), (4, 4)]
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
         (('Gxpi4', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gzpi2', 0), ('Gxpi4', 0)): [(0, 3), (3, 2), (4, 0), (5, 3)],

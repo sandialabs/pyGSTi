@@ -9,7 +9,7 @@
 # ***************************************************************************************************
 
 from . import protocol as _proto
-from ..algorithms.robust_phase_estimation import RobustPhaseEstimation as _rpe
+from ..algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
 
 from collections import OrderedDict, namedtuple
 from argparse import Namespace
@@ -84,9 +84,9 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
         # Actually build the circuits.
         sin_circs = []
         cos_circs = []
-        for N in req_lengths:
-            sin_circs.append(sin_prep + gate * N + sin_meas)
-            cos_circs.append(cos_prep + gate * N + cos_meas)
+        for n in req_lengths:
+            sin_circs.append(sin_prep + gate * n + sin_meas)
+            cos_circs.append(cos_prep + gate * n + cos_meas)
 
         super().__init__([sin_circs, cos_circs], qubit_labels=qubit_labels)
         self.auxfile_types["sin_prep"] = "text-circuit-list"
@@ -111,8 +111,8 @@ class RobustPhaseEstimation(_proto.Protocol):
 
     def parse_dataset(self, design, dataset):
         measured = OrderedDict()
-        for N, sin_circ, cos_circ in zip(design.req_lengths, *design.circuit_lists):
-            m = measured[N] = numpy.zeros(4, dtype=int)
+        for n, sin_circ, cos_circ in zip(design.req_lengths, *design.circuit_lists):
+            m = measured[n] = numpy.zeros(4, dtype=int)
             m[:2] = self._parse_row(
                 dataset[sin_circ], design.sin_outcomes_pos, design.sin_outcomes_neg
             )
@@ -130,14 +130,14 @@ class RobustPhaseEstimation(_proto.Protocol):
         angles = OrderedDict()
 
         # The ordering here is chosen to maintain compatibility.
-        for N, (Cp_Ns, Cm_Ns, Cp_Nc, Cm_Nc) in measured.items():
+        for n, (Cp_Ns, Cm_Ns, Cp_Nc, Cm_Nc) in measured.items():                                                        # noqa
             # See the description of RobustPhaseEstimationDesign.
             # We estimate P^+_{Ns} and P^-_{Nc} from the similarly named counts.
             # The MLE for these probabilities is:
-            Pp_Ns = Cp_Ns / (Cp_Ns + Cm_Ns)
-            Pp_Nc = Cp_Nc / (Cp_Nc + Cm_Nc)
+            Pp_Ns = Cp_Ns / (Cp_Ns + Cm_Ns)                                                                             # noqa
+            Pp_Nc = Cp_Nc / (Cp_Nc + Cm_Nc)                                                                             # noqa
 
-            angles[N] = numpy.arctan2(2 * Pp_Ns - 1, 2 * Pp_Nc - 1) % (2 * numpy.pi)
+            angles[n] = numpy.arctan2(2 * Pp_Ns - 1, 2 * Pp_Nc - 1) % (2 * numpy.pi)
 
         return angles
 
@@ -145,7 +145,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         meas = self.parse_dataset(data.edesign, data.dataset)
         angles = self.raw_angles(meas)
 
-        _res = _rpe(Namespace(raw_angles=angles, _measured=meas))
+        _res = _RobustPhaseEstimation(Namespace(raw_angles=angles, _measured=meas))
 
         ret = RobustPhaseEstimationResults(data, self, _res.angle_estimates)
         return ret

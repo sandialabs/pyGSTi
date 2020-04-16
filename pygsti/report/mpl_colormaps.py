@@ -24,18 +24,18 @@ except ImportError:
                       "import)."))
 
 
-class mpl_LinLogNorm(_matplotlib.colors.Normalize):
+class MplLinLogNorm(_matplotlib.colors.Normalize):
     """ Matplotlib version of lin-log colormap normalization """
 
-    def __init__(self, linLogColormap, clip=False):
-        cm = linLogColormap
-        super(mpl_LinLogNorm, self).__init__(vmin=cm.vmin, vmax=cm.vmax, clip=clip)
+    def __init__(self, linlog_colormap, clip=False):
+        cm = linlog_colormap
+        super(MplLinLogNorm, self).__init__(vmin=cm.vmin, vmax=cm.vmax, clip=clip)
         self.trans = cm.trans
         self.cm = cm
 
     def inverse(self, value):
         """ Inverse of __call__ as per matplotlib spec. """
-        norm_trans = super(mpl_LinLogNorm, self).__call__(self.trans)
+        norm_trans = super(MplLinLogNorm, self).__call__(self.trans)
         deltav = self.vmax - self.vmin
         return_value = _np.where(_np.greater(0.5, value),
                                  2 * value * (self.trans - self.vmin) + self.vmin,
@@ -137,9 +137,9 @@ def mpl_process_lbl(lbl, math=False):
     return l
 
 
-def mpl_process_lbls(lblList):
+def mpl_process_lbls(lbl_list):
     """ Process a list of plotly labels into matplotlib ones"""
-    return [mpl_process_lbl(lbl) for lbl in lblList]
+    return [mpl_process_lbl(lbl) for lbl in lbl_list]
 
 
 def mpl_color(plotly_color):
@@ -161,7 +161,7 @@ def mpl_color(plotly_color):
 
 
 def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp',
-                         boxLabels_fontsize=6):
+                         box_labels_font_size=6):
     """
     Convert a pygsti (plotly) figure to a matplotlib figure.
 
@@ -180,7 +180,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
     prec : int or {"compact","compacth"}
         Digits of precision to include in labels.
 
-    boxLabels_fontsize : int, optional
+    box_labels_font_size : int, optional
         The size for labels on the boxes. If 0 then no labels are
         put on the boxes
 
@@ -350,7 +350,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             #print("DB ann = ", len(annotations))
             #boxLabels = bool( len(annotations) >= 1 ) #TODO: why not plt_data.size instead of 1?
             #boxLabels = True  # maybe should always be true?
-            if boxLabels_fontsize > 0:
+            if box_labels_font_size > 0:
                 # Write values on colored squares
                 for y in range(plt_data.shape[0]):
                     for x in range(plt_data.shape[1]):
@@ -360,7 +360,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                                   horizontalalignment='center',
                                   verticalalignment='center',
                                   color=mpl_besttxtcolor(plt_data[y, x], cmap, norm),
-                                  fontsize=boxLabels_fontsize)
+                                  fontsize=box_labels_font_size)
 
             if show_colorscale:
                 cbar = _plt.colorbar(heatmap)

@@ -33,9 +33,9 @@ def array_eq(a, b, tol=1e-8):
     return _np.linalg.norm(a - b) < tol
 
 
-def trace(M):  # memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
+def trace(m):  # memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
     """
-    The trace of a matrix, sum_i M[i,i].
+    The trace of a matrix, sum_i m[i,i].
 
     A memory leak in some version of numpy can cause repeated calls to numpy's
     trace function to eat up all available system memory, and this function
@@ -43,15 +43,15 @@ def trace(M):  # memory leak in numpy causes repeated trace calls to eat up all 
 
     Parameters
     ----------
-    M : numpy array
+    m : numpy array
         the matrix (any object that can be double-indexed)
 
     Returns
     -------
-    element type of M
-        The trace of M.
+    element type of m
+        The trace of m.
     """
-    return sum([M[i, i] for i in range(M.shape[0])])
+    return sum([m[i, i] for i in range(m.shape[0])])
 #    with warnings.catch_warnings():
 #        warnings.filterwarnings('error')
 #        try:
@@ -64,7 +64,7 @@ def trace(M):  # memory leak in numpy causes repeated trace calls to eat up all 
 #    return ret
 
 
-def is_hermitian(mx, TOL=1e-9):
+def is_hermitian(mx, tol=1e-9):
     """
     Test whether mx is a hermitian matrix.
 
@@ -73,7 +73,7 @@ def is_hermitian(mx, TOL=1e-9):
     mx : numpy array
         Matrix to test.
 
-    TOL : float, optional
+    tol : float, optional
         Tolerance on absolute magitude of elements.
 
     Returns
@@ -83,13 +83,13 @@ def is_hermitian(mx, TOL=1e-9):
     """
     (m, n) = mx.shape
     for i in range(m):
-        if abs(mx[i, i].imag) > TOL: return False
+        if abs(mx[i, i].imag) > tol: return False
         for j in range(i + 1, n):
-            if abs(mx[i, j] - mx[j, i].conjugate()) > TOL: return False
+            if abs(mx[i, j] - mx[j, i].conjugate()) > tol: return False
     return True
 
 
-def is_pos_def(mx, TOL=1e-9):
+def is_pos_def(mx, tol=1e-9):
     """
     Test whether mx is a positive-definite matrix.
 
@@ -98,7 +98,7 @@ def is_pos_def(mx, TOL=1e-9):
     mx : numpy array
         Matrix to test.
 
-    TOL : float, optional
+    tol : float, optional
         Tolerance on absolute magitude of elements.
 
     Returns
@@ -107,10 +107,10 @@ def is_pos_def(mx, TOL=1e-9):
         True if mx is positive-semidefinite, otherwise False.
     """
     evals = _np.linalg.eigvals(mx)
-    return all([ev > -TOL for ev in evals])
+    return all([ev > -tol for ev in evals])
 
 
-def is_valid_density_mx(mx, TOL=1e-9):
+def is_valid_density_mx(mx, tol=1e-9):
     """
     Test whether mx is a valid density matrix (hermitian,
       positive-definite, and unit trace).
@@ -120,7 +120,7 @@ def is_valid_density_mx(mx, TOL=1e-9):
     mx : numpy array
         Matrix to test.
 
-    TOL : float, optional
+    tol : float, optional
         Tolerance on absolute magitude of elements.
 
     Returns
@@ -128,7 +128,7 @@ def is_valid_density_mx(mx, TOL=1e-9):
     bool
         True if mx is a valid density matrix, otherwise False.
     """
-    return is_hermitian(mx, TOL) and is_pos_def(mx, TOL) and abs(trace(mx) - 1.0) < TOL
+    return is_hermitian(mx, tol) and is_pos_def(mx, tol) and abs(trace(mx) - 1.0) < tol
 
 
 def frobeniusnorm(ar):
@@ -225,17 +225,17 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-def matrix_sign(M):
-    """ The "sign" matrix of `M` """
-    #Notes: sign(M) defined s.t. eigvecs of sign(M) are evecs of M
-    # and evals of sign(M) are +/-1 or 0 based on sign of eigenvalues of M
+def matrix_sign(m):
+    """ The "sign" matrix of `m` """
+    #Notes: sign(m) defined s.t. eigvecs of sign(m) are evecs of m
+    # and evals of sign(m) are +/-1 or 0 based on sign of eigenvalues of m
 
     #Using the extremely numerically stable (but expensive) Schur method
     # see http://www.maths.manchester.ac.uk/~higham/fm/OT104HighamChapter5.pdf
-    N = M.shape[0]; assert(M.shape == (N, N)), "M must be square!"
-    T, Z = _spl.schur(M, 'complex')  # M = Z T Z^H where Z is unitary and T is upper-triangular
+    N = m.shape[0]; assert(m.shape == (N, N)), "m must be square!"
+    T, Z = _spl.schur(m, 'complex')  # m = Z T Z^H where Z is unitary and T is upper-triangular
     U = _np.zeros(T.shape, 'complex')  # will be sign(T), which is easy to compute
-    # (U is also upper triangular), and then sign(M) = Z U Z^H
+    # (U is also upper triangular), and then sign(m) = Z U Z^H
 
     # diagonals are easy
     U[_np.diag_indices_from(U)] = _np.sign(_np.diagonal(T))
@@ -367,21 +367,21 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def unitary_superoperator_matrix_log(M, mxBasis):
+def unitary_superoperator_matrix_log(m, mx_basis):
     """
-    Construct the logarithm of superoperator matrix `M`
+    Construct the logarithm of superoperator matrix `m`
     that acts as a unitary on density-matrix space,
-    (`M: rho -> U rho Udagger`) so that log(M) can be
+    (`m: rho -> U rho Udagger`) so that log(m) can be
     written as the action by Hamiltonian `H`:
-    `log(M): rho -> -i[H,rho]`.
+    `log(m): rho -> -i[H,rho]`.
 
 
     Parameters
     ----------
-    M : numpy array
+    m : numpy array
         The superoperator matrix whose logarithm is taken
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -389,161 +389,161 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     Returns
     -------
     numpy array
-        A matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
+        A matrix `logM`, of the same shape as `m`, such that `m = exp(logM)`
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt  # (would create circular imports if at top)
     from . import optools as _gt  # (would create circular imports if at top)
 
-    M_std = change_basis(M, mxBasis, "std")
+    M_std = change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
     U = _gt.process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho] * sqrt(d)/2
-    logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mxBasis)
-    assert(_np.linalg.norm(_spl.expm(logM) - M) < 1e-8)  # expensive b/c of expm - could comment for performance
+    logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mx_basis)
+    assert(_np.linalg.norm(_spl.expm(logM) - m) < 1e-8)  # expensive b/c of expm - could comment for performance
     return logM
 
 
-def near_identity_matrix_log(M, TOL=1e-8):
+def near_identity_matrix_log(m, tol=1e-8):
     """
-    Construct the logarithm of superoperator matrix `M` that is
-    near the identity.  If `M` is real, the resulting logarithm will be real.
+    Construct the logarithm of superoperator matrix `m` that is
+    near the identity.  If `m` is real, the resulting logarithm will be real.
 
     Parameters
     ----------
-    M : numpy array
+    m : numpy array
         The superoperator matrix whose logarithm is taken
 
-    TOL : float, optional
+    tol : float, optional
         The tolerance used when testing for zero imaginary parts.
 
     Returns
     -------
     numpy array
-        An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
-        and `logM` is real when `M` is real.
+        An matrix `logM`, of the same shape as `m`, such that `m = exp(logM)`
+        and `logM` is real when `m` is real.
     """
     # A near-identity matrix should have a unique logarithm, and it should be
     # real if the original matrix is real
-    M_is_real = bool(_np.linalg.norm(M.imag) < TOL)
-    logM = _spl.logm(M)
+    M_is_real = bool(_np.linalg.norm(m.imag) < tol)
+    logM = _spl.logm(m)
     if M_is_real:
-        assert(_np.linalg.norm(logM.imag) < TOL), \
+        assert(_np.linalg.norm(logM.imag) < tol), \
             "Failed to construct a real logarithm! " \
-            + "This is probably because M is not near the identity.\n" \
-            + "Its eigenvalues are: " + str(_np.linalg.eigvals(M))
+            + "This is probably because m is not near the identity.\n" \
+            + "Its eigenvalues are: " + str(_np.linalg.eigvals(m))
         logM = logM.real
     return logM
 
 
-def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
+def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     """
-    Construct an approximate logarithm of superoperator matrix `M` that is
-    real and near the `target_logM`.  The equation `M = exp( logM )` is
+    Construct an approximate logarithm of superoperator matrix `m` that is
+    real and near the `target_logm`.  The equation `m = exp( logM )` is
     allowed to become inexact in order to make `logM` close to
-    `target_logM`.  In particular, the objective function that is
+    `target_logm`.  In particular, the objective function that is
     minimized is (where `||` indicates the 2-norm):
 
-    `|exp(logM) - M|_1 + targetWeight * ||logM - target_logM||^2`
+    `|exp(logM) - m|_1 + target_weight * ||logM - target_logm||^2`
 
     Parameters
     ----------
-    M : numpy array
+    m : numpy array
         The superoperator matrix whose logarithm is taken
 
-    target_logM : numpy array
+    target_logm : numpy array
         The target logarithm
 
-    targetWeight : float
+    target_weight : float
         A weighting factor used to blance the exactness-of-log term
         with the closeness-to-target term in the optimized objective
         function.  This value multiplies the latter term.
 
-    TOL : float, optional
+    tol : float, optional
         Optimzer tolerance.
 
     Returns
     -------
     logM : numpy array
-        An matrix of the same shape as `M`.
+        An matrix of the same shape as `m`.
     """
 
-    assert(_np.linalg.norm(M.imag) < 1e-8), "Argument `M` must be a *real* matrix!"
-    mx_shape = M.shape
+    assert(_np.linalg.norm(m.imag) < 1e-8), "Argument `m` must be a *real* matrix!"
+    mx_shape = m.shape
 
-    def _objective(flat_logM):
-        logM = flat_logM.reshape(mx_shape)
+    def _objective(flat_logm):
+        logM = flat_logm.reshape(mx_shape)
         testM = _spl.expm(logM)
-        ret = targetWeight * _np.linalg.norm(logM - target_logM)**2 + \
-            _np.linalg.norm(testM.flatten() - M.flatten(), 1)
+        ret = target_weight * _np.linalg.norm(logM - target_logm)**2 + \
+            _np.linalg.norm(testM.flatten() - m.flatten(), 1)
         #print("DEBUG: ",ret)
         return ret
 
         #Alt objective1: puts L1 on target term
-        #return _np.linalg.norm(testM-M)**2 + targetWeight*_np.linalg.norm(
-        #                      logM.flatten() - target_logM.flatten(), 1)
+        #return _np.linalg.norm(testM-m)**2 + target_weight*_np.linalg.norm(
+        #                      logM.flatten() - target_logm.flatten(), 1)
 
         #Alt objective2: all L2 terms (ridge regression)
-        #return targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
-        #        _np.linalg.norm(testM - M)**2
+        #return target_weight*_np.linalg.norm(logM-target_logm)**2 + \
+        #        _np.linalg.norm(testM - m)**2
 
     #from .. import optimize as _opt
     #print_obj_func = _opt.create_obj_func_printer(_objective) #only ever prints to stdout!
     print_obj_func = None
 
-    logM = _np.real(real_matrix_log(M, actionIfImaginary="ignore"))  # just drop any imaginary part
-    initial_flat_logM = logM.flatten()  # + 0.1*target_logM.flatten()
-    # Note: adding some of target_logM doesn't seem to help; and hurts in easy cases
+    logM = _np.real(real_matrix_log(m, action_if_imaginary="ignore"))  # just drop any imaginary part
+    initial_flat_logM = logM.flatten()  # + 0.1*target_logm.flatten()
+    # Note: adding some of target_logm doesn't seem to help; and hurts in easy cases
 
     if _objective(initial_flat_logM) > 1e-16:  # otherwise initial logM is fine!
 
         #print("Initial objective fn val = ",_objective(initial_flat_logM))
-        #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
-        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
-        #      _np.linalg.norm(logM-target_logM)**2)
+        #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-m),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-m.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logm)**2)
 
         solution = _spo.minimize(_objective, initial_flat_logM, options={'maxiter': 1000},
-                                 method='L-BFGS-B', callback=print_obj_func, tol=TOL)
+                                 method='L-BFGS-B', callback=print_obj_func, tol=tol)
         logM = solution.x.reshape(mx_shape)
         #print("Final objective fn val = ",_objective(solution.x))
-        #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
-        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
-        #      _np.linalg.norm(logM-target_logM)**2)
+        #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-m),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-m.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
 
 
-def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
+def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
     """
-    Construct a *real* logarithm of real matrix `M`.
+    Construct a *real* logarithm of real matrix `m`.
 
-    This is possible when negative eigenvalues of `M` come in pairs, so
+    This is possible when negative eigenvalues of `m` come in pairs, so
     that they can be viewed as complex conjugate pairs.
 
     Parameters
     ----------
-    M : numpy array
+    m : numpy array
         The matrix to take the logarithm of
 
-    actionIfImaginary : {"raise","warn","ignore"}, optional
+    action_if_imaginary : {"raise","warn","ignore"}, optional
         What action should be taken if a real-valued logarithm cannot be found.
         "raise" raises a ValueError, "warn" issues a warning, and "ignore"
         ignores the condition and simply returns the complex-valued result.
 
-    TOL : float, optional
+    tol : float, optional
         An internal tolerance used when testing for equivalence and zero
         imaginary parts (real-ness).
 
     Returns
     -------
     logM : numpy array
-        An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
+        An matrix `logM`, of the same shape as `m`, such that `m = exp(logM)`
     """
-    assert(_np.linalg.norm(_np.imag(M)) < TOL), "real_matrix_log must be passed a *real* matrix!"
-    evals, U = _np.linalg.eig(M)
+    assert(_np.linalg.norm(_np.imag(m)) < tol), "real_matrix_log must be passed a *real* matrix!"
+    evals, U = _np.linalg.eig(m)
     U = U.astype("complex")
 
     used_indices = set()
@@ -553,12 +553,12 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
     for i, ev in enumerate(evals):
         if i in used_indices: continue
         used_indices.add(i)
-        if abs(_np.imag(ev)) < TOL and _np.real(ev) < 0:
+        if abs(_np.imag(ev)) < tol and _np.real(ev) < 0:
             evec1 = U[:, i]
-            if _np.linalg.norm(_np.imag(evec1)) < TOL:
+            if _np.linalg.norm(_np.imag(evec1)) < tol:
                 # evec1 is real, so look for ev2 corresponding to another real evec
                 for j, ev2 in enumerate(evals[i + 1:], start=i + 1):
-                    if abs(ev - ev2) < TOL and _np.linalg.norm(_np.imag(U[:, j])) < TOL:
+                    if abs(ev - ev2) < tol and _np.linalg.norm(_np.imag(U[:, j])) < tol:
                         used_indices.add(j)
                         neg_real_pairs_real_evecs.append((i, j)); break
                 else: unpaired_indices.append(i)
@@ -566,7 +566,7 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
                 # evec1 is complex, so look for ev2 corresponding to the conjugate of evec1
                 evec1C = evec1.conjugate()
                 for j, ev2 in enumerate(evals[i + 1:], start=i + 1):
-                    if abs(ev - ev2) < TOL and _np.linalg.norm(evec1C - U[:, j]) < TOL:
+                    if abs(ev - ev2) < tol and _np.linalg.norm(evec1C - U[:, j]) < tol:
                         used_indices.add(j)
                         neg_real_pairs_conj_evecs.append((i, j)); break
                 else: unpaired_indices.append(i)
@@ -603,20 +603,20 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
     mayBeImaginary = bool(len(unpaired_indices) > 0)
     imMag = _np.linalg.norm(_np.imag(logM))
 
-    if mayBeImaginary and imMag > TOL:
-        if actionIfImaginary == "raise":
+    if mayBeImaginary and imMag > tol:
+        if action_if_imaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative"
                              + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
-            #+ "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
-        elif actionIfImaginary == "warn":
+            #+ "\nDEBUG m = \n%s" % m + "\nDEBUG evals = %s" % evals)
+        elif action_if_imaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative"
                            + " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
-        elif actionIfImaginary == "ignore":
+        elif action_if_imaginary == "ignore":
             pass
         else:
-            assert(False), "Invalid 'actionIfImaginary' argument: %s" % actionIfImaginary
+            assert(False), "Invalid 'action_if_imaginary' argument: %s" % action_if_imaginary
     else:
-        assert(imMag <= TOL), "real_matrix_log failed to construct a real logarithm!"
+        assert(imMag <= tol), "real_matrix_log failed to construct a real logarithm!"
         logM = _np.real(logM)
 
     return logM
@@ -674,20 +674,20 @@ def random_hermitian(dimension):
     return c / my_norm
 
 
-def norm1to1(operator, n_samples=10000, mxBasis="gm", return_list=False):
+def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
     """
     Returns the Hermitian 1-to-1 norm of a superoperator represented in
     the standard basis, calculated via Monte-Carlo sampling. Definition
     of Hermitian 1-to-1 norm can be found in arxiv:1109.6887.
     """
-    if mxBasis == 'gm':
+    if mx_basis == 'gm':
         std_operator = change_basis(operator, 'gm', 'std')
-    elif mxBasis == 'pp':
+    elif mx_basis == 'pp':
         std_operator = change_basis(operator, 'pp', 'std')
-    elif mxBasis == 'std':
+    elif mx_basis == 'std':
         std_operator = operator
     else:
-        raise ValueError("mxBasis should be 'gm', 'pp' or 'std'!")
+        raise ValueError("mx_basis should be 'gm', 'pp' or 'std'!")
 
     rand_dim = int(_np.sqrt(float(len(std_operator))))
     vals = [norm1(unvec(_np.dot(std_operator, vec(random_hermitian(rand_dim)))))
@@ -811,7 +811,7 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
 
 
 def minweight_match_realmxeigs(a, b, metricfn=None,
-                               pass_indices_to_metricfn=False, EPS=1e-9):
+                               pass_indices_to_metricfn=False, eps=1e-9):
     """
     Matches the elements of two vectors, `a` and `b` whose elements
     are assumed to either real or one-half of a conjugate pair.
@@ -871,7 +871,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     def split_real_conj(ar):
         real_inds = []; conj_inds = []
         for i, v in enumerate(ar):
-            if abs(v.imag) < EPS: real_inds.append(i)
+            if abs(v.imag) < eps: real_inds.append(i)
             else:
                 for pair in conj_inds:
                     if i in pair: break  # ok, we've already found v's pair
@@ -1093,78 +1093,78 @@ def _findx(a, inds, always_copy=False):
         return a_inds
 
 
-def safedot(A, B):
+def safedot(a, b):
     """
-    Performs dot(A,B) correctly when neither, either, or both arguments
+    Performs dot(a,b) correctly when neither, either, or both arguments
     are sparse matrices
     """
-    if _sps.issparse(A):
-        return A.dot(B)  # sparseMx.dot works for both sparse and dense args
-    elif _sps.issparse(B):
-        # to return a sparse mx even when A is dense (asymmetric behavior):
-        # --> return _sps.csr_matrix(A).dot(B) # numpyMx.dot can't handle sparse argument
-        return _np.dot(A, B.toarray())
+    if _sps.issparse(a):
+        return a.dot(b)  # sparseMx.dot works for both sparse and dense args
+    elif _sps.issparse(b):
+        # to return a sparse mx even when a is dense (asymmetric behavior):
+        # --> return _sps.csr_matrix(a).dot(b) # numpyMx.dot can't handle sparse argument
+        return _np.dot(a, b.toarray())
     else:
-        return _np.dot(A, B)
+        return _np.dot(a, b)
 
 
-def safereal(A, inplace=False, check=False):
+def safereal(a, inplace=False, check=False):
     """
-    Returns the real-part of `A` correctly when `A` is either a dense array or
+    Returns the real-part of `a` correctly when `a` is either a dense array or
     a sparse matrix
     """
     if check:
-        assert(safenorm(A, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
-    if _sps.issparse(A):
-        if _sps.isspmatrix_csr(A):
+        assert(safenorm(a, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
+    if _sps.issparse(a):
+        if _sps.isspmatrix_csr(a):
             if inplace:
-                ret = _sps.csr_matrix((_np.real(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+                ret = _sps.csr_matrix((_np.real(a.data), a.indices, a.indptr), shape=a.shape, dtype='d')
             else:  # copy
-                ret = _sps.csr_matrix((_np.real(A.data).copy(), A.indices.copy(),
-                                       A.indptr.copy()), shape=A.shape, dtype='d')
+                ret = _sps.csr_matrix((_np.real(a.data).copy(), a.indices.copy(),
+                                       a.indptr.copy()), shape=a.shape, dtype='d')
             ret.eliminate_zeros()
             return ret
         else:
-            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
+            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(a)))
     else:
-        return _np.real(A)
+        return _np.real(a)
 
 
-def safeimag(A, inplace=False, check=False):
+def safeimag(a, inplace=False, check=False):
     """
-    Returns the imaginary-part of `A` correctly when `A` is either a dense array
+    Returns the imaginary-part of `a` correctly when `a` is either a dense array
     or a sparse matrix
     """
     if check:
-        assert(safenorm(A, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
-    if _sps.issparse(A):
-        if _sps.isspmatrix_csr(A):
+        assert(safenorm(a, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
+    if _sps.issparse(a):
+        if _sps.isspmatrix_csr(a):
             if inplace:
-                ret = _sps.csr_matrix((_np.imag(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+                ret = _sps.csr_matrix((_np.imag(a.data), a.indices, a.indptr), shape=a.shape, dtype='d')
             else:  # copy
-                ret = _sps.csr_matrix((_np.imag(A.data).copy(), A.indices.copy(),
-                                       A.indptr.copy()), shape=A.shape, dtype='d')
+                ret = _sps.csr_matrix((_np.imag(a.data).copy(), a.indices.copy(),
+                                       a.indptr.copy()), shape=a.shape, dtype='d')
             ret.eliminate_zeros()
             return ret
         else:
-            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
+            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(a)))
     else:
-        return _np.imag(A)
+        return _np.imag(a)
 
 
-def safenorm(A, part=None):
+def safenorm(a, part=None):
     """
-    Returns the frobenius norm of a matrix or vector, `A` when it is either
+    Returns the frobenius norm of a matrix or vector, `a` when it is either
     a dense array or a sparse matrix.
 
     Parameters
     ----------
-    A : ndarray or sparse matrix
+    a : ndarray or sparse matrix
         The matrix or vector to take the norm of.
 
     part : {None,'real','imag'}
         If not None, return the norm of the real or imaginary
-        part of `A`.
+        part of `a`.
 
     Returns
     -------
@@ -1173,31 +1173,31 @@ def safenorm(A, part=None):
     if part == 'real': takepart = _np.real
     elif part == 'imag': takepart = _np.imag
     else: takepart = lambda x: x
-    if _sps.issparse(A):
-        assert(_sps.isspmatrix_csr(A)), "Non-CSR sparse formats not implemented"
-        return _np.linalg.norm(takepart(A.data))
+    if _sps.issparse(a):
+        assert(_sps.isspmatrix_csr(a)), "Non-CSR sparse formats not implemented"
+        return _np.linalg.norm(takepart(a.data))
     else:
-        return _np.linalg.norm(takepart(A))
+        return _np.linalg.norm(takepart(a))
     # could also use _spsl.norm(A)
 
 
-def safe_onenorm(A):
+def safe_onenorm(a):
     """
-    Computes the 1-norm of the dense or sparse matrix `A`.
+    Computes the 1-norm of the dense or sparse matrix `a`.
 
     Parameters
     ----------
-    A : ndarray or sparse matrix
+    a : ndarray or sparse matrix
         The matrix or vector to take the norm of.
 
     Returns
     -------
     float
     """
-    if _sps.isspmatrix(A):
-        return sparse_onenorm(A)
+    if _sps.isspmatrix(a):
+        return sparse_onenorm(a)
     else:
-        return _np.linalg.norm(A, 1)
+        return _np.linalg.norm(a, 1)
 
 
 def get_csr_sum_indices(csr_matrices):
@@ -1382,88 +1382,88 @@ else:
         return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
 
 
-def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
+def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
     """
-    Returns "prepared" meta-info about matrix A,
-        including a shifted version of A, to be used
+    Returns "prepared" meta-info about matrix a,
+        including a shifted version of a, to be used
         in `expm_multiply_fast`
     """
-    if len(A.shape) != 2 or A.shape[0] != A.shape[1]:
-        raise ValueError('expected A to be like a square matrix')
-    assert(_sps.isspmatrix_csr(A))  # assuming this allows faster computations
+    if len(a.shape) != 2 or a.shape[0] != a.shape[1]:
+        raise ValueError('expected a to be like a square matrix')
+    assert(_sps.isspmatrix_csr(a))  # assuming this allows faster computations
 
-    n = A.shape[0]
-    n0 = 1  # always act exp(A) on *single* vectors
-    mu = _spsl._expm_multiply._trace(A) / float(n)
+    n = a.shape[0]
+    n0 = 1  # always act exp(a) on *single* vectors
+    mu = _spsl._expm_multiply._trace(a) / float(n)
 
-    #ident = _spsl._expm_multiply._ident_like(A) #general case
+    #ident = _spsl._expm_multiply._ident_like(a) #general case
 
     if _fastcalc is None:
-        ident = _sps.identity(A.shape[0], dtype=A.dtype, format='csr')  # CSR specific
-        A = A - mu * ident  # SLOW!
+        ident = _sps.identity(a.shape[0], dtype=a.dtype, format='csr')  # CSR specific
+        a = a - mu * ident  # SLOW!
     else:
         indptr = _np.empty(n + 1, _np.int64)
-        indices = _np.empty(A.data.shape[0] + n, _np.int64)  # pessimistic (assume no diags exist)
-        data = _np.empty(A.data.shape[0] + n, A.dtype)  # pessimistic (assume no diags exist)
-        nxt = _fastcalc.csr_subtract_identity(A.data,
-                                              _np.ascontiguousarray(A.indptr, _np.int64),
-                                              _np.ascontiguousarray(A.indices, _np.int64),
+        indices = _np.empty(a.data.shape[0] + n, _np.int64)  # pessimistic (assume no diags exist)
+        data = _np.empty(a.data.shape[0] + n, a.dtype)  # pessimistic (assume no diags exist)
+        nxt = _fastcalc.csr_subtract_identity(a.data,
+                                              _np.ascontiguousarray(a.indptr, _np.int64),
+                                              _np.ascontiguousarray(a.indices, _np.int64),
                                               data, indptr, indices, -mu, n)
-        A = _sps.csr_matrix((data[0:nxt], indices[0:nxt], indptr), shape=(n, n))
-    #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); A = A1
+        a = _sps.csr_matrix((data[0:nxt], indices[0:nxt], indptr), shape=(n, n))
+    #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); a = A1
 
     #exact_1_norm specific for CSR
-    A_1_norm = max(_np.sum(_np.abs(A.data[_np.where(A.indices == iCol)])) for iCol in range(n))
-    #A_1_norm = _spsl._expm_multiply._exact_1_norm(A) # general case
+    A_1_norm = max(_np.sum(_np.abs(a.data[_np.where(a.indices == iCol)])) for iCol in range(n))
+    #A_1_norm = _spsl._expm_multiply._exact_1_norm(a) # general case
 
     t = 1.0  # always
     if t * A_1_norm == 0:
         m_star, s = 0, 1
     else:
         ell = 2
-        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(t * A, A_1_norm=t * A_1_norm, ell=ell)
+        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(t * a, A_1_norm=t * A_1_norm, ell=ell)
         m_star, s = _spsl._expm_multiply._fragment_3_1(norm_info, n0, tol, ell=ell)
 
     eta = _np.exp(t * mu / float(s))
-    assert(_sps.isspmatrix_csr(A))
-    return A, mu, m_star, s, eta
+    assert(_sps.isspmatrix_csr(a))
+    return a, mu, m_star, s, eta
 
 
 if _fastcalc is None:
-    def expm_multiply_fast(prepA, v, tol=EXPM_DEFAULT_TOL):
-        A, mu, m_star, s, eta = prepA
+    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prep_a
         return _custom_expm_multiply_simple_core(
             A, v, mu, m_star, s, tol, eta)  # t == 1.0 always, `balance` not implemented so removed
 
 else:
-    def expm_multiply_fast(prepA, v, tol=EXPM_DEFAULT_TOL):
-        A, mu, m_star, s, eta = prepA
+    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prep_a
         return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
                                                           v, mu, m_star, s, tol, eta)
 
 
-def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
+def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
     """
-    A helper function.  Note that this (python) version works when A is a LinearOperator
+    a helper function.  Note that this (python) version works when a is a LinearOperator
     as well as a SciPy CSR sparse matrix.
     """
     #if balance:
     #    raise NotImplementedError
-    F = B
+    F = b
     for i in range(s):
         #if m_star > 0: #added
-        #    c1 = _np.linalg.norm(B, _np.inf) #_exact_inf_norm(B)
+        #    c1 = _np.linalg.norm(b, _np.inf) #_exact_inf_norm(b)
         for j in range(m_star):
             coeff = 1.0 / float(s * (j + 1))  # t == 1.0
-            B = coeff * A.dot(B)
-            F = F + B
+            b = coeff * a.dot(b)
+            F = F + b
         #    if j % 3 == 0: #every == 3 #TODO: work on this
-        #        c2 = _np.linalg.norm(B, _np.inf) #_exact_inf_norm(B)
+        #        c2 = _np.linalg.norm(b, _np.inf) #_exact_inf_norm(b)
         #        if c1 + c2 <= tol * _np.linalg.norm(F, _np.inf): #_exact_inf_norm(F)
         #            break
         #        c1 = c2
         F = eta * F
-        B = F
+        b = F
     return F
 
 
@@ -1484,7 +1484,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta):  # t == 1.
 #    else:
 #        return np.linalg.norm(A, 1)
 
-def expop_multiply_prep(op, A_1_norm=None, tol=EXPM_DEFAULT_TOL):
+def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
     """
     Returns "prepared" meta-info about operation op,
       which is assumed to be traceless (so no shift is needed).
@@ -1501,46 +1501,46 @@ def expop_multiply_prep(op, A_1_norm=None, tol=EXPM_DEFAULT_TOL):
     #ASSUME op is *traceless*
 
     #FUTURE: get exact_1_norm specific for our ops - now just use approximate
-    if A_1_norm is None:
-        A_1_norm = _spsl.onenormest(op)
+    if a_1_norm is None:
+        a_1_norm = _spsl.onenormest(op)
 
     #t = 1.0 # always, so t*<X> => just <X> below
-    if A_1_norm == 0:
+    if a_1_norm == 0:
         m_star, s = 0, 1
     else:
         ell = 2
-        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(op, A_1_norm=A_1_norm, ell=ell)
+        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(op, A_1_norm=a_1_norm, ell=ell)
         m_star, s = _spsl._expm_multiply._fragment_3_1(norm_info, n0, tol, ell=ell)
 
     eta = 1.0  # _np.exp(t*mu / float(s)) # b/c mu always == 0 (traceless assumption)
     return mu, m_star, s, eta
 
 
-def sparse_equal(A, B, atol=1e-8):
+def sparse_equal(a, b, atol=1e-8):
     """
     Checks whether two Scipy sparse matrices are (almost) equal.
 
     Parameters
     ----------
-    A, B : scipy.sparse matrix
+    a, b : scipy.sparse matrix
         The two matrices to compare.
 
     atol : float, optional
         The tolerance to use, passed to `numpy.allclose`, when comparing
-        the elements of `A` and `B`.
+        the elements of `a` and `b`.
 
     Returns
     -------
     bool
     """
-    if _np.array_equal(A.shape, B.shape) == 0:
+    if _np.array_equal(a.shape, b.shape) == 0:
         return False
 
-    r1, c1 = A.nonzero()
-    r2, c2 = B.nonzero()
+    r1, c1 = a.nonzero()
+    r2, c2 = b.nonzero()
 
-    lidx1 = _np.ravel_multi_index((r1, c1), A.shape)
-    lidx2 = _np.ravel_multi_index((r2, c2), B.shape)
+    lidx1 = _np.ravel_multi_index((r1, c1), a.shape)
+    lidx2 = _np.ravel_multi_index((r2, c2), b.shape)
     sidx1 = lidx1.argsort()
     sidx2 = lidx2.argsort()
 
@@ -1548,27 +1548,27 @@ def sparse_equal(A, B, atol=1e-8):
     if index_match == 0:
         return False
     else:
-        v1 = A.data
-        v2 = B.data
+        v1 = a.data
+        v2 = b.data
         V1 = v1[sidx1]
         V2 = v2[sidx2]
     return _np.allclose(V1, V2, atol=atol)
 
 
-def sparse_onenorm(A):
+def sparse_onenorm(a):
     """
-    Computes the 1-norm of the scipy sparse matrix `A`.
+    Computes the 1-norm of the scipy sparse matrix `a`.
 
     Parameters
     ----------
-    A : scipy sparse matrix
+    a : scipy sparse matrix
         The matrix or vector to take the norm of.
 
     Returns
     -------
     float
     """
-    return max(abs(A).sum(axis=0).flat)
+    return max(abs(a).sum(axis=0).flat)
 
 
 def ndarray_base(a, debug=False):
@@ -1638,11 +1638,11 @@ def get_kite(evals):
     return kite
 
 
-def find_zero_communtant_connection(U, Uinv, U0, U0inv, kite):
+def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
     """
-    Find a matrix `R` such that Uinv R U0 is diagonal (so G = R G0 Rinv if
-    G and G0 share the same eigenvalues and have eigenvectors U and U0 respectively)
-    AND log(R) has no (zero) projection onto the commutant of G0 = U0 diag(evals) U0inv.
+    Find a matrix `R` such that u_inv R u0 is diagonal (so G = R G0 Rinv if
+    G and G0 share the same eigenvalues and have eigenvectors u and u0 respectively)
+    AND log(R) has no (zero) projection onto the commutant of G0 = u0 diag(evals) u0_inv.
     """
 
     #0.  Let R be a matrix that maps G0 -> Gp, where Gp has evecs of G and evals of G0.
@@ -1651,22 +1651,22 @@ def find_zero_communtant_connection(U, Uinv, U0, U0inv, kite):
     #3.  Redefine R = X.R.
     #4.  GOTO 1.
 
-    # G0 = U0 * diag * U0inv, G = U * diag * Uinv
-    D = project_onto_kite(_np.dot(Uinv, U0), kite)
-    R = _np.dot(U, _np.dot(D, U0inv))  # Include D so R is as close to identity as possible
+    # G0 = u0 * diag * u0_inv, G = u * diag * u_inv
+    D = project_onto_kite(_np.dot(u_inv, u0), kite)
+    R = _np.dot(u, _np.dot(D, u0_inv))  # Include D so R is as close to identity as possible
     assert(_np.linalg.norm(R.imag) < 1e-8)
 
     def project_onto_commutant(x):
-        a = _np.dot(U0inv, _np.dot(x, U0))
+        a = _np.dot(u0_inv, _np.dot(x, u0))
         a = project_onto_kite(a, kite)
-        return _np.dot(U0, _np.dot(a, U0inv))
+        return _np.dot(u0, _np.dot(a, u0_inv))
 
     iter = 0; lastR = R
     while iter < 100:
-        #Starting condition = Uinv * R * U0 is diagonal, so
-        # G' = R G0 Rinv where G' has the same spectrum as G0 but different eigenvecs (U vs U0)
+        #Starting condition = u_inv * R * u0 is diagonal, so
+        # G' = R G0 Rinv where G' has the same spectrum as G0 but different eigenvecs (u vs u0)
         assert(_np.linalg.norm(R.imag) < 1e-8)
-        test = _np.dot(Uinv, _np.dot(R, U0))
+        test = _np.dot(u_inv, _np.dot(R, u0))
         assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
 
         r = real_matrix_log(R)

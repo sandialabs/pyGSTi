@@ -13,6 +13,7 @@ import copy as _copy
 import uuid as _uuid
 import itertools as _itertools
 from ..tools import listtools as _lt
+from .circuit import Circuit as _Circuit
 
 
 class CircuitPlaquette(object):
@@ -61,15 +62,15 @@ class CircuitPlaquette(object):
         self._outcomesByStr = None
         self.num_simplified_elements = None
 
-    def expand_aliases(self, dsFilter=None, circuit_simplifier=None):
+    def expand_aliases(self, ds_filter=None, circuit_simplifier=None):
         """
         Returns a new CircuitPlaquette with any aliases
         expanded (within the operation sequences).  Optionally keeps only
-        those strings which, after alias expansion, are in `dsFilter`.
+        those strings which, after alias expansion, are in `ds_filter`.
 
         Parameters
         ----------
-        dsFilter : DataSet, optional
+        ds_filter : DataSet, optional
             If not None, keep only strings that are in this data set.
 
         circuit_simplifier : Model, optional
@@ -94,14 +95,14 @@ class CircuitPlaquette(object):
                 effect2 = effect if (self.aliases is None) else \
                     effect.replace_layers_with_aliases(self.aliases)
 
-            if dsFilter is None or s2 in dsFilter:
+            if ds_filter is None or s2 in ds_filter:
                 new_elements.append((i, j, s2))
                 if new_fidpairs: new_fidpairs.append((prep2, effect2))
 
         ret = CircuitPlaquette(self.base, self.rows, self.cols,
                                new_elements, None, new_fidpairs)
         if circuit_simplifier is not None:
-            ret.simplify_circuits(circuit_simplifier, dsFilter)
+            ret.simplify_circuits(circuit_simplifier, ds_filter)
         return ret
 
     def get_all_strs(self):
@@ -111,7 +112,7 @@ class CircuitPlaquette(object):
     def simplify_circuits(self, model, dataset=None):
         """
         Simplified this plaquette so that the `num_simplified_elements` property and
-        the `iter_simplified()` method may be used.
+        the `iter_simplified()` and `elementvec_to_matrix` methods may be used.
 
         Parameters
         ----------
@@ -144,6 +145,43 @@ class CircuitPlaquette(object):
 
     def __len__(self):
         return len(self.elements)
+
+    def elementvec_to_matrix(self, elementvec, mergeop="sum"):
+        """
+        Form a matrix of values for this plaquette from  a given vector,
+        `elementvec` of individual-outcome elements (e.g. the bulk probabilities
+        computed by a model).
+
+        Parameters
+        ----------
+        elementvec : numpy array
+            An array of length `self.num_simplified_elements` containting the
+            values to use when constructing a matrix of values for this plaquette.
+
+        mergeop : "sum" or format string, optional
+            Dictates how to combine the `elementvec` components corresponding to a single
+            plaquette entry (circuit).  If "sum", the returned array contains summed
+            values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
+            are joined together with separating commas, and the resulting array contains
+            string (object-type) entries.
+
+        Returns
+        -------
+        numpy array
+        """
+        if mergeop == "sum":
+            ret = _np.nan * _np.ones((self.rows, self.cols), 'd')
+            for i, j, opstr, elIndices, _ in self.iter_simplified():
+                ret[i, j] = sum(elementvec[elIndices])
+        elif '%' in mergeop:
+            fmt = mergeop
+            ret = _np.nan * _np.ones((self.rows, self.cols), dtype=_np.object)
+            for i, j, opstr, elIndices, _ in self.iter_simplified():
+                ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+                                       (fmt % x) for x in elementvec[elIndices]])
+        else:
+            raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
+        return ret
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -201,9 +239,9 @@ class CircuitStructure(object):
         else:
             raise TypeError('Use digest hash')
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
-        if 'uuid' not in stateDict:
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
+        if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 
     def xvals(self):
@@ -238,13 +276,13 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
-    def create_plaquette(self, baseStr):
+    def create_plaquette(self, base_str):
         """
         Creates a the plaquette for the given base string.
 
         Parameters
         ----------
-        baseStr : Circuit
+        base_str : Circuit
 
         Returns
         -------
@@ -312,20 +350,20 @@ class LsGermsStructure(CircuitStructure):
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
 
-    def __init__(self, Ls, germs, prepStrs, effectStrs, aliases=None,
-                 sequenceRules=None):
+    def __init__(self, max_lengths, germs, prep_fiducials, meas_fiducials, aliases=None,
+                 sequence_rules=None):
         """
         Create an empty operation sequence structure.
 
         Parameters
         ----------
-        Ls : list of ints
+        max_lengths : list of ints
             List of maximum lengths (x values)
 
         germs : list of Circuits
             List of germ sequences (y values)
 
-        prepStrs : list of Circuits
+        prep_fiducials : list of Circuits
             List of preparation fiducial sequences (minor x values)
 
         effecStrs : list of Circuits
@@ -334,17 +372,17 @@ class LsGermsStructure(CircuitStructure):
         aliases : dict
             Operation label aliases to be propagated to all plaquettes.
 
-        sequenceRules : list, optional
+        sequence_rules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
             rules.  Both `find` and `replace` are tuples of operation labels
             (or `Circuit` objects).
         """
-        self.Ls = Ls[:]
+        self.Ls = max_lengths[:]
         self.germs = germs[:]
-        self.prepStrs = prepStrs[:]
-        self.effectStrs = effectStrs[:]
+        self.prep_fiducials = prep_fiducials[:]
+        self.meas_fiducials = meas_fiducials[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
-        self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
+        self.sequenceRules = sequence_rules[:] if (sequence_rules is not None) else None
 
         self.allstrs = []
         self.allstrs_set = set()
@@ -365,23 +403,23 @@ class LsGermsStructure(CircuitStructure):
 
     def minor_xvals(self):
         """ Returns a list of the minor x-values"""
-        return self.prepStrs
+        return self.prep_fiducials
 
     def minor_yvals(self):
         """ Returns a list of the minor y-values"""
-        return self.effectStrs
+        return self.meas_fiducials
 
-    def add_plaquette(self, basestr, L, germ, fidpairs=None, dsfilter=None):
+    def add_plaquette(self, basestr, max_length, germ, fidpairs=None, dsfilter=None):
         """
         Adds a plaquette with the given fiducial pairs at the
-        `(L,germ)` location.
+        `(max_length,germ)` location.
 
         Parameters
         ----------
         basestr : Circuit
             The base operation sequence of the new plaquette.
 
-        L : int
+        max_length : int
 
         germ : Circuit
 
@@ -398,7 +436,7 @@ class LsGermsStructure(CircuitStructure):
         Returns
         -------
         missing : list
-            A list of `(prep_fiducial, germ, L, effect_fiducial, entire_string)`
+            A list of `(prep_fiducial, germ, max_length, effect_fiducial, entire_string)`
             tuples indicating which sequences were not found in `dsfilter`.
         """
 
@@ -406,15 +444,15 @@ class LsGermsStructure(CircuitStructure):
         from ..construction import circuitconstruction as _gstrc  # maybe move used routines to a circuittools.py?
 
         if fidpairs is None:
-            fidpairs = list(_itertools.product(range(len(self.prepStrs)),
-                                               range(len(self.effectStrs))))
+            fidpairs = list(_itertools.product(range(len(self.prep_fiducials)),
+                                               range(len(self.meas_fiducials))))
         if dsfilter:
             inds_to_remove = []
             for k, (i, j) in enumerate(fidpairs):
-                el = self.prepStrs[i] + basestr + self.effectStrs[j]
+                el = self.prep_fiducials[i] + basestr + self.meas_fiducials[j]
                 trans_el = _gstrc.translate_circuit(el, self.aliases)
                 if trans_el not in dsfilter:
-                    missing_list.append((self.prepStrs[i], germ, L, self.effectStrs[j], el))
+                    missing_list.append((self.prep_fiducials[i], germ, max_length, self.meas_fiducials[j], el))
                     inds_to_remove.append(k)
 
             if len(inds_to_remove) > 0:
@@ -430,23 +468,23 @@ class LsGermsStructure(CircuitStructure):
                 self.allstrs.append(x)
         #_lt.remove_duplicates_in_place(self.allstrs) # above block does this more efficiently
 
-        self._plaquettes[(L, germ)] = plaq
+        self._plaquettes[(max_length, germ)] = plaq
 
-        #keep track of which L,germ is the *first* one to "claim" a base string
+        #keep track of which max_length,germ is the *first* one to "claim" a base string
         # (useful for *not* duplicating data in color box plots)
         if basestr not in self._baseStrToLGerm:
-            self._firsts.append((L, germ))
-            self._baseStrToLGerm[basestr] = (L, germ)
+            self._firsts.append((max_length, germ))
+            self._baseStrToLGerm[basestr] = (max_length, germ)
 
         return missing_list
 
-    def add_unindexed(self, gsList, dsfilter=None):
+    def add_unindexed(self, gs_list, dsfilter=None):
         """
         Adds unstructured operation sequences (not in any plaquette).
 
         Parameters
         ----------
-        gsList : list of Circuits
+        gs_list : list of Circuits
             The operation sequences to add.
 
         dsfilter : DataSet, optional
@@ -457,14 +495,14 @@ class LsGermsStructure(CircuitStructure):
         Returns
         -------
         missing : list
-            A list of elements in `gsList` which were not found in `dsfilter`
+            A list of elements in `gs_list` which were not found in `dsfilter`
             and therefore not added.
         """
         from ..construction import circuitconstruction as _gstrc  # maybe move used routines to a circuittools.py?
         #if dsfilter and len(dsfilter) > 8000: dsfilter = None # TEST DEBUG - remove dsfilter check
 
         missing_list = []
-        for opstr in gsList:
+        for opstr in gs_list:
             if opstr not in self.allstrs_set:
                 if dsfilter:
                     trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
@@ -483,13 +521,13 @@ class LsGermsStructure(CircuitStructure):
         #placeholder in case there's some additional init we need to do.
         pass
 
-    def get_plaquette(self, L, germ, onlyfirst=True):
+    def get_plaquette(self, max_length, germ, onlyfirst=True):
         """
-        Returns a the plaquette at `(L,germ)`.
+        Returns a the plaquette at `(max_length,germ)`.
 
         Parameters
         ----------
-        L : int
+        max_length : int
             The maximum length.
 
         germ : Circuit
@@ -506,33 +544,33 @@ class LsGermsStructure(CircuitStructure):
         -------
         CircuitPlaquette
         """
-        if (L, germ) not in self._plaquettes:
+        if (max_length, germ) not in self._plaquettes:
             p = self.create_plaquette(None, [])  # no elements
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-        if not onlyfirst or (L, germ) in self._firsts:
-            return self._plaquettes[(L, germ)]
+        if not onlyfirst or (max_length, germ) in self._firsts:
+            return self._plaquettes[(max_length, germ)]
         else:
-            basestr = self._plaquettes[(L, germ)].base
+            basestr = self._plaquettes[(max_length, germ)].base
             p = self.create_plaquette(basestr, [])  # no elements
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-    def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None, seqs=None):
+    def truncate(self, max_lengths=None, germs=None, prep_fiducials=None, meas_fiducials=None, seqs=None):
         """
         Truncate this operation sequence structure to a subset of its current strings.
 
         Parameters
         ----------
-        Ls : list, optional
+        max_lengths : list, optional
             The integer L-values to keep.  If None, then all are kept.
 
         germs : list, optional
             The (Circuit) germs to keep.  If None, then all are kept.
 
-        prepStrs, effectStrs : list, optional
-            The (Circuit) preparation and effect fiducial sequences to keep.
+        prep_fiducials, meas_fiducials : list, optional
+            The (Circuit) preparation and measurement fiducial sequences to keep.
             If None, then all are kept.
 
         seqs : list
@@ -542,17 +580,17 @@ class LsGermsStructure(CircuitStructure):
         -------
         LsGermsStructure
         """
-        Ls = self.Ls if (Ls is None) else Ls
+        max_lengths = self.Ls if (max_lengths is None) else max_lengths
         germs = self.germs if (germs is None) else germs
-        prepStrs = self.prepStrs if (prepStrs is None) else prepStrs
-        effectStrs = self.effectStrs if (effectStrs is None) else effectStrs
-        cpy = LsGermsStructure(Ls, germs, prepStrs,
-                               effectStrs, self.aliases, self.sequenceRules)
+        prep_fiducials = self.prep_fiducials if (prep_fiducials is None) else prep_fiducials
+        meas_fiducials = self.meas_fiducials if (meas_fiducials is None) else meas_fiducials
+        cpy = LsGermsStructure(max_lengths, germs, prep_fiducials,
+                               meas_fiducials, self.aliases, self.sequenceRules)
 
-        #OLD iPreps = [i for i, prepStr in enumerate(self.prepStrs) if prepStr in prepStrs]
-        #OLD iEffects = [i for i, eStr in enumerate(self.effectStrs) if eStr in effectStrs]
+        #OLD iPreps = [i for i, prepStr in enumerate(self.prep_fiducials) if prepStr in prep_fiducials]
+        #OLD iEffects = [i for i, eStr in enumerate(self.meas_fiducials) if eStr in meas_fiducials]
         #OLD fidpairs = list(_itertools.product(iPreps, iEffects))
-        all_fidpairs = list(_itertools.product(list(range(len(prepStrs))), list(range(len(effectStrs)))))
+        all_fidpairs = list(_itertools.product(list(range(len(prep_fiducials))), list(range(len(meas_fiducials)))))
 
         for (L, germ), plaq in self._plaquettes.items():
             basestr = plaq.base
@@ -561,22 +599,22 @@ class LsGermsStructure(CircuitStructure):
             else:
                 fidpairs = []
                 for i, j in all_fidpairs:
-                    if prepStrs[i] + basestr + effectStrs[j] in seqs:
+                    if prep_fiducials[i] + basestr + meas_fiducials[j] in seqs:
                         fidpairs.append((i, j))
 
-            if (L in Ls) and (germ in germs):
+            if (L in max_lengths) and (germ in germs):
                 cpy.add_plaquette(basestr, L, germ, fidpairs)
 
         cpy.add_unindexed(self.unindexed)  # preserve unindexed strings
         return cpy
 
-    def create_plaquette(self, baseStr, fidpairs=None):
+    def create_plaquette(self, base_str, fidpairs=None):
         """
         Creates a the plaquette for the given base string and pairs.
 
         Parameters
         ----------
-        baseStr : Circuit
+        base_str : Circuit
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -588,15 +626,15 @@ class LsGermsStructure(CircuitStructure):
         CircuitPlaquette
         """
         if fidpairs is None:
-            fidpairs = list(_itertools.product(range(len(self.prepStrs)),
-                                               range(len(self.effectStrs))))
+            fidpairs = list(_itertools.product(range(len(self.prep_fiducials)),
+                                               range(len(self.meas_fiducials))))
 
-        elements = [(j, i, self.prepStrs[i] + baseStr + self.effectStrs[j])
+        elements = [(j, i, self.prep_fiducials[i] + base_str + self.meas_fiducials[j])
                     for i, j in fidpairs]  # note preps are *cols* not rows
-        real_fidpairs = [(self.prepStrs[i], self.effectStrs[j]) for i, j in fidpairs]  # strings, not just indices
+        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # circuits, not indices
 
-        return CircuitPlaquette(baseStr, len(self.effectStrs),
-                                len(self.prepStrs), elements,
+        return CircuitPlaquette(base_str, len(self.meas_fiducials),
+                                len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
     def plaquette_rows_cols(self):
@@ -608,7 +646,7 @@ class LsGermsStructure(CircuitStructure):
         -------
         rows, cols : int
         """
-        return len(self.effectStrs), len(self.prepStrs)
+        return len(self.meas_fiducials), len(self.prep_fiducials)
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -633,7 +671,7 @@ class LsGermsStructure(CircuitStructure):
         """
         P = processor_fn  # shorhand
         cpy = LsGermsStructure(self.Ls, list(map(P, self.germs)),
-                               list(map(P, self.prepStrs)), list(map(P, self.effectStrs)),
+                               list(map(P, self.prep_fiducials)), list(map(P, self.meas_fiducials)),
                                updated_aliases, self.sequenceRules)
         cpy.allstrs = list(map(P, self.allstrs))
         cpy.allstrs_set = set(cpy.allstrs)
@@ -647,8 +685,8 @@ class LsGermsStructure(CircuitStructure):
         """
         Returns a copy of this `LsGermsStructure`.
         """
-        cpy = LsGermsStructure(self.Ls, self.germs, self.prepStrs,
-                               self.effectStrs, self.aliases, self.sequenceRules)
+        cpy = LsGermsStructure(self.Ls, self.germs, self.prep_fiducials,
+                               self.meas_fiducials, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
         cpy.allstrs_set = self.allstrs_set.copy()
         cpy.unindexed = self.unindexed[:]
@@ -664,8 +702,25 @@ class LsGermsSerialStructure(CircuitStructure):
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
 
-    def __init__(self, Ls, germs, nMinorRows, nMinorCols, aliases=None,
-                 sequenceRules=None):
+    @classmethod
+    def from_list(cls, circuit_list, dsfilter=None):
+        """
+        Creates a LsGermsSerialStructure out of a simple circuit list.
+
+        This factory method is used when a default structure is required for a
+        given simple list of circuits.
+        """
+        max_length = 0  # just a single "0" length
+        empty_circuit = _Circuit((), line_labels=circuit_list[0].line_labels if len(circuit_list) > 0 else "auto")
+        square_side = int(_np.ceil(_np.sqrt(len(circuit_list))))
+        ret = cls([max_length], [empty_circuit], square_side, square_side)
+
+        fidpairs = [(c, empty_circuit) for c in circuit_list]
+        ret.add_plaquette(empty_circuit, max_length, empty_circuit, fidpairs, dsfilter)
+        return ret
+
+    def __init__(self, max_lengths, germs, n_minor_rows, n_minor_cols, aliases=None,
+                 sequence_rules=None):
         """
         Create an empty LsGermSerialStructure.
 
@@ -677,30 +732,30 @@ class LsGermsSerialStructure(CircuitStructure):
 
         Parameters
         ----------
-        Ls : list of ints
+        max_lengths : list of ints
             List of maximum lengths (x values)
 
         germs : list of Circuits
             List of germ sequences (y values)
 
-        nMinorRows, nMinorCols : int
+        n_minor_rows, n_minor_cols : int
             The number of minor rows and columns to allocate space for.
             These should be the maximum values required for any plaquette.
 
         aliases : dict
             Operation label aliases to be propagated to all plaquettes.
 
-        sequenceRules : list, optional
+        sequence_rules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
             rules.  Both `find` and `replace` are tuples of operation labels
             (or `Circuit` objects).
         """
-        self.Ls = Ls[:]
+        self.Ls = max_lengths[:]
         self.germs = germs[:]
-        self.nMinorRows = nMinorRows
-        self.nMinorCols = nMinorCols
+        self.nMinorRows = n_minor_rows
+        self.nMinorCols = n_minor_cols
         self.aliases = aliases.copy() if (aliases is not None) else None
-        self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
+        self.sequenceRules = sequence_rules[:] if (sequence_rules is not None) else None
 
         self.allstrs = []
         self.allstrs_set = set()
@@ -727,18 +782,18 @@ class LsGermsSerialStructure(CircuitStructure):
         """ Returns a list of the minor y-values (0-based integers)"""
         return list(range(self.nMinorRows))
 
-    def add_plaquette(self, basestr, L, germ, fidpairs, dsfilter=None):
+    def add_plaquette(self, basestr, max_length, germ, fidpairs, dsfilter=None):
         """
         Adds a plaquette with the given fiducial pairs at the
-        `(L,germ)` location.
+        `(max_length,germ)` location.
 
         Parameters
         ----------
         basestr : Circuit
             The base operation sequence of the new plaquette, typically `germ^power`
-            such that `len(germ^power) <= L`.
+            such that `len(germ^power) <= max_length`.
 
-        L : int
+        max_length : int
             The maximum length value.
 
         germ : Circuit
@@ -760,7 +815,7 @@ class LsGermsSerialStructure(CircuitStructure):
         Returns
         -------
         missing : list
-            A list of `(prep_fiducial, germ, L, effect_fiducial, entire_string)`
+            A list of `(prep_fiducial, germ, max_length, effect_fiducial, entire_string)`
             tuples indicating which sequences were not found in `dsfilter`.
         """
 
@@ -773,7 +828,7 @@ class LsGermsSerialStructure(CircuitStructure):
                 el = prepStr + basestr + effectStr
                 trans_el = _gstrc.translate_circuit(el, self.aliases)
                 if trans_el not in dsfilter:
-                    missing_list.append((prepStr, germ, L, effectStr, el))
+                    missing_list.append((prepStr, germ, max_length, effectStr, el))
                     inds_to_remove.append(k)
 
             if len(inds_to_remove) > 0:
@@ -789,23 +844,23 @@ class LsGermsSerialStructure(CircuitStructure):
                 self.allstrs.append(x)
         # _lt.remove_duplicates_in_place(self.allstrs) # above block does this more efficiently
 
-        self._plaquettes[(L, germ)] = plaq
+        self._plaquettes[(max_length, germ)] = plaq
 
-        #keep track of which L,germ is the *first* one to "claim" a base string
+        #keep track of which max_length,germ is the *first* one to "claim" a base string
         # (useful for *not* duplicating data in color box plots)
         if basestr not in self._baseStrToLGerm:
-            self._firsts.append((L, germ))
-            self._baseStrToLGerm[basestr] = (L, germ)
+            self._firsts.append((max_length, germ))
+            self._baseStrToLGerm[basestr] = (max_length, germ)
 
         return missing_list
 
-    def add_unindexed(self, gsList, dsfilter=None):
+    def add_unindexed(self, gs_list, dsfilter=None):
         """
         Adds unstructured operation sequences (not in any plaquette).
 
         Parameters
         ----------
-        gsList : list of Circuits
+        gs_list : list of Circuits
             The operation sequences to add.
 
         dsfilter : DataSet, optional
@@ -816,13 +871,13 @@ class LsGermsSerialStructure(CircuitStructure):
         Returns
         -------
         missing : list
-            A list of elements in `gsList` which were not found in `dsfilter`
+            A list of elements in `gs_list` which were not found in `dsfilter`
             and therefore not added.
         """
         from ..construction import circuitconstruction as _gstrc  # maybe move used routines to a circuittools.py?
 
         missing_list = []
-        for opstr in gsList:
+        for opstr in gs_list:
             if opstr not in self.allstrs_set:
                 if dsfilter:
                     trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
@@ -841,13 +896,13 @@ class LsGermsSerialStructure(CircuitStructure):
         #placeholder in case there's some additional init we need to do.
         pass
 
-    def get_plaquette(self, L, germ, onlyfirst=True):
+    def get_plaquette(self, max_length, germ, onlyfirst=True):
         """
-        Returns a the plaquette at `(L,germ)`.
+        Returns a the plaquette at `(max_length,germ)`.
 
         Parameters
         ----------
-        L : int
+        max_length : int
             The maximum length.
 
         germ : Circuit
@@ -864,32 +919,32 @@ class LsGermsSerialStructure(CircuitStructure):
         -------
         CircuitPlaquette
         """
-        if (L, germ) not in self._plaquettes:
+        if (max_length, germ) not in self._plaquettes:
             p = self.create_plaquette(None, [])  # no elements
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-        if not onlyfirst or (L, germ) in self._firsts:
-            return self._plaquettes[(L, germ)]
+        if not onlyfirst or (max_length, germ) in self._firsts:
+            return self._plaquettes[(max_length, germ)]
         else:
-            basestr = self._plaquettes[(L, germ)].base
+            basestr = self._plaquettes[(max_length, germ)].base
             p = self.create_plaquette(basestr, [])  # no elements
             p.simplify_circuits(None)  # just marks as "simplified"
             return p
 
-    def truncate(self, Ls=None, germs=None, nMinorRows=None, nMinorCols=None):
+    def truncate(self, max_lengths=None, germs=None, n_minor_rows=None, n_minor_cols=None):
         """
         Truncate this operation sequence structure to a subset of its current strings.
 
         Parameters
         ----------
-        Ls : list, optional
+        max_lengths : list, optional
             The integer L-values to keep.  If None, then all are kept.
 
         germs : list, optional
             The (Circuit) germs to keep.  If None, then all are kept.
 
-        nMinorRows, nMinorCols : int or "auto", optional
+        n_minor_rows, n_minor_cols : int or "auto", optional
             The number of minor rows and columns in the new structure.  If the
             special "auto" value is used, the number or rows/cols is chosen
             automatically (to be as small as possible). If None, then the values
@@ -899,50 +954,50 @@ class LsGermsSerialStructure(CircuitStructure):
         -------
         LsGermsSerialStructure
         """
-        Ls = self.Ls if (Ls is None) else Ls
+        max_lengths = self.Ls if (max_lengths is None) else max_lengths
         germs = self.germs if (germs is None) else germs
-        nMinorCols = self.nMinorCols if (nMinorCols is None) else nMinorCols
-        nMinorRows = self.nMinorRows if (nMinorRows is None) else nMinorRows
+        n_minor_cols = self.nMinorCols if (n_minor_cols is None) else n_minor_cols
+        n_minor_rows = self.nMinorRows if (n_minor_rows is None) else n_minor_rows
 
-        if nMinorCols == "auto" or nMinorRows == "auto":
+        if n_minor_cols == "auto" or n_minor_rows == "auto":
             #Pre-compute fidpairs lists per plaquette to get #fidpairs for each
             maxEls = 0
             for (L, germ), plaq in self._plaquettes.items():
-                if (L in Ls) and (germ in germs):
+                if (L in max_lengths) and (germ in germs):
                     maxEls = max(maxEls, len(plaq.elements))
 
-            if nMinorCols == "auto" and nMinorRows == "auto":
+            if n_minor_cols == "auto" and n_minor_rows == "auto":
                 #special behavior: make as square as possible
-                nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxEls)))
-                if nMinorRows * nMinorCols < maxEls: nMinorCols += 1
-                if nMinorRows * nMinorCols < maxEls: nMinorRows += 1
-                assert(nMinorRows * nMinorCols >= maxEls), "Logic Error!"
-            elif nMinorCols == "auto":
-                nMinorCols = maxEls // nMinorRows
-                if nMinorRows * nMinorCols < maxEls: nMinorCols += 1
-            else:  # nMinorRows == "auto"
-                nMinorRows = maxEls // nMinorCols
-                if nMinorRows * nMinorCols < maxEls: nMinorRows += 1
+                n_minor_rows = n_minor_cols = int(_np.floor(_np.sqrt(maxEls)))
+                if n_minor_rows * n_minor_cols < maxEls: n_minor_cols += 1
+                if n_minor_rows * n_minor_cols < maxEls: n_minor_rows += 1
+                assert(n_minor_rows * n_minor_cols >= maxEls), "Logic Error!"
+            elif n_minor_cols == "auto":
+                n_minor_cols = maxEls // n_minor_rows
+                if n_minor_rows * n_minor_cols < maxEls: n_minor_cols += 1
+            else:  # n_minor_rows == "auto"
+                n_minor_rows = maxEls // n_minor_cols
+                if n_minor_rows * n_minor_cols < maxEls: n_minor_rows += 1
 
-        cpy = LsGermsSerialStructure(Ls, germs, nMinorRows, nMinorCols,
+        cpy = LsGermsSerialStructure(max_lengths, germs, n_minor_rows, n_minor_cols,
                                      self.aliases, self.sequenceRules)
 
         for (L, germ), plaq in self._plaquettes.items():
             basestr = plaq.base
             fidpairs = plaq.fidpairs
-            if (L in Ls) and (germ in germs):
+            if (L in max_lengths) and (germ in germs):
                 cpy.add_plaquette(basestr, L, germ, fidpairs)
 
         cpy.add_unindexed(self.unindexed)  # preserve unindexed strings
         return cpy
 
-    def create_plaquette(self, baseStr, fidpairs):
+    def create_plaquette(self, base_str, fidpairs):
         """
         Creates a the plaquette for the given base string and pairs.
 
         Parameters
         ----------
-        baseStr : Circuit
+        base_str : Circuit
 
         fidpairs : list
             A list if `(prep,meas)` tuples of Circuit objects, specifying
@@ -957,11 +1012,11 @@ class LsGermsSerialStructure(CircuitStructure):
                                           list(range(self.nMinorCols))))
         assert(len(ji_list) >= len(fidpairs)), "Number of minor rows/cols is too small!"
 
-        elements = [(j, i, prepStr + baseStr + effectStr)
+        elements = [(j, i, prepStr + base_str + effectStr)
                     for (j, i), (prepStr, effectStr) in
                     zip(ji_list[0:len(fidpairs)], fidpairs)]  # note preps are *cols* not rows
 
-        return CircuitPlaquette(baseStr, self.nMinorRows,
+        return CircuitPlaquette(base_str, self.nMinorRows,
                                 self.nMinorCols, elements,
                                 self.aliases, fidpairs[:])
 

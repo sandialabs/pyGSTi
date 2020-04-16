@@ -39,55 +39,55 @@ class OptimizeIntegerFiducialsBase(object):
 
     def test_optimize_integer_fiducials_slack_frac(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1, **self.options
+            self.model, self.fiducials, slack_frac=0.1, **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_fixed(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, fixedSlack=0.1, **self.options
+            self.model, self.fiducials, fixed_slack=0.1, **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_initial_weights(self):
         weights = np.ones(len(self.fiducials), 'i')
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, fixedSlack=0.1,
-            initialWeights=weights, **self.options
+            self.model, self.fiducials, fixed_slack=0.1,
+            initial_weights=weights, **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_return_all(self):
         fiducials, weights, scores = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1, returnAll=True,
+            self.model, self.fiducials, slack_frac=0.1, return_all=True,
             **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_worst_score_func(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1,
-            scoreFunc='worst', **self.options
+            self.model, self.fiducials, slack_frac=0.1,
+            score_func='worst', **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_fixed_num(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1, fixedNum=4,
+            self.model, self.fiducials, slack_frac=0.1, fixed_num=4,
             **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_force_empty(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1, fixedNum=4,
-            forceEmpty=False, **self.options
+            self.model, self.fiducials, slack_frac=0.1, fixed_num=4,
+            force_empty=False, **self.options
         )
         # TODO assert correctness
 
     def test_optimize_integer_fiducials_slack_low_max_iterations(self):
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, self.fiducials, slackFrac=0.1, maxIter=1,
+            self.model, self.fiducials, slack_frac=0.1, max_iter=1,
             **self.options
         )
         # TODO assert correctness
@@ -96,8 +96,8 @@ class OptimizeIntegerFiducialsBase(object):
         insuff_fids = pc.circuit_list([('Gx',)])
         weights = np.ones(len(insuff_fids), 'i')
         fiducials = fs.optimize_integer_fiducials_slack(
-            self.model, insuff_fids, fixedSlack=0.1,
-            initialWeights=weights, **self.options
+            self.model, insuff_fids, fixed_slack=0.1,
+            initial_weights=weights, **self.options
         )
         self.assertIsNone(fiducials)
 
@@ -109,14 +109,14 @@ class OptimizeIntegerFiducialsBase(object):
 class OptimizeIntegerFiducialsExceptionTester(FiducialSelectionStdModel, BaseCase):
     def test_optimize_integer_fiducials_slack_raises_on_missing_method(self):
         with self.assertRaises(Exception):
-            fs.optimize_integer_fiducials_slack(self.model, self.fiducials, fixedSlack=0.1)
+            fs.optimize_integer_fiducials_slack(self.model, self.fiducials, fixed_slack=0.1)
 
 
 class PrepOptimizeIntegerFiducialsStdModelTester(OptimizeIntegerFiducialsBase, FiducialSelectionStdModel, BaseCase):
     def setUp(self):
         super(PrepOptimizeIntegerFiducialsStdModelTester, self).setUp()
         self.options.update(
-            prepOrMeas="prep"
+            prep_or_meas="prep"
         )
 
 
@@ -124,7 +124,7 @@ class MeasOptimizeIntegerFiducialsStdModelTester(OptimizeIntegerFiducialsBase, F
     def setUp(self):
         super(MeasOptimizeIntegerFiducialsStdModelTester, self).setUp()
         self.options.update(
-            prepOrMeas="meas"
+            prep_or_meas="meas"
         )
 
 
@@ -149,7 +149,7 @@ class _TestFiducialListBase(object):
         super(_TestFiducialListBase, self).setUp()
         self.fiducials_list = fs.optimize_integer_fiducials_slack(
             self.model, self.fiducials,
-            prepOrMeas=self.prep_or_meas, slackFrac=0.1
+            prep_or_meas=self.prep_or_meas, slack_frac=0.1
         )
 
     def test_test_fiducial_list(self):
@@ -160,13 +160,13 @@ class _TestFiducialListBase(object):
     def test_test_fiducial_list_worst_score_func(self):
         self.assertTrue(fs.test_fiducial_list(
             self.model, self.fiducials_list, self.prep_or_meas,
-            scoreFunc='worst'
+            score_func='worst'
         ))
 
     def test_test_fiducial_list_return_all(self):
         result, spectrum, score = fs.test_fiducial_list(
             self.model, self.fiducials_list, self.prep_or_meas,
-            returnAll=True
+            return_all=True
         )
         # TODO assert correctness
 
@@ -192,14 +192,14 @@ class TestFiducialListExceptionTester(FiducialSelectionStdModel, BaseCase):
 class GraspFiducialOptimizationTester(FiducialSelectionStdModel, BaseCase):
     def test_grasp_fiducial_optimization_prep(self):
         fiducials = fs.grasp_fiducial_optimization(
-            self.model, self.fiducials, prepOrMeas="prep", alpha=0.5,
+            self.model, self.fiducials, prep_or_meas="prep", alpha=0.5,
             verbosity=4
         )
         # TODO assert correctness
 
     def test_grasp_fiducial_optimization_meas(self):
         fiducials = fs.grasp_fiducial_optimization(
-            self.model, self.fiducials, prepOrMeas="meas", alpha=0.5,
+            self.model, self.fiducials, prep_or_meas="meas", alpha=0.5,
             verbosity=4
         )
         # TODO assert correctness
@@ -207,6 +207,6 @@ class GraspFiducialOptimizationTester(FiducialSelectionStdModel, BaseCase):
     def test_grasp_fiducial_optimization_raises_on_bad_method(self):
         with self.assertRaises(ValueError):
             fs.grasp_fiducial_optimization(
-                self.model, self.fiducials, prepOrMeas="foobar",
+                self.model, self.fiducials, prep_or_meas="foobar",
                 alpha=0.5, verbosity=4
             )

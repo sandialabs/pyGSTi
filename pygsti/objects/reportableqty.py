@@ -36,7 +36,7 @@ class ReportableQty(object):
     primarily for use in reports.
     """
 
-    def __init__(self, value, errbar=None, nonMarkovianEBs=False):
+    def __init__(self, value, errbar=None, non_markovian_ebs=False):
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -49,13 +49,13 @@ class ReportableQty(object):
         errbar : anything
            The error bar(s) to store
 
-        nonMarkovianEBs : bool
+        non_markovian_ebs : bool
             boolean indicating if non markovian error bars should be used
         """
         self.value = value
         self.errbar = errbar
 
-        self.nonMarkovianEBs = nonMarkovianEBs
+        self.nonMarkovianEBs = non_markovian_ebs
 
     def __str__(self):
         def f(x, y): return (str(x) + " +/- " + str(y)) if y else str(x)
@@ -195,13 +195,13 @@ class ReportableQty(object):
         if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
 
-        def _convert(A):
-            ret = _np.empty(A.shape, 'd')
-            for i in range(A.shape[0]):
-                ret[i, i] = A[i, i].real
-                for j in range(i + 1, A.shape[1]):
-                    ret[i, j] = A[i, j].real
-                    ret[j, i] = A[i, j].imag
+        def _convert(a):
+            ret = _np.empty(a.shape, 'd')
+            for i in range(a.shape[0]):
+                ret[i, i] = a[i, i].real
+                for j in range(i + 1, a.shape[1]):
+                    ret[i, j] = a[i, j].real
+                    ret[j, i] = a[i, j].imag
             return ret
 
         v = _convert(self.value)
@@ -224,7 +224,7 @@ class ReportableQty(object):
         return self.value.size
 
     @staticmethod
-    def from_val(value, nonMarkovianEBs=False):
+    def from_val(value, non_markovian_ebs=False):
         '''
         Convert Table values into ReportableQtys or leave them be if they are well-formed types
         Well-formed types include:
@@ -238,14 +238,14 @@ class ReportableQty(object):
         if isinstance(value, ReportableQty):
             return value
         if isinstance(value, _Label):  # distinguish b/c Label is also a *tuple*
-            return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
+            return ReportableQty(value, non_markovian_ebs=non_markovian_ebs)
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(
                 len(value))
-            return ReportableQty(value[0], value[1], nonMarkovianEBs=nonMarkovianEBs)
+            return ReportableQty(value[0], value[1], non_markovian_ebs=non_markovian_ebs)
         else:
-            return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
+            return ReportableQty(value, non_markovian_ebs=non_markovian_ebs)
 
     def has_eb(self):
         """

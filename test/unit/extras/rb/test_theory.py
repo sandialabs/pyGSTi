@@ -14,7 +14,7 @@ class GaugeTransformBase(object):
         # have r = infidelity in its initial gauge does have this in the RB gauge. This also
         # tests that the r predictions are working for not-all-the-Cliffords models.
         mdl_in_RB_gauge = rb.theory.transform_to_rb_gauge(self.mdl, self.target_model, eigenvector_weighting=0.5)
-        r_pred_EI = rb.theory.predicted_RB_number(self.mdl, self.target_model, rtype='EI')
+        r_pred_EI = rb.theory.predicted_rb_number(self.mdl, self.target_model, rtype='EI')
         REI = rb.theory.gateset_infidelity(mdl_in_RB_gauge, self.target_model, itype='EI')
         self.assertAlmostEqual(r_pred_EI, REI, places=10)
 
@@ -29,7 +29,7 @@ class InfidelityBase(object):
 
     def test_predicted_RB_number_AGI(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        r_pred_AGI = rb.theory.predicted_RB_number(self.mdl, self.target_model, weights=self.weights, rtype='AGI')
+        r_pred_AGI = rb.theory.predicted_rb_number(self.mdl, self.target_model, weights=self.weights, rtype='AGI')
         self.assertAlmostEqual(r_pred_AGI, self.expected_AGI, places=10)
 
     def test_gateset_infidelity_EI(self):
@@ -39,7 +39,7 @@ class InfidelityBase(object):
 
     def test_predicted_RB_number_EI(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        r_pred_EI = rb.theory.predicted_RB_number(self.mdl, self.target_model, weights=self.weights, rtype='EI')
+        r_pred_EI = rb.theory.predicted_rb_number(self.mdl, self.target_model, weights=self.weights, rtype='EI')
         self.assertAlmostEqual(r_pred_EI, self.expected_EI, places=10)
 
 
@@ -95,7 +95,7 @@ class RBTheoryCliffordsModelTester(GaugeTransformBase, InfidelityBase, BaseCase)
         cls.mdl = cls.target_model.depolarize(op_noise=cls.depol_strength)
         cls.expected_AGI = rb.analysis.p_to_r(1 - cls.depol_strength, d=2, rtype='AGI')
         cls.expected_EI = rb.analysis.p_to_r(1 - cls.depol_strength, d=2, rtype='EI')
-        cls.clifford_group = rb.group.construct_1Q_Clifford_group()
+        cls.clifford_group = rb.group.construct_1q_clifford_group()
 
     def test_R_matrix(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
@@ -104,7 +104,7 @@ class RBTheoryCliffordsModelTester(GaugeTransformBase, InfidelityBase, BaseCase)
 
     def test_exact_RB_ASPs(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.mdl, self.clifford_group, m_max=1000, m_min=0,
             m_step=100, success_outcomelabel=('0',),
             group_to_model=None, weights=None, compilation=None,
@@ -112,7 +112,7 @@ class RBTheoryCliffordsModelTester(GaugeTransformBase, InfidelityBase, BaseCase)
         )
         self.assertLess(abs(ASPs[1] - (0.5 + 0.5 * (1.0 - self.depol_strength)**101)), 10**(-10))
 
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.mdl, self.clifford_group, m_max=1000, m_min=0,
             m_step=100, success_outcomelabel=('0',),
             group_to_model=None, weights=None, compilation=None,
@@ -124,7 +124,7 @@ class RBTheoryCliffordsModelTester(GaugeTransformBase, InfidelityBase, BaseCase)
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
         # TODO optimize
         # Check it works with a Clifford model, and gives plausable output
-        m, ASPs = rb.theory.L_matrix_ASPs(
+        m, ASPs = rb.theory.L_matrix_asps(
             self.mdl, self.target_model, m_max=10, m_min=0, m_step=1,
             success_outcomelabel=('0',), compilation=None,
             group_twirled=False, weights=None, gauge_optimize=False,
@@ -141,7 +141,7 @@ class RBTheoryXYModelTester(BaseCase):
         cls.target_model = std1Q_XY.target_model()
         cls.mdl = cls.target_model.depolarize(op_noise=1e-3)
 
-        cls.clifford_group = rb.group.construct_1Q_Clifford_group()
+        cls.clifford_group = rb.group.construct_1q_clifford_group()
         cls.clifford_compilation = std1Q_XY.clifford_compilation
 
     def test_exact_AB_ASPs(self):
@@ -149,7 +149,7 @@ class RBTheoryXYModelTester(BaseCase):
         # Tests the exact RB ASPs function on a subset-of-Cliffords model.
         group_to_model = {'Gc16': 'Gx', 'Gc21': 'Gy'}
         weights = {'Gx': 5, 'Gy': 10}
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.target_model, self.clifford_group, m_max=10, m_min=0,
             m_step=1, success_outcomelabel=('0',),
             group_to_model=group_to_model, weights=None,
@@ -158,7 +158,7 @@ class RBTheoryXYModelTester(BaseCase):
         self.assertLess(abs(np.sum(ASPs) - len(ASPs)), 10**(-10))
 
         # Tests the function behaves reasonably with a depolarized model + works with group_twirled + weights.
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.mdl, self.clifford_group, m_max=10, m_min=0, m_step=1,
             success_outcomelabel=('0',),
             group_to_model=group_to_model, weights=None,
@@ -166,7 +166,7 @@ class RBTheoryXYModelTester(BaseCase):
         )
         self.assertLess(abs(ASPs[0] - 1), 10**(-10))
 
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.mdl, self.clifford_group, m_max=10, m_min=0, m_step=3,
             success_outcomelabel=('0',),
             group_to_model=group_to_model, weights=weights,
@@ -181,7 +181,7 @@ class RBTheoryXYModelTester(BaseCase):
         group_to_model = {'Gc16': 'Gx', 'Gc21': 'Gy'}
         weights = {'Gx': 5, 'Gy': 10}
 
-        m, ASPs = rb.theory.exact_RB_ASPs(
+        m, ASPs = rb.theory.exact_rb_asps(
             self.mdl, self.clifford_group, m_max=10, m_min=0, m_step=1,
             success_outcomelabel=('0',),
             group_to_model=group_to_model, weights=weights,
@@ -189,7 +189,7 @@ class RBTheoryXYModelTester(BaseCase):
         )
 
         # Todo : change '1to1' to 'diamond' in 2 of 3 of the following, when diamonddist is working.
-        L_m, L_ASPs, L_LASPs, L_UASPs = rb.theory.L_matrix_ASPs(
+        L_m, L_ASPs, L_LASPs, L_UASPs = rb.theory.L_matrix_asps(
             self.mdl, self.target_model, m_max=10, m_min=0, m_step=1,
             success_outcomelabel=('0',), compilation=self.clifford_compilation,
             group_twirled=True, weights=weights, gauge_optimize=True,
@@ -198,7 +198,7 @@ class RBTheoryXYModelTester(BaseCase):
         self.assertTrue((abs(ASPs - L_ASPs) < 0.001).all())
 
         # Check it works without the twirl, and gives plausable output
-        L_m, L_ASPs = rb.theory.L_matrix_ASPs(
+        L_m, L_ASPs = rb.theory.L_matrix_asps(
             self.mdl, self.target_model, m_max=10, m_min=0, m_step=1,
             success_outcomelabel=('0',),
             compilation=self.clifford_compilation,
@@ -217,7 +217,7 @@ class RBTheoryXYIModelTester(BaseCase):
         cls.depol_strength = 1e-3
         cls.mdl = cls.target_model.depolarize(op_noise=cls.depol_strength)
 
-        cls.clifford_group = rb.group.construct_1Q_Clifford_group()
+        cls.clifford_group = rb.group.construct_1q_clifford_group()
         cls.clifford_compilation = std1Q_XYI.clifford_compilation
 
     def test_R_matrix(self):
@@ -234,12 +234,12 @@ class RBTheoryXYIModelTester(BaseCase):
         group_to_model = {'Gc0': 'Gi', 'Gc16': 'Gx', 'Gc21': 'Gy'}
         weights = {'Gi': 1., 'Gx': 1, 'Gy': 1}
         # Tests the p-prediction function works, and that we get the correct predictions from the R-matrix.
-        p = rb.theory.R_matrix_predicted_RB_decay_parameter(self.target_model, self.clifford_group,
+        p = rb.theory.R_matrix_predicted_rb_decay_parameter(self.target_model, self.clifford_group,
                                                             group_to_model=group_to_model,
                                                             weights=weights)
         self.assertAlmostEqual(p, 1., places=10)
 
-        p = rb.theory.R_matrix_predicted_RB_decay_parameter(self.mdl, self.clifford_group,
+        p = rb.theory.R_matrix_predicted_rb_decay_parameter(self.mdl, self.clifford_group,
                                                             group_to_model=group_to_model,
                                                             weights=weights)
         self.assertAlmostEqual(p, (1.0 - self.depol_strength), places=10)

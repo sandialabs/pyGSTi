@@ -392,14 +392,14 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
 class ImplicitModelSimplifierHelper(MemberDictDictSimplifierHelper):
     """ Performs the work of a "Simplifier Helper" using user-supplied dicts """
 
-    def __init__(self, implicitModel):
+    def __init__(self, implicit_model):
         """
         Create a new ImplicitModelSimplifierHelper.
 
         Parameters
         ----------
-        implicitModel : ImplicitOpModel
+        implicit_model : ImplicitOpModel
         """
         super(ImplicitModelSimplifierHelper, self).__init__(
-            implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks,
-            implicitModel.state_space_labels)
+            implicit_model.prep_blks, implicit_model.povm_blks, implicit_model.instrument_blks,
+            implicit_model.state_space_labels)

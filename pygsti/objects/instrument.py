@@ -20,7 +20,7 @@ from . import operation as _op
 from . import spamvec as _sv
 
 
-def convert(instrument, toType, basis, extra=None):
+def convert(instrument, to_type, basis, extra=None):
     """
     Convert intrument to a new type of parameterization, potentially
     creating a new object.  Raises ValueError for invalid conversions.
@@ -30,7 +30,7 @@ def convert(instrument, toType, basis, extra=None):
     instrument : Instrument
         Instrument to convert
 
-    toType : {"full","TP","static","static unitary"}
+    to_type : {"full","TP","static","static unitary"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
 
@@ -49,16 +49,16 @@ def convert(instrument, toType, basis, extra=None):
        object from the object passed as input.
     """
 
-    if toType == "TP":
+    if to_type == "TP":
         if isinstance(instrument, TPInstrument):
             return instrument
         else:
             return TPInstrument(list(instrument.items()))
-    elif toType in ("full", "static", "static unitary"):
-        gate_list = [(k, _op.convert(g, toType, basis)) for k, g in instrument.items()]
+    elif to_type in ("full", "static", "static unitary"):
+        gate_list = [(k, _op.convert(g, to_type, basis)) for k, g in instrument.items()]
         return Instrument(gate_list)
     else:
-        raise ValueError("Cannot convert an instrument to type %s" % toType)
+        raise ValueError("Cannot convert an instrument to type %s" % to_type)
 
 
 class Instrument(_gm.ModelMember, _collections.OrderedDict):
@@ -259,20 +259,20 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update Instrument element matrix G with inv(S) * G * S.
+        Update Instrument element matrix G with inv(s) * G * s.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
-            gate.transform(S)
+            gate.transform(s)
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
@@ -300,7 +300,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
-    def rotate(self, amount, mxBasis='gm'):
+    def rotate(self, amount, mx_basis='gm'):
         """
         Rotate this instrument by the given `amount`.
 
@@ -314,7 +314,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
             ranges over all of the non-identity un-normalized Pauli operators.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
@@ -326,7 +326,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # rotate the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
-            gate.rotate(amount, mxBasis)
+            gate.rotate(amount, mx_basis)
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
@@ -567,20 +567,20 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
 
-    def transform(self, S):
+    def transform(self, s):
         """
-        Update Instrument element matrix G with inv(S) * G * S.
+        Update Instrument element matrix G with inv(s) * G * s.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.param_ops:
-            gate.transform(S)
+            gate.transform(s)
 
         for element in self.values():
             element._construct_matrix()  # construct from param gates
@@ -612,7 +612,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             element._construct_matrix()  # construct from param gates
         self.dirty = True
 
-    def rotate(self, amount, mxBasis='gm'):
+    def rotate(self, amount, mx_basis='gm'):
         """
         Rotate this instrument by the given `amount`.
 
@@ -626,7 +626,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
             ranges over all of the non-identity un-normalized Pauli operators.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
@@ -638,7 +638,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # rotate the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.param_ops:
-            gate.rotate(amount, mxBasis)
+            gate.rotate(amount, mx_basis)
 
         for element in self.values():
             element._construct_matrix()  # construct from param gates

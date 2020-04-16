@@ -52,26 +52,26 @@ class RBSampleTester(BaseCase):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
         n = self.pspec_1.number_of_qubits
         layer = sample.circuit_layer_by_pairing_qubits(
-            self.pspec_1, twoQprob=0.0, oneQgatenames='all',
-            twoQgatenames='all', modelname='clifford'
+            self.pspec_1, two_q_prob=0.0, one_q_gate_names='all',
+            two_q_gate_names='all', modelname='clifford'
         )
         self.assertEqual(len(layer), n)
 
         layer = sample.circuit_layer_by_pairing_qubits(
-            self.pspec_1, twoQprob=1.0, oneQgatenames='all',
-            twoQgatenames='all', modelname='clifford'
+            self.pspec_1, two_q_prob=1.0, one_q_gate_names='all',
+            two_q_gate_names='all', modelname='clifford'
         )
         self.assertEqual(len(layer), n // 2)
 
         layer = sample.circuit_layer_by_pairing_qubits(
-            self.pspec_1, twoQprob=0.0, oneQgatenames=['Gx'],
-            twoQgatenames='all', modelname='clifford'
+            self.pspec_1, two_q_prob=0.0, one_q_gate_names=['Gx'],
+            two_q_gate_names='all', modelname='clifford'
         )
         self.assertEqual(layer[0].name, 'Gx')
 
         layer = sample.circuit_layer_by_pairing_qubits(
-            self.pspec_1, twoQprob=0.0, oneQgatenames=['Gxpi'],
-            twoQgatenames='all', modelname='target'
+            self.pspec_1, two_q_prob=0.0, one_q_gate_names=['Gxpi'],
+            two_q_gate_names='all', modelname='target'
         )
         self.assertEqual(layer[0].name, 'Gxpi')
 
@@ -79,13 +79,13 @@ class RBSampleTester(BaseCase):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
         n = self.pspec_2.number_of_qubits
         layer = sample.circuit_layer_by_Qelimination(
-            self.pspec_2, twoQprob=0.0, oneQgates='all',
-            twoQgates='all', modelname='clifford'
+            self.pspec_2, two_q_prob=0.0, one_q_gates='all',
+            two_q_gates='all', modelname='clifford'
         )
         self.assertEqual(len(layer), self.pspec_2.number_of_qubits)
         layer = sample.circuit_layer_by_Qelimination(
-            self.pspec_2, twoQprob=1.0, oneQgates='all',
-            twoQgates='all', modelname='clifford'
+            self.pspec_2, two_q_prob=1.0, one_q_gates='all',
+            two_q_gates='all', modelname='clifford'
         )
         self.assertEqual(len(layer), (n % 2) + n // 2)
 
@@ -97,20 +97,20 @@ class RBSampleTester(BaseCase):
         co2Qgates = [[], [C01, C23]]
 
         layer = sample.circuit_layer_by_co2Qgates(
-            self.pspec_1, None, co2Qgates, co2Qgatesprob='uniform',
-            twoQprob=1.0, oneQgatenames='all', modelname='clifford'
+            self.pspec_1, None, co2Qgates, co2_q_gates_prob='uniform',
+            two_q_prob=1.0, one_q_gate_names='all', modelname='clifford'
         )
         self.assertTrue(len(layer) == n or len(layer) == n // 2)
 
         layer = sample.circuit_layer_by_co2Qgates(
-            self.pspec_1, None, co2Qgates, co2Qgatesprob=[0., 1.],
-            twoQprob=1.0, oneQgatenames='all', modelname='clifford'
+            self.pspec_1, None, co2Qgates, co2_q_gates_prob=[0., 1.],
+            two_q_prob=1.0, one_q_gate_names='all', modelname='clifford'
         )
         self.assertEqual(len(layer), n // 2)
 
         layer = sample.circuit_layer_by_co2Qgates(
-            self.pspec_1, None, co2Qgates, co2Qgatesprob=[1., 0.],
-            twoQprob=1.0, oneQgatenames=['Gx'], modelname='clifford'
+            self.pspec_1, None, co2Qgates, co2_q_gates_prob=[1., 0.],
+            two_q_prob=1.0, one_q_gate_names=['Gx'], modelname='clifford'
         )
         self.assertEqual(len(layer), n)
         self.assertEqual(layer[0].name, 'Gx')
@@ -118,15 +118,15 @@ class RBSampleTester(BaseCase):
         co2Qgates = [[], [C23]]
         layer = sample.circuit_layer_by_co2Qgates(
             self.pspec_1, ['Q2', 'Q3'], co2Qgates,
-            co2Qgatesprob=[0.25, 0.75], twoQprob=0.5,
-            oneQgatenames='all', modelname='clifford'
+            co2_q_gates_prob=[0.25, 0.75], two_q_prob=0.5,
+            one_q_gate_names='all', modelname='clifford'
         )
         # TODO assert correctness
 
         co2Qgates = [[C01]]
         layer = sample.circuit_layer_by_co2Qgates(
-            self.pspec_1, None, co2Qgates, co2Qgatesprob=[1.],
-            twoQprob=1.0, oneQgatenames='all', modelname='clifford'
+            self.pspec_1, None, co2Qgates, co2_q_gates_prob=[1.],
+            two_q_prob=1.0, one_q_gate_names='all', modelname='clifford'
         )
         self.assertEqual(layer[0].name, 'Gcnot')
         self.assertEqual(len(layer), 3)
@@ -134,33 +134,33 @@ class RBSampleTester(BaseCase):
         # Tests the nested co2Qgates option.
         co2Qgates = [[], [[C01, C23], [C01]]]
         layer = sample.circuit_layer_by_co2Qgates(
-            self.pspec_1, None, co2Qgates, co2Qgatesprob='uniform',
-            twoQprob=1.0, oneQgatenames='all', modelname='clifford'
+            self.pspec_1, None, co2Qgates, co2_q_gates_prob='uniform',
+            two_q_prob=1.0, one_q_gate_names='all', modelname='clifford'
         )
         # TODO assert correctness
 
     def test_circuit_layer_of_oneQgates(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
         layer = sample.circuit_layer_of_oneQgates(
-            self.pspec_1, oneQgatenames='all', pdist='uniform',
+            self.pspec_1, one_q_gate_names='all', pdist='uniform',
             modelname='clifford'
         )
         self.assertEqual(len(layer), self.pspec_1.number_of_qubits)
         layer = sample.circuit_layer_of_oneQgates(
             self.pspec_1, subsetQs=['Q1', 'Q2'],
-            oneQgatenames=['Gx', 'Gy'], pdist=[1., 0.],
+            one_q_gate_names=['Gx', 'Gy'], pdist=[1., 0.],
             modelname='clifford'
         )
         self.assertEqual(len(layer), 2)
         self.assertEqual(layer[0].name, 'Gx')
         layer = sample.circuit_layer_of_oneQgates(
-            self.pspec_1, subsetQs=['Q2'], oneQgatenames=['Gx'],
+            self.pspec_1, subsetQs=['Q2'], one_q_gate_names=['Gx'],
             pdist=[3.], modelname='clifford'
         )
         self.assertEqual(layer[0], Label('Gx', 'Q2'))
         self.assertEqual(len(layer), 1)
         layer = sample.circuit_layer_of_oneQgates(
-            self.pspec_1, oneQgatenames=['Gx'], pdist='uniform',
+            self.pspec_1, one_q_gate_names=['Gx'], pdist='uniform',
             modelname='clifford'
         )
 
