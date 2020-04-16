@@ -880,7 +880,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             else:
                 raise ValueError("Regularization => negative terms!")
 
-
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
         #    print("LOGL OBJECTIVE: ")
@@ -1378,7 +1377,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
-        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)        
+        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)
         terms = _np.concatenate((terms, self.penaltyvec(paramvec)))
 
         if self.firsts is not None:
