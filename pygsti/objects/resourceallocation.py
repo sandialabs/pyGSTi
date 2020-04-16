@@ -14,7 +14,7 @@ _dummy_profiler = _DummyProfiler()
 
 class ResourceAllocation(object):
     @classmethod
-    def build_resource_allocation(cls, arg):
+    def create_from(cls, arg):
         if arg is None:
             return cls()
         elif isinstance(arg, ResourceAllocation):

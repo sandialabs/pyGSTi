@@ -120,7 +120,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
 class GSTInitialModel(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
     def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
@@ -207,7 +207,7 @@ class GSTInitialModel(object):
 
 class GSTBadFitOptions(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         if isinstance(obj, GSTBadFitOptions):
             return obj
         else:  # assum obj is a dict of arguments
@@ -223,12 +223,12 @@ class GSTBadFitOptions(object):
 
 class GSTObjFnBuilders(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.init_simple()
         elif isinstance(obj, dict): return cls.init_simple(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
-        else: raise ValueError("Cannot build a GSTObjFnBuilders object from '%s'" % str(type(obj)))
+        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod
     def init_simple(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
@@ -267,10 +267,10 @@ class GateSetTomography(_proto.Protocol):
         """
 
         super().__init__(name)
-        self.initial_model = GSTInitialModel.build(initial_model)
+        self.initial_model = GSTInitialModel.create_from(initial_model)
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.build(badfit_options)
+        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
         self.verbosity = verbosity
 
         if isinstance(optimizer, _opt.Optimizer):
@@ -280,9 +280,9 @@ class GateSetTomography(_proto.Protocol):
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 mdl = self.initial_model.model
                 optimizer['first_fditer'] = 0 if mdl and mdl.simtype in ("termorder", "termgap") else 1
-            self.optimizer = _opt.CustomLMOptimizer.build(optimizer)
+            self.optimizer = _opt.CustomLMOptimizer.create_from(optimizer)
 
-        objfn_builders = GSTObjFnBuilders.build(objfn_builders)
+        objfn_builders = GSTObjFnBuilders.create_from(objfn_builders)
         self.iteration_builders = objfn_builders.iteration_builders
         self.final_builders = objfn_builders.final_builders
 
@@ -387,7 +387,7 @@ class LinearGateSetTomography(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.build(badfit_options)
+        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
         self.verbosity = verbosity
 
         #Advanced options that could be changed by users who know what they're doing

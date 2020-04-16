@@ -171,6 +171,12 @@ class Circuit(object):
     default_expand_subcircuits = True
 
     @classmethod
+    def create_from(cls, obj):
+        if isinstance(obj, cls): return obj
+        if isinstance(obj, (tuple, list)): return cls.fromtup(obj)
+        raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+
+    @classmethod
     def fromtup(cls, tup):
         if '@' in tup:
             k = tup.index('@')

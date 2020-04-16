@@ -41,7 +41,7 @@ class OptimizerResult(object):
 
 class Optimizer(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         if isinstance(obj, cls):
             return obj
         else:

@@ -48,6 +48,15 @@ def objfn(objfn_cls, model, dataset, circuits=None,
 
 class ObjectiveFunctionBuilder(object):
     @classmethod
+    def create_from(cls, obj):
+        if isinstance(obj, cls): return obj
+        elif obj is None: return cls.simple()
+        elif isinstance(obj, str): return cls.simple(objective=obj)
+        elif isinstance(obj, dict): return cls.simple(**obj)
+        elif isinstance(obj, (list, tuple)): return cls(*obj)
+        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+
+    @classmethod
     def simple(cls, objective='logl', freq_weighted_chi2=False):
         if objective == "chi2":
             if freq_weighted_chi2:
@@ -110,7 +119,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         TODO: docstring
         """
-        resource_alloc = _ResourceAllocation.build_resource_allocation(resource_alloc)
+        resource_alloc = _ResourceAllocation.create_from(resource_alloc)
         self.comm = resource_alloc.comm
         self.profiler = resource_alloc.profiler
         self.mem_limit = resource_alloc.mem_limit
@@ -234,7 +243,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         # Memory check
         persistent_mem = self.get_persistent_memory_estimate()
         in_gb = 1.0 / 1024.0**3  # in gigabytes
-        if self.raw_objfn.mem_limit:
+        if self.raw_objfn.mem_limit is not None:
             in_gb = 1.0 / 1024.0**3  # in gigabytes
             if self.raw_objfn.mem_limit < persistent_mem:
                 raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
@@ -255,7 +264,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
             subcalls = self.get_evaltree_subcalls()
             evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
                                                      self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-            self.cache.add_evaltree(self.mdl, self.dataset, self.circuits_to_use, evt_resource_alloc,
+            self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
                                     subcalls, self.raw_objfn.printer - 1)
 
         self.eval_tree = self.cache.eval_tree
@@ -1208,17 +1217,16 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
-        if self.regularize_factor != 0: ex += self.nparams
-        if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.mdl)
-        if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.mdl)
-
         if forcefn_grad is not None:
             ex += forcefn_grad.shape[0]
             ffg_norm = _np.linalg.norm(forcefn_grad)
             start_norm = _np.linalg.norm(self.mdl.to_vector())
-            self.forceOffset = self.nelements + ex  # index to jacobian row of first forcing term
             self.forceShift = ffg_norm * (ffg_norm + start_norm) * shift_fctr
             #used to keep forceShift - _np.dot(forcefn_grad,paramvec) positive (Note: not analytic, just a heuristic!)
+
+        if self.regularize_factor != 0: ex += self.nparams
+        if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.mdl)
+        if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.mdl)
 
         return ex
 
@@ -1249,6 +1257,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
     def fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
         off = 0
+
+        if self.forcefn_grad is not None:
+            n = self.forcefn_grad.shape[0]
+            self.jac[off:off + n, :] = -self.forcefn_grad
+            off += n
 
         if self.regularize_factor > 0:
             n = len(paramvec)
@@ -1356,7 +1369,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             self.update_lsvec_for_omitted_probs(lsvec, self.probs)
 
         self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
-        assert(lsvec.shape == (self.nelements,))  # reshape ensuring no copy is needed
+        assert(lsvec.shape == (self.nelements + self.ex,))
         return lsvec
 
     def terms(self, paramvec=None):
@@ -1365,14 +1378,14 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
-        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)
+        terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)        
         terms = _np.concatenate((terms, self.penaltyvec(paramvec)))
 
         if self.firsts is not None:
             self.update_terms_for_omitted_probs(terms, self.probs)
 
         self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
-        assert(terms.shape == (self.nelements,))  # reshape ensuring no copy is needed
+        assert(terms.shape == (self.nelements + self.ex,))
         return terms
 
     # Jacobian function
