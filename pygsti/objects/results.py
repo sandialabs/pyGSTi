@@ -129,8 +129,8 @@ class Results(object):
         # to the circuitLists used to obtain estimates
         finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
-            self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
-            self.circuit_lists['meas fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['prep fiducials'] = finalStruct.prep_fiducials
+            self.circuit_lists['meas fiducials'] = finalStruct.meas_fiducials
             self.circuit_lists['germs'] = finalStruct.germs
         else:
             self.circuit_lists['prep fiducials'] = []

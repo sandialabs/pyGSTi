@@ -914,8 +914,8 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
             for goparams_dict in goparams_list:
                 if 'target_model' in goparams_dict:
                     _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                    "user-defined target_model in gauge opt"
-                                    "param dict(s)"))
+                                    " user-defined target_model in gauge opt"
+                                    " param dict(s)"))
                 goparams_dict.update({'target_model': target_model})
 
     #Gauge optimize to list of gauge optimization parameters
@@ -1044,7 +1044,7 @@ def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
     # Get by-sequence goodness of fit
     objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
     objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
-    fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+    fitqty = objfn.get_chi2k_distributed_qty(objfn.percircuit())
     return fitqty
 
 
@@ -1229,7 +1229,7 @@ def reoptimize_with_weights(model, ds, circuit_list, circuit_weights, objfn_buil
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
-    bulk_circuit_list = _BulkCircuitList(circuit_list, circuitWeights=circuit_weights)
+    bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
     opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
                                             resource_alloc, cache, printer - 1)
     return mdl_reopt
@@ -1514,7 +1514,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         Results
         """
         view = ModelEstimateResults(self.data, self.protocol, init_circuits=False)
-        view.qtys['circuit_lists'] = self.circuit_lists
+        view.circuit_lists = self.circuit_lists
 
         if isinstance(estimate_keys, str):
             estimate_keys = [estimate_keys]

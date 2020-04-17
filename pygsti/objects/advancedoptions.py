@@ -27,6 +27,7 @@ class AdvancedOptions(dict):
         if invalid_keys:
             raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
                                                                           "', '".join(sorted(self.valid_keys))))
+        super().update(d)
 
 
 class GSTAdvancedOptions(AdvancedOptions):
