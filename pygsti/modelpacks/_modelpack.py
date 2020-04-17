@@ -232,7 +232,7 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits_list(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+    def get_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """ Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
 
         Parameters
@@ -274,14 +274,14 @@ class GSTModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        structs = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
-                                    self.prep_fiducials(qubit_labels),
-                                    self.meas_fiducials(qubit_labels),
-                                    self.germs(qubit_labels, lite),
-                                    list(_gen_max_length(max_max_length)),
-                                    fidpairs,
-                                    **kwargs)
-        return structs[-1]  # just return final struct (for longest sequences)
+        lists = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
+                                  self.prep_fiducials(qubit_labels),
+                                  self.meas_fiducials(qubit_labels),
+                                  self.germs(qubit_labels, lite),
+                                  list(_gen_max_length(max_max_length)),
+                                  fidpairs,
+                                  **kwargs)
+        return lists[-1]  # just return final list (for longest sequences)
 
 
 class RBModelPack(ModelPack):
