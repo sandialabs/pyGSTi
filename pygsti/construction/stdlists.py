@@ -425,14 +425,16 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
 
     truncFn = _get_trunc_function(trunc_scheme)
 
-    #TODO: if an empty germ list, base line_labels off of fiducials?
-    empty_germ = _Circuit((), germ_list[0].line_labels, stringrep="{}")
+    line_labels = germ_list[0].line_labels if len(germ_list) > 0 \
+        else (prep_strs + effect_strs)[0].line_labels   # if an empty germ list, base line_labels off of fiducials
+
+    empty_germ = _Circuit((), line_labels, stringrep="{}")
     if include_lgst: germ_list = [empty_germ] + germ_list
 
     #running structure of all strings so far (LGST strings or empty)
     running_cs = _LsGermsStructure([], germ_list, prep_strs,
-                                    effect_strs, op_label_aliases,
-                                    sequence_rules)
+                                   effect_strs, op_label_aliases,
+                                   sequence_rules)
 
     missing_lgst = []
 
@@ -452,8 +454,8 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
             cs.Ls.append(maxLen)
         else:  # create a new cs for just this maxLen
             cs = _LsGermsStructure([maxLen], germ_list, prep_strs,
-                                    effect_strs, op_label_aliases,
-                                    sequence_rules)
+                                   effect_strs, op_label_aliases,
+                                   sequence_rules)
         if maxLen == 0:
             #Special LGST case
             missing_lgst = cs.add_unindexed(lgst_list, dscheck)
@@ -461,7 +463,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
             if include_lgst and i == 0:  # first maxlen, so add LGST seqs as empty germ
                 #Note: no FPR on LGST strings
                 missing_list.extend(cs.add_plaquette(empty_germ, maxLen, empty_germ,
-                                                      allPossiblePairs, dscheck))
+                                                     allPossiblePairs, dscheck))
                 missing_lgst = cs.add_unindexed(lgst_list, dscheck)  # only adds those not already present
                 #assert(('Gx','Gi0','Gi0') not in cs.allstrs) # DEBUG
 
@@ -502,7 +504,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
                 missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
-                                                      fiducialPairsThisIter, dscheck))
+                                                     fiducialPairsThisIter, dscheck))
 
         if nest: cs = cs.copy()  # pinch off a copy of running_cs
         cs.done_adding_strings()
