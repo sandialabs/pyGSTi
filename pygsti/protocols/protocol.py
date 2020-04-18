@@ -677,6 +677,24 @@ class CircuitListsDesign(ExperimentDesign):
         self.auxfile_types['circuit_lists'] = 'pickle' \
             if any([isinstance(lst, _objs.BulkCircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
+    def truncate(self, list_indices_to_keep):
+        """
+        Truncates this experiment design by only keeping a subset
+        of its circuit lists.
+
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
+
+        Returns
+        -------
+        CircuitListsDesign
+            The truncated experiment design.
+        """
+        return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
+                                  qubit_labels=self.qubit_labels, nested=self.nested)
+
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
     """
