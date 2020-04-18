@@ -124,7 +124,7 @@ class GSTInitialModel(object):
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
     def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
-                 lgst_gaugeopt_tol=None, contract_start_to_cptp=False):
+                 lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
         self.model = model
         if starting_point is None:
@@ -1222,13 +1222,14 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opts, cac
     return budget
 
 
-def reoptimize_with_weights(model, ds, circuit_list, circuit_weights, objfn_builder, optimizer,
+def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
                             resource_alloc, cache, verbosity):
     """
     TODO: docstring
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
+    circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
     bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
     opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
                                             resource_alloc, cache, printer - 1)

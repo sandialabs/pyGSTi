@@ -1,11 +1,38 @@
 from ..util import BaseCase
 
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
-from pygsti.objects import TrivialGaugeGroup
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.objects import TrivialGaugeGroup, FreqWeightedChi2Function
+from pygsti.objects.objectivefns import PoissonPicDeltaLogLFunction
 from pygsti.protocols import gst
+from pygsti.protocols.protocol import ProtocolData, Protocol
+from pygsti.protocols.estimate import Estimate
+from pygsti.construction import generate_fake_data, make_lsgst_experiment_list
+from pygsti.tools import two_delta_logl_nsigma, two_delta_logl
+from pygsti.optimize.customlm import CustomLMOptimizer
 
 
 class GSTUtilTester(BaseCase):
+
+    @classmethod
+    def setUpClass(cls):
+
+        #Construct a results object
+        gst_design = smq1Q_XYI.get_gst_experiment_design(max_max_length=4)
+        mdl_target = smq1Q_XYI.target_model()
+        mdl_datagen = mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
+
+        ds = generate_fake_data(mdl_datagen, gst_design.all_circuits_needing_data, 1000, seed=2020)
+        data = ProtocolData(gst_design, ds)
+        cls.results = gst.ModelEstimateResults(data, Protocol("test-protocol"))
+        cls.results.add_estimate(
+            Estimate.gst_init(
+                cls.results, mdl_target, mdl_target,
+                [mdl_datagen] * len(gst_design.circuit_lists), parameters={'objective': 'logl'}),
+            estimate_key="test-estimate"
+        )
+        cls.target_model = mdl_target
+
     def test_gaugeopt_suite_to_dictionary(self):
         model_1Q = std1Q_XYI.target_model()
         model_2Q = std2Q_XYICNOT.target_model()
@@ -39,70 +66,24 @@ class GSTUtilTester(BaseCase):
             gst.gaugeopt_suite_to_dictionary("foobar", model_1Q, verbosity=1)
 
     def test_add_badfit_estimates(self):
-        raise NotImplementedError()  # TODO: test add_badfit_estimates
+        builder = PoissonPicDeltaLogLFunction.builder()
+        opt = CustomLMOptimizer()
+        badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
+                                                                   "wildcard", "do nothing"))
+        res = self.results.copy()
+        gst.add_badfit_estimates(res, 'test-estimate', badfit_opts, builder, opt)
+        estimate_names = set(res.estimates.keys())
+        self.assertEqual(estimate_names, set(['test-estimate',
+                                              'test-estimate.robust', 'test-estimate.Robust',
+                                              'test-estimate.robust+', 'test-estimate.Robust+']))
+        self.assertTrue('unmodeled_error' in res.estimates['test-estimate'].parameters)  # wildcard budget
 
     def test_add_gauge_opt(self):
-        raise NotImplementedError()  # TODO: test add_gauge_opt
-
-
-class HasTargetModelTester(BaseCase):
-    """
-    Tests for methods in the HasTargetModel class.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
-
-class GateSetTomographyDesignTester(BaseCase):
-    """
-    Tests for methods in the GateSetTomographyDesign class.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
-
-class StructuredGSTDesignTester(BaseCase):
-    """
-    Tests for methods in the StructuredGSTDesign class.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
+        res = self.results.copy()
+        unreliable = ()
+        gst.add_gauge_opt(res, 'test-estimate', 'stdgaugeopt', self.target_model, self.target_model, unreliable)
+        self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].models)
+        self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].goparameters)
 
 
 class StandardGSTDesignTester(BaseCase):
@@ -110,19 +91,12 @@ class StandardGSTDesignTester(BaseCase):
     Tests for methods in the StandardGSTDesign class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
+    def test_creation(self):
+        gst.GateSetTomographyDesign(smq1Q_XYI.target_model(),
+                                    smq1Q_XYI.prep_fiducials(),
+                                    smq1Q_XYI.meas_fiducials(),
+                                    smq1Q_XYI.germs(),
+                                    [1, 2])
 
 
 class GSTInitialModelTester(BaseCase):
@@ -130,25 +104,59 @@ class GSTInitialModelTester(BaseCase):
     Tests for methods in the GSTInitialModel class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
     def setUp(self):
-        pass  # TODO
+        self.target_model = smq1Q_XYI.target_model()
 
     def tearDown(self):
         pass  # TODO
 
-    def test_build(self):
-        raise NotImplementedError()  # TODO: test build
+    def test_create_from(self):
+        im = gst.GSTInitialModel.create_from(None)  # default is to use the target
+        im2 = gst.GSTInitialModel.create_from(im)
+        self.assertTrue(im2 is im)
 
-    def test_get_model(self):
-        raise NotImplementedError()  # TODO: test get_model
+        im3 = gst.GSTInitialModel.create_from(self.target_model)
+        self.assertEqual(im3.starting_point, "User-supplied-Model")
+
+    def test_get_model_target(self):
+        #Default
+        im = gst.GSTInitialModel()  # default is to use the target
+        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        self.assertEqual(im.starting_point, 'target')
+        self.assertTrue(mdl is self.target_model)
+
+    def test_get_model_custom(self):
+        #Custom model
+        custom_model = self.target_model.rotate(max_rotate=0.05, seed=1234)
+        im = gst.GSTInitialModel(custom_model)  # default is to use the target
+        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        self.assertEqual(im.starting_point, "User-supplied-Model")
+        self.assertTrue(mdl is custom_model)
+
+    def test_get_model_depolarized(self):
+        #Depolarized start
+        depol_model = self.target_model.depolarize(op_noise=0.1)
+        im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
+        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        self.assertEqual(im.starting_point, 'target')
+        self.assertTrue(depol_model.frobeniusdist(mdl) < 1e-6)
+
+    def test_get_model_lgst(self):
+        #LGST
+        datagen_model = self.target_model.depolarize(op_noise=0.1)
+        lgst_circuits = make_lsgst_experiment_list(self.target_model,
+                                                   smq1Q_XYI.prep_fiducials(),
+                                                   smq1Q_XYI.meas_fiducials(), [], [1])
+        ds = generate_fake_data(datagen_model, lgst_circuits, 1000, sample_error='none')  # no error for reproducibility
+
+        im1 = gst.GSTInitialModel(self.target_model, "LGST")
+        mdl1 = im1.get_model(self.target_model, self.target_model, lgst_circuits, ds, None, None)
+
+        im2 = gst.GSTInitialModel(self.target_model, "LGST-if-possible")
+        mdl2 = im2.get_model(self.target_model, self.target_model, lgst_circuits, ds, None, None)
+
+        self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)
+        #TODO: would like some gauge-inv metric between mdl? and datagen_model to be ~0 (FUTURE)
 
 
 class GSTBadFitOptionsTester(BaseCase):
@@ -156,22 +164,14 @@ class GSTBadFitOptionsTester(BaseCase):
     Tests for methods in the GSTBadFitOptions class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
+    def test_create_from(self):
+        bfo = gst.GSTBadFitOptions.create_from(None)
+        bfo2 = gst.GSTBadFitOptions.create_from(bfo)
+        self.assertTrue(bfo2 is bfo)
 
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
-    def test_build(self):
-        raise NotImplementedError()  # TODO: test build
+        bfo3 = gst.GSTBadFitOptions.create_from({'threshold': 3.0, 'actions': ('wildcard',)})
+        self.assertEqual(bfo3.threshold, 3.0)
+        self.assertEqual(bfo3.actions, ('wildcard',))
 
 
 class GSTObjFnBuildersTester(BaseCase):
@@ -179,141 +179,150 @@ class GSTObjFnBuildersTester(BaseCase):
     Tests for methods in the GSTObjFnBuilders class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
+    def test_create_from(self):
+        builders0 = gst.GSTObjFnBuilders.create_from(None)
+        builders = gst.GSTObjFnBuilders.create_from(builders0)
+        self.assertTrue(builders is builders0)
 
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
-    def test_build(self):
-        raise NotImplementedError()  # TODO: test build
+        builders = gst.GSTObjFnBuilders.create_from([('A', 'B'), ('C', 'D')])  # pass args as tuple
+        self.assertEqual(builders.iteration_builders, ('A', 'B'))
+        self.assertEqual(builders.final_builders, ('C', 'D'))
 
     def test_init_simple(self):
-        raise NotImplementedError()  # TODO: test init_simple
+        builders = gst.GSTObjFnBuilders.init_simple()
+        self.assertEqual(len(builders.iteration_builders), 1)
+        self.assertEqual(len(builders.final_builders), 1)
+
+        builders = gst.GSTObjFnBuilders.init_simple('logl', always_perform_mle=True)
+        self.assertEqual(len(builders.iteration_builders), 2)
+        self.assertEqual(len(builders.final_builders), 0)
+
+        builders = gst.GSTObjFnBuilders.init_simple('logl', always_perform_mle=True, only_perform_mle=True)
+        self.assertEqual(len(builders.iteration_builders), 1)
+        self.assertEqual(len(builders.final_builders), 0)
+
+        builders = gst.GSTObjFnBuilders.init_simple('logl', freq_weighted_chi2=True)
+        self.assertEqual(builders.iteration_builders[0].cls_to_build, FreqWeightedChi2Function)
 
 
-class GateSetTomographyTester(BaseCase):
+class BaseProtocolData(object):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.gst_design = smq1Q_XYI.get_gst_experiment_design(max_max_length=4)
+        cls.mdl_target = smq1Q_XYI.target_model()
+        cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
+
+        ds = generate_fake_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 1000, sample_error='none')
+        cls.gst_data = ProtocolData(cls.gst_design, ds)
+
+
+class GateSetTomographyTester(BaseProtocolData, BaseCase):
     """
     Tests for methods in the GateSetTomography class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
     def test_run(self):
-        raise NotImplementedError()  # TODO: test run
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTP"), 'stdgaugeopt', name="testGST")
+        results = proto.run(self.gst_data)
+
+        mdl_result = results.estimates["testGST"].models['stdgaugeopt']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+        self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
 
-class LinearGateSetTomographyTester(BaseCase):
+class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
     """
     Tests for methods in the LinearGateSetTomography class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
     def test_check_if_runnable(self):
-        raise NotImplementedError()  # TODO: test check_if_runnable
+        proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testGST")
+
+        with self.assertRaises(ValueError):
+            proto.check_if_runnable(self.gst_data)  # data should only have 1 circuit list
+
+        lgst_data = ProtocolData(gst.GateSetTomographyDesign(self.mdl_target.copy(), [self.gst_design.circuit_lists[0]],
+                                                             qubit_labels=self.gst_design.qubit_labels),
+                                 self.gst_data.dataset)
+        proto.check_if_runnable(lgst_data)  # throws an error if there's a problem
 
     def test_run(self):
-        raise NotImplementedError()  # TODO: test run
+        proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testLGST")
+
+        lgst_data = ProtocolData(gst.GateSetTomographyDesign(self.mdl_target.copy(), [self.gst_design.circuit_lists[0]],
+                                                             qubit_labels=self.gst_design.qubit_labels),
+                                 self.gst_data.dataset)
+
+        results = proto.run(lgst_data)
+
+        mdl_result = results.estimates["testLGST"].models['stdgaugeopt']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset, self.gst_design.circuit_lists[0])
+        self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
 
-class StandardGSTTester(BaseCase):
+class StandardGSTTester(BaseProtocolData, BaseCase):
     """
     Tests for methods in the StandardGST class.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
     def test_run(self):
-        raise NotImplementedError()  # TODO: test run
+        proto = gst.StandardGST(modes="TP,CPTP,Target")
+        results = proto.run(self.gst_data)
+
+        mdl_result = results.estimates["TP"].models['stdgaugeopt']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+        self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
+
+        mdl_result = results.estimates["CPTP"].models['stdgaugeopt']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+        self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
 
-class ModelEstimateResultsTester(BaseCase):
-    """
-    Tests for methods in the ModelEstimateResults class.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        pass  # TODO
-
-    @classmethod
-    def tearDownClass(cls):
-        pass  # TODO
-
-    def setUp(self):
-        pass  # TODO
-
-    def tearDown(self):
-        pass  # TODO
-
-    def test_from_dir(self):
-        raise NotImplementedError()  # TODO: test from_dir
-
-    def test_dataset(self):
-        raise NotImplementedError()  # TODO: test dataset
-
-    def test_as_nameddict(self):
-        raise NotImplementedError()  # TODO: test as_nameddict
-
-    def test_add_estimates(self):
-        raise NotImplementedError()  # TODO: test add_estimates
-
-    def test_rename_estimate(self):
-        raise NotImplementedError()  # TODO: test rename_estimate
-
-    def test_add_estimate(self):
-        raise NotImplementedError()  # TODO: test add_estimate
-
-    def test_add_model_test(self):
-        raise NotImplementedError()  # TODO: test add_model_test
-
-    def test_view(self):
-        raise NotImplementedError()  # TODO: test view
-
-    def test_copy(self):
-        raise NotImplementedError()  # TODO: test copy
+#Unit tests are currently performed in objects/test_results.py - TODO: move these tests here
+# or move ModelEstimateResults class (?) and update/add tests
+#class ModelEstimateResultsTester(BaseCase):
+#    """
+#    Tests for methods in the ModelEstimateResults class.
+#    """
+#
+#    @classmethod
+#    def setUpClass(cls):
+#        pass  # TODO
+#
+#    @classmethod
+#    def tearDownClass(cls):
+#        pass  # TODO
+#
+#    def setUp(self):
+#        pass  # TODO
+#
+#    def tearDown(self):
+#        pass  # TODO
+#
+#    def test_from_dir(self):
+#        raise NotImplementedError()  # TODO: test from_dir
+#
+#    def test_dataset(self):
+#        raise NotImplementedError()  # TODO: test dataset
+#
+#    def test_as_nameddict(self):
+#        raise NotImplementedError()  # TODO: test as_nameddict
+#
+#    def test_add_estimates(self):
+#        raise NotImplementedError()  # TODO: test add_estimates
+#
+#    def test_rename_estimate(self):
+#        raise NotImplementedError()  # TODO: test rename_estimate
+#
+#    def test_add_estimate(self):
+#        raise NotImplementedError()  # TODO: test add_estimate
+#
+#    def test_add_model_test(self):
+#        raise NotImplementedError()  # TODO: test add_model_test
+#
+#    def test_view(self):
+#        raise NotImplementedError()  # TODO: test view
+#
+#    def test_copy(self):
+#        raise NotImplementedError()  # TODO: test copy
