@@ -487,6 +487,9 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
         }
     }
 
+    #Additional configuration needed in jinja templates
+    render_params['config']['embed_figures'] = True  # to know NOT to test for AJAX errors
+
     # Render main page template to output path
     template = env.get_template(template_name)
     with open(str(output_filename), 'w') as outfile:

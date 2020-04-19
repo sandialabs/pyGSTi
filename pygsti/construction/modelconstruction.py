@@ -1070,11 +1070,12 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
             #tuple should have length 4^k-1 for a k-qubit gate (with dimension 4^k)
             assert(len(errs) + 1 == gate_mx.shape[0]), \
                 "Invalid number of Pauli stochastic rates: got %d but expected %d" % (len(errs), gate_mx.shape[0] - 1)
-            gate = _op.StochasticNoiseOp(len(errs) + 1, "pp", evotype, initial_rates=errs)
+            err = _op.StochasticNoiseOp(len(errs) + 1, "pp", evotype, initial_rates=errs)
+            gate = _op.ComposedOp([_op.StaticDenseOp(gate_mx, evotype), err])
 
         elif isinstance(errs, float):
             #Make a depolarization operator:
-            gate = _op.LindbladOp.from_operation_matrix(gate_mx, ham_basis=None, nonham_basis="pp",
+            gate = _op.LindbladOp.from_operation_matrix(gate_mx, gate_mx, ham_basis=None, nonham_basis="pp",
                                                         param_mode="depol", nonham_mode="diagonal",
                                                         truncate=True, mx_basis="pp", evotype=evotype)
             perPauliRate = errs / len(gate.errorgen.other_basis.labels)

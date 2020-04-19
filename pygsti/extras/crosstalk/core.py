@@ -218,30 +218,6 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     # -------------------------- #
 
     # This converts a DataSet to an array since the code below uses arrays
-    # -------------------------- #
-
-    if type(ds) != _pygobjs.dataset.DataSet:
-
-        data_shape = _np.shape(ds)
-        settings_shape = _np.shape(settings)
-
-        # Check that the input data is a 2D array
-        assert(len(data_shape) == 2), \
-            "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
-
-        # Check that settings is a list of length number_of_regions
-        assert((len(settings_shape) == 1) and (settings_shape[0] == number_of_regions))
-        "settings should be a list of the same length as number_of_regions."
-
-        # The number of columns in the data must be consistent with the number of settings
-        assert(data_shape[1] == (sum(settings) + number_of_regions))
-        "Mismatch between the number of settings specified for each region and the number of columns in data"
-
-        data = ds
-        num_data = data_shape[0]
-        num_columns = data_shape[1]
-
-    # This converts a DataSet to an array, as the code below uses arrays
     if type(ds) == _pygobjs.dataset.DataSet:
 
         opstr = ds.keys()[0]
@@ -282,6 +258,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                 else:  # two-region/two-qubit gate
                     print("Two qubit gate, not sure what to do!!")  # TODO
                     return
+
             outcomes_row = dscopy[opstr]
 
             for outcome in outcomes_row:
@@ -464,14 +441,13 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
         # source is a result, destination is a setting
         if source < number_of_regions and dest >= number_of_regions:
-            if dest not in range(setting_indices[source],
-                                 (setting_indices[(source + 1)] if source < (number_of_regions - 1) else num_columns)):
+            if dest not in range(setting_indices[source], (setting_indices[(source + 1)]
+                                                           if source < (number_of_regions - 1) else num_columns)):
                 # make sure destination is not a setting for that region
                 for region in range(number_of_regions):
                     # search among regions to find the one that this destination setting belongs to
-                    if dest in range(setting_indices[region],
-                                     (setting_indices[(region + 1)] if region < (number_of_regions - 1)
-                                      else num_columns)):
+                    if dest in range(setting_indices[region], (setting_indices[(region + 1)]
+                                                               if region < (number_of_regions - 1) else num_columns)):
                         break
                 cmatrix[source, region] = 1
                 is_edge_ct[idx] = 1
@@ -479,14 +455,13 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
         # source is a setting, destination is a result
         if source >= number_of_regions and dest < number_of_regions:
-            if source not in range(setting_indices[dest],
-                                   (setting_indices[(dest + 1)] if dest < (number_of_regions - 1) else num_columns)):
+            if source not in range(setting_indices[dest], (setting_indices[(dest + 1)]
+                                                           if dest < (number_of_regions - 1) else num_columns)):
                 # make sure source is not a setting for that region
                 for region in range(number_of_regions):
                     # search among regions to find the one that this source setting belongs to
-                    if source in range(setting_indices[region],
-                                       (setting_indices[(region + 1)] if region < (number_of_regions - 1)
-                                        else num_columns)):
+                    if source in range(setting_indices[region], (setting_indices[(region + 1)]
+                                                                 if region < (number_of_regions - 1) else num_columns)):
                         break
                 cmatrix[region, dest] = 1
                 is_edge_ct[idx] = 1
@@ -653,6 +628,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                             if results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting:
                                 key_copy = key.copy(editable=True)
                                 key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != dest_qubit])
+
                                 dest_seq = key_copy
                                 break
 
@@ -667,37 +643,14 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
                         max_tvd_explanations[idx] = \
                             ("Max TVD = {}. Settings on source qubit: {}, {}. Setting on destination qubit: {}\n"
-                             "    Sequences on source (qubit {})\n {}\n {}\n    Sequence on destination (qubit {})\n"
-                             " {}\n"
-                             "    Results when source={}, destination={}:\n"
-                             " {}\n"
+                             "  Sequences on source (qubit {})\n {}\n {}\n    Sequence on destination (qubit {})\n {}\n"
+                             "    Results when source={}, destination={}:\n {}\n"
                              "    Results when source={}, destination={}:\n {}\n").format(
                                  max_tvds[idx], source_setting1, source_setting2, dest_setting, source_qubit,
                                  source_setting1_seq, source_setting2_seq, dest_qubit, dest_seq, source_setting1,
                                  dest_setting, res1, source_setting2, dest_setting, res2)
                 else:
                     max_tvd_explanations[idx] = "Max TVD = 0. Experiment not rich enough to calculate TVD."
-
-            if any(level_cnts < 10):
-                print(" ***   Warning: n<10 data points for some levels. TVD calculations may have large error bars.")
-
-            tvds = _np.zeros((num_levels, num_levels))
-            for i in range(num_levels):
-                for j in range(i):
-
-                    marg1 = data[data[:, source] == source_levels[i], dest]
-                    marg2 = data[data[:, source] == source_levels[j], dest]
-                    n1, n2 = len(marg1), len(marg2)
-
-                    tvd_sum = 0.0
-                    for lidx, level in enumerate(marg1_levels):
-                        temp = _np.where(marg2_levels == level)
-                        if len(temp[0]) == 0:
-                            tvd_sum += marg1_level_cnts[lidx] / n1
-                        else:
-                            tvd_sum += _np.fabs(marg1_level_cnts[lidx] / n1 - marg2_level_cnts[temp[0][0]] / n2)
-
-                    tvds[i, j] = tvds[j, i] = tvd_sum / 2.0
 
     results.cmatrix = cmatrix
     results.is_edge_ct = is_edge_ct

@@ -238,8 +238,25 @@ def convert(gate, to_type, basis, extra=None):
         bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
-        return LindbladOpType.from_operation_obj(gate, to_type, None, proj_basis,
-                                                 basis, truncate=True, lazy=True)
+        #FUTURE: do something like this to get a guess for the post-op unitary factor
+        #  (this commented code doesn't seem to work quite right).  Such intelligence should
+        #  help scenarios where the assertion below fails.
+        #if isinstance(gate, DenseOperator):
+        #    J = _jt.jamiolkowski_iso(gate.todense(), opMxBasis=basis, choiMxBasis="std")
+        #    ev, U = _np.linalg.eig(gate.todense())
+        #    imax = _np.argmax(ev)
+        #    J_unitary = _np.kron(U[:,imax:imax+1], U[:,imax:imax+1].T)
+        #    postfactor = _jt.jamiolkowski_iso_inv(J_unitary, choiMxBasis="std", opMxBasis=basis)
+        #    unitary = _gt.process_mx_to_unitary(postfactor)
+        #else:
+        postfactor = None
+
+        ret = LindbladOpType.from_operation_obj(gate, to_type, postfactor, proj_basis,
+                                                basis, truncate=True, lazy=True)
+        if ret.dim <= 16:  # only do this for up to 2Q gates, otherwise todense is too expensive
+            assert(_np.linalg.norm(gate.todense() - ret.todense()) < 1e-6), \
+                "Failure to create CPTP gate (maybe due the complex log's branch cut?)"
+        return ret
 
     elif to_type == "clifford":
         if isinstance(gate, CliffordOp):
@@ -2168,6 +2185,14 @@ class StochasticNoiseOp(LinearOperator):
             raise ValueError("Invalid evotype '%s' for %s" % (evotype, self.__class__.__name__))
 
         LinearOperator.__init__(self, rep, evotype)
+        self._update_rep()  # initialize self._rep
+
+    def _update_rep(self):
+        # Create dense error superoperator from paramvec
+        errormap = _np.identity(self.dim)
+        for rate, ss in zip(self._params_to_rates(self.params), self.stochastic_superops):
+            errormap += rate * ss
+        self._rep.base[:, :] = errormap
 
     def _rates_to_params(self, rates):
         return _np.sqrt(_np.array(rates))
@@ -2363,12 +2388,7 @@ class StochasticNoiseOp(LinearOperator):
         None
         """
         self.params[:] = v
-
-        # Create dense error superoperator from paramvec
-        errormap = _np.identity(self.dim)
-        for rate, ss in zip(self._params_to_rates(v), self.stochastic_superops):
-            errormap += rate * ss
-        self._rep.base[:, :] = errormap
+        self._update_rep()
         if not nodirty: self.dirty = True
 
     #Transform functions? (for gauge opt)

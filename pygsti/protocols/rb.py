@@ -390,7 +390,10 @@ class DirectRBDesign(BenchmarkingDesign):
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
-        self.sampler = sampler
+        if isinstance(sampler, str):
+            self.sampler = sampler
+        else:
+            self.sampler = 'function'
         self.samplerargs = samplerargs
         self.addlocal = addlocal
         self.lsargs = lsargs
@@ -546,6 +549,7 @@ class Benchmark(_proto.Protocol):
 
     summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts',
                          'success_probabilities', 'adjusted_success_probabilities')
+    circuit_datatypes = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
     dscmp_datatypes = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
@@ -590,18 +594,17 @@ class Benchmark(_proto.Protocol):
                                  get_summary_values, for_passes='all')
 
     def compute_circuit_data(self, data):
-        names = ['success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities']
 
         def get_circuit_values(icirc, circ, dsrow, idealout):
             ret = {'twoQgate_count': circ.two_q_gate_count(),
-                   'depth': circ.depth(),
-                   'target': idealout,
+                   'circuit_depth': circ.depth(),
+                   'idealout': idealout,
                    'circuit_index': icirc,
-                   'width': len(circ.line_labels)}
+                   'circuit_width': len(circ.line_labels)}
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self.compute_dict(data, names, get_circuit_values, for_passes="first")
+        return self.compute_dict(data, self.circuit_datatypes, get_circuit_values, for_passes="first")
 
     def compute_dscmp_data(self, data, dscomparator):
 
@@ -917,7 +920,7 @@ class VolumetricBenchmark(Benchmark):
                  statistic='mean', rescaler='auto', dscomparator=None,
                  custom_data_src=None, name=None):
 
-        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin'))
+        assert(statistic in ('max', 'mean', 'min', 'dist', 'maxmax', 'minmin', 'sum'))
 
         super().__init__(name)
         self.depths = depths
@@ -933,6 +936,8 @@ class VolumetricBenchmark(Benchmark):
         self.auxfile_types['custom_data_src'] = 'pickle'
         self.auxfile_types['rescale_function'] = 'none'  # don't serialize this, so need _set_rescale_function
         self._set_rescale_function()
+        self._nameddict_attributes += (('datatype', 'Data Type', 'category'),
+                                       ('statistic', 'Statistic', 'category'))
 
     def _init_unserialized_attributes(self):
         self._set_rescale_function()
@@ -971,8 +976,13 @@ class VolumetricBenchmark(Benchmark):
                 if self.datatype not in data.cache:
                     dscmp_data = self.compute_dscmp_data(data, self.dscomparator)
                     data.cache.update(dscmp_data)
+            elif self.datatype in self.circuit_datatypes:
+                if self.datatype not in data.cache:
+                    circuit_data = self.compute_circuit_data(data)
+                    data.cache.update(circuit_data)
             else:
                 raise ValueError("Invalid datatype: %s" % self.datatype)
+
             src_data = data.cache[self.datatype]
 
         elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
@@ -1003,6 +1013,8 @@ class VolumetricBenchmark(Benchmark):
             np_fn = _np.nanmin
         elif self.statistic == 'dist':
             def np_fn(v): return v  # identity
+        elif self.statistic == 'sum':
+            np_fn = _np.sum
         else: raise ValueError("Invalid statistic '%s'!" % self.statistic)
 
         def agg_fn(percircuitdata, width, rescale=True):
@@ -1027,15 +1039,17 @@ class VolumetricBenchmark(Benchmark):
         width = len(design.qubit_labels)
 
         vb = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
-        fails = self.create_depthwidth_dict(depths, (width,), lambda: None, None)
+        successes = self.create_depthwidth_dict(depths, (width,), lambda: None, 'int')
+        fails = self.create_depthwidth_dict(depths, (width,), lambda: None, 'int')
 
         for depth in depths:
             percircuitdata = data_per_depth[depth]
-            fails[depth][width] = failcnt_fn(percircuitdata)
+            successes[depth][width], fails[depth][width] = failcnt_fn(percircuitdata)
             vb[depth][width] = agg_fn(percircuitdata, width)
 
         results = VolumetricBenchmarkingResults(data, self)  # 'Qty', 'category'
         results.volumetric_benchmarks = vb
+        results.success_counts = successes
         results.failure_counts = fails
         return results
 
@@ -1329,9 +1343,11 @@ class VolumetricBenchmarkingResults(_proto.ProtocolResults):
         super().__init__(data, protocol_instance)
 
         self.volumetric_benchmarks = {}
+        self.success_counts = {}
         self.failure_counts = {}
 
         self.auxfile_types['volumetric_benchmarks'] = 'pickle'  # b/c NamedDicts don't json
+        self.auxfile_types['success_counts'] = 'pickle'  # b/c NamedDict don't json
         self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDict don't json
 
 

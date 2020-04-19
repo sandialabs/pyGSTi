@@ -17,6 +17,8 @@ from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import loaders as _load
 from . import writers as _write
 
+QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
+
 
 #Class-name utils...
 def full_class_name(x):
@@ -64,6 +66,7 @@ def _get_auxfile_ext(typ):
     elif typ == 'text-circuit-lists': ext = '.txt'
     elif typ == 'list-of-protocolobjs': ext = ''
     elif typ == 'dict-of-protocolobjs': ext = ''
+    elif typ == 'dict-of-resultsobjs': ext = ''
     elif typ == 'protocolobj': ext = ''
     elif typ == 'json': ext = '.json'
     elif typ == 'pickle': ext = '.pkl'
@@ -74,7 +77,8 @@ def _get_auxfile_ext(typ):
 
 
 def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
-                        ignore_meta=('type',), separate_auxfiletypes=False):
+                        ignore_meta=('type',), separate_auxfiletypes=False,
+                        quick_load=False):
     """
     Load the contents of a `root_dir` into a dict.
 
@@ -104,6 +108,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         serialized) as a separate return value, instead of placing it
         within the returned dict.
 
+    quick_load : bool, optional
+        Setting this to True skips the loading of members that may take
+        a long time to load, namely those in separate files whose files are
+        large.  When the loading of an attribute is skipped, it is set to `None`.
+
     Returns
     -------
     loaded_qtys : dict
@@ -117,6 +126,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     """
     root_dir = _pathlib.Path(root_dir)
     ret = {}
+    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
+
+    def should_skip_loading(path):
+        return quick_load and (path.stat().st_size >= max_size)
+
     with open(root_dir / 'meta.json', 'r') as f:
         meta = _json.load(f)
 
@@ -125,6 +139,7 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         ret[key] = val
 
     for key, typ in meta[auxfile_types_member].items():
+        if key in ignore_meta: continue  # don't load -> members items in ignore_meta
         ext = _get_auxfile_ext(typ)
 
         #Process cases with non-standard expected path(s)
@@ -138,29 +153,38 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
-                val.append(_load.load_circuit_list(pth)); i += 1
+                if should_skip_loading(pth):
+                    val.append(None)
+                else:
+                    val.append(_load.load_circuit_list(pth))
+                i += 1
 
         elif typ == 'protocolobj':
             protocol_dir = root_dir / (key + ext)
-            val = cls_from_meta_json(protocol_dir).from_dir(protocol_dir)
+            val = cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
 
         elif typ == 'list-of-protocolobjs':
             i = 0; val = []
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
-                val.append(cls_from_meta_json(pth).from_dir(pth)); i += 1
+                val.append(cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
 
         elif typ == 'dict-of-protocolobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: cls_from_meta_json(pth).from_dir(pth) for k, pth in zip(keys, paths)}
+            val = {k: cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
+
+        elif typ == 'dict-of-resultsobjs':
+            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
+            val = {k: cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+                   for k, pth in zip(keys, paths)}
 
         else:  # cases with 'standard' expected path
 
             pth = root_dir / (key + ext)
             if pth.is_dir():
                 raise ValueError("Expected path: %s is a dir!" % pth)
-            elif not pth.exists():
+            elif not pth.exists() or should_skip_loading(pth):
                 val = None  # missing files => None values
             elif typ == 'text-circuit-list':
                 val = _load.load_circuit_list(pth)
@@ -225,7 +249,7 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
     meta['auxfile_types'] = auxfile_types
 
     for key, val in valuedict.items():
-        if key in auxfile_types: continue  # member is serialized to a separate file (see below)
+        if key in auxfile_types: continue  # member is serialized to a separate file
         if isinstance(val, _VerbosityPrinter): val = val.verbosity  # HACK!!
         meta[key] = val
     #Wait to write meta.json until the end, since
@@ -253,6 +277,12 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
             for k, obj in val.items():
                 obj_dirname = auxnm + "_" + k + ext  # keys must be strings
                 obj.write(root_dir / obj_dirname)
+
+        elif typ == 'dict-of-resultsobjs':
+            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
+            for k, obj in val.items():
+                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
+                obj._write_partial(root_dir / obj_dirname)
 
         else:
             # standard path cases
@@ -320,7 +350,7 @@ def obj_to_meta_json(obj, dirname):
         _json.dump(meta, f)
 
 
-def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member):
+def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=()):
     """
     Write the contents of `obj` to `dirname` using a 'meta.json' file and
     an auxfile-types dictionary.
@@ -338,13 +368,27 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member):
         mapping of attributes to auxiliary-file types.  Usually this is
         `"auxfile_types"`.
 
+    omit_attributes : list or tuple
+        List of (string-valued) names of attributes to omit when serializing
+        this object.  Usually you should just leave this empty.
+
     Returns
     -------
     None
     """
     meta = {'type': full_class_name(obj)}
-    write_meta_based_dir(dirname, obj.__dict__,
-                         obj.__dict__[auxfile_types_member], init_meta=meta)
+
+    if len(omit_attributes) > 0:
+        vals = obj.__dict__.copy()
+        auxtypes = obj.__dict__[auxfile_types_member].copy()
+        for o in omit_attributes:
+            if o in vals: del vals[o]
+            if o in auxtypes: del auxtypes[o]
+    else:
+        vals = obj.__dict__
+        auxtypes = obj.__dict__[auxfile_types_member]
+
+    write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
 
 
 def read_json_or_pkl_files_to_dict(dirname):

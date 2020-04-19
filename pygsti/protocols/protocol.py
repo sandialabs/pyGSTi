@@ -34,9 +34,13 @@ class Protocol(object):
     """
 
     @classmethod
-    def from_dir(cls, dirname):
+    def from_dir(cls, dirname, quick_load=False):
         """
         Initialize a new Protocol object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
 
         Parameters
         ----------
@@ -48,7 +52,7 @@ class Protocol(object):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -69,7 +73,9 @@ class Protocol(object):
         """
         super().__init__()
         self.name = name if name else self.__class__.__name__
+        self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
         self.auxfile_types = {}
+        self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -110,6 +116,43 @@ class Protocol(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this protocol.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`Protocol` object named within its `self._nameddict_attributes` tuple.
+        The final nested dictionary is set to be `final_dict`, which allows additional result
+        quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        ret = _NamedDict('Protocol Name', 'category'); tail = ret
+        attr_val = self.name
+
+        tail[attr_val] = _NamedDict('Protocol Type', 'category'); tail = tail[attr_val]
+        attr_val = self.__class__.__name__
+
+        for next_attr, *ndargs in self._nameddict_attributes:
+            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
+            attr_val = getattr(self, next_attr)
+
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
+
+        tail[attr_val] = final_dict
+        return ret
+
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
            Usually this means initializing things with auxfile_type == 'none' that aren't
@@ -146,7 +189,7 @@ class MultiPassProtocol(Protocol):
         -------
         MultiPassProtocol
         """
-        if name is None: name = self.protocol.name + "_multipass"
+        if name is None: name = protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
         self.auxfile_types['protocol'] = 'protocolobj'
@@ -344,17 +387,24 @@ class DefaultRunner(ProtocolRunner):
     are given within :class:`ExperimentDesign` objects.)
     """
 
-    def __init__(self):
+    def __init__(self, run_passes_separately=False):
         """
         Create a new DefaultRunner object, which runs the default protocol at
         each data-tree node.  (Default protocols are given within
         :class:`ExperimentDesign` objects.)
 
+        Parameters
+        ----------
+        run_passes_separately : bool, optional
+            If `True`, then when multi-pass data is encountered it is split into passes
+            before handing it off to the protocols.  Set this to `True` when the default
+            protocols being run expect single-pass data.
+
         Returns
         -------
         DefaultRunner
         """
-        pass
+        self.run_passes_separately = run_passes_separately
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -382,7 +432,12 @@ class DefaultRunner(ProtocolRunner):
             for name, protocol in node.data.edesign.default_protocols.items():
                 assert(name == protocol.name), "Protocol name inconsistency"
                 print("Running protocol %s at %s" % (name, breadcrumb))
-                node.for_protocol[name] = protocol.run(node.data, memlimit, comm)
+                if node.data.is_multipass() and self.run_passes_separately:
+                    implicit_multipassprotocol = MultiPassProtocol(protocol)
+                    node.for_protocol[implicit_multipassprotocol.name] = \
+                        implicit_multipassprotocol.run(node.data, memlimit, comm)
+                else:
+                    node.for_protocol[name] = protocol.run(node.data, memlimit, comm)
 
             for subname, subnode in node.items():
                 visit_node(subnode, breadcrumb + '/' + str(subname))
@@ -412,7 +467,7 @@ class ExperimentDesign(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ExperimentDesign object from `dirname`.
 
@@ -422,14 +477,29 @@ class ExperimentDesign(_TreeNode):
             The *root* directory name (under which there is a 'edesign'
             subdirectory).
 
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
         Returns
         -------
         ExperimentDesign
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
-        ret._init_children(dirname, 'edesign')
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
+        ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
         return ret
 
@@ -475,6 +545,8 @@ class ExperimentDesign(_TreeNode):
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
+        self.tags = {}
+        self._nameddict_attributes = ()
         self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
@@ -596,6 +668,38 @@ class ExperimentDesign(_TreeNode):
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
         self.write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this design.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`ExperimentDesign` object named within its `self._nameddict_attributes`
+        tuple.  The final nested dictionary is set to be `final_dict`, which allows additional
+        result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        head = tail = {}; attr_val = None
+        for next_attr, *ndargs in self._nameddict_attributes:
+            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
+            attr_val = getattr(self, next_attr)
+
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
+
+        tail[attr_val] = final_dict
+        return head[None]
 
     def create_subdata(self, subdata_name, dataset):
         """
@@ -772,9 +876,13 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         objects, and shouldn't need to be used by external users.
         """
         sub_circuits = self[sub_name].all_circuits_needing_data
-        truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
-        #truncated_ds.add_outcome_labels(dataset.get_outcome_labels())  # make sure truncated ds has all outcome lbls
-        truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
+        if isinstance(dataset, dict):  # then do truncation "element-wise"
+            truncated_ds = {k: ds.truncate(sub_circuits) for k, ds in dataset.items()}
+            for tds in truncated_ds.values(): tds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
+        else:
+            truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+            #truncated_ds.add_outcome_labels(dataset.get_outcome_labels())  # make sure truncated ds has all outcomes
+            truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
 
@@ -886,17 +994,29 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
         sub_design = self[qubit_labels]
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
-        filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
-        filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcome lbls
+
+        if isinstance(dataset, dict):  # then do filtration "element-wise"
+            filtered_ds = {k: _cnst.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
+            for fds in filtered_ds.values(): fds.add_std_nqubit_outcome_labels(len(qubit_labels))
+        else:
+            filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+            filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcomes
 
         if sub_design.alt_actual_circuits_executed:
             actual_to_desired = _collections.defaultdict(lambda: None)
             actual_to_desired.update({actual: desired for actual, desired in
                                       zip(sub_design.alt_actual_circuits_executed,
                                           sub_design.all_circuits_needing_data)})
-            filtered_ds = filtered_ds.copy_nonstatic()
-            filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-            filtered_ds.done_adding_data()
+            if isinstance(dataset, dict):  # then do circuit processing "element-wise"
+                for k in filtered_ds:
+                    fds = filtered_ds[k].copy_nonstatic()
+                    fds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
+                    fds.done_adding_data()
+                    filtered_ds[k] = fds
+            else:
+                filtered_ds = filtered_ds.copy_nonstatic()
+                filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
+                filtered_ds.done_adding_data()
         return ProtocolData(sub_design, filtered_ds)
 
 
@@ -910,7 +1030,7 @@ class ProtocolData(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -920,34 +1040,57 @@ class ProtocolData(_TreeNode):
             The *root* directory name (under which there are 'edesign'
             and 'data' subdirectories).
 
+        parent : ProtocolData, optional
+            The parent data object, if there is one.  This is needed for
+            sub-data objects which reference/inherit their parent's dataset.
+            Primarily used internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
         Returns
         -------
         ProtocolData
         """
         p = _pathlib.Path(dirname)
         edesign = parent.edesign[name] if parent and name else \
-            _io.load_edesign_from_dir(dirname)
+            _io.load_edesign_from_dir(dirname, quick_load=quick_load)
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
         #    meta = _json.load(f)
 
-        #Load dataset or multidataset based on what files exist
-        dataset_files = sorted(list(data_dir.glob('*.txt')))
-        if len(dataset_files) == 0:  # assume same dataset as parent
-            if parent is None: parent = ProtocolData.from_dir(dirname / '..')
-            dataset = parent.dataset
-        elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-            dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+            # Note: could also use (path.stat().st_size >= max_size) to condition on size of data files
         else:
-            raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-            dataset = _objs.MultiDataSet.init_from_dict(
-                {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
+            #Load dataset or multidataset based on what files exist
+            dataset_files = sorted(list(data_dir.glob('*.txt')))
+            if len(dataset_files) == 0:  # assume same dataset as parent
+                if parent is None: parent = ProtocolData.from_dir(dirname / '..')
+                dataset = parent.dataset
+            elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
+                dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+            else:
+                dataset = {pth.stem: _io.load_dataset(pth, verbosity=0) for pth in dataset_files}
+                #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
+                # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
+                #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
+                #dataset = _objs.MultiDataSet.init_from_dict(
+                #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
-        ret._init_children(dirname, 'data')  # loads child nodes
+        ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -976,8 +1119,9 @@ class ProtocolData(_TreeNode):
         self.edesign = edesign
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data; None also allowed.
         self.cache = cache if (cache is not None) else {}
+        self.tags = {}
 
-        if isinstance(self.dataset, _objs.MultiDataSet):
+        if isinstance(self.dataset, (_objs.MultiDataSet, dict)):  # can be a dict of DataSets instead of a multidataset
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -1022,7 +1166,7 @@ class ProtocolData(_TreeNode):
         -------
         bool
         """
-        return isinstance(self.dataset, _objs.MultiDataSet)
+        return isinstance(self.dataset, (_objs.MultiDataSet, dict))
 
     #def get_tree_paths(self):
     #    return self.edesign.get_tree_paths()
@@ -1093,7 +1237,7 @@ class ProtocolData(_TreeNode):
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, _objs.MultiDataSet):
+                if isinstance(self.dataset, (_objs.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1104,6 +1248,30 @@ class ProtocolData(_TreeNode):
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this data.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  The final nested dictionary is set to be
+        `final_dict`, which allows additional result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        head = tail = {}; attr_val = None
+        for tag_category, tag_value in self.tags.items():
+            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
+            attr_val = tag_value
+        tail[attr_val] = final_dict
+        return self.edesign.setup_nameddict(head[None])
+
 
 class ProtocolResults(object):
     """
@@ -1113,7 +1281,7 @@ class ProtocolResults(object):
     """
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None):
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResults object from `dirname` / results / `name`.
 
@@ -1133,16 +1301,32 @@ class ProtocolResults(object):
             is already loaded, it can be passed in here.  Otherwise leave this
             as None and it will be loaded.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
         Returns
         -------
         ProtocolResults
         """
         dirname = _pathlib.Path(dirname)
-        ret = cls.__new__(cls)
+        ret = cls._from_dir_partial(dirname / 'results' / name, quick_load, load_protocol=True)
         ret.data = preloaded_data if (preloaded_data is not None) else \
-            _io.load_data_from_dir(dirname)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
+            _io.load_data_from_dir(dirname, quick_load=quick_load)
         assert(ret.name == name), "ProtocolResults name inconsistency!"
+        return ret
+
+    @classmethod
+    def _from_dir_partial(cls, dirname, quick_load=False, load_protocol=False):
+        """
+        Internal method for loading only the results-specific data, and not the `data` member.
+        This method may be used independently by derived ProtocolResults objecsts which contain
+        multiple sub-results (e.g. MultiPassResults)
+        """
+        ignore = ('type',) if load_protocol else ('type', 'protocol')
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -1201,7 +1385,16 @@ class ProtocolResults(object):
             self.data.write(dirname)
 
         #write qtys to results dir
-        _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
+        self._write_partial(results_dir, write_protocol=True)
+
+    def _write_partial(self, results_dir, write_protocol=False):
+        """
+        Internal method used to write the results-specific data to a directory.
+        This method does not write the object's `data` member, which must be
+        serialized separately.
+        """
+        _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types',
+                                        omit_attributes=() if write_protocol else ('protocol',))
 
     def as_nameddict(self):
         """
@@ -1213,18 +1406,19 @@ class ProtocolResults(object):
         """
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation
-        ret = _NamedDict('Qty', 'category')
+        final = _NamedDict('Qty', 'category')
+        ret = self.protocol.setup_nameddict(self.data.setup_nameddict(final))
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                ret[k] = v.as_nameddict()
+                final[k] = v.as_nameddict()
             elif isinstance(v, _NamedDict):
-                ret[k] = v
+                final[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                ret[k] = v
+                final[k] = v
         return ret
 
     def as_dataframe(self):
@@ -1251,6 +1445,19 @@ class MultiPassResults(ProtocolResults):
     within the `.passes` attribute.
     """
 
+    @classmethod
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+        #Because 'dict-of-resultsobjs' only does *partial* loading/writing of the given results
+        # objects, we need to finish the loading manually.  Only partial loading is performed so
+        # because it is assumed that whatever object has a 'dict-of-resultsobjs' and isn't a
+        # ProtocolResultsDir must separately have access to the protocol and data used by these
+        # results (as they should be derivative of the protocol and data of the object).
+        ret = super(MultiPassResults, cls).from_dir(dirname, name, preloaded_data, quick_load)  # call base class
+        for pass_name, partially_loaded_results in ret.passes.items():
+            partially_loaded_results.data = ret.data.passes[pass_name]  # assumes data and ret.passes use *same* keys
+            partially_loaded_results.protocol = ret.protocol.protocol  # assumes ret.protocol is MultiPassProtocol-like
+        return ret
+
     def __init__(self, data, protocol_instance):
         """
         Initialize an empty MultiPassResults object, which contain a dictionary
@@ -1271,8 +1478,21 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = {}
+        self.passes = {}  # _NamedDict('Pass', 'category') - as_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
+
+    def as_nameddict(self):
+        # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
+        ret = _NamedDict('Protocol Name', 'category')
+        for pass_name, r in self.passes.items():
+            sub = r.as_nameddict()  # should have outer-most 'Protocol Name' dict
+            assert(sub.name == 'Protocol Name' and len(sub) == 1)
+            pname = r.protocol.name  # also list(sub.keys())[0]
+            if pname not in ret:
+                ret[pname] = _NamedDict('Pass', 'category')
+            ret[pname][pass_name] = sub[pname]
+
+        return ret
 
 
 class ProtocolResultsDir(_TreeNode):
@@ -1284,7 +1504,7 @@ class ProtocolResultsDir(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -1304,13 +1524,18 @@ class ProtocolResultsDir(_TreeNode):
             The name of this result within `parent`.  This is only
             used when `parent` is not None.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the contained results objects.
+
         Returns
         -------
         ProtcolResultsDir
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            _io.load_data_from_dir(dirname)
+            _io.load_data_from_dir(dirname, quick_load=quick_load)
 
         #Load results in results_dir
         results = {}
@@ -1319,10 +1544,10 @@ class ProtocolResultsDir(_TreeNode):
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
                     results[pth.name] = _io.cls_from_meta_json(pth).from_dir(
-                        dirname, pth.name, preloaded_data=data)
+                        dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children(dirname, meta_subdir='results')
+        ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
@@ -1421,8 +1646,16 @@ class ProtocolResultsDir(_TreeNode):
         NamedDict
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = _NamedDict('Protocol Instance', 'category',
-                                          items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
+        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.name == nds[0].name for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
             ret = _NamedDict(category, 'category')
@@ -1483,7 +1716,7 @@ class ProtocolPostProcessor(object):
     # but it's conceptually a different thing...  Should we derive it from Protocol?
 
     @classmethod
-    def from_dir(cls, dirname):  # same I/O pattern as Protocol
+    def from_dir(cls, dirname, quick_load=False):  # same I/O pattern as Protocol
         """
         Initialize a new ProtocolPostProcessor object from `dirname`.
 
@@ -1492,12 +1725,16 @@ class ProtocolPostProcessor(object):
         dirname : str
             The directory name.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
         Returns
         -------
         ProtocolPostProcessor
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
