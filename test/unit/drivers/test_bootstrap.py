@@ -17,7 +17,7 @@ class BootstrapBase(BaseCase):
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
         cls.mdl = alg.do_lgst(
-            cls.ds, cls.fiducials, cls.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0
+            cls.ds, cls.fiducials, cls.fiducials, target_model=tp_target, svd_truncate_to=4, verbosity=0
         )
 
     def setUp(self):

@@ -66,7 +66,7 @@ def ds_lgst(self):
 def mdl_lgst(self):
     return alg.do_lgst(
         self.ds, self.fiducials, self.fiducials, self.model,
-        svdTruncateTo=4, verbosity=0
+        svd_truncate_to=4, verbosity=0
     )
 
 

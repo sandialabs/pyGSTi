@@ -26,6 +26,7 @@ from .. import tools as _tools
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
+from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -124,7 +125,7 @@ def do_model_test(model_filename_or_object,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     ds = _load_dataset(data_filename_or_set, comm, printer)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -148,7 +149,8 @@ def do_model_test(model_filename_or_object,
     #Create the protocol
     proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite, None,
                              builder, _get_badfit_options(advanced_options),
-                             advanced_options.get('set trivial gauge group', True), printer)
+                             advanced_options.get('set trivial gauge group', True), printer,
+                             name=advanced_options.get('estimate_label', None))
 
     #Set more advanced options
     proto.profile = advanced_options.get('profile', 1)
@@ -234,7 +236,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
@@ -250,11 +252,12 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
 
     proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
-                                           _get_badfit_options(advanced_options), printer)
+                                           _get_badfit_options(advanced_options), printer,
+                                           name=advanced_options.get('estimate_label', None))
     proto.profile = advanced_options.get('profile', 1)
     proto.record_output = advanced_options.get('record_output', 1)
     proto.oplabels = advanced_options.get('op_labels', 'default')
@@ -399,7 +402,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
@@ -416,7 +419,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
@@ -513,6 +516,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     Results
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    advanced_options = advanced_options or {}
 
     valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
     if isinstance(lsgst_lists, valid_struct_types) or isinstance(lsgst_lists[0], valid_struct_types):
@@ -524,12 +528,14 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     data = _proto.ProtocolData(exp_design, ds)
 
     if gauge_opt_params is None:
-        gauge_opt_params = {'itemWeights': {'gates': 1.0, 'spam': 0.001}}
+        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
+
     proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, exp_design),
-                                     _get_badfit_options(advanced_options), printer)
+                                     _get_badfit_options(advanced_options), printer,
+                                     name=advanced_options.get('estimate_label', None))
 
     proto.profile = advanced_options.get('profile', 1)
     proto.record_output = advanced_options.get('record_output', 1)
@@ -662,7 +668,7 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if advanced_options and 'all' in advanced_options and len(advanced_options) == 1:
         advanced_options = advanced_options['all']  # backward compatibility
-    advanced_options = GSTAdvancedOptions(advanced_options or {})
+    advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
@@ -681,7 +687,8 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     proto = _proto.StandardGST(modes, gauge_opt_suite, gauge_opt_target, models_to_test,
                                _get_gst_builders(advanced_options),
                                _get_optimizer(advanced_options, exp_design),
-                               _get_badfit_options(advanced_options), printer)
+                               _get_badfit_options(advanced_options), printer,
+                               name=advanced_options.get('estimate_label', None))
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -735,6 +742,7 @@ def _update_objfn_builders(builders, advanced_options):
 
 
 def _get_badfit_options(advanced_options):
+    advanced_options = advanced_options or {}
     old_badfit_options = advanced_options.get('badFitOptions', {})
     assert(set(old_badfit_options.keys()).issubset(('wildcard_budget_includes_spam', 'wildcard_smart_init'))), \
         "Invalid keys in badFitOptions sub-dictionary!"
@@ -754,6 +762,7 @@ def _output_to_pickle(obj, output_pkl, comm):
 
 
 def _get_gst_initial_model(advanced_options):
+    advanced_options = advanced_options or {}
     if advanced_options.get("starting_point", None) is None:
         advanced_options["starting_point"] = "LGST-if-possible"  # to keep backward compatibility
     return _proto.GSTInitialModel(None, advanced_options.get("starting_point", None),
@@ -764,6 +773,7 @@ def _get_gst_initial_model(advanced_options):
 
 
 def _get_gst_builders(advanced_options):
+    advanced_options = advanced_options or {}
     objfn_builders = _proto.GSTObjFnBuilders.init_simple(
         advanced_options.get('objective', 'logl'),
         advanced_options.get('use_freq_weighted_chi2', False),
@@ -775,41 +785,9 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, exp_design):
+    advanced_options = advanced_options or {}
     default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
-
-
-class AdvancedOptions(dict):
-    valid_keys = ()
-
-    def __init__(self, items=None):
-        super().__init__()
-        self.update(items or {})
-
-    def __setitem__(self, key, val):
-        if key not in self.valid_keys:
-            raise ValueError("Invalid key '%s'. Valid keys are: '%s'" % (str(key), "', '".join(self.valid_keys)))
-        super().__setitem__(key, val)
-
-    def update(self, d):
-        invalid_keys = [k for k in d.keys() if k not in self.valid_keys]
-        if invalid_keys:
-            raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
-                             "', '".join(self.valid_keys)))
-
-
-class GSTAdvancedOptions(AdvancedOptions):
-    valid_keys = ('germ_length_limits', 'include_lgst', 'nested_circuit_lists',
-                  'string_manipulation_rules', 'op_label_aliases', 'circuit_weights',
-                  'profile', 'record_output', 'distribute_method',
-                  'objective', 'use_freq_weighted_chi2', 'prob_clip_interval', 'min_prob_clip',
-                  'min_prob_clip_for_weighting', 'radius', 'cptp_penalty_factor', 'spam_penalty_factor',
-                  'bad_fit_threshold', 'on_bad_fit',
-                  'starting_point', 'depolarize_start', 'randomize_start', 'lgst_gaugeopt_tol',
-                  'contract_start_to_cptp',
-                  'always_perform_mle', 'only_perform_mle',
-                  'max_iterations', 'tolerance', 'finitediff_iterations', 'extra_lm_opts',
-                  'set trivial_gauge_group', 'op_labels', 'unreliable_ops')

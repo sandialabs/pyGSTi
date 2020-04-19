@@ -305,7 +305,7 @@ def chi2fn(n, p, f, min_prob_clip_for_weighting=1e-4):
 
 
 @_deprecated_fn('Use RawFreqWeightedChi2Function object instead')
-def chi2fn_wfreqs(n, p, f, min_prob_clip_for_weighting=1e-4):
+def chi2fn_wfreqs(n, p, f, min_freq_clip_for_weighting=1e-4):
     """
     Computes the frequency-weighed chi^2 term corresponding to a single outcome.
 
@@ -323,13 +323,13 @@ def chi2fn_wfreqs(n, p, f, min_prob_clip_for_weighting=1e-4):
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
 
-    min_prob_clip_for_weighting : float, optional
-        unused but present to keep the same function
-        signature as chi2fn.
+    min_freq_clip_for_weighting : float, optional
+        The minimum frequency weighting used in the weighting,
+        i.e. the largest weighting factor is `1 / fmin_freq_clip_for_weighting`.
 
     Returns
     -------
     float or numpy array
     """
-    rawfn = _objfns.RawFreqWeightedChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting})
+    rawfn = _objfns.RawFreqWeightedChi2Function({'min_freq_clip_for_weighting': min_freq_clip_for_weighting})
     return rawfn.terms(p, n * f, n, f)

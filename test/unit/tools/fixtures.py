@@ -35,7 +35,7 @@ def dataset(self):
 
 @ns.memo
 def mdl_lgst(self):
-    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
+    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
 
 
 @ns.memo
@@ -58,11 +58,18 @@ def lsgstStrings(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    return pygsti.do_iterative_mc2gst(
-        self.dataset, self.mdl_clgst, self.lsgstStrings, verbosity=0,
-        minProbClipForWeighting=1e-6, probClipInterval=(-1e6, 1e6),
-        memLimit=self.CM + 10*1024**3
+    chi2_builder = pygsti.obj.Chi2Function.builder(
+        regularization={'min_prob_clip_for_weighting': 1e-6},
+        penalties={'prob_clip_interval': (-1e6, 1e6)})
+    models, _, _ = pygsti.algorithms.core.do_iterative_gst(
+        self.dataset, self.mdl_clgst, self.lsgstStrings,
+        optimizer=None,
+        iteration_objfn_builders=[chi2_builder],
+        final_objfn_builders=[],
+        resource_alloc={'mem_limit': self.CM + 1024**3},
+        verbosity=0
     )
+    return models[-1]
 
 
 @ns.memo

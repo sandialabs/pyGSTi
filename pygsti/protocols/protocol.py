@@ -483,7 +483,8 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list',
+        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _objs.BulkCircuitList) else 'text-circuit-list'
+        self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
                               'default_protocols': 'dict-of-protocolobjs'}
 
@@ -647,14 +648,25 @@ class CircuitListsDesign(ExperimentDesign):
         -------
         CircuitListsDesign
         """
+
+        if isinstance(circuit_lists, _objs.BulkCircuitList):
+            master = circuit_lists
+            assert(master.circuit_structure is not None), \
+                "When specifying a set of lists using a single BulkCircuitList it must contain a circuit structure."
+            master_struct = master.circuit_structure
+            circuit_lists = [_objs.BulkCircuitList(master_struct.truncate(max_lengths=master.Ls[0:i + 1]),
+                                                   master.op_label_aliases, master.circuit_weights)
+                             for i in range(len(master.Ls))]
+            nested = True  # (by this construction)
+
         if all_circuits_needing_data is not None:
-            all_circuits = all_circuits_needing_data
+            all_circuits = all_circuits_needing_data  # (ok if this is a BulkCircuitList)
         elif nested and len(circuit_lists) > 0:
-            all_circuits = circuit_lists[-1]
+            all_circuits = circuit_lists[-1]  # (ok if this is a BulkCircuitList)
         else:
             all_circuits = []
             for lst in circuit_lists:
-                all_circuits.extend(lst)
+                all_circuits.extend(lst)  # Note: this should work even for type(lst) == BulkCircuitList
             if remove_duplicates:
                 _lt.remove_duplicates_in_place(all_circuits)
 
@@ -662,55 +674,26 @@ class CircuitListsDesign(ExperimentDesign):
         self.nested = nested
 
         super().__init__(all_circuits, qubit_labels)
-        self.auxfile_types['circuit_lists'] = 'text-circuit-lists'
+        self.auxfile_types['circuit_lists'] = 'pickle' \
+            if any([isinstance(lst, _objs.BulkCircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
-
-class CircuitStructuresDesign(CircuitListsDesign):
-    """
-    An experiment design that is comprised of multiple
-    circuit structures (:class:`CircuitStructure` objects).
-    """
-
-    def __init__(self, circuit_structs, qubit_labels=None, nested=False, remove_duplicates=True):
+    def truncate(self, list_indices_to_keep):
         """
-        Create a new CircuitStructuresDesign object.
+        Truncates this experiment design by only keeping a subset
+        of its circuit lists.
 
         Parameters
         ----------
-        circuit_structs : list or CircuitStructure
-            A list of :class:`CircuitStructure` objects, specifying the circuits
-            for which data is needed, OR a single :class:`CircuitStructure`
-            object specifying circuits at different lengths.
-
-        qubit_labels : tuple, optional
-            The qubits that this experiment design applies to. If None, the
-            line labels of the first circuit is used.
-
-        nested : bool, optional
-            Whether the elements of `circuit_structs` contain nested circuit
-            lists, e.g. whether `circuit_structs[i].allstrs` is a subset of
-            `circuit_structs[i+1].allstrs`.
-
-        remove_duplicates : bool, optional
-            Whether to remove duplicates when automatically creating
-            all the circuits that need data (this argument isn't used
-            when `all_circuits_needing_data` is given).
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
 
         Returns
         -------
-        CircuitStructureDesign
+        CircuitListsDesign
+            The truncated experiment design.
         """
-        #Convert a single LsGermsStruct to a list if needed:
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_structs, validStructTypes):
-            master = circuit_structs
-            circuit_structs = [master.truncate(max_lengths=master.Ls[0:i + 1])
-                               for i in range(len(master.Ls))]
-            nested = True  # (by this construction)
-
-        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested, remove_duplicates)
-        self.circuit_structs = circuit_structs
-        self.auxfile_types['circuit_structs'] = 'pickle'
+        return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
+                                  qubit_labels=self.qubit_labels, nested=self.nested)
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset

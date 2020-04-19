@@ -14,15 +14,13 @@ import itertools as _itertools
 import sys as _sys
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .. import optimize as _opt
-from .. import tools as _tools
-from ..tools import listtools as _lt
-from ..tools import slicetools as _slct
-from ..tools import mpitools as _mpit
+from .. import optimize as _opt, tools as _tools
+from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
-from .circuitstructure import LsGermsStructure as _LsGermsStructure
+from .computationcache import ComputationCache as _ComputationCache
+from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
-_dummy_profiler = _profiler.DummyProfiler()
 CHECK = False
 CHECK_JACOBIAN = False
 FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
@@ -37,123 +35,27 @@ def objfn(objfn_cls, model, dataset, circuits=None,
         circuits = list(dataset.keys())
 
     if op_label_aliases:
-        circuits = BulkCircuitList(circuits, op_label_aliases)
+        circuits = _BulkCircuitList(circuits, op_label_aliases)
 
-    resource_alloc = ResourceAllocation(comm, mem_limit)
+    resource_alloc = _ResourceAllocation(comm, mem_limit)
     ofn = objfn_cls(model, dataset, circuits, regularization, penalties, cache,
                     resource_alloc, verbosity=0, *addl_args)
     return ofn
-
-
-class ComputationCache(object):
-    def __init__(self,
-                 eval_tree=None, lookup=None, outcomes_lookup=None, wrt_blk_size=None, wrt_blk_size2=None,
-                 counts=None, total_counts=None):
-        self.eval_tree = eval_tree
-        self.lookup = lookup
-        self.outcomes_lookup = outcomes_lookup
-        self.wrt_blk_size = wrt_blk_size
-        self.wrt_blk_size2 = wrt_blk_size2
-        self.counts = counts
-        self.total_counts = total_counts
-
-    def has_evaltree(self):
-        return (self.eval_tree is not None)
-
-    def add_evaltree(self, model, dataset=None, circuits_to_use=None, resource_alloc=None, subcalls=(), verbosity=0):
-        """TODO: docstring """
-        comm = resource_alloc.comm if resource_alloc else None
-        mlim = resource_alloc.mem_limit if resource_alloc else None
-        distribute_method = resource_alloc.distribute_method
-        self.eval_tree, self.wrt_blk_size, self.wrt_blk_size2, self.lookup, self.outcomes_lookup = \
-            model.bulk_evaltree_from_resources(circuits_to_use, comm, mlim, distribute_method,
-                                               subcalls, dataset, verbosity)
-
-    def has_count_vectors(self):
-        return (self.counts is not None) and (self.total_counts is not None)
-
-    def add_count_vectors(self, dataset, circuits_to_use, ds_circuits_to_use, circuit_weights=None):
-        assert(self.has_evaltree()), "Must `add_evaltree` before calling `add_count_vectors`!"
-        nelements = self.eval_tree.num_final_elements()
-        counts = _np.empty(nelements, 'd')
-        totals = _np.empty(nelements, 'd')
-
-        for (i, circuit) in enumerate(ds_circuits_to_use):
-            cnts = dataset[circuit].counts
-            totals[self.lookup[i]] = sum(cnts.values())  # dataset[opStr].total
-            counts[self.lookup[i]] = [cnts.get(x, 0) for x in self.outcomes_lookup[i]]
-
-        if circuit_weights is not None:
-            for i in range(len(circuits_to_use)):
-                counts[self.lookup[i]] *= circuit_weights[i]  # dim nelements (K = nSpamLabels, M = nCircuits )
-                totals[self.lookup[i]] *= circuit_weights[i]  # multiply N's by weights
-
-        self.counts = counts
-        self.total_counts = totals
-
-
-class BulkCircuitList(list):
-
-    #TODO REMOVE
-    #@classmethod
-    #def from_circuit_list(cls, circuit_list, model, dataset=None, resource_alloc=None,
-    #                      subcalls=(), verbosity=0): # cache=None
-    #    if circuit_list is None and dataset is not None:
-    #        circuit_list = list(dataset.keys())
-    #    comm = resource_alloc.comm if resource_alloc else None
-    #    mlim = resource_alloc.mem_limit
-    #    distribute_method = resource_alloc.distribute_method
-    #    evalTree, wrt_blk_size, _, lookup, outcomes_lookup = model.bulk_evaltree_from_resources(
-    #        circuit_list, comm, mlim, distribute_method, subcalls, dataset, verbosity)
-    #
-    #    # Note: evalTree.generate_circuit_list() != circuit_list, as the tree holds *simplified* circuits
-    #    return cls(circuit_list, evalTree, lookup, outcomes_lookup)
-
-    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
-
-        #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_list_or_structure, (list, tuple)):
-            self.circuits_to_use = circuit_list_or_structure
-            self.circuit_structure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
-            self.circuit_structure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
-        else:
-            self.circuit_structure = circuit_list_or_structure
-            self.circuits_to_use = self.circuit_structure.allstrs
-
-        self.op_label_aliases = op_label_aliases
-        self.circuit_weights = circuit_weights
-        self.name = name  # an optional name for this circuit list
-        self[:] = self.circuits_to_use  # maybe get rid of self.circuits_to_use in the future...
 
     #def __len__(self):
     #    return len(self.circuits_to_use)
 
 
-class ResourceAllocation(object):
-    @classmethod
-    def build_resource_allocation(cls, arg):
-        if arg is None:
-            return cls()
-        elif isinstance(arg, ResourceAllocation):
-            return arg
-        else:  # assume argument is a dict of args
-            return cls(arg.get('comm', None), arg.get('mem_limit', None),
-                       arg.get('profiler', None), arg.get('distribute_method', 'default'))
-
-    def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default"):
-        self.comm = comm
-        self.mem_limit = mem_limit
-        if profiler is not None:
-            self.profiler = profiler
-        else:
-            self.profiler = _dummy_profiler
-        self.distribute_method = distribute_method
-
-    def copy(self):
-        return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
-
-
 class ObjectiveFunctionBuilder(object):
+    @classmethod
+    def create_from(cls, obj):
+        if isinstance(obj, cls): return obj
+        elif obj is None: return cls.simple()
+        elif isinstance(obj, str): return cls.simple(objective=obj)
+        elif isinstance(obj, dict): return cls.simple(**obj)
+        elif isinstance(obj, (list, tuple)): return cls(*obj)
+        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+
     @classmethod
     def simple(cls, objective='logl', freq_weighted_chi2=False):
         if objective == "chi2":
@@ -161,8 +63,7 @@ class ObjectiveFunctionBuilder(object):
                 builder = FreqWeightedChi2Function.builder(
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'min_prob_clip_for_weighting': 1e-4,
-                                    'radius': 1e-4})
+                    regularization={'min_freq_clip_for_weighting': 1e-4})
             else:
                 builder = Chi2Function.builder(
                     name='chi2',
@@ -217,7 +118,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         TODO: docstring
         """
-        resource_alloc = ResourceAllocation.build_resource_allocation(resource_alloc)
+        resource_alloc = _ResourceAllocation.create_from(resource_alloc)
         self.comm = resource_alloc.comm
         self.profiler = resource_alloc.profiler
         self.mem_limit = resource_alloc.mem_limit
@@ -241,10 +142,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         return _np.sum(self.terms(probs, counts, total_counts, freqs))
 
     def jacobian(self, probs, counts, total_counts, freqs):
-        return _np.sum(self.dterms(probs, counts, total_counts, freqs), axis=0)
+        return self.dterms(probs, counts, total_counts, freqs)  # same as dterms b/c only i-th term depends on p_i
 
     def hessian(self, probs, counts, total_counts, freqs):
-        return _np.sum(self.hterms(probs, counts, total_counts, freqs), axis=0)
+        return self.hterms(probs, counts, total_counts, freqs)  # same as dterms b/c only i-th term depends on p_i
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         return self.lsvec(probs, counts, total_counts, freqs, intermediates)**2
@@ -331,7 +232,8 @@ class MDSObjectiveFunction(ObjectiveFunction):
         self.check_jacobian = CHECK_JACOBIAN
 
         circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
-        bulk_circuit_list = circuit_list if isinstance(circuit_list, BulkCircuitList) else BulkCircuitList(circuit_list)
+        bulk_circuit_list = circuit_list if isinstance(
+            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
         self.circuits_to_use = bulk_circuit_list[:]
         self.circuit_weights = bulk_circuit_list.circuit_weights
         self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
@@ -339,7 +241,8 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
         # Memory check
         persistent_mem = self.get_persistent_memory_estimate()
-        if self.raw_objfn.mem_limit:
+        in_gb = 1.0 / 1024.0**3  # in gigabytes
+        if self.raw_objfn.mem_limit is not None:
             in_gb = 1.0 / 1024.0**3  # in gigabytes
             if self.raw_objfn.mem_limit < persistent_mem:
                 raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
@@ -355,12 +258,12 @@ class MDSObjectiveFunction(ObjectiveFunction):
         else:
             evt_mlim = None
 
-        self.cache = cache if (cache is not None) else ComputationCache()
+        self.cache = cache if (cache is not None) else _ComputationCache()
         if not self.cache.has_evaltree():
             subcalls = self.get_evaltree_subcalls()
-            evt_resource_alloc = ResourceAllocation(self.raw_objfn.comm, evt_mlim,
-                                                    self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-            self.cache.add_evaltree(self.mdl, self.dataset, self.circuits_to_use, evt_resource_alloc,
+            evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
+                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
+            self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
                                     subcalls, self.raw_objfn.printer - 1)
 
         self.eval_tree = self.cache.eval_tree
@@ -629,9 +532,9 @@ class RawChi2Function(RawObjectiveFunction):
     def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         # lsvec = (p-f)*sqrt(N/cp) = (p-f)*w
         # dlsvec/dp = w + (p-f)*dw/dp
-        # d2lsvec/dp2 = dw/dp + (p-f)*d2w/dp2
+        # d2lsvec/dp2 = dw/dp + (p-f)*d2w/dp2 + dw/dp = 2*dw/dp + (p-f)*d2w/dp2
         weights = self.get_weights(probs, freqs, total_counts)
-        return self.get_dweights(probs, freqs, weights) + (probs - freqs) * self.get_hweights(probs, freqs, weights)
+        return 2 * self.get_dweights(probs, freqs, weights) + (probs - freqs) * self.get_hweights(probs, freqs, weights)
 
     def hterms_alt(self, probs, counts, total_counts, freqs, intermediates=None):
         """ Unnecessary - should be the same as hterms, and maybe faster? """
@@ -687,17 +590,19 @@ class RawChiAlphaFunction(RawObjectiveFunction):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return objective_function_value
 
-    def set_regularization(self, pfratio_stitchpt=0.01, pfratio_derivpt=0.01, radius=None):
+    def set_regularization(self, pfratio_stitchpt=0.01, pfratio_derivpt=0.01, radius=None, fmin=None):
         self.x0 = pfratio_stitchpt
         self.x1 = pfratio_derivpt
 
         if radius is None:
             #Infer the curvature of the regularized zero-f-term functions from
             # the largest curvature we use at the stitch-points of nonzero-f terms.
+            assert(fmin is not None), "Must specify 'fmin' when radius is None (should be smalled allowed frequency)."
             self.radius = None
             self.zero_freq_terms = self._zero_freq_terms_relaxed
             self.zero_freq_dterms = self._zero_freq_dterms_relaxed
             self.zero_freq_hterms = None  # no hessian support
+            self.fmin = fmin  # = max(1e-7, _np.min(freqs_nozeros))  # lowest non-zero frequency
         else:
             #Use radius to specify the curvature/"roundness" of f == 0 terms,
             # though this uses a more aggressive p^3 function to penalize negative probs.
@@ -705,6 +610,7 @@ class RawChiAlphaFunction(RawObjectiveFunction):
             self.zero_freq_terms = self._zero_freq_terms_harsh
             self.zero_freq_dterms = self._zero_freq_dterms_harsh
             self.zero_freq_hterms = None  # no hessian support
+            self.fmin = None
 
     def _intermediates(self, probs, counts, total_counts, freqs):
         """ Intermediate values used by both terms(...) and dterms(...) """
@@ -759,12 +665,12 @@ class RawChiAlphaFunction(RawObjectiveFunction):
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def _zero_freq_terms_harsh(self, total_counts, probs):
-        a = self.a
+        a = self.radius
         return total_counts * _np.where(probs >= a, probs,
                                         (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
     def _zero_freq_dterms_harsh(self, total_counts, probs):
-        a = self.a
+        a = self.radius
         return total_counts * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
     def _zero_freq_terms_relaxed(self, total_counts, probs):
@@ -787,13 +693,12 @@ class RawFreqWeightedChi2Function(RawChi2Function):
     def get_chi2k_distributed_qty(self, objective_function_value):
         return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
-    def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
-        super().set_regularization(min_prob_clip_for_weighting)
-        self.radius = radius
+    def set_regularization(self, min_freq_clip_for_weighting=1e-4):
+        self.min_freq_clip_for_weighting = min_freq_clip_for_weighting
 
     def get_weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
-        return _np.sqrt(total_counts / _np.clip(f, 1e-7, None))
+        return _np.sqrt(total_counts / _np.clip(f, self.min_freq_clip_for_weighting, None))
 
     def get_dweights(self, p, f, wts):
         return _np.zeros(len(p), 'd')
@@ -802,19 +707,13 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         return _np.zeros(len(p), 'd')
 
     def zero_freq_terms(self, total_counts, probs):
-        a = self.radius
-        return total_counts * _np.where(probs >= a, probs,
-                                        (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
+        return total_counts * probs**2 / self.min_freq_clip_for_weighting  # N * p^2 / fmin
 
     def zero_freq_dterms(self, total_counts, probs):
-        a = self.radius
-        return total_counts * _np.where(probs >= a, 1.0,
-                                        (-1.0 / a**2) * probs**2 + 2 * probs / a)
+        return 2 * total_counts * probs / self.min_freq_clip_for_weighting
 
     def zero_freq_hterms(self, total_counts, probs):
-        a = self.radius
-        return total_counts * _np.where(probs >= a, 0.0,
-                                        (-2.0 / a**2) * probs + 2 / a)
+        return 2 * total_counts / self.min_freq_clip_for_weighting
 
 
 # The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
@@ -960,9 +859,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # quadratic extrapolation of logl at min_p for probabilities < min_p
             terms = _np.where(probs < self.min_p,
                               terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
-            if _np.min(terms) < 0.0:
-                raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
-                                  "(it should be smaller than the smallest frequency)") % self.min_p)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
@@ -970,6 +866,14 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         # special handling for f == 0 terms
         # using cubit rounding of function that smooths N*p for p>0:
         #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
+
+        if _np.min(terms) < 0.0:
+            #Since we set terms = _np.maximum(terms, 0) above we know it was the regularization that caused this
+            if self.regtype == 'minp':
+                raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
+                                  "(it should be smaller than the smallest frequency)") % self.min_p)
+            else:
+                raise ValueError("Regularization => negative terms!")
 
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
@@ -1030,7 +934,9 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         # terms = Nf*(log(f)-log(p)) + N*(p-f)  OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = -Nf/p + N  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = Nf/p^2   OR  2*S2
-        assert(self.regtype == "minp")
+        if(self.regtype != "minp"):
+            raise NotImplementedError("Hessian only implemented for 'minp' regulariation type so far.")
+
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
         _, pos_probs, c0, c1, freqs_nozeros = intermediates
@@ -1137,8 +1043,6 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
 
         terms = _np.where(counts == 0, 0.0, terms)
         #Note: no penalty for omitted probabilities (objective fn == 0 whenever counts == 0)
-
-        terms.shape = [self.nelements]  # reshape ensuring no copy is needed
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
@@ -1165,7 +1069,9 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         # terms = Nf*log(p) OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = Nf/p  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = -Nf/p^2   OR  2*S2
-        assert(self.regtype == "minp")
+        if(self.regtype != "minp"):
+            raise NotImplementedError("Hessian only implemented for 'minp' regulariation type so far.")
+
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
         _, pos_probs, c0, c1, freqs_nozeros = intermediates
@@ -1272,10 +1178,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
     def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
         return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
-    def __init__(self, raw_objfn_cls, mdl, dataset, circuit_list, regularization=None, penalties=None,
+    def __init__(self, raw_objfn, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
 
-        raw_objfn = raw_objfn_cls(regularization, resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdl, dataset, circuit_list, cache, enable_hessian)
 
         if penalties is None: penalties = {}
@@ -1307,17 +1212,16 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
-        if self.regularize_factor != 0: ex += self.nparams
-        if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.mdl)
-        if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.mdl)
-
         if forcefn_grad is not None:
             ex += forcefn_grad.shape[0]
             ffg_norm = _np.linalg.norm(forcefn_grad)
             start_norm = _np.linalg.norm(self.mdl.to_vector())
-            self.forceOffset = self.nelements + ex  # index to jacobian row of first forcing term
             self.forceShift = ffg_norm * (ffg_norm + start_norm) * shift_fctr
             #used to keep forceShift - _np.dot(forcefn_grad,paramvec) positive (Note: not analytic, just a heuristic!)
+
+        if self.regularize_factor != 0: ex += self.nparams
+        if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.mdl)
+        if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.mdl)
 
         return ex
 
@@ -1349,6 +1253,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
     def fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
         off = 0
 
+        if self.forcefn_grad is not None:
+            n = self.forcefn_grad.shape[0]
+            lspenaltyvec_jac[off:off + n, :] = -self.forcefn_grad
+            off += n
+
         if self.regularize_factor > 0:
             n = len(paramvec)
             lspenaltyvec_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0)
@@ -1357,11 +1266,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         if self.cptp_penalty_factor > 0:
             off += _cptp_penalty_jac_fill(
-                self.jac[off:, :], self.mdl, self.cptp_penalty_factor, self.opBasis)
+                lspenaltyvec_jac[off:, :], self.mdl, self.cptp_penalty_factor, self.opBasis)
 
         if self.spam_penalty_factor > 0:
             off += _spam_penalty_jac_fill(
-                self.jac[off:, :], self.mdl, self.spam_penalty_factor, self.opBasis)
+                lspenaltyvec_jac[off:, :], self.mdl, self.spam_penalty_factor, self.opBasis)
 
         assert(off == self.ex)
 
@@ -1436,7 +1345,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
     def lsvec(self, paramvec=None, oob_check=False):
         tm = _time.time()
-        if paramvec is not None: self.mdl.from_vector(paramvec)
+        if paramvec is not None:
+            self.mdl.from_vector(paramvec)
+        else:
+            paramvec = self.mdl.to_vector()
+
         self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
@@ -1455,12 +1368,14 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             self.update_lsvec_for_omitted_probs(lsvec, self.probs)
 
         self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
-        assert(lsvec.shape == (self.nelements,))  # reshape ensuring no copy is needed
+        assert(lsvec.shape == (self.nelements + self.ex,))
         return lsvec
 
     def terms(self, paramvec=None):
         tm = _time.time()
         if paramvec is not None: self.mdl.from_vector(paramvec)
+        else: paramvec = self.mdl.to_vector()
+
         self.mdl.bulk_fill_probs(self.probs, self.eval_tree, self.prob_clip_interval,
                                  self.check, self.raw_objfn.comm)
 
@@ -1471,7 +1386,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
             self.update_terms_for_omitted_probs(terms, self.probs)
 
         self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
-        assert(terms.shape == (self.nelements,))  # reshape ensuring no copy is needed
+        assert(terms.shape == (self.nelements + self.ex,))
         return terms
 
     # Jacobian function
@@ -1479,7 +1394,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         tm = _time.time()
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.nelements, self.nparams)
-        if paramvec is not None: self.mdl.from_vector(paramvec)
+        if paramvec is not None:
+            self.mdl.from_vector(paramvec)
+        else:
+            paramvec = self.mdl.to_vector()
+
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
                                   pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
                                   check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
@@ -1531,7 +1450,11 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         tm = _time.time()
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.nelements, self.nparams)
-        if paramvec is not None: self.mdl.from_vector(paramvec)
+        if paramvec is not None:
+            self.mdl.from_vector(paramvec)
+        else:
+            paramvec = self.mdl.to_vector()
+
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
                                   pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
                                   check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
@@ -1596,8 +1519,8 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         if pv is not None: self.mdl.from_vector(pv)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        self.mld.bulk_fill_dprobs(dprobs, self.eval_tree, self.probs, self.prob_clip_interval,
-                                  self.check, self.comm)  # use cache?
+        self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree, self.probs, self.prob_clip_interval,
+                                  self.check, self.raw_objfn.comm)  # use cache?
 
         d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.N, self.freqs)[:, None, None]
         dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
@@ -1607,6 +1530,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         return _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
 
     def hessian(self, pv=None):
+        if self.ex != 0: raise NotImplementedError("Hessian is not implemented for penalty terms yet!")
         if pv is not None: self.mdl.from_vector(pv)
         return self._construct_hessian(self.counts, self.N, self.prob_clip_interval)
 
@@ -1656,49 +1580,57 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 class Chi2Function(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawChi2Function, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawChi2Function(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class ChiAlphaFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawChiAlphaFunction, mdl, dataset, circuit_list, regularization, penalties,
+                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False,
+                 alpha=1):
+        raw_objfn = RawChiAlphaFunction(regularization, resource_alloc, name, description, verbosity, alpha)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class FreqWeightedChi2Function(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawFreqWeightedChi2Function, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawFreqWeightedChi2Function(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class PoissonPicDeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawPoissonPicDeltaLogLFunction, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class DeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawDeltaLogLFunction, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawMaxLogLFunction, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawMaxLogLFunction(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
 class TVDFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
-        super().__init__(RawTVDFunction, mdl, dataset, circuit_list, regularization, penalties,
+        raw_objfn = RawTVDFunction(regularization, resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
                          cache, resource_alloc, name, description, verbosity, enable_hessian)
 
 
@@ -1737,12 +1669,12 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
         pass  # no regularization
 
     def set_penalties(self):
-        pass  # no penalties
+        return 0  # no penalties
 
-    def lsvec(self, paramvec):
+    def lsvec(self, paramvec=None):
         raise NotImplementedError()
 
-    def dlsvec(self, paramvec):
+    def dlsvec(self, paramvec=None):
         raise NotImplementedError()
 
 
@@ -1753,37 +1685,39 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
     # in this case.
 
     def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
-        self.min_p = min_prob_clip_for_weighting
-        self.a = radius  # parameterizes "roundness" of f == 0 terms
+        self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
+        self.radius = radius  # parameterizes "roundness" of f == 0 terms
 
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
                       prob_clip_interval=(-10000, 10000)):
         assert(regularize_factor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
             "Cannot apply regularization or penalization in time-dependent chi2 case (yet)"
         self.prob_clip_interval = prob_clip_interval
+        return 0
 
-    def lsvec(self, paramvec):
+    def lsvec(self, paramvec=None):
         tm = _time.time()
-        self.mdl.from_vector(paramvec)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
         fsim = self.mdl._fwdsim()
         v = self.v
         fsim.bulk_fill_timedep_chi2(v, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
-                                    self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, self.comm)
+                                    self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
+                                    self.raw_objfn.comm)
         self.raw_objfn.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
-    def dlsvec(self, paramvec):
+    def dlsvec(self, paramvec=None):
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs.shape = (self.nelements, self.nparams)
-        self.mdl.from_vector(paramvec)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
 
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dchi2(dprobs, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     self.comm, wrt_block_size=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
-                                     gather_mem_limit=self.gthrMem)
+                                     self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                     profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -1792,8 +1726,8 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
 class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
 
     def set_regularization(self, min_prob_clip=1e-4, radius=1e-4):
-        self.min_p = min_prob_clip
-        self.a = radius  # parameterizes "roundness" of f == 0 terms
+        self.min_prob_clip = min_prob_clip
+        self.radius = radius  # parameterizes "roundness" of f == 0 terms
 
     def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
                       prob_clip_interval=(-10000, 10000)):
@@ -1801,17 +1735,19 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
             "Cannot apply CPTP or SPAM penalization in time-dependent logl case (yet)"
         assert(forcefn_grad is None), "forcing functions not supported with time-dependent logl function yet"
         self.prob_clip_interval = prob_clip_interval
+        return 0
 
     def get_chi2k_distributed_qty(self, objective_function_value):
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def lsvec(self, paramvec):
+    def lsvec(self, paramvec=None):
         tm = _time.time()
-        self.mdl.from_vector(paramvec)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
         fsim = self.mdl._fwdsim()
         v = self.v
         fsim.bulk_fill_timedep_loglpp(v, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
-                                      self.dataset, self.min_p, self.a, self.prob_clip_interval, self.comm)
+                                      self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
+                                      self.raw_objfn.comm)
         v = _np.sqrt(v)
         v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
@@ -1827,17 +1763,17 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
 
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
     #   and deriv == 0.5 / sqrt(...) * c0 * dp
-    def dlsvec(self, paramvec):
+    def dlsvec(self, paramvec=None):
         tm = _time.time()
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
         dlogl.shape = (self.nelements, self.nparams)
-        self.mdl.from_vector(paramvec)
+        if paramvec is not None: self.mdl.from_vector(paramvec)
 
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
-                                       self.dataset, self.min_p, self.a, self.prob_clip_interval, self.v,
-                                       self.comm, wrt_block_size=self.wrt_blk_size, profiler=self.raw_objfn.profiler,
-                                       gather_mem_limit=self.gthrMem)
+                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
+                                       self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                       profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)
@@ -2078,7 +2014,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         return self.lsvec(wvec)**2
 
     def lsvec(self, w_vec=None):
-        tm = _time.time()
         if w_vec is not None: self.wildcard_budget.from_vector(w_vec)
         self.wildcard_budget.update_probs(self.probs,
                                           self.logl_objfn.probs,
@@ -2087,7 +2022,8 @@ class LogLWildcardFunction(ObjectiveFunction):
                                           self.logl_objfn.lookup,
                                           self.wildcard_budget_precomp)
 
-        return self.logl_objfn.lsvec_from_probs(tm)
+        counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.N, self.logl_objfn.freqs
+        return self.logl_objfn.raw_objfn.lsvec(self.probs, counts, N, freqs)
 
     def dlsvec(self, w_vec):
         raise NotImplementedError("No jacobian yet")

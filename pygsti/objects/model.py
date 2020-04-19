@@ -43,6 +43,7 @@ from . import explicitcalc as _explicitcalc
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from .label import Label as _Label
+from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 
 class Model(object):
@@ -922,8 +923,9 @@ class OpModel(Model):
         # dataset.simplify -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # simplify all gsplaq strs -> elementIndices[(i,j)],
 
-        circuits = [(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr))
-                    for opstr in circuits]  # cast to Circuits
+        aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
+        circuits = list(map(_cir.Circuit.create_from, circuits))  # cast to Circuits
+        ds_circuits = _lt.apply_aliases_to_circuit_list(circuits, aliases)
 
         #Indexed by raw operation sequence
         raw_elabels_dict = _collections.OrderedDict()  # final
@@ -935,7 +937,7 @@ class OpModel(Model):
         outcomesByParent = _collections.OrderedDict()  # final
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
-        def resolve_elabels(circuit):
+        def resolve_elabels(circuit, ds_circuit):
             """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
             prep_lbl, circuit, povm_lbl = \
@@ -956,7 +958,7 @@ class OpModel(Model):
                     # a final element in the "full" (tuple) outcome labels that
                     # were observed.
                     observed_povm_outcomes = sorted(set(
-                        [full_out_tup[-1] for full_out_tup in dataset[circuit].outcomes]))
+                        [full_out_tup[-1] for full_out_tup in dataset[ds_circuit].outcomes]))
                     elabels = [povm_lbl + "_" + elbl
                                for elbl in observed_povm_outcomes]
                     # elbl = oout[-1] -- the last element corresponds
@@ -1078,10 +1080,11 @@ class OpModel(Model):
 
         # Step1: recursively populate raw_elabels_dict,
         #        raw_opOutcomes_dict, and elIndsToOutcomesByParent
-        resolved_circuits = list(map(resolve_elabels, circuits))
-        for iParent, ((opstr, elabels), orig_circuit) in enumerate(zip(resolved_circuits, circuits)):
+        resolved_circuits = [resolve_elabels(c, dsc) for c, dsc in zip(circuits, ds_circuits)]
+        for iParent, ((opstr, elabels), orig_circuit, orig_dscircuit) in enumerate(zip(resolved_circuits,
+                                                                                       circuits, ds_circuits)):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
-            oouts = None if (dataset is None) else set(dataset[orig_circuit].outcomes)
+            oouts = None if (dataset is None) else set(dataset[orig_dscircuit].outcomes)
             process(opstr, elabels, oouts, elIndsToOutcomesByParent[iParent])
 
         # Step2: fill raw_offsets dictionary
@@ -1632,8 +1635,6 @@ class OpModel(Model):
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        def to_circuit(x): return x if isinstance(x, _cir.Circuit) else _cir.Circuit(x)
-        circuit_list = list(map(to_circuit, circuit_list))  # make sure simplify_circuits is given Circuits
         simplified_circuits, elIndices, outcomes, nEls = \
             self.simplify_circuits(circuit_list, dataset)
 

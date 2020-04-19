@@ -65,10 +65,10 @@ def allerrors(nqubits, maxweight):
     """
     if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweigth <= 2 is currently supported")
     if maxweight == 1:
-        return [_pobjs.NQPauliOp.Weight1Pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)]
+        return [_pobjs.NQPauliOp.weight_1_pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)]
     else:
-        return [_pobjs.NQPauliOp.Weight1Pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)] + \
-               [_pobjs.NQPauliOp.Weight2Pauli(nqubits, loc1, loc2, p1, p2) for loc1 in range(nqubits)
+        return [_pobjs.NQPauliOp.weight_1_pauli(nqubits, loc, p) for loc in range(nqubits) for p in range(3)] + \
+               [_pobjs.NQPauliOp.weight_2_pauli(nqubits, loc1, loc2, p1, p2) for loc1 in range(nqubits)
                 for loc2 in range(loc1 + 1, nqubits)
                 for p1 in range(3) for p2 in range(3)]
 

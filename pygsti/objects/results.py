@@ -13,14 +13,14 @@ import itertools as _itertools
 import warnings as _warnings
 import copy as _copy
 
+import pygsti
 from .. import tools as _tools
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
-from .estimate import Estimate as _Estimate
 from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
-#A flag to enable fast-loading of old results files (should
+#a flag to enable fast-loading of old results files (should
 # only be changed by experts)
 _SHORTCUT_OLD_RESULTS_LOAD = False
 
@@ -129,8 +129,8 @@ class Results(object):
         # to the circuitLists used to obtain estimates
         finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
-            self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
-            self.circuit_lists['meas fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['prep fiducials'] = finalStruct.prep_fiducials
+            self.circuit_lists['meas fiducials'] = finalStruct.meas_fiducials
             self.circuit_lists['germs'] = finalStruct.germs
         else:
             self.circuit_lists['prep fiducials'] = []
@@ -248,8 +248,8 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = _Estimate(self, target_model, seed_model,
-                                                 models_by_iter, parameters)
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate(self, target_model, seed_model,
+                                                                          models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \

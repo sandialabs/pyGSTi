@@ -202,13 +202,13 @@ def logl_per_circuit(model, dataset, circuit_list=None,
         Values are the log-likelihood contributions of the corresponding gate
         string aggregated over outcomes.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
 
     if wildcard:
@@ -280,11 +280,11 @@ def logl_jacobian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,), where M is the length of the vectorized model.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -352,11 +352,11 @@ def logl_hessian(model, dataset, circuit_list=None,
     numpy array
       array of shape (M,M), where M is the length of the vectorized model.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -879,7 +879,8 @@ def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
         rawfn = _objfns.RawDeltaLogLFunction({'min_prob_clip': min_prob_clip})
 
     ret = 2 * rawfn.terms(p, n * f, n, f)
-    ret[nan_indices] = _np.nan
+    if not _np.isscalar(f):
+        ret[nan_indices] = _np.nan
     return ret
 
 

@@ -5,8 +5,11 @@ from ..util import BaseCase
 from . import fixtures as pkg
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects.results import Results
-from pygsti.objects import estimate
+from pygsti.protocols.gst import ModelEstimateResults
+from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
+from pygsti.objects import BulkCircuitList
+from pygsti.protocols import estimate
+
 
 
 class EstimateBase(object):
@@ -15,9 +18,10 @@ class EstimateBase(object):
         cls.model = pkg.mdl_lsgst_go
         cls.maxLengthList = pkg.maxLengthList
 
-        cls.res = Results()
-        cls.res.init_dataset(pkg.dataset)
-        cls.res.init_circuits(pkg.lsgstStructs)
+        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+                                      for circuit_struct in pkg.lsgstStructs])
+        data = ProtocolData(edesign, pkg.dataset)
+        cls.res = ModelEstimateResults(data, Protocol("test-protocol"))
 
     def setUp(self):
         self.model = self.model.copy()
@@ -50,9 +54,10 @@ class ResultsEstimateTester(EstimateBase, BaseCase):
     def setUp(self):
         super(ResultsEstimateTester, self).setUp()
         self.res.add_estimate(
-            std.target_model(), std.target_model(),
-            [self.model] * len(self.maxLengthList),
-            parameters={'objective': 'logl'},
+            estimate.Estimate.gst_init(
+                self.res, std.target_model(), std.target_model(),
+                [self.model] * len(self.maxLengthList),
+                parameters={'objective': 'logl'}),
             estimate_key="default"
         )
         self.est = self.res.estimates['default']
@@ -79,4 +84,4 @@ class EmptyEstimateTester(EstimateBase, BaseCase):
         with self.assertRaises(ValueError):
             goparams = {'item_weights': {'gates': 1.0, 'spam': 0.1}, 'model': self.model}
             self.est.add_gaugeoptimized(goparams, label="test", comm=None,
-                                        verbosity=None)  # goparams must have 'targetModel'
+                                        verbosity=None)  # goparams must have 'target_model'

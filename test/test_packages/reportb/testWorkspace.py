@@ -2,7 +2,7 @@ import os
 import unittest
 import pickle
 import copy
-import pygsti
+import pygsti.protocols.estimate
 from pygsti.extras import drift
 from pygsti.modelpacks.legacy import stdQT_XYIMS
 
@@ -123,7 +123,7 @@ class TestWorkspace(ReportBaseCase):
             hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss.allstrs,
                                                 min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
-            est = pygsti.objects.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
+            est = pygsti.protocols.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, non_mark_radius_sq=0.0)

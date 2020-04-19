@@ -21,6 +21,11 @@ from .. import objects as _objs
 from .. import construction as _pc
 from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
+from ..objects.computationcache import ComputationCache as _ComputationCache
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..optimize.customlm import Optimizer as _Optimizer
+from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 _dummy_profiler = _DummyProfiler()
 
 
@@ -555,7 +560,8 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
         from which a default optimizer can be built.
 
     objective_function_builder : ObjectiveFunctionBuilder
-        Defines the objective function that is optimized.
+        Defines the objective function that is optimized.  Can also be anything
+        readily converted to an objective function builder, e.g. `"logl"`.
 
     resource_alloc : ResourceAllocation
         A resource allocation object containing information about how to
@@ -576,7 +582,8 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
     model : Model
         the best-fit model.
     """
-    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    resource_alloc = _ResourceAllocation.create_from(resource_alloc)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.create_from(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -591,6 +598,7 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
+    objective_function_builder = _objs.ObjectiveFunctionBuilder.create_from(objective_function_builder)
     objective = objective_function_builder.build(mdl, dataset, circuit_list, resource_alloc, cache, printer)
     profiler.add_time("do_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
@@ -664,7 +672,8 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     final_cache : ComputationCache
         The final iteration's computation cache.
     """
-    resource_alloc = _objfns.ResourceAllocation.build_resource_allocation(resource_alloc)
+    resource_alloc = _ResourceAllocation.create_from(resource_alloc)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.create_from(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -674,10 +683,13 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     tStart = _time.time()
     tRef = tStart
 
+    iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.create_from(ofb) for ofb in iteration_objfn_builders]
+    final_objfn_builders = [_objs.ObjectiveFunctionBuilder.create_from(ofb) for ofb in final_objfn_builders]
+
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
-            if isinstance(circuitsToEstimate, _objfns.BulkCircuitList) and circuitsToEstimate.name:
+            if isinstance(circuitsToEstimate, _BulkCircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
 
             printer.show_progress(i, nIters, verbose_messages=extraMessages,
@@ -686,7 +698,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
-            cache = _objfns.ComputationCache()  # store objects for this particular model, dataset, and circuit list
+            cache = _ComputationCache()  # store objects for this particular model, dataset, and circuit list
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()

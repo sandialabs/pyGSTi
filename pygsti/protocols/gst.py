@@ -31,14 +31,17 @@ from .. import optimize as _opt
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
-
-
-#For results object:
-from ..objects.estimate import Estimate as _Estimate
+from pygsti.protocols.estimate import Estimate as _Estimate
 from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
 from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+from ..objects.computationcache import ComputationCache as _ComputationCache
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+
+
+#For results object:
 
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -62,18 +65,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
         HasTargetModel.__init__(self, target_model_filename_or_obj)
 
 
-class StructuredGSTDesign(GateSetTomographyDesign, _proto.CircuitStructuresDesign):
-    """ GST experiment design where circuits are structured by length and germ (typically). """
-
-    def __init__(self, target_model_filename_or_obj, circuit_structs, qubit_labels=None,
-                 nested=False, remove_duplicates=True):
-        _proto.CircuitStructuresDesign.__init__(self, circuit_structs, qubit_labels, nested, remove_duplicates)
-        HasTargetModel.__init__(self, target_model_filename_or_obj)
-        #Note: we *don't* need to init GateSetTomographyDesign here, only HasTargetModel,
-        # GateSetTomographyDesign's non-target-model data is initialized by CircuitStructuresDesign.
-
-
-class StandardGSTDesign(StructuredGSTDesign):
+class StandardGSTDesign(GateSetTomographyDesign):
     """ Standard GST experiment design consisting of germ-powers sandwiched between fiducials. """
 
     def __init__(self, target_model_filename_or_obj, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -105,9 +97,9 @@ class StandardGSTDesign(StructuredGSTDesign):
         self.fpr_keep_fraction = keep_fraction
         self.fpr_keep_seed = keep_seed
 
-        #TODO: add a line_labels arg to make_lsgst_structs and pass qubit_labels in?
+        #TODO: add a line_labels arg to make_lsgst_lists and pass qubit_labels in?
         target_model = _load_model(target_model_filename_or_obj)
-        structs = _construction.make_lsgst_structs(
+        lists = _construction.make_lsgst_lists(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
@@ -116,7 +108,7 @@ class StandardGSTDesign(StructuredGSTDesign):
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
-        super().__init__(target_model, structs, qubit_labels, self.nested)
+        super().__init__(target_model, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
         self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
         self.auxfile_types['germs'] = 'text-circuit-list'
@@ -128,11 +120,11 @@ class StandardGSTDesign(StructuredGSTDesign):
 
 class GSTInitialModel(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
     def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
-                 lgst_gaugeopt_tol=None, contract_start_to_cptp=False):
+                 lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
         self.model = model
         if starting_point is None:
@@ -145,7 +137,7 @@ class GSTInitialModel(object):
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
-    def get_model(self, target_model, gaugeopt_target, lgst_struct, dataset, qubit_labels, comm):
+    def get_model(self, target_model, gaugeopt_target, lgst_list, dataset, qubit_labels, comm):
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
@@ -160,8 +152,8 @@ class GSTInitialModel(object):
                         gaugeopt_target=gaugeopt_target, badfit_options=None, name="LGST")
 
             try:  # see if LGST can be run on this data
-                if lgst_struct:
-                    lgst_data = _proto.ProtocolData(StructuredGSTDesign(mdl_start, [lgst_struct], qubit_labels),
+                if lgst_list:
+                    lgst_data = _proto.ProtocolData(GateSetTomographyDesign(mdl_start, [lgst_list], None, qubit_labels),
                                                     dataset)
                     lgst.check_if_runnable(lgst_data)
                     starting_pt = "LGST"
@@ -215,7 +207,7 @@ class GSTInitialModel(object):
 
 class GSTBadFitOptions(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         if isinstance(obj, GSTBadFitOptions):
             return obj
         else:  # assum obj is a dict of arguments
@@ -231,12 +223,12 @@ class GSTBadFitOptions(object):
 
 class GSTObjFnBuilders(object):
     @classmethod
-    def build(cls, obj):
+    def create_from(cls, obj):
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.init_simple()
         elif isinstance(obj, dict): return cls.init_simple(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
-        else: raise ValueError("Cannot build a GSTObjFnBuilders object from '%s'" % str(type(obj)))
+        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod
     def init_simple(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
@@ -275,10 +267,10 @@ class GateSetTomography(_proto.Protocol):
         """
 
         super().__init__(name)
-        self.initial_model = GSTInitialModel.build(initial_model)
+        self.initial_model = GSTInitialModel.create_from(initial_model)
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.build(badfit_options)
+        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
         self.verbosity = verbosity
 
         if isinstance(optimizer, _opt.Optimizer):
@@ -288,9 +280,9 @@ class GateSetTomography(_proto.Protocol):
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 mdl = self.initial_model.model
                 optimizer['first_fditer'] = 0 if mdl and mdl.simtype in ("termorder", "termgap") else 1
-            self.optimizer = _opt.CustomLMOptimizer.build(optimizer)
+            self.optimizer = _opt.CustomLMOptimizer.create_from(optimizer)
 
-        objfn_builders = GSTObjFnBuilders.build(objfn_builders)
+        objfn_builders = GSTObjFnBuilders.create_from(objfn_builders)
         self.iteration_builders = objfn_builders.iteration_builders
         self.final_builders = objfn_builders.final_builders
 
@@ -336,29 +328,24 @@ class GateSetTomography(_proto.Protocol):
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distribute_method=self.distribute_method)
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
+                                             distribute_method=self.distribute_method)
 
-        try:  # take structs if available
-            circuit_lists_or_structs = data.edesign.circuit_structs
-            first_struct = data.edesign.circuit_structs[0]  # for LGST
-            aliases = circuit_lists_or_structs[-1].aliases
-        except:
-            circuit_lists_or_structs = data.edesign.circuit_lists
-            first_struct = None  # for LGST
-            aliases = None
+        circuit_lists = data.edesign.circuit_lists
+        first_list = data.edesign.circuit_lists[0]  # for LGST
+        aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _BulkCircuitList) else None
         ds = data.dataset
 
         if self.oplabel_aliases:  # override any other aliases with ones specifically given
             aliases = self.oplabel_aliases
 
-        bulk_circuit_lists = [_objfns.BulkCircuitList(lst, aliases, self.circuit_weights)
-                              for lst in circuit_lists_or_structs]
+        bulk_circuit_lists = [_BulkCircuitList(lst, aliases, self.circuit_weights)
+                              for lst in circuit_lists]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
 
         mdl_start = self.initial_model.get_model(data.edesign.target_model, self.gaugeopt_target,
-                                                 first_struct, data.dataset, data.edesign.qubit_labels, comm)
+                                                 first_list, data.dataset, data.edesign.qubit_labels, comm)
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -374,7 +361,7 @@ class GateSetTomography(_proto.Protocol):
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
-                                            else self.iteration_builders[-1]
+            else self.iteration_builders[-1]
         parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
         parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
@@ -400,7 +387,7 @@ class LinearGateSetTomography(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.build(badfit_options)
+        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
         self.verbosity = verbosity
 
         #Advanced options that could be changed by users who know what they're doing
@@ -423,11 +410,16 @@ class LinearGateSetTomography(_proto.Protocol):
         else:
             raise ValueError("LGST can only be applied to explicit models with dense operators")
 
-        if not isinstance(edesign, _proto.CircuitStructuresDesign):
-            raise ValueError("LGST must be given an experiment design with fiducials!")
-        if len(edesign.circuit_structs) != 1:
-            raise ValueError("There should only be one circuit structure in the input exp-design!")
-        circuit_struct = edesign.circuit_structs[0]
+        if isinstance(edesign, _proto.CircuitListsDesign):
+            if len(edesign.circuit_lists) != 1:
+                raise ValueError("There should only be one circuit list in the input exp-design!")
+            circuit_list = edesign.circuit_lists[0]
+        else:
+            circuit_list = edesign.all_circuits_needing_data
+
+        if not isinstance(circuit_list, _BulkCircuitList) or circuit_list.circuit_structure is None:
+            raise ValueError("LGST must be given an experiment design with a circuit structure!")
+        circuit_struct = circuit_list.circuit_structure
 
         valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if not isinstance(circuit_struct, valid_struct_types):
@@ -439,7 +431,12 @@ class LinearGateSetTomography(_proto.Protocol):
 
         edesign = data.edesign
         target_model = self.target_model if (self.target_model is not None) else edesign.target_model
-        circuit_struct = edesign.circuit_structs[0]
+
+        if isinstance(edesign, _proto.CircuitListsDesign):
+            circuit_list = edesign.circuit_lists[0]
+        else:
+            circuit_list = edesign.all_circuits_needing_data
+        circuit_struct = circuit_list.circuit_structure
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
@@ -451,8 +448,8 @@ class LinearGateSetTomography(_proto.Protocol):
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
-        resource_alloc = _objfns.ResourceAllocation(comm, memlimit, profiler,
-                                                    distributeMethod="default")
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
+                                             distribute_method="default")
 
         ds = data.dataset
         aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
@@ -460,8 +457,8 @@ class LinearGateSetTomography(_proto.Protocol):
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
-        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prepStrs, circuit_struct.effectStrs, target_model,
-                                op_labels, svdTruncateTo=target_model.get_dimension(),
+        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
+                                op_labels, svd_truncate_to=target_model.get_dimension(),
                                 op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
@@ -731,6 +728,9 @@ def _update_gaugeopt_dict_from_suitename(gauge_opt_suite_dict, root_lbl, suite_n
             valid_spam_range = [1]; spamwt_range = [1e-4, 1e-1]
         elif suite_name == "toggleValidSpam":
             valid_spam_range = [0, 1]; spamwt_range = [1e-3]
+        else:
+            valid_spam_range = []
+            spamwt_range = []
 
         if suite_name == root_lbl:  # then shorten the root name
             root_lbl = "2QUR-" if suite_name.endswith("unreliable2Q") else ""
@@ -914,8 +914,8 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
             for goparams_dict in goparams_list:
                 if 'target_model' in goparams_dict:
                     _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                    "user-defined target_model in gauge opt"
-                                    "param dict(s)"))
+                                    " user-defined target_model in gauge opt"
+                                    " param dict(s)"))
                 goparams_dict.update({'target_model': target_model})
 
     #Gauge optimize to list of gauge optimization parameters
@@ -1044,7 +1044,7 @@ def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
     # Get by-sequence goodness of fit
     objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
     objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
-    fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+    fitqty = objfn.get_chi2k_distributed_qty(objfn.percircuit())
     return fitqty
 
 
@@ -1102,7 +1102,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opts, cac
     # and minimize this for different eta (binary search) to find that largest eta for which the
     # first two terms is are zero.  This Wvec is our keeper.
     if cache is None:
-        cache = _objfns.ComputationCache()  # ensure we have a cache since we need its lookup dict below
+        cache = _ComputationCache()  # ensure we have a cache since we need its lookup dict below
 
     ds_dof = ds.get_degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
@@ -1222,14 +1222,15 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opts, cac
     return budget
 
 
-def reoptimize_with_weights(model, ds, circuit_list, circuit_weights, objfn_builder, optimizer,
+def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
                             resource_alloc, cache, verbosity):
     """
     TODO: docstring
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
-    bulk_circuit_list = _objfns.BulkCircuitList(circuit_list, circuitWeights=circuit_weights)
+    circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
+    bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
     opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
                                             resource_alloc, cache, printer - 1)
     return mdl_reopt
@@ -1283,24 +1284,26 @@ class ModelEstimateResults(_proto.ProtocolResults):
         #Initialize some basic "results" by just exposing the circuit lists more directly
         circuit_lists = _collections.OrderedDict()
 
+        def cast_bcl(x):
+            return _BulkCircuitList(x) if not isinstance(x, _BulkCircuitList) else x
+
         if init_circuits:
             edesign = self.data.edesign
-            if isinstance(edesign, _proto.CircuitStructuresDesign):
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(cs) for cs in edesign.circuit_structs]
+            if isinstance(edesign, _proto.CircuitListsDesign):
+                circuit_lists['iteration'] = [cast_bcl(cl) for cl in edesign.circuit_lists]
 
                 #Set "Ls and germs" info: gives particular structure
-                final_struct = edesign.circuit_structs[-1]
-                if isinstance(final_struct, _LsGermsStructure):  # FUTURE: do something w/ a *LsGermsSerialStructure*
-                    circuit_lists['prep fiducials'] = final_struct.prep_fiducials
-                    circuit_lists['meas fiducials'] = final_struct.meas_fiducials
-                    circuit_lists['germs'] = final_struct.germs
-
-            elif isinstance(edesign, _proto.CircuitListsDesign):
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(cl) for cl in edesign.circuit_lists]
+                final_list = edesign.circuit_lists[-1]
+                if hasattr(final_list, 'circuit_structure') \
+                   and isinstance(final_list.circuit_structure, _LsGermsStructure):
+                    # FUTURE: do something w/ a *LsGermsSerialStructure*
+                    circuit_lists['prep fiducials'] = final_list.circuit_structure.prep_fiducials
+                    circuit_lists['meas fiducials'] = final_list.circuit_structure.meas_fiducials
+                    circuit_lists['germs'] = final_list.circuit_structure.germs
 
             else:
                 #Single iteration
-                circuit_lists['iteration'] = [_objfns.BulkCircuitList(edesign.all_circuits_needing_data)]
+                circuit_lists['iteration'] = [cast_bcl(edesign.all_circuits_needing_data)]
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 
@@ -1512,7 +1515,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         Results
         """
         view = ModelEstimateResults(self.data, self.protocol, init_circuits=False)
-        view.qtys['circuit_lists'] = self.circuit_lists
+        view.circuit_lists = self.circuit_lists
 
         if isinstance(estimate_keys, str):
             estimate_keys = [estimate_keys]

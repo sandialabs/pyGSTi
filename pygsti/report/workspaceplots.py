@@ -24,11 +24,12 @@ from .workspace import WorkspacePlot
 from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
+import plotly
+import plotly.graph_objs as go
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
-import plotly
-import plotly.graph_objs as go
 if int(plotly.__version__.split('.')[0]) >= 3:  # Plotly 3+
     go_x_axis = go.layout.XAxis
     go_y_axis = go.layout.YAxis
@@ -121,7 +122,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         hover_labels = []
         for y in range(plt_data.shape[0]):
             hover_labels.append([hover_label_fn(plt_data[y, x], y, x)
-                                for x in range(plt_data.shape[1])])
+                                 for x in range(plt_data.shape[1])])
     if hover_labels:
         heatmapArgs['hoverinfo'] = 'text'
         heatmapArgs['text'] = hover_labels
@@ -1745,7 +1746,7 @@ class ColorBoxPlot(WorkspacePlot):
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
-            circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _objfns.BulkCircuitList) \
+            circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _BulkCircuitList) \
                 else _objs.LsGermsSerialStructure.from_list(circuit_list, dataset)  # default struct
 
             if (submatrices is not None) and ptyp in submatrices:
@@ -2894,9 +2895,13 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
             box_labels=True, prec=1, colormap=colormap, scale=scale)
 
         #Combine plotly figures into one
-        nSigma_figdict = nSigma_fig.plotlyfig.to_dict()  # so we can work with normal dicts
-        # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
-        logL_figdict = logL_fig.plotlyfig.to_dict()
+        nSigma_figdict = nSigma_fig.plotlyfig
+        if hasattr(nSigma_figdict, 'to_dict'):
+            nSigma_figdict = nSigma_figdict.to_dict()  # so we can work with normal dicts
+            # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
+        logL_figdict = logL_fig.plotlyfig
+        if hasattr(logL_figdict, 'to_dict'):
+            logL_figdict = logL_figdict.to_dict()
         combined_fig_data = list(nSigma_figdict['data']) + [logL_figdict['data'][0]]
         combined_fig_data[-1].update(visible=False)
         combined_fig = ReportFigure(go.Figure(data=combined_fig_data, layout=nSigma_figdict['layout']),
@@ -3158,8 +3163,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         if decay:
             lengths = _np.linspace(0, max(rb_r.depths), 200)
-            A = rb_r.fits[fitkey].estimates['A']
-            B = rb_r.fits[fitkey].estimates['B']
+            A = rb_r.fits[fitkey].estimates['a']
+            B = rb_r.fits[fitkey].estimates['b']
             p = rb_r.fits[fitkey].estimates['p']
 
             data.append(go.Scatter(

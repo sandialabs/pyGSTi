@@ -1156,7 +1156,7 @@ class RandomizedBenchmarking(Benchmark):
 
         if self.bootstrap_samples > 0:
 
-            parameters = ['A', 'B', 'p', 'r']
+            parameters = ['a', 'b', 'p', 'r']
             bootstraps_ff = {p: [] for p in parameters}
             bootstraps_faf = {p: [] for p in parameters}
             failcount_ff = 0
@@ -1292,8 +1292,8 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
         if decay:
             lengths = _np.linspace(0, max(self.depths), 200)
-            a = self.fits[fitkey].estimates['A']
-            b = self.fits[fitkey].estimates['B']
+            a = self.fits[fitkey].estimates['a']
+            b = self.fits[fitkey].estimates['b']
             p = self.fits[fitkey].estimates['p']
             _plt.plot(lengths, a + b * p**lengths,
                       label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],

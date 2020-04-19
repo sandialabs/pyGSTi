@@ -276,8 +276,8 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
                 "There is more than one DataSet, so must specify the `dskey`!"
             dskey = list(stabilityanalyzer.data.keys())[0]
 
-        prepind = gss.prepStrs.index(prep)
-        measind = gss.prepStrs.index(meas)
+        prepind = gss.prep_fiducials.index(prep)
+        measind = gss.prep_fiducials.index(meas)
         circuitdict = {}
 
         #UNUSED: numL = len(gss.Ls)
@@ -465,8 +465,8 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
         if isinstance(meas, str):
             meas = _Circuit(None, stringrep=meas)
 
-        prepind = gss.prepStrs.index(prep)
-        measind = gss.prepStrs.index(meas)
+        prepind = gss.prep_fiducials.index(prep)
+        measind = gss.prep_fiducials.index(meas)
         # data = []
         circuitsdict = {}
 
@@ -540,8 +540,8 @@ def _create_drift_switchboard(ws, results, gss):
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
-             [c.str for c in gss.effectStrs],
+            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prep_fiducials)],
+             [c.str for c in gss.meas_fiducials],
              [i.str for i in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
@@ -554,8 +554,8 @@ def _create_drift_switchboard(ws, results, gss):
     else:
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
-            [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
-             [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
+            [[c.str for c in gss.germs], [c.str for c in(gss.prep_fiducials)],
+             [c.str for c in gss.meas_fiducials], [str(o) for o in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prepStrs", (1,))
@@ -563,8 +563,8 @@ def _create_drift_switchboard(ws, results, gss):
         drift_switchBd.add("outcomes", (3,))
 
         drift_switchBd.germs[:] = gss.germs
-        drift_switchBd.prepStrs[:] = gss.prepStrs
-        drift_switchBd.effectStrs[:] = gss.effectStrs
+        drift_switchBd.prepStrs[:] = gss.prep_fiducials
+        drift_switchBd.effectStrs[:] = gss.meas_fiducials
         drift_switchBd.outcomes[:] = results.data.get_outcome_labels()
 
     return drift_switchBd
