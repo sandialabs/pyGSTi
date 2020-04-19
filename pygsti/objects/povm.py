@@ -1232,14 +1232,32 @@ class LindbladPOVM(POVM):
 
 class MarginalizedPOVM(POVM):
     """
-    Create a marginalized POVM by adding together sets of effect vectors whose labels
-    have the same *character* at marginalized indices.  This assumes that the POVM
-    being marginalized has a particular (though common) effect-label structure whereby
-    each state-space sector corresponds to a single character, e.g. "0010" for a 4-qubt POVM.
+    A POVM whose effects are the sums of sets of effect vectors in a parent POVM,
+    namely the effects whose labels have the same *character* at certain "marginalized"
+    indices.
     """
 
     def __init__(self, povm_to_marginalize, all_sslbls, sslbls_after_marginalizing):
-        """ TODO: docstring """
+        """
+        Create a MarginalizedPOVM.
+
+        Create a marginalized POVM by adding together sets of effect vectors whose labels
+        have the same *character* at marginalized indices.  This assumes that the POVM
+        being marginalized has a particular (though common) effect-label structure whereby
+        each state-space sector corresponds to a single character, e.g. "0010" for a 4-qubt POVM.
+
+        Parameters
+        ----------
+        povm_to_marginalize : POVM
+            The POVM to marginalize (the "parent" POVM).
+
+        all_sslbls : StateSpaceLabels or tuple
+            The state space labels of the parent POVM, which should have as many
+            labels (factors) as the parent POVM's outcome/effect labels have characters.
+
+        sslbls_after_marginalizing : tuple
+            The subset of `all_sslbls` that should be *kept* after marginalizing.
+        """
         self.povm_to_marginalize = povm_to_marginalize
 
         if isinstance(all_sslbls, _ld.StateSpaceLabels):
