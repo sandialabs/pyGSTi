@@ -167,8 +167,8 @@ class InstrumentTestCase(BaseTestCase):
         model = pygsti.construction.build_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-        #    prepLabels=["rho0"], prepExpressions=["0"],
-        #    effectLabels=["0","1"], effectExpressions=["0","complement"])
+        #    prep_labels=["rho0"], prep_expressions=["0"],
+        #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
         v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis.cast("pp",4))
         v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis.cast("pp",4))
@@ -234,8 +234,8 @@ class InstrumentTestCase(BaseTestCase):
         gatestring2 = ('Gx','Gy','Gy')
 
         p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
-        p2 = model.product(gatestring1, bScale=False)
-        p3,scale = model.product(gatestring1, bScale=True)
+        p2 = model.product(gatestring1, scale=False)
+        p3,scale = model.product(gatestring1, scale=True)
 
         print(p1)
         print(p2)
@@ -251,7 +251,7 @@ class InstrumentTestCase(BaseTestCase):
         p2 = np.dot( model.operations['Gy'], np.dot( model.operations['Gy'], model.operations['Gx'] ))
 
         bulk_prods = model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = model.bulk_product(evt, bScale=True)
+        bulk_prods_scaled, scaleVals = model.bulk_product(evt, scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[0],p1)
         self.assertArraysAlmostEqual(bulk_prods[1],p2)
@@ -272,7 +272,7 @@ class InstrumentTestCase(BaseTestCase):
         print(probs)
         p20,p21 = probs[('0',)],probs[('1',)]
 
-        #probs = model.probs(gatestring1, bUseScaling=True)
+        #probs = model.probs(gatestring1, use_scaling=True)
         #print(probs)
         #p30,p31 = probs['0'],probs['1']
 
@@ -283,16 +283,16 @@ class InstrumentTestCase(BaseTestCase):
         bulk_probs = model.bulk_probs([gatestring1,gatestring2],check=True)
 
         evt_split = evt.copy()
-        new_lookup = evt_split.split(lookup, numSubTrees=2)
-        print("SPLIT TREE: new elIndices = ",new_lookup)
+        new_lookup = evt_split.split(lookup, num_sub_trees=2)
+        print("SPLIT TREE: new el_indices = ",new_lookup)
         probs_to_fill = np.empty( evt_split.num_final_elements(), 'd')
         model.bulk_fill_probs(probs_to_fill,evt_split,check=True)
 
         dProbs = model.dprobs(gatestring1)
-        bulk_dProbs = model.bulk_dprobs([gatestring1,gatestring2], returnPr=False, check=True)
+        bulk_dProbs = model.bulk_dprobs([gatestring1,gatestring2], return_pr=False, check=True)
 
         hProbs = model.hprobs(gatestring1)
-        bulk_hProbs = model.bulk_hprobs([gatestring1,gatestring2], returnPr=False, check=True)
+        bulk_hProbs = model.bulk_hprobs([gatestring1,gatestring2], return_pr=False, check=True)
 
 
         print("DONE")

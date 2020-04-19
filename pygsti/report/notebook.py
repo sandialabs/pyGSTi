@@ -24,54 +24,54 @@ class Notebook(object):
     '''
     DefaultTemplate = 'Empty.ipynb'
 
-    def __init__(self, cells=None, notebookTextFiles=None):
+    def __init__(self, cells=None, notebook_text_files=None):
         '''
-        Create an IPython notebook from a list of cells, list of notebookTextFiles, or both.
+        Create an IPython notebook from a list of cells, list of notebook_text_files, or both.
 
         Parameters
         ----------
         cells : list, optional
             List of NotebookCell objects
-        notebookTextFiles : list, optional
+        notebook_text_files : list, optional
             List of filenames (text files with '@@markdown' or '@@code' designating cells)
         '''
         if cells is None:
             cells = []
         self.cells = cells
-        if notebookTextFiles is not None:
-            for filename in notebookTextFiles:
+        if notebook_text_files is not None:
+            for filename in notebook_text_files:
                 self.add_notebook_text_file(filename)
 
-    def to_json_dict(self, templateFilename=DefaultTemplate):
+    def to_json_dict(self, template_filename=DefaultTemplate):
         '''
         Using an existing (usually empty) notebook as a template, generate the json for a new notebook.
 
         Parameters
         ----------
-        templateFilename : str, optional
+        template_filename : str, optional
             Name of an existing notebook file to build from
         '''
-        templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                         'templates', templateFilename)
-        with open(str(templateFilename), 'r') as infile:
+        template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                          'templates', template_filename)
+        with open(str(template_filename), 'r') as infile:
             notebookDict = _json.load(infile)
         notebookDict['cells'].extend([c.to_json_dict() for c in self.cells])
         return notebookDict
 
-    def save_to(self, outputFilename, templateFilename=DefaultTemplate):
+    def save_to(self, output_filename, template_filename=DefaultTemplate):
         '''
         Save this class to a file as a jupyter notebook
 
         Parameters
         ----------
-        outputFilename : str
+        output_filename : str
             File to save the output jupyter notebook to
 
-        templateFilename : str, optional
+        template_filename : str, optional
             Name of an existing notebook file to build from
         '''
-        jsonDict = self.to_json_dict(templateFilename)
-        with open(str(outputFilename), 'w') as outfile:
+        jsonDict = self.to_json_dict(template_filename)
+        with open(str(output_filename), 'w') as outfile:
             _json.dump(jsonDict, outfile)
 
     def add(self, cell):
@@ -84,7 +84,7 @@ class Notebook(object):
         '''
         self.cells.append(cell)
 
-    def add_block(self, block, cellType):
+    def add_block(self, block, cell_type):
         '''
         Add a block to the notebook
 
@@ -92,13 +92,13 @@ class Notebook(object):
         ----------
         block : str
             block of either code or markdown
-        cellType : str
+        cell_type : str
             tag for the cell. Either 'code' or 'markdown'
         '''
         lines = block.splitlines(True)
-        self.add(NotebookCell(cellType, lines))
+        self.add(NotebookCell(cell_type, lines))
 
-    def add_file(self, filename, cellType):
+    def add_file(self, filename, cell_type):
         '''
         Read in a cell block from a file
 
@@ -106,12 +106,12 @@ class Notebook(object):
         ----------
         filename: str
             filename containing either code or markdown
-        cellType : str
+        cell_type : str
             tag for the cell. Either 'code' or 'markdown'
         '''
         with open(str(filename), 'r') as infile:
             block = infile.read()
-        self.add_block(block, cellType)
+        self.add_block(block, cell_type)
 
     def add_code(self, block):
         '''
@@ -244,7 +244,7 @@ class Notebook(object):
         for filename in filenames:
             self.add_notebook_file(filename)
 
-    def launch_new(self, outputFilename, templateFilename=DefaultTemplate):
+    def launch_new(self, output_filename, template_filename=DefaultTemplate):
         '''
         Save and then launch this notebook with a new jupyter server.  Note that
         this function waits to return until the notebook server exists, and so
@@ -252,39 +252,39 @@ class Notebook(object):
 
         Parameters
         ----------
-        outputFilename : str
+        output_filename : str
             filename to save this notebook to
-        templateFilename : str, optional
+        template_filename : str, optional
             filename to build this notebook from (see save_to)
         '''
-        self.save_to(outputFilename, templateFilename)
-        _call('jupyter notebook {}'.format(outputFilename), shell=True)  # this waits for notebook to complete
-        #_os.system('jupyter notebook {}'.format(outputFilename)) # same behavior as above
-        #processid = _os.spawnlp(_os.P_NOWAIT, 'jupyter', 'notebook', _os.path.abspath(outputFilename)) #DOESN'T WORK
+        self.save_to(output_filename, template_filename)
+        _call('jupyter notebook {}'.format(output_filename), shell=True)  # this waits for notebook to complete
+        #_os.system('jupyter notebook {}'.format(output_filename)) # same behavior as above
+        #processid = _os.spawnlp(_os.P_NOWAIT, 'jupyter', 'notebook', _os.path.abspath(output_filename)) #DOESN'T WORK
         #print("DB: spawned notebook %d!" % processid)
 
-    def launch(self, outputFilename, templateFilename=DefaultTemplate, port='auto'):
+    def launch(self, output_filename, template_filename=DefaultTemplate, port='auto'):
         '''
         Save and then launch this notebook
 
         Parameters
         ----------
-        outputFilename : str
+        output_filename : str
             filename to save this notebook to
-        templateFilename : str, optional
+        template_filename : str, optional
             filename to build this notebook from (see save_to)
         '''
-        self.save_to(outputFilename, templateFilename)
-        outputFilename = _os.path.abspath(outputFilename)  # for path manips below
+        self.save_to(output_filename, template_filename)
+        output_filename = _os.path.abspath(output_filename)  # for path manips below
 
         from notebook import notebookapp
         servers = list(notebookapp.list_running_servers())
         for serverinfo in servers:
-            rel = _os.path.relpath(outputFilename, serverinfo['notebook_dir'])
+            rel = _os.path.relpath(output_filename, serverinfo['notebook_dir'])
             if ".." not in rel:  # notebook servers don't allow moving up directories
                 if port == 'auto'or int(serverinfo['port']) == port:
                     url = _os.path.join(serverinfo['url'], 'notebooks', rel)
                     _browser.open(url); break
         else:
             print("No running notebook server found that is rooted above %s" %
-                  outputFilename)
+                  output_filename)

@@ -16,7 +16,7 @@ class EvalTreeBase(object):
         opLabels = list(cls.target_model.operations.keys())
         strs = pc.make_lsgst_experiment_list(
             opLabels, cls.prepStrs, cls.measStrs, cls.germs, cls.maxLens,
-            includeLGST=False
+            include_lgst=False
         )
         tools.remove_duplicates_in_place(strs)
         ret = cls.target_model.simplify_circuits(strs)
@@ -63,9 +63,9 @@ class EvalTreeBase(object):
 
     def test_split_on_num_subtrees(self):
         # TODO can this be broken up?
-        # Split using numSubTrees
+        # Split using num_sub_trees
         gsl1 = self.tree.generate_circuit_list()
-        lookup2 = self.tree.split(self.lookup, numSubTrees=5)
+        lookup2 = self.tree.split(self.lookup, num_sub_trees=5)
         # TODO assert correctness
         gsl2 = self.tree.generate_circuit_list()
         self.assertEqual(gsl1, gsl2)
@@ -83,11 +83,11 @@ class EvalTreeBase(object):
     def test_split_on_max_subtree_size(self):
         # TODO can this be broken up?
         # TODO optimize!
-        # Split using maxSubTreeSize
+        # Split using max_sub_tree_size
         maxSize = 25
 
         gsl1 = self.tree.generate_circuit_list()
-        lookup2 = self.tree.split(self.lookup, maxSubTreeSize=maxSize)
+        lookup2 = self.tree.split(self.lookup, max_sub_tree_size=maxSize)
         # TODO assert correctness
         gsl2 = self.tree.generate_circuit_list()
         self.assertEqual(gsl1, gsl2)
@@ -105,11 +105,11 @@ class EvalTreeBase(object):
 
     def test_split_raises_on_conflicting_args(self):
         with self.assertRaises(ValueError):
-            self.tree.split(self.lookup, maxSubTreeSize=10, numSubTrees=10)  # can't specify both
+            self.tree.split(self.lookup, max_sub_tree_size=10, num_sub_trees=10)  # can't specify both
 
     def test_split_raises_on_bad_num_subtrees(self):
         with self.assertRaises(ValueError):
-            self.tree.split(self.lookup, numSubTrees=0)  # numSubTrees must be > 0
+            self.tree.split(self.lookup, num_sub_trees=0)  # num_sub_trees must be > 0
 
 
 class EvalTree1QBase(EvalTreeBase):

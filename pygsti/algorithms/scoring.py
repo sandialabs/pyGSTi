@@ -13,7 +13,7 @@ from functools import total_ordering
 import numpy as _np
 
 
-def list_score(input_array, scoreFunc='all'):
+def list_score(input_array, score_func='all'):
     """Score an array of eigenvalues. Smaller scores are better.
 
     Parameters
@@ -21,7 +21,7 @@ def list_score(input_array, scoreFunc='all'):
     input_array : numpy array
         The eigenvalues to be scored.
 
-    scoreFunc : {'all', 'worst'}, optional
+    score_func : {'all', 'worst'}, optional
         Sets the objective function for scoring the eigenvalues. If 'all',
         score is ``sum(1/input_array)``. If 'worst', score is
         ``1/min(input_array)``.
@@ -40,14 +40,14 @@ def list_score(input_array, scoreFunc='all'):
     # function, and the inf can be handled appropriately, so we suppress
     # division warnings printed to stderr.
     with _np.errstate(divide='ignore'):
-        if scoreFunc == 'all':
+        if score_func == 'all':
             score = sum(1. / _np.abs(input_array))
-        elif scoreFunc == 'worst':
+        elif score_func == 'worst':
             score = 1. / min(_np.abs(input_array))
         else:
-            raise ValueError("'%s' is not a valid value for scoreFunc.  "
+            raise ValueError("'%s' is not a valid value for score_func.  "
                              "Either 'all' or 'worst' must be specified!"
-                             % scoreFunc)
+                             % score_func)
 
     return score
 
@@ -77,10 +77,10 @@ class CompositeScore():
         The number of non-zero eigenvalues.
     """
 
-    def __init__(self, major, minor, N):
+    def __init__(self, major, minor, n):
         self.major = major
         self.minor = minor
-        self.N = N
+        self.N = n
 
     def __lt__(self, other):
         #Just base on *scores*
@@ -100,12 +100,12 @@ class CompositeScore():
             self.major, self.minor, self.N)
 
 
-def composite_rcl_fn(candidateScores, alpha):
+def composite_rcl_fn(candidate_scores, alpha):
     """Create a restricted candidate list (RCL) based on CompositeScore objects.
 
     Parameters
     ----------
-    candidateScores : list of CompositScore
+    candidate_scores : list of CompositScore
         List of scores to be sorted in RCL and not RCL.
 
     alpha : float
@@ -129,17 +129,17 @@ def composite_rcl_fn(candidateScores, alpha):
         The indices of the scores sufficiently good to be in the RCL.
 
     """
-    maxScore = max(candidateScores)
-    minScore = min(candidateScores)
+    maxScore = max(candidate_scores)
+    minScore = min(candidate_scores)
     if maxScore.major == minScore.major:
         threshold = CompositeScore(maxScore.major,
                                    ((1 - alpha) * minScore.minor
                                     + alpha * maxScore.minor), None)
     else:
-        maxMinorScore = max([s.minor for s in candidateScores])
+        maxMinorScore = max([s.minor for s in candidate_scores])
         threshold = CompositeScore(((1 - alpha) * minScore.major
                                     + alpha * maxScore.major),
                                    maxMinorScore, None)
         # take *all* candidates with computed major score, so use
         # maximal minor score
-    return _np.where(_np.array(candidateScores) <= threshold)[0]
+    return _np.where(_np.array(candidate_scores) <= threshold)[0]

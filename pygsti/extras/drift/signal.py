@@ -565,7 +565,7 @@ def fourier_frequencies_from_times(times):
     return frequencies_from_timestep(timestep, numtimes)
 
 
-def amplitudes_at_frequencies(freqInds, timeseries, times=None, transform='dct'):
+def amplitudes_at_frequencies(freq_indices, timeseries, times=None, transform='dct'):
     """
     Finds the amplitudes in the data at the specified frequency indices.
     Todo: better docstring. Currently only works for the DCT.
@@ -574,8 +574,8 @@ def amplitudes_at_frequencies(freqInds, timeseries, times=None, transform='dct')
     for o in timeseries.keys():
 
         if transform == 'dct':
-            temp = _dct(timeseries[o], norm='ortho')[freqInds] / _np.sqrt(len(timeseries[o]) / 2)
-            if 0. in freqInds:
+            temp = _dct(timeseries[o], norm='ortho')[freq_indices] / _np.sqrt(len(timeseries[o]) / 2)
+            if 0. in freq_indices:
                 temp[0] = temp[0] / _np.sqrt(2)
             amplitudes[o] = list(temp)
 

@@ -37,16 +37,16 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
         #ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
-        #                                            nSamples=1000, sampleError="multinomial", seed=1234)
+        #                                            n_samples=1000, sample_error="multinomial", seed=1234)
         #ds.save(compare_files + "/calcMethods2Q.dataset")
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset")
+        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q.dataset")
         cls.advOpts = {'tolerance': 1e-2 }
 
         #Reduced model GST dataset
         cls.nQubits=2
-        cls.mdl_redmod_datagen = pc.build_nqnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                                    extraWeight1Hops=0, extraGateWeight=1, sparse=False, sim_type="matrix", verbosity=1,
+        cls.mdl_redmod_datagen = pc.build_nqnoise_model(cls.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                                    extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, sim_type="matrix", verbosity=1,
                                                     gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
 
         #Create a reduced set of fiducials and germs
@@ -68,7 +68,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         #redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
         #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset")
 
-        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q_redmod.dataset")
+        cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q_redmod.dataset")
 
         #print(len(expList)," reduced model sequences")
 
@@ -91,7 +91,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advancedOptions=self.advOpts,
+                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.write_model(results.estimates['default'].models['go0'],
@@ -111,7 +111,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advancedOptions=self.advOpts,
+                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
 
         #Note: expected nSigma of 143 is so high b/c we use very high tol of 1e-2 => result isn't very good
@@ -148,13 +148,13 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_matrix(self):
         # Using dense matrices and matrix-based calcs
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="matrix", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -168,13 +168,13 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
@@ -187,13 +187,13 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=True,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
@@ -207,13 +207,13 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                      extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                       sim_type="termorder:1", parameterization="H+S terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -228,13 +228,13 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
-        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+        target_model = pc.build_nqnoise_model(self.nQubits, geometry="line", max_idle_weight=1, maxhops=1,
+                                             extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                              sim_type="termorder:1", parameterization="H+S clifford terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)

@@ -16,10 +16,10 @@ listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
 gs_datagen1 = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
 gs_datagen2 = gs_target.depolarize(gate_noise=0.05, spam_noise=0.01).rotate(rotate=0.01)
 
-ds1 = pygsti.construction.generate_fake_data(gs_datagen1, listOfExperiments, nSamples=1000,
-                                            sampleError="binomial", seed=1234)
-ds2 = pygsti.construction.generate_fake_data(gs_datagen2, listOfExperiments, nSamples=1000,
-                                            sampleError="binomial", seed=1234)
+ds1 = pygsti.construction.generate_fake_data(gs_datagen1, listOfExperiments, n_samples=1000,
+                                            sample_error="binomial", seed=1234)
+ds2 = pygsti.construction.generate_fake_data(gs_datagen2, listOfExperiments, n_samples=1000,
+                                            sample_error="binomial", seed=1234)
 ds3 = ds1.copy_nonstatic(); ds3.add_counts_from_dataset(ds2); ds3.done_adding_data()
 
 #Run GST on all three datasets

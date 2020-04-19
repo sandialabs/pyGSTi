@@ -17,20 +17,20 @@ class NotebookCell(object):
     Struct representing either a code or markdown cell
     '''
 
-    def __init__(self, cellType='code', source=None):
+    def __init__(self, cell_type='code', source=None):
         '''
         Build a notebook cell
 
         Parameters
         ----------
-        cellType : str, optional
+        cell_type : str, optional
             tag for the cell: either 'code' or 'markdown'
         source : list(str), optional
             lines of code/markdown in the cell
         '''
         if source is None:
             source = []
-        self.cellType = cellType
+        self.cellType = cell_type
         self.source = source
 
     def to_json_dict(self):

@@ -22,9 +22,9 @@ from ..tools import timed_block as _timed_block
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 try:
-    from jinja2.runtime import Undefined as _jinja_undefined
+    from jinja2.runtime import Undefined as _Undefined
 except ImportError:
-    _jinja_undefined = ()
+    _Undefined = ()
 
 
 def read_contents(filename):
@@ -135,12 +135,12 @@ def insert_resource(connected, online_url, offline_filename,
         raise ValueError("Unknown resource type for %s" % url)
 
 
-def rsync_offline_dir(outputDir):
+def rsync_offline_dir(output_dir):
     """
-    Copy the pyGSTi 'offline' directory into `outputDir` by creating or updating
+    Copy the pyGSTi 'offline' directory into `output_dir` by creating or updating
     any outdated files as needed.
     """
-    destDir = _os.path.join(str(outputDir), "offline")
+    destDir = _os.path.join(str(output_dir), "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                "templates", "offline")  # TODO package resources?
     if not _os.path.exists(destDir):
@@ -159,14 +159,14 @@ def rsync_offline_dir(outputDir):
                     #print("COPYING to %s" % destnm)
 
 
-def read_and_preprocess_template(templateFilename, toggles):
+def read_and_preprocess_template(template_filename, toggles):
     """
     Load a HTML template from a file and perform an preprocessing,
     indicated by "#iftoggle(name)", "#elsetoggle", and "#endtoggle".
 
     Parameters
     ----------
-    templateFilename : str
+    template_filename : str
         filename (no relative directory assumed).
 
     toggles : dict
@@ -177,7 +177,7 @@ def read_and_preprocess_template(templateFilename, toggles):
     -------
     str
     """
-    template = read_contents(templateFilename)
+    template = read_contents(template_filename)
 
     if toggles is None:
         toggles = {}
@@ -241,25 +241,25 @@ def read_and_preprocess_template(templateFilename, toggles):
     return preprocess(template)
 
 
-def clearDir(path):
+def clear_dir(path):
     """ If `path` is a directory, remove all the files within it """
     if not _os.path.isdir(path): return
     for fn in _os.listdir(path):
         full_fn = _os.path.join(str(path), fn)
         if _os.path.isdir(full_fn):
-            clearDir(full_fn)
+            clear_dir(full_fn)
             _os.rmdir(full_fn)
         else:
             _os.remove(full_fn)
 
 
-def makeEmptyDir(dirname):
+def make_empty_dir(dirname):
     """ Ensure that `dirname` names an empty directory """
     if not _os.path.exists(dirname):
         _os.makedirs(dirname)
     else:
         assert(_os.path.isdir(dirname)), "%s exists but isn't a directory!" % dirname
-        clearDir(dirname)
+        clear_dir(dirname)
     return dirname
 
 
@@ -272,7 +272,7 @@ def _render_as_html(value, render_options, link_to):
     """
     if isinstance(value, str):
         html = value
-    elif isinstance(value, _jinja_undefined):
+    elif isinstance(value, _Undefined):
         html = "OMITTED"
     else:
         if hasattr(value, 'set_render_options'):
@@ -329,7 +329,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
     #render quantities as HTML
     qtys_html = _collections.defaultdict(lambda: "OMITTED")
     for key, val in qtys.items():
-        with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
+        with _timed_block(key, format_str='Rendering {:35}', printer=printer, verbosity=2):
             qtys[key] = _render_as_html(val, render_options, link_to)
 
     return qtys_html
@@ -380,7 +380,7 @@ def render_as_latex(qtys, render_options, verbosity):
     return qtys_latex
 
 
-def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=None):
+def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to=None):
     """Build a jinja2 environment for generating pyGSTi reports"""
     try:
         import jinja2  # import locally since we don't want to require jinja to import pygsti
@@ -391,17 +391,17 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     # Indirect access to offline template elements at generation time
     offline_loader = jinja2.PackageLoader('pygsti', 'report/templates/offline/')
 
-    if templateDir is None:
+    if template_dir is None:
         # Use root packaged templates directory by default
         loader = jinja2.PackageLoader('pygsti', 'report/templates/')
 
-    elif templateDir.startswith('~'):
+    elif template_dir.startswith('~'):
         # Assume path after ~ is relative to root packaged template directory
-        relpath = templateDir[1:]
+        relpath = template_dir[1:]
         loader = jinja2.PackageLoader('pygsti', _os.path.join('report/templates', relpath))
     else:
         # Use path as is.
-        loader = jinja2.FileSystemLoader(templateDir)
+        loader = jinja2.FileSystemLoader(template_dir)
 
     # Construct jinja2 environment
     env = jinja2.Environment(
@@ -441,11 +441,11 @@ def _make_jinja_env(static_path, templateDir=None, render_options=None, link_to=
     return env
 
 
-def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='main.html',
+def merge_jinja_template(qtys, output_filename, template_dir=None, template_name='main.html',
                          auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
-                         renderMath=True, resizable=True, autosize='none', verbosity=0):
+                         render_math=True, resizable=True, autosize='none', verbosity=0):
     """
-    Renders `qtys` and merges them into a single HTML file `outputFilename`.
+    Renders `qtys` and merges them into a single HTML file `output_filename`.
     This functions parameters are the same as those of :func:`merge_jinja_template_dir`.
 
     Returns
@@ -453,8 +453,8 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     None
     """
 
-    assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
-    out_file = Path(outputFilename).absolute()
+    assert(output_filename.endswith(".html")), "output_filename should have ended with .html!"
+    out_file = Path(output_filename).absolute()
     out_path = out_file.parent
     static_path = out_path / 'offline'
 
@@ -468,7 +468,7 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     else:
         figDir = None
 
-    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+    env = _make_jinja_env(static_path.relative_to(out_path), template_dir=template_dir,
                           render_options=dict(switched_item_mode="inline",
                                               global_requirejs=False,
                                               use_loadable_items=True,
@@ -491,31 +491,31 @@ def merge_jinja_template(qtys, outputFilename, templateDir=None, templateName='m
     render_params['config']['embed_figures'] = True  # to know NOT to test for AJAX errors
 
     # Render main page template to output path
-    template = env.get_template(templateName)
-    with open(str(outputFilename), 'w') as outfile:
+    template = env.get_template(template_name)
+    with open(str(output_filename), 'w') as outfile:
         outfile.write(template.render(render_params))
 
     if auto_open:
-        url = 'file://' + _os.path.abspath(outputFilename)
+        url = 'file://' + _os.path.abspath(output_filename)
         _webbrowser.open(url)
 
 
-def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='main.html',
+def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name='main.html',
                              auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
-                             renderMath=True, resizable=True, autosize='none', embed_figures=True, verbosity=0):
+                             render_math=True, resizable=True, autosize='none', embed_figures=True, verbosity=0):
     """
-    Renders `qtys` and merges them into the HTML files under `templateDir`,
-    saving the output under `outputDir`.
+    Renders `qtys` and merges them into the HTML files under `template_dir`,
+    saving the output under `output_dir`.
 
     Parameters
     ----------
     qtys : dict
         A dictionary of workspace quantities (switchboards and outputs).
 
-    outputDir : str
+    output_dir : str
         The merged-output directory..
 
-    templateDir : str, optional
+    template_dir : str, optional
         The template filename, relative to pyGSTi's `templates` directory.
 
     auto_open : bool, optional
@@ -543,7 +543,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         A dictionary of toggle_name:bool pairs specifying
         how to preprocess the template.
 
-    renderMath : bool, optional
+    render_math : bool, optional
         Whether math should be rendered.
 
     resizable : bool, optional
@@ -576,14 +576,14 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     """
 
     # Create output directory if it does not already exist
-    out_path = Path(outputDir).absolute()
+    out_path = Path(output_dir).absolute()
     out_path.mkdir(parents=True, exist_ok=True)
     assert(out_path.is_dir()), "failed to create output directory!"
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
     if not connected:
-        rsync_offline_dir(outputDir)
+        rsync_offline_dir(output_dir)
 
     if embed_figures is False or link_to is not None:
         figDir = out_path / 'figures'
@@ -596,7 +596,7 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
         figDir = None
 
     switched_item_mode = "inline" if embed_figures else "separate files"
-    env = _make_jinja_env(static_path.relative_to(out_path), templateDir=templateDir,
+    env = _make_jinja_env(static_path.relative_to(out_path), template_dir=template_dir,
                           render_options=dict(switched_item_mode=switched_item_mode,
                                               global_requirejs=False,
                                               use_loadable_items=embed_figures,
@@ -619,8 +619,8 @@ def merge_jinja_template_dir(qtys, outputDir, templateDir=None, templateName='ma
     render_params['config']['embed_figures'] = embed_figures  # to know when to test for AJAX errors
 
     # Render main page template to output path
-    template = env.get_template(templateName)
-    outputFilename = str(out_path / templateName)
+    template = env.get_template(template_name)
+    outputFilename = str(out_path / template_name)
     with open(outputFilename, 'w') as outfile:
         outfile.write(template.render(render_params))
 
@@ -658,21 +658,21 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
         raise _subprocess.CalledProcessError(returncode, call)
 
 
-def merge_latex_template(qtys, templateFilename, outputFilename,
+def merge_latex_template(qtys, template_filename, output_filename,
                          toggles=None, precision=None, verbosity=0):
     """
-    Renders `qtys` and merges them into the LaTeX file `templateFilename`,
-    saving the output under `outputFilename`.
+    Renders `qtys` and merges them into the LaTeX file `template_filename`,
+    saving the output under `output_filename`.
 
     Parameters
     ----------
     qtys : dict
         A dictionary of workspace quantities (outputs).
 
-    templateFilename : str
+    template_filename : str
         The template filename, relative to pyGSTi's `templates` directory.
 
-    outputFilename : str
+    output_filename : str
         The merged-output filename.
 
     toggles : dict, optional
@@ -696,10 +696,10 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity)
-    templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                     "templates", templateFilename)
-    output_dir = _os.path.dirname(outputFilename)
-    output_base = _os.path.splitext(_os.path.basename(outputFilename))[0]
+    template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                      "templates", template_filename)
+    output_dir = _os.path.dirname(output_filename)
+    output_base = _os.path.splitext(_os.path.basename(output_filename))[0]
 
     #render quantities as LaTeX within dir where report will be simplified
     cwd = _os.getcwd()
@@ -722,7 +722,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
                 (("true" if val else "false"), toggleNm)
 
     template = ''
-    with open(templateFilename, 'r') as templatefile:
+    with open(template_filename, 'r') as templatefile:
         template = templatefile.read()
     template = template.replace("{", "{{").replace("}", "}}")  # double curly braces (for format processing)
     # Replace template field markers with `str.format` fields.
@@ -731,7 +731,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     # Replace str.format fields with values and write to output file
     filled_template = template.format_map(qtys_latex)
 
-    with open(outputFilename, 'w') as outputfile:
+    with open(output_filename, 'w') as outputfile:
         outputfile.write(filled_template)
 
 

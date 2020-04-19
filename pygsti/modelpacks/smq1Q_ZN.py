@@ -39,9 +39,9 @@ class _Module(GSTModelPack):
     _measfiducials = [(), (('Gn', 0), ), (('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gzpi2', 0), ('Gn', 0)),
                    (('Gn', 0), ('Gn', 0), ('Gn', 0)), (('Gn', 0), ('Gn', 0), ('Gn', 0), ('Gzpi2', 0), ('Gn', 0))]
 
-    global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+    global_fidpairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gn', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gzpi2', 0), ('Gn', 0)): [(0, 0), (2, 3), (5, 2), (5, 4)],
@@ -50,9 +50,9 @@ class _Module(GSTModelPack):
         (('Gzpi2', 0), ('Gzpi2', 0), ('Gn', 0), ('Gzpi2', 0), ('Gn', 0), ('Gn', 0)): [(0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)]
     }
 
-    global_fidPairs_lite = [(0, 0), (2, 3), (5, 2), (5, 4)]
+    global_fidpairs_lite = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
         (('Gzpi2', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gn', 0), ): [(0, 0), (2, 3), (5, 2), (5, 4)],
         (('Gzpi2', 0), ('Gn', 0)): [(0, 0), (2, 3), (5, 2), (5, 4)],

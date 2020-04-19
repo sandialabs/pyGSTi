@@ -324,15 +324,15 @@ def distribute_slice(s, comm, allow_split_comm=True):
     return slices, loc_slice, slcOwners, loc_comm
 
 
-def gather_slices(slices, slice_owners, arToFill,
-                  arToFillInds, axes, comm, max_buffer_size=None):
+def gather_slices(slices, slice_owners, ar_to_fill,
+                  ar_to_fill_inds, axes, comm, max_buffer_size=None):
     """
-    Gathers data within a numpy array, `arToFill`, according to given slices.
+    Gathers data within a numpy array, `ar_to_fill`, according to given slices.
 
     Upon entry it is assumed that the different processors within `comm` have
-    computed different parts of `arToFill`, namely different slices of the
+    computed different parts of `ar_to_fill`, namely different slices of the
     `axis`-th axis.  At exit, data has been gathered such that all processors
-    have the results for the entire `arToFill` (or at least for all the slices
+    have the results for the entire `ar_to_fill` (or at least for all the slices
     given).
 
     Parameters
@@ -348,22 +348,22 @@ def gather_slices(slices, slice_owners, arToFill,
         within `slices` to an integer rank of the processor responsible
         for communicating that slice's data to the rest of the processors.
 
-    arToFill : numpy.ndarray
+    ar_to_fill : numpy.ndarray
         The array which contains partial data upon entry and the gathered
         data upon exit.
 
-    arToFillInds : list
+    ar_to_fill_inds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of
-        `arToFillInds` are taken to be indices for the leading dimension
+        `ar_to_fill` that should be gathered into.  The elements of
+        `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `arToFill` and `arToFillInds` is essentally like
-        passing `arToFill[arToFillInds]` to this function, except it will
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis
+        The axis or axes of `ar_to_fill` on which the slices apply (which axis
         do the slices in `slices` refer to?).  Note that `len(axes)` must
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
@@ -384,24 +384,24 @@ def gather_slices(slices, slice_owners, arToFill,
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [slice(None, None)] * arToFill.ndim
-    arIndx[0:len(arToFillInds)] = arToFillInds
+    arIndx = [slice(None, None)] * ar_to_fill.ndim
+    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
     max_indices = [None] * len(axes)
     if max_buffer_size is not None:  # no maximum of buffer size
-        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        chunkBytes = ar_to_fill.nbytes  # start with the entire array as the "chunk"
         for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
-            bytes_per_index = chunkBytes / arToFill.shape[axis]
+            bytes_per_index = chunkBytes / ar_to_fill.shape[axis]
             max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
-                chunkBytes /= arToFill.shape[axis]
+                chunkBytes /= ar_to_fill.shape[axis]
             else:
                 max_indices[iaxis] = max_inds
                 break
@@ -429,47 +429,47 @@ def gather_slices(slices, slice_owners, arToFill,
                 arIndx[axis] = axSlcs[iaxis]
 
             #broadcast arIndx slice
-            buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
-                else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
+            buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
+                else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
             comm.Bcast(buf, root=owner)
-            if my_rank != owner: _fas(arToFill, arIndx, buf)
+            if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
 
 
-def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
+def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,
                            axes, comm, max_buffer_size=None):
     """
-    Gathers data within a numpy array, `arToFill`, according to given slices.
+    Gathers data within a numpy array, `ar_to_fill`, according to given slices.
 
     Upon entry it is assumed that the different processors within `comm` have
-    computed different parts of `arToFill`, namely different slices of the
+    computed different parts of `ar_to_fill`, namely different slices of the
     axes indexed by `axes`. At exit, data has been gathered such that all processors
-    have the results for the entire `arToFill` (or at least for all the slices
+    have the results for the entire `ar_to_fill` (or at least for all the slices
     given).
 
     Parameters
     ----------
-    slicesIOwn : list
+    current_slices : list
         A list of all the slices computed by the *current* processor.
         Each element of `slices` may be either a single slice or a
         tuple of slices (when gathering across multiple dimensions).
 
-    arToFill : numpy.ndarray
+    ar_to_fill : numpy.ndarray
         The array which contains partial data upon entry and the gathered
         data upon exit.
 
-    arToFillInds : list
+    ar_to_fill_inds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of
-        `arToFillInds` are taken to be indices for the leading dimension
+        `ar_to_fill` that should be gathered into.  The elements of
+        `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `arToFill` and `arToFillInds` is essentally like
-        passing `arToFill[arToFillInds]` to this function, except it will
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis
+        The axis or axes of `ar_to_fill` on which the slices apply (which axis
         do the slices in `slices` refer to?).  Note that `len(axes)` must
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
@@ -492,24 +492,24 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [slice(None, None)] * arToFill.ndim
-    arIndx[0:len(arToFillInds)] = arToFillInds
+    arIndx = [slice(None, None)] * ar_to_fill.ndim
+    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
     max_indices = [None] * len(axes)
     if max_buffer_size is not None:  # no maximum of buffer size
-        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        chunkBytes = ar_to_fill.nbytes  # start with the entire array as the "chunk"
         for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
-            bytes_per_index = chunkBytes / arToFill.shape[axis]
+            bytes_per_index = chunkBytes / ar_to_fill.shape[axis]
             max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
-                chunkBytes /= arToFill.shape[axis]
+                chunkBytes /= ar_to_fill.shape[axis]
             else:
                 max_indices[iaxis] = max_inds
                 break
@@ -518,7 +518,7 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
     # -- end part that is the same as gather_slices
 
     #Get a list of the slices to broadcast, indexed by the rank of the owner proc
-    slices_by_owner = comm.allgather(slicesIOwn)
+    slices_by_owner = comm.allgather(current_slices)
     for owner, slices in enumerate(slices_by_owner):
         for slcOrSlcTup in slices:
             slcTup = (slcOrSlcTup,) if isinstance(slcOrSlcTup, slice) else slcOrSlcTup
@@ -540,22 +540,22 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
                     arIndx[axis] = axSlcs[iaxis]
 
                 #broadcast arIndx slice
-                buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
-                    else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
+                buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
+                    else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
                 comm.Bcast(buf, root=owner)
-                if my_rank != owner: _fas(arToFill, arIndx, buf)
+                if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
                 buf = None  # free buffer mem asap
 
 
-def gather_indices(indices, index_owners, arToFill, arToFillInds,
+def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
                    axes, comm, max_buffer_size=None):
     """
-    Gathers data within a numpy array, `arToFill`, according to given indices.
+    Gathers data within a numpy array, `ar_to_fill`, according to given indices.
 
     Upon entry it is assumed that the different processors within `comm` have
-    computed different parts of `arToFill`, namely different slices or
+    computed different parts of `ar_to_fill`, namely different slices or
     index-arrays of the `axis`-th axis.  At exit, data has been gathered such
-    that all processors have the results for the entire `arToFill` (or at least
+    that all processors have the results for the entire `ar_to_fill` (or at least
     for all the indices given).
 
     Parameters
@@ -571,22 +571,22 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
         integer rank of the processor responsible for communicating that
         slice/index-array's data to the rest of the processors.
 
-    arToFill : numpy.ndarray
+    ar_to_fill : numpy.ndarray
         The array which contains partial data upon entry and the gathered
         data upon exit.
 
-    arToFillInds : list
+    ar_to_fill_inds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of
-        `arToFillInds` are taken to be indices for the leading dimension
+        `ar_to_fill` that should be gathered into.  The elements of
+        `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `arToFill` and `arToFillInds` is essentally like
-        passing `arToFill[arToFillInds]` to this function, except it will
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis
+        The axis or axes of `ar_to_fill` on which the slices apply (which axis
         do the elements of `indices` refer to?).  Note that `len(axes)` must
         be equal to the number of sub-indices (i.e. the tuple length) of each
         element of `indices`.
@@ -607,24 +607,24 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [slice(None, None)] * arToFill.ndim
-    arIndx[0:len(arToFillInds)] = arToFillInds
+    arIndx = [slice(None, None)] * ar_to_fill.ndim
+    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
     max_indices = [None] * len(axes)
     if max_buffer_size is not None:  # no maximum of buffer size
-        chunkBytes = arToFill.nbytes  # start with the entire array as the "chunk"
+        chunkBytes = ar_to_fill.nbytes  # start with the entire array as the "chunk"
         for iaxis, axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
-            bytes_per_index = chunkBytes / arToFill.shape[axis]
+            bytes_per_index = chunkBytes / ar_to_fill.shape[axis]
             max_inds = int(max_buffer_size / bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
-                chunkBytes /= arToFill.shape[axis]
+                chunkBytes /= ar_to_fill.shape[axis]
             else:
                 max_indices[iaxis] = max_inds
                 break
@@ -636,12 +636,12 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
         indTup = (indOrIndTup,) if not isinstance(indOrIndTup, tuple) else indOrIndTup
         assert(len(indTup) == len(axes))
 
-        def to_slice_list(indexArrayOrSlice):
+        def to_slice_list(index_array_or_slice):
             """Breaks a slice or index array into a list of slices"""
-            if isinstance(indexArrayOrSlice, slice):
-                return [indexArrayOrSlice]  # easy!
+            if isinstance(index_array_or_slice, slice):
+                return [index_array_or_slice]  # easy!
 
-            lst = indexArrayOrSlice
+            lst = index_array_or_slice
             if len(lst) == 0: return [slice(0, 0)]
 
             slc_lst = []
@@ -680,10 +680,10 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
                 arIndx[axis] = axSlcs[iaxis]
 
             #broadcast arIndx slice
-            buf = _findx(arToFill, arIndx, True) if (my_rank == owner) \
-                else _np.empty(_findx_shape(arToFill, arIndx), arToFill.dtype)
+            buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
+                else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
             comm.Bcast(buf, root=owner)
-            if my_rank != owner: _fas(arToFill, arIndx, buf)
+            if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
 
 

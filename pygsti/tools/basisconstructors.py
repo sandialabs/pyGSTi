@@ -27,16 +27,16 @@ sigmaz = _np.array([[1, 0], [0, -1]])
 ##Matrix unit basis
 
 
-def mut(i, j, N):
-    mx = _np.zeros((N, N), 'd'); mx[i, j] = 1.0
+def mut(i, j, n):
+    mx = _np.zeros((n, n), 'd'); mx[i, j] = 1.0
     return mx
 
 
-mxUnitVec = (mut(0, 0, 2), mut(0, 1, 2), mut(1, 0, 2), mut(1, 1, 2))
-mxUnitVec_2Q = (mut(0, 0, 4), mut(0, 1, 4), mut(0, 2, 4), mut(0, 3, 4),
-                mut(1, 0, 4), mut(1, 1, 4), mut(1, 2, 4), mut(1, 3, 4),
-                mut(2, 0, 4), mut(2, 1, 4), mut(2, 2, 4), mut(2, 3, 4),
-                mut(3, 0, 4), mut(3, 1, 4), mut(3, 2, 4), mut(3, 3, 4))
+MX_UNIT_VEC = (mut(0, 0, 2), mut(0, 1, 2), mut(1, 0, 2), mut(1, 1, 2))
+MX_UNIT_VEC_2Q = (mut(0, 0, 4), mut(0, 1, 4), mut(0, 2, 4), mut(0, 3, 4),
+                  mut(1, 0, 4), mut(1, 1, 4), mut(1, 2, 4), mut(1, 3, 4),
+                  mut(2, 0, 4), mut(2, 1, 4), mut(2, 2, 4), mut(2, 3, 4),
+                  mut(3, 0, 4), mut(3, 1, 4), mut(3, 2, 4), mut(3, 3, 4))
 
 MAX_BASIS_MATRIX_DIM = 2**6
 
@@ -343,11 +343,11 @@ def std_labels(matrix_dim):
     return ["(%d,%d)" % (i, j) for i in range(matrix_dim) for j in range(matrix_dim)]
 
 
-def _GetGellMannNonIdentityDiagMxs(dimension):
+def _get_gell_mann_non_identity_diag_mxs(dimension):
     d = dimension
     listOfMxs = []
     if d > 2:
-        dm1_listOfMxs = _GetGellMannNonIdentityDiagMxs(d - 1)
+        dm1_listOfMxs = _get_gell_mann_non_identity_diag_mxs(d - 1)
         for dm1_mx in dm1_listOfMxs:
             mx = _np.zeros((d, d), 'complex')
             mx[0:d - 1, 0:d - 1] = dm1_mx
@@ -407,7 +407,7 @@ def gm_matrices_unnormalized(matrix_dim):
                 listOfMxs.append(mx)
 
         #Non-Id Diagonal matrices
-        listOfMxs.extend(_GetGellMannNonIdentityDiagMxs(d))
+        listOfMxs.extend(_get_gell_mann_non_identity_diag_mxs(d))
 
         assert(len(listOfMxs) == d**2)
         return listOfMxs
@@ -476,7 +476,7 @@ def gm_labels(matrix_dim):
     return lblList
 
 
-def pp_matrices(matrix_dim, maxWeight=None):
+def pp_matrices(matrix_dim, max_weight=None):
     """
     Get the elements of the Pauil-product basis
     spanning the space of matrix_dim x matrix_dim density matrices
@@ -498,18 +498,18 @@ def pp_matrices(matrix_dim, maxWeight=None):
         Matrix-dimension of the density-matrix space.  Must be
         a power of 2.
 
-    maxWeight : int, optional
-        Restrict the elements returned to those having weight <= `maxWeight`. An
+    max_weight : int, optional
+        Restrict the elements returned to those having weight <= `max_weight`. An
         element's "weight" is defined as the number of non-identity single-qubit
         factors of which it is comprised.  For example, if `matrix_dim == 4` and
-        `maxWeight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
+        `max_weight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
 
 
     Returns
     -------
     list
         A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where N == matrix_dim^2,
-        the dimension of the density-matrix space. (Exception: when maxWeight
+        the dimension of the density-matrix space. (Exception: when max_weight
         is not None, the returned list may have fewer than N elements.)
 
     Notes
@@ -536,8 +536,8 @@ def pp_matrices(matrix_dim, maxWeight=None):
     matrices = []
     basisIndList = [[0, 1, 2, 3]] * nQubits
     for sigmaInds in _itertools.product(*basisIndList):
-        if maxWeight is not None:
-            if sigmaInds.count(0) < nQubits - maxWeight: continue
+        if max_weight is not None:
+            if sigmaInds.count(0) < nQubits - max_weight: continue
 
         M = _np.identity(1, 'complex')
         for i in sigmaInds:
@@ -593,14 +593,14 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
                    [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                    [0, 0, 0, 1]], 'd')  # projector onto symmetric space
 
-    def _toQutritSpace(inputMat):
-        return _np.dot(A, _np.dot(inputMat, A.transpose()))
+    def _to_qutrit_space(input_matrix):
+        return _np.dot(A, _np.dot(input_matrix, A.transpose()))
 
     qt_mxs = []
     pp_mxs = pp_matrices(4)
     #selected_pp_indices = [0,5,10,11,1,2,3,6,7] #which pp mxs to project
     # labels = ['II', 'XX', 'YY', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
-    qt_mxs = [_toQutritSpace(pp_mxs[i]) for i in selected_pp_indices]
+    qt_mxs = [_to_qutrit_space(pp_mxs[i]) for i in selected_pp_indices]
 
     # Normalize so Tr(BiBj) = delta_ij (done by hand, since only 3x3 mxs)
     qt_mxs[0] *= 1 / _np.sqrt(0.75)
@@ -744,15 +744,15 @@ def unknown_labels(dim):
     return []
 
 
-_basisConstructorDict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
-_basisConstructorDict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
-_basisConstructorDict['gm_unnormalized'] = MatrixBasisConstructor(
+_basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
+_basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
+_basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
     'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True)
-_basisConstructorDict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
-_basisConstructorDict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
-_basisConstructorDict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
-_basisConstructorDict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
-                                                                  identity_labels, True)
-_basisConstructorDict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
-_basisConstructorDict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
-_basisConstructorDict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)
+_basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
+_basis_constructor_dict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
+_basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
+_basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
+                                                                    identity_labels, True)
+_basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
+_basis_constructor_dict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
+_basis_constructor_dict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)

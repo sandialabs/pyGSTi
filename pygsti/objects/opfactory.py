@@ -160,15 +160,15 @@ class OpFactory(_gm.ModelMember):
         else:
             return op
 
-    def transform(self, S):
+    def transform(self, s):
         """
         Update OpFactory so that created ops G are additionally transformed
-        as inv(S) * G * S.
+        as inv(s) * G * s.
 
         Parameters
         ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
         """
         raise NotImplementedError("Cannot currently transform factories!")
@@ -193,13 +193,13 @@ class EmbeddedOpFactory(OpFactory):
     set of target sectors.
     """
 
-    def __init__(self, stateSpaceLabels, targetLabels, factory_to_embed, dense=False):
+    def __init__(self, state_space_labels, target_labels, factory_to_embed, dense=False):
         """
         Create a new EmbeddedOpFactory object.
 
         Parameters
         ----------
-        stateSpaceLabels : StateSpaceLabels or a list of tuples
+        state_space_labels : StateSpaceLabels or a list of tuples
             This argument specifies the density matrix space upon which the
             operations this factory builds act.  If a list of tuples, each tuple
             corresponds to a block of a density matrix in the standard basis
@@ -210,8 +210,8 @@ class EmbeddedOpFactory(OpFactory):
             product between qubit and single level systems.  (E.g. a 2-qubit
             space might be labelled `[('Q0','Q1')]`).
 
-        targetLabels : list of strs
-            The labels contained in `stateSpaceLabels` which demarcate the
+        target_labels : list of strs
+            The labels contained in `state_space_labels` which demarcate the
             portions of the state space acted on by the operations produced
             by `factory_to_embed` (the "contained" factory).
 
@@ -222,9 +222,9 @@ class EmbeddedOpFactory(OpFactory):
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory = factory_to_embed
-        self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
+        self.state_space_labels = _StateSpaceLabels(state_space_labels,
                                                     evotype=factory_to_embed._evotype)
-        self.targetLabels = targetLabels
+        self.targetLabels = target_labels
         self.dense = dense
         super(EmbeddedOpFactory, self).__init__(self.state_space_labels.dim, factory_to_embed._evotype)
 
@@ -324,13 +324,13 @@ class EmbeddingOpFactory(OpFactory):
     :method:`create_op` is used instead.
     """
 
-    def __init__(self, stateSpaceLabels, factory_or_op_to_embed, dense=False, num_target_labels=None):
+    def __init__(self, state_space_labels, factory_or_op_to_embed, dense=False, num_target_labels=None):
         """
         Create a new EmbeddingOpFactory object.
 
         Parameters
         ----------
-        stateSpaceLabels : StateSpaceLabels or a list of tuples
+        state_space_labels : StateSpaceLabels or a list of tuples
             This argument specifies the density matrix space upon which the
             operations this factory builds act.  If a list of tuples, each tuple
             corresponds to a block of a density matrix in the standard basis
@@ -362,7 +362,7 @@ class EmbeddingOpFactory(OpFactory):
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
-        self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
+        self.state_space_labels = _StateSpaceLabels(state_space_labels,
                                                     evotype=factory_or_op_to_embed._evotype)
         self.dense = dense
         self.num_target_labels = num_target_labels

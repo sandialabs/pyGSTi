@@ -37,10 +37,10 @@ class JamiolkowskiBasisTester(BaseCase):
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = j.jamiolkowski_iso(self.testGate, opMxBasis=self.stdSmall,
-                                  choiMxBasis=cmb)
-        Jmx2 = j.jamiolkowski_iso(self.testGateGM_mx, opMxBasis=self.gmSmall,
-                                  choiMxBasis=cmb)
+        Jmx1 = j.jamiolkowski_iso(self.testGate, op_mx_basis=self.stdSmall,
+                                  choi_mx_basis=cmb)
+        Jmx2 = j.jamiolkowski_iso(self.testGateGM_mx, op_mx_basis=self.gmSmall,
+                                  choi_mx_basis=cmb)
         print("Jmx1.shape = ", Jmx1.shape)
 
         #Make sure these yield the same trace == 1 matrix
@@ -48,8 +48,8 @@ class JamiolkowskiBasisTester(BaseCase):
         self.assertAlmostEqual(np.trace(Jmx1), 1.0)
 
         #Op on expanded gate in std and gm bases
-        JmxExp1 = j.jamiolkowski_iso(self.expTestGate_mx, opMxBasis=self.std, choiMxBasis=cmb)
-        JmxExp2 = j.jamiolkowski_iso(self.expTestGateGM_mx, opMxBasis=self.gm, choiMxBasis=cmb)
+        JmxExp1 = j.jamiolkowski_iso(self.expTestGate_mx, op_mx_basis=self.std, choi_mx_basis=cmb)
+        JmxExp2 = j.jamiolkowski_iso(self.expTestGateGM_mx, op_mx_basis=self.gm, choi_mx_basis=cmb)
         print("JmxExp1.shape = ", JmxExp1.shape)
 
         #Make sure these are the same as operating on the contracted basis
@@ -57,12 +57,12 @@ class JamiolkowskiBasisTester(BaseCase):
         self.assertArraysAlmostEqual(Jmx1, JmxExp2)
 
         #Reverse transform should yield back the operation matrix
-        revTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choiMxBasis=cmb,
-                                                opMxBasis=self.gmSmall)
+        revTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choi_mx_basis=cmb,
+                                                op_mx_basis=self.gmSmall)
         self.assertArraysAlmostEqual(revTestGate_mx, self.testGateGM_mx)
 
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
-        revExpTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choiMxBasis=cmb, opMxBasis=self.std)
+        revExpTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choi_mx_basis=cmb, op_mx_basis=self.std)
         self.assertArraysAlmostEqual(bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
                                      self.testGate)
 

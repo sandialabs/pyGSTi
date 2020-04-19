@@ -5,8 +5,8 @@ import numpy as np
 
 import pygsti.extras.rpe as rpe
 import pygsti.extras.rpe.rpeconstruction as rc
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_GxPi2_GyPi2_UpDn
-from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_GxPi2_GyPi2_00
+from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn
+from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00
 
 
 class TestRPEObjectMethods(BaseTestCase):
@@ -32,7 +32,7 @@ class TestRPEObjectMethods(BaseTestCase):
             lstDict = rc.make_rpe_angle_string_list_dict(2,rpeconfig_inst)
 
             rpeDS = rc.make_rpe_data_set(depol_gateset,lstDict,1000,
-                                         sampleError='binomial',seed=1234)
+                                         sample_error='binomial',seed=1234)
 
 
 if __name__ == "__main__":

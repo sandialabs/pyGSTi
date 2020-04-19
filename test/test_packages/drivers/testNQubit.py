@@ -53,7 +53,7 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map", verbosity=10)
         #                                    roughNoise=(1234,0.1))
 
-        #print("Constructed model with %d gates, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
+        #print("Constructed model with %d gates, dim=%d, and n_params=%d.  Norm(paramvec) = %g" %
         #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
     def test_sequential_sequenceselection(self):
@@ -74,9 +74,9 @@ class NQubitTestCase(BaseTestCase):
                                       roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
-            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=2, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
+        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
+            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list & dataset
@@ -101,9 +101,9 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
-            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=1, maxhops=0,
-            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
+        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
+            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list
@@ -157,8 +157,8 @@ class NQubitTestCase(BaseTestCase):
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                          sim_type="map", parameterization="H+S", sparse=True)
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gaugeOptParams=False,
-                                                   advancedOptions={'tolerance': 1e-1}, verbosity=4)
+                                                   lsgstLists, gauge_opt_params=False,
+                                                   advanced_options={'tolerance': 1e-1}, verbosity=4)
 
     def test_2Q_terms(self):
 
@@ -202,8 +202,8 @@ class NQubitTestCase(BaseTestCase):
         mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
 
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gaugeOptParams=False,
-                                                   advancedOptions={'tolerance': 1e-3}, verbosity=4)
+                                                   lsgstLists, gauge_opt_params=False,
+                                                   advanced_options={'tolerance': 1e-3}, verbosity=4)
 
 
     def test_3Q(self):
@@ -268,7 +268,7 @@ class NQubitTestCase(BaseTestCase):
         return
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
-                                              advancedOptions={'maxIterations': 2}) #keep this short; don't care if it doesn't converge.
+                                              advanced_options={'maxIterations': 2}) #keep this short; don't care if it doesn't converge.
         print("DONE!")
 
 

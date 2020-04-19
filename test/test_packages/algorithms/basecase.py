@@ -36,15 +36,15 @@ class AlgorithmsBase(BaseTestCase):
             expList = pygsti.construction.make_lsgst_experiment_list(
                 self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
             ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
-                                                        nSamples=10000, sampleError='binomial', seed=100)
+                                                        n_samples=10000, sample_error='binomial', seed=100)
             ds.save(compare_files + "/analysis.dataset")
 
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        self.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
         if regenerate_references():
             ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                             nSamples=10000,sampleError='binomial', seed=100)
+                                                             n_samples=10000,sample_error='binomial', seed=100)
             ds_lgst.save(compare_files + "/analysis_lgst.dataset")
 
-        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
+        self.ds_lgst = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis_lgst.dataset")

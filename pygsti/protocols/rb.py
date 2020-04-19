@@ -562,9 +562,9 @@ class Benchmark(_proto.Protocol):
             return dsrow[idealout]
 
         def hamming_distance_counts(dsrow, circ, idealout):
-            nQ = len(circ.line_labels)  # number of qubits
-            assert(nQ == len(idealout[-1]))
-            hamming_distance_counts = _np.zeros(nQ + 1, float)
+            nqubits = len(circ.line_labels)  # number of qubits
+            assert(nqubits == len(idealout[-1]))
+            hamming_distance_counts = _np.zeros(nqubits + 1, float)
             if dsrow.total > 0:
                 for outcome_lbl, counts in dsrow.counts.items():
                     outbitstring = outcome_lbl[-1]
@@ -575,8 +575,8 @@ class Benchmark(_proto.Protocol):
             """ TODO: docstring """
             hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
             #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
-            adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
-            return adjSP
+            adj_sp = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+            return adj_sp
 
         def get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
@@ -596,7 +596,7 @@ class Benchmark(_proto.Protocol):
     def compute_circuit_data(self, data):
 
         def get_circuit_values(icirc, circ, dsrow, idealout):
-            ret = {'twoQgate_count': circ.twoQgate_count(),
+            ret = {'twoQgate_count': circ.two_q_gate_count(),
                    'circuit_depth': circ.depth(),
                    'idealout': idealout,
                    'circuit_index': icirc,
@@ -699,33 +699,33 @@ class Benchmark(_proto.Protocol):
                 {comp: _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
                  for comp in component_names})  # ~= "RB summary dataset"
 
-            for depth, SPs in success_probabilities.items():
-                numcircuits = len(SPs)
+            for depth, sprobs in success_probabilities.items():
+                numcircuits = len(sprobs)
                 for k in range(numcircuits):
                     ind = _np.random.randint(numcircuits)
-                    sampledSP = SPs[ind]
+                    sampled_sprob = sprobs[ind]
                     totalcounts = total_counts[depth][ind] if finitecounts else None
-                    bcache['success_probabilities'][depth].append(sampledSP)
+                    bcache['success_probabilities'][depth].append(sampled_sprob)
                     if finitecounts:
-                        bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampled_sprob))
                         bcache['total_counts'][depth].append(totalcounts)
                     else:
-                        bcache['success_counts'][depth].append(sampledSP)
+                        bcache['success_counts'][depth].append(sampled_sprob)
 
                     #ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
                     #totalcounts = total_counts[depth][ind] if finitecounts else None  # need this if a new randint
-                    sampledHDcounts = hamming_distance_counts[depth][ind]
-                    sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
+                    sampled_hamdist_counts = hamming_distance_counts[depth][ind]
+                    sampled_hamdist_pdf = _np.array(sampled_hamdist_counts) / _np.sum(sampled_hamdist_counts)
 
                     if finitecounts:
                         bcache['hamming_distance_counts'][depth].append(
-                            list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                            list(_np.random.multinomial(totalcounts, sampled_hamdist_pdf)))
                     else:
-                        bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
+                        bcache['hamming_distance_counts'][depth].append(sampled_hamdist_pdf)
 
                     # replicates adjusted_success_probability function above
-                    adjSP = _np.sum([(-1 / 2)**n * sampledHDpdf[n] for n in range(len(sampledHDpdf))])
-                    bcache['adjusted_success_probabilities'][depth].append(adjSP)
+                    adj_sp = _np.sum([(-1 / 2)**n * sampled_hamdist_pdf[n] for n in range(len(sampled_hamdist_pdf))])
+                    bcache['adjusted_success_probabilities'][depth].append(adj_sp)
 
             data_cache[key].append(bcache)
 
@@ -760,9 +760,9 @@ class VolumetricBenchmarkGrid(Benchmark):
 
         #Then run resulting data normally, giving a results object
         # with "top level" dicts correpsonding to different paths
-        VB = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
+        vb = VolumetricBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
                                  self.rescaler, self.dscomparator, name=self.name)
-        separate_results = _proto.SimpleRunner(VB).run(data, memlimit, comm)
+        separate_results = _proto.SimpleRunner(vb).run(data, memlimit, comm)
         pp_results = self.postproc.run(separate_results, memlimit, comm)
         pp_results.protocol = self
         return pp_results
@@ -1027,9 +1027,9 @@ class VolumetricBenchmark(Benchmark):
 
         def failcnt_fn(percircuitdata):
             """ Returns (nSucceeded, nFailed) for all circuits at same depth """
-            nCircuits = len(percircuitdata)
+            num_circuits = len(percircuitdata)
             failcount = int(_np.sum(_np.isnan(percircuitdata)))
-            return (nCircuits - failcount, failcount)
+            return (num_circuits - failcount, failcount)
 
         data_per_depth = src_data
         if self.depths == 'all':
@@ -1142,39 +1142,39 @@ class RandomizedBenchmarking(Benchmark):
         else:
             depths = filter(lambda d: d in data_per_depth, self.depths)
 
-        nQubits = len(design.qubit_labels)
+        nqubits = len(design.qubit_labels)
 
         if isinstance(self.asymptote, str):
             assert(self.asymptote == 'std'), "If `asymptote` is a string it must be 'std'!"
             if self.datatype == 'success_probabilities':
-                asymptote = 1 / 2**nQubits
+                asymptote = 1 / 2**nqubits
             elif self.datatype == 'adjusted_success_probabilities':
-                asymptote = 1 / 4**nQubits
+                asymptote = 1 / 4**nqubits
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
         def get_rb_fits(circuitdata_per_depth):
-            ASPs = []
+            adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
-                ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+                adj_sps.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
 
             full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_data_fitting(
-                depths, ASPs, nQubits, seed=self.seed, asymptote=asymptote,
+                depths, adj_sps, nqubits, seed=self.seed, asymptote=asymptote,
                 ftype='full+FA', rtype=self.rtype)
 
             return full_fit_results, fixed_asym_fit_results
 
         #do RB fit on actual data
-        FF_results, FAF_results = get_rb_fits(data_per_depth)
+        ff_results, faf_results = get_rb_fits(data_per_depth)
 
         if self.bootstrap_samples > 0:
 
-            parameters = ['A', 'B', 'p', 'r']
-            bootstraps_FF = {p: [] for p in parameters}
-            bootstraps_FAF = {p: [] for p in parameters}
-            failcount_FF = 0
-            failcount_FAF = 0
+            parameters = ['a', 'b', 'p', 'r']
+            bootstraps_ff = {p: [] for p in parameters}
+            bootstraps_faf = {p: [] for p in parameters}
+            failcount_ff = 0
+            failcount_faf = 0
 
             #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
             if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
@@ -1183,44 +1183,44 @@ class RandomizedBenchmarking(Benchmark):
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:
-                BS_FF_results, BS_FAF_results = get_rb_fits(bootstrap_cache[self.datatype])
+                bs_ff_results, bs_faf_results = get_rb_fits(bootstrap_cache[self.datatype])
 
-                if BS_FF_results['success']:
+                if bs_ff_results['success']:
                     for p in parameters:
-                        bootstraps_FF[p].append(BS_FF_results['estimates'][p])
+                        bootstraps_ff[p].append(bs_ff_results['estimates'][p])
                 else:
-                    failcount_FF += 1
-                if BS_FAF_results['success']:
+                    failcount_ff += 1
+                if bs_faf_results['success']:
                     for p in parameters:
-                        bootstraps_FAF[p].append(BS_FAF_results['estimates'][p])
+                        bootstraps_faf[p].append(bs_faf_results['estimates'][p])
                 else:
-                    failcount_FAF += 1
+                    failcount_faf += 1
 
-            failrate_FF = failcount_FF / self.bootstrap_samples
-            failrate_FAF = failcount_FAF / self.bootstrap_samples
+            failrate_ff = failcount_ff / self.bootstrap_samples
+            failrate_faf = failcount_faf / self.bootstrap_samples
 
-            std_FF = {p: _np.std(_np.array(bootstraps_FF[p])) for p in parameters}
-            std_FAF = {p: _np.std(_np.array(bootstraps_FAF[p])) for p in parameters}
+            std_ff = {p: _np.std(_np.array(bootstraps_ff[p])) for p in parameters}
+            std_faf = {p: _np.std(_np.array(bootstraps_faf[p])) for p in parameters}
 
         else:
-            bootstraps_FF = None
-            std_FF = None
-            failrate_FF = None
+            bootstraps_ff = None
+            std_ff = None
+            failrate_ff = None
 
-            bootstraps_FAF = None
-            std_FAF = None
-            failrate_FAF = None
+            bootstraps_faf = None
+            std_faf = None
+            failrate_faf = None
 
         fits = _tools.NamedDict('FitType', 'category')
         fits['full'] = _rbfit.FitResults(
-            'LS', FF_results['seed'], self.rtype, FF_results['success'], FF_results['estimates'],
-            FF_results['variable'], stds=std_FF, bootstraps=bootstraps_FF,
-            bootstraps_failrate=failrate_FF)
+            'LS', ff_results['seed'], self.rtype, ff_results['success'], ff_results['estimates'],
+            ff_results['variable'], stds=std_ff, bootstraps=bootstraps_ff,
+            bootstraps_failrate=failrate_ff)
 
         fits['A-fixed'] = _rbfit.FitResults(
-            'LS', FAF_results['seed'], self.rtype, FAF_results['success'],
-            FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,
-            bootstraps=bootstraps_FAF, bootstraps_failrate=failrate_FAF)
+            'LS', faf_results['seed'], self.rtype, faf_results['success'],
+            faf_results['estimates'], faf_results['variable'], stds=std_faf,
+            bootstraps=bootstraps_faf, bootstraps_failrate=failrate_faf)
 
         return RandomizedBenchmarkingResults(data, self, fits, depths, self.defaultfit)
 
@@ -1295,21 +1295,21 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
                          "'full'. Please specify the fit to plot!")
                     fitkey = allfitkeys[0]
 
-        ASPs = []
+        adj_sps = []
         data_per_depth = self.data.cache[self.protocol.datatype]
         for depth in self.depths:
             percircuitdata = data_per_depth[depth]
-            ASPs.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+            adj_sps.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
 
         _plt.figure(figsize=size)
-        _plt.plot(self.depths, ASPs, 'o', label='Average success probabilities')
+        _plt.plot(self.depths, adj_sps, 'o', label='Average success probabilities')
 
         if decay:
             lengths = _np.linspace(0, max(self.depths), 200)
-            A = self.fits[fitkey].estimates['A']
-            B = self.fits[fitkey].estimates['B']
+            a = self.fits[fitkey].estimates['a']
+            b = self.fits[fitkey].estimates['b']
             p = self.fits[fitkey].estimates['p']
-            _plt.plot(lengths, A + B * p**lengths,
+            _plt.plot(lengths, a + b * p**lengths,
                       label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
                                                               self.fits[fitkey].stds['r']))
 

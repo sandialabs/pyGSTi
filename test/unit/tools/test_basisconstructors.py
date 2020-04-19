@@ -81,7 +81,7 @@ class BasisConstructorsTester(BaseCase):
         # TODO assert correctness
 
     def test_pp_maxweight(self):
-        ppMax1 = bc.pp_matrices(2, maxWeight=1)  # using maxWeight
+        ppMax1 = bc.pp_matrices(2, max_weight=1)  # using max_weight
         # TODO assert correctness
 
     def test_qt_dim1(self):

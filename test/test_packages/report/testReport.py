@@ -58,7 +58,7 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_noCIs(self):
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
-                                            confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
+                                            confidence_level=None, verbosity=3,  auto_open=False) # omit title as test
 
         #Test advanced options
         linkto = ()
@@ -66,14 +66,14 @@ class TestReport(ReportBaseCase):
         if bPandas: linkto = ('pkl',) + linkto
         results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
         pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
-                                             confidenceLevel=None, verbosity=3,  auto_open=False,
-                                             advancedOptions={'errgen_type': "logG-logT",
+                                             confidence_level=None, verbosity=3,  auto_open=False,
+                                             advanced_options={'errgen_type': "logG-logT",
                                                               'precision': {'normal': 2, 'polar': 1, 'sci': 1}},
                                              link_to=linkto)
 
         pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL},temp_files + "/general_reportA_adv2",
-                                             confidenceLevel=None, verbosity=3,  auto_open=False,
-                                             advancedOptions={'errgen_type': "logTiG",
+                                             confidence_level=None, verbosity=3,  auto_open=False,
+                                             advanced_options={'errgen_type': "logTiG",
                                                               'precision': 2, #just a single int
                                                               'resizable': False,
                                                               'autosize': 'none'})
@@ -81,7 +81,7 @@ class TestReport(ReportBaseCase):
         #test latex reporting
         if bLatex:
             pygsti.report.create_standard_report(self.results.view("default","go0"),temp_files + "/general_reportA.pdf",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+                                                 confidence_level=None, verbosity=3,  auto_open=False)
 
 
 
@@ -95,7 +95,7 @@ class TestReport(ReportBaseCase):
         crfact.project_hessian('intrinsic error')
 
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
-                                            "Report B", confidenceLevel=95, verbosity=3,  auto_open=False)
+                                            "Report B", confidence_level=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 
@@ -107,8 +107,8 @@ class TestReport(ReportBaseCase):
 
         #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
-                                             "Report E", confidenceLevel=95, verbosity=3,  auto_open=False,
-                                             advancedOptions={'nm threshold': -10})
+                                             "Report E", confidence_level=95, verbosity=3,  auto_open=False,
+                                             advanced_options={'nm threshold': -10})
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -122,8 +122,8 @@ class TestReport(ReportBaseCase):
 
         #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.create_standard_report(results,temp_files + "/general_reportC",
-                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False,
-                                             advancedOptions={'combine_robust': False} )
+                                             "Report C", confidence_level=None, verbosity=3,  auto_open=False,
+                                             advanced_options={'combine_robust': False} )
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -139,7 +139,7 @@ class TestReport(ReportBaseCase):
 
         #Note: this report will have Robust estimates too
         pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
-                                             "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
+                                             "Report D", confidence_level=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
 
@@ -147,7 +147,7 @@ class TestReport(ReportBaseCase):
         #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
                                              temp_files + "/general_reportF",
-                                             "Report F", confidenceLevel=None, verbosity=3,  auto_open=False)
+                                             "Report F", confidence_level=None, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -182,9 +182,9 @@ class TestReport(ReportBaseCase):
         if os.path.exists(temp_files + "/inline_report.html.files"):
             shutil.rmtree(temp_files + "/inline_report.html.files") #clear figures directory
         pygsti.report.merge_helpers.merge_jinja_template(qtys, temp_files + "/inline_report.html",
-                                                         templateDir=compare_files, templateName="report_dashboard_template.html",
+                                                         template_dir=compare_files, template_name="report_dashboard_template.html",
                                                          auto_open=False, precision=None, link_to=linkto,
-                                                         connected=False, toggles=toggles, renderMath=True,
+                                                         connected=False, toggles=toggles, render_math=True,
                                                          resizable=True, autosize='none', verbosity=printer)
 
     def test_table_formatting(self):
@@ -202,9 +202,9 @@ class TestReport(ReportBaseCase):
         w = weirdType()
 
         from pygsti.report.convert import converter
-        specs = dict(longtables=False, tableID=None, tableclass=None,
+        specs = dict(longtables=False, table_id=None, tableclass=None,
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
-               resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
+               resizable=False, autosize=False, fontsize=None, complex_as_polar=True,
                brackets=False)
         html  = converter('html')  # Retrieve low-level formatters
         latex = converter('latex')
@@ -239,7 +239,7 @@ class TestReport(ReportBaseCase):
 
         print("Value formatting")
         specs['precision'] = 2
-        specs['complexAsPolar'] = True
+        specs['complex_as_polar'] = True
         for complxAsPolar in (True,False):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
                 html(x, specs)
@@ -289,16 +289,16 @@ class TestReport(ReportBaseCase):
         with self.assertRaises(AssertionError):
             mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #elsetoggle or #endtoggle
 
-        # ---- makeEmptyDir ----
+        # ---- make_empty_dir ----
         dirname = temp_files + "/empty_testdir"
         if os.path.exists(dirname):
             shutil.rmtree(dirname) #make sure no directory exists
-        mh.makeEmptyDir(dirname)
+        mh.make_empty_dir(dirname)
 
 
         # ---- fill_std_qtys ---- Not a function anymore
         #qtys = {}
-        #mh.fill_std_qtys(qtys, connected=True, renderMath=True, CSSnames=[]) #test connected=True case HERE
+        #mh.fill_std_qtys(qtys, connected=True, render_math=True, CSSnames=[]) #test connected=True case HERE
 
         # ---- evaluate_call ----
         printer = pygsti.obj.VerbosityPrinter(1)

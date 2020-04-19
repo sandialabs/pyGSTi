@@ -8,7 +8,7 @@ from pygsti.algorithms import grammatrix as gm
 class DataSetInstance(object):
     def setUp(self):
         super(DataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=[('0',), ('1',)])
+        self.ds = DataSet(outcome_labels=[('0',), ('1',)])
         self.ds.add_count_dict(('Gx', 'Gx'), {('0',): 40, ('1',): 60})
         self.ds.add_count_dict(('Gx', 'Gy'), {('0',): 40, ('1',): 60})
         self.ds.add_count_dict(('Gy', 'Gx'), {('0',): 40, ('1',): 60})

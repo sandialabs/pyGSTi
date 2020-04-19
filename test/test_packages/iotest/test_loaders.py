@@ -66,7 +66,7 @@ class LoadersTester(IOBase):
     def test_load_circuit_list(self):
         path = str(self.reference_path('gatestringlist_loadwrite.txt'))
         circuit_list2 = loaders.load_circuit_list(path)
-        python_circuit_list = loaders.load_circuit_list(path, readRawStrings=True)
+        python_circuit_list = loaders.load_circuit_list(path, read_raw_strings=True)
         circuit_list = io_gen.circuit_list
 
         self.assertEqual(circuit_list, circuit_list2)

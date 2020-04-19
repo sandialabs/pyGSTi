@@ -63,7 +63,7 @@ def get_edgelist(device):
     return specs.edgelist
 
 
-def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
+def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=[],
                           construct_clifford_compilations={'paulieq': ('1Qcliffords',),
                                                            'absolute': ('paulis', '1Qcliffords')},
                           verbosity=0):
@@ -80,8 +80,8 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
         qubits = dev.qubits.copy()
 
     total_qubits = len(qubits)
-    twoQgate = dev.twoQgate
-    gate_names = [twoQgate] + oneQgates
+    two_qubit_gate = dev.two_qubit_gate
+    gate_names = [two_qubit_gate] + one_qubit_gates
 
     edgelist = dev.edgelist.copy()
 
@@ -95,7 +95,7 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
 
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
-    availability = {twoQgate: edgelist}
+    availability = {two_qubit_gate: edgelist}
     #print(availability)
     pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
                                  construct_clifford_compilations=construct_clifford_compilations,
@@ -104,19 +104,19 @@ def create_processor_spec(device, oneQgates, qubitsubset=None, removeedges=[],
     return pspec
 
 
-def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None,
+def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
                              model_type='TwirledLayers', idlename=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
 
     specs = _get_dev_specs(device)
-    twoQgate = specs.twoQgate
-    if 'Gc0' in oneQgates:
-        assert('Gi' not in oneQgates), "Cannot ascertain idle gate name!"
+    two_qubit_gate = specs.two_qubit_gate
+    if 'Gc0' in one_qubit_gates:
+        assert('Gi' not in one_qubit_gates), "Cannot ascertain idle gate name!"
         idlename = 'Gc0'
-    elif 'Gi' in oneQgates:
-        assert('Gc0' not in oneQgates), "Cannot ascertain idle gate name!"
+    elif 'Gi' in one_qubit_gates:
+        assert('Gc0' not in one_qubit_gates), "Cannot ascertain idle gate name!"
         idlename = 'Gi'
     else:
         if model_type == 'dict':
@@ -141,13 +141,13 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
 
     if calformat == 'ibmq-v2018':
 
-        assert(oneQgates_to_native == {}), \
+        assert(one_qubit_gates_to_native == {}), \
             "There is only a single one-qubit gate error rate for this calibration data format!"
         # This goes through the multi-qubit gates and records their error rates
         for dct in caldata['multiQubitGates']:
 
             # Converts to our gate name convention.
-            gatename = twoQgate + ':Q' + str(dct['qubits'][0]) + ':Q' + str(dct['qubits'][1])
+            gatename = two_qubit_gate + ':Q' + str(dct['qubits'][0]) + ':Q' + str(dct['qubits'][1])
             # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
             agi = dct['gateError']['value']
             # Maps the AGI to an entanglement infidelity.
@@ -167,18 +167,18 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
+            alias_dict.update({oneQgate + ':' + q: q for oneQgate in one_qubit_gates})
 
     elif calformat == 'ibmq-v2019':
 
         # These'll be the keys in the error model, with the pyGSTi gate names aliased to these keys. If unspecified,
         # we set the error rate of a gate to the 'u3' gate error rate.
         oneQgatekeys = []
-        for oneQgate in oneQgates:
+        for oneQgate in one_qubit_gates:
             try:
-                nativekey = oneQgates_to_native[oneQgate]
+                nativekey = one_qubit_gates_to_native[oneQgate]
             except:
-                oneQgates_to_native[oneQgate] = 'u3'
+                one_qubit_gates_to_native[oneQgate] = 'u3'
                 nativekey = 'u3'
             assert(nativekey in ('id', 'u1', 'u2', 'u3')
                    ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
@@ -187,7 +187,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
 
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: oneQgates_to_native[oneQgate] + ':' + q for oneQgate in oneQgates})
+            alias_dict.update({oneQgate + ':' + q: one_qubit_gates_to_native[oneQgate] + ':' + q
+                               for oneQgate in one_qubit_gates})
 
         # Loop through all the gates, and record the error rates that we use in our error model.
         for gatecal in caldata['gates']:
@@ -197,7 +198,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
                 # The qubits the gate is on, in the IBM Q notation
                 qubits = gatecal['qubits']
                 # Converts to our gate name convention.
-                gatename = twoQgate + ':Q' + str(qubits[0]) + ':Q' + str(qubits[1])
+                gatename = two_qubit_gate + ':Q' + str(qubits[0]) + ':Q' + str(qubits[1])
                 # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
                 agi = gatecal['parameters'][0]['value']
                 # Maps the AGI to an entanglement infidelity.
@@ -231,8 +232,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
             qslist = qs.split('-')
             # Converts to our gate name convention. Do both orderings of the qubits as symmetric and we
             # are not necessarily consistent with Rigetti's ordering in the cal dict.
-            gatename1 = twoQgate + ':Q' + qslist[0] + ':Q' + qslist[1]
-            gatename2 = twoQgate + ':Q' + qslist[1] + ':Q' + qslist[0]
+            gatename1 = two_qubit_gate + ':Q' + qslist[0] + ':Q' + qslist[1]
+            gatename2 = two_qubit_gate + ':Q' + qslist[1] + ':Q' + qslist[0]
 
             # We use the controlled-Z fidelity if available, and the Bell state fidelity otherwise.
             # Here we are assuming that this is an average gate fidelity (as stated in the pyQuil docs)
@@ -265,7 +266,7 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: q for oneQgate in oneQgates})
+            alias_dict.update({oneQgate + ':' + q: q for oneQgate in one_qubit_gates})
 
     elif calformat == 'native':
         error_rates = caldata['error_rates'].copy()
@@ -296,7 +297,8 @@ def create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native={},
     return model
 
 
-def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_native={}, calformat=None, qubits=None):
+def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={},
+                                    calformat=None, qubits=None):
     """
     todo
 
@@ -304,9 +306,9 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
     with non-independent error rates model.
     """
 
-    def get_local_depolarization_channel(rate, numQs):
+    def get_local_depolarization_channel(rate, num_qubits):
 
-        if numQs == 1:
+        if num_qubits == 1:
 
             channel = _np.identity(4, float)
             channel[1, 1] = _anl.r_to_p(rate, 2, 'EI')
@@ -315,7 +317,7 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
 
             return channel
 
-        if numQs == 2:
+        if num_qubits == 2:
 
             perQrate = 1 - _np.sqrt(1 - rate)
             channel = _np.identity(4, float)
@@ -335,7 +337,8 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
                                         })
         return povm
 
-    tempdict = create_error_rates_model(caldata, device, oneQgates, oneQgates_to_native=oneQgates_to_native,
+    tempdict = create_error_rates_model(caldata, device, one_qubit_gates,
+                                        one_qubit_gates_to_native=one_qubit_gates_to_native,
                                         calformat=calformat, model_type='dict')
 
     error_rates = tempdict['error_rates']
@@ -351,10 +354,10 @@ def create_local_depolarizing_model(caldata, device, oneQgates, oneQgates_to_nat
     print(qubits)
     print(edgelist)
 
-    model = _mconst.build_localnoise_model(nQubits=len(qubits),
+    model = _mconst.build_localnoise_model(n_qubits=len(qubits),
                                            qubit_labels=qubits,
-                                           gate_names=[devspecs.twoQgate] + oneQgates,
-                                           availability={devspecs.twoQgate: edgelist},
+                                           gate_names=[devspecs.two_qubit_gate] + one_qubit_gates,
+                                           availability={devspecs.two_qubit_gate: edgelist},
                                            parameterization='full', independent_gates=True)
 
     for lbl in model.operation_blks['gates'].keys():

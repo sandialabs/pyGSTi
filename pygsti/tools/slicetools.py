@@ -179,17 +179,17 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
         raise ValueError("List does not correspond to a slice!")
 
 
-def as_array(slcOrListLike):
+def as_array(slc_or_list_like):
     """
-    Returns `slcOrListLike` as an index array (an integer numpy.ndarray).
+    Returns `slc_or_list_like` as an index array (an integer numpy.ndarray).
     """
-    if isinstance(slcOrListLike, slice):
-        return _np.array(indices(slcOrListLike), _np.int64)
+    if isinstance(slc_or_list_like, slice):
+        return _np.array(indices(slc_or_list_like), _np.int64)
     else:
-        return _np.array(slcOrListLike, _np.int64)
+        return _np.array(slc_or_list_like, _np.int64)
 
 
-def divide(slc, maxLen):
+def divide(slc, max_len):
     """
     Divides a slice into sub-slices based on a maximum length (for each
     sub-slice).
@@ -202,7 +202,7 @@ def divide(slc, maxLen):
     slc : slice
         The slice to divide
 
-    maxLen : int
+    max_len : int
         The maximum length (i.e. number of indices) allowed in a sub-slice.
 
     Returns
@@ -214,7 +214,7 @@ def divide(slc, maxLen):
     step = 1 if (slc.step is None) else slc.step
     while sub_start < slc.stop:
         # Note: len(range(start,stop,step)) == stop-start+(step-1) // step
-        sub_slices.append(slice(sub_start, min(sub_start + maxLen * step, slc.stop),
+        sub_slices.append(slice(sub_start, min(sub_start + max_len * step, slc.stop),
                                 slc.step))
-        sub_start += maxLen * step
+        sub_start += max_len * step
     return sub_slices
