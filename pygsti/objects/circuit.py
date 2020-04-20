@@ -2928,7 +2928,8 @@ class Circuit(object):
 
     def convert_to_openqasm(self, num_qubits=None,
                             gatename_conversion=None, qubit_conversion=None,
-                            block_between_layers=True):  # TODO
+                            block_between_layers=True,
+                            block_between_gates=False):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3017,12 +3018,24 @@ class Circuit(object):
                     if gate.qubits is None:
                         for q in gate_qubits:
                             openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        if block_between_gates:
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels[:-1]:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
                     else:
                         for q in gate_qubits:
                             openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
                             if q != gate_qubits[-1]:
                                 openqasm_for_gate += ', '
                         openqasm_for_gate += ';\n'
+                        if block_between_gates:
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels[:-1]:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
                 else:
                     assert len(gate.qubits) == 1
                     q = gate.qubits[0]
@@ -3040,9 +3053,10 @@ class Circuit(object):
                 qubits_used.extend(gate_qubits)
 
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            for q in self.line_labels:
-                if q not in qubits_used:
-                    openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+            if not block_between_gates:
+                for q in self.line_labels:
+                    if q not in qubits_used:
+                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
