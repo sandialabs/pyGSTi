@@ -56,19 +56,19 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
     return lindbladian
 
 
-def stochastic_lindbladian(Q, sparse=False):
+def stochastic_lindbladian(q, sparse=False):
     """
-    Construct the Lindbladian corresponding to stochastic Q-errors.
+    Construct the Lindbladian corresponding to stochastic q-errors.
 
-    Mathematically, for a d-dimensional matrix Q, this routine
+    Mathematically, for a d-dimensional matrix q, this routine
     constructs the d^2-dimension Lindbladian matrix L whose
-    action is given by L(rho) = Q*rho*Q^dag where rho is a density
+    action is given by L(rho) = q*rho*q^dag where rho is a density
     matrix.  L is returned as a superoperator matrix that acts on a
     vectorized density matrices.
 
     Parameters
     ----------
-    Q : ndarray
+    q : ndarray
       The matrix used to construct the Lindbladian.
 
     sparse : bool, optional
@@ -88,21 +88,21 @@ def stochastic_lindbladian(Q, sparse=False):
     # and since log(1+x) ~ x, lambda ~= d^2*err_rate) / d^2 = err_rate.
     #This is the most intuitive to the user (the coeff lambda ~= err_rate), so we
     # scale the generator to by a sqrt(d) factor per basis element, as
-    # we expect the given element Q to be normalized.
+    # we expect the given element q to be normalized.
 
     #TODO: there's probably a fast & slick way to so this computation
     #  using vectorization identities
-    assert(len(Q.shape) == 2)
-    assert(Q.shape[0] == Q.shape[1])
-    Qdag = _np.conjugate(_np.transpose(Q))
-    d = Q.shape[0]
+    assert(len(q.shape) == 2)
+    assert(q.shape[0] == q.shape[1])
+    Qdag = _np.conjugate(_np.transpose(q))
+    d = q.shape[0]
     if sparse:
-        lindbladian = _sps.lil_matrix((d**2, d**2), dtype=Q.dtype)
+        lindbladian = _sps.lil_matrix((d**2, d**2), dtype=q.dtype)
     else:
-        lindbladian = _np.empty((d**2, d**2), dtype=Q.dtype)
+        lindbladian = _np.empty((d**2, d**2), dtype=q.dtype)
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = d * _mt.safedot(Q, _mt.safedot(rho0, Qdag))
+        rho1 = d * _mt.safedot(q, _mt.safedot(rho0, Qdag))
         lindbladian[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
         # vectorize rho1 & set as linbladian column
 
@@ -110,19 +110,19 @@ def stochastic_lindbladian(Q, sparse=False):
     return lindbladian
 
 
-def affine_lindbladian(Q, sparse=False):
+def affine_lindbladian(q, sparse=False):
     """
-    Construct the Lindbladian corresponding to affine Q-errors.
+    Construct the Lindbladian corresponding to affine q-errors.
 
-    Mathematically, for a d-dimensional matrix Q, this routine
+    Mathematically, for a d-dimensional matrix q, this routine
     constructs the d^2-dimension Lindbladian matrix L whose
-    action is given by L(rho) = Q where rho is a density
+    action is given by L(rho) = q where rho is a density
     matrix.  L is returned as a superoperator matrix that acts on a
     vectorized density matrices.
 
     Parameters
     ----------
-    Q : ndarray
+    q : ndarray
       The matrix used to construct the Lindbladian.
 
     sparse : bool, optional
@@ -135,17 +135,17 @@ def affine_lindbladian(Q, sparse=False):
 
     #TODO: there's probably a fast & slick way to so this computation
     #  using vectorization identities
-    assert(len(Q.shape) == 2)
-    assert(Q.shape[0] == Q.shape[1])
-    d = Q.shape[0]
+    assert(len(q.shape) == 2)
+    assert(q.shape[0] == q.shape[1])
+    d = q.shape[0]
     Id = _np.identity(d, 'd').flatten()
     if sparse:
-        lindbladian = _sps.lil_matrix((d**2, d**2), dtype=Q.dtype)
+        lindbladian = _sps.lil_matrix((d**2, d**2), dtype=q.dtype)
     else:
-        lindbladian = _np.empty((d**2, d**2), dtype=Q.dtype)
+        lindbladian = _np.empty((d**2, d**2), dtype=q.dtype)
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = Q * _mt.safedot(Id, rho0.flatten())  # get |Q>><Id|rho0
+        rho1 = q * _mt.safedot(Id, rho0.flatten())  # get |q>><Id|rho0
         lindbladian[:, i] = rho1.todense().flatten().T if sparse else rho1.flatten()  # weird that need .T here
         # vectorize rho1 & set as linbladian column
 
@@ -153,7 +153,7 @@ def affine_lindbladian(Q, sparse=False):
     return lindbladian
 
 
-def nonham_lindbladian(Lm, Ln, sparse=False):
+def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
     """
     Construct the Lindbladian corresponding to generalized
     non-Hamiltonian (stochastic) errors.

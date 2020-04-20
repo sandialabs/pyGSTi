@@ -77,7 +77,7 @@ class DMEffectRep(object):
         raise NotImplementedError()
 
 
-class DMEffectRep_Dense(DMEffectRep):
+class DMEffectRepDense(DMEffectRep):
     def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype('d'))
         if reducefix == 0:
@@ -87,18 +87,18 @@ class DMEffectRep_Dense(DMEffectRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        super(DMEffectRep_Dense, self).__init__(len(self.base))
+        super(DMEffectRepDense, self).__init__(len(self.base))
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
-        return (DMEffectRep_Dense, (self.base, reducefix))
+        return (DMEffectRepDense, (self.base, reducefix))
 
     def probability(self, state):
         # can assume state is a DMStateRep
         return _np.dot(self.base, state.base)  # not vdot b/c *real* data
 
 
-class DMEffectRep_TensorProd(DMEffectRep):
+class DMEffectRepTensorProd(DMEffectRep):
     def __init__(self, kron_array, factor_dims, nfactors, max_factor_dim, dim):
         # int dim = _np.product(factor_dims) -- just send as argument for speed?
         assert(dim == _np.product(factor_dims))
@@ -106,10 +106,10 @@ class DMEffectRep_TensorProd(DMEffectRep):
         self.factor_dims = factor_dims
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
-        super(DMEffectRep_TensorProd, self).__init__(dim)
+        super(DMEffectRepTensorProd, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMEffectRep_TensorProd,
+        return (DMEffectRepTensorProd,
                 (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
@@ -151,7 +151,7 @@ class DMEffectRep_TensorProd(DMEffectRep):
         return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
-class DMEffectRep_Computational(DMEffectRep):
+class DMEffectRepComputational(DMEffectRep):
     def __init__(self, zvals, dim):
         # int dim = 4**len(zvals) -- just send as argument for speed?
         assert(dim == 4**len(zvals))
@@ -169,10 +169,10 @@ class DMEffectRep_Computational(DMEffectRep):
         self.nfactors = len(zvals)  # (or nQubits)
         self.abs_elval = 1 / (_np.sqrt(2)**self.nfactors)
 
-        super(DMEffectRep_Computational, self).__init__(dim)
+        super(DMEffectRepComputational, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMEffectRep_Computational, (self.zvals, self.dim))
+        return (DMEffectRepComputational, (self.zvals, self.dim))
 
     def parity(self, x):
         """recursively divide the (64-bit) integer into two equal
@@ -230,16 +230,16 @@ class DMEffectRep_Computational(DMEffectRep):
         return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
-class DMEffectRep_Errgen(DMEffectRep):  # TODO!! Need to make SV version
+class DMEffectRepErrgen(DMEffectRep):  # TODO!! Need to make SV version
     def __init__(self, errgen_oprep, effect_rep, errgen_id):
         dim = effect_rep.dim
         self.errgen_rep = errgen_oprep
         self.effect_rep = effect_rep
         self.errgen_id = errgen_id
-        super(DMEffectRep_Errgen, self).__init__(dim)
+        super(DMEffectRepErrgen, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMEffectRep_Errgen, (self.errgen_rep, self.effect_rep, self.errgen_id))
+        return (DMEffectRepErrgen, (self.errgen_rep, self.effect_rep, self.errgen_id))
 
     def probability(self, state):
         state = self.errgen_rep.acton(state)  # *not* acton_adjoint
@@ -269,7 +269,7 @@ class DMOpRep(object):
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
-class DMOpRep_Dense(DMOpRep):
+class DMOpRepDense(DMOpRep):
     def __init__(self, data, reducefix=0):
         if reducefix == 0:
             self.base = data
@@ -278,11 +278,11 @@ class DMOpRep_Dense(DMOpRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        super(DMOpRep_Dense, self).__init__(self.base.shape[0])
+        super(DMOpRepDense, self).__init__(self.base.shape[0])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
-        return (DMOpRep_Dense, (self.base, reducefix))
+        return (DMOpRepDense, (self.base, reducefix))
 
     def acton(self, state):
         return DMStateRep(_np.dot(self.base, state.base))
@@ -291,53 +291,53 @@ class DMOpRep_Dense(DMOpRep):
         return DMStateRep(_np.dot(self.base.T, state.base))  # no conjugate b/c *real* data
 
     def __str__(self):
-        return "DMOpRep_Dense:\n" + str(self.base)
+        return "DMOpRepDense:\n" + str(self.base)
 
 
-class DMOpRep_Embedded(DMOpRep):
-    def __init__(self, embedded_op, numBasisEls, actionInds,
-                 blocksizes, embedded_dim, nComponentsInActiveBlock,
-                 iActiveBlock, nBlocks, dim):
+class DMOpRepEmbedded(DMOpRep):
+    def __init__(self, embedded_op, num_basis_els, action_inds,
+                 blocksizes, embedded_dim, ncomponents_in_active_block,
+                 active_block_index, nblocks, dim):
 
         self.embedded = embedded_op
-        self.numBasisEls = numBasisEls
-        self.actionInds = actionInds
+        self.num_basis_els = num_basis_els
+        self.action_inds = action_inds
         self.blocksizes = blocksizes
 
-        numBasisEls_noop_blankaction = numBasisEls.copy()
-        for i in actionInds: numBasisEls_noop_blankaction[i] = 1
-        self.basisInds_noop_blankaction = [list(range(n)) for n in numBasisEls_noop_blankaction]
+        num_basis_els_noop_blankaction = num_basis_els.copy()
+        for i in action_inds: num_basis_els_noop_blankaction[i] = 1
+        self.basisInds_noop_blankaction = [list(range(n)) for n in num_basis_els_noop_blankaction]
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(numBasisEls[1:]))))), _np.int64)
-        self.basisInds_action = [list(range(numBasisEls[i])) for i in actionInds]
+            reversed(list(num_basis_els[1:]))))), _np.int64)
+        self.basisInds_action = [list(range(num_basis_els[i])) for i in action_inds]
 
         self.embeddedDim = embedded_dim
-        self.nComponents = nComponentsInActiveBlock
-        self.iActiveBlock = iActiveBlock
-        self.nBlocks = nBlocks
-        self.offset = sum(blocksizes[0:iActiveBlock])
-        super(DMOpRep_Embedded, self).__init__(dim)
+        self.ncomponents = ncomponents_in_active_block
+        self.active_block_index = active_block_index
+        self.nblocks = nblocks
+        self.offset = sum(blocksizes[0:active_block_index])
+        super(DMOpRepEmbedded, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Embedded, (self.embedded,
-                                   self.numBasisEls, self.actionInds,
-                                   self.blocksizes, self.embeddedDim,
-                                   self.nComponents, self.iActiveBlock,
-                                   self.nBlocks, self.dim))
+        return (DMOpRepEmbedded, (self.embedded,
+                                  self.num_basis_els, self.action_inds,
+                                  self.blocksizes, self.embeddedDim,
+                                  self.ncomponents, self.active_block_index,
+                                  self.nblocks, self.dim))
 
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
-            if iBlk != self.iActiveBlock:
+            if iBlk != self.active_block_index:
                 output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
         output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
-        offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
         #print("DB REPLIB ACTON: ",self.basisInds_action)
@@ -347,7 +347,7 @@ class DMOpRep_Embedded(DMOpRep):
             inds = []
             for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i, bInd in zip(self.actionInds, op_b):
+                for i, bInd in zip(self.action_inds, op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
@@ -363,14 +363,14 @@ class DMOpRep_Embedded(DMOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = DMStateRep(_np.zeros(state.base.shape, 'd'))
-        offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
             for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i, bInd in zip(self.actionInds, op_b):
+                for i, bInd in zip(self.action_inds, op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
@@ -383,14 +383,14 @@ class DMOpRep_Embedded(DMOpRep):
         return output_state
 
 
-class DMOpRep_Composed(DMOpRep):
+class DMOpRepComposed(DMOpRep):
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_op_reps
-        super(DMOpRep_Composed, self).__init__(dim)
+        super(DMOpRepComposed, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Composed, (self.factor_reps, self.dim))
+        return (DMOpRepComposed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -408,14 +408,14 @@ class DMOpRep_Composed(DMOpRep):
         self.factor_reps = new_factor_op_reps
 
 
-class DMOpRep_Sum(DMOpRep):
+class DMOpRepSum(DMOpRep):
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
         self.factor_reps = factor_reps
-        super(DMOpRep_Sum, self).__init__(dim)
+        super(DMOpRepSum, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Sum, (self.factor_reps, self.dim))
+        return (DMOpRepSum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -432,14 +432,14 @@ class DMOpRep_Sum(DMOpRep):
         return output_state
 
 
-class DMOpRep_Exponentiated(DMOpRep):
+class DMOpRepExponentiated(DMOpRep):
     def __init__(self, exponentiated_op_rep, power, dim):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
-        super(DMOpRep_Exponentiated, self).__init__(dim)
+        super(DMOpRepExponentiated, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
+        return (DMOpRepExponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -454,7 +454,7 @@ class DMOpRep_Exponentiated(DMOpRep):
         return state
 
 
-class DMOpRep_Lindblad(DMOpRep):
+class DMOpRepLindblad(DMOpRep):
     def __init__(self, errgen_rep,
                  mu, eta, m_star, s, unitarypost_data,
                  unitarypost_indices, unitarypost_indptr):
@@ -471,7 +471,7 @@ class DMOpRep_Lindblad(DMOpRep):
         self.eta = eta
         self.m_star = m_star
         self.s = s
-        super(DMOpRep_Lindblad, self).__init__(dim)
+        super(DMOpRepLindblad, self).__init__(dim)
 
     def set_exp_params(self, mu, eta, m_star, s):
         self.mu = mu
@@ -484,12 +484,12 @@ class DMOpRep_Lindblad(DMOpRep):
 
     def __reduce__(self):
         if self.unitary_postfactor is None:
-            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
-                                       _np.empty(0, 'd'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
+            return (DMOpRepLindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                      _np.empty(0, 'd'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
         else:
-            return (DMOpRep_Lindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
-                                       self.unitary_postfactor.data, self.unitary_postfactor.indices,
-                                       self.unitary_postfactor.indptr))
+            return (DMOpRepLindblad, (self.errgen_rep, self.mu, self.eta, self.m_star, self.s,
+                                      self.unitary_postfactor.data, self.unitary_postfactor.indices,
+                                      self.unitary_postfactor.indptr))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -509,14 +509,14 @@ class DMOpRep_Lindblad(DMOpRep):
         raise NotImplementedError("No adjoint action implemented for sparse Lindblad LinearOperator Reps yet.")
 
 
-class DMOpRep_Sparse(DMOpRep):
-    def __init__(self, A_data, A_indices, A_indptr):
-        dim = len(A_indptr) - 1
-        self.A = _sps.csr_matrix((A_data, A_indices, A_indptr), shape=(dim, dim))
-        super(DMOpRep_Sparse, self).__init__(dim)
+class DMOpRepSparse(DMOpRep):
+    def __init__(self, a_data, a_indices, a_indptr):
+        dim = len(a_indptr) - 1
+        self.A = _sps.csr_matrix((a_data, a_indices, a_indptr), shape=(dim, dim))
+        super(DMOpRepSparse, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Sparse, (self.A.data, self.A.indices, self.A.indptr))
+        return (DMOpRepSparse, (self.A.data, self.A.indices, self.A.indptr))
 
     @property
     def data(self):
@@ -581,7 +581,7 @@ class SVEffectRep(object):
         raise NotImplementedError()
 
 
-class SVEffectRep_Dense(SVEffectRep):
+class SVEffectRepDense(SVEffectRep):
     def __init__(self, data, reducefix=0):
         assert(data.dtype == _np.dtype(complex))
         if reducefix == 0:
@@ -591,18 +591,18 @@ class SVEffectRep_Dense(SVEffectRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        super(SVEffectRep_Dense, self).__init__(len(self.base))
+        super(SVEffectRepDense, self).__init__(len(self.base))
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
-        return (SVEffectRep_Dense, (self.base, reducefix))
+        return (SVEffectRepDense, (self.base, reducefix))
 
     def amplitude(self, state):
         # can assume state is a SVStateRep
         return _np.vdot(self.base, state.base)  # (or just 'dot')
 
 
-class SVEffectRep_TensorProd(SVEffectRep):
+class SVEffectRepTensorProd(SVEffectRep):
     def __init__(self, kron_array, factor_dims, nfactors, max_factor_dim, dim):
         # int dim = _np.product(factor_dims) -- just send as argument for speed?
         assert(dim == _np.product(factor_dims))
@@ -610,11 +610,11 @@ class SVEffectRep_TensorProd(SVEffectRep):
         self.factor_dims = factor_dims
         self.nfactors = nfactors
         self.max_factor_dim = max_factor_dim  # Unused
-        super(SVEffectRep_TensorProd, self).__init__(dim)
+        super(SVEffectRepTensorProd, self).__init__(dim)
 
     def __reduce__(self):
-        return (SVEffectRep_TensorProd, (self.kron_array, self.factor_dims,
-                                         self.nfactors, self.max_factor_dim, self.dim))
+        return (SVEffectRepTensorProd, (self.kron_array, self.factor_dims,
+                                        self.nfactors, self.max_factor_dim, self.dim))
 
     def todense(self, outvec):
         N = self.dim
@@ -655,7 +655,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
         return _np.vdot(Edense, state.base)
 
 
-class SVEffectRep_Computational(SVEffectRep):
+class SVEffectRepComputational(SVEffectRep):
     def __init__(self, zvals, dim):
         # int dim = 4**len(zvals) -- just send as argument for speed?
         assert(dim == 2**len(zvals))
@@ -677,10 +677,10 @@ class SVEffectRep_Computational(SVEffectRep):
             assert(v in (0, 1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base * v
             base //= 2  # or right shift?
-        super(SVEffectRep_Computational, self).__init__(dim)
+        super(SVEffectRepComputational, self).__init__(dim)
 
     def __reduce__(self):
-        return (SVEffectRep_Computational, (self.zvals, self.dim))
+        return (SVEffectRepComputational, (self.zvals, self.dim))
 
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
@@ -708,7 +708,7 @@ class SVOpRep(object):
         raise NotImplementedError()
 
 
-class SVOpRep_Dense(SVOpRep):
+class SVOpRepDense(SVOpRep):
     def __init__(self, data, reducefix=0):
         if reducefix == 0:
             self.base = data
@@ -717,11 +717,11 @@ class SVOpRep_Dense(SVOpRep):
             # (so self.base *owns* it's data) and manually convey the writeable flag.
             self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
             self.base.flags.writeable = True if reducefix == 1 else False
-        super(SVOpRep_Dense, self).__init__(self.base.shape[0])
+        super(SVOpRepDense, self).__init__(self.base.shape[0])
 
     def __reduce__(self):
         reducefix = 1 if self.base.flags.writeable else 2
-        return (SVOpRep_Dense, (self.base, reducefix))
+        return (SVOpRepDense, (self.base, reducefix))
 
     def acton(self, state):
         return SVStateRep(_np.dot(self.base, state.base))
@@ -730,61 +730,61 @@ class SVOpRep_Dense(SVOpRep):
         return SVStateRep(_np.dot(_np.conjugate(self.base.T), state.base))
 
     def __str__(self):
-        return "SVOpRep_Dense:\n" + str(self.base)
+        return "SVOpRepDense:\n" + str(self.base)
 
 
-class SVOpRep_Embedded(SVOpRep):
+class SVOpRepEmbedded(SVOpRep):
     # exactly the same as DM case
-    def __init__(self, embedded_op, numBasisEls, actionInds,
-                 blocksizes, embedded_dim, nComponentsInActiveBlock,
-                 iActiveBlock, nBlocks, dim):
+    def __init__(self, embedded_op, num_basis_els, action_inds,
+                 blocksizes, embedded_dim, ncomponents_in_active_block,
+                 active_block_index, nblocks, dim):
 
         self.embedded = embedded_op
-        self.numBasisEls = numBasisEls
-        self.actionInds = actionInds
+        self.num_basis_els = num_basis_els
+        self.action_inds = action_inds
         self.blocksizes = blocksizes
 
-        numBasisEls_noop_blankaction = numBasisEls.copy()
-        for i in actionInds: numBasisEls_noop_blankaction[i] = 1
-        self.basisInds_noop_blankaction = [list(range(n)) for n in numBasisEls_noop_blankaction]
+        num_basis_els_noop_blankaction = num_basis_els.copy()
+        for i in action_inds: num_basis_els_noop_blankaction[i] = 1
+        self.basisInds_noop_blankaction = [list(range(n)) for n in num_basis_els_noop_blankaction]
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(numBasisEls[1:]))))), _np.int64)
-        self.basisInds_action = [list(range(numBasisEls[i])) for i in actionInds]
+            reversed(list(num_basis_els[1:]))))), _np.int64)
+        self.basisInds_action = [list(range(num_basis_els[i])) for i in action_inds]
 
         self.embeddedDim = embedded_dim
-        self.nComponents = nComponentsInActiveBlock
-        self.iActiveBlock = iActiveBlock
-        self.nBlocks = nBlocks
-        self.offset = sum(blocksizes[0:iActiveBlock])
-        super(SVOpRep_Embedded, self).__init__(dim)
+        self.ncomponents = ncomponents_in_active_block
+        self.active_block_index = active_block_index
+        self.nblocks = nblocks
+        self.offset = sum(blocksizes[0:active_block_index])
+        super(SVOpRepEmbedded, self).__init__(dim)
 
     def __reduce__(self):
-        return (DMOpRep_Embedded, (self.embedded,
-                                   self.numBasisEls, self.actionInds,
-                                   self.blocksizes, self.embeddedDim,
-                                   self.nComponents, self.iActiveBlock,
-                                   self.nBlocks, self.dim))
+        return (DMOpRepEmbedded, (self.embedded,
+                                  self.num_basis_els, self.action_inds,
+                                  self.blocksizes, self.embeddedDim,
+                                  self.ncomponents, self.active_block_index,
+                                  self.nblocks, self.dim))
 
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
-            if iBlk != self.iActiveBlock:
+            if iBlk != self.active_block_index:
                 output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
         output_state = SVStateRep(_np.zeros(state.base.shape, complex))
-        offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
             for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i, bInd in zip(self.actionInds, op_b):
+                for i, bInd in zip(self.action_inds, op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
@@ -800,14 +800,14 @@ class SVOpRep_Embedded(SVOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = SVStateRep(_np.zeros(state.base.shape, complex))
-        offset = self.offset  # if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
             for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i, bInd in zip(self.actionInds, op_b):
+                for i, bInd in zip(self.action_inds, op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
@@ -820,15 +820,15 @@ class SVOpRep_Embedded(SVOpRep):
         return output_state
 
 
-class SVOpRep_Composed(SVOpRep):
+class SVOpRepComposed(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_op_reps, dim):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factors_reps = factor_op_reps
-        super(SVOpRep_Composed, self).__init__(dim)
+        super(SVOpRepComposed, self).__init__(dim)
 
     def __reduce__(self):
-        return (SVOpRep_Composed, (self.factor_reps, self.dim))
+        return (SVOpRepComposed, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -846,15 +846,15 @@ class SVOpRep_Composed(SVOpRep):
         self.factors_reps = new_factor_op_reps
 
 
-class SVOpRep_Sum(SVOpRep):
+class SVOpRepSum(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_reps
-        super(SVOpRep_Sum, self).__init__(dim)
+        super(SVOpRepSum, self).__init__(dim)
 
     def __reduce__(self):
-        return (SVOpRep_Sum, (self.factor_reps, self.dim))
+        return (SVOpRepSum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -871,14 +871,14 @@ class SVOpRep_Sum(SVOpRep):
         return output_state
 
 
-class SVOpRep_Exponentiated(SVOpRep):
+class SVOpRepExponentiated(SVOpRep):
     def __init__(self, exponentiated_op_rep, power, dim):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
-        super(SVOpRep_Exponentiated, self).__init__(dim)
+        super(SVOpRepExponentiated, self).__init__(dim)
 
     def __reduce__(self):
-        return (SVOpRep_Exponentiated, (self.exponentiated_op, self.power, self.dim))
+        return (SVOpRepExponentiated, (self.exponentiated_op, self.power, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -973,14 +973,14 @@ class SBOpRep(object):
         return 2**(self.n)  # assume "unitary evolution"-type mode
 
 
-class SBOpRep_Embedded(SBOpRep):
+class SBOpRepEmbedded(SBOpRep):
     def __init__(self, embedded_op, n, qubits):
         self.embedded = embedded_op
         self.qubits = qubits  # qubit *indices*
-        super(SBOpRep_Embedded, self).__init__(n)
+        super(SBOpRepEmbedded, self).__init__(n)
 
     def __reduce__(self):
-        return (SBOpRep_Embedded, (self.embedded, self.n, self.qubits))
+        return (SBOpRepEmbedded, (self.embedded, self.n, self.qubits))
 
     def acton(self, state):
         state = state.copy()  # needed?
@@ -999,15 +999,15 @@ class SBOpRep_Embedded(SBOpRep):
         return outstate
 
 
-class SBOpRep_Composed(SBOpRep):
+class SBOpRepComposed(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_op_reps, n):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_op_reps
-        super(SBOpRep_Composed, self).__init__(n)
+        super(SBOpRepComposed, self).__init__(n)
 
     def __reduce__(self):
-        return (SBOpRep_Composed, (self.factor_reps, self.n))
+        return (SBOpRepComposed, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -1022,15 +1022,15 @@ class SBOpRep_Composed(SBOpRep):
         return state
 
 
-class SBOpRep_Sum(SBOpRep):
+class SBOpRepSum(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_reps, n):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_reps
-        super(SBOpRep_Sum, self).__init__(n)
+        super(SBOpRepSum, self).__init__(n)
 
     def __reduce__(self):
-        return (SBOpRep_Sum, (self.factor_reps, self.n))
+        return (SBOpRepSum, (self.factor_reps, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -1043,14 +1043,14 @@ class SBOpRep_Sum(SBOpRep):
         raise NotImplementedError()
 
 
-class SBOpRep_Exponentiated(SBOpRep):
+class SBOpRepExponentiated(SBOpRep):
     def __init__(self, exponentiated_op_rep, power, n):
         self.exponentiated_op = exponentiated_op_rep
         self.power = power
-        super(SBOpRep_Exponentiated, self).__init__(n)
+        super(SBOpRepExponentiated, self).__init__(n)
 
     def __reduce__(self):
-        return (SBOpRep_Exponentiated, (self.exponentiated_op, self.power, self.n))
+        return (SBOpRepExponentiated, (self.exponentiated_op, self.power, self.n))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -1065,17 +1065,17 @@ class SBOpRep_Exponentiated(SBOpRep):
         return state
 
 
-class SBOpRep_Clifford(SBOpRep):
+class SBOpRepClifford(SBOpRep):
     def __init__(self, smatrix, svector, smatrix_inv, svector_inv, unitary):
         self.smatrix = smatrix
         self.svector = svector
         self.smatrix_inv = smatrix_inv
         self.svector_inv = svector_inv
         self.unitary = unitary
-        super(SBOpRep_Clifford, self).__init__(smatrix.shape[0] // 2)
+        super(SBOpRepClifford, self).__init__(smatrix.shape[0] // 2)
 
     def __reduce__(self):
-        return (SBOpRep_Clifford, (self.smatrix, self.svector, self.smatrix_inv, self.svector_inv, self.unitary))
+        return (SBOpRepClifford, (self.smatrix, self.svector, self.smatrix_inv, self.svector_inv, self.unitary))
 
     @property
     def unitary_dagger(self):
@@ -1245,14 +1245,14 @@ class PolyRep(dict):
         return tuple(sorted(ret))
 
     #UNUSED TODO REMOVE
-    #def deriv(self, wrtParam):
+    #def deriv(self, wrt_param):
     #    """
     #    Take the derivative of this polynomial representation with respect to
-    #    the single variable `wrtParam`.
+    #    the single variable `wrt_param`.
     #
     #    Parameters
     #    ----------
-    #    wrtParam : int
+    #    wrt_param : int
     #        The variable index to differentiate with respect to (can be
     #        0 to the `max_num_vars-1` supplied to `__init__`.
     #
@@ -1263,10 +1263,10 @@ class PolyRep(dict):
     #    dcoeffs = {}
     #    for i, coeff in self.items():
     #        ivar = self._int_to_vinds(i)
-    #        cnt = float(ivar.count(wrtParam))
+    #        cnt = float(ivar.count(wrt_param))
     #        if cnt > 0:
     #            l = list(ivar)
-    #            del l[ivar.index(wrtParam)]
+    #            del l[ivar.index(wrt_param)]
     #            dcoeffs[tuple(l)] = cnt * coeff
     #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
     #    return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
@@ -1644,23 +1644,23 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-def DM_mapfill_probs_block(calc, mxToFill, dest_indices, evalTree, comm):
+def DM_mapfill_probs_block(calc, mx_to_fill, dest_indices, eval_tree, comm):
 
     dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
-    cacheSize = evalTree.cache_size()
+    cacheSize = eval_tree.cache_size()
 
     #Create rhoCache
     rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
 
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
-    rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in evalTree.rholabels}
-    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in evalTree.opLabels}
-    effectreps = {i: E._rep for i, E in enumerate(calc._Es_from_labels(evalTree.elabels))}  # cache these in future
+    rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in eval_tree.rholabels}
+    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in eval_tree.opLabels}
+    effectreps = {i: E._rep for i, E in enumerate(calc._es_from_labels(eval_tree.elabels))}  # cache these in future
 
     #comm is currently ignored
-    #TODO: if evalTree is split, distribute among processors
-    for i in evalTree.get_evaluation_order():
-        iStart, remainder, iCache = evalTree[i]
+    #TODO: if eval_tree is split, distribute among processors
+    for i in eval_tree.get_evaluation_order():
+        iStart, remainder, iCache = eval_tree[i]
         if iStart is None:  # then first element of remainder is a state prep label
             rholabel = remainder[0]
             init_state = rhoreps[rholabel]
@@ -1672,14 +1672,14 @@ def DM_mapfill_probs_block(calc, mxToFill, dest_indices, evalTree, comm):
         final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
 
-        ereps = [effectreps[j] for j in evalTree.eLbl_indices_per_circuit[i]]
-        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
+        ereps = [effectreps[j] for j in eval_tree.eLbl_indices_per_circuit[i]]
+        final_indices = [dest_indices[j] for j in eval_tree.final_indices_per_circuit[i]]
 
         for j, erep in zip(final_indices, ereps):
-            mxToFill[j] = erep.probability(final_state)  # outcome probability
+            mx_to_fill[j] = erep.probability(final_state)  # outcome probability
 
 
-def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, evalTree, param_indices, comm):
+def DM_mapfill_dprobs_block(calc, mx_to_fill, dest_indices, dest_param_indices, eval_tree, param_indices, comm):
 
     eps = 1e-7  # hardcoded?
 
@@ -1699,13 +1699,13 @@ def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, ev
     # get placed into dpr_cache
 
     #Get a map from global parameter indices to the desired
-    # final index within mxToFill (fpoffset = final parameter offset)
+    # final index within mx_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-    nEls = evalTree.num_final_elements()
+    nEls = eval_tree.num_final_elements()
     probs = _np.empty(nEls, 'd')
     probs2 = _np.empty(nEls, 'd')
-    DM_mapfill_probs_block(calc, probs, slice(0, nEls), evalTree, comm)
+    DM_mapfill_probs_block(calc, probs, slice(0, nEls), eval_tree, comm)
 
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
@@ -1714,44 +1714,44 @@ def DM_mapfill_dprobs_block(calc, mxToFill, dest_indices, dest_param_indices, ev
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             calc.from_vector(vec, close=True)
-            DM_mapfill_probs_block(calc, probs2, slice(0, nEls), evalTree, subComm)
-            _fas(mxToFill, [dest_indices, iFinal], (probs2 - probs) / eps)
+            DM_mapfill_probs_block(calc, probs2, slice(0, nEls), eval_tree, subComm)
+            _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
     calc.from_vector(orig_vec, close=True)
 
-    #Now each processor has filled the relavant parts of mxToFill, so gather together:
-    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+    #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
+    _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
 
 
-def DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
-                            minProbClipForWeighting, probClipInterval, comm):
+def DM_mapfill_TDchi2_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows,
+                            min_prob_clip_for_weighting, prob_clip_interval, comm):
 
-    def obj_fn(p, f, Ni, N, omitted_p):
-        cp = _np.clip(p, minProbClipForWeighting, 1 - minProbClipForWeighting)
-        v = (p - f) * _np.sqrt(N / cp)
+    def obj_fn(p, f, n_i, n, omitted_p):
+        cp = _np.clip(p, min_prob_clip_for_weighting, 1 - min_prob_clip_for_weighting)
+        v = (p - f) * _np.sqrt(n / cp)
 
         if omitted_p != 0:
             # if this is the *last* outcome at this time then account for any omitted probability
-            omitted_cp = _np.clip(omitted_p, minProbClipForWeighting, 1 - minProbClipForWeighting)
-            v = _np.sqrt(v**2 + N * omitted_p**2 / omitted_cp)
+            omitted_cp = _np.clip(omitted_p, min_prob_clip_for_weighting, 1 - min_prob_clip_for_weighting)
+            v = _np.sqrt(v**2 + n * omitted_p**2 / omitted_cp)
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
-    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm)
 
 
-def DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows,
-                              minProbClip, radius, probClipInterval, comm):
+def DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows,
+                              min_prob_clip, radius, prob_clip_interval, comm):
 
-    min_p = minProbClip; a = radius
+    min_p = min_prob_clip; a = radius
 
-    def obj_fn(p, f, Ni, N, omitted_p):
+    def obj_fn(p, f, n_i, n, omitted_p):
         pos_p = max(p, min_p)
-        if Ni != 0:
-            freq_term = Ni * (_np.log(f) - 1.0)
+        if n_i != 0:
+            freq_term = n_i * (_np.log(f) - 1.0)
         else:
             freq_term = 0.0
-        S = -Ni / min_p + N
-        S2 = 0.5 * Ni / (min_p**2)
-        v = freq_term + -Ni * _np.log(pos_p) + N * pos_p  # dims K x M (K = nSpamLabels, M = nCircuits)
+        S = -n_i / min_p + n
+        S2 = 0.5 * n_i / (min_p**2)
+        v = freq_term + -n_i * _np.log(pos_p) + n * pos_p  # dims K x M (K = nSpamLabels, M = n_circuits)
 
         # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
         v = max(v, 0)
@@ -1760,43 +1760,43 @@ def DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, num_outcomes, evalTr
         if p < min_p:
             v = v + S * (p - min_p) + S2 * (p - min_p)**2
 
-        if Ni == 0:
+        if n_i == 0:
             if p >= a:
-                v = N * p
+                v = n * p
             else:
-                v = N * ((-1.0 / (3 * a**2)) * p**3 + p**2 / a + a / 3.0)
+                v = n * ((-1.0 / (3 * a**2)) * p**3 + p**2 / a + a / 3.0)
         # special handling for f == 0 terms
         # using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
 
         if omitted_p != 0.0:
             # if this is the *last* outcome at this time then account for any omitted probability
-            v += N * omitted_p if omitted_p >= a else \
-                N * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+            v += n * omitted_p if omitted_p >= a else \
+                n * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
 
         return v  # objective function term (the qty stored in cache)
 
-    return DM_mapfill_TDterms(calc, obj_fn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm)
+    return DM_mapfill_TDterms(calc, obj_fn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm)
 
 
-def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTree, dataset_rows, comm):
+def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm):
 
     dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
-    cacheSize = evalTree.cache_size()
+    cacheSize = eval_tree.cache_size()
 
-    EVecs = calc._Es_from_labels(evalTree.elabels)
-    elabels_as_outcomes = [(_gt.eLabelToOutcome(e),) for e in evalTree.elabels]
+    EVecs = calc._es_from_labels(eval_tree.elabels)
+    elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in eval_tree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
-    #if clipTo is not None:
-    #    _np.clip(mxToFill, clipTo[0], clipTo[1], out=mxToFill)  # in-place clip
+    #if clip_to is not None:
+    #    _np.clip(mx_to_fill, clip_to[0], clip_to[1], out=mx_to_fill)  # in-place clip
 
-    mxToFill[dest_indices] = 0.0  # reset destination (we sum into it)
+    mx_to_fill[dest_indices] = 0.0  # reset destination (we sum into it)
 
     #comm is currently ignored
-    #TODO: if evalTree is split, distribute among processors
-    for i in evalTree.get_evaluation_order():
-        iStart, remainder, iCache = evalTree[i]
+    #TODO: if eval_tree is split, distribute among processors
+    for i in eval_tree.get_evaluation_order():
+        iStart, remainder, iCache = eval_tree[i]
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
         rholabel = remainder[0]; remainder = remainder[1:]
         rhoVec = calc._rho_from_label(rholabel)
@@ -1814,8 +1814,8 @@ def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTr
                 totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
             lastInds[t0] = k
 
-        elbl_indices = evalTree.eLbl_indices_per_circuit[i]
-        final_indices = [dest_indices[j] for j in evalTree.final_indices_per_circuit[i]]
+        elbl_indices = eval_tree.eLbl_indices_per_circuit[i]
+        final_indices = [dest_indices[j] for j in eval_tree.final_indices_per_circuit[i]]
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
 
         cur_probtotal = 0; last_t = 0
@@ -1846,45 +1846,45 @@ def DM_mapfill_TDterms(calc, objfn, mxToFill, dest_indices, num_outcomes, evalTr
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
-            mxToFill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
+            mx_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
 
 
-def DM_mapfill_TDdchi2_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree, dataset_rows,
-                             minProbClipForWeighting, probClipInterval, wrtSlice, comm):
+def DM_mapfill_TDdchi2_terms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, eval_tree, dataset_rows,
+                             min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
 
-    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
-        DM_mapfill_TDchi2_terms(calc, mxToFill, dest_indices, n_outcomes,
-                                evTree, dataset_rows, minProbClipForWeighting, probClipInterval, fillComm)
+    def fillfn(mx_to_fill, dest_indices, n_outcomes, eval_tree, dataset_rows, fill_comm):
+        DM_mapfill_TDchi2_terms(calc, mx_to_fill, dest_indices, n_outcomes,
+                                eval_tree, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
 
-    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
-                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
-
-
-def DM_mapfill_TDdloglpp_terms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes,
-                               evalTree, dataset_rows, minProbClip, radius, probClipInterval, wrtSlice, comm):
-
-    def fillfn(mxToFill, dest_indices, n_outcomes, evTree, dataset_rows, fillComm):
-        DM_mapfill_TDloglpp_terms(calc, mxToFill, dest_indices, n_outcomes,
-                                  evTree, dataset_rows, minProbClip, radius, probClipInterval, fillComm)
-
-    return DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices,
-                                     num_outcomes, evalTree, dataset_rows, fillfn, wrtSlice, comm)
+    return DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices,
+                                     num_outcomes, eval_tree, dataset_rows, fillfn, wrt_slice, comm)
 
 
-def DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices, num_outcomes, evalTree,
-                              dataset_rows, fillfn, wrtSlice, comm):
+def DM_mapfill_TDdloglpp_terms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes,
+                               eval_tree, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
+
+    def fillfn(mx_to_fill, dest_indices, n_outcomes, eval_tree, dataset_rows, fill_comm):
+        DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, n_outcomes,
+                                  eval_tree, dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
+
+    return DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices,
+                                     num_outcomes, eval_tree, dataset_rows, fillfn, wrt_slice, comm)
+
+
+def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, eval_tree,
+                              dataset_rows, fillfn, wrt_slice, comm):
 
     eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+    param_indices = range(calc.Np) if (wrt_slice is None) else _slct.indices(wrt_slice)
 
-    nEls = evalTree.num_final_elements()
+    nEls = eval_tree.num_final_elements()
     vals = _np.empty(nEls, 'd')
     vals2 = _np.empty(nEls, 'd')
-    assert(evalTree.cache_size() == 0)  # so all elements have None as start and remainder[0] is a prep label
+    assert(eval_tree.cache_size() == 0)  # so all elements have None as start and remainder[0] is a prep label
 
-    fillfn(vals, slice(0, nEls), num_outcomes, evalTree, dataset_rows, comm)
+    fillfn(vals, slice(0, nEls), num_outcomes, eval_tree, dataset_rows, comm)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1904,30 +1904,30 @@ def DM_mapfill_timedep_dterms(calc, mxToFill, dest_indices, dest_param_indices, 
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             calc.from_vector(vec, close=True)
-            fillfn(vals2, slice(0, nEls), num_outcomes, evalTree, dataset_rows, subComm)
-            _fas(mxToFill, [dest_indices, iFinal], (vals2 - vals) / eps)
+            fillfn(vals2, slice(0, nEls), num_outcomes, eval_tree, dataset_rows, subComm)
+            _fas(mx_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
     calc.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
-    _mpit.gather_slices(all_slices, owners, mxToFill, [], axes=1, comm=comm)
+    _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
 
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (calc.Np, calc.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+    #      (calc.Np, calc.dim, cache_size, len(eval_tree), eval_tree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
-def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
     """
     Computes polynomials of the probabilities for multiple spam-tuples of `circuit`
 
@@ -1951,7 +1951,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes.
 
     fastmode : bool, optional
@@ -2104,8 +2104,8 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                     factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(fi)]
                     res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
-                    pLeft = _unitary_sim_pre(factors, comm, memLimit)
-                    pRight = _unitary_sim_post(factors, comm, memLimit)
+                    pLeft = _unitary_sim_pre(factors, comm, mem_limit)
+                    pRight = _unitary_sim_post(factors, comm, mem_limit)
                     # if not self.unitary_evolution else 1.0
                     res.scale((pLeft * pRight))
                     final_factor_indx = fi[-1]
@@ -2129,15 +2129,15 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     return prps  # can be a list of polys
 
 
-def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0,
-                    resetTermWeights=True, debug=None):
-    #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
+                    reset_term_weights=True, debug=None):
+    #return _prs_directly(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
 
-def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0,
-                    resetTermWeights=True, debug=None):
-    #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
+                    reset_term_weights=True, debug=None):
+    #return _prs_directly(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
 
@@ -2152,31 +2152,31 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
 
 
 def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                         comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                                         comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
     return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                              comm, memLimit, pathmagnitude_gap, min_term_mag, max_paths,
+                                              comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
 def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                         comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                                         comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
     return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                                              comm, memLimit, pathmagnitude_gap, min_term_mag, max_paths,
+                                              comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
 def SV_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
-                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+                                                 circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
     return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
-                                                      circuitsetup_cache, comm, memLimit, fastmode)
+                                                      circuitsetup_cache, comm, mem_limit, fastmode)
 
 
 def SB_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
-                                                 circuitsetup_cache, comm=None, memLimit=None, fastmode=True):
+                                                 circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
     return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
-                                                      circuitsetup_cache, comm, memLimit, fastmode)
+                                                      circuitsetup_cache, comm, mem_limit, fastmode)
 
 
 def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
@@ -2250,7 +2250,7 @@ global_cnt = 0
 
 
 def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm,
-                                       memLimit, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
+                                       mem_limit, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2287,7 +2287,7 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes.
 
     pathmagnitude_gap : float, optional
@@ -2375,7 +2375,7 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
 
 
 def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
-                                               circuitsetup_cache, comm, memLimit, fastmode):
+                                               circuitsetup_cache, comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2412,7 +2412,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes.
 
     fastmode : bool, optional
@@ -2525,8 +2525,8 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
         def add_path(b, mag, incd):
             factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
             res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
-            pLeft = _unitary_sim_pre(factors, comm, memLimit)
-            pRight = _unitary_sim_post(factors, comm, memLimit)
+            pLeft = _unitary_sim_pre(factors, comm, mem_limit)
+            pRight = _unitary_sim_post(factors, comm, mem_limit)
             res.scale((pLeft * pRight))
 
             final_factor_indx = b[-1]
@@ -2614,7 +2614,7 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, memLimit=None, fastmode=True,
+def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, mem_limit=None, fastmode=True,
                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None,
                          compute_polyreps=True):
     """
@@ -2648,7 +2648,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    memLimit : int, optional
+    mem_limit : int, optional
         A rough memory limit in bytes.
 
     fastmode : bool, optional
@@ -2838,8 +2838,8 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
         def add_path(b, mag, incd):
             factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(b)]
             res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
-            pLeft = _unitary_sim_pre(factors, comm, memLimit)
-            pRight = _unitary_sim_post(factors, comm, memLimit)
+            pLeft = _unitary_sim_pre(factors, comm, mem_limit)
+            pRight = _unitary_sim_post(factors, comm, mem_limit)
             res.scale((pLeft * pRight))
 
             final_factor_indx = b[-1]
@@ -3133,7 +3133,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 #     #returns whether fn_visitpath caused us to exit
 
 
-def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_pathmags,
+def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_pathmags,
                             foat_indices_per_op=None, initial_threshold=0.1,
                             min_threshold=1e-10, max_npaths=1000000):
     """
@@ -3149,7 +3149,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
         `oprep_lists[i]` is a list of the terms available to choose from
         for the i-th circuit layer, ordered by increasing term-magnitude.
 
-    E_indices : numpy array
+    e_indices : numpy array
         The effect-vector index for each element of `oprep_lists[-1]`
         (representations for *all* effect vectors exist all together
         in `oprep_lists[-1]`).
@@ -3157,7 +3157,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
     num_elabels : int
         The total number of different effects whose reps appear in
         `oprep_lists[-1]` (also one more than the largest index in
-        `E_indices`.
+        `e_indices`.
 
     target_sum_of_pathmags : array
         An array of floats of length `num_elabels` giving the target sum of path
@@ -3204,25 +3204,25 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
     if foat_indices_per_op is None:
         foat_indices_per_op = [()] * len(oprep_lists)
 
-    # REMOVE comm = memLimit = None  # TODO: make these arguments later?
+    # REMOVE comm = mem_limit = None  # TODO: make these arguments later?
 
     def count_path(b, mg, incd):
-        mag[E_indices[b[-1]]] += mg
-        nPaths[E_indices[b[-1]]] += 1
+        mag[e_indices[b[-1]]] += mg
+        nPaths[e_indices[b[-1]]] += 1
 
         # REMOVE?
         # #Instead of magnitude, accumulate actual current path contribution that we can test for convergence
         # factors = [oprep_lists[i][factorInd] for i, factorInd in enumerate(b)]
         # res = _np.product([f.evaluated_coeff for f in factors])
-        # pLeft = _unitary_sim_pre(factors, comm, memLimit)
-        # pRight = _unitary_sim_post(factors, comm, memLimit)
+        # pLeft = _unitary_sim_pre(factors, comm, mem_limit)
+        # pRight = _unitary_sim_post(factors, comm, mem_limit)
         # res *= (pLeft * pRight)
         #
         # final_factor_indx = b[-1]
-        # Ei = E_indices[final_factor_indx]  # final "factor" index == E-vector index
+        # Ei = e_indices[final_factor_indx]  # final "factor" index == E-vector index
         # integrals[Ei] += res
 
-        return (nPaths[E_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
+        return (nPaths[e_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(num_elabels, 'd')
@@ -3257,8 +3257,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
 
     def count_path_nomax(b, mg, incd):
         # never returns True - we want to check *threshold* alone selects correct # of paths
-        mag[E_indices[b[-1]]] += mg
-        nPaths[E_indices[b[-1]]] += 1
+        mag[e_indices[b[-1]]] += mg
+        nPaths[e_indices[b[-1]]] += 1
 
     mag = _np.zeros(num_elabels, 'd')
     # integrals = _np.zeros(num_elabels, 'd') REMOVE
@@ -3280,7 +3280,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, num_elabels, target_sum_of_p
     return threshold_lower_bound, nPaths, mag
 
 
-def _unitary_sim_pre(complete_factors, comm, memLimit):
+def _unitary_sim_pre(complete_factors, comm, mem_limit):
     rhoVec = complete_factors[0].pre_state  # a prep representation
     for f in complete_factors[0].pre_ops:
         rhoVec = f.acton(rhoVec)
@@ -3294,7 +3294,7 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     return EVec.amplitude(rhoVec)
 
 
-def _unitary_sim_post(complete_factors, comm, memLimit):
+def _unitary_sim_post(complete_factors, comm, mem_limit):
     rhoVec = complete_factors[0].post_state  # a prep representation
     for f in complete_factors[0].post_ops:
         rhoVec = f.acton(rhoVec)

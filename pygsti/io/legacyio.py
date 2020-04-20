@@ -33,24 +33,24 @@ def enable_no_cython_unpickling():
             replacement_obj = _slow.DMStateRep(data, reducefix)
             return replacement_obj
 
-    class dummy_DMEffectRep_Dense(object):
+    class dummy_DMEffectRepDense(object):
         def __new__(cls, data, reducefix):
-            #replacement_obj = _slow.DMEffectRep_Dense.__new__(_slow.DMEffectRep_Dense)
-            replacement_obj = _slow.DMEffectRep_Dense(data, reducefix)
+            #replacement_obj = _slow.DMEffectRepDense.__new__(_slow.DMEffectRepDense)
+            replacement_obj = _slow.DMEffectRepDense(data, reducefix)
             return replacement_obj
 
-    class dummy_DMOpRep_Dense(object):
+    class dummy_DMOpRepDense(object):
         def __new__(cls, data, reducefix):
-            #replacement_obj = _slow.DMOpRep_Dense.__new__(_slow.DMEffectRep_Dense)
-            replacement_obj = _slow.DMOpRep_Dense(data, reducefix)
+            #replacement_obj = _slow.DMOpRepDense.__new__(_slow.DMEffectRepDense)
+            replacement_obj = _slow.DMOpRepDense(data, reducefix)
             return replacement_obj
 
     assert(_sys.modules.get('pygsti.objects.replib.fastreplib', None) is None), \
         "You should only use this function when they Cython extensions are *not* built!"
     fastreplib = _ModuleType("fastreplib")
     fastreplib.DMStateRep = dummy_DMStateRep
-    fastreplib.DMEffectRep_Dense = dummy_DMEffectRep_Dense
-    fastreplib.DMOpRep_Dense = dummy_DMOpRep_Dense
+    fastreplib.DMEffectRepDense = dummy_DMEffectRepDense
+    fastreplib.DMOpRepDense = dummy_DMOpRepDense
     _sys.modules['pygsti.objects.replib.fastreplib'] = fastreplib
 
     yield
@@ -113,7 +113,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
                                                             nonham_basis=state['other_basis'],
                                                             param_mode=state['param_mode'],
                                                             nonham_mode=state['nonham_mode'], truncate=True,
-                                                            mxBasis=state['matrix_basis'], evotype=state['_evotype'])
+                                                            mx_basis=state['matrix_basis'], evotype=state['_evotype'])
             self.__dict__.update(g.__dict__)
 
         def ModelMember_setstate(self, state):

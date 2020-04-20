@@ -4,16 +4,16 @@ Several of the most important figures up front.
 ### Model Violation 
 The aggregate log-likelihood as a function of GST iterations''')
 @@code
-ws.FitComparisonBarPlot(Ls, gssPerIter, mdlPerIter, 
-                        effective_ds, objective, 'L')
+ws.FitComparisonBarPlot(Ls, circuits_per_iter, mdl_per_iter, 
+                        effective_ds, objfn_builder, 'L')
 @@markdown
 ### Per-sequence Model Violation
 And a histogram of the per-sequence goodness of fit values.''')
 @@code
 k = -1 #iteration index
 colorHistogramPlot = ws.ColorBoxPlot(
-    objective, gssPerIter[k], effective_ds, mdlPerIter[k],
-    linlg_pcntle=0.95, minProbClipForWeighting=mpc, typ='histogram')
+    objfn_builder, circuits_per_iter[k], effective_ds, mdl_per_iter[k],
+    linlg_pcntle=0.95, typ='histogram')
 @@markdown
 ### Comparison of GST estimated gates to target gates: 
 This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.''')

@@ -610,13 +610,13 @@ class StabilizerFrame(object):
             ampl += a * self._canonical_amplitude(ip, zvals)
         return ampl
 
-    def clifford_update(self, smatrix, svector, Umx, qubit_filter=None):
+    def clifford_update(self, smatrix, svector, u_mx, qubit_filter=None):
         """
         Update this stabilizer frame by the action of a Clifford operation,
         given in the usual symplectic representation.
 
         If there are any active views (from calling :method:`push_view`) and/or
-        if `qubit_filter` is not None, then `smatrix`, `svector`, and `Umx`
+        if `qubit_filter` is not None, then `smatrix`, `svector`, and `u_mx`
         should be sized for just the number of qubits in the current view.
 
         Parameters
@@ -626,7 +626,7 @@ class StabilizerFrame(object):
             respectively, where n is the number of qubits (in the current view
             if applicable).
 
-        Umx : numpy.ndarray
+        u_mx : numpy.ndarray
             The dense unitary representation of the Clifford action, which is
             needed in order to track the global phase of the frame (state).
             This is a complex matrix of shape (2^n,2^n), where n is the number of
@@ -669,10 +669,10 @@ class StabilizerFrame(object):
         #Step3: Update global amplitudes - Part B
         for ip, (base_state, ampls) in enumerate(sampled_amplitudes):
 
-            # print("DB: Umx = ",Umx) # DEBUG
+            # print("DB: u_mx = ",u_mx) # DEBUG
             if debug: print("APPLYING U to instate =", ampls)
             instate = ampls
-            outstate = _np.dot(Umx, instate)  # state-vector propagation
+            outstate = _np.dot(u_mx, instate)  # state-vector propagation
             if debug: print("OUTSTATE = ", outstate)
             #TODO: sometimes need a second state & set instate to the sum?
             # choose second state based on im/re amplitude & just run through U separately?
@@ -696,7 +696,7 @@ class StabilizerFrame(object):
                     break  # move on to next stabilizer state & global amplitude
             else:
                 raise ValueError("Outstate was completely zero!")
-                # (this shouldn't happen if Umx is unitary!)
+                # (this shouldn't happen if u_mx is unitary!)
 
     def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=False):
         """

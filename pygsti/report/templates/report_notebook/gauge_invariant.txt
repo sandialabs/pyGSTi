@@ -27,7 +27,7 @@ ws.GateEigenvalueTable(mdl, target_model, cri,
 ### Gram Matrix Eigenvalues: 
 Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.
 @@code
-ws.GramMatrixBarPlot(ds, target_model, 10, strs)
+ws.GramMatrixBarPlot(ds, target_model, 10, (prep_fiducials, meas_fiducials))
 
 @@markdown
 ### RB error metrics

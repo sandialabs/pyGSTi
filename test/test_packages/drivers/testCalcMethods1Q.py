@@ -73,17 +73,17 @@ class CalcMethods1QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
-                                                        nSamples=1000, sampleError="multinomial", seed=1234)
+                                                        n_samples=1000, sample_error="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
-        #ds_swp = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
+        #ds_swp = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
         #pygsti.io.write_dataset(temp_files + "/dataset.3to2.txt", ds_swp) # run in Python3
         #ds_swp = pygsti.io.load_dataset(temp_files + "/dataset.3to2.txt") # run in Python2
         #ds_swp.save(compare_files + "/calcMethods1Q.dataset") # run in Python2
         #assert(False),"STOP"
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.dataset")
+        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.dataset")
 
         #Reduced model GST dataset
         cls.nQubits=1 # can't just change this now - see opLabels below
@@ -111,7 +111,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
             redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
 
-        cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q_redmod.dataset")
+        cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q_redmod.dataset")
 
         #print(len(expList)," reduced model sequences")
 
@@ -268,7 +268,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -290,7 +290,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -311,7 +311,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -326,7 +326,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -347,7 +347,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -363,7 +363,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -386,7 +386,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -405,7 +405,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -422,7 +422,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -440,7 +440,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+                                              verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)

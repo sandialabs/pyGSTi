@@ -12,7 +12,7 @@ class GaugeOptMethodBase(object):
         super(GaugeOptMethodBase, self).setUp()
         self.options = dict(
             verbosity=10,
-            checkJac=True
+            check_jac=True
         )
 
     def test_gaugeopt(self):
@@ -27,32 +27,32 @@ class GaugeOptMethodBase(object):
 class GaugeOptMetricMethods(GaugeOptMethodBase):
     def test_gaugeopt_gates_metrics(self):
         go_result = go.gaugeopt_to_target(
-            self.model, self.target, gatesMetric='fidelity', **self.options
+            self.model, self.target, gates_metric='fidelity', **self.options
         )
         # TODO assert correctness
         go_result = go.gaugeopt_to_target(
-            self.model, self.target, gatesMetric='tracedist', **self.options
+            self.model, self.target, gates_metric='tracedist', **self.options
         )
         # TODO assert correctness
 
     def test_gaugeopt_spam_metrics(self):
         go_result = go.gaugeopt_to_target(
-            self.model, self.target, spamMetric='fidelity', **self.options
+            self.model, self.target, spam_metric='fidelity', **self.options
         )
         # TODO assert correctness
         go_result = go.gaugeopt_to_target(
-            self.model, self.target, spamMetric='tracedist', **self.options
+            self.model, self.target, spam_metric='tracedist', **self.options
         )
         # TODO assert correctness
 
     def test_gaugeopt_raises_on_invalid_metrics(self):
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, spamMetric='foobar', **self.options
+                self.model, self.target, spam_metric='foobar', **self.options
             )
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, gatesMetric='foobar', **self.options
+                self.model, self.target, gates_metric='foobar', **self.options
             )
 
 
@@ -90,11 +90,11 @@ class LGSTGaugeOptInstance(GaugeOptWithGaugeGroupInstance):
         super(LGSTGaugeOptInstance, cls).setUpClass()
         # cls._model = alg.do_lgst(
         #     fixtures.ds, fixtures.fiducials, fixtures.fiducials, fixtures.model,
-        #     svdTruncateTo=4, verbosity=0
+        #     svd_truncate_to=4, verbosity=0
         # )
 
         # TODO construct directly
-        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, checkJac=True)
+        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, check_jac=True)
         cls._model = mdl_lgst_target
 
 
@@ -111,7 +111,7 @@ class LGSTGaugeOptAutoMethodTester(GaugeOptMetricMethods, LGSTGaugeOptInstance, 
 
     def test_gaugeopt_return_all(self):
         # XXX does this need to be tested independently of everything else? EGN: probably not - better pattern for this?
-        soln, trivialEl, mdl = go.gaugeopt_to_target(self.model, self.target, returnAll=True, **self.options)
+        soln, trivialEl, mdl = go.gaugeopt_to_target(self.model, self.target, return_all=True, **self.options)
         # TODO assert correctness
 
 
@@ -133,19 +133,19 @@ class LGSTGaugeOptLSMethodTester(GaugeOptMethodBase, LGSTGaugeOptInstance, BaseC
     def test_ls_gaugeopt_raises_on_bad_metrics(self):
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, spamMetric='tracedist', **self.options
+                self.model, self.target, spam_metric='tracedist', **self.options
             )
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, spamMetric='fidelity', **self.options
+                self.model, self.target, spam_metric='fidelity', **self.options
             )
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, gatesMetric='tracedist', **self.options
+                self.model, self.target, gates_metric='tracedist', **self.options
             )
         with self.assertRaises(ValueError):
             go.gaugeopt_to_target(
-                self.model, self.target, gatesMetric='fidelity', **self.options
+                self.model, self.target, gates_metric='fidelity', **self.options
             )
 
     # def test_gaugeopt_no_target(self):
@@ -158,7 +158,7 @@ class CPTPGaugeOptTester(GaugeOptMethodBase, GaugeOptWithGaugeGroupInstance, Bas
     def setUpClass(cls):
         super(CPTPGaugeOptTester, cls).setUpClass()
         # TODO construct directly
-        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, checkJac=True)
+        mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, check_jac=True)
         mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTP", verbosity=10, tol=10.0)
         cls._model = mdl_clgst_cptp
 

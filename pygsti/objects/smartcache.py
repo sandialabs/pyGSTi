@@ -110,9 +110,9 @@ class SmartCache(object):
     def __getstate__(self):
         d = dict(self.__dict__)
 
-        def get_pickleable_dict(cacheDict):
+        def get_pickleable_dict(cache_dict):
             pickleableCache = dict()
-            for k, v in cacheDict.items():
+            for k, v in cache_dict.items():
                 try:
                     _pickle.dumps(v)
                     pickleableCache[k] = v
@@ -133,10 +133,10 @@ class SmartCache(object):
         d = dict(self.__dict__)
         from ..io.jsoncodec import encode_obj
 
-        def get_jsonable_dict(cacheDict):
+        def get_jsonable_dict(cache_dict):
 
             jsonableCache = dict()
-            for k, v in cacheDict.items():
+            for k, v in cache_dict.items():
                 try:
                     encode_obj(v, False)
                     jsonableCache[k] = v
@@ -162,7 +162,7 @@ class SmartCache(object):
         '''
         self.customDigests.append(custom)
 
-    def low_overhead_cached_compute(self, fn, argVals, kwargs=None):
+    def low_overhead_cached_compute(self, fn, arg_vals, kwargs=None):
         '''
         Cached compute with less profiling:
             see :method:`cached_compute` docstring
@@ -172,20 +172,20 @@ class SmartCache(object):
         name_key = get_fn_name_key(fn)
         if name_key in self.ineffective:
             key = 'NA'
-            result = fn(*argVals, **kwargs)
+            result = fn(*arg_vals, **kwargs)
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(argVals) + (kwargs,), self.customDigests)  # cache by call key
+                key = call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
                 with _timed_block('call', times):
-                    self.cache[key] = fn(*argVals, **kwargs)
+                    self.cache[key] = fn(*arg_vals, **kwargs)
                 if times['hash'] > times['call']:
                     self.ineffective.add(name_key)
             result = self.cache[key]
         return key, result
 
-    def cached_compute(self, fn, argVals, kwargs=None):
+    def cached_compute(self, fn, arg_vals, kwargs=None):
         '''
         Shows effectiveness of a cache
 
@@ -194,7 +194,7 @@ class SmartCache(object):
         fn : function
             Cached function
 
-        argVals : tuple or list
+        arg_vals : tuple or list
             Arguments to cached function
 
         kwargs : dictionary
@@ -203,7 +203,7 @@ class SmartCache(object):
         Returns
         -------
         key: the key used to hash the function call
-        result : result of fn called with argVals and kwargs
+        result : result of fn called with arg_vals and kwargs
 
         '''
         special_kwargs = dict()
@@ -219,26 +219,26 @@ class SmartCache(object):
         self.requests[name_key] += 1
         if name_key in self.ineffective:
             key = 'INEFFECTIVE'
-            result = fn(*argVals, **kwargs)
+            result = fn(*arg_vals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
             #DB: print(fn.__name__, " --> Ineffective!") # DB
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(argVals) + (kwargs,), self.customDigests)  # cache by call key
+                key = call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
-                #DB: if "_computeSubMxs" in fn.__name__:
+                #DB: if "_compute_sub_mxs" in fn.__name__:
                 #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
                 #DB: print("Key detail: ",key[0]) # DB
-                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
-                typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
+                #DB: for a,k in zip(tuple(arg_vals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
+                typesig = str(tuple(str(type(arg)) for arg in arg_vals)) + \
                     str({k: str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
                 with _timed_block('call', times):
-                    self.cache[key] = fn(*argVals, **kwargs)
+                    self.cache[key] = fn(*arg_vals, **kwargs)
                     if "_filledarrays" in special_kwargs:
-                        self.outargs[key] = tuple((argVals[i] if isinstance(i, int) else kwargs[i]
+                        self.outargs[key] = tuple((arg_vals[i] if isinstance(i, int) else kwargs[i]
                                                    for i in special_kwargs['_filledarrays']))  # copy?
                 self.misses[key] += 1
                 hashtime = times['hash']
@@ -261,7 +261,7 @@ class SmartCache(object):
                 if "_filledarrays" in special_kwargs:
                     for i, pos in enumerate(special_kwargs["_filledarrays"]):
                         if isinstance(pos, int):
-                            argVals[pos][:] = self.outargs[key][i]
+                            arg_vals[pos][:] = self.outargs[key][i]
                         else:
                             kwargs[pos][:] = self.outargs[key][i]
 

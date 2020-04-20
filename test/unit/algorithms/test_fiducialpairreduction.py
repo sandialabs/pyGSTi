@@ -64,14 +64,14 @@ class FindSufficientFiducialPairsBase(object):
     def test_find_sufficient_fiducial_pairs_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='sequential'
+            search_mode='sequential'
         )
         self.assertEqual(fiducial_pairs, self.fiducial_pairs)
 
     def test_find_sufficient_fiducial_pairs_random(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='random', nRandom=300, seed=_SEED
+            search_mode='random', n_random=300, seed=_SEED
         )
         # TODO assert correctness
 
@@ -80,7 +80,7 @@ class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='sequential'
+            search_mode='sequential'
         )
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ or
                         fiducial_pairs == self.fiducial_pairs_per_germ_alt)
@@ -88,7 +88,7 @@ class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_random(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='random', nRandom=100, seed=_SEED
+            search_mode='random', n_random=100, seed=_SEED
         )
         # TODO assert correctness
 
@@ -101,7 +101,7 @@ class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
         test_pair_list = [(0, 0), (0, 1), (1, 0)]
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            testPairList=test_pair_list
+            test_pair_list=test_pair_list
         )
         # TODO assert correctness
 

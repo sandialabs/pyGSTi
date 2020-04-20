@@ -20,7 +20,7 @@ class TestTimedBlock(BaseCase):
     def test_pre_message(self):
         preMessage = "this is a pre-message!"
         with mock.patch('sys.stdout') as mock_out:
-            with opt.timed_block('time', preMessage=preMessage):
+            with opt.timed_block('time', pre_message=preMessage):
                 pass
             call_count = mock_out.write.call_count
             call_args_list = mock_out.write.call_args_list

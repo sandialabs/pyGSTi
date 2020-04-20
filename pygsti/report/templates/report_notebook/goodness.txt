@@ -9,16 +9,16 @@ $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard de
 The rating from 1 to 5 stars gives a very crude indication of goodness of fit.
 
 @@code
-ws.FitComparisonTable(Ls, gssPerIter, mdlPerIter,
-                      effective_ds, objective, 'L')
+ws.FitComparisonTable(Ls, circuits_per_iter, mdl_per_iter,
+                      effective_ds, objfn_builder, 'L')
 @@markdown
 ### Per-sequence Model Violation
 Each point displays the goodness of fit for a single gate sequence.''')
 @@code
 k = -1 #iteration index
 colorScatterPlot = ws.ColorBoxPlot(
-    objective, gssPerIter[k], effective_ds, mdlPerIter[k],
-    linlg_pcntle=0.95, minProbClipForWeighting=mpc, typ='scatter')
+    objfn_builder, circuits_per_iter[k], effective_ds, mdl_per_iter[k],
+    linlg_pcntle=0.95, typ='scatter')
 
 @@markdown
 ### $2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset.
@@ -26,8 +26,8 @@ Each pixel represents a single experiment (gate sequence), and its color indicat
 @@code
 k = -1 #iteration index
 colorBoxPlot = ws.ColorBoxPlot(
-    objective, gssPerIter[k], effective_ds, mdlPerIter[k],
-    linlg_pcntle=0.95, minProbClipForWeighting=mpc)
+    objfn_builder, circuits_per_iter[k], effective_ds, mdl_per_iter[k],
+    linlg_pcntle=0.95)
 
 
 @@markdown
@@ -35,5 +35,5 @@ colorBoxPlot = ws.ColorBoxPlot(
 Each pixel represents a single experiment (gate sequence), and its color indicates the amount of scaling that was applied to the original data counts when computing the log-likelihood or $\chi^2$ for this estimate.  
 Values of 1.0 indicate all of the original data was used, whereas numbers between 0 and 1 indicate that the data counts for the experiement were artificially decreased (usually to improve the fit).
 @@code
-ws.ColorBoxPlot("scaling", gssFinal, effective_ds, mdl_final,
-        submatrices=scaledSubMxsDict)
+ws.ColorBoxPlot("scaling", circuits_final, effective_ds, mdl_final,
+        submatrices={'scaling': scale_submxs, 'scaling.colormap': "revseq"})

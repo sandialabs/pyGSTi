@@ -10,7 +10,7 @@
 
 qubits = ['Q' + str(x) for x in range(5)]
 
-twoQgate = 'Gcnot'
+two_qubit_gate = 'Gcnot'
 
 edgelist = [('Q1', 'Q0'),
             ('Q2', 'Q1'),

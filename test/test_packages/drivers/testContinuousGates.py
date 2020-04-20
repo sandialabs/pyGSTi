@@ -115,7 +115,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         mdl.set_simtype('map')  # must use map calcs with factories (at least for now, since matrix eval trees don't know about all possible gates?)
         #mdl.from_vector( datagen_vec ) # DEBUG - used to see at where optimization should get us...
 
-        results = pygsti.do_long_sequence_gst_base(ds, mdl, [allStrs], gaugeOptParams=False, verbosity=3)
+        results = pygsti.do_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)
 
         _, nSigma, pval = pygsti.two_delta_logl(results.estimates['default'].models['final iteration estimate'], results.dataset,
                             dof_calc_method="all")

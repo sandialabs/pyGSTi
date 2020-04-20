@@ -11,7 +11,7 @@ def main():
     gs, gs_target = load()
     with timed_block('Gauge opt with CP Penalty:'):
         gs_gaugeopt = pygsti.gaugeopt_to_target(gs, gs_target, 
-                itemWeights={'spam' : 0.0001, 'gates':1.0}, 
+                item_weights={'spam' : 0.0001, 'gates':1.0}, 
                 CPpenalty=1.0, 
                 validSpamPenalty=1.0)
 

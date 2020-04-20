@@ -15,12 +15,12 @@ class IdleTomographySection(_Section):
     _HTML_TEMPLATE = 'tabs/IdleTomography.html'
 
     @_Section.figure_factory()
-    def idtIntrinsicErrorsTable(workspace, switchboard=None, **kwargs):
+    def idt_intrinsic_errors_table(workspace, switchboard=None, **kwargs):
         return workspace.IdleTomographyIntrinsicErrorsTable(switchboard.idtresults)
 
     @_Section.figure_factory(3)
-    def idtObservedRatesTable(workspace, switchboard=None, **kwargs):
+    def idt_observed_rates_table(workspace, switchboard=None, **kwargs):
         # HARDCODED - show only top 20 rates
         return workspace.IdleTomographyObservedRatesTable(
-            switchboard.idtresults, 20, switchboard.gsGIRep
+            switchboard.idtresults, 20, switchboard.mdl_gaugeinv
         )

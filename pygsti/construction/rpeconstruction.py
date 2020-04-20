@@ -15,34 +15,34 @@ from .. import objects as _objs
 from .. import tools as _tools
 
 
-def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
-                                    gateDepol=None, withId=True):
+def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
+                                    gate_depol=None, with_id=True):
     """
     Make a model for simulating RPE, paramaterized by rotation angles.  Note
-    that the output model also has thetaTrue, alphaTrue, and epsilonTrue
+    that the output model also has thetaTrue, alpha_true, and epsilon_true
     added attributes.
 
     Parameters
     ----------
-    alphaTrue : float
-       Angle of Z rotation (canonical RPE requires alphaTrue to be close to
+    alpha_true : float
+       Angle of Z rotation (canonical RPE requires alpha_true to be close to
        pi/2).
 
-    epsilonTrue : float
-       Angle of X rotation (canonical RPE requires epsilonTrue to be close to
+    epsilon_true : float
+       Angle of X rotation (canonical RPE requires epsilon_true to be close to
        pi/4).
 
-    Yrot : float
+    y_rot : float
        Angle of rotation about Y axis that, by similarity transformation,
        rotates X rotation.
 
-    SPAMdepol : float
+    spam_depol : float
        Amount to depolarize SPAM by.
 
-    gateDepol : float, optional
+    gate_depol : float, optional
        Amount to depolarize gates by (defaults to None).
 
-    withId : bool, optional
+    with_id : bool, optional
        Do we include (perfect) identity or no identity? (Defaults to False;
        should be False for RPE, True for GST)
 
@@ -50,59 +50,59 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
     -------
     Model
         The desired model for RPE; model also has attributes thetaTrue,
-        alphaTrue, and epsilonTrue, automatically extracted.
+        alpha_true, and epsilon_true, automatically extracted.
     """
 
-    if withId:
+    if with_id:
         outputModel = _setc.build_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gz'],
-            ["I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0", "Ec"], effectExpressions=["0", "complement"],
+            ["I(Q0)", "X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
+            prep_labels=["rho0"], prep_expressions=["0"],
+            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
     else:
         outputModel = _setc.build_explicit_model(
             [('Q0',)], ['Gx', 'Gz'],
-            ["X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0", "Ec"], effectExpressions=["0", "complement"],
+            ["X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
+            prep_labels=["rho0"], prep_expressions=["0"],
+            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    if Yrot != 0:
+    if y_rot != 0:
         modelAux1 = _setc.build_explicit_model(
             [('Q0',)], ['Gi', 'Gy', 'Gz'],
-            ["I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0", "Ec"], effectExpressions=["0", "complement"],
+            ["I(Q0)", "Y(%s,Q0)" % y_rot, "Z(pi/2,Q0)"],
+            prep_labels=["rho0"], prep_expressions=["0"],
+            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
         outputModel.operations['Gx'] = _objs.FullDenseOp(
             _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
                             outputModel.operations['Gx']), modelAux1.operations['Gy']))
 
-    outputModel = outputModel.depolarize(op_noise=gateDepol,
-                                         spam_noise=SPAMdepol)
+    outputModel = outputModel.depolarize(op_noise=gate_depol,
+                                         spam_noise=spam_depol)
 
     thetaTrue = _tools.rpe.extract_theta(outputModel)
     outputModel.thetaTrue = thetaTrue
 
     outputModel.alphaTrue = _tools.rpe.extract_alpha(outputModel)
-    outputModel.alphaTrue = alphaTrue
+    outputModel.alphaTrue = alpha_true
 
     outputModel.epsilonTrue = _tools.rpe.extract_epsilon(outputModel)
-    outputModel.epsilonTrue = epsilonTrue
+    outputModel.epsilonTrue = epsilon_true
 
     return outputModel
 
 
-def make_rpe_alpha_str_lists_gx_gz(kList):
+def make_rpe_alpha_str_lists_gx_gz(k_list):
     """
     Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
     gates. These operation sequences are used to estimate alpha (Z rotation angle).
 
     Parameters
     ----------
-    kList : list of ints
+    k_list : list of ints
        The list of "germ powers" to be used.  Typically successive powers of
        two; e.g. [1,2,4,8,16].
 
@@ -115,7 +115,7 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
     """
     cosStrList = []
     sinStrList = []
-    for k in kList:
+    for k in k_list:
         cosStrList += [_objs.Circuit(('Gi', 'Gx', 'Gx', 'Gz')
                                      + ('Gz',) * k
                                      + ('Gz', 'Gz', 'Gz', 'Gx', 'Gx'),
@@ -147,7 +147,7 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
     return cosStrList, sinStrList
 
 
-def make_rpe_epsilon_str_lists_gx_gz(kList):
+def make_rpe_epsilon_str_lists_gx_gz(k_list):
     """
     Make epsilon cosine and sine circuit lists for (approx) X pi/4 and
     Z pi/2 gates. These operation sequences are used to estimate epsilon (X rotation
@@ -155,7 +155,7 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
 
     Parameters
     ----------
-    kList : list of ints
+    k_list : list of ints
        The list of "germ powers" to be used.  Typically successive powers of
        two; e.g. [1,2,4,8,16].
 
@@ -169,7 +169,7 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
     epsilonCosStrList = []
     epsilonSinStrList = []
 
-    for k in kList:
+    for k in k_list:
         epsilonCosStrList += [_objs.Circuit(('Gx',) * k
                                             + ('Gx',) * 4,
                                             'Gx^' + str(k) + 'GxGxGxGx')]
@@ -189,14 +189,14 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
     return epsilonCosStrList, epsilonSinStrList
 
 
-def make_rpe_theta_str_lists_gx_gz(kList):
+def make_rpe_theta_str_lists_gx_gz(k_list):
     """
     Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
     gates. These operation sequences are used to estimate theta (X-Z axes angle).
 
     Parameters
     ----------
-    kList : list of ints
+    k_list : list of ints
        The list of "germ powers" to be used.  Typically successive powers of
        two; e.g. [1,2,4,8,16].
 
@@ -210,7 +210,7 @@ def make_rpe_theta_str_lists_gx_gz(kList):
     thetaCosStrList = []
     thetaSinStrList = []
 
-    for k in kList:
+    for k in k_list:
         thetaCosStrList += [_objs.Circuit(
             ('Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx', 'Gx', 'Gz') * k
             + ('Gx',) * 4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^' + str(k) + 'GxGxGxGx')]
@@ -234,14 +234,14 @@ def make_rpe_theta_str_lists_gx_gz(kList):
     return thetaCosStrList, thetaSinStrList
 
 
-def make_rpe_string_list_d(log2kMax):
+def make_rpe_string_list_d(log2k_max):
     """
     Generates a dictionary that contains operation sequences for all RPE cosine and
     sine experiments for all three angles.
 
     Parameters
     ----------
-    log2kMax : int
+    log2k_max : int
        Maximum number of times to repeat an RPE "germ"
 
     Returns
@@ -266,7 +266,7 @@ def make_rpe_string_list_d(log2kMax):
         - 'totalStrList' : All above operation sequences combined into one list;
           duplicates removed.
     """
-    kList = [2**k for k in range(log2kMax + 1)]
+    kList = [2**k for k in range(log2k_max + 1)]
     alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
     epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
     thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
@@ -286,36 +286,36 @@ def make_rpe_string_list_d(log2kMax):
     return stringListD
 
 
-def make_rpe_data_set(modelOrDataset, stringListD, nSamples, sampleError='binomial', seed=None):
+def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='binomial', seed=None):
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
     Is a thin wrapper for pygsti.construction.generate_fake_data, changing
-    default behavior of sampleError, and taking a dictionary of operation sequences
+    default behavior of sample_error, and taking a dictionary of operation sequences
     as input.
 
     Parameters
     ----------
-    modelOrDataset : Model or DataSet object
+    model_or_dataset : Model or DataSet object
         If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
 
-    stringListD : Dictionary of list of (tuples or Circuits)
+    string_list_d : Dictionary of list of (tuples or Circuits)
         Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet.  The dictionary must have the key
         'totalStrList'; easiest if this dictionary is generated by
         make_rpe_string_list_d.
 
-    nSamples : int or list of ints or None
+    n_samples : int or list of ints or None
         The simulated number of samples for each operation sequence.  This only
-        has effect when  sampleError == "binomial" or "multinomial".  If
+        has effect when  sample_error == "binomial" or "multinomial".  If
         an integer, all operation sequences have this number of total samples. If
         a list, integer elements specify the number of samples for the
-        corresponding operation sequence.  If None, then modelOrDataset must be
+        corresponding operation sequence.  If None, then model_or_dataset must be
         a DataSet, and total counts are taken from it (on a per-circuit
         basis).
 
-    sampleError : string, optional
+    sample_error : string, optional
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sampl error:
@@ -326,7 +326,7 @@ def make_rpe_data_set(modelOrDataset, stringListD, nSamples, sampleError='binomi
         - "binomial" - the number of counts is taken from a binomial
           distribution. Distribution has parameters p = probability of the
           operation sequence and n = number of samples.  This can only be used when
-          there are exactly two SPAM labels in modelOrDataset.
+          there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = probability of the operation sequence
           using the k-th SPAM label and n = number of samples.  This should not
@@ -341,41 +341,41 @@ def make_rpe_data_set(modelOrDataset, stringListD, nSamples, sampleError='binomi
     DataSet
        A static data set filled with counts for the specified operation sequences.
     """
-    return _dsc.generate_fake_data(modelOrDataset,
-                                   stringListD['totalStrList'],
-                                   nSamples, sampleError=sampleError, seed=seed)
+    return _dsc.generate_fake_data(model_or_dataset,
+                                   string_list_d['totalStrList'],
+                                   n_samples, sample_error=sample_error, seed=seed)
 
 
 #TODO savePlot arg is never used?
-def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs):
+def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n, runs):
     #                  plot=False):
     """ Experimental test function """
-    kList = [2**k for k in range(log2kMax + 1)]
+    kList = [2**k for k in range(log2k_max + 1)]
 
     alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
     epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
     thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
 
-    #percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
-    #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
+    #percentAlphaError = 100*_np.abs((_np.pi/2-alpha_true)/alpha_true)
+    #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilon_true)/epsilon_true)
 
     simModel = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
-                                          ["I(Q0)", "X(" + str(epsilonTrue) + ",Q0)", "Z(" + str(alphaTrue) + ",Q0)"],
-                                          prepLabels=["rho0"], prepExpressions=["0"],
-                                          effectLabels=["E0", "Ec"], effectExpressions=["0", "complement"],
+                                          ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)", "Z(" + str(alpha_true) + ",Q0)"],
+                                          prep_labels=["rho0"], prep_expressions=["0"],
+                                          effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                           spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     modelAux1 = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
-                                           ["I(Q0)", "Y(" + str(Yrot) + ",Q0)", "Z(pi/2,Q0)"],
-                                           prepLabels=["rho0"], prepExpressions=["0"],
-                                           effectLabels=["E0", "Ec"], effectExpressions=["0", "complement"],
+                                           ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
+                                           prep_labels=["rho0"], prep_expressions=["0"],
+                                           effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                            spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     simModel.operations['Gx'] = _objs.FullDenseOp(
         _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']), simModel.operations['Gx']),
                 modelAux1.operations['Gy']))
 
-    simModel = simModel.depolarize(spam_noise=SPAMdepol)
+    simModel = simModel.depolarize(spam_noise=spam_depol)
 
     thetaTrue = _tools.rpe.extract_theta(simModel)
 
@@ -383,20 +383,20 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 
     jMax = runs
 
-    alphaHatListArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
-    epsilonHatListArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
-    thetaHatListArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
+    alphaHatListArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
+    epsilonHatListArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
+    thetaHatListArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
 
-    alphaErrorArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
-    epsilonErrorArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
-    thetaErrorArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
-    PhiFunErrorArray = _np.zeros([jMax, log2kMax + 1], dtype='object')
+    alphaErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
+    epsilonErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
+    thetaErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
+    PhiFunErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
 
     for j in range(jMax):
         simDS = _dsc.generate_fake_data(
             simModel, alphaCosStrList + alphaSinStrList + epsilonCosStrList
             + epsilonSinStrList + thetaCosStrList + thetaSinStrList,
-            N, sampleError='binomial', seed=j)
+            n, sample_error='binomial', seed=j)
         alphaErrorList = []
         epsilonErrorList = []
         thetaErrorList = []
@@ -407,11 +407,11 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
                                                    epsilonCosStrList, 'epsilon')
         thetaHatList, PhiFunList = _tools.rpe.est_theta_list(simDS, thetaSinStrList,
                                                              thetaCosStrList, epsilonHatList,
-                                                             returnPhiFunList=True)
+                                                             return_phi_fun_list=True)
         for alphaTemp1 in alphaHatList:
-            alphaErrorList.append(abs(alphaTrue - alphaTemp1))
+            alphaErrorList.append(abs(alpha_true - alphaTemp1))
         for epsilonTemp1 in epsilonHatList:
-            epsilonErrorList.append(abs(epsilonTrue - epsilonTemp1))
+            epsilonErrorList.append(abs(epsilon_true - epsilonTemp1))
     #        print abs(_np.pi/2-abs(alphaTemp1))
         for thetaTemp1 in thetaHatList:
             thetaErrorList.append(abs(thetaTrue - thetaTemp1))
@@ -427,10 +427,10 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
         epsilonHatListArray[j, :] = _np.array(epsilonHatList)
         thetaHatListArray[j, :] = _np.array(thetaHatList)
 
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
+    #print "True alpha:",alpha_true
+    #print "True alpha:",alpha_true
+    #print "True alpha:",alpha_true
+    #print "True alpha:",alpha_true
     #print "% true alpha deviation from target:", percentAlphaError
 
     outputDict = {}
@@ -441,13 +441,13 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 #    outputDict['thetaArray'] = thetaHatListArray
 #    outputDict['thetaErrorArray'] = thetaErrorArray
 #    outputDict['PhiFunErrorArray'] = PhiFunErrorArray
-#    outputDict['alpha'] = alphaTrue
-#    outputDict['epsilonTrue'] = epsilonTrue
+#    outputDict['alpha'] = alpha_true
+#    outputDict['epsilon_true'] = epsilon_true
 #    outputDict['thetaTrue'] = thetaTrue
-#    outputDict['Yrot'] = Yrot
-#    outputDict['SPAMdepol'] = SPAMdepol#Input value to depolarize SPAM by
+#    outputDict['y_rot'] = y_rot
+#    outputDict['spam_depol'] = spam_depol#Input value to depolarize SPAM by
 #    outputDict['SPAMerror'] = SPAMerror#<<E|rho>>
 #    outputDict['mdl'] = simModel
-#    outputDict['N'] = N
+#    outputDict['n'] = n
 
     return outputDict

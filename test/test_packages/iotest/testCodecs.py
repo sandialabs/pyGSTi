@@ -48,7 +48,7 @@ class CodecsTestCase(BaseTestCase):
         test = self.datagen_gateset.copy()
         self.ds = pygsti.construction.generate_fake_data(
             self.datagen_gateset, self.lsgstStrings[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
+            n_samples=1000,sample_error='binomial', seed=100)
 
         #Make an model with instruments
         E = self.datagen_gateset.povms['Mdefault']['0']
@@ -72,7 +72,7 @@ class CodecsTestCase(BaseTestCase):
         #create a Workspace object
         self.ws = pygsti.report.create_standard_report(self.results, None,
                                                        title="GST Codec TEST Report",
-                                                       confidenceLevel=95)
+                                                       confidence_level=95)
         std.target_model()._check_paramvec()
 
         #create miscellaneous other objects
@@ -315,7 +315,7 @@ class TestCodecs(CodecsTestCase):
         # are correctly pickled within a DataSet.  In particular correct
         # preservation of the circuit's .str property
         pygsti.obj.Circuit.default_expand_subcircuits = False # so exponentiation => CircuitLabels
-        ds = pygsti.obj.DataSet(outcomeLabels=('0','1'))
+        ds = pygsti.obj.DataSet(outcome_labels=('0','1'))
         c0 = pygsti.obj.Circuit(None,stringrep="[Gx:0Gy:1]")
         c = c0**2
         self.assertTrue(isinstance(c.tup[0], CircuitLabel))

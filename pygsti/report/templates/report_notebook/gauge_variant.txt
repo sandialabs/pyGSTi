@@ -39,7 +39,7 @@ ws.GatesVsTargetTable(mdl, target_model, None,
 @@code
 ws.SpamTable([target_model, mdl],
              ['Target','Estimated'],
-             'boxes', cri, includeHSVec=False)
+             'boxes', cri, include_hs_vec=False)
 
 @@markdown
 ### The GST estimate of the logic gate operations.

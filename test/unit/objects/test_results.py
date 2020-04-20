@@ -3,8 +3,11 @@ import pickle
 from ..util import BaseCase, Namespace
 from . import fixtures as pkg
 
-from pygsti.objects import results, estimate
+from pygsti.protocols.gst import ModelEstimateResults
+from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
+from pygsti.objects import BulkCircuitList
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.protocols import estimate
 
 
 class ResultsBase(object):
@@ -15,76 +18,44 @@ class ResultsBase(object):
         self.maxLengthList = pkg.maxLengthList
         self.gss = pkg.lsgstStructs
 
-        # Construct results but do not init
-        self.res = results.Results()
-
-
-class BareResultsTester(ResultsBase, BaseCase):
-    def test_init_dataset(self):
-        self.res.init_dataset(self.ds)
-        # TODO assert correctness
-
-    def test_init_circuits(self):
-        self.res.init_dataset(self.ds)
-        self.res.init_circuits(self.gss)
-        # TODO assert correctness
-
-    def test_add_estimate_raises_before_initialization(self):
-        # Raise before initializing dataset
-        with self.assertRaises(ValueError):
-            self.res.add_estimate(None, None, None, None)
-        self.res.init_dataset(self.ds)
-
-        # Raise before initializing circuits
-        with self.assertRaises(ValueError):
-            self.res.add_estimate(None, None, None, None)
+        # Construct results
+        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+                                      for circuit_struct in pkg.lsgstStructs])
+        data = ProtocolData(edesign, pkg.dataset)
+        self.res = ModelEstimateResults(data, Protocol("test-protocol"))
 
 
 class ResultsTester(ResultsBase, BaseCase):
-    def setUp(self):
-        super(ResultsTester, self).setUp()
-        # Init results before tests
-        self.res.init_dataset(self.ds)
-        self.res.init_circuits(self.gss)
-
-    def test_init_warns_on_reinitialization(self):
-        with self.assertWarns(Warning):
-            self.res.init_dataset(self.ds)  # usually don't want to re-init
-        with self.assertWarns(Warning):
-            self.res.init_circuits(self.gss)  # usually don't want to re-init
-
-    def test_init_circuits_raises_on_bad_arg(self):
-        # XXX Don't test this unless init_circuits can actually take a string  EGN: we can remove this test.
-        # (and if it can, document it)
-        with self.assertRaises(ValueError):
-            self.res.init_circuits("foobar")
 
     def test_add_estimate(self):
-        # add estimates
         self.res.add_estimate(
-            std.target_model(), std.target_model(),
-            [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'},
+            estimate.Estimate.gst_init(
+                self.res, std.target_model(), std.target_model(),
+                [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
         )
         # TODO assert correctness
 
 
 class PopulatedResultsTester(ResultsBase, BaseCase):
+
     def setUp(self):
-        super(PopulatedResultsTester, self).setUp()
-        self.res.init_dataset(self.ds)
-        self.res.init_circuits(self.gss)
+        super().setUp()
+
+        # add an estimate
         self.res.add_estimate(
-            std.target_model(), std.target_model(),
-            [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'},
+            estimate.Estimate.gst_init(
+                self.res, std.target_model(), std.target_model(),
+                [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
         )
-
+    
     def test_add_estimate_warns_on_overwrite(self):
         with self.assertWarns(Warning):
             self.res.add_estimate(
-                std.target_model(), std.target_model(),
-                [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'},
+                estimate.Estimate.gst_init(
+                    self.res, std.target_model(), std.target_model(),
+                    [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
                 estimate_key="default"
             )  # re-init existing estimate
 
@@ -100,9 +71,10 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
 
     def test_add_estimate_from_results(self):
         # add_estimates from other results
-        res2 = results.Results()
-        res2.init_dataset(self.ds)
-        res2.init_circuits(self.gss)
+        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+                                      for circuit_struct in pkg.lsgstStructs])
+        data = ProtocolData(edesign, pkg.dataset)
+        res2 = ModelEstimateResults(data, Protocol("test-protocol2"))
 
         res2.add_estimates(self.res, ['default'])
 
@@ -119,17 +91,3 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
         mdl_guess = std.target_model().depolarize(op_noise=0.07, spam_noise=0.03)
         self.res.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
         # TODO assert correctness
-
-    def test_results_warns_on_deprecated(self):
-        #deprecated functions that issue warnings
-        res = results.Results()
-        with self.assertWarns(Warning):
-            res.create_full_report_pdf()
-        with self.assertWarns(Warning):
-            res.create_brief_report_pdf()
-        with self.assertWarns(Warning):
-            res.create_presentation_pdf()
-        with self.assertWarns(Warning):
-            res.create_presentation_ppt()
-        with self.assertWarns(Warning):
-            res.create_general_report_pdf()

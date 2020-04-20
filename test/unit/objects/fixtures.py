@@ -28,19 +28,19 @@ def expList(self):
 def dataset(self):
     # Was previously written to disk as 'analysis.dataset'
     return pygsti.construction.generate_fake_data(
-        self.datagen_gateset, self.expList, nSamples=10000,
-        sampleError='binomial', seed=100
+        self.datagen_gateset, self.expList, n_samples=10000,
+        sample_error='binomial', seed=100
     )
 
 
 @ns.memo
 def mdl_lgst(self):
-    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
+    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
 
 
 @ns.memo
 def mdl_lgst_go(self):
-    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, checkJac=True)
+    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True)
 
 
 @ns.memo
@@ -66,11 +66,18 @@ def lsgstStructs(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    return pygsti.do_iterative_mc2gst(
-        self.dataset, self.mdl_clgst, self.lsgstStrings, verbosity=0,
-        minProbClipForWeighting=1e-6, probClipInterval=(-1e6, 1e6),
-        memLimit=self.CM + 1024**3
+    chi2_builder = pygsti.obj.Chi2Function.builder(
+        regularization={'min_prob_clip_for_weighting': 1e-6},
+        penalties={'prob_clip_interval': (-1e6, 1e6)})
+    models, _, _ = pygsti.algorithms.core.do_iterative_gst(
+        self.dataset, self.mdl_clgst, self.lsgstStrings,
+        optimizer=None,
+        iteration_objfn_builders=[chi2_builder],
+        final_objfn_builders=[],
+        resource_alloc={'mem_limit': self.CM + 1024**3},
+        verbosity=0
     )
+    return models[-1]
 
 
 @ns.memo

@@ -20,7 +20,7 @@ class TestHessianMethods(BaseTestCase):
         super(TestHessianMethods, self).setUp()
 
         self.model = pygsti.io.load_model(compare_files + "/analysis.model")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        self.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
 
         fiducials = stdxyi.fiducials
@@ -89,8 +89,8 @@ class TestHessianMethods(BaseTestCase):
     def test_hessian_projection(self):
 
         chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                                  returnGradient=True,
-                                                  returnHessian=True)
+                                                  return_gradient=True,
+                                                  return_hessian=True)
 
         proj_non_gauge = self.model.get_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
@@ -188,7 +188,7 @@ class TestHessianMethods(BaseTestCase):
         #estLR.add_confidence_region_factory('final iteration estimate', 'final') #Could do this, but use alt. method for more coverage
         with self.assertRaises(KeyError):
             estLR.get_confidence_region_factory('final iteration estimate', 'final') #won't create by default
-        cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final', createIfNeeded=True) #now it will
+        cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final', create_if_needed=True) #now it will
         self.assertTrue( estLR.has_confidence_region_factory('final iteration estimate', 'final'))
 
         #cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
@@ -259,7 +259,7 @@ class TestHessianMethods(BaseTestCase):
                 else:
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                                            FnObj, return_fn_val=True, verbosity=4)
 
             ##SHORT-CIRCUIT linear reponse here to reduce run time
             if ci_cur is ci_linresponse: continue
@@ -284,7 +284,7 @@ class TestHessianMethods(BaseTestCase):
                 else:
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                                            FnObj, return_fn_val=True, verbosity=4)
 
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
@@ -295,7 +295,7 @@ class TestHessianMethods(BaseTestCase):
                 else:
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                                            FnObj, return_fn_val=True, verbosity=4)
 
 
             def fnOfSpam_float(rhoVecs, povms):
@@ -322,7 +322,7 @@ class TestHessianMethods(BaseTestCase):
                 else:
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                                            FnObj, return_fn_val=True, verbosity=4)
 
 
             def fnOfGateSet_float(mdl):
@@ -345,7 +345,7 @@ class TestHessianMethods(BaseTestCase):
                 else:
                     df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                     df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                                            FnObj, return_fn_val=True, verbosity=4)
 
         #TODO: assert values of df & f0 ??
 
@@ -378,12 +378,12 @@ class TestHessianMethods(BaseTestCase):
 
     def test_mapcalc_hessian(self):
         chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+                                        return_hessian=True)
 
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
         chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+                                        return_hessian=True)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
 

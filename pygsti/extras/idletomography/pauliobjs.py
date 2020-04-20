@@ -15,9 +15,9 @@ from ...objects.label import Label as _Lbl
 #Helper function
 
 
-def _commute_parity(P1, P2):
-    """ 1 if P1 commutes w/P2, -1 if they anticommute """
-    return 1 if (P1 == "I" or P2 == "I" or P1 == P2) else -1
+def _commute_parity(pauli1, pauli2):
+    """ 1 if pauli1 commutes w/pauli2, -1 if they anticommute """
+    return 1 if (pauli1 == "I" or pauli2 == "I" or pauli1 == pauli2) else -1
 
 
 class NQOutcome(object):
@@ -26,16 +26,16 @@ class NQOutcome(object):
     """
 
     @classmethod
-    def Weight1String(cls, N, i):
-        """ creates a `N`-bit string with a 1 in location `i`. """
-        ident = list("0" * N)
+    def weight_1_string(cls, n, i):
+        """ creates a `n`-bit string with a 1 in location `i`. """
+        ident = list("0" * n)
         ident[i] = "1"
         return cls(''.join(ident))
 
     @classmethod
-    def Weight2String(cls, N, i, j):
-        """ creates a `N`-bit string with 1s in locations `i` and `j`. """
-        ident = list("0" * N)
+    def weight_2_string(cls, n, i, j):
+        """ creates a `n`-bit string with 1s in locations `i` and `j`. """
+        ident = list("0" * n)
         ident[i] = "1"
         ident[j] = "1"
         return cls(''.join(ident))
@@ -134,7 +134,7 @@ class NQPauliState(object):
     def __hash__(self):
         return hash(str(self))
 
-    def to_circuit(self, pauliBasisDict):
+    def to_circuit(self, pauli_basis_dict):
         """
         Convert this Pauli basis state or measurement to a fiducial operation sequence.
 
@@ -145,7 +145,7 @@ class NQPauliState(object):
 
         Parameters
         ----------
-        pauliBasisDict : dict
+        pauli_basis_dict : dict
             A dictionary w/keys like `"+X"` or `"-Y"` and values that
             are tuples of gate *names* (not labels, which include qubit or
             other state-space designations), e.g. `("Gx","Gx")`.  This
@@ -160,13 +160,13 @@ class NQPauliState(object):
         nQubits = len(self.signs)
         for i, (s, let) in enumerate(zip(self.signs, self.rep)):
             key = sgn[s] + let  # e.g. "+X", "-Y", etc
-            if key not in pauliBasisDict and s == +1:
+            if key not in pauli_basis_dict and s == +1:
                 key = let  # try w/out "+"
-            if key not in pauliBasisDict:
-                raise ValueError("'%s' is not in `pauliBasisDict` (keys = %s)"
-                                 % (key, str(list(pauliBasisDict.keys()))))
-            opstr.extend([_Lbl(opname, i) for opname in pauliBasisDict[key]])
-            # pauliBasisDict just has 1Q gate *names* -- need to make into labels
+            if key not in pauli_basis_dict:
+                raise ValueError("'%s' is not in `pauli_basis_dict` (keys = %s)"
+                                 % (key, str(list(pauli_basis_dict.keys()))))
+            opstr.extend([_Lbl(opname, i) for opname in pauli_basis_dict[key]])
+            # pauli_basis_dict just has 1Q gate *names* -- need to make into labels
         return _objs.Circuit(opstr, num_lines=nQubits).parallelize()
 
 
@@ -177,20 +177,20 @@ class NQPauliOp(object):
     """
 
     @classmethod
-    def Weight1Pauli(cls, N, i, P):
+    def weight_1_pauli(cls, n, i, pauli):
         """
-        Creates a `N`-qubit Pauli operator with the Pauli indexed
-        by `P` in location `i`.
+        Creates a `n`-qubit Pauli operator with the Pauli indexed
+        by `pauli` in location `i`.
 
         Parameters
         ----------
-        N : int
+        n : int
             The number of qubits
 
         i : int
             The index of the single non-trivial Pauli operator.
 
-        P : int
+        pauli : int
             An integer 0 <= `P` <= 2 indexing the non-trivial Pauli at location
             `i` as follows: 0='X', 1='Y', 2='Z'.
 
@@ -198,26 +198,26 @@ class NQPauliOp(object):
         -------
         NQPauliOp
         """
-        ident = list("I" * N)
-        ident[i] = ["X", "Y", "Z"][P]
+        ident = list("I" * n)
+        ident[i] = ["X", "Y", "Z"][pauli]
         return cls(''.join(ident))
 
     @classmethod
-    def Weight2Pauli(cls, N, i, j, P1, P2):
+    def weight_2_pauli(cls, n, i, j, pauli1, pauli2):
         """
-        Creates a `N`-qubit Pauli operator with the Paulis indexed
-        by `P1` and `P2` in locations `i` and `j` respectively.
+        Creates a `n`-qubit Pauli operator with the Paulis indexed
+        by `pauli1` and `pauli2` in locations `i` and `j` respectively.
 
         Parameters
         ----------
-        N : int
+        n : int
             The number of qubits
 
         i, j : int
             The indices of the non-trivial Pauli operators.
 
-        P1,P2 : int
-            Integers 0 <= `P` <= 2 indexing the non-trivial Paulis at locations
+        pauli1,pauli2 : int
+            Integers 0 <= `pauli` <= 2 indexing the non-trivial Paulis at locations
             `i` and `j`, respectively, as follows: 0='X', 1='Y', 2='Z'.
 
         Returns
@@ -229,9 +229,9 @@ class NQPauliOp(object):
         Creates a `N`-qubit Pauli operator with Paulis `P1` and `P2` in locations
         `i` and `j` respectively.
         """
-        ident = list("I" * N)
-        ident[i] = ["X", "Y", "Z"][P1]
-        ident[j] = ["X", "Y", "Z"][P2]
+        ident = list("I" * n)
+        ident[i] = ["X", "Y", "Z"][pauli1]
+        ident[j] = ["X", "Y", "Z"][pauli2]
         return cls(''.join(ident))
 
     def __init__(self, string_rep, sign=1):
@@ -351,7 +351,7 @@ class NQPauliOp(object):
         assert(len(self) == len(other)), "Length mismatch!"
         return bool(_np.prod([_commute_parity(P1, P2) for P1, P2 in zip(self.rep, other.rep)]) == 1)
 
-    def icommutatorOver2(self, other):
+    def icommutator_over_2(self, other):
         """
         Compute `i[self, other]/2` where `[,]` is the commutator.
 
@@ -380,27 +380,28 @@ class NQPauliOp(object):
         #  Ri = Pi or Qi if Pi==I or Qi==I , otherwise
         #  Ri = i(+/-1)P' where P' is another Pauli. (this is same as case when Si == -1)
 
-        def Ri_operator(P1, P2):
-            """ the *operator* (no sign) part of R = P1*P2 """
-            if P1 + P2 in ("XY", "YX", "IZ", "ZI"): return "Z"
-            if P1 + P2 in ("XZ", "ZX", "IY", "YI"): return "Y"
-            if P1 + P2 in ("YZ", "ZY", "IX", "XI"): return "X"
-            if P1 + P2 in ("II", "XX", "YY", "ZZ"): return "I"
+        def ri_operator(pauli1, pauli2):
+            """ the *operator* (no sign) part of R = pauli1*pauli2 """
+            if pauli1 + pauli2 in ("XY", "YX", "IZ", "ZI"): return "Z"
+            if pauli1 + pauli2 in ("XZ", "ZX", "IY", "YI"): return "Y"
+            if pauli1 + pauli2 in ("YZ", "ZY", "IX", "XI"): return "X"
+            if pauli1 + pauli2 in ("II", "XX", "YY", "ZZ"): return "I"
             assert(False)
 
-        def Ri_sign(P1, P2, parity):
-            """ the +/-1 *sign* part of R = P1*P2 (doesn't count the i-factor in 3rd case)"""
-            if parity == 1: return 1  # pass commuteParity(P1,P2) to save computation
-            return 1 if P1 + P2 in ("XY", "YZ", "ZX") else -1
+        def ri_sign(pauli1, pauli2, parity):
+            """ the +/-1 *sign* part of R = pauli1*pauli2 (doesn't count the i-factor in 3rd case)"""
+            if parity == 1: return 1  # pass commuteParity(pauli1,pauli2) to save computation
+            return 1 if pauli1 + pauli2 in ("XY", "YZ", "ZX") else -1
 
         assert(len(self) == len(other)), "Length mismatch!"
         s1, s2 = self.rep, other.rep
-        parities = [_commute_parity(P1, P2) for P1, P2 in zip(s1, s2)]
+        parities = [_commute_parity(pauli1, pauli2) for pauli1, pauli2 in zip(s1, s2)]
         if _np.prod(parities) == 1: return None  # an even number of minus signs => commutator = 0
 
-        op = ''.join([Ri_operator(P1, P2) for P1, P2 in zip(s1, s2)])
+        op = ''.join([ri_operator(pauli1, pauli2) for pauli1, pauli2 in zip(s1, s2)])
         num_i = parities.count(-1)  # number of i factors from 3rd Ri case above
-        sign = (-1)**((num_i + 1) / 2) * _np.prod([Ri_sign(P1, P2, p) for P1, P2, p in zip(s1, s2, parities)])
+        sign = (-1)**((num_i + 1) / 2) * _np.prod([ri_sign(pauli1, pauli2, p)
+                                                   for pauli1, pauli2, p in zip(s1, s2, parities)])
         if isinstance(other, NQPauliOp): other_sign = other.sign
         elif isinstance(other, NQPauliState): other_sign = _np.product(other.signs)
         else: raise ValueError("Can't take commutator with %s type" % str(type(other)))

@@ -61,9 +61,9 @@ class _Module(GSTModelPack, RBModelPack):
                                         ('Gc0c22', [('Gxpi2', 1), ('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1), (), ()]),
                                         ('Gc0c23', [('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 1), ('Gxpi2', 1), ('Gxpi2', 1), (), ()])])
 
-    global_fidPairs = [(0, 1), (2, 0), (2, 1), (3, 3)]
+    global_fidpairs = [(0, 1), (2, 0), (2, 1), (3, 3)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gxpi2', 1), ): [(1, 2), (2, 2), (3, 1), (3, 3)],
         ((), ): [(1, 1), (2, 2), (3, 3)],
         (('Gypi2', 1), ): [(0, 1), (1, 1), (2, 0), (3, 0)],
@@ -77,10 +77,10 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 1), ('Gypi2', 1), ('Gypi2', 1)): [(0, 0), (0, 1), (0, 2), (1, 2)]
     }
 
-    global_fidPairs_lite = [(0, 4), (0, 5), (1, 0), (2, 0), (2, 4), (2, 5), (3, 0), (4, 2), (4, 4), (5, 1), (5, 2),
+    global_fidpairs_lite = [(0, 4), (0, 5), (1, 0), (2, 0), (2, 4), (2, 5), (3, 0), (4, 2), (4, 4), (5, 1), (5, 2),
                             (5, 3)]
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
         (('Gxpi2', 1), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         ((), ): [(0, 3), (1, 1), (5, 5)],
         (('Gypi2', 1), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
@@ -92,7 +92,7 @@ class _Module(GSTModelPack, RBModelPack):
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1)],
             ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
-            effectLabels=['0', '1'], effectExpressions=['0', '1'])
+            effect_labels=['0', '1'], effect_expressions=['0', '1'])
 
 
 import sys

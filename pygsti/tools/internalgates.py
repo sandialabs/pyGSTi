@@ -185,22 +185,22 @@ def get_standard_gatename_unitaries():
     sigmay = _np.array([[0, -1.0j], [1.0j, 0]])
     sigmaz = _np.array([[1, 0], [0, -1]])
 
-    def Uop(exp):
+    def u_op(exp):
         return _np.array(_spl.expm(-1j * exp / 2), complex)
 
     std_unitaries['Gi'] = _np.array([[1., 0.], [0., 1.]], complex)
 
-    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = Uop(_np.pi / 2 * sigmax)
-    std_unitaries['Gy'] = std_unitaries['Gypi2'] = Uop(_np.pi / 2 * sigmay)
-    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = Uop(_np.pi / 2 * sigmaz)
+    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = u_op(_np.pi / 2 * sigmax)
+    std_unitaries['Gy'] = std_unitaries['Gypi2'] = u_op(_np.pi / 2 * sigmay)
+    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = u_op(_np.pi / 2 * sigmaz)
 
     std_unitaries['Gxpi'] = _np.array([[0., 1.], [1., 0.]], complex)
     std_unitaries['Gypi'] = _np.array([[0., -1j], [1j, 0.]], complex)
     std_unitaries['Gzpi'] = _np.array([[1., 0.], [0., -1.]], complex)
 
-    std_unitaries['Gxmpi2'] = Uop(-1 * _np.pi / 2 * sigmax)
-    std_unitaries['Gympi2'] = Uop(-1 * _np.pi / 2 * sigmay)
-    std_unitaries['Gzmpi2'] = Uop(-1 * _np.pi / 2 * sigmaz)
+    std_unitaries['Gxmpi2'] = u_op(-1 * _np.pi / 2 * sigmax)
+    std_unitaries['Gympi2'] = u_op(-1 * _np.pi / 2 * sigmay)
+    std_unitaries['Gzmpi2'] = u_op(-1 * _np.pi / 2 * sigmaz)
 
     H = (1 / _np.sqrt(2)) * _np.array([[1., 1.], [1., -1.]], complex)
     P = _np.array([[1., 0.], [0., 1j]], complex)
@@ -251,6 +251,58 @@ def get_standard_gatename_unitaries():
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
     return std_unitaries
+
+
+def get_standard_gatenames_cirq_conversions():
+    """
+    A dictionary converting the gates with standard names
+    (see get_standard_gatename_unitaries()) to the cirq
+    names for these gates.
+
+    By default, an idle operation will not be converted to a gate.
+    If you want an idle to be converted to a `cirq.WaitGate`, you will have
+    to modify this dictionary.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Currently there are some standard gate names with no conversion to cirq.
+
+    TODO: add Clifford gates with
+    https://cirq.readthedocs.io/en/latest/generated/cirq.SingleQubitCliffordGate.html
+
+    Returns
+    -------
+    dict mapping strings to string
+    """
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+    std_gatenames_to_cirq = {}
+    std_gatenames_to_cirq['Gi'] = None
+    std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gxpi'] = cirq.X
+    std_gatenames_to_cirq['Gzpi2'] = cirq.ZPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gzmpi2'] = cirq.ZPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gzpi'] = cirq.Z
+    std_gatenames_to_cirq['Gypi2'] = cirq.YPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gympi2'] = cirq.YPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gypi'] = cirq.Y
+    std_gatenames_to_cirq['Gp'] = std_gatenames_to_cirq['Gzpi']  # todo : check that this is correct
+    std_gatenames_to_cirq['Gpdag'] = std_gatenames_to_cirq['Gzmpi2']  # todo : check that this is correct
+    std_gatenames_to_cirq['Gh'] = cirq.H
+    std_gatenames_to_cirq['Gt'] = cirq.T  # todo : check that this is correct
+    std_gatenames_to_cirq['Gtdag'] = cirq.T**-1  # todo : check that this is correct
+    std_gatenames_to_cirq['Gcphase'] = cirq.CZ
+    std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
+    std_gatenames_to_cirq['Gswap'] = cirq.SWAP
+
+    return std_gatenames_to_cirq
 
 
 def get_standard_gatenames_quil_conversions():

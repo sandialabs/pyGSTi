@@ -14,7 +14,7 @@ from ...objects import processorspec as _pspec
 qubits = ['Q' + str(x) for x in range(8)] + ['Q1' + str(x) for x in range(8)]  \
     + ['Q2' + str(x) for x in range(8)] + ['Q3' + str(x) for x in range(8)]
 
-twoQgate = 'Gcphase'
+two_qubit_gate = 'Gcphase'
 
 edgelist = [('Q' + str(i), 'Q' + str((i + 1) % 8)) for i in range(8)] \
     + [('Q' + str((i + 1) % 8), 'Q' + str(i)) for i in range(8)] \

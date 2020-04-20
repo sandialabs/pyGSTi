@@ -2,7 +2,7 @@ import os
 import unittest
 import pickle
 import copy
-import pygsti
+import pygsti.protocols.estimate
 from pygsti.extras import drift
 from pygsti.modelpacks.legacy import stdQT_XYIMS
 
@@ -51,7 +51,7 @@ class TestWorkspace(ReportBaseCase):
         key, result = ws.smartCache.cached_compute(output_fn, [])
         #print(key,result)
 
-        ws.save_cache(temp_files + "/saved_workspace_testcache.pkl", showUnpickled=True)
+        ws.save_cache(temp_files + "/saved_workspace_testcache.pkl", show_unpickled=True)
         ws.load_cache(temp_files + "/saved_workspace_testcache.pkl")
 
     def test_plotly_pickling(self):
@@ -121,12 +121,12 @@ class TestWorkspace(ReportBaseCase):
         #Construct confidence regions
         def make_cr(mdl):
             hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss.allstrs,
-                                                minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+                                                min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
-            est = pygsti.objects.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
+            est = pygsti.protocols.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
-                hessian=hessian, nonMarkRadiusSq=0.0)
+                hessian=hessian, non_mark_radius_sq=0.0)
             crfactory.project_hessian('std')
             return crfactory.view(95)
 
@@ -145,12 +145,12 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.SpamParametersTable(self.mdl, cr ) )
         tbls.append( w.SpamParametersTable(gsMultiSpam, cr ) )
 
-        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
-        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
-        tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2TP ) )
-        tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2CPTP ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="boxes", confidence_region_info=cr ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="numbers", confidence_region_info=cr ) )
+        tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidence_region_info=cr2TP ) )
+        tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidence_region_info=cr2CPTP ) )
         with self.assertRaises(ValueError):
-            w.GatesTable(self.mdl, ["mytitle"], display_as="foobar", confidenceRegionInfo=cr )
+            w.GatesTable(self.mdl, ["mytitle"], display_as="foobar", confidence_region_info=cr )
 
         tbls.append( w.ChoiTable(self.mdl, ["mytitle"], cr ) )
         tbls.append( w.ChoiTable(gsQT, ["mytitle"], None ) )
@@ -162,18 +162,18 @@ class TestWorkspace(ReportBaseCase):
             w.GatesVsTargetTable(self.mdl, self.tgt, cr, display=("foobar",) )
 
         tbls.append( w.SpamVsTargetTable(self.mdl, self.tgt, cr ) )
-        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="boxes", genType="logTiG") )
-        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", genType="logTiG") )
-        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", genType="logG-logT") )
-        tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", genType="logGTi") )
-        tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", genType="logGTi") )
-        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", genType="logGTi") )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="boxes", gen_type="logTiG") )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logTiG") )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logG-logT") )
+        tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
+        tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", gen_type="logGTi") )
         with self.assertRaises(ValueError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
         with self.assertRaises(AssertionError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display_as='foobar')
         with self.assertRaises(ValueError):
-            w.ErrgenTable(self.mdl, self.tgt, cr, genType='foobar')
+            w.ErrgenTable(self.mdl, self.tgt, cr, gen_type='foobar')
 
         tbls.append( w.GateDecompTable(self.mdl, self.tgt, cr) )
 
@@ -184,7 +184,7 @@ class TestWorkspace(ReportBaseCase):
         with self.assertRaises(ValueError):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
 
-        tbls.append( w.DataSetOverviewTable(self.ds,maxLengthList=[1,2,4,8]) )
+        tbls.append( w.DataSetOverviewTable(self.ds,max_length_list=[1,2,4,8]) )
         tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.circuit_structs['iteration'],
                                           self.results.estimates['default'].models['iteration estimates'], self.ds) )
         with self.assertRaises(ValueError):
@@ -196,7 +196,7 @@ class TestWorkspace(ReportBaseCase):
         prepStrs = self.results.circuit_lists['prep fiducials']
         effectStrs = self.results.circuit_lists['meas fiducials']
         tbls.append( w.CircuitTable((prepStrs,effectStrs),
-                                    ["Prep.","Measure"], commonTitle="Fiducials"))
+                                    ["Prep.","Measure"], common_title="Fiducials"))
 
         metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
                           "evnudiamond", "inf","agi","trace","diamond","nuinf","nuagi",
@@ -206,7 +206,7 @@ class TestWorkspace(ReportBaseCase):
                 metric, [self.mdl,self.mdl],[self.tgt,self.tgt], ['one','two'])) #1D
             tbls.append( w.GatesSingleMetricTable(
                 metric, [[self.mdl],[self.mdl]],[[self.tgt],[self.tgt]],
-                ['column one'], ['row one','row two'], opLabel="Gx")) #2D
+                ['column one'], ['row one','row two'], op_label="Gx")) #2D
             tbls.append( w.GatesSingleMetricTable(
                 metric, [self.mdl,None],[self.tgt,self.tgt], ['one','two'])) #1D w/None model
 
@@ -264,7 +264,7 @@ class TestWorkspace(ReportBaseCase):
             with self.assertRaises(ValueError):
                 tbl.saveas(temp_files + "/saved_table_%d.foobar" % i) # Unknown file type
 
-        w.save_cache(temp_files + "/saved_workspace_cache1.pkl", showUnpickled=True)
+        w.save_cache(temp_files + "/saved_workspace_cache1.pkl", show_unpickled=True)
         w.load_cache(temp_files + "/saved_workspace_cache1.pkl")
 
         w2 = pygsti.report.Workspace(temp_files + "/saved_workspace_cache1.pkl") # init from cache
@@ -283,14 +283,14 @@ class TestWorkspace(ReportBaseCase):
         plts = []
         plts.append( w.BoxKeyPlot(prepStrs, effectStrs) )
         plts.append( w.BoxKeyPlot(non_gatestring_strs, non_gatestring_strs) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=True,
-                                    hoverInfo=True, sumUp=False, invert=False) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=True, invert=False) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=False, invert=True) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=True,
+                                    hover_info=True, sum_up=False, invert=False) )
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
+                                    hover_info=True, sum_up=True, invert=False) )
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
+                                    hover_info=True, sum_up=False, invert=True) )
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
+                                    hover_info=True, sum_up=False, invert=False, typ="scatter") )
 
         mds = pygsti.objects.MultiDataSet()
         mds.add_dataset("DS0",self.ds)
@@ -308,8 +308,8 @@ class TestWorkspace(ReportBaseCase):
         results_gst.generate_spectra()
         results_gst.do_instability_detection(0.05)
         results_gst.do_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
-        plts.append( w.ColorBoxPlot('driftsize', self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=False, sumUp=True, invert=False, stabilityanalyzer=results_gst) )
+        plts.append( w.ColorBoxPlot('driftsize', self.gss, self.ds, self.mdl, box_labels=False,
+                                    hover_info=False, sum_up=True, invert=False, stabilityanalyzer=results_gst) )
 
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)
@@ -324,26 +324,26 @@ class TestWorkspace(ReportBaseCase):
         #        effect_labels=self.mdl.get_effect_labels() )
         baseStrs = self.gss.get_basestrings()
         directModels = dx.direct_mlgst_models(
-            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svdTruncateTo=4)
+            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
         plts.append( w.ColorBoxPlot(["chi2","logl","blank",'directchi2','directlogl'], self.gss,
-                                    self.ds, self.mdl, boxLabels=False, directGSTmodels=directModels) )
+                                    self.ds, self.mdl, box_labels=False, direct_gst_models=directModels) )
         plts.append( w.ColorBoxPlot(["errorrate"], self.gss,
-                                    self.ds, self.mdl, boxLabels=False, sumUp=True,
-                                    directGSTmodels=directModels) )
+                                    self.ds, self.mdl, box_labels=False, sum_up=True,
+                                    direct_gst_models=directModels) )
 
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                   colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",colormap=None))
-        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", boxLabels=True) )
+        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", box_labels=True) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],scale=1.5) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],amp=2.0) )
 
         projections = np.zeros(16,'d')
-        plts.append( w.ProjectionsBoxPlot(projections, "pp", boxLabels=False) )
-        plts.append( w.ProjectionsBoxPlot(projections, "gm", boxLabels=True) )
-        plts.append( w.ProjectionsBoxPlot(np.zeros(9,'d'), "gm", boxLabels=True) )  # non-qubit case
-        plts.append( w.ProjectionsBoxPlot(np.zeros(64,'d'), "gm", boxLabels=True) ) # >2Q case
+        plts.append( w.ProjectionsBoxPlot(projections, "pp", box_labels=False) )
+        plts.append( w.ProjectionsBoxPlot(projections, "gm", box_labels=True) )
+        plts.append( w.ProjectionsBoxPlot(np.zeros(9,'d'), "gm", box_labels=True) )  # non-qubit case
+        plts.append( w.ProjectionsBoxPlot(np.zeros(64,'d'), "gm", box_labels=True) ) # >2Q case
 
         choievals = np.array([-0.03, 0.02, 0.04, 0.98])
         choieb = np.array([0.05, 0.01, 0.02, 0.01])
@@ -401,7 +401,7 @@ class TestWorkspace(ReportBaseCase):
         switchbd2 = w.Switchboard(["spamWeight"], [["0.0","0.1","0.2","0.5","0.9","0.95"]], ["slider"])
 
         tbl = w.SpamTable(switchbd["mdl"])
-        plt = w.ColorBoxPlot(("chi2","logl"), self.gss, switchbd["ds"], switchbd["mdl"], boxLabels=False)
+        plt = w.ColorBoxPlot(("chi2","logl"), self.gss, switchbd["ds"], switchbd["mdl"], box_labels=False)
 
         switchbd.render("html")
         switchbd2.render("html")
@@ -611,7 +611,7 @@ class TestWorkspace(ReportBaseCase):
         self.assertEqual(ph._eformat(-1.234, "foobar"), "-1.234") #just prints in general format
 
         subMxs = np.nan * np.ones((3,3,2,2),'d') # a 3x3 grid of 2x2 matrices
-        nBoxes, dof_per_box = ph._compute_num_boxes_dof(subMxs, sumUp=True, element_dof=1)
+        nBoxes, dof_per_box = ph._compute_num_boxes_dof(subMxs, sum_up=True, element_dof=1)
         self.assertEqual(nBoxes, 0)
         self.assertEqual(dof_per_box, None)
 
@@ -620,8 +620,8 @@ class TestWorkspace(ReportBaseCase):
         subMxs[0,2,1,1] = 1.0 # matrix [0,2] has a two non-Nan elements
 
         # now the mxs that aren't all-NaNs don't all have the same # of Nans => warning
-        #self.assertWarns(ph._compute_num_boxes_dof, subMxs, sumUp=True, element_dof=1)
-        ph._compute_num_boxes_dof( subMxs, sumUp=True, element_dof=1) # Python2.7 doesn't always warn...
+        #self.assertWarns(ph._compute_num_boxes_dof, subMxs, sum_up=True, element_dof=1)
+        ph._compute_num_boxes_dof( subMxs, sum_up=True, element_dof=1) # Python2.7 doesn't always warn...
 
 
     def test_plot_basefns(self):
@@ -648,25 +648,25 @@ class TestWorkspace(ReportBaseCase):
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
-            sumUp=True, hoverInfo=True) #sumup test
+            sum_up=True, hover_info=True) #sumup test
 
         pygsti.report.workspaceplots.generate_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
-            sumUp=True, hoverInfo=False) #no hover info
+            sum_up=True, hover_info=False) #no hover info
 
         pygsti.report.workspaceplots.generate_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
-            sumUp=False, hoverInfo=False) # no hover info or sumUp
+            sum_up=False, hover_info=False) # no hover info or sum_up
 
         pygsti.report.workspaceplots.generate_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
-            sumUp=True, invert=True) #ignores invert
+            sum_up=True, invert=True) #ignores invert
 
         # ----- circuit_color_boxplot -----
         germs = preps = effects = gstrs
@@ -684,32 +684,32 @@ class TestWorkspace(ReportBaseCase):
         assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
 
         pygsti.report.workspaceplots.circuit_color_boxplot(
-            gss, mxs, colormap, sumUp=True)
+            gss, mxs, colormap, sum_up=True)
         pygsti.report.workspaceplots.circuit_color_boxplot(
-            gss, mxs, colormap, sumUp=False)
+            gss, mxs, colormap, sum_up=False)
         pygsti.report.workspaceplots.circuit_color_boxplot(
-            gss2, mxs, colormap, sumUp=True)
+            gss2, mxs, colormap, sum_up=True)
         pygsti.report.workspaceplots.circuit_color_boxplot(
-            gss2, mxs, colormap, sumUp=False)
+            gss2, mxs, colormap, sum_up=False)
 
 
         # ----- circuit_color_scatterplot -----
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss, mxs, colormap, sumUp=True)
+            gss, mxs, colormap, sum_up=True)
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss, mxs, colormap, hoverInfo=False) # no hoverinfo
+            gss, mxs, colormap, hover_info=False) # no hoverinfo
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss2, mxs, colormap, hoverInfo=True) # gss2 case
+            gss2, mxs, colormap, hover_info=True) # gss2 case
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss2, mxs, colormap, hoverInfo=True) # gss2 case
+            gss2, mxs, colormap, hover_info=True) # gss2 case
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss, mxs, colormap, sumUp=True, addl_hover_subMxs={'qty': mxs} ) # just reuse mxs
+            gss, mxs, colormap, sum_up=True, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss, mxs, colormap, sumUp=False, addl_hover_subMxs={'qty': mxs} ) # just reuse mxs
+            gss, mxs, colormap, sum_up=False, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss3, mxs, colormap, sumUp=True, hoverInfo=True) # gss3 case
+            gss3, mxs, colormap, sum_up=True, hover_info=True) # gss3 case
         pygsti.report.workspaceplots.circuit_color_scatterplot(
-            gss3, mxs, colormap, sumUp=False, hoverInfo=True) # gss3 case
+            gss3, mxs, colormap, sum_up=False, hover_info=True) # gss3 case
 
 
         # ---- circuit_color_histogram ----
@@ -721,7 +721,7 @@ class TestWorkspace(ReportBaseCase):
 
         # ---- opmatrix_color_boxplot ----
         pygsti.report.workspaceplots.opmatrix_color_boxplot(
-            np.identity(4,'d'), -1.0, 1.0, mxBasis="pp", mxBasisY="gm")
+            np.identity(4,'d'), -1.0, 1.0, mx_basis="pp", mx_basis_y="gm")
           # test weird case when there's different bases on diff axes
 
         # ---- matrix_color_boxplot ----

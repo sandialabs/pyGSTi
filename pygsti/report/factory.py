@@ -18,6 +18,7 @@ import numpy as _np
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
+from ..objects import objectivefns as _objfns
 from ..tools import timed_block as _timed_block
 
 from ..tools.mpitools import distribute_indices as _distribute_indices
@@ -36,6 +37,7 @@ from . import section as _section
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
+from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -120,7 +122,7 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     return None
 
 
-def create_offline_zip(outputDir="."):
+def create_offline_zip(output_dir="."):
     """
     Creates a zip file containing the a directory ("offline") of files
     need to display "offline" reports (generated with `connected=False`).
@@ -135,7 +137,7 @@ def create_offline_zip(outputDir="."):
 
     Parameters
     ----------
-    outputDir : str, optional
+    output_dir : str, optional
         The directory in which "offline.zip" should be place.
 
     Returns
@@ -145,7 +147,7 @@ def create_offline_zip(outputDir="."):
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates")
 
-    zipFName = _os.path.join(outputDir, "offline.zip")
+    zipFName = _os.path.join(output_dir, "offline.zip")
     zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)
     for root, _, files in _os.walk(_os.path.join(templatePath, "offline")):
         for f in files:
@@ -180,7 +182,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     return toggles
 
 
-def _create_master_switchboard(ws, results_dict, confidenceLevel,
+def _create_master_switchboard(ws, results_dict, confidence_level,
                                nmthreshold, printer, fmt,
                                combine_robust, idt_results_dict=None, embed_figures=True):
     """
@@ -199,7 +201,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     for results in results_dict.values():
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
-        Ls = _add_new_labels(Ls, results.circuit_structs['final'].Ls)
+        loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
+            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
+        Ls = _add_new_labels(Ls, loc_Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
                                                list(est.goparameters.keys()))
@@ -227,64 +231,69 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     )
 
     switchBd.add("ds", (0,))
-    switchBd.add("prepStrs", (0,))
-    switchBd.add("effectStrs", (0,))
-    switchBd.add("strs", (0,))
+    switchBd.add("prep_fiducials", (0,))
+    switchBd.add("meas_fiducials", (0,))
+    switchBd.add("fiducials_tup", (0,))
     switchBd.add("germs", (0,))
 
     switchBd.add("eff_ds", (0, 1))
     switchBd.add("modvi_ds", (0, 1))
-    switchBd.add("wildcardBudget", (0, 1))
-    switchBd.add("wildcardBudgetOptional", (0, 1))
-    switchBd.add("scaledSubMxsDict", (0, 1))
-    switchBd.add("gsTarget", (0, 1))
+    switchBd.add("wildcard_budget", (0, 1))
+    switchBd.add("wildcard_budget_optional", (0, 1))
+    switchBd.add("scaled_submxs_dict", (0, 1))
+    switchBd.add("mdl_target", (0, 1))
     switchBd.add("params", (0, 1))
-    switchBd.add("objective", (0, 1))
-    switchBd.add("objective_tvd_tuple", (0, 1))
-    switchBd.add("objective_modvi", (0, 1))
-    switchBd.add("mpc", (0, 1))
-    switchBd.add("mpc_modvi", (0, 1))
+    switchBd.add("objfn_builder", (0, 1))
+    switchBd.add("objfn_builder_modvi", (0, 1))
+    #switchBd.add("objective_tvd_tuple", (0, 1))    #REMOVE
+    #switchBd.add("objective_modvi", (0, 1))    #REMOVE
+    #switchBd.add("mpc", (0, 1))    #REMOVE
+    #switchBd.add("mpc_modvi", (0, 1))    #REMOVE
     switchBd.add("clifford_compilation", (0, 1))
     switchBd.add("meta_stdout", (0, 1))
     switchBd.add("profiler", (0, 1))
 
-    switchBd.add("gsGIRep", (0, 1))
-    switchBd.add("gsGIRepEP", (0, 1))
-    switchBd.add("gsFinal", (0, 1, 2))
-    switchBd.add("gsEvalProjected", (0, 1, 2))
-    switchBd.add("gsTargetAndFinal", (0, 1, 2))  # general only!
+    switchBd.add("mdl_gaugeinv", (0, 1))
+    switchBd.add("mdl_gaugeinv_ep", (0, 1))
+    switchBd.add("mdl_final", (0, 1, 2))
+    switchBd.add("mdl_eval_projected", (0, 1, 2))
+    switchBd.add("mdl_target_and_final", (0, 1, 2))  # general only!
     switchBd.add("goparams", (0, 1, 2))
-    switchBd.add("gsL", (0, 1, 3))
-    switchBd.add("gsL_modvi", (0, 1, 3))
-    switchBd.add("gss", (0, 3))
-    switchBd.add("gssFinal", (0,))
-    switchBd.add("gsAllL", (0, 1))
-    switchBd.add("gsAllL_modvi", (0, 1))
-    switchBd.add("gssAllL", (0,))
-    switchBd.add("gsFinalGrid", (2,))
+    switchBd.add("mdl_current", (0, 1, 3))
+    switchBd.add("mdl_current_modvi", (0, 1, 3))
+    switchBd.add("circuits_current", (0, 3))  # current L value (iteration)
+    switchBd.add("circuits_final", (0,))  # final L value (iteration)
+    switchBd.add("mdl_all", (0, 1))
+    switchBd.add("mdl_all_modvi", (0, 1))
+    switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
+    switchBd.add("mdl_final_grid", (2,))
 
     switchBd.add("idtresults", (0,))
 
-    if confidenceLevel is not None:
+    if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
-        switchBd.add("criGIRep", (0, 1))
+        switchBd.add("cri_gaugeinv", (0, 1))
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
 
         switchBd.ds[d] = results.dataset
-        switchBd.prepStrs[d] = results.circuit_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.circuit_lists['meas fiducials']
-        switchBd.strs[d] = (results.circuit_lists['prep fiducials'],
-                            results.circuit_lists['meas fiducials'])
+        switchBd.prep_fiducials[d] = results.circuit_lists['prep fiducials']
+        switchBd.meas_fiducials[d] = results.circuit_lists['meas fiducials']
+        switchBd.fiducials_tup[d] = (results.circuit_lists['prep fiducials'],
+                                     results.circuit_lists['meas fiducials'])
         switchBd.germs[d] = results.circuit_lists['germs']
 
-        switchBd.gssFinal[d] = results.circuit_structs['final']
+        switchBd.circuits_final[d] = results.circuit_lists['final']
+
+        loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
+            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
+
         for iL, L in enumerate(swLs):  # allow different results to have different Ls
-            if L in results.circuit_structs['final'].Ls:
-                k = results.circuit_structs['final'].Ls.index(L)
-                switchBd.gss[d, iL] = results.circuit_structs['iteration'][k]
-        switchBd.gssAllL[d] = results.circuit_structs['iteration']
+            if L in loc_Ls:
+                k = loc_Ls.index(L)
+                switchBd.circuits_current[d, iL] = results.circuit_lists['iteration'][k]
+        switchBd.circuits_all[d] = results.circuit_lists['iteration']
 
         if idt_results_dict is not None:
             switchBd.idtresults[d] = idt_results_dict.get(dslbl, None)
@@ -300,24 +309,30 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             else:
                 est_modvi = est
 
-            def rpt_objective(opt_objective):
-                """ If optimized using just LGST, compute logl values """
-                if opt_objective == "lgst": return "logl"
-                else: return opt_objective
-
+            switchBd.objfn_builder[d, i] = est.parameters.get(
+                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.simple('logl'))
+            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
+                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.simple('logl'))
             switchBd.params[d, i] = est.parameters
-            switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
-            switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
-            switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
-            if est.parameters['objective'] == "logl":
-                switchBd.mpc[d, i] = est.parameters['minProbClip']
-                switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
-            elif est.parameters['objective'] == "chi2":
-                switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
-                switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
-            else:  # "lgst" - just use defaults for logl
-                switchBd.mpc[d, i] = 1e-4
-                switchBd.mpc_modvi[d, i] = 1e-4
+
+            #REMOVE
+            #def rpt_objective(opt_objective):
+            #    """ If optimized using just LGST, compute logl values """
+            #    if opt_objective == "lgst": return "logl"
+            #    else: return opt_objective
+            #switchBd.params[d, i] = est.parameters
+            #switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
+            #switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
+            #switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
+            #if est.parameters['objective'] == "logl":
+            #    switchBd.mpc[d, i] = est.parameters['minProbClip']
+            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
+            #elif est.parameters['objective'] == "chi2":
+            #    switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
+            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
+            #else:  # "lgst" - just use defaults for logl
+            #    switchBd.mpc[d, i] = 1e-4
+            #    switchBd.mpc_modvi[d, i] = 1e-4
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -327,7 +342,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.meta_stdout[d, i] = est_modvi.meta.get('stdout', [('LOG', 1, "No standard output recorded")])
 
             GIRepLbl = 'final iteration estimate'  # replace with a gauge-opt label if it has a CI factory
-            if confidenceLevel is not None:
+            if confidence_level is not None:
                 if _get_viewable_crf(est, lbl, GIRepLbl) is None:
                     for l in gauge_opt_labels:
                         if _get_viewable_crf(est, lbl, l) is not None:
@@ -343,45 +358,45 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             if est.parameters.get("weights", None):
                 effds, scale_subMxs = est.get_effective_dataset(True)
                 switchBd.eff_ds[d, i] = effds
-                switchBd.scaledSubMxsDict[d, i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
+                switchBd.scaled_submxs_dict[d, i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
                 switchBd.modvi_ds[d, i] = results.dataset if combine_robust else effds
             else:
                 switchBd.modvi_ds[d, i] = results.dataset
                 switchBd.eff_ds[d, i] = NA
-                switchBd.scaledSubMxsDict[d, i] = NA
+                switchBd.scaled_submxs_dict[d, i] = NA
 
-            switchBd.wildcardBudgetOptional[d, i] = est.parameters.get("unmodeled_error", None)
+            switchBd.wildcard_budget_optional[d, i] = est.parameters.get("unmodeled_error", None)
             if est.parameters.get("unmodeled_error", None):
-                switchBd.wildcardBudget[d, i] = est.parameters['unmodeled_error']
+                switchBd.wildcard_budget[d, i] = est.parameters['unmodeled_error']
             else:
-                switchBd.wildcardBudget[d, i] = NA
+                switchBd.wildcard_budget[d, i] = NA
 
-            switchBd.gsTarget[d, i] = est.models['target']
-            switchBd.gsGIRep[d, i] = est.models[GIRepLbl]
+            switchBd.mdl_target[d, i] = est.models['target']
+            switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
             try:
-                switchBd.gsGIRepEP[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
-                                                                               est.models['target'])
+                switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
+                                                                                     est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
-                switchBd.gsGIRepEP[d, i] = None
+                switchBd.mdl_gaugeinv_ep[d, i] = None
             except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion
-                switchBd.gsGIRepEP[d, i] = None
+                switchBd.mdl_gaugeinv_ep[d, i] = None
 
-            switchBd.gsFinal[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
-            switchBd.gsTargetAndFinal[d, i, :] = \
+            switchBd.mdl_final[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
+            switchBd.mdl_target_and_final[d, i, :] = \
                 [[est.models['target'], est.models[l]] if (l in est.models) else NA
                  for l in gauge_opt_labels]
             switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) for l in gauge_opt_labels]
 
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
-                if L in results.circuit_structs['final'].Ls:
-                    k = results.circuit_structs['final'].Ls.index(L)
-                    switchBd.gsL[d, i, iL] = est.models['iteration estimates'][k]
-                    switchBd.gsL_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.gsAllL[d, i] = est.models['iteration estimates']
-            switchBd.gsAllL_modvi[d, i] = est_modvi.models['iteration estimates']
+                if L in loc_Ls:
+                    k = loc_Ls.index(L)
+                    switchBd.mdl_current[d, i, iL] = est.models['iteration estimates'][k]
+                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
+            switchBd.mdl_all[d, i] = est.models['iteration estimates']
+            switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
 
-            if confidenceLevel is not None:
-                misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
+            if confidence_level is not None:
+                misfit_sigma = est.misfit_sigma(use_accurate_np=True)
 
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
@@ -395,58 +410,58 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                             # experimental non-markovian error bars.
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
-                            switchBd.cri[d, i, il] = crf.view(confidenceLevel, region_type)
+                            switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
 
                     else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
                 #  relevant warnings/notes should have been given above.
-                switchBd.criGIRep[d, i] = None  # default
+                switchBd.cri_gaugeinv[d, i] = None  # default
                 crf = _get_viewable_crf(est, lbl, GIRepLbl)
                 if crf is not None:
                     region_type = "normal" if misfit_sigma <= nmthreshold \
                                   else "non-markovian"
-                    switchBd.criGIRep[d, i] = crf.view(confidenceLevel, region_type)
+                    switchBd.cri_gaugeinv[d, i] = crf.view(confidence_level, region_type)
 
     results_list = [results_dict[dslbl] for dslbl in dataset_labels]
     for i, gokey in enumerate(gauge_opt_labels):
         if multidataset:
-            switchBd.gsFinalGrid[i] = [
+            switchBd.mdl_final_grid[i] = [
                 [(res.estimates[el].models.get(gokey, None)
                   if el in res.estimates else None) for el in est_labels]
                 for res in results_list]
         else:
-            switchBd.gsFinalGrid[i] = [
+            switchBd.mdl_final_grid[i] = [
                 (results_list[0].estimates[el].models.get(gokey, None)
                  if el in results_list[0].estimates else None) for el in est_labels]
 
     if multidataset:
-        switchBd.add_unswitched('gsTargetGrid', [
+        switchBd.add_unswitched('mdl_target_grid', [
             [(res.estimates[el].models.get('target', None)
               if el in res.estimates else None) for el in est_labels]
             for res in results_list])
     else:
-        switchBd.add_unswitched('gsTargetGrid', [
+        switchBd.add_unswitched('mdl_target_grid', [
             (results_list[0].estimates[el].models.get('target', None)
              if el in results_list[0].estimates else None) for el in est_labels])
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
 
-def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
+def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printer):
     """
     Constructs a dictionary of idle tomography results, parallel
     to the GST results in `gst_results_dict`, where possible.
     """
-    if idtPauliDicts is None:
+    if idt_pauli_dicts is None:
         return {}
 
     idt_results_dict = {}
-    GiStr = _objs.Circuit((idtIdleOp,))
+    GiStr = _objs.Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
-    autodict = bool(idtPauliDicts == "auto")
+    autodict = bool(idt_pauli_dicts == "auto")
     for ky, results in gst_results_dict.items():
 
         if autodict:
@@ -455,12 +470,15 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
                     idt_target = est.models['target']
                     break
             else: continue  # can't find any target models
-            idtPauliDicts = _idt.determine_paulidicts(idt_target)
-            if idtPauliDicts is None:
+            idt_pauli_dicts = _idt.determine_paulidicts(idt_target)
+            if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
 
-        gss = results.circuit_structs['final']
-        if GiStr not in gss.germs: continue
+        circuits_final = results.circuit_lists['final']
+        if not isinstance(circuits_final, _BulkCircuitList): continue
+
+        circuit_struct = circuits_final.circuit_structure
+        if GiStr not in circuit_struct.germs: continue
 
         try:  # to get a dimension -> nQubits
             estLabels = list(results.estimates.keys())
@@ -472,13 +490,13 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
             printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
             continue  # skip if we can't get dimension
 
-        maxLengths = gss.Ls
+        maxLengths = circuit_struct.Ls
         # just use "L0" (first maxLength) - all should have same fidpairs
-        plaq = gss.get_plaquette(maxLengths[0], GiStr)
-        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
+        plaq = circuit_struct.get_plaquette(maxLengths[0], GiStr)
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
-        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
+        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
                                              maxweight=2,  # HARDCODED for now (FUTURE)
                                              idle_string=idStr, advancedOptions=idt_advanced)
         idt_results_dict[ky] = idtresults
@@ -486,7 +504,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
     return idt_results_dict
 
 
-def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
+def _create_single_metric_switchboard(ws, results_dict, b_gauge_inv,
                                       dataset_labels, est_labels=None, embed_figures=True):
     op_labels = None
     for results in results_dict.values():
@@ -495,7 +513,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
                 op_labels = _add_new_labels(op_labels,
                                             list(est.models['target'].operations.keys()))
 
-    if bGaugeInv:
+    if b_gauge_inv:
         metric_abbrevs = ["evinf", "evagi", "evnuinf", "evnuagi", "evdiamond",
                           "evnudiamond"]
     else:
@@ -509,13 +527,13 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
             ["Metric", "Operation"], [metric_names, op_labels],
             ["dropdown", "dropdown"], [0, 0], show=[True, True],
             use_loadable_items=embed_figures)
-        metric_switchBd.add("opLabel", (1,))
+        metric_switchBd.add("op_label", (1,))
         metric_switchBd.add("metric", (0,))
-        metric_switchBd.add("cmpTableTitle", (0, 1))
+        metric_switchBd.add("cmp_table_title", (0, 1))
 
-        metric_switchBd.opLabel[:] = op_labels
+        metric_switchBd.op_label[:] = op_labels
         for i, gl in enumerate(op_labels):
-            metric_switchBd.cmpTableTitle[:, i] = ["%s %s" % (gl, nm) for nm in metric_names]
+            metric_switchBd.cmp_table_title[:, i] = ["%s %s" % (gl, nm) for nm in metric_names]
 
     else:
         metric_switchBd = ws.Switchboard(
@@ -523,8 +541,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
             ["dropdown"], [0], show=[True],
             use_loadable_items=embed_figures)
         metric_switchBd.add("metric", (0,))
-        metric_switchBd.add("cmpTableTitle", (0,))
-        metric_switchBd.cmpTableTitle[:] = metric_names
+        metric_switchBd.add("cmp_table_title", (0,))
+        metric_switchBd.cmp_table_title[:] = metric_names
 
     metric_switchBd.metric[:] = metric_abbrevs
 
@@ -533,8 +551,8 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
 
 @_deprecated_fn('pygsti.report.construct_standard_report(...).write_html(...)')
 def create_general_report(results, filename, title="auto",
-                          confidenceLevel=None,
-                          linlogPercentile=5, errgen_type="logGTi",
+                          confidence_level=None,
+                          linlog_percentile=5, errgen_type="logGTi",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False,
@@ -555,9 +573,9 @@ def create_general_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_standard_report(...).write_html(...)')
 def create_standard_report(results, filename, title="auto",
-                           confidenceLevel=None, comm=None, ws=None,
+                           confidence_level=None, comm=None, ws=None,
                            auto_open=False, link_to=None, brevity=0,
-                           advancedOptions=None, verbosity=1):
+                           advanced_options=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
@@ -596,7 +614,7 @@ def create_standard_report(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -634,9 +652,9 @@ def create_standard_report(results, filename, title="auto",
         - 3: Germ-level estimate tables disappear at brevity=3
         - 4: Everything but summary figures disappears at brevity=4
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
@@ -727,28 +745,28 @@ def create_standard_report(results, filename, title="auto",
     ws = ws or _ws.Workspace()
 
     report = construct_standard_report(
-        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
+        results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 auto_open=auto_open, verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
@@ -759,9 +777,9 @@ def create_standard_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_nqnoise_report(...).write_html(...)')
 def create_nqnoise_report(results, filename, title="auto",
-                          confidenceLevel=None, comm=None, ws=None,
+                          confidence_level=None, comm=None, ws=None,
                           auto_open=False, link_to=None, brevity=0,
-                          advancedOptions=None, verbosity=1):
+                          advanced_options=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -791,7 +809,7 @@ def create_nqnoise_report(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -829,9 +847,9 @@ def create_nqnoise_report(results, filename, title="auto",
         - 3: Germ-level estimate tables disappear at brevity=3
         - 4: Everything but summary figures disappears at brevity=4
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
@@ -902,28 +920,28 @@ def create_nqnoise_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
     report = construct_nqnoise_report(
-        results, title, confidenceLevel, comm, ws, advancedOptions, verbosity
+        results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 auto_open=auto_open, verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
@@ -934,7 +952,7 @@ def create_nqnoise_report(results, filename, title="auto",
 
 @_deprecated_fn('construct_standard_report(...).write_notebook(...)')
 def create_report_notebook(results, filename, title="auto",
-                           confidenceLevel=None,
+                           confidence_level=None,
                            auto_open=False, connected=False, verbosity=0):
     """
     Create a "report notebook": a Jupyter ipython notebook file which, when its
@@ -966,7 +984,7 @@ def create_report_notebook(results, filename, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -992,7 +1010,7 @@ def create_report_notebook(results, filename, title="auto",
         `create_report_notebook` will be removed in the next major release of pyGSTi. It is replaced by
         the `Report.write_notebook`
     """
-    report = construct_standard_report(results, title=title, confidenceLevel=confidenceLevel, verbosity=verbosity)
+    report = construct_standard_report(results, title=title, confidence_level=confidence_level, verbosity=verbosity)
     report.write_notebook(filename, auto_open=auto_open, connected=connected, verbosity=verbosity)
 
 
@@ -1086,8 +1104,8 @@ def find_std_clifford_compilation(model, verbosity=0):
 
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
-                              confidenceLevel=None, comm=None, ws=None,
-                              advancedOptions=None, verbosity=1):
+                              confidence_level=None, comm=None, ws=None,
+                              advanced_options=None, verbosity=1):
     """
     Create a "standard" GST report, containing details about each estimate
     in `results` individually.
@@ -1107,7 +1125,7 @@ def construct_standard_report(results, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -1122,9 +1140,9 @@ def construct_standard_report(results, title="auto",
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
@@ -1167,13 +1185,13 @@ def construct_standard_report(results, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
-    advancedOptions = advancedOptions or {}
-    linlogPercentile = advancedOptions.get('linlog percentile', 5)
-    nmthreshold = advancedOptions.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    embed_figures = advancedOptions.get('embed_figures', True)
-    combine_robust = advancedOptions.get('combine_robust', True)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    advanced_options = advanced_options or {}
+    linlogPercentile = advanced_options.get('linlog percentile', 5)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    embed_figures = advanced_options.get('embed_figures', True)
+    combine_robust = advanced_options.get('combine_robust', True)
+    idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
@@ -1251,7 +1269,7 @@ def construct_standard_report(results, title="auto",
 
     printer.log("Computing switchable properties")
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-        _create_master_switchboard(ws, results, confidenceLevel,
+        _create_master_switchboard(ws, results, confidence_level,
                                    nmthreshold, printer, None,
                                    combine_robust, idt_results, embed_figures)
 
@@ -1267,14 +1285,14 @@ def construct_standard_report(results, title="auto",
         'pdfinfo': _merge.to_pdfinfo(pdfInfo),
         'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
         'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile))),
-        'topSwitchboard': switchBd,
-        'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
-        'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams)
+        'top_switchboard': switchBd,
+        'color_boxplot_key_plot': ws.BoxKeyPlot(switchBd.prep_fiducials, switchBd.meas_fiducials),
+        'final_model_gaugeopt_params_table': ws.GaugeOptParamsTable(switchBd.goparams)
     }
 
     report_params = {
         'linlog_percentile': linlogPercentile,
-        'confidence_level': confidenceLevel,
+        'confidence_level': confidence_level,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
         'combine_robust': combine_robust,
@@ -1282,8 +1300,8 @@ def construct_standard_report(results, title="auto",
         'dataset_labels': tuple(dataset_labels),
         'est_labels': tuple(est_labels),
         'gauge_opt_labels': tuple(gauge_opt_labels),
-        'Ls': tuple(Ls),
-        'swLs': tuple(swLs)
+        'max_lengths': tuple(Ls),
+        'switchbd_maxlengths': tuple(swLs)
     }
 
     templates = dict(
@@ -1312,8 +1330,8 @@ def construct_standard_report(results, title="auto",
 
 
 def construct_nqnoise_report(results, title="auto",
-                             confidenceLevel=None, comm=None, ws=None,
-                             advancedOptions=None, verbosity=1):
+                             confidence_level=None, comm=None, ws=None,
+                             advanced_options=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
     model estimates.
@@ -1338,7 +1356,7 @@ def construct_nqnoise_report(results, title="auto",
        The title of the report.  "auto" causes a random title to be
        generated (which you may or may not like).
 
-    confidenceLevel : int, optional
+    confidence_level : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -1353,9 +1371,9 @@ def construct_nqnoise_report(results, title="auto",
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of advanced options for which the default values are usually
-        are fine.  Here are the possible keys of `advancedOptions`:
+        are fine.  Here are the possible keys of `advanced_options`:
 
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
@@ -1393,13 +1411,13 @@ def construct_nqnoise_report(results, title="auto",
     printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
-    advancedOptions = advancedOptions or {}
-    linlogPercentile = advancedOptions.get('linlog percentile', 5)
-    nmthreshold = advancedOptions.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
-    embed_figures = advancedOptions.get('embed_figures', True)
-    combine_robust = advancedOptions.get('combine_robust', True)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts', 'auto')
-    idtIdleOp = advancedOptions.get('idt_idle_oplabel', _Lbl('Gi'))
+    advanced_options = advanced_options or {}
+    linlogPercentile = advanced_options.get('linlog percentile', 5)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    embed_figures = advanced_options.get('embed_figures', True)
+    combine_robust = advanced_options.get('combine_robust', True)
+    idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
+    idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
 
     if isinstance(title, int):  # to catch backward compatibility issues
         raise ValueError(("'title' argument must be a string.  You may be accidentally"
@@ -1470,7 +1488,7 @@ def construct_nqnoise_report(results, title="auto",
 
     printer.log("Computing switchable properties")
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
-        _create_master_switchboard(ws, results, confidenceLevel,
+        _create_master_switchboard(ws, results, confidence_level,
                                    nmthreshold, printer, None,
                                    combine_robust, idt_results, embed_figures)
 
@@ -1487,14 +1505,14 @@ def construct_nqnoise_report(results, title="auto",
         'linlg_pcntle': "%d" % round(linlogPercentile),  # to nearest %
         'linlg_pcntle_inv': "%d" % (100 - int(round(linlogPercentile))),
         'topSwitchboard': switchBd,
-        'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prepStrs, switchBd.effectStrs),
+        'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prep_fiducials, switchBd.meas_fiducials),
         'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams),
-        'gramBarPlot': ws.GramMatrixBarPlot(switchBd.ds, switchBd.gsTarget, 10, switchBd.strs)
+        'gramBarPlot': ws.GramMatrixBarPlot(switchBd.ds, switchBd.mdl_target, 10, switchBd.fiducials_tup)
     }
 
     report_params = {
         'linlog_percentile': linlogPercentile,
-        'confidence_level': confidenceLevel,
+        'confidence_level': confidence_level,
         'nm_threshold': nmthreshold,
         'embed_figures': embed_figures,
         'combine_robust': combine_robust,
@@ -1502,8 +1520,8 @@ def construct_nqnoise_report(results, title="auto",
         'dataset_labels': tuple(dataset_labels),
         'est_labels': tuple(est_labels),
         'gauge_opt_labels': tuple(gauge_opt_labels),
-        'Ls': tuple(Ls),
-        'swLs': tuple(swLs)
+        'max_lengths': tuple(Ls),
+        'switchbd_maxlengths': tuple(swLs)
     }
 
     templates = dict(
@@ -1545,7 +1563,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"
-    gss = results.data.edesign.circuit_structs[-1]
+    circuit_struct = results.data.edesign.circuit_structs[-1]
     singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
@@ -1566,7 +1584,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, gss)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_struct)
 
     # Sets whether or not the dataset key is a switchboard or not.
     if len(singleresults.data.keys()) > 1:
@@ -1594,14 +1612,14 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     report_params = {
         'results': switchBd.results,
-        'gss': gss,
+        'circuit_struct': circuit_struct,
         'dskey': dskey,
         'switchboard': drift_switchBd
     }
 
     averaging_allowed = singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1)
     sections = [
-        _section.DriftSection(GlobalPowerSpectraPlot=averaging_allowed)
+        _section.DriftSection(global_power_spectra_plot=averaging_allowed)
     ]
 
     templates = dict(

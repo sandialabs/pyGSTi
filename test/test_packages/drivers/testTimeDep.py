@@ -61,17 +61,17 @@ class TimeDependentTestCase(BaseTestCase):
 
         #Create a time-dependent dataset (simulation of time-dependent model):
         circuits = std1Q_XYI.prepStrs +  pygsti.construction.circuit_list([ ('Gi',), ('Gi','Gx','Gi','Gx')]) # just pick some circuits
-        ds = pygsti.construction.generate_fake_data(mdl, circuits, nSamples=100,
-                                                    sampleError='none', seed=1234, times=[0,0.1,0.2])
+        ds = pygsti.construction.generate_fake_data(mdl, circuits, n_samples=100,
+                                                    sample_error='none', seed=1234, times=[0,0.1,0.2])
 
         self.assertArraysEqual(ds[('Gi',)].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
         self.assertArraysEqual(ds[('Gi',)].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
         self.assertArraysEqual(ds[('Gi',)].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
-        ds2 = pygsti.construction.generate_fake_data(mdl, circuits, nSamples=100,
-                                                     sampleError='none', seed=1234, times=[0,0.1,0.2],
-                                                     recordZeroCnts=False)
+        ds2 = pygsti.construction.generate_fake_data(mdl, circuits, n_samples=100,
+                                                     sample_error='none', seed=1234, times=[0,0.1,0.2],
+                                                     record_zero_counts=False)
         self.assertArraysEqual(ds2[('Gi',)].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
         self.assertArraysEqual(ds2[('Gi',)].reps, np.array([100.,  95.,   5.,  90.,  10.]))
         self.assertArraysEqual(ds2[('Gi',)].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
@@ -89,27 +89,27 @@ class TimeDependentTestCase(BaseTestCase):
             target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, nSamples=10,
-                                                    sampleError="binomial", seed=1234, times=[0],
-                                                    recordZeroCnts=False)
+        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, n_samples=10,
+                                                    sample_error="binomial", seed=1234, times=[0],
+                                                    record_zero_counts=False)
 
         target_model.set_simtype('map', max_cache_size=0) # No caching allowed for time-dependent calcs
         self.assertEqual(ds.get_degrees_of_freedom(aggregate_times=False), 126)
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
-                                              advancedOptions={'timeDependent': True,
+                                              advanced_options={'timeDependent': True,
                                                                'starting point': 'target',
                                                                'alwaysPerformMLE': False,
-                                                               'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
 
         # Normal GST used as a check - should get same answer since data is time-independent
         results2 = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                                germs, maxLengths, verbosity=3,
-                                               advancedOptions={'timeDependent': False,
+                                               advanced_options={'timeDependent': False,
                                                                 'starting point': 'target',
                                                                 'alwaysPerformMLE': False,
-                                                                'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                                'onlyPerformMLE': False}, gauge_opt_params=False)
 
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
@@ -136,9 +136,9 @@ class TimeDependentTestCase(BaseTestCase):
             target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, nSamples=1000,
-                                                    sampleError="binomial", seed=1234, times=[0, 0.1, 0.2],
-                                                    recordZeroCnts=False)
+        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, n_samples=1000,
+                                                    sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
+                                                    record_zero_counts=False)
         self.assertEqual(ds.get_degrees_of_freedom(aggregate_times=False), 500)
 
         target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0
@@ -146,11 +146,11 @@ class TimeDependentTestCase(BaseTestCase):
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
-                                              advancedOptions={'timeDependent': True,
+                                              advanced_options={'timeDependent': True,
                                                                'starting point': 'target',
                                                                'alwaysPerformMLE': False,
                                                                'tolerance': 1e-4,  # run faster!
-                                                               'onlyPerformMLE': False}, gaugeOptParams=False)
+                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
 
         #we should recover the 1.0 decay we put into mdl_datagen['Gi']:
         final_mdl = results.estimates['default'].models['final iteration estimate']

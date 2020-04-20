@@ -18,7 +18,7 @@ from ..objects.polynomial import bulk_load_compact_polys as _bulk_load_compact_p
 from ..objects.circuit import Circuit as _Circuit
 from ..construction.circuitconstruction import circuit_list as _circuit_list
 from ..construction.modelconstruction import build_explicit_model as _build_explicit_model
-from ..construction.stdlists import make_lsgst_structs as _make_lsgst_structs
+from ..construction.stdlists import make_lsgst_lists as _make_lsgst_lists
 from ..protocols import gst as _gst
 
 
@@ -123,10 +123,10 @@ class GSTModelPack(ModelPack):
     _prepfiducials = None
     _measfiducials = None
 
-    global_fidPairs = None
-    global_fidPairs_lite = None
-    _pergerm_fidPairsDict = None
-    _pergerm_fidPairsDict_lite = None
+    global_fidpairs = None
+    global_fidpairs_lite = None
+    _pergerm_fidpairsdict = None
+    _pergerm_fidpairsdict_lite = None
 
     def __init__(self):
         self._gscache = {}
@@ -159,10 +159,10 @@ class GSTModelPack(ModelPack):
         return self._indexed_circuits(self._measfiducials, qubit_labels)
 
     def pergerm_fidpair_dict(self, qubit_labels=None):
-        return self._indexed_circuitdict(self._pergerm_fidPairsDict, qubit_labels)
+        return self._indexed_circuitdict(self._pergerm_fidpairsdict, qubit_labels)
 
     def pergerm_fidpair_dict_lite(self, qubit_labels=None):
-        return self._indexed_circuitdict(self._pergerm_fidPairsDict_lite, qubit_labels)
+        return self._indexed_circuitdict(self._pergerm_fidpairsdict_lite, qubit_labels)
 
     def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
@@ -172,7 +172,7 @@ class GSTModelPack(ModelPack):
         max_max_length : number
             The greatest maximum-length to use. Equivalent to
             constructing a :class:`StandardGSTDesign` with a
-            `maxLengths` list of powers of two less than or equal to
+            `max_lengths` list of powers of two less than or equal to
             the given value.
 
         qubit_labels : tuple, optional
@@ -195,8 +195,8 @@ class GSTModelPack(ModelPack):
         :class:`StandardGSTDesign`
         """
         for k in kwargs.keys():
-            if k not in ('germLengthLimits', 'keepFraction', 'keepSeed', 'includeLGST', 'nest', 'sequenceRules',
-                         'opLabelAliases', 'dscheck', 'actionIfMissing', 'verbosity', 'add_default_protocol'):
+            if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'sequence_rules',
+                         'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol'):
                 raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
         if qubit_labels is None: qubit_labels = self._sslbls
@@ -217,29 +217,29 @@ class GSTModelPack(ModelPack):
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),
             list(_gen_max_length(max_max_length)),
-            kwargs.get('germLengthLimits', None),
+            kwargs.get('germ_length_limits', None),
             fidpairs,
-            kwargs.get('keepFraction', 1),
-            kwargs.get('keepSeed', None),
-            kwargs.get('includeLGST', True),
+            kwargs.get('keep_fraction', 1),
+            kwargs.get('keep_seed', None),
+            kwargs.get('include_lgst', True),
             kwargs.get('nest', True),
-            kwargs.get('sequenceRules', None),
-            kwargs.get('opLabelAliases', None),
+            kwargs.get('sequence_rules', None),
+            kwargs.get('op_label_aliases', None),
             kwargs.get('dscheck', None),
-            kwargs.get('actionIfMissing', None),
+            kwargs.get('action_if_missing', None),
             qubit_labels,
             kwargs.get('verbosity', 0),
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits_struct(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
-        """ Construct a :class:`pygsti.objects.LsGermsStructure` from this modelpack.
+    def get_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+        """ Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
 
         Parameters
         ----------
         max_max_length : number
             The greatest maximum-length to use. Equivalent to
-            constructing a cicuit struct with a `maxLengths`
+            constructing a cicuit struct with a `max_lengths`
             list of powers of two less than or equal to
             the given value.
 
@@ -256,11 +256,11 @@ class GSTModelPack(ModelPack):
             leave this set to True.
 
         **kwargs :
-            Additional arguments to pass to :function:`make_lsgst_structs`
+            Additional arguments to pass to :function:`make_lsgst_lists`
 
         Returns
         -------
-        :class:`pygsti.objects.LsGermsStructure`
+        :class:`pygsti.objects.BulkCircuitList`
         """
         if fpr:
             fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
@@ -274,14 +274,14 @@ class GSTModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        structs = _make_lsgst_structs(self._target_model(qubit_labels),  # Note: only need gate names here
-                                      self.prep_fiducials(qubit_labels),
-                                      self.meas_fiducials(qubit_labels),
-                                      self.germs(qubit_labels, lite),
-                                      list(_gen_max_length(max_max_length)),
-                                      fidpairs,
-                                      **kwargs)
-        return structs[-1]  # just return final struct (for longest sequences)
+        lists = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
+                                  self.prep_fiducials(qubit_labels),
+                                  self.meas_fiducials(qubit_labels),
+                                  self.germs(qubit_labels, lite),
+                                  list(_gen_max_length(max_max_length)),
+                                  fidpairs,
+                                  **kwargs)
+        return lists[-1]  # just return final list (for longest sequences)
 
 
 class RBModelPack(ModelPack):

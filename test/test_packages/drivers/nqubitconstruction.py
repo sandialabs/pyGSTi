@@ -261,7 +261,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
     #mdl = pygsti.construction.build_explicit_model(
     #    [2**nQubits], [Qlbls], [], [], 
-    #    effectLabels=eLbls, effectExpressions=eExprs)
+    #    effect_labels=eLbls, effect_expressions=eExprs)
     printer.log("Created initial model")
 
     qubitGraph = QubitGraph(nQubits, geometry)
@@ -387,7 +387,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
             errbasis = pygsti.obj.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
             termErr = Lindblad(wtId, ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-                               nonham_diagonal_only=True, truncate=True, mxBasis=wtBasis)
+                               nonham_diagonal_only=True, truncate=True, mx_basis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
@@ -402,7 +402,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
     
     
 
-#def create_noncomposed_gate(targetOp, target_qubit_inds, qubitGraph, maxWeight, maxHops,
+#def create_noncomposed_gate(target_op, target_qubit_inds, qubitGraph, max_weight, maxHops,
 #                            spectatorMaxWeight=1, mode="embed"):
 #
 #    assert(spectatorMaxWeight <= 1) #only 0 and 1 are currently supported
@@ -410,7 +410,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    errinds = [] # list of basis indices for all error terms
 #    possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
 #    nPossible = len(possible_err_qubit_inds)
-#    for wt in range(maxWeight+1):
+#    for wt in range(max_weight+1):
 #        if mode == "no-embedding": # make an error term for the entire gate
 #            for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
 #                # err_qubit_inds are global qubit indices
@@ -439,11 +439,11 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    
 #    if mode == "no-embedding":     
 #        fullTargetOp = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
-#                                    targetOp, basisAllQ) 
+#                                    target_op, basisAllQ) 
 #        fullTargetOp = StaticDenseOp( fullTargetOp ) #Make static
 #        fullLocalErr = LindbladDenseOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-#                         nonham_diagonal_only=True, truncate=True, mxBasis=basisAllQ)
+#                         nonham_diagonal_only=True, truncate=True, mx_basis=basisAllQ)
 #          # gate on full qubit space that accounts for error on the "local qubits", that is,
 #          # those local to the qubits being operated on
 #    elif mode == "embed":
@@ -453,10 +453,10 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
 #        locTargetOp = StaticDenseOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
-#                                    targetOp, basisLocQ) )
+#                                    target_op, basisLocQ) )
 #        localErr = LindbladDenseOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-#                         nonham_diagonal_only=True, truncate=True, mxBasis=basisLocQ)
+#                         nonham_diagonal_only=True, truncate=True, mx_basis=basisLocQ)
 #        fullLocalErr = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
 #                                   localErr, basisAllQ)
 #    else:
@@ -587,7 +587,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         localErr = Lindblad(locId, ham_basis=errbasis,
                             nonham_basis=errbasis, cptp=True,
                             nonham_diagonal_only=True, truncate=True,
-                            mxBasis=basisLocQ)
+                            mx_basis=basisLocQ)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
                                 localErr, basisAllQ.dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
@@ -628,7 +628,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
                 termErr = Lindblad(wtId, ham_basis=errbasis,
                                    nonham_basis=errbasis, cptp=True,
                                    nonham_diagonal_only=True, truncate=True,
-                                   mxBasis=wtBasis)
+                                   mx_basis=wtBasis)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
                                        termErr, basisAllQ.dim)

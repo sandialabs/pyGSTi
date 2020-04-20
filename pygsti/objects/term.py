@@ -194,7 +194,7 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     return [termType(rep) for rep in build_terms(order)]
 
 
-def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
+def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
     """Variant of EmbeddedOp.__init__ used to create embeddedop reps without a corresponding embedded op.
     For use w/terms where there are just reps
     """
@@ -213,15 +213,15 @@ def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
         qubitLabels = state_space_labels.labels[0]
         qubit_indices = _np.array([qubitLabels.index(targetLbl)
-                                   for targetLbl in targetLabels], _np.int64)
+                                   for targetLbl in target_labels], _np.int64)
 
         nQubits = int(round(_np.log2(opDim)))
-        rep = replib.SBOpRep_Embedded(rep_to_embed,
-                                      nQubits, qubit_indices)
+        rep = replib.SBOpRepEmbedded(rep_to_embed,
+                                     nQubits, qubit_indices)
 
     elif evotype in ("statevec", "densitymx"):
 
-        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in targetLabels]
+        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in target_labels]
         # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the"
@@ -234,11 +234,11 @@ def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
-        labelIndices = [tensorProdBlkLabels.index(label) for label in targetLabels]
+        labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
         actionInds = _np.array(labelIndices, _np.int64)
         assert(_np.product([numBasisEls[i] for i in actionInds]) == rep_to_embed.dim), \
             "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (
-                rep_to_embed.dim, str(targetLabels))
+                rep_to_embed.dim, str(target_labels))
 
         nBlocks = state_space_labels.num_tensor_prod_blocks()
         iActiveBlock = iTensorProdBlk
@@ -247,18 +247,18 @@ def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
         blocksizes = _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
                                 for k in range(nBlocks)], _np.int64)
         if evotype == "statevec":
-            rep = replib.SVOpRep_Embedded(rep_to_embed,
-                                          numBasisEls, actionInds, blocksizes, embeddedDim,
-                                          nComponents, iActiveBlock, nBlocks, opDim)
+            rep = replib.SVOpRepEmbedded(rep_to_embed,
+                                         numBasisEls, actionInds, blocksizes, embeddedDim,
+                                         nComponents, iActiveBlock, nBlocks, opDim)
         else:  # "densitymx"
-            rep = replib.DMOpRep_Embedded(rep_to_embed,
-                                          numBasisEls, actionInds, blocksizes, embeddedDim,
-                                          nComponents, iActiveBlock, nBlocks, opDim)
+            rep = replib.DMOpRepEmbedded(rep_to_embed,
+                                         numBasisEls, actionInds, blocksizes, embeddedDim,
+                                         nComponents, iActiveBlock, nBlocks, opDim)
     else:
         raise ValueError("Invalid evotype `%s`" % evotype)
     return rep
 
-#def embed_term(term, stateSpaceLabels, targetLabels):
+#def embed_term(term, state_space_labels, target_labels):
 #    """
 #    Embed a term to it acts within a larger state space.
 #
@@ -270,14 +270,14 @@ def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
 #    term : RankOneTerm
 #        The term to embed
 #
-#    stateSpaceLabels : a list of tuples
+#    state_space_labels : a list of tuples
 #        This argument specifies the density matrix space upon which the
 #        constructed term will act.  Each tuple corresponds to a block of a
 #        density matrix in the standard basis (and therefore a component of
 #        the direct-sum density matrix space).
 #
-#    targetLabels : list
-#        The labels contained in `stateSpaceLabels` which demarcate the
+#    target_labels : list
+#        The labels contained in `state_space_labels` which demarcate the
 #        portions of the state space acted on by `term`.
 #
 #    Returns
@@ -286,9 +286,9 @@ def _embed_oprep(state_space_labels, targetLabels, rep_to_embed, evotype):
 #    """
 #    from . import operation as _op
 #    ret = RankOneTerm(term.coeff, None, None, term.termtype, term._evotype)
-#    ret.pre_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
+#    ret.pre_ops = [_op.EmbeddedOp(state_space_labels, target_labels, op)
 #                   for op in term.pre_ops]
-#    ret.post_ops = [_op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
+#    ret.post_ops = [_op.EmbeddedOp(state_space_labels, target_labels, op)
 #                    for op in term.post_ops]
 #    return ret
 
@@ -389,11 +389,11 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
                       pre_state._rep, post_state._rep, None, None, [], [])
         return cls(rep)
 
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, self._rep.pre_state, self._rep.post_state,
                                                   None, None, pre_ops, post_ops))
@@ -423,11 +423,11 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
                       [], [])
         return cls(rep)
 
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
                                                   self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
@@ -471,22 +471,22 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
                       pre_op_reps, post_op_reps)
         return cls(rep)
 
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
                                                   None, None, pre_ops, post_ops))
 
 
 class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
@@ -495,11 +495,11 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
 
 
 class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
@@ -508,11 +508,11 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
 
 
 class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
-    def embed(self, stateSpaceLabels, targetLabels):
+    def embed(self, state_space_labels, target_labels):
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
-        pre_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
-        post_ops = [_embed_oprep(stateSpaceLabels, targetLabels, oprep, evotype)
+        post_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                     for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
                                                   None, None, None, None, pre_ops, post_ops))

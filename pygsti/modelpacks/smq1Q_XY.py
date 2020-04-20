@@ -61,9 +61,9 @@ class _Module(GSTModelPack, RBModelPack):
                                         ('Gc22', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)]),
                                         ('Gc23', [('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)])])
 
-    global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+    global_fidpairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gypi2', 0), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
         (('Gxpi2', 0), ('Gypi2', 0)): [(0, 0), (0, 4), (2, 5), (5, 4)],
@@ -72,9 +72,9 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)): [(0, 0), (2, 3), (5, 2), (5, 4)]
     }
 
-    global_fidPairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
+    global_fidpairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gypi2', 0), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
         (('Gxpi2', 0), ('Gypi2', 0)): [(0, 0), (0, 4), (2, 5), (5, 4)],
