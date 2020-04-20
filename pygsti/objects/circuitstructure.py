@@ -392,6 +392,9 @@ class LsGermsStructure(CircuitStructure):
         self._baseStrToLGerm = {}
         super(LsGermsStructure, self).__init__()
 
+    def __iter__(self):
+        yield from self.allstrs
+
     #Base class access in terms of generic x,y coordinates
     def xvals(self):
         """ Returns a list of the x-values"""
