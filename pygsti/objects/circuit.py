@@ -21,12 +21,6 @@ from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 
-try:
-    import cirq
-except ImportError:
-    _has_cirq = False
-else:
-    _has_cirq = True
 
 #Internally:
 # when static: a tuple of Label objects labelling each top-level circuit layer
@@ -2809,7 +2803,9 @@ class Circuit(object):
         A Cirq Circuit object.
         """
 
-        if not _has_cirq:
+        try:
+            import cirq
+        except ImportError:
             raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
         if gatename_conversion is None:
@@ -2823,7 +2819,7 @@ class Circuit(object):
             operations = []
             for gate in layer:
                 operation = gatename_conversion[gate.name]
-                if operation is None: # TODO: How to handle idle?
+                if operation is None:  # TODO: How to handle idle?
                     continue
                 qubits = map(qubit_conversion.get, gate.qubits)
                 operations.append(operation.on(*qubits))

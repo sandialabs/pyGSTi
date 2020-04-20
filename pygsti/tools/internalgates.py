@@ -13,13 +13,6 @@ import scipy.linalg as _spl
 from . import optools as _gts
 from . import symplectic as _symp
 
-try:
-    import cirq
-except ImportError:
-    _has_cirq = False
-else:
-    _has_cirq = True
-
 
 def get_internal_gate_unitaries():
     """
@@ -259,6 +252,7 @@ def get_standard_gatename_unitaries():
 
     return std_unitaries
 
+
 def get_standard_gatenames_cirq_conversions():
     """
     A dictionary converting the gates with standard names
@@ -283,19 +277,21 @@ def get_standard_gatenames_cirq_conversions():
     -------
     dict mapping strings to string
     """
-    if not _has_cirq:
-      raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
     std_gatenames_to_cirq = {}
     std_gatenames_to_cirq['Gi'] = None
-    std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1/2)
-    std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1/2)
+    std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1 / 2)
     std_gatenames_to_cirq['Gxpi'] = cirq.X
-    std_gatenames_to_cirq['Gzpi2'] = cirq.ZPowGate(exponent=1/2)
-    std_gatenames_to_cirq['Gzmpi2'] = cirq.ZPowGate(exponent=-1/2)
+    std_gatenames_to_cirq['Gzpi2'] = cirq.ZPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gzmpi2'] = cirq.ZPowGate(exponent=-1 / 2)
     std_gatenames_to_cirq['Gzpi'] = cirq.Z
-    std_gatenames_to_cirq['Gypi2'] = cirq.YPowGate(exponent=1/2)
-    std_gatenames_to_cirq['Gympi2'] = cirq.YPowGate(exponent=-1/2)
+    std_gatenames_to_cirq['Gypi2'] = cirq.YPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gympi2'] = cirq.YPowGate(exponent=-1 / 2)
     std_gatenames_to_cirq['Gypi'] = cirq.Y
     std_gatenames_to_cirq['Gp'] = std_gatenames_to_cirq['Gzpi']  # todo : check that this is correct
     std_gatenames_to_cirq['Gpdag'] = std_gatenames_to_cirq['Gzmpi2']  # todo : check that this is correct
@@ -307,6 +303,7 @@ def get_standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
 
     return std_gatenames_to_cirq
+
 
 def get_standard_gatenames_quil_conversions():
     """
