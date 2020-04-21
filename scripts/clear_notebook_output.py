@@ -15,6 +15,7 @@ def strip_output(nb):
     for cell in nb['cells']:
         if cell['cell_type'] == 'code':
             cell.outputs = []
+            cell.execution_count = None
 
 
 parser = argparse.ArgumentParser(description=__doc__)
