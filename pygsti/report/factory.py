@@ -276,13 +276,16 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
-
+        prep_fiducials = results.circuit_lists.get('prep fiducials',
+                                                   results.circuit_lists['final'].circuit_structure.prep_fiducials)
+        meas_fiducials = results.circuit_lists.get('meas fiducials',
+                                                   results.circuit_lists['final'].circuit_structure.meas_fiducials)
+        germs = results.circuit_lists.get('germs', results.circuit_lists['final'].circuit_structure.germs)
         switchBd.ds[d] = results.dataset
-        switchBd.prep_fiducials[d] = results.circuit_lists['prep fiducials']
-        switchBd.meas_fiducials[d] = results.circuit_lists['meas fiducials']
-        switchBd.fiducials_tup[d] = (results.circuit_lists['prep fiducials'],
-                                     results.circuit_lists['meas fiducials'])
-        switchBd.germs[d] = results.circuit_lists['germs']
+        switchBd.prep_fiducials[d] = prep_fiducials
+        switchBd.meas_fiducials[d] = meas_fiducials
+        switchBd.fiducials_tup[d] = (prep_fiducials, meas_fiducials)
+        switchBd.germs[d] = germs
 
         switchBd.circuits_final[d] = results.circuit_lists['final']
 
@@ -1563,7 +1566,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"
-    circuit_struct = results.data.edesign.circuit_structs[-1]
+    circuit_struct = results.data.edesign.circuit_lists[-1]
     singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
