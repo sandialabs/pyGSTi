@@ -8,7 +8,8 @@ from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L
 
 import numpy as np
-import sys, os
+import sys
+import os
 import pickle
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -85,12 +86,8 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_nongauge_params()
         self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
-
     def test_hessian_projection(self):
-
-        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                                  return_gradient=True,
-                                                  return_hessian=True)
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         proj_non_gauge = self.model.get_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
@@ -377,13 +374,11 @@ class TestHessianMethods(BaseTestCase):
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                        return_hessian=True)
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
-                                        return_hessian=True)
+        chi2Hessian_mapcalc = pygsti.chi2_hessian(self.model, self.ds)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
 
