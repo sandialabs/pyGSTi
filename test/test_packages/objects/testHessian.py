@@ -25,9 +25,9 @@ class TestHessianMethods(BaseTestCase):
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
-        opLabels = list(self.model.operations.keys()) # also == std.gates
+        op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(opLabels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.construction.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):

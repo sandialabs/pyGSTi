@@ -39,10 +39,10 @@ class CodecsTestCase(BaseTestCase):
         self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
-        self.opLabels = list(self.model.operations.keys())
+        self.op_labels = list(self.model.operations.keys())
 
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
+            self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()

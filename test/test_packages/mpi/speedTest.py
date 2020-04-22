@@ -20,7 +20,7 @@ else:
 def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
                       maxLs = [1,2,4,8],
                       nSamples=1000, useFreqWeightedChiSq=False,
-                      minProbClipForWeighting=1e-4, fidPairList=None,
+                      min_prob_clip_for_weighting=1e-4, fidPairList=None,
                       comm=None):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
     lgstStrings = pygsti.construction.list_lgst_circuits(
@@ -45,7 +45,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
     #Run LGST to get starting model
     mdl_lgst = pygsti.do_lgst(dsFake, myspecs, gsTarget,
-                             svdTruncateTo=gsTarget.dim, verbosity=3)
+                             svd_truncate_to=gsTarget.dim, verbosity=3)
     mdl_lgst_go = pygsti.optimize_gauge(mdl_lgst,"target",
                                        target_model=mdl_dataGen)
 
@@ -53,8 +53,8 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
     tStart = time.time()
     all_gs_lsgst = pygsti.do_iterative_mc2gst(
         dsFake, mdl_lgst_go, lsgstStringsToUse,
-        minProbClipForWeighting=minProbClipForWeighting,
-        probClipInterval=(-1e5,1e5),
+        min_prob_clip_for_weighting=min_prob_clip_for_weighting,
+        prob_clip_interval=(-1e5,1e5),
         verbosity=1, memLimit=3*(1024)**3, returnAll=True,
         useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm)
     tEnd = time.time()

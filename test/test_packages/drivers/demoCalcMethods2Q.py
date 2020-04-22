@@ -50,7 +50,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                                     gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
 
         #Create a reduced set of fiducials and germs
-        opLabels = list(cls.mdl_redmod_datagen.operations.keys())
+        op_labels = list(cls.mdl_redmod_datagen.operations.keys())
         fids1Q = std1Q_XY.fiducials[0:2] # for speed
         cls.redmod_fiducials = []
         for i in range(cls.nQubits):
@@ -58,7 +58,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ])
+        cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in op_labels ])
         cls.redmod_maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(
             cls.mdl_redmod_datagen, cls.redmod_fiducials, cls.redmod_fiducials,

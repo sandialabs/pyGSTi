@@ -1,7 +1,7 @@
 import logging
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
-    
+
 import unittest
 import pygsti
 import numpy as np
@@ -19,32 +19,32 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
         #initialize with no noise
         self.need_time = True # maybe torep() won't work unless this is False?
         super(MyTimeDependentIdle,self).__init__(np.identity(4,'d'), "densitymx") # this is *super*-operator, so "densitymx"
-        self.from_vector([initial_depol_rate]) 
+        self.from_vector([initial_depol_rate])
         self.set_time(0.0)
-        
-        
-    def num_params(self): 
+
+
+    def num_params(self):
         return 1 # we have two parameters
-    
+
     def to_vector(self):
         return np.array([self.depol_rate],'d') #our parameter vector
-        
+
     def from_vector(self, v, close=False, nodirty=False):
         #initialize from parameter vector v
         self.depol_rate = v[0]
         self.need_time = True
-        
+
     def set_time(self,t):
         a = 1.0-min(self.depol_rate*t,1.0)
         self.need_time = False
-        
-        # .base is a member of DenseOperator and is a numpy array that is 
+
+        # .base is a member of DenseOperator and is a numpy array that is
         # the dense Pauli transfer matrix of this operator
         self.base[:,:] = np.array([[1,   0,   0,   0],
                                    [0,   a,   0,   0],
                                    [0,   0,   a,   0],
                                    [0,   0,   0,   a]],'d')
-        
+
     def transform(self, S):
         # Update self with inverse(S) * self * S (used in gauge optimization)
         raise NotImplementedError("MyTimeDependentIdle cannot be transformed!")
@@ -99,17 +99,17 @@ class TimeDependentTestCase(BaseTestCase):
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
                                               advanced_options={'timeDependent': True,
-                                                               'starting point': 'target',
-                                                               'alwaysPerformMLE': False,
-                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
+                                                               'starting_point': 'target',
+                                                               'always_perform_mle': False,
+                                                               'only_perform_mle': False}, gauge_opt_params=False)
 
         # Normal GST used as a check - should get same answer since data is time-independent
         results2 = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                                germs, maxLengths, verbosity=3,
                                                advanced_options={'timeDependent': False,
-                                                                'starting point': 'target',
-                                                                'alwaysPerformMLE': False,
-                                                                'onlyPerformMLE': False}, gauge_opt_params=False)
+                                                                'starting_point': 'target',
+                                                                'always_perform_mle': False,
+                                                                'only_perform_mle': False}, gauge_opt_params=False)
 
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
@@ -147,10 +147,10 @@ class TimeDependentTestCase(BaseTestCase):
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                               germs, maxLengths, verbosity=3,
                                               advanced_options={'timeDependent': True,
-                                                               'starting point': 'target',
-                                                               'alwaysPerformMLE': False,
+                                                               'starting_point': 'target',
+                                                               'always_perform_mle': False,
                                                                'tolerance': 1e-4,  # run faster!
-                                                               'onlyPerformMLE': False}, gauge_opt_params=False)
+                                                               'only_perform_mle': False}, gauge_opt_params=False)
 
         #we should recover the 1.0 decay we put into mdl_datagen['Gi']:
         final_mdl = results.estimates['default'].models['final iteration estimate']

@@ -22,13 +22,13 @@ def assertGatesetsInSync(mdl, comm):
 
 def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
-                minProbClipForWeighting=1e-4, fidPairList=None,
-                comm=None, distributeMethod="circuits"):
+                min_prob_clip_for_weighting=1e-4, fidPairList=None,
+                comm=None, distribute_method="circuits"):
 
     #Run LGST to get starting model
     assertGatesetsInSync(gsTarget, comm)
     mdl_lgst = pygsti.do_lgst(ds, prepStrs, effectStrs, gsTarget,
-                             svdTruncateTo=gsTarget.dim, verbosity=3)
+                             svd_truncate_to=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(mdl_lgst, comm)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,gsTarget)
@@ -40,19 +40,19 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
     if obj == "chi2":
         all_gs_lsgst = pygsti.do_iterative_mc2gst(
             ds, mdl_lgst_go, lsgstStringsToUse,
-            minProbClipForWeighting=minProbClipForWeighting,
-            probClipInterval=(-1e5,1e5),
+            min_prob_clip_for_weighting=min_prob_clip_for_weighting,
+            prob_clip_interval=(-1e5,1e5),
             verbosity=1, memLimit=3*(1024)**3, returnAll=True,
             useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distributeMethod=distributeMethod)
+            distribute_method=distribute_method)
     elif obj == "logl":
         all_gs_lsgst = pygsti.do_iterative_mlgst(
             ds, mdl_lgst_go, lsgstStringsToUse,
-            minProbClip=minProbClipForWeighting,
-            probClipInterval=(-1e5,1e5),
+            min_prob_clip=min_prob_clip_for_weighting,
+            prob_clip_interval=(-1e5,1e5),
             verbosity=1, memLimit=3*(1024)**3, returnAll=True,
             useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distributeMethod=distributeMethod)
+            distribute_method=distribute_method)
 
     tEnd = time.time()
     print("Time = ",(tEnd-tStart)/3600.0,"hours")
@@ -60,14 +60,14 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
     return all_gs_lsgst
 
 
-def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="circuits"):
+def runOneQubit(obj, ds, lsgstStrings, comm=None, distribute_method="circuits"):
     #specs = pygsti.construction.build_spam_specs(
     #    std.fiducials, prep_labels=std.target_model().get_prep_labels(),
     #    effect_labels=std.target_model().get_effect_labels())
 
     return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.target_model(),
                         lsgstStrings, comm=comm,
-                        distributeMethod=distributeMethod)
+                        distribute_method=distribute_method)
 
 
 def create_fake_dataset(comm):
@@ -769,13 +769,13 @@ def test_MPI_mlgst_forcefn(comm):
         ds = comm.bcast(None, root=0)
 
 
-    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svdTruncateTo=4, verbosity=0)
+    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
     mdl_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
         ds, mdl_lgst_go, lgstStrings, verbosity=3,
-        minProbClip=1e-4, probClipInterval=(-1e2,1e2),
+        min_prob_clip=1e-4, prob_clip_interval=(-1e2,1e2),
         forcefn_grad=forcingfn_grad, comm=comm)
 
 

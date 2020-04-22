@@ -1,7 +1,7 @@
 import logging
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
-    
+
 import unittest
 import pygsti
 import numpy as np
@@ -11,7 +11,7 @@ from pygsti.objects import Label as L
 import pygsti.construction as pc
 import sys, os, warnings
 
-from ..testutils import BaseTestCase, compare_files, temp_files        
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 
 #Note: these are the same sample factory classes used elsewhere in the unit tests - TODO: consolidate
@@ -20,49 +20,49 @@ class XRotationOp(pygsti.obj.DenseOperator):
         #initialize with no noise
         self.target_angle = target_angle
         super(XRotationOp,self).__init__(np.identity(4, 'd'), "densitymx") # this is *super*-operator, so "densitymx"
-        self.from_vector(np.array(initial_params,'d')) 
-        
-    def num_params(self): 
+        self.from_vector(np.array(initial_params,'d'))
+
+    def num_params(self):
         return 2 # we have two parameters
-    
+
     def to_vector(self):
         return np.array([self.depol_amt, self.over_rotation],'d') #our parameter vector
-        
+
     def from_vector(self,v, close=False, nodirty=False):
         #initialize from parameter vector v
         self.depol_amt = v[0]
         self.over_rotation = v[1]
-        
+
         theta = (self.target_angle + self.over_rotation)/2
         a = 1.0-self.depol_amt
         b = a*2*np.cos(theta)*np.sin(theta)
         c = a*(np.cos(theta)**2 - np.sin(theta)**2)
-        
-        # .base is a member of DenseOperator and is a numpy array that is 
+
+        # .base is a member of DenseOperator and is a numpy array that is
         # the dense Pauli transfer matrix of this operator
         self.base[:] = np.array([[1,   0,   0,   0],
                                  [0,   a,   0,   0],
                                  [0,   0,   c,  -b],
                                  [0,   0,   b,   c]],'d')
 
-        
+
 class ParamXRotationOpFactory(pygsti.obj.OpFactory):
     def __init__(self):
         dim = 4  # 1-qubit
         self.params = np.array([0,0],'d')  #initialize with no noise
         pygsti.obj.OpFactory.__init__(self, dim, "densitymx")
-        
+
     def create_object(self, args=None, sslbls=None):
         assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
         assert(len(args) == 1)
         return XRotationOp( float(args[0]) ) #no need to set parameters of returned op - done by base class
-    
-    def num_params(self): 
+
+    def num_params(self):
         return len(self.params) # we have two parameters
-    
+
     def to_vector(self):
         return self.params #our parameter vector
-        
+
     def from_vector(self, v, clean=False, nodirty=False):
         self.params[:] = v
 
@@ -117,9 +117,9 @@ class ContinuousGatesTestCase(BaseTestCase):
 
         results = pygsti.do_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)
 
-        _, nSigma, pval = pygsti.two_delta_logl(results.estimates['default'].models['final iteration estimate'], results.dataset,
+        _, nSigma, pval = pygsti.two_delta_logl(results.estimates[results.name].models['final iteration estimate'], results.dataset,
                             dof_calc_method="all")
         self.assertTrue(nSigma < 5.0) # so far we just know that this should roughly work -- how to make TD-GST robus is still an open research topic
-        
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
