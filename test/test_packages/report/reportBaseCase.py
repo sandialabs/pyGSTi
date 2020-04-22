@@ -62,21 +62,29 @@ class ReportBaseCase(BaseTestCase):
         cls.mdl_clgst_tp.set_all_parameterizations("TP")
 
         #Compute results for MC2GST
-        lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(
-            cls.ds, cls.mdl_clgst, cls.lsgstStrings, verbosity=0,
-            min_prob_clip_for_weighting=1e-6, prob_clip_interval=(-1e6,1e6),
-            returnAll=True)
+        lsgst_gatesets_prego, *_ = pygsti.do_iterative_gst(
+            cls.ds, cls.mdl_clgst, cls.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=[],
+            resource_alloc=None,
+            verbosity=0
+        )
 
-        cls.results = pygsti.objects.Results()
-        cls.results.init_dataset(cls.ds)
-        cls.results.init_circuits(cls.lsgstStructs)
-        cls.results.add_estimate(target_model, cls.mdl_clgst,
-                                 lsgst_gatesets_prego,
-                                 {'objective': "chi2",
-                                  'min_prob_clip_for_weighting': 1e-4,
-                                  'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
-                                  'weights': None, 'defaultDirectory': temp_files + "",
-                                  'defaultBasename': "MyDefaultReportName"})
+        experiment_design = pygsti.protocols.StandardGSTDesign(
+            target_model, std.fiducials, std.fiducials, std.germs, cls.maxLengthList
+        )
+        data = pygsti.protocols.ProtocolData(experiment_design, cls.ds)
+        protocol = pygsti.protocols.StandardGST()
+        cls.results = pygsti.protocols.gst.ModelEstimateResults(data, protocol)
+        cls.results.add_estimate(pygsti.protocols.estimate.Estimate.gst_init(
+            cls.results, target_model, cls.mdl_clgst,lsgst_gatesets_prego,
+            {'objective': "chi2",
+             'min_prob_clip_for_weighting': 1e-4,
+             'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': temp_files + "",
+             'defaultBasename': "MyDefaultReportName"}
+        ))
 
         gaugeOptParams = collections.OrderedDict([
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
