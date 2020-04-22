@@ -276,11 +276,12 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
-        prep_fiducials = results.circuit_lists.get('prep fiducials',
-                                                   results.circuit_lists['final'].circuit_structure.prep_fiducials)
-        meas_fiducials = results.circuit_lists.get('meas fiducials',
-                                                   results.circuit_lists['final'].circuit_structure.meas_fiducials)
-        germs = results.circuit_lists.get('germs', results.circuit_lists['final'].circuit_structure.germs)
+
+        prep_fiducials = results.circuit_lists.get('prep fiducials', None) \
+            or results.circuit_lists['final'].circuit_structure.prep_fiducials
+        meas_fiducials = results.circuit_lists.get('meas fiducials', None) \
+            or results.circuit_lists['final'].circuit_structure.meas_fiducials
+        germs = results.circuit_lists.get('germs', None) or results.circuit_lists['final'].circuit_structure.germs
         switchBd.ds[d] = results.dataset
         switchBd.prep_fiducials[d] = prep_fiducials
         switchBd.meas_fiducials[d] = meas_fiducials
