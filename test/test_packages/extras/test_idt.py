@@ -128,7 +128,7 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
 
     advanced = {'fit order': fitOrder}
     results = idt.do_idle_tomography(nQubits, ds, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
-                                     advancedOptions=advanced, include_hamiltonian=hamiltonian,
+                                     advanced_options=advanced, include_hamiltonian=hamiltonian,
                                      include_stochastic=stochastic, include_affine=affine)
 
     if hamiltonian: ham_intrinsic_rates = results.intrinsic_rates['hamiltonian']
@@ -333,7 +333,7 @@ class IDTTestCase(BaseTestCase):
         # ----- Run idle tomography with our custom (GST) set of pauli fiducial pairs ----
         advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         idtresults = idt.do_idle_tomography(nQubits, ds, maxLengths, (prepDict,measDict), maxweight=2,
-                                     advancedOptions=advanced, include_hamiltonian='auto',
+                                     advanced_options=advanced, include_hamiltonian='auto',
                                      include_stochastic='auto', include_affine='auto')
         #Note: inclue_affine="auto" should have detected that we don't have the sequences to
         # determine the affine intrinsic rates:
