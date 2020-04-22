@@ -37,22 +37,16 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
 
     #Run full iterative LSGST
     tStart = time.time()
-    if obj == "chi2":
-        all_gs_lsgst = pygsti.do_iterative_mc2gst(
-            ds, mdl_lgst_go, lsgstStringsToUse,
-            min_prob_clip_for_weighting=min_prob_clip_for_weighting,
-            prob_clip_interval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
-            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distribute_method=distribute_method)
-    elif obj == "logl":
-        all_gs_lsgst = pygsti.do_iterative_mlgst(
-            ds, mdl_lgst_go, lsgstStringsToUse,
-            min_prob_clip=min_prob_clip_for_weighting,
-            prob_clip_interval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
-            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distribute_method=distribute_method)
+    resource_allocation = pygsti.objects.resourceallocation.ResourceAllocation(
+        comm=comm, mem_limit=3*(1024)**3, distribute_method=distribute_method
+    )
+
+    all_gs_lsgst, *_ = pygsti.do_iterative_gst(
+        ds, mdl_lgst_go, lsgstStringsToUse,
+        optimizer={'tol': 1e-5},
+        iteration_objfn_builders=[obj],
+        final_objfn_builders=[], resource_alloc=resource_allocation
+    )
 
     tEnd = time.time()
     print("Time = ",(tEnd-tStart)/3600.0,"hours")
@@ -773,11 +767,16 @@ def test_MPI_mlgst_forcefn(comm):
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
-    mdl_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
-        ds, mdl_lgst_go, lgstStrings, verbosity=3,
-        min_prob_clip=1e-4, prob_clip_interval=(-1e2,1e2),
-        forcefn_grad=forcingfn_grad, comm=comm)
-
+    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.do_gst_fit(
+        ds, mdl_lgst_go, lgstStrings, optimizer=None,
+        objective_function_builder=pygsti.objects.PoissonPicDeltaLogLFunction.builder(
+            name='logl',
+            description='2*DeltaLogL',
+            regularization={'min_prob_clip': 1e-4},
+            penalties={'forcefn_grad': forcingfn_grad, 'prob_clip_interval': (-1e2, 1e2)}
+        ),
+        resource_alloc=pygsti.objects.resourceallocation.ResourceAllocation(comm=comm), cache=None
+    )
 
 
 @mpitest(4)
