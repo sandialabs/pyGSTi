@@ -2100,7 +2100,89 @@ def create_standard_localnoise_sequences(n_qubits, max_lengths, single_q_fiducia
                                          availability=None, geometry="line",
                                          paramroot="H+S", sparse=False, verbosity=0, cache=None, idle_only=False,
                                          idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
-    """ Docstring: TODO """
+    """
+    Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
+    all of the parameters of a `LocalNoiseModel` created by passing the
+    arguments of this function to :function:`build_localnoise_model`
+
+    Note that this function essentialy performs fiducial selection, germ
+    selection, and fiducial-pair reduction simultaneously.  It is used to
+    generate a short (ideally minimal) list of sequences needed for multi-
+    qubit GST.
+
+    This function allows the local noise model to be created by specifing
+    standard gate names or additional gates as *unitary* operators.  Some
+    example gate names are:
+
+        - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+        - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+        - 'Gh' : Hadamard
+        - 'Gp' : phase
+        - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+
+
+    Parameters
+    ----------
+    n_qubits : int
+        The number of qubits
+
+    max_lengths : list
+        A list of integers specifying the different maximum lengths for germ
+        powers.  Typically these values start a 1 and increase by powers of
+        2, e.g. `[1,2,4,8,16]`.
+
+    single_q_fiducials : list
+        A list of gate-name-tuples, e.g. `[(), ('Gx',), ('Gy',), ('Gx','Gx')]`,
+        which form a set of 1-qubit fiducials for the given model (compatible
+        with both the gates it posseses and their parameterizations - for
+        instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
+        and Stochastic errors.
+
+    gate_names, nonstd_gate_unitaries, availability, geometry, sparse : various
+        Local-noise model parameters specifying the model to create sequences
+        for. See function:`build_loalnoise_model` for details.
+
+    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+        The "root" (no trailing " terms", etc.) parameterization used for the
+        cloud noise model (which specifies what needs to be amplified).
+
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+    cache : dict, optional
+        A cache dictionary which holds template information so that repeated
+        calls to `create_standard_cloudnoise_sequences` can draw on the same
+        pool of templates.
+
+    idle_only : bool, optional
+        If True, only sequences for the idle germ are returned.  This is useful
+        for idle tomography in particular.
+
+    idt_pauli_dicts : tuple, optional
+        A (prepDict,measDict) tuple of dicts that maps a 1-qubit Pauli basis
+        string (e.g. 'X' or '-Y') to a sequence of gate *names*.  If given,
+        the idle-germ fiducial pairs chosen by this function are restricted
+        to those where either 1) each qubit is prepared and measured in the
+        same basis or 2) each qubits is prepared and measured in different
+        bases (note: '-X' and 'X" are considered the *same* basis).  This
+        restriction makes the resulting sequences more like the "standard"
+        ones of idle tomography, and thereby easier to interpret.
+
+    algorithm : {"greedy","sequential"}
+        The algorithm is used internall by
+        :function:`find_amped_polys_for_syntheticidle`.  You should leave this
+        as the default unless you know what you're doing.
+
+    idle_op_str : Circuit or tuple, optional
+        The circuit or label that is used to indicate a completely
+        idle layer (all qubits idle).
+
+    Returns
+    -------
+    LsGermsSerialStructure
+        An object holding a structured (using germ and fiducial sub-sequences)
+        list of sequences.
+    """
     #Same as cloudnoise but no hopping. -- should max_idle_weight == 0?
     return create_standard_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
                                                 gate_names, nonstd_gate_unitaries,

@@ -736,9 +736,35 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     return models, optimums, final_cache
 
 
-def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
-    """ TODO: docstring """
+def _do_runopt(objective, optimizer, resource_alloc, printer):
+    """
+    Runs the core model-optimization step within a GST routine by optimizing
+    `objective` using `optimizer`.
 
+    This is factored out as a separate function because of the differences
+    when running Taylor-term simtype calculations, which utilize this
+    as a subroutine (see :function:`_do_term_runopt`).
+
+    Parameters
+    ----------
+    objective : MDSObjectiveFunction
+        A "model-dataset" objective function to optimize.
+
+    optimizer : Optimizer
+        The optimizer to use.
+
+    resource_alloc : ResourceAllocation
+        The resources allocated to this computation (MPI comm, memory limit, etc).
+
+    printer : VerbosityPrinter
+        An object for printing output.
+
+    Returns
+    -------
+    OptimizerResult
+    """
+
+    mdl = objective.mdl
     profiler = resource_alloc.profiler
 
     #Perform actual optimization
@@ -780,9 +806,36 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
     return opt_result
 
 
-def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
-    """ TODO: docstring """
+def _do_term_runopt(objective, optimizer, resource_alloc, printer):
+    """
+    Runs the core model-optimization step for models using the
+    Taylor-term (path integral) method of computing probabilities.
 
+    This routine serves the same purpose as :function:`_do_runopt`, but
+    is more complex because an appropriate "path set" must be found,
+    requiring a loop of model optimizations with fixed path sets until
+    a sufficient "good" path set is obtained.
+
+    Parameters
+    ----------
+    objective : MDSObjectiveFunction
+        A "model-dataset" objective function to optimize.
+
+    optimizer : Optimizer
+        The optimizer to use.
+
+    resource_alloc : ResourceAllocation
+        The resources allocated to this computation (MPI comm, memory limit, etc).
+
+    printer : VerbosityPrinter
+        An object for printing output.
+
+    Returns
+    -------
+    OptimizerResult
+    """
+
+    mdl = objective.mdl
     fwdsim = mdl._fwdsim()
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop

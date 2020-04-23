@@ -269,8 +269,8 @@ class MDSObjectiveFunction(ObjectiveFunction):
         self.eval_tree = self.cache.eval_tree
         self.lookup = self.cache.lookup
         self.outcomes_lookup = self.cache.outcomes_lookup
-        self.wrt_blk_size = self.cache.wrt_blk_size
-        self.wrt_blk_size2 = self.cache.wrt_blk_size2
+        self.wrt_block_size = self.cache.wrt_block_size
+        self.wrt_block_size2 = self.cache.wrt_block_size2
 
         self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
         self.firsts = None  # no omitted probs by default
@@ -386,8 +386,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
     def compute_count_vectors(self):
         if not self.cache.has_count_vectors():
-            self.cache.add_count_vectors(self.dataset, self.circuits_to_use,
-                                         self.ds_circuits_to_use, self.circuit_weights)
+            self.cache.add_count_vectors(self.dataset, self.ds_circuits_to_use, self.circuit_weights)
         return self.cache.counts, self.cache.total_counts
 
     def _construct_hessian(self, counts_all, total_counts_all, prob_clip_interval):
@@ -409,7 +408,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         my_subtree_indices, subtree_owners, my_subcomm = self.eval_tree.distribute(self.raw_objfn.comm)
 
         nparams = self.mdl.num_params()
-        blk_size1, blk_size2 = self.wrt_blk_size, self.wrt_blk_size2
+        blk_size1, blk_size2 = self.wrt_block_size, self.wrt_block_size2
         row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
         col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
 
@@ -1401,7 +1400,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
                                   pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_block_size,
                                   profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         #DEBUG TODO REMOVE - test dprobs to make sure they look right.
@@ -1457,7 +1456,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         self.mdl.bulk_fill_dprobs(dprobs, self.eval_tree,
                                   pr_mx_to_fill=self.probs, clip_to=self.prob_clip_interval,
-                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                  check=self.check, comm=self.raw_objfn.comm, wrt_block_size=self.wrt_block_size,
                                   profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         if self.firsts is not None:
@@ -1716,7 +1715,7 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dchi2(dprobs, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                     self.raw_objfn.comm, wrt_block_size=self.wrt_block_size,
                                      profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
@@ -1772,7 +1771,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
         fsim = self.mdl._fwdsim()
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.eval_tree, self.ds_circuits_to_use, self.num_total_outcomes,
                                        self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
-                                       self.raw_objfn.comm, wrt_block_size=self.wrt_blk_size,
+                                       self.raw_objfn.comm, wrt_block_size=self.wrt_block_size,
                                        profiler=self.raw_objfn.profiler, gather_mem_limit=self.gthrMem)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
