@@ -1567,7 +1567,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"
-    circuit_struct = results.data.edesign.circuit_lists[-1]
+    circuit_list = results.data.edesign.circuit_lists[-1]
     singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
@@ -1588,7 +1588,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_struct)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_list)
 
     # Sets whether or not the dataset key is a switchboard or not.
     if len(singleresults.data.keys()) > 1:
@@ -1616,7 +1616,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     report_params = {
         'results': switchBd.results,
-        'circuit_struct': circuit_struct,
+        'circuit_list': circuit_list,
         'dskey': dskey,
         'switchboard': drift_switchBd
     }

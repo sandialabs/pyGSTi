@@ -254,15 +254,15 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, dskey=None, detectorkey=None,
+    def __init__(self, ws, stabilityanalyzer, circuits, prep, germ, meas, dskey=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas,
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, prep, germ, meas,
                                                            dskey, detectorkey, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+    def _create(self, stabilityanalyzer, circuits, prep, germ, meas, dskey, detectorkey, showlegend, scale):
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
@@ -276,14 +276,15 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
                 "There is more than one DataSet, so must specify the `dskey`!"
             dskey = list(stabilityanalyzer.data.keys())[0]
 
-        prepind = gss.prep_fiducials.index(prep)
-        measind = gss.prep_fiducials.index(meas)
+        circuit_struct = circuits.circuit_structure
+        prepind = circuit_struct.prep_fiducials.index(prep)
+        measind = circuit_struct.prep_fiducials.index(meas)
         circuitdict = {}
 
-        #UNUSED: numL = len(gss.Ls)
+        #UNUSED: numL = len(circuit_struct.Ls)
         #UNUSED: colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
-        for Lind, L in enumerate(gss.Ls):
-            for j, k, circuit in gss.get_plaquette(L, germ):
+        for Lind, L in enumerate(circuit_struct.Ls):
+            for j, k, circuit in circuit_struct.get_plaquette(L, germ):
                 if j == prepind:
                     if k == measind:
                         circuitdict[L] = circuit
@@ -442,20 +443,20 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
+    def __init__(self, ws, stabilityanalyzer, circuits, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
                  estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
 
-        gss : CircuitStructure
+        circuits : BulkCircuitList
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
         """
-        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ,
-                                                               meas, outcome, min_length, times, dskey, estimatekey,
-                                                               estimator, showlegend, scale)
+        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits,
+                                                               prep, germ, meas, outcome, min_length, times,
+                                                               dskey, estimatekey, estimator, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
+    def _create(self, stabilityanalyzer, circuits, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
                 estimator, showlegend, scale):
 
         if isinstance(germ, str):
@@ -465,21 +466,22 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
         if isinstance(meas, str):
             meas = _Circuit(None, stringrep=meas)
 
-        prepind = gss.prep_fiducials.index(prep)
-        measind = gss.prep_fiducials.index(meas)
+        circuit_struct = circuits.circuit_structure
+        prepind = circuit_struct.prep_fiducials.index(prep)
+        measind = circuit_struct.prep_fiducials.index(meas)
         # data = []
         circuitsdict = {}
 
         truncatedL = []
-        for L in gss.Ls:
+        for L in circuit_struct.Ls:
             if L >= min_length:
                 truncatedL.append(L)
 
-        #numL = len(gss.Ls)
-        for Lind, L in enumerate(gss.Ls):
+        #numL = len(circuit_struct.Ls)
+        for Lind, L in enumerate(circuit_struct.Ls):
             if L >= min_length:
                 #trace_pt = None
-                for j, k, circuit in gss.get_plaquette(L, germ):
+                for j, k, circuit in circuit_struct.get_plaquette(L, germ):
                     if j == prepind:
                         if k == measind:
                             circuitsdict[L] = circuit
@@ -532,16 +534,17 @@ def _create_switchboard(ws, results_dict):
     return switchBd, dataset_labels
 
 
-def _create_drift_switchboard(ws, results, gss):
+def _create_drift_switchboard(ws, results, circuits):
     """
     todo
     """
+    circuit_struct = circuits.circuit_structure
     if len(results.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prep_fiducials)],
-             [c.str for c in gss.meas_fiducials],
+            [list(results.data.keys()), [c.str for c in circuit_struct.germs], [c.str for c in(circuit_struct.prep_fiducials)],
+             [c.str for c in circuit_struct.meas_fiducials],
              [i.str for i in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
@@ -554,24 +557,24 @@ def _create_drift_switchboard(ws, results, gss):
     else:
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
-            [[c.str for c in gss.germs], [c.str for c in(gss.prep_fiducials)],
-             [c.str for c in gss.meas_fiducials], [str(o) for o in results.data.get_outcome_labels()]],
+            [[c.str for c in circuit_struct.germs], [c.str for c in(circuit_struct.prep_fiducials)],
+             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
-        drift_switchBd.add("prepStrs", (1,))
-        drift_switchBd.add("effectStrs", (2,))
+        drift_switchBd.add("prep_fiducials", (1,))
+        drift_switchBd.add("meas_fiducials", (2,))
         drift_switchBd.add("outcomes", (3,))
 
-        drift_switchBd.germs[:] = gss.germs
-        drift_switchBd.prepStrs[:] = gss.prep_fiducials
-        drift_switchBd.effectStrs[:] = gss.meas_fiducials
+        drift_switchBd.germs[:] = circuit_struct.germs
+        drift_switchBd.prep_fiducials[:] = circuit_struct.prep_fiducials
+        drift_switchBd.meas_fiducials[:] = circuit_struct.meas_fiducials
         drift_switchBd.outcomes[:] = results.data.get_outcome_labels()
 
     return drift_switchBd
 
 
 # TODO deprecate in favor of `report.factory.construct_drift_report`
-def create_drift_report(results, gss, filename, title="auto",
+def create_drift_report(results, circuits, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
                         brevity=0, advanced_options=None, verbosity=1):
     """
@@ -583,7 +586,7 @@ def create_drift_report(results, gss, filename, title="auto",
     ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
     report = construct_drift_report(
-        results, gss, title, ws, verbosity
+        results, circuits, title, ws, verbosity
     )
 
     advanced_options = advanced_options or {}
