@@ -13,6 +13,7 @@ import scipy.stats as _stats
 import warnings as _warnings
 import itertools as _itertools
 import collections as _collections
+import copy as _copy
 from .. import optimize as _opt
 from .. import tools as _tools
 
@@ -96,7 +97,7 @@ class ConfidenceRegionFactory(object):
 
         self.hessian_projection_parameters = _collections.OrderedDict()
         self.inv_hessian_projections = _collections.OrderedDict()
-        self.linresponse_mlgst_params = None
+        self.linresponse_gstfit_params = None
         self.nNonGaugeParams = self.nGaugeParams = None
 
         self.model_lbl = model_lbl
@@ -109,8 +110,9 @@ class ConfidenceRegionFactory(object):
         del to_pickle['parent']
 
         # *don't* pickle any Comm objects
-        if self.linresponse_mlgst_params and "comm" in self.linresponse_mlgst_params:
-            del self.linresponse_mlgst_params['comm']  # one *cannot* pickle Comm objects
+        if self.linresponse_gstfit_params and "resource_alloc" in self.linresponse_gstfit_params:
+            to_pickle['linresponse_gstfit_params'] = self.linresponse_gstfit_params.copy()
+            del to_pickle['linresponse_gstfit_params']['resource_alloc']  # one *cannot* pickle Comm objects
 
         return to_pickle
 
@@ -351,7 +353,7 @@ class ConfidenceRegionFactory(object):
         }
         return inv_projected_hessian
 
-    def enable_linear_response_errorbars(self):
+    def enable_linear_response_errorbars(self, resource_alloc=None):
         """
         Stores the parameters needed to run (on-demand) the ML-GST
         optimizations needed to compute error bars on quantities.
@@ -362,6 +364,11 @@ class ConfidenceRegionFactory(object):
         computation of the entire Hessian matrix, which can be
         prohibitively costly on large parameter spaces.
 
+        Parameters
+        ----------
+        resoure_alloc : ResourceAllocation
+            Allocation for running linear-response GST fits.
+
         Returns
         -------
         None
@@ -369,34 +376,21 @@ class ConfidenceRegionFactory(object):
         assert(self.parent is not None)  # Estimate
         assert(self.parent.parent is not None)  # Results
 
-        circuit_list = self.parent.parent.circuit_lists[self.circuit_list_lbl]
+        circuits = self.parent.parent.circuit_lists[self.circuit_list_lbl]
         dataset = self.parent.parent.dataset
 
         parameters = self.parent.parameters
-        minProbClip = parameters.get('minProbClip', 1e-4)
-        #minProbClipForWeighting = parameters.get('minProbClipForWeighting',1e-4)
-        probClipInterval = parameters.get('probClipInterval', (-1e6, 1e6))
-        radius = parameters.get('radius', 1e-4)
-        cptp_penalty_factor = parameters.get('cptpPenaltyFactor', 0)
-        spam_penalty_factor = parameters.get('spamPenaltyFactor', 0)
-        aliases = parameters.get('opLabelAliases', None)
-        distributeMethod = parameters.get('distributeMethod', 'deriv')
-        memLimit = parameters.get('memLimit', None)
-        comm = parameters.get('comm', None)
+        builder = parameters['final_objfn_builder']
+        cache = parameters.get('final_cache', None)
+        opt = {'maxiter': 100, 'tol': 1e-10}  # don't let this run for too long
 
-        self.linresponse_mlgst_params = {
+        self.linresponse_gstfit_params = {
             'dataset': dataset,
-            'circuitsToUse': circuit_list,
-            'maxiter': 10000, 'tol': 1e-10,
-            'cptp_penalty_factor': cptp_penalty_factor,
-            'spam_penalty_factor': spam_penalty_factor,
-            'minProbClip': minProbClip,
-            'probClipInterval': probClipInterval,
-            'radius': radius,
-            'poissonPicture': True, 'verbosity': 2,  # NOTE: HARDCODED
-            'memLimit': memLimit, 'comm': comm,
-            'distributeMethod': distributeMethod, 'profiler': None,
-            'opLabelAliases': aliases
+            'circuit_list': circuits,
+            'optimizer': opt,
+            'objective_function_builder': _copy.deepcopy(builder),
+            'resource_alloc': resource_alloc,
+            'cache': cache
         }
 
         #Count everything as non-gauge? TODO BETTER
@@ -433,7 +427,7 @@ class ConfidenceRegionFactory(object):
         ConfidenceRegionFactoryView
         """
         inv_hessian_projection = None
-        linresponse_mlgst_params = None
+        linresponse_gstfit_params = None
 
         assert(self.parent is not None)  # Estimate
         model = self.parent.models[self.model_lbl]
@@ -447,11 +441,11 @@ class ConfidenceRegionFactory(object):
                 "Hessian projection '%s' does not exist!" % hessian_projection_label
             inv_hessian_projection = self.inv_hessian_projections[hessian_projection_label]
         else:
-            assert(self.linresponse_mlgst_params is not None), \
+            assert(self.linresponse_gstfit_params is not None), \
                 "Must either compute & project a Hessian matrix or enable linear response parameters"
             assert(hessian_projection_label is None), \
                 "Must set `hessian_projection_label` to None when using linear-response error bars"
-            linresponse_mlgst_params = self.linresponse_mlgst_params
+            linresponse_gstfit_params = self.linresponse_gstfit_params
 
         #Compute the non-Markovian "radius" if required
         if region_type == "normal":
@@ -461,7 +455,7 @@ class ConfidenceRegionFactory(object):
         else:
             raise ValueError("Invalid confidence region type: %s" % region_type)
 
-        return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_mlgst_params,
+        return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_gstfit_params,
                                            confidence_level, nonMarkRadiusSq,
                                            self.nNonGaugeParams, self.nGaugeParams)
 
@@ -893,12 +887,13 @@ class ConfidenceRegionFactoryView(object):
         assert(len(grad_f.shape) == 2)
 
         mlgst_args = self.mlgst_params.copy()
-        mlgst_args['startModel'] = self.model
-        mlgst_args['forcefn_grad'] = grad_f
-        mlgst_args['shiftFctr'] = 100.0
-        mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
-        mlgst_args['maxiter'] = 100  # don't let this run for too long
-        _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
+        mlgst_args['start_model'] = self.model
+
+        penalties = mlgst_args['objective_function_builder'].penalties or {}
+        penalties.update({'forcefn_grad': grad_f, 'shift_fctr': 100.0})
+        mlgst_args['objective_function_builder'].penalties = penalties
+
+        _, bestGS = _alg.core.do_gst_fit(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
         delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
