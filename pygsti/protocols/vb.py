@@ -160,7 +160,7 @@ class SummaryStatsConstructor(_proto.Protocol):
     def compute_circuit_data(self, data):
 
         def get_circuit_values(icirc, circ, dsrow, idealout):
-            ret = {'twoQgate_count': circ.twoQgate_count(),
+            ret = {'twoQgate_count': circ.two_q_gate_count(),
                    'circuit_depth': circ.depth(),
                    'idealout': idealout,
                    'circuit_index': icirc,
@@ -203,8 +203,8 @@ class SummaryStatsConstructor(_proto.Protocol):
         ds = data.dataset
 
         depths = design.depths
-        qty_data = _tools.NamedDict('Datatype', 'category', None,
-                                    {comp: _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+        qty_data = _tools.NamedDict('Datatype', 'category', None, None,
+                                    {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
                                      for comp in component_names})
 
         #loop over all circuits
@@ -223,8 +223,8 @@ class SummaryStatsConstructor(_proto.Protocol):
 
     def create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
         return _tools.NamedDict(
-            'Depth', 'int', seriestype, {depth: _tools.NamedDict(
-                'Width', 'int', seriestype, {width: fillfn() for width in widths}) for depth in depths})
+            'Depth', 'int', None, None, {depth: _tools.NamedDict(
+                'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
     def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
@@ -259,8 +259,8 @@ class SummaryStatsConstructor(_proto.Protocol):
 
             component_names = self.summary_datatypes
             bcache = _tools.NamedDict(
-                'Datatype', 'category', None,
-                {comp: _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+                'Datatype', 'category', None, None,
+                {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
                  for comp in component_names})  # ~= "RB summary dataset"
 
             for depth, SPs in success_probabilities.items():
@@ -304,7 +304,7 @@ def _get_statistic_function(stat, datatype):
     #             return _np.nan  #, None
     #         else:
     #             ind = _np.nanargmax(v)
-    #             return _tools.NamedDict('Circuit Index', 'int', datatype, {ind: v[ind]})   #v[ind], ind
+    #             return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {ind: v[ind]})   #v[ind], ind
 
     # elif stat == 'mean':
     #     def fn(v):
@@ -319,15 +319,15 @@ def _get_statistic_function(stat, datatype):
     #             return _np.nan  #, None
     #         else:
     #             ind = _np.nanargmin(v)
-    #             return _tools.NamedDict('Circuit Index', 'int', datatype, {ind: v[ind]})   #v[ind], ind
+    #             return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {ind: v[ind]})   #v[ind], ind
 
     if stat == 'dist':
         def fn(v):
-            return _tools.NamedDict('Circuit Index', 'int', datatype, {i: j for i, j in enumerate(v)})
+            return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {i: j for i, j in enumerate(v)})
 
             # _tools.NamedDict(
-            # 'Depth', 'int', seriestype, {depth: _tools.NamedDict(
-            #     'Width', 'int', seriestype, {width: fillfn() for width in widths}) for depth in depths})
+            # 'Depth', 'int', None, None, {depth: _tools.NamedDict(
+            #     'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
     # elif stat == 'sum':  # Should this be nansum?
     #     def fn(v):
@@ -361,7 +361,7 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
         self.custom_data_src = custom_data_src
         # because this *could* be a model or a qty dict (or just a string?)
         self.auxfile_types['custom_data_src'] = 'pickle'
-        self._nameddict_attributes += (('datatype', 'Data Type', 'category'),
+        self._nameddict_attributes += (('datatype', 'DataType', 'category'),
                                        ('statistic', 'Statistic', 'category'))
 
     def run(self, data, memlimit=None, comm=None, dscomparator=None):
@@ -397,7 +397,7 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
                 "Only success probabilities or polarizations can be simulated!"
             sfmodel = self.custom_data_src
             depths = data.edesign.depths if self.depths == 'all' else self.depths
-            src_data = _tools.NamedDict('Depth', 'int', 'float', {depth: [] for depth in depths})
+            src_data = _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
             circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
 
             for depth in depths:
@@ -559,8 +559,8 @@ class SummaryStats(_proto.ProtocolResults):
 #         passnames = list(data.passes.keys()) if data.is_multipass() else [None]
 #         passresults = []
 #         for passname in passnames:
-#             vb = _tools.NamedDict('Depth', 'int', None)
-#             fails = _tools.NamedDict('Depth', 'int', None)
+#             vb = _tools.NamedDict('Depth', 'int', None, None)
+#             fails = _tools.NamedDict('Depth', 'int', None, None)
 #             path_for_gridloc = {}
 #             for path in paths:
 #                 #TODO: need to be able to filter based on widths... - maybe replace .update calls
@@ -592,8 +592,8 @@ class SummaryStats(_proto.ProtocolResults):
 
 #                 for depth in depths:
 #                     if depth not in vb:  # and depth not in fails
-#                         vb[depth] = _tools.NamedDict('Width', 'int', 'float')
-#                         fails[depth] = _tools.NamedDict('Width', 'int', None)
+#                         vb[depth] = _tools.NamedDict('Width', 'int', 'Value', 'float')
+#                         fails[depth] = _tools.NamedDict('Width', 'int', 'Value', None)
 #                         path_for_gridloc[depth] = {}  # just used for meaningful error message
 
 #                     if width in path_for_gridloc[depth]:
@@ -617,13 +617,13 @@ class SummaryStats(_proto.ProtocolResults):
 #         agg_fn = _get_statistic_function(self.statistic)
 
 #         if self.aggregate and len(passnames) > 1:  # aggregate pass data into a single set of qty dicts
-#             agg_vb = _tools.NamedDict('Depth', 'int', None)
-#             agg_fails = _tools.NamedDict('Depth', 'int', None)
+#             agg_vb = _tools.NamedDict('Depth', 'int', None, None)
+#             agg_fails = _tools.NamedDict('Depth', 'int', None, None)
 #             template = passresults[0].volumetric_benchmarks  # to get widths and depths
 
 #             for depth, template_by_width_data in template.items():
-#                 agg_vb[depth] = _tools.NamedDict('Width', 'int', 'float')
-#                 agg_fails[depth] = _tools.NamedDict('Width', 'int', None)
+#                 agg_vb[depth] = _tools.NamedDict('Width', 'int', 'Value', 'float')
+#                 agg_fails[depth] = _tools.NamedDict('Width', 'int', 'Value', None)
 
 #                 for width in template_by_width_data.keys():
 #                     # ppd = "per pass data"
