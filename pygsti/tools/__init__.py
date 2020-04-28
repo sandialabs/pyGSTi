@@ -26,3 +26,4 @@ from .matrixmod2 import *
 from .hypothesis import *
 from .opttools import *
 from .nameddict import NamedDict
+from .typeddict import TypedDict

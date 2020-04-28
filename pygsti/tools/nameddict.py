@@ -9,47 +9,55 @@
 #***************************************************************************************************
 
 import numpy as _np
+from . import typeddict as _typeddict
 
 
 class NamedDict(dict):
-    def __init__(self, name=None, keytype=None, valtype=None, items=()):
+    @classmethod
+    def create_nested(cls, key_val_type_list, inner):
+        """
+        Creates a nested NamedDict.
+
+        Parameters
+        ----------
+        key_val_type_list : list
+            A list of (key, value, type) tuples, one per nesting layer.
+
+        inner : various
+            The value that will be set to the inner-most nested
+            dictionary's value, supplying any additional layers of
+            nesting (if `inner` is a `NamedDict`) or the value
+            contained in all of the nested layers.
+        """
+        head = tail = {}; val = None
+        for next_key, next_val, next_type in key_val_type_list:
+            tail[val] = cls(next_key, next_type); tail = tail[val]
+            val = next_val
+
+        tail[val] = inner
+        return head[None]
+
+    def __init__(self, keyname=None, keytype=None, valname=None, valtype=None, items=()):
         super().__init__(items)
-        self.name = name
+        self.keyname = keyname
+        self.valname = valname
         self.keytype = keytype
         self.valtype = valtype
 
     def __reduce__(self):
-        return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items())), None)
+        return (NamedDict, (self.keyname, self.keytype, self.valname, self.valtype, list(self.items())), None)
 
     def as_dataframe(self):
-        import pandas as _pandas
-
-        columns = {'value': []}
-        seriestypes = {'value': "unknown"}
+        columns = {}; seriestypes = {}
         self._add_to_columns(columns, seriestypes, {})
-
-        columns_as_series = {}
-        for colname, lst in columns.items():
-            seriestype = seriestypes[colname]
-            if seriestype == 'float':
-                s = _np.array(lst, dtype='d')
-            elif seriestype == 'int':
-                s = _np.array(lst, dtype=int)  # or pd.Series w/dtype?
-            elif seriestype == 'category':
-                s = _pandas.Categorical(lst)
-            else:
-                s = lst  # will infer an object array?
-
-            columns_as_series[colname] = s
-
-        df = _pandas.DataFrame(columns_as_series)
-        return df
+        return _typeddict._columndict_to_dataframe(columns, seriestypes)
 
     def _add_to_columns(self, columns, seriestypes, row_prefix):
-        nm = self.name
-        if nm not in columns:
-            #add column; assume 'value' is always a column
-            columns[nm] = [None] * len(columns['value'])
+        #Add key column if needed
+        nm = self.keyname
+        ncols = len(next(iter(columns.values()))) if len(columns) > 0 else 0
+        if nm not in columns:  # then add a column
+            columns[nm] = [None] * ncols
             seriestypes[nm] = self.keytype
         elif seriestypes[nm] != self.keytype:
             seriestypes[nm] = None  # conflicting types, so set to None
@@ -58,22 +66,33 @@ class NamedDict(dict):
             ("Column %s is assigned at multiple dict-levels (latter levels will "
              "overwrite the values of earlier levels)! keys-so-far=%s") % (nm, tuple(row_prefix.keys()))
 
+        #Add value column if needed
+        valname = self.valname if (self.valname is not None) else 'Value'
+        add_value_col = not all([(isinstance(v, (NamedDict, _typeddict.TypedDict)) or hasattr(v, 'as_nameddict'))
+                                 for v in self.values()])
+        if add_value_col:
+            if valname not in columns:  # then add a column
+                columns[valname] = [None] * ncols
+                seriestypes[valname] = self.valtype if (ncols == 0) else None  # can't store Nones in special types
+            elif seriestypes[valname] != self.valtype:
+                seriestypes[valname] = None  # conflicting types, so set to None
+
+            assert(valname not in row_prefix), \
+                ("Column %s is assigned at multiple dict-levels (latter levels will "
+                 "overwrite the values of earlier levels)! keys-so-far=%s") % (valname, tuple(row_prefix.keys()))
+
+        #Add rows
         row = row_prefix.copy()
         for k, v in self.items():
             row[nm] = k
-            if isinstance(v, NamedDict):
+            if isinstance(v, (NamedDict, _typeddict.TypedDict)):
                 v._add_to_columns(columns, seriestypes, row)
             elif hasattr(v, 'as_nameddict'):  # e.g., for other ProtocolResults
                 v.as_nameddict()._add_to_columns(columns, seriestypes, row)
             else:
                 #Add row
                 complete_row = row.copy()
-                complete_row['value'] = v
-
-                if seriestypes['value'] == "unknown":
-                    seriestypes['value'] = self.valtype
-                elif seriestypes['value'] != self.valtype:
-                    seriestypes['value'] = None  # conflicting type, so set to None
+                complete_row[valname] = v
 
                 for rk, rv in complete_row.items():
                     columns[rk].append(rv)

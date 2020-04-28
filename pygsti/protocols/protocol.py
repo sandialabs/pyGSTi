@@ -75,7 +75,7 @@ class Protocol(object):
         self.name = name if name else self.__class__.__name__
         self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
         self.auxfile_types = {}
-        self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
+        self._nameddict_attributes = ()  # (('name', 'ProtocolName', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -136,22 +136,11 @@ class Protocol(object):
         -------
         NamedDict
         """
-        ret = _NamedDict('Protocol Name', 'category'); tail = ret
-        attr_val = self.name
-
-        tail[attr_val] = _NamedDict('Protocol Type', 'category'); tail = tail[attr_val]
-        attr_val = self.__class__.__name__
-
-        for next_attr, *ndargs in self._nameddict_attributes:
-            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
-            attr_val = getattr(self, next_attr)
-
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-
-        tail[attr_val] = final_dict
-        return ret
+        keys_vals_types = [('ProtocolName', self.name, 'category'),
+                           ('ProtocolType', self.__class__.__name__, 'category')]
+        keys_vals_types.extend(_convert_nameddict_attributes(self))
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
 
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
@@ -689,17 +678,9 @@ class ExperimentDesign(_TreeNode):
         -------
         NamedDict
         """
-        head = tail = {}; attr_val = None
-        for next_attr, *ndargs in self._nameddict_attributes:
-            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
-            attr_val = getattr(self, next_attr)
-
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-
-        tail[attr_val] = final_dict
-        return head[None]
+        keys_vals_types = _convert_nameddict_attributes(self)
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
 
     def create_subdata(self, subdata_name, dataset):
         """
@@ -1060,9 +1041,10 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                dataset = _io.load_dataset(dataset_files[0], withTimes=False, ignoreZeroCountLines=False, verbosity=0)
+                dataset = _io.load_dataset(dataset_files[0], with_times=False, ignore_zero_count_lines=False,
+                                           verbosity=0)
             else:
-                dataset = {pth.stem: _io.load_dataset(pth, withTimes=False, ignoreZeroCountLines=False, verbosity=0)
+                dataset = {pth.stem: _io.load_dataset(pth, with_times=False, ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
@@ -1248,12 +1230,8 @@ class ProtocolData(_TreeNode):
         -------
         NamedDict
         """
-        head = tail = {}; attr_val = None
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-        tail[attr_val] = final_dict
-        return self.edesign.setup_nameddict(head[None])
+        keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
+        return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
 
 
 class ProtocolResults(object):
@@ -1387,22 +1365,29 @@ class ProtocolResults(object):
         -------
         NamedDict
         """
+        return self.protocol.setup_nameddict(
+            self.data.setup_nameddict(
+                self._my_attributes_as_nameddict()
+            ))
+
+    def _my_attributes_as_nameddict(self):
         #This function can be overridden by derived classes - this just
-        # tries to give a decent default implementation
-        final = _NamedDict('Qty', 'category')
-        ret = self.protocol.setup_nameddict(self.data.setup_nameddict(final))
+        # tries to give a decent default implementation.  Ideally derived
+        # implementatons would use ValueName and Value columns so results
+        # can be aggregated easily.
+        vals = _NamedDict('ValueName', 'category')
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                final[k] = v.as_nameddict()
+                vals[k] = v.as_nameddict()
             elif isinstance(v, _NamedDict):
-                final[k] = v
+                vals[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                final[k] = v
-        return ret
+                vals[k] = v
+        return vals
 
     def as_dataframe(self):
         """
@@ -1631,7 +1616,7 @@ class ProtocolResultsDir(_TreeNode):
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
         nds = [v.as_nameddict() for v in self.for_protocol.values()]
         if len(nds) > 0:
-            assert(all([nd.name == nds[0].name for nd in nds])), \
+            assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
                 "All protocols on a given node must return a NamedDict with the *same* root name!"
             results_on_this_node = nds[0]
             for nd in nds[1:]:
@@ -1779,3 +1764,22 @@ class ProtocolPostProcessor(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+
+#In the future, we could put this function into a base class for
+# the classes that utilize it above, so it would become a proper method.
+def _convert_nameddict_attributes(obj):
+    """
+    A helper function that converts the elements of the 
+    "_nameddict_attributes" attribute of several classes to
+    the (key, value, type) array expected by 
+    :method:`NamedDict.create_nested`.
+    """
+    keys_vals_types = []
+    for tup in obj._nameddict_attributes:
+        if len(tup) == 1: attr, key, typ = tup[0], tup[0], None
+        elif len(tup) == 2: attr, key, typ = tup[0], tup[1], None
+        elif len(tup) == 3: attr, key, typ = tup
+        keys_vals_types.append((key, getattr(obj, attr), typ))
+    return keys_vals_types
+
