@@ -1382,15 +1382,35 @@ class ProtocolResults(object):
                 vals[k] = v
         return vals
 
-    def as_dataframe(self):
+    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        df = self.as_nameddict().as_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
@@ -1617,39 +1637,47 @@ class ProtocolResultsDir(_TreeNode):
         for k, v in self.items():
             v._addto_bypath_nameddict(dest, path + (k,))
 
-    #def as_nameddict(self):
-    #    """
-    #    Convert the results in this object into nested :class:`NamedDict` objects.
-    #
-    #    Returns
-    #    -------
-    #    NamedDict
-    #    """
-    #    sub_results = {k: v.as_nameddict() for k, v in self.items()}
-    #    results_on_this_node = self._result_namedicts_on_this_node()
-    #
-    #    if sub_results:
-    #        category = self.child_category if self.child_category else 'nocategory'
-    #        ret = _NamedDict(category, 'category')
-    #        if results_on_this_node:
-    #            #Results in this (self's) dir don't have a value for the sub-category, so put None
-    #            ret[None] = results_on_this_node
-    #        ret.update(sub_results)
-    #        return ret
-    #    else:  # no sub-results, so can just return a dict of results on this node
-    #        return results_on_this_node
+    def as_nameddict(self):
+        """
+        Convert the results in this object into nested :class:`NamedDict` objects.
+    
+        Returns
+        -------
+        NamedDict
+        """
+        nd = _NamedDict('Path', 'object')  # so it can hold tuples of tuples, etc.
+        self._addto_bypath_nameddict(nd, path=())
+        return nd
 
-    def as_dataframe(self):
+    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        nd = _NamedDict('Path', 'object')  # so it can hold tuples of tuples, etc.
-        self._addto_bypath_nameddict(nd, path=())
-        return nd.as_dataframe()
+        df = self.as_nameddict().as_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
@@ -1789,3 +1817,36 @@ def _convert_nameddict_attributes(obj):
         keys_vals_types.append((key, getattr(obj, attr), typ))
     return keys_vals_types
 
+
+def _drop_constant_cols(df):
+    to_drop = [col for col in df.columns if len(df[col].unique()) == 1]
+    return df.drop(columns=to_drop)
+
+
+def _reset_index(df):
+    '''Returns DataFrame with index as columns - works with Categorical indices unlike DataFrame.reset_index'''
+    import pandas as _pd
+    index_df = df.index.to_frame(index=False)
+    df = df.reset_index(drop=True)
+    # In merge is important the order in which you pass the dataframes
+    # if the index contains a Categorical. I.e.,
+    # pd.merge(df, index_df, left_index=True, right_index=True) does not work.
+    return _pd.merge(index_df, df, left_index=True, right_index=True)
+
+
+def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
+    """ See as_dataframe docstrings for argument descriptions. """
+    if drop_columns:
+        if drop_columns is True:  drop_columns = (True,)
+        for col in drop_columns:
+            df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
+
+    if pivot_valuename is not None or pivot_value is not None:
+        if pivot_valuename is None: pivot_valuename = "ValueName"
+        if pivot_value is None: pivot_valuename = "Value"
+        index_columns = list(df.columns)
+        index_columns.remove(pivot_valuename)
+        index_columns.remove(pivot_value)
+        df = _reset_index(df.set_index(index_columns + [pivot_valuename])[pivot_value].unstack())
+
+    return df
