@@ -9,6 +9,7 @@
 #***************************************************************************************************
 import numpy as _np
 import itertools as _itertools
+import os as _os
 import copy as _copy
 import json as _json
 import pickle as _pickle
@@ -490,6 +491,10 @@ class ExperimentDesign(_TreeNode):
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
         ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
+
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None,
@@ -535,7 +540,7 @@ class ExperimentDesign(_TreeNode):
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
         self.tags = {}
-        self._nameddict_attributes = ()
+        self._nameddict_attributes = (('qubit_labels', 'Qubits', 'category'),)
         self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
@@ -863,7 +868,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
     # based on qubits, then copy (?) template edesign and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='Qubits'):
+    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='QubitSubset'):
         """
         Create a new SimultaneousExperimentDesign object.
 
@@ -1605,6 +1610,25 @@ class ProtocolResultsDir(_TreeNode):
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
+    def _result_namedicts_on_this_node(self):
+        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"  # eg "ProtocolName"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+        return results_on_this_node
+
+    def _addto_bypath_nameddict(self, dest, path):
+        results_on_this_node = self._result_namedicts_on_this_node()
+        if results_on_this_node is not None:
+            dest[path] = results_on_this_node
+        for k, v in self.items():
+            v._addto_bypath_nameddict(dest, path + (k,))
+
     def as_nameddict(self):
         """
         Convert the results in this object into nested :class:`NamedDict` objects.
@@ -1614,15 +1638,7 @@ class ProtocolResultsDir(_TreeNode):
         NamedDict
         """
         sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        nds = [v.as_nameddict() for v in self.for_protocol.values()]
-        if len(nds) > 0:
-            assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
-                "All protocols on a given node must return a NamedDict with the *same* root name!"
-            results_on_this_node = nds[0]
-            for nd in nds[1:]:
-                results_on_this_node.update(nd)
-        else:
-            results_on_this_node = None
+        results_on_this_node = self._result_namedicts_on_this_node()
 
         if sub_results:
             category = self.child_category if self.child_category else 'nocategory'
@@ -1643,7 +1659,9 @@ class ProtocolResultsDir(_TreeNode):
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        nd = _NamedDict('Path', 'object')  # so it can hold tuples of tuples, etc.
+        self._addto_bypath_nameddict(nd, path=())
+        return nd.as_dataframe()
 
     def __str__(self):
         import pprint

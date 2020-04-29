@@ -22,6 +22,8 @@ def _columndict_to_dataframe(columns, seriestypes):
             s = _np.array(lst, dtype=int)  # or pd.Series w/dtype?
         elif seriestype == 'category':
             s = _pandas.Categorical(lst)
+        elif seriestype == 'object':
+            s = _pandas.Series(lst, dtype=object)
         else:
             s = lst  # will infer an object array?
 
