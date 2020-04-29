@@ -31,14 +31,9 @@ class TreeNode(object):
         # ret._init_children(dirname, subdir_between_dirname_and_meta_json)  # loads child nodes
         # return ret
 
-    def __init__(self, possible_child_name_dirs, child_values=None, child_category=None):
+    def __init__(self, possible_child_name_dirs, child_values=None):
         self._dirs = possible_child_name_dirs  # maps possible child keys -> subdir name
         self._vals = child_values if child_values else {}
-        self._childcategory = child_category
-
-    @property
-    def child_category(self):
-        return self._childcategory
 
     def _init_children(self, dirname, meta_subdir=None, **kwargs):
         dirname = _pathlib.Path(dirname)
@@ -53,7 +48,6 @@ class TreeNode(object):
 
         self._dirs = child_dirs
         self._vals = {}
-        self._childcategory = meta.get('category', None)
 
         for nm, subdir in child_dirs.items():
             subobj_dir = dirname / subdir
@@ -141,7 +135,6 @@ class TreeNode(object):
         if write_subdir_json:
             subdirs = {}
             subdirs['directories'] = {dirname: subname for subname, dirname in self._dirs.items()}
-            if self._childcategory: subdirs['category'] = self._childcategory
             # write self._dirs "backwards" b/c json doesn't allow tuple-like keys (sometimes keys are tuples)
             with open(dirname / 'edesign' / 'subdirs.json', 'w') as f:
                 _json.dump(subdirs, f)

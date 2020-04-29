@@ -498,7 +498,7 @@ class ExperimentDesign(_TreeNode):
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None,
-                 children=None, children_dirs=None, child_category=None):
+                 children=None, children_dirs=None):
         """
         Create a new ExperimentDesign object, which holds a set of circuits (needing data).
 
@@ -527,10 +527,6 @@ class ExperimentDesign(_TreeNode):
             names.  Directory names are used when saving the object (via
             :method:`write`).
 
-        child_category : str, optional
-            The category that describes the children of this object.  This
-            is used as a heading for the keys of `children`.
-
         Returns
         -------
         ExperimentDesign
@@ -555,7 +551,7 @@ class ExperimentDesign(_TreeNode):
                               'default_protocols': 'dict-of-protocolobjs'}
 
         # because TreeNode takes care of its own serialization:
-        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none', '_loaded_from': 'none'})
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
             if children:
@@ -585,7 +581,7 @@ class ExperimentDesign(_TreeNode):
             {subname: auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
-        super().__init__(children_dirs, children, child_category)
+        super().__init__(children_dirs, children)
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
@@ -777,7 +773,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
     """
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
-                 interleave=False, category='EdesignBranch'):
+                 interleave=False):
         """
         Create a new CombinedExperimentDesign object.
 
@@ -806,10 +802,6 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             names.  Directory names are used when saving the object (via
             :method:`write`).
 
-        category : str, optional
-            The category that describes the sub-edesigns of this object.  This
-            is used as a heading for the keys of `sub_designs`.
-
         Returns
         -------
         CombinedExperimentDesign
@@ -834,7 +826,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             else:
                 qubit_labels = first
 
-        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
     def create_subdata(self, sub_name, dataset):
         """
@@ -868,7 +860,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
     # based on qubits, then copy (?) template edesign and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='QubitSubset'):
+    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None):
         """
         Create a new SimultaneousExperimentDesign object.
 
@@ -887,10 +879,6 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             The qubits that this experiment design applies to. If None, the
             concatenated qubit labels of `edesigns` are used (this is usually
             what you want).
-
-        category : str, optional
-            The category name for the qubit-label-tuples correspoding to the
-            elements of `edesigns`.
 
         Returns
         -------
@@ -945,7 +933,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
         sub_designs = {des.qubit_labels: des for des in edesigns}
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
-        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
     def create_subdata(self, qubit_labels, dataset):
         """
@@ -1103,7 +1091,7 @@ class ProtocolData(_TreeNode):
 
         if self.edesign is None:
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
-        super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
+        super().__init__(self.edesign._dirs, {})  # children created on-demand
 
     def __getstate__(self):
         # don't pickle ourself recursively if self._passdatas contains just ourself
@@ -1569,7 +1557,7 @@ class ProtocolResultsDir(_TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.edesign._dirs, children, self.data.edesign._childcategory)
+        super().__init__(self.data.edesign._dirs, children)
 
     def write(self, dirname=None, parent=None):
         """
@@ -1629,27 +1617,27 @@ class ProtocolResultsDir(_TreeNode):
         for k, v in self.items():
             v._addto_bypath_nameddict(dest, path + (k,))
 
-    def as_nameddict(self):
-        """
-        Convert the results in this object into nested :class:`NamedDict` objects.
-
-        Returns
-        -------
-        NamedDict
-        """
-        sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = self._result_namedicts_on_this_node()
-
-        if sub_results:
-            category = self.child_category if self.child_category else 'nocategory'
-            ret = _NamedDict(category, 'category')
-            if results_on_this_node:
-                #Results in this (self's) dir don't have a value for the sub-category, so put None
-                ret[None] = results_on_this_node
-            ret.update(sub_results)
-            return ret
-        else:  # no sub-results, so can just return a dict of results on this node
-            return results_on_this_node
+    #def as_nameddict(self):
+    #    """
+    #    Convert the results in this object into nested :class:`NamedDict` objects.
+    #
+    #    Returns
+    #    -------
+    #    NamedDict
+    #    """
+    #    sub_results = {k: v.as_nameddict() for k, v in self.items()}
+    #    results_on_this_node = self._result_namedicts_on_this_node()
+    #
+    #    if sub_results:
+    #        category = self.child_category if self.child_category else 'nocategory'
+    #        ret = _NamedDict(category, 'category')
+    #        if results_on_this_node:
+    #            #Results in this (self's) dir don't have a value for the sub-category, so put None
+    #            ret[None] = results_on_this_node
+    #        ret.update(sub_results)
+    #        return ret
+    #    else:  # no sub-results, so can just return a dict of results on this node
+    #        return results_on_this_node
 
     def as_dataframe(self):
         """
