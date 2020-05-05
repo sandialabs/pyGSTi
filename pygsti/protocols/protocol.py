@@ -1464,10 +1464,10 @@ class MultiPassResults(ProtocolResults):
 
     def as_nameddict(self):
         # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
-        ret = _NamedDict('Protocol Name', 'category')
+        ret = _NamedDict('ProtocolName', 'category')
         for pass_name, r in self.passes.items():
-            sub = r.as_nameddict()  # should have outer-most 'Protocol Name' dict
-            assert(sub.name == 'Protocol Name' and len(sub) == 1)
+            sub = r.as_nameddict()  # should have outer-most 'ProtocolName' dict
+            assert(sub.keyname == 'ProtocolName' and len(sub) == 1)
             pname = r.protocol.name  # also list(sub.keys())[0]
             if pname not in ret:
                 ret[pname] = _NamedDict('Pass', 'category')
@@ -1640,7 +1640,7 @@ class ProtocolResultsDir(_TreeNode):
     def as_nameddict(self):
         """
         Convert the results in this object into nested :class:`NamedDict` objects.
-    
+
         Returns
         -------
         NamedDict
@@ -1843,7 +1843,7 @@ def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
 
     if pivot_valuename is not None or pivot_value is not None:
         if pivot_valuename is None: pivot_valuename = "ValueName"
-        if pivot_value is None: pivot_valuename = "Value"
+        if pivot_value is None: pivot_value = "Value"
         index_columns = list(df.columns)
         index_columns.remove(pivot_valuename)
         index_columns.remove(pivot_value)

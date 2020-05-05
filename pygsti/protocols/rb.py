@@ -522,7 +522,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
 
-class RandomizedBenchmarking(_vb.SummaryStatsConstructor):
+class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
     The randomized benchmarking protocol. This same analysis protocol is used for Clifford, Direct and Mirror RB.
     The standard Mirror RB analysis is obtained by setting `datatype` = `adjusted_success_probabilities`.
@@ -574,7 +574,7 @@ class RandomizedBenchmarking(_vb.SummaryStatsConstructor):
         """
         super().__init__(name)
 
-        assert(datatype in self.summary_datatypes), "Unknown data type: %s!" % str(datatype)
+        assert(datatype in self.summary_statistics), "Unknown data type: %s!" % str(datatype)
         assert(datatype in ('success_probabilities', 'adjusted_success_probabilities')), \
             "Data type '%s' must be 'success_probabilities' or 'adjusted_success_probabilities'!" % str(datatype)
 

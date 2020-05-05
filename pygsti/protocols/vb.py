@@ -104,15 +104,15 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.fixed_versus_depth = fixed_versus_depth
 
 
-class SummaryStatsConstructor(_proto.Protocol):
+class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from the raw data.
 
     """
-    summary_datatypes = ('success_counts', 'total_counts', 'hamming_distance_counts',
+    summary_statistics = ('success_counts', 'total_counts', 'hamming_distance_counts',
                          'success_probabilities', 'polarization', 'adjusted_success_probabilities')
-    circuit_datatypes = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
-    # dscmp_datatypes = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
+    circuit_statistics = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
+    # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
         super().__init__(name)
@@ -154,7 +154,7 @@ class SummaryStatsConstructor(_proto.Protocol):
                    'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
 
-        return self.compute_dict(data, self.summary_datatypes,
+        return self.compute_dict(data, self.summary_statistics,
                                  get_summary_values, for_passes='all')
 
     def compute_circuit_data(self, data):
@@ -168,7 +168,7 @@ class SummaryStatsConstructor(_proto.Protocol):
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self.compute_dict(data, self.circuit_datatypes, get_circuit_values, for_passes="first")
+        return self.compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
 
     # def compute_dscmp_data(self, data, dscomparator):
 
@@ -179,7 +179,7 @@ class SummaryStatsConstructor(_proto.Protocol):
     #                'llrs': dscomparator.llrs.get(circ, _np.nan)}
     #         return ret
 
-    #     return self.compute_dict(data, "dscmpdata", self.dsmp_datatypes, get_dscmp_values, for_passes="none")
+    #     return self.compute_dict(data, "dscmpdata", self.dsmp_statistics, get_dscmp_values, for_passes="none")
 
     def compute_predicted_probs(self, data, model):
 
@@ -257,7 +257,7 @@ class SummaryStatsConstructor(_proto.Protocol):
 
         for i in range(num_existing, num_qtys):
 
-            component_names = self.summary_datatypes
+            component_names = self.summary_statistics
             bcache = _tools.NamedDict(
                 'Datatype', 'category', None, None,
                 {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
@@ -294,75 +294,75 @@ class SummaryStatsConstructor(_proto.Protocol):
             data_cache[key].append(bcache)
 
 
-def _get_statistic_function(stat, datatype):
-    """
-    Get function to aggregate the different per-circuit datatype values
-    """
-    # if stat == 'max' or stat == 'maxmax':
-    #     def fn(v):
-    #         if _np.isnan(v).all():
-    #             return _np.nan  #, None
-    #         else:
-    #             ind = _np.nanargmax(v)
-    #             return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {ind: v[ind]})   #v[ind], ind
-
-    # elif stat == 'mean':
-    #     def fn(v):
-    #         if _np.isnan(v).all():
-    #             return _np.nan  #, None
-    #         else:
-    #             return _np.nanmean(v)  #, None
-
-    # elif stat == 'min' or stat == 'minmin':
-    #     def fn(v):
-    #         if _np.isnan(v).all():
-    #             return _np.nan  #, None
-    #         else:
-    #             ind = _np.nanargmin(v)
-    #             return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {ind: v[ind]})   #v[ind], ind
-
-    if stat == 'dist':
-        def fn(v):
-            return _tools.NamedDict('CircuitIndex', 'int', 'Value', datatype, {i: j for i, j in enumerate(v)})
-
-            # _tools.NamedDict(
-            # 'Depth', 'int', None, None, {depth: _tools.NamedDict(
-            #     'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
-
-    # elif stat == 'sum':  # Should this be nansum?
-    #     def fn(v):
-    #         if _np.isnan(v).all():
-    #             return _np.nan   #, None
-    #         else:
-    #             return _np.nansum(v)  #, None
-
-    # else: raise ValueError("Invalid statistic '%s'!" % stat)
-
-    return fn
-
-
-class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
+class ByDepthSummaryStatistics(SummaryStatistics):
     """
     TODO
     """
-    def __init__(self, depths='all', datatype='polarization', custom_data_src=None, name=None):
+    def __init__(self, depths='all', statistics_to_compute='polarization', names_to_compute=None,
+                 custom_data_src=None, name=None):
         """
         todo
 
         """
-        statistic = 'dist'
-        #assert(statistic in ('dist', )) #'max', 'mean', 'min', 'dist', 'sum'))
-        if name is None:
-            name = datatype  # statistic + ' ' +
         super().__init__(name)
         self.depths = depths
-        self.datatype = datatype
-        self.statistic = statistic
+        self.statistics_to_compute = statistics_to_compute
+        self.names_to_compute = statistics_to_compute if (names_to_compute is None) else names_to_compute
         self.custom_data_src = custom_data_src
         # because this *could* be a model or a qty dict (or just a string?)
         self.auxfile_types['custom_data_src'] = 'pickle'
-        self._nameddict_attributes += (('datatype', 'DataType', 'category'),
-                                       ('statistic', 'Statistic', 'category'))
+
+    def _get_statistic_per_depth(self, statistic, data):
+        design = data.edesign
+
+        if self.custom_data_src is None:  # then use the data in `data`
+            #Note: can only take/put things ("results") in data.cache that *only* depend on the exp. design
+            # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
+            if statistic in self.summary_statistics:
+                if statistic not in data.cache:
+                    summary_data_dict = self.compute_summary_data(data)
+                    data.cache.update(summary_data_dict)
+            # Code currently doesn't work with a dscmp, so commented out.
+            # elif statistic in self.dscmp_statistics:
+            #     if statistic not in data.cache:
+            #         dscmp_data = self.compute_dscmp_data(data, dscomparator)
+            #         data.cache.update(dscmp_data)
+            elif statistic in self.circuit_statistics:
+                if statistic not in data.cache:
+                    circuit_data = self.compute_circuit_data(data)
+                    data.cache.update(circuit_data)
+            else:
+                raise ValueError("Invalid statistic: %s" % statistic)
+
+            statistic_per_depth = data.cache[statistic]
+
+        elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
+            assert(statistic in ('success_probabilities', 'polarization')), \
+                "Only success probabilities or polarizations can be simulated!"
+            sfmodel = self.custom_data_src
+            depths = design.depths if self.depths == 'all' else self.depths
+            statistic_per_depth = _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
+            circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
+
+            for depth in depths:
+                for circ in circuit_lists_for_depths[depth]:
+                    predicted_success_prob = sfmodel.probs(circ)[('success',)]
+                    if statistic == 'success_probabilities':
+                        statistic_per_depth[depth].append(predicted_success_prob)
+                    elif statistic == 'polarization':
+                        nQ = len(circ.line_labels)
+                        pol = (predicted_success_prob - 1 / 2**nQ) / (1 - 1 / 2**nQ)
+                        statistic_per_depth[depth].append(pol)
+
+        # Note sure this is used anywhere, so commented out for now.
+        #elif isinstance(custom_data_src, dict):  # Assume this is a "summary dataset"
+        #    summary_data = self.custom_data_src
+        #    statistic_per_depth = summary_data['success_probabilities']
+
+        else:
+            raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
+
+        return statistic_per_depth
 
     def run(self, data, memlimit=None, comm=None, dscomparator=None):
         """
@@ -370,88 +370,22 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
 
         """
         design = data.edesign
+        width = len(design.qubit_labels)
+        results = SummaryStatisticsResults(data, self)
 
-        if self.custom_data_src is None:  # then use the data in `data`
-            #Note: can only take/put things ("results") in data.cache that *only* depend on the exp. design
-            # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
-            if self.datatype in self.summary_datatypes:
-                if self.datatype not in data.cache:
-                    summary_data_dict = self.compute_summary_data(data)
-                    data.cache.update(summary_data_dict)
-            # Code currently doesn't work with a dscmp, so commented out.
-            # elif self.datatype in self.dscmp_datatypes:
-            #     if self.datatype not in data.cache:
-            #         dscmp_data = self.compute_dscmp_data(data, dscomparator)
-            #         data.cache.update(dscmp_data)
-            elif self.datatype in self.circuit_datatypes:
-                if self.datatype not in data.cache:
-                    circuit_data = self.compute_circuit_data(data)
-                    data.cache.update(circuit_data)
-            else:
-                raise ValueError("Invalid datatype: %s" % self.datatype)
-
-            src_data = data.cache[self.datatype]
-
-        elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
-            assert(self.datatype == 'success_probabilities' or self.datatype == 'polarization'), \
-                "Only success probabilities or polarizations can be simulated!"
-            sfmodel = self.custom_data_src
-            depths = data.edesign.depths if self.depths == 'all' else self.depths
-            src_data = _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
-            circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
+        for statistic, statistic_nm in zip(self.statistics_to_compute, self.names_to_compute):
+            statistic_per_depth = self._get_statistic_per_depth(statistic, data)
+            depths = statistic_per_depth.keys() if self.depths == 'all' else \
+                filter(lambda d: d in statistic_per_depth, self.depths)
+            statistic_per_dwc = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
+            # a nested NamedDict with indices: depth, width, circuit_index (width only has single value though)
 
             for depth in depths:
-                for circ in circuit_lists_for_depths[depth]:
-                    predicted_success_prob = sfmodel.probs(circ)[('success',)]
-                    if self.datatype == 'success_probabilities':
-                        src_data[depth].append(predicted_success_prob)
-                    elif self.datatype == 'polarization':
-                        nQ = len(circ.line_labels)
-                        pol = (predicted_success_prob - 1 / 2**nQ) / (1 - 1 / 2**nQ)
-                        src_data[depth].append(pol)
-
-        # Note sure this is used anywhere, so commented out for now.
-        #elif isinstance(custom_data_src, dict):  # Assume this is a "summary dataset"
-        #    summary_data = self.custom_data_src
-        #    src_data = summary_data['success_probabilities']
-
-        else:
-            raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
-
-        # The function we use to aggregate datatype-data for all circuits at same depth
-        # Note: This is nolonger "aggregating" anything: we can probably move all aggregation outside
-        # this protocol.
-        agg_fn = _get_statistic_function(self.statistic, 'float')
-
-        def failcnt_fn(percircuitdata):
-            """ Returns (nSucceeded, nFailed) for all circuits at same depth """
-            nCircuits = len(percircuitdata)
-            failcount = int(_np.sum(_np.isnan(percircuitdata)))
-            return (nCircuits - failcount, failcount)
-
-        data_per_depth = src_data
-        if self.depths == 'all':
-            depths = data_per_depth.keys()
-        else:
-            depths = filter(lambda d: d in data_per_depth, self.depths)
-        width = len(design.qubit_labels)
-
-        summarystat = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
-#        circuitindex = self.create_depthwidth_dict(depths, (width,), lambda: None, 'int')
-#        successes = self.create_depthwidth_dict(depths, (width,), lambda: None, 'int')
-#        fails = self.create_depthwidth_dict(depths, (width,), lambda: None, 'int')
-
-        for depth in depths:
-            percircuitdata = data_per_depth[depth]
-#            successes[depth][width], fails[depth][width] = failcnt_fn(percircuitdata) # ASSIGN NAMED DICT.
-            summarystat[depth][width] = agg_fn(percircuitdata)  # ASSIGN NAMED DICT.
-            # circuitindex[depth][width] =
-
-        results = SummaryStats(data, self)  # 'Qty', 'category'
-        results.summary_statistic = summarystat
-#        results.success_counts = successes
-#        results.failure_counts = fails
-#        results.circuit_index = circuitindex
+                percircuitdata = statistic_per_depth[depth]
+                statistic_per_dwc[depth][width] = \
+                    _tools.NamedDict('CircuitIndex', 'int', 'Value', 'float',
+                                     {i: j for i, j in enumerate(percircuitdata)})
+            results.statistics[statistic_nm] = statistic_per_dwc
         return results
 
 
@@ -467,7 +401,7 @@ class ByDepthSummaryStatsConstructor(SummaryStatsConstructor):
 #                          dscomparator, model_or_summary_data, name)
 
 
-class SummaryStats(_proto.ProtocolResults):
+class SummaryStatisticsResults(_proto.ProtocolResults):
     """
     The results from running a volumetric benchmark protocol
 
@@ -478,16 +412,17 @@ class SummaryStats(_proto.ProtocolResults):
         TODO: docstring
         """
         super().__init__(data, protocol_instance)
+        self.statistics = {}
+        self.auxfile_types['statistics'] = 'pickle'  # b/c NamedDicts don't json
 
-        self.summary_statistic = {}
-        #self.success_counts = {}
-        #self.failure_counts = {}
-        #self.circuit_index = {}
-
-        self.auxfile_types['summary_statistic'] = 'pickle'  # b/c NamedDicts don't json
-        #self.auxfile_types['success_counts'] = 'pickle'  # b/c NamedDicts don't json
-        #self.auxfile_types['failure_counts'] = 'pickle'  # b/c NamedDicts don't json
-        #self.auxfile_types['circuit_index'] = 'pickle'  # b/c NamedDicts don't json
+    def _my_attributes_as_nameddict(self):
+        """Overrides base class behavior so elements of self.statistics form top-level NamedDict"""
+        stats = _tools.NamedDict('ValueName', 'category')
+        for k, v in self.statistics.items():
+            assert(isinstance(v, _tools.NamedDict)), \
+                "SummaryStatisticsResults.statistics dict should be populated with NamedDicts, not %s" % str(type(v))
+            stats[k] = v
+        return stats
 
 
 #BDB = ByDepthBenchmark
