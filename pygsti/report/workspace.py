@@ -382,12 +382,12 @@ class Workspace(object):
         script += _merge.insert_resource(connected, None, "pygsti_plotly_ex.js")
         script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
-        # Load style sheets for displaying tables
-        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
-
         #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
         jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
         script += _merge.insert_resource(connected, jQueryUI_CSS, "smoothness-jquery-ui.css")
+
+        # Load style sheets for displaying tables
+        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
 
         #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
         if connected:
