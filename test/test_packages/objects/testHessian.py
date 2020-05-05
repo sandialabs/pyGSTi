@@ -125,7 +125,7 @@ class TestHessianMethods(BaseTestCase):
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
             if abs(val) > TOL or abs(chk) > TOL:
-                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=3)
+                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=2)
             # (else both chk and val are <= TOL, so both == 0 for our purposes)
         #print "eigvals = ",eigvals
 

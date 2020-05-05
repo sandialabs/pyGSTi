@@ -244,12 +244,13 @@ class MDSObjectiveFunction(ObjectiveFunction):
         in_gb = 1.0 / 1024.0**3  # in gigabytes
         if self.raw_objfn.mem_limit is not None:
             in_gb = 1.0 / 1024.0**3  # in gigabytes
-            if self.raw_objfn.mem_limit < persistent_mem:
-                raise MemoryError("Memory limit ({} GB) is < memory required to hold final results "
-                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, persistent_mem * in_gb))
-
             cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
-            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem))
+            if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
+                raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
+                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
+                                                   persistent_mem * in_gb))
+
+            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
             evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
             self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
             self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
@@ -433,7 +434,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
                 # usually want but NOT here, where we fill arrays just big
                 # enough for each subtree separately - so re-init spamtuple_indices
                 eval_subtree = eval_subtree.copy()
-                eval_subtree.recompute_spamtuple_indices(bLocal=True)
+                eval_subtree.recompute_spamtuple_indices(local=True)
 
             # Create views into pre-allocated memory
             probs = probs_mem[0:sub_nelements]

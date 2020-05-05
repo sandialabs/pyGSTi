@@ -83,33 +83,31 @@ class TimeDependentTestCase(BaseTestCase):
         germs = std1Q_XYI.germs
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("TP",sim_type="map")
+        target_model = std1Q_XYI.target_model("TP", sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-        listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-            target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+                                                     meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, n_samples=10,
+        ds = pygsti.construction.generate_fake_data(mdl_datagen, edesign.all_circuits_needing_data, n_samples=10,
                                                     sample_error="binomial", seed=1234, times=[0],
                                                     record_zero_counts=False)
+        data = pygsti.protocols.ProtocolData(edesign, ds)
 
-        target_model.set_simtype('map', max_cache_size=0) # No caching allowed for time-dependent calcs
+        target_model.set_simtype('map', max_cache_size=0)  # No caching allowed for time-dependent calcs
         self.assertEqual(ds.get_degrees_of_freedom(aggregate_times=False), 126)
 
-        results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                              germs, maxLengths, verbosity=3,
-                                              advanced_options={'timeDependent': True,
-                                                               'starting_point': 'target',
-                                                               'always_perform_mle': False,
-                                                               'only_perform_mle': False}, gauge_opt_params=False)
+        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()],[])
+        gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
+                                                 objfn_builders=builders)
+        results = gst.run(data)
 
         # Normal GST used as a check - should get same answer since data is time-independent
         results2 = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
                                                germs, maxLengths, verbosity=3,
-                                               advanced_options={'timeDependent': False,
-                                                                'starting_point': 'target',
-                                                                'always_perform_mle': False,
-                                                                'only_perform_mle': False}, gauge_opt_params=False)
+                                               advanced_options={'starting_point': 'target',
+                                                                 'always_perform_mle': True,
+                                                                 'only_perform_mle': True}, gauge_opt_params=False)
 
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
@@ -132,11 +130,11 @@ class TimeDependentTestCase(BaseTestCase):
         target_model = std1Q_XYI.target_model("TP",sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
         mdl_datagen.operations['Gi'] = MyTimeDependentIdle(1.0)
-        listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-            target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+                                                     meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, n_samples=1000,
+        ds = pygsti.construction.generate_fake_data(mdl_datagen, edesign.all_circuits_needing_data, n_samples=1000,
                                                     sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
                                                     record_zero_counts=False)
         self.assertEqual(ds.get_degrees_of_freedom(aggregate_times=False), 500)
@@ -144,16 +142,14 @@ class TimeDependentTestCase(BaseTestCase):
         target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0
         target_model.set_simtype('map', max_cache_size=0)  # No caching allowed for time-dependent calcs
 
-        results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                              germs, maxLengths, verbosity=3,
-                                              advanced_options={'timeDependent': True,
-                                                               'starting_point': 'target',
-                                                               'always_perform_mle': False,
-                                                               'tolerance': 1e-4,  # run faster!
-                                                               'only_perform_mle': False}, gauge_opt_params=False)
+        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()],[])
+        gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
+                                                 objfn_builders=builders, optimizer={'tol': 1e-4} )
+        data = pygsti.protocols.ProtocolData(edesign, ds)
+        results = gst.run(data)
 
         #we should recover the 1.0 decay we put into mdl_datagen['Gi']:
-        final_mdl = results.estimates['default'].models['final iteration estimate']
+        final_mdl = results.estimates['GateSetTomography'].models['final iteration estimate']
         print("Final decay rate = ", final_mdl.operations['Gi'].to_vector())
         #self.assertAlmostEqual(final_mdl.operations['Gi'].to_vector()[0], 1.0, places=1)
         self.assertAlmostEqual(final_mdl.operations['Gi'].to_vector()[0], 1.0, delta=0.1) # weaker b/c of unknown TravisCI issues

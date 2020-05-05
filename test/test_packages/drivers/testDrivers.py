@@ -199,14 +199,12 @@ class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_badfit(self):
         ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
-        ts = "whole germ powers"
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, advanced_options={'truncScheme': ts,
-                                                                     'bad_fit_threshold': -100})
+                                std.germs, maxLens, advanced_options={'bad_fit_threshold': -100})
 
         pygsti.report.create_standard_report(result, temp_files + "/full_report_badfit",
                                              "badfit report", verbosity=2)

@@ -241,7 +241,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                 open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
-        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 3, delta=1.0)
+        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 4, delta=1.0)
         #mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_prunedpath.model"))
 
         # Note: can't easily gauge opt b/c term-based models can't be converted to "full"
