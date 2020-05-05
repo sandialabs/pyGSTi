@@ -247,11 +247,10 @@ class ConfidenceRegionFactory(object):
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 
         elif obj == 'chi2':
-            chi2, hessian = _tools.chi2(model, dataset, circuit_list,
-                                        False, True, minProbClipForWeighting,
-                                        probClipInterval, mem_limit=mem_limit,
-                                        op_label_aliases=aliases,
-                                        approximate_hessian=approximate)
+            chi2, hessian = [f(model, dataset, circuit_list,
+                               minProbClipForWeighting,
+                               probClipInterval, mem_limit=mem_limit,
+                               op_label_aliases=aliases) for f in (_tools.chi2, _tools.chi2_hessian)]
 
             nonMarkRadiusSq = max(chi2 - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
         else:

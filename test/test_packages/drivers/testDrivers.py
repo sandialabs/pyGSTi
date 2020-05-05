@@ -16,10 +16,10 @@ class DriversTestCase(BaseTestCase):
         self.germs = std.germs
         self.fiducials = std.fiducials
         self.maxLens = [1,2,4]
-        self.opLabels = list(self.model.operations.keys())
+        self.op_labels = list(self.model.operations.keys())
 
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
+            self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
         if regenerate_references():
@@ -206,7 +206,7 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.target_model(), std.fiducials, std.fiducials,
                                 std.germs, maxLens, advanced_options={'truncScheme': ts,
-                                                                     'badFitThreshold': -100})
+                                                                     'bad_fit_threshold': -100})
 
         pygsti.report.create_standard_report(result, temp_files + "/full_report_badfit",
                                              "badfit report", verbosity=2)
@@ -230,11 +230,11 @@ class TestDriversMethods(DriversTestCase):
         ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
-        mdl = pygsti.do_lgst(ds, std.fiducials, std.fiducials, targetModel=tp_target, svdTruncateTo=4, verbosity=0)
+        mdl = pygsti.do_lgst(ds, std.fiducials, std.fiducials, target_model=tp_target, svd_truncate_to=4, verbosity=0)
 
         default_maxLens = [0]+[2**k for k in range(10)]
         circuits = pygsti.construction.make_lsgst_experiment_list(
-            self.opLabels, self.fiducials, self.fiducials, self.germs,
+            self.op_labels, self.fiducials, self.fiducials, self.germs,
             default_maxLens, fid_pairs=None, trunc_scheme="whole germ powers")
         ds_defaultMaxLens = pygsti.construction.generate_fake_data(
             mdl, circuits, n_samples=10000, sample_error='round')

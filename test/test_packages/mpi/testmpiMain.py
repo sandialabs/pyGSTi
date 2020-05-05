@@ -22,13 +22,13 @@ def assertGatesetsInSync(mdl, comm):
 
 def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
-                minProbClipForWeighting=1e-4, fidPairList=None,
-                comm=None, distributeMethod="circuits"):
+                min_prob_clip_for_weighting=1e-4, fidPairList=None,
+                comm=None, distribute_method="circuits"):
 
     #Run LGST to get starting model
     assertGatesetsInSync(gsTarget, comm)
     mdl_lgst = pygsti.do_lgst(ds, prepStrs, effectStrs, gsTarget,
-                             svdTruncateTo=gsTarget.dim, verbosity=3)
+                             svd_truncate_to=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(mdl_lgst, comm)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,gsTarget)
@@ -37,22 +37,16 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
 
     #Run full iterative LSGST
     tStart = time.time()
-    if obj == "chi2":
-        all_gs_lsgst = pygsti.do_iterative_mc2gst(
-            ds, mdl_lgst_go, lsgstStringsToUse,
-            minProbClipForWeighting=minProbClipForWeighting,
-            probClipInterval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
-            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distributeMethod=distributeMethod)
-    elif obj == "logl":
-        all_gs_lsgst = pygsti.do_iterative_mlgst(
-            ds, mdl_lgst_go, lsgstStringsToUse,
-            minProbClip=minProbClipForWeighting,
-            probClipInterval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
-            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-            distributeMethod=distributeMethod)
+    resource_allocation = pygsti.objects.resourceallocation.ResourceAllocation(
+        comm=comm, mem_limit=3*(1024)**3, distribute_method=distribute_method
+    )
+
+    all_gs_lsgst, *_ = pygsti.do_iterative_gst(
+        ds, mdl_lgst_go, lsgstStringsToUse,
+        optimizer={'tol': 1e-5},
+        iteration_objfn_builders=[obj],
+        final_objfn_builders=[], resource_alloc=resource_allocation
+    )
 
     tEnd = time.time()
     print("Time = ",(tEnd-tStart)/3600.0,"hours")
@@ -60,14 +54,14 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
     return all_gs_lsgst
 
 
-def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="circuits"):
+def runOneQubit(obj, ds, lsgstStrings, comm=None, distribute_method="circuits"):
     #specs = pygsti.construction.build_spam_specs(
     #    std.fiducials, prep_labels=std.target_model().get_prep_labels(),
     #    effect_labels=std.target_model().get_effect_labels())
 
     return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.target_model(),
                         lsgstStrings, comm=comm,
-                        distributeMethod=distributeMethod)
+                        distribute_method=distribute_method)
 
 
 def create_fake_dataset(comm):
@@ -769,15 +763,20 @@ def test_MPI_mlgst_forcefn(comm):
         ds = comm.bcast(None, root=0)
 
 
-    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svdTruncateTo=4, verbosity=0)
+    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
-    mdl_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
-        ds, mdl_lgst_go, lgstStrings, verbosity=3,
-        minProbClip=1e-4, probClipInterval=(-1e2,1e2),
-        forcefn_grad=forcingfn_grad, comm=comm)
-
+    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.do_gst_fit(
+        ds, mdl_lgst_go, lgstStrings, optimizer=None,
+        objective_function_builder=pygsti.objects.PoissonPicDeltaLogLFunction.builder(
+            name='logl',
+            description='2*DeltaLogL',
+            regularization={'min_prob_clip': 1e-4},
+            penalties={'forcefn_grad': forcingfn_grad, 'prob_clip_interval': (-1e2, 1e2)}
+        ),
+        resource_alloc=pygsti.objects.resourceallocation.ResourceAllocation(comm=comm), cache=None
+    )
 
 
 @mpitest(4)

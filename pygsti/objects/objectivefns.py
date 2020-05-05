@@ -1178,8 +1178,8 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
     def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
         return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
-    def __init__(self, raw_objfn, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+    def __init__(self, raw_objfn, mdl, dataset, circuit_list, penalties=None, cache=None,
+                 verbosity=0, enable_hessian=False):
 
         super().__init__(raw_objfn, mdl, dataset, circuit_list, cache, enable_hessian)
 
@@ -1581,8 +1581,7 @@ class Chi2Function(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawChi2Function(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class ChiAlphaFunction(TimeIndependentMDSObjectiveFunction):
@@ -1590,48 +1589,42 @@ class ChiAlphaFunction(TimeIndependentMDSObjectiveFunction):
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False,
                  alpha=1):
         raw_objfn = RawChiAlphaFunction(regularization, resource_alloc, name, description, verbosity, alpha)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class FreqWeightedChi2Function(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawFreqWeightedChi2Function(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class PoissonPicDeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class DeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawMaxLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class TVDFunction(TimeIndependentMDSObjectiveFunction):
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
                  cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawTVDFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, regularization, penalties,
-                         cache, resource_alloc, name, description, verbosity, enable_hessian)
+        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
 
 
 class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
@@ -1644,9 +1637,9 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
     def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, verbosity=0):
+                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0):
 
-        dummy = RawObjectiveFunction({}, resource_alloc, name, None, verbosity)
+        dummy = RawObjectiveFunction({}, resource_alloc, name, description, verbosity)
         super().__init__(dummy, mdl, dataset, circuit_list, cache, enable_hessian=False)
 
         self.time_dependent = True

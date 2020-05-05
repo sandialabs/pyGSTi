@@ -78,7 +78,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         germs = std.germs
         maxLengths = [1,2,4,8,16]
 
-        opLabels = list(target_model.operations.keys())
+        op_labels = list(target_model.operations.keys())
 
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             target_model, prep_fiducials, meas_fiducials, germs,

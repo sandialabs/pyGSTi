@@ -95,7 +95,8 @@ class TestReport(ReportBaseCase):
         crfact.project_hessian('intrinsic error')
 
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
-                                            "Report B", confidence_level=95, verbosity=3,  auto_open=False)
+                                             "Report B", confidence_level=95, verbosity=3,  auto_open=False)
+
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 

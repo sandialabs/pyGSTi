@@ -20,8 +20,6 @@ try:
 except ImportError:
     bPandas = False
 
-HEADLESS = os.getenv('DISPLAY') is None
-
 class TestWorkspace(ReportBaseCase):
 
     def setUp(self):
@@ -31,18 +29,12 @@ class TestWorkspace(ReportBaseCase):
         self.ds = self.results.dataset.copy()
         self.ds.comment = "Hello\nWorld!" # for testing DS overview table
         self.mdl = self.results.estimates['default'].models['go0']
-        self.gss = self.results.circuit_structs['final']
+        self.gss = self.results.circuit_lists['final']
 
-    @unittest.skipIf(HEADLESS, "skipping while IPython display is not available")
     def test_notebook_mode(self):
         wnb = pygsti.report.Workspace()
-        wnb.init_notebook_mode(connected=True, autodisplay=True)
-        wnb = pygsti.report.Workspace()
-        wnb.init_notebook_mode(connected=True, autodisplay=False)
-        wnb = pygsti.report.Workspace()
-        wnb.init_notebook_mode(connected=False, autodisplay=True)
-        wnb = pygsti.report.Workspace()
-        wnb.init_notebook_mode(connected=False, autodisplay=False)
+        with self.assertRaises(ValueError):
+            wnb.init_notebook_mode()
 
     def test_caching(self):
         ws = pygsti.report.Workspace()
@@ -120,10 +112,10 @@ class TestWorkspace(ReportBaseCase):
 
         #Construct confidence regions
         def make_cr(mdl):
-            hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss.allstrs,
+            hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss,
                                                 min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
-            est = pygsti.protocols.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
+            est = pygsti.protocols.estimate.Estimate.gst_init(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, non_mark_radius_sq=0.0)
@@ -185,11 +177,11 @@ class TestWorkspace(ReportBaseCase):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
 
         tbls.append( w.DataSetOverviewTable(self.ds,max_length_list=[1,2,4,8]) )
-        tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.circuit_structs['iteration'],
+        tbls.append( w.FitComparisonTable(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
                                           self.results.estimates['default'].models['iteration estimates'], self.ds) )
         with self.assertRaises(ValueError):
-            w.FitComparisonTable(self.gss.Ls, self.results.circuit_structs['iteration'],
-                                 self.results.estimates['default'].models['iteration estimates'], self.ds, objective="foobar")
+            w.FitComparisonTable(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
+                                 self.results.estimates['default'].models['iteration estimates'], self.ds, objfn_builder="foobar")
 
         tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
 
@@ -322,12 +314,12 @@ class TestWorkspace(ReportBaseCase):
         #        effectStrs=effectStrs,
         #        prep_labels=list(self.mdl.preps.keys()),
         #        effect_labels=self.mdl.get_effect_labels() )
-        baseStrs = self.gss.get_basestrings()
+        baseStrs = self.gss.circuit_structure.get_basestrings()
         directModels = dx.direct_mlgst_models(
             baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
-        plts.append( w.ColorBoxPlot(["chi2","logl","blank",'directchi2','directlogl'], self.gss,
+        plts.append( w.ColorBoxPlot(["chi2","logl","blank"], self.gss.circuit_structure,
                                     self.ds, self.mdl, box_labels=False, direct_gst_models=directModels) )
-        plts.append( w.ColorBoxPlot(["errorrate"], self.gss,
+        plts.append( w.ColorBoxPlot(["errorrate"], self.gss.circuit_structure,
                                     self.ds, self.mdl, box_labels=False, sum_up=True,
                                     direct_gst_models=directModels) )
 
@@ -350,7 +342,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ChoiEigenvalueBarPlot(choievals, None) )
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
 
-        plts.append( w.FitComparisonBarPlot(self.gss.Ls, self.results.circuit_structs['iteration'],
+        plts.append( w.FitComparisonBarPlot(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
                                           self.results.estimates['default'].models['iteration estimates'], self.ds,) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
 

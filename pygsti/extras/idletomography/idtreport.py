@@ -327,7 +327,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         data_pts = info_dict['data']
         errorbars = info_dict['errbars']
         fitCoeffs = info_dict['fitCoeffs']
-        fitOrder = info_dict['fitOrder']
+        fitOrder = info_dict['fit_order']
         if idtresults.predicted_obs_rates is not None:
             predictedRate = idtresults.predicted_obs_rates[typ][fidpair][obs_or_outcome]
         else:

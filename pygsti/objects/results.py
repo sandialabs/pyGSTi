@@ -248,8 +248,8 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate(self, target_model, seed_model,
-                                                                          models_by_iter, parameters)
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.gst_init(self, target_model, seed_model,
+                                                                                   models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \

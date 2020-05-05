@@ -25,21 +25,21 @@ class ReportBaseCase(BaseTestCase):
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
         os.chdir('..') # The test_packages directory
 
-        targetModel = std.target_model()
-        datagen_gateset = targetModel.depolarize(op_noise=0.05, spam_noise=0.1)
-        datagen_gateset2 = targetModel.depolarize(op_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
+        target_model = std.target_model()
+        datagen_gateset = target_model.depolarize(op_noise=0.05, spam_noise=0.1)
+        datagen_gateset2 = target_model.depolarize(op_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
         #cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
         #  #only use the first EVec
 
-        opLabels = std.gates
-        cls.lgstStrings = pygsti.construction.list_lgst_circuits(std.fiducials, std.fiducials, opLabels)
+        op_labels = std.gates
+        cls.lgstStrings = pygsti.construction.list_lgst_circuits(std.fiducials, std.fiducials, op_labels)
         cls.maxLengthList = [1,2,4,8]
 
         cls.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            opLabels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
+            op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
         cls.lsgstStructs = pygsti.construction.make_lsgst_structs(
-            opLabels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
+            op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
@@ -55,32 +55,40 @@ class ReportBaseCase(BaseTestCase):
         cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
         cls.ds2 = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
-        mdl_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, targetModel, svdTruncateTo=4, verbosity=0)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, targetModel, {'gates': 1.0, 'spam': 0.0})
+        mdl_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, target_model, svd_truncate_to=4, verbosity=0)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
         cls.mdl_clgst_tp.set_all_parameterizations("TP")
 
         #Compute results for MC2GST
-        lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(
-            cls.ds, cls.mdl_clgst, cls.lsgstStrings, verbosity=0,
-            minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-            returnAll=True)
+        lsgst_gatesets_prego, *_ = pygsti.do_iterative_gst(
+            cls.ds, cls.mdl_clgst, cls.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=[],
+            resource_alloc=None,
+            verbosity=0
+        )
 
-        cls.results = pygsti.objects.Results()
-        cls.results.init_dataset(cls.ds)
-        cls.results.init_circuits(cls.lsgstStructs)
-        cls.results.add_estimate(targetModel, cls.mdl_clgst,
-                                 lsgst_gatesets_prego,
-                                 {'objective': "chi2",
-                                  'minProbClipForWeighting': 1e-4,
-                                  'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                  'weights': None, 'defaultDirectory': temp_files + "",
-                                  'defaultBasename': "MyDefaultReportName"})
+        experiment_design = pygsti.protocols.StandardGSTDesign(
+            target_model, std.fiducials, std.fiducials, std.germs, cls.maxLengthList
+        )
+        data = pygsti.protocols.ProtocolData(experiment_design, cls.ds)
+        protocol = pygsti.protocols.StandardGST()
+        cls.results = pygsti.protocols.gst.ModelEstimateResults(data, protocol)
+        cls.results.add_estimate(pygsti.protocols.estimate.Estimate.gst_init(
+            cls.results, target_model, cls.mdl_clgst,lsgst_gatesets_prego,
+            {'objective': "chi2",
+             'min_prob_clip_for_weighting': 1e-4,
+             'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': temp_files + "",
+             'defaultBasename': "MyDefaultReportName"}
+        ))
 
         gaugeOptParams = collections.OrderedDict([
                 ('model', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
-                ('target_model', targetModel),       #so can gauge-propagate CIs
+                ('target_model', target_model),       #so can gauge-propagate CIs
                 ('cptp_penalty_factor', 0),
                 ('gates_metric',"frobenius"),
                 ('spam_metric',"frobenius"),
@@ -94,7 +102,7 @@ class ReportBaseCase(BaseTestCase):
 
         #Compute results for MLGST with TP constraint
         # Use do_long_sequence_gst with a non-mark dataset to trigger data scaling
-        tp_target = targetModel.copy(); tp_target.set_all_parameterizations("TP")
+        tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
 
 
         cls.ds3 = cls.ds.copy_nonstatic()
@@ -103,29 +111,29 @@ class ReportBaseCase(BaseTestCase):
 
         cls.results_logL = pygsti.do_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
                                                        std.germs, cls.maxLengthList, verbosity=0,
-                                                       advanced_options={'tolerance': 1e-6, 'starting point': 'LGST',
-                                                                        'onBadFit': ["robust","Robust","robust+","Robust+"],
-                                                                        'badFitThreshold': -1.0,
-                                                                        'germLengthLimits': {('Gx','Gi','Gi'): 2} })
+                                                       advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
+                                                                        'on_bad_fit': ["robust","Robust","robust+","Robust+"],
+                                                                        'bad_fit_threshold': -1.0,
+                                                                        'germ_length_limits': {('Gx','Gi','Gi'): 2} })
         #OLD
         #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.mdl_clgst_tp, cls.lsgstStrings, verbosity=0,
-        #                                           minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+        #                                           min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
         #                                           returnAll=True) #TP initial model => TP output models
         #cls.results_logL = pygsti.objects.Results()
         #cls.results_logL.init_dataset(cls.ds)
         #cls.results_logL.init_circuits(cls.lsgstStructs)
-        #cls.results_logL.add_estimate(targetModel, cls.mdl_clgst_tp,
+        #cls.results_logL.add_estimate(target_model, cls.mdl_clgst_tp,
         #                         lsgst_gatesets_TP,
         #                         {'objective': "logl",
-        #                          'minProbClip': 1e-4,
-        #                          'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+        #                          'min_prob_clip': 1e-4,
+        #                          'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
         #                          'weights': None, 'defaultDirectory': temp_files + "",
         #                          'defaultBasename': "MyDefaultReportName"})
         #
-        #tp_target = targetModel.copy(); tp_target.set_all_parameterizations("TP")
+        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
         #gaugeOptParams = gaugeOptParams.copy() #just to be safe
         #gaugeOptParams['model'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
-        #gaugeOptParams['targetModel'] = tp_target  #so can gauge-propagate CIs
+        #gaugeOptParams['target_model'] = tp_target  #so can gauge-propagate CIs
         #_, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
         #gaugeOptParams['_gaugeGroupEl'] = gaugeEl #so can gauge-propagate CIs
         #cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
@@ -142,10 +150,10 @@ class ReportBaseCase(BaseTestCase):
 
         cls = self.__class__
 
-        self.targetModel = std.target_model()
+        self.target_model = std.target_model()
         self.fiducials = std.fiducials[:]
         self.germs = std.germs[:]
-        self.opLabels = std.gates
+        self.op_labels = std.gates
 
         #self.specs = cls.specs
         self.maxLengthList = cls.maxLengthList[:]

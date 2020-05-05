@@ -277,12 +277,16 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
 
+        prep_fiducials = results.circuit_lists.get('prep fiducials', None) \
+            or results.circuit_lists['final'].circuit_structure.prep_fiducials
+        meas_fiducials = results.circuit_lists.get('meas fiducials', None) \
+            or results.circuit_lists['final'].circuit_structure.meas_fiducials
+        germs = results.circuit_lists.get('germs', None) or results.circuit_lists['final'].circuit_structure.germs
         switchBd.ds[d] = results.dataset
-        switchBd.prep_fiducials[d] = results.circuit_lists['prep fiducials']
-        switchBd.meas_fiducials[d] = results.circuit_lists['meas fiducials']
-        switchBd.fiducials_tup[d] = (results.circuit_lists['prep fiducials'],
-                                     results.circuit_lists['meas fiducials'])
-        switchBd.germs[d] = results.circuit_lists['germs']
+        switchBd.prep_fiducials[d] = prep_fiducials
+        switchBd.meas_fiducials[d] = meas_fiducials
+        switchBd.fiducials_tup[d] = (prep_fiducials, meas_fiducials)
+        switchBd.germs[d] = germs
 
         switchBd.circuits_final[d] = results.circuit_lists['final']
 
@@ -1563,7 +1567,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"
-    circuit_struct = results.data.edesign.circuit_structs[-1]
+    circuit_list = results.data.edesign.circuit_lists[-1]
     singleresults = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
@@ -1584,7 +1588,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_struct)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_list)
 
     # Sets whether or not the dataset key is a switchboard or not.
     if len(singleresults.data.keys()) > 1:
@@ -1612,7 +1616,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 
     report_params = {
         'results': switchBd.results,
-        'circuit_struct': circuit_struct,
+        'circuit_list': circuit_list,
         'dskey': dskey,
         'switchboard': drift_switchBd
     }

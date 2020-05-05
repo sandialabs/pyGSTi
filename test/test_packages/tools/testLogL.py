@@ -11,21 +11,21 @@ class LogLTestCase(BaseTestCase):
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6),
-                                poisson_picture=True, check=False, mem_limit=0) # No memory for you
+                                poisson_picture=True, mem_limit=0) # No memory for you
 
         L = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
-                                poisson_picture=True, check=False, mem_limit=None, verbosity=10) # Reference: no mem limit
+                                poisson_picture=True, mem_limit=None, verbosity=10) # Reference: no mem limit
         L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
-                                 poisson_picture=True, check=False, mem_limit=370000000, verbosity=10) # Limit memory a bit
+                                 poisson_picture=True, mem_limit=370000000, verbosity=10) # Limit memory a bit
         L2 = pygsti.logl_hessian(model, ds,prob_clip_interval=(-1e6,1e6),
-                                 poisson_picture=True, check=False, mem_limit=1000000, verbosity=10) # Limit memory a bit more
+                                 poisson_picture=True, mem_limit=1000000, verbosity=10) # Limit memory a bit more
         L3 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
-                                 poisson_picture=True, check=False, mem_limit=300000, verbosity=10) # Very low memory (splits tree)
+                                 poisson_picture=True, mem_limit=300000, verbosity=10) # Very low memory (splits tree)
 
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6),
-                                poisson_picture=True, check=False, mem_limit=70000) # Splitting unproductive
+                                poisson_picture=True, mem_limit=70000) # Splitting unproductive
 
 
         #print("****DEBUG LOGL HESSIAN L****")
@@ -47,6 +47,6 @@ class LogLTestCase(BaseTestCase):
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         L = pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6), mem_limit=25000000,
-                                poisson_picture=True, check=False, comm=comm)
+                                poisson_picture=True, comm=comm)
 
         print(L)

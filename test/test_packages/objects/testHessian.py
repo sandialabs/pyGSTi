@@ -9,7 +9,8 @@ from pygsti.objects import Label as L
 from pygsti import protocols as proto
 
 import numpy as np
-import sys, os
+import sys
+import os
 import pickle
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -26,9 +27,9 @@ class TestHessianMethods(BaseTestCase):
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
-        opLabels = list(self.model.operations.keys()) # also == std.gates
+        op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(opLabels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.construction.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
@@ -86,11 +87,7 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_nongauge_params()
         self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
-
     def test_hessian_projection(self):
-
-        chi2 = pygsti.chi2(self.model, self.ds)
-        chi2Grad = pygsti.chi2_jacobian(self.model, self.ds)
         chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         proj_non_gauge = self.model.get_nongauge_projector()
