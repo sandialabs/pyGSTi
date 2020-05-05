@@ -259,8 +259,8 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, prep, germ, meas,
-                                                           dskey, detectorkey, showlegend, scale)
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, prep, germ,
+                                                           meas, dskey, detectorkey, showlegend, scale)
 
     def _create(self, stabilityanalyzer, circuits, prep, germ, meas, dskey, detectorkey, showlegend, scale):
 
@@ -543,7 +543,8 @@ def _create_drift_switchboard(ws, results, circuits):
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in circuit_struct.germs], [c.str for c in(circuit_struct.prep_fiducials)],
+            [list(results.data.keys()), [c.str for c in circuit_struct.germs],
+             [c.str for c in(circuit_struct.prep_fiducials)],
              [c.str for c in circuit_struct.meas_fiducials],
              [i.str for i in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],

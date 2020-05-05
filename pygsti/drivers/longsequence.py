@@ -518,7 +518,6 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
-    valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
     exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
