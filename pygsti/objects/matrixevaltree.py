@@ -57,11 +57,15 @@ class MatrixEvalTree(EvalTree):
 
           Parameters
           ----------
-          TODO: docstring - fix this!
-          circuit_list : list of (tuples or Circuits)
-              A list of tuples of operation labels or Circuit
-              objects, specifying the operation sequences that
-              should be present in the evaluation tree.
+          simplified_circuit_elabels : dict
+              A dictionary of `(circuit, elabels)` tuples specifying
+              the circuits that should be present in the evaluation tree.
+              `circuit` is a *simplified* circuit whose first layer is a
+              preparation label. `elabels` is a list of all the POVM
+              effect labels (corresponding to outcomes) for the
+              circuit (only a single label is needed rather than a
+              POVM-label, effect-label pair because these are *simplified*
+              effect labels).
 
           num_sub_tree_comms : int, optional
               The number of processor groups (communicators)

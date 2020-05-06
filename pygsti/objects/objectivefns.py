@@ -26,10 +26,17 @@ CHECK_JACOBIAN = False
 FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
+#PRIVATE
 def objfn(objfn_cls, model, dataset, circuits=None,
           regularization=None, penalties=None, op_label_aliases=None,
           cache=None, comm=None, mem_limit=None, **addl_args):
-    """ TODO: docstring """
+    """
+    A convenience function for creating an objective function.
+
+    Takes a number of common parameters and automates the creation of
+    intermediate objects like a :class:`ResourceAllocation` and
+    :class:`BulkCircuitList`.
+    """
 
     if circuits is None:
         circuits = list(dataset.keys())
@@ -116,7 +123,11 @@ class RawObjectiveFunction(ObjectiveFunction):
 
     def __init__(self, regularization=None, resource_alloc=None, name=None, description=None, verbosity=0):
         """
-        TODO: docstring
+        Create a raw objective function.
+
+        A raw objective function acts on "raw" probabilities and counts,
+        and is usually a statistic comparing the probabilities to count data.
+
         """
         resource_alloc = _ResourceAllocation.create_from(resource_alloc)
         self.comm = resource_alloc.comm

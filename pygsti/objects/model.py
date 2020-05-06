@@ -411,10 +411,45 @@ class OpModel(Model):
 
         kwargs : various
             Arguments for the specific simultator type.
-            TODO: docstring - list options here, e.g. for "map":
-            cache : dict or None
+            If `sim_type == "map"`:
+            - max_cache_size : int
+                The maximum state-cache size allowed.
+            If `sim_type` is one of `"termorder"`, `"termgap"` or `"termdirect"`:
+            - cache : dict or None
                 A cache of pre-computed values used in Taylor-term-based forward
                 simulation.
+            - max_order : int
+                The maximum Taylor order to compute polynomials to (default is 3).
+            - desired_perr : float
+                The desired maximum-error when computing probabilities (default is 0.01).
+                Path sets are selected (heuristically) to target this error, within the
+                bounds set by `max_order`, etc.
+            - allowed_perr : float
+                The allowed maximum-error when computing probabilities (default is 0.1).
+                When rigorous bounds cannot guarantee that probabilities are correct to
+                within this error, additional paths are added to the path set.
+            - max_paths_per_outcome : int
+                The maximum number of paths that can be used (summed) to compute a
+                single outcome probability (default if 500).
+            - min_term_mag : float
+                Terms with magnitudes less than this value will be ignored, i.e. not
+                considered candidates for inclusion in paths.  If this number is too
+                low, the number of possible paths to consder may be very large, impacting
+                performance.  If too high, then not enough paths will be considered to
+                achieve an accurate result.  By default this value is set automatically
+                based on the desired error and `max_paths_per_outcome`.  Only adjust this
+                if you know what you're doing.
+            - max_term_stages : int
+                The maximum number of "stage", i.e. re-computations of a path set, are
+                allowed before giving up (default is 5).
+            - path_fraction_threshold : float
+                When greater than this fraction of the total available paths (set by
+                other constraints) are considered, no further re-compuation of the
+                path set will occur, as it is expected to give little improvement.
+                (default is 0.9).
+            - oob_check_interval : int
+                The optimizer will check whether the computed probabilities have sufficiently
+                small error every `oob_check_interval` (outer) optimizer iteration (default is 10).
 
         Returns
         -------
@@ -890,17 +925,15 @@ class OpModel(Model):
 
         Returns
         -------
-        TODO: docstring - update to raw_elabels_dict
-        raw_spamTuples_dict : collections.OrderedDict
-            A dictionary whose keys are raw operation sequences (containing just
-            "simplified" gates, i.e. not instruments), and whose values are
-            lists of (preplbl, effectlbl) tuples.  The effectlbl names a
-            "simplified" effect vector; preplbl is just a prep label. Each tuple
-            corresponds to a single "final element" of the computation, e.g. a
-            probability.  The ordering is important - and is why this needs to be
-            an ordered dictionary - when the lists of tuples are concatenated (by
-            key) the resulting tuple orderings corresponds to the final-element
-            axis of an output array that is being filled (computed).
+        raw_elabels_dict : collections.OrderedDict
+            A dictionary whose keys are simplified circuits (containing just
+            "simplified" gates, i.e. not instruments) that include preparation
+            labels but no measurement (POVM). Values are lists of simplified
+            effect labels, each label corresponds to a single "final element" of
+            the computation, e.g. a probability.  The ordering is important - and
+            is why this needs to be an ordered dictionary - when the lists of tuples
+            are concatenated (by key) the resulting tuple orderings corresponds to
+            the final-element axis of an output array that is being filled (computed).
 
         elIndices : collections.OrderedDict
             A dictionary whose keys are integer indices into `circuits` and
@@ -938,7 +971,7 @@ class OpModel(Model):
         elIndsToOutcomesByParent = _collections.OrderedDict()
 
         def resolve_elabels(circuit, ds_circuit):
-            """ Determines spam tuples that correspond to circuit
+            """ Determines simplified effect labels that correspond to circuit
                 and strips any spam-related pieces off """
             prep_lbl, circuit, povm_lbl = \
                 self.split_circuit(circuit)
@@ -1039,7 +1072,7 @@ class OpModel(Model):
                         outcome_tup = op_outcomes + (_gt.e_label_to_outcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
-                        # don't add spamtuples we don't observe
+                        # don't add elabels we don't observe
 
                         elabel_indx = od.get(elabel, None)
                         if elabel is None:
@@ -1051,7 +1084,7 @@ class OpModel(Model):
                         #Link the current iParent to this index (even if it was already going to be computed)
                         el_inds_to_outcomes[(s, elabel_indx)] = outcome_tup
                 else:
-                    # Note: store elements of raw_spamTuples_dict as dicts for
+                    # Note: store elements of raw_elabels_dict as dicts for
                     # now, for faster lookup during "index" mode
                     outcome_tuples = [op_outcomes + (_gt.e_label_to_outcome(x),) for x in elabels]
 
@@ -1064,7 +1097,7 @@ class OpModel(Model):
                                 el_inds_to_outcomes[(s, ist)] = outcome_tup
                                 ist += 1
                     else:
-                        # add all els of `spamtuples` (w/indexes starting at 0)
+                        # add all els of `elabels` (w/indexes starting at 0)
                         elabel_dict = _collections.OrderedDict([
                             (elabel, i) for i, elabel in enumerate(elabels)])
 
@@ -1104,7 +1137,7 @@ class OpModel(Model):
             elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
 
         #Step3b: convert elements of raw_elabels_dict from OrderedDicts
-        # to lists not that we don't need to use them for lookups anymore.
+        # to lists now that we don't need to use them for lookups anymore.
         for s in list(raw_elabels_dict.keys()):
             raw_elabels_dict[s] = list(raw_elabels_dict[s].keys())
 
@@ -1148,17 +1181,15 @@ class OpModel(Model):
 
         Returns
         -------
-        TODO: docstring - update to raw_elabels_dict
-        raw_spamTuples_dict : collections.OrderedDict
-            A dictionary whose keys are raw operation sequences (containing just
-            "simplified" gates, i.e. not instruments), and whose values are
-            lists of (preplbl, effectlbl) tuples.  The effectlbl names a
-            "simplified" effect vector; preplbl is just a prep label. Each tuple
-            corresponds to a single "final element" of the computation for this
-            operation sequence.  The ordering is important - and is why this needs to be
-            an ordered dictionary - when the lists of tuples are concatenated (by
-            key) the resulting tuple orderings corresponds to the final-element
-            axis of an output array that is being filled (computed).
+        raw_elabels_dict : collections.OrderedDict
+            A dictionary whose keys are simplified circuits (containing just
+            "simplified" gates, i.e. not instruments) that include preparation
+            labels but no measurement (POVM). Values are lists of simplified
+            effect labels, each label corresponds to a single "final element" of
+            the computation, e.g. a probability.  The ordering is important - and
+            is why this needs to be an ordered dictionary - when the lists of tuples
+            are concatenated (by key) the resulting tuple orderings corresponds to
+            the final-element axis of an output array that is being filled (computed).
 
         outcomes : list
             A list of outcome labels (an outcome label is a tuple
@@ -1682,14 +1713,11 @@ class OpModel(Model):
            across multiple processors.  Distribution is performed over
            subtrees of `eval_tree` (if it is split).
 
-        mem_limit : TODO: docstring
+        mem_limit : int, optional
+            A rough memory limit in bytes which is used to determine resource
+            allocation.
         """
         return self._fwdsim().bulk_prep_probs(eval_tree, comm, mem_limit)
-
-    #TODO REMOVE UNNECESSARY?
-    #def bulk_probs_get_termgaps(self, eval_tree, comm=None, mem_limit=None):
-    #    """ TODO: docstring """
-    #    return self._fwdsim().bulk_get_current_gaps(eval_tree, comm, mem_limit)
 
     def bulk_probs_paths_are_sufficient(self, eval_tree, probs, comm=None, mem_limit=None, verbosity=0):
         """
@@ -1715,7 +1743,9 @@ class OpModel(Model):
            across multiple processors.  Distribution is performed over
            subtrees of `eval_tree` (if it is split).
 
-        mem_limit : TODO: docstring
+        mem_limit : int, optional
+            A rough memory limit in bytes which is used to determine resource
+            allocation.
 
         Returns
         -------
