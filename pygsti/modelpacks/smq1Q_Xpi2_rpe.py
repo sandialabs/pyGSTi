@@ -1,4 +1,6 @@
 """
+An RPE gate set module.
+
 Variables for working with the a partial model the X(pi/2)
 """
 #***************************************************************************************************
@@ -16,6 +18,21 @@ from ..protocols import rpe as _rpe
 
 
 def get_rpe_experiment_design(max_max_length, qubit_labels=None, req_counts=None):
+    """
+    Create a RPE experiment design based on this model-pack's gate set.
+
+    Parameters
+    ----------
+    max_max_length : int
+        The maximum number of gate repetitions to use.
+
+    qubit_labels : tuple, optional
+        If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+        then the default labels are used, which are often the integers beginning with 0.
+
+    req_counts : int, optional
+        <TODO description>
+    """
     max_log_lengths = _np.log2(max_max_length)
     if not (int(max_log_lengths) - max_log_lengths == 0):
         raise ValueError('Only integer powers of two accepted for max_max_length.')
