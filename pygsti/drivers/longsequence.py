@@ -1,4 +1,6 @@
-""" End-to-end functions for performing long-sequence GST """
+"""
+End-to-end functions for performing long-sequence GST
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -39,22 +41,24 @@ def do_model_test(model_filename_or_object,
                   advanced_options=None, comm=None, mem_limit=None,
                   output_pkl=None, verbosity=2):
     """
-    Tests a Model model against a DataSet using a specific set of structured
-    operation sequences (given by fiducials, max_lengths and germs).
+    Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
-    Constructs operation sequences by repeating germ strings an integer number of
-    times such that the length of the repeated germ is less than or equal to
+    This routine tests a Model model against a DataSet using a specific set of
+    structured, GST-like circuits (given by fiducials, max_lengths and germs).
+    In particular, circuits are constructed by repeating germ strings an integer
+    number of times such that the length of the repeated germ is less than or equal to
     the maximum length set in max_lengths.  Each string thus constructed is
-    sandwiched between all pairs of (prep, effect) fiducial sequences.
+    sandwiched between all pairs of (preparation, measurement) fiducial sequences.
 
-    `themodel` is used directly (without any optimization) as the
+    `model_filename_or_object` is used directly (without any optimization) as the
     the model estimate at each maximum-length "iteration".  The model
     is given a trivial `default_gauge_group` so that it is not altered
     during any gauge optimization step.
 
-    A :class:`~pygsti.report.Results` object is returned, which encapsulates
-    the model estimate and related parameters, and can be used with
+    A :class:`~pygsti.protocols.ModelEstimateResults` object is returned, which
+    encapsulates the model estimate and related parameters, and can be used with
     report-generation routines.
+
     Parameters
     ----------
     model_filename_or_object : Model or string
@@ -116,8 +120,8 @@ def do_model_test(model_filename_or_object,
         to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
-       The 'verbosity' option is an integer specifying the level of
-       detail printed to stdout during the calculation.
+        The 'verbosity' option is an integer specifying the level of
+        detail printed to stdout during the calculation.
 
     Returns
     -------
@@ -178,7 +182,6 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     to :function:`do_long_sequence_gst`  whereas `do_lgst` is a low-level
     routine used when building your own algorithms.
 
-
     Parameters
     ----------
     data_filename_or_set : DataSet or string
@@ -228,8 +231,8 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
         to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
-       The 'verbosity' option is an integer specifying the level of
-       detail printed to stdout during the calculation.
+        The 'verbosity' option is an integer specifying the level of
+        detail printed to stdout during the calculation.
 
     Returns
     -------
@@ -275,23 +278,23 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                          advanced_options=None, comm=None, mem_limit=None,
                          output_pkl=None, verbosity=2):
     """
-    Perform end-to-end GST analysis using Ls and germs, with L as a maximum
-    length.
+    Perform long-sequence GST (LSGST).
 
-    Constructs operation sequences by repeating germ strings an integer number of
-    times such that the length of the repeated germ is less than or equal to
-    the maximum length set in max_lengths.  The LGST estimate of the gates is
-    computed, gauge optimized, and then used as the seed for either LSGST or
-    MLEGST.
-    LSGST is iterated ``len(max_lengths)`` times with successively larger sets
-    of operation sequences.  On the i-th iteration, the repeated germs sequences
-    limited by ``max_lengths[i]`` are included in the growing set of strings
-    used by LSGST.  The final iteration will use MLEGST when ``objective ==
-    "logl"`` to maximize the true log-likelihood instead of minimizing the
-    chi-squared function.
-    Once computed, the model estimates are optionally gauge optimized to
-    the CPTP space and then to the target model (using `gaugeOptRatio`
-    and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
+    This analysis fits a model (`target_model_filename_or_object`) to data
+    (`data_filename_or_set`) using the outcomes from periodic GST circuits
+    constructed by repeating germ strings an integer number of times such that
+    the length of the repeated germ is less than or equal to the maximum length
+    set in `max_lengths`.  When LGST is applicable (i.e. for explicit models
+    with full or TP parameterizations), the LGST estimate of the gates is computed,
+    gauge optimized, and used as a starting seed for the remaining optimizations.
+
+    LSGST iterates ``len(max_lengths)`` times, optimizing the chi2 using successively
+    larger sets of circuits.  On the i-th iteration, the repeated germs sequences
+    limited by ``max_lengths[i]`` are included in the growing set of circuits
+    used by LSGST.  The final iteration maximizes the log-likelihood.
+
+    Once computed, the model estimates are optionally gauge optimized as
+    directed by `gauge_opt_params`.  A :class:`~pygsti.protocols.ModelEstimateResults`
     object is returned, which encapsulates the input and outputs of this GST
     analysis, and can generate final end-user output such as reports and
     presentations.
@@ -387,15 +390,15 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
-       The 'verbosity' option is an integer specifying the level of
-       detail printed to stdout during the calculation.
-       - 0 -- prints nothing
-       - 1 -- shows progress bar for entire iterative GST
-       - 2 -- show summary details about each individual iteration
-       - 3 -- also shows outer iterations of LM algorithm
-       - 4 -- also shows inner iterations of LM algorithm
-       - 5 -- also shows detailed info from within jacobian
-              and objective function calls.
+        The 'verbosity' option is an integer specifying the level of
+        detail printed to stdout during the calculation.
+        - 0 -- prints nothing
+        - 1 -- shows progress bar for entire iterative GST
+        - 2 -- show summary details about each individual iteration
+        - 3 -- also shows outer iterations of LM algorithm
+        - 4 -- also shows inner iterations of LM algorithm
+        - 5 -- also shows detailed info from within jacobian
+               and objective function calls.
 
     Returns
     -------
@@ -501,15 +504,15 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
         to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
-       The 'verbosity' option is an integer specifying the level of
-       detail printed to stdout during the calculation.
-       - 0 -- prints nothing
-       - 1 -- shows progress bar for entire iterative GST
-       - 2 -- show summary details about each individual iteration
-       - 3 -- also shows outer iterations of LM algorithm
-       - 4 -- also shows inner iterations of LM algorithm
-       - 5 -- also shows detailed info from within jacobian
-              and objective function calls.
+        The 'verbosity' option is an integer specifying the level of
+        detail printed to stdout during the calculation.
+        - 0 -- prints nothing
+        - 1 -- shows progress bar for entire iterative GST
+        - 2 -- show summary details about each individual iteration
+        - 3 -- also shows outer iterations of LM algorithm
+        - 4 -- also shows inner iterations of LM algorithm
+        - 5 -- also shows detailed info from within jacobian
+               and objective function calls.
 
     Returns
     -------
@@ -658,8 +661,8 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
         to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
-       The 'verbosity' option is an integer specifying the level of
-       detail printed to stdout during the calculation.
+        The 'verbosity' option is an integer specifying the level of
+        detail printed to stdout during the calculation.
 
     Returns
     -------
