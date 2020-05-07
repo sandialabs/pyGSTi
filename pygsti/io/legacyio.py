@@ -1,4 +1,6 @@
-""" Functions for allowing old-vesion objects to unpickle load."""
+"""
+Functions for allowing old-vesion objects to unpickle load.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,6 +24,8 @@ from ..objects.replib import slowreplib as _slow
 @_contextmanager
 def enable_no_cython_unpickling():
     """
+    Context manager for unpickling objects constructed *with* Cython extensions.
+
     A context manager enabling the un-pickling of pyGSTi objects that
     were constructed on a system *with* pyGSTi's C-extensions, when the
     current system's pyGSTi does not have these extensions.
@@ -61,8 +65,16 @@ def enable_no_cython_unpickling():
 @_contextmanager
 def enable_old_object_unpickling(old_version="0.9.6"):
     """
-    Returns a context manager which enables the unpickling of old-version (0.9.6
-    and sometimes prior) objects.
+    Context manager enabling unpickling of old-verion objects.
+
+    Returns a context manager which enables the unpickling of old-version (
+    back to 0.9.6 and sometimes prior) objects.
+
+    Parameters
+    ----------
+    old_version : str, optional
+        The string representation of the old version whose pickle files you'd
+        like to unpickle. E.g., `"0.9.7"`
     """
     def totup(v): return tuple(map(int, v.split('.')))
     old_version = totup(old_version)
