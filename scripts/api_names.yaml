@@ -1,24 +1,3 @@
-## This YAML document is a map of the public names exposed by pyGSTi.
-## It will be used in an upcoming refactoring to rename a large
-## portion of the package's API.
-##
-## The root level of this YAML document corresponds to the `pygsti`
-## package; packages list the packages and modules they expose, by
-## filename.
-##
-## Modules list the names they expose. The value corresponding to a
-## name will be the new name after refactoring, or `null` to indicate
-## no change of name, or another dict if the name is a class (see
-## below). All names are initially listed as `null`; collaborators can
-## add new names as they see fit.
-##
-## Classes are listed as dicts of the names they expose. Each class
-## also lists a reserved name `__name__` which corresponds to the name
-## of the class itself. In other words, to rename a class, change the
-## value of the class's `__name__` member. The actual python
-## `__name__` member will only be affected indirectly.
-
-
 algorithms:
   compilers.py:
     add_cnot: null
@@ -134,6 +113,7 @@ algorithms:
   robust_phase_estimation.py:
     RobustPhaseEstimation:
       __name__: null
+      theta_n: null
   scoring.py:
     CompositeScore:
       __name__: null
@@ -294,10 +274,34 @@ extras:
     probtrajectory.py:
       ConstantProbTrajectory:
         __name__: null
+        basisfunction: null
+        copy: null
+        get_parameters: null
+        get_parameters_as_list: null
+        get_probabilities: null
+        set_hyperparameters: null
+        set_parameters: null
+        set_parameters_from_list: null
       CosineProbTrajectory:
         __name__: null
+        basisfunction: null
+        copy: null
+        get_parameters: null
+        get_parameters_as_list: null
+        get_probabilities: null
+        set_hyperparameters: null
+        set_parameters: null
+        set_parameters_from_list: null
       ProbTrajectory:
         __name__: null
+        basisfunction: null
+        copy: null
+        get_parameters: null
+        get_parameters_as_list: null
+        get_probabilities: null
+        set_hyperparameters: null
+        set_parameters: null
+        set_parameters_from_list: null
       amplitude_compression: null
       maxlikelihood: null
       negloglikelihood: null
@@ -331,6 +335,28 @@ extras:
     stabilityanalyzer.py:
       StabilityAnalyzer:
         __name__: null
+        averaging_allowed: null
+        do_instability_characterization: null
+        do_instability_detection: null
+        generate_spectra: null
+        get_dof: null
+        get_dof_reduction: null
+        get_instability_frequencies: null
+        get_instability_indices: null
+        get_max_tvd_bound: null
+        get_maxmax_tvd_bound: null
+        get_maxpower: null
+        get_number_of_spectra: null
+        get_power_threshold: null
+        get_probability_trajectory: null
+        get_probability_trajectory_model: null
+        get_pvalue: null
+        get_pvalue_threshold: null
+        get_spectrum: null
+        get_statistical_significance: null
+        get_unstable_circuits: null
+        instability_detected: null
+        same_frequencies: null
       check_valid_tests: null
       condense_tests: null
       get_auto_betweenclass_weighting: null
@@ -342,6 +368,10 @@ extras:
     trmodel.py:
       TimeResolvedModel:
         __name__: null
+        copy: null
+        get_parameters: null
+        get_probabilities: null
+        set_parameters: null
       maxlikelihood: null
       negloglikelihood: null
   rpe:
@@ -370,6 +400,7 @@ io:
   json.py:
     PygstiJSONEncoder:
       __name__: null
+      encode: null
       item_separator: null
       key_separator: null
     dump: null
@@ -419,6 +450,14 @@ io:
   stdinput.py:
     StdInputParser:
       __name__: null
+      parse_circuit: null
+      parse_datafile: null
+      parse_dataline: null
+      parse_dictfile: null
+      parse_dictline: null
+      parse_multidatafile: null
+      parse_stringfile: null
+      parse_tddatafile: null
     get_display_progress_fn: null
     read_model: null
   writers.py:
@@ -449,6 +488,7 @@ objects:
       pop: null
       popitem: null
       setdefault: null
+      update: null
       valid_keys: null
       values: null
     GSTAdvancedOptions:
@@ -461,59 +501,160 @@ objects:
       pop: null
       popitem: null
       setdefault: null
+      update: null
       valid_keys: null
       values: null
   basis.py:
     Basis:
       __name__: null
+      cast: null
+      copy: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
     BuiltinBasis:
       __name__: null
+      cast: null
+      copy: null
       elements: null
       ellookup: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
       labels: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
     DirectSumBasis:
       __name__: null
+      cast: null
+      copy: null
       elements: null
       ellookup: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
       labels: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
     EmbeddedBasis:
       __name__: null
+      cast: null
+      copy: null
       elements: null
       ellookup: null
       elndim: null
       elsize: null
+      embed_label: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
       labels: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
+      unembed_label: null
       vector_elements: null
     ExplicitBasis:
       Count: null
       __name__: null
+      cast: null
+      copy: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
     LazyBasis:
       __name__: null
+      cast: null
+      copy: null
       elements: null
       ellookup: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
       labels: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
     TensorProdBasis:
       __name__: null
+      cast: null
+      copy: null
       elements: null
       ellookup: null
       elndim: null
       elsize: null
+      equivalent: null
+      get_from_element_std: null
+      get_from_std: null
+      get_to_element_std: null
+      get_to_std: null
+      is_complete: null
+      is_normalized: null
+      is_partial: null
+      is_simple: null
       labels: null
+      reverse_transform_matrix: null
+      simple_equivalent: null
+      transform_matrix: null
       vector_elements: null
   bulkcircuitlist.py:
     BulkCircuitList:
@@ -532,32 +673,162 @@ objects:
   circuit.py:
     Circuit:
       __name__: null
+      append_circuit: null
+      append_idling_layers: null
+      append_idling_lines: null
+      append_labels_as_lines: null
+      as_label: null
+      change_gate_library: null
+      clear: null
+      clear_labels: null
+      combine_one_q_gates: null
+      compress_depth: null
+      convert_to_cirq: null
+      convert_to_openqasm: null
+      convert_to_quil: null
+      copy: null
+      create_from: null
       default_expand_subcircuits: null
+      delete_idle_layers: null
+      delete_idling_lines: null
+      delete_layers: null
+      delete_lines: null
+      depth: null
+      display_str: null
+      done_editing: null
+      expand_subcircuits: null
+      factorize_repetitions: null
+      from_pythonstr: null
+      fromtup: null
+      get_idling_lines: null
+      get_labels: null
+      get_layer: null
+      get_layer_label: null
+      get_layer_label_with_idles: null
+      get_layer_with_idles: null
+      insert_circuit: null
+      insert_idling_layers: null
+      insert_idling_lines: null
+      insert_labels_as_lines: null
+      insert_labels_into_layers: null
+      insert_layer: null
+      is_line_idling: null
       layertup: null
       line_labels: null
+      map_names_inplace: null
+      map_state_space_labels: null
+      map_state_space_labels_inplace: null
+      multi_q_gate_count: null
       name: null
+      nq_gate_count: null
+      num_layers: null
+      number_of_lines: null
+      parallelize: null
+      prefix_circuit: null
+      reorder_lines: null
+      repeat: null
+      replace_gatename: null
+      replace_gatename_inplace: null
+      replace_layer: null
+      replace_layer_with_circuit: null
+      replace_layers_with_aliases: null
+      replace_with_idling_line: null
+      reverse: null
+      serialize: null
+      set_labels: null
+      shift_gates_forward: null
+      simulate: null
+      size: null
       str: null
+      tensor_circuit: null
+      to_pythonstr: null
       tup: null
+      two_q_gate_count: null
+      width: null
+      write_q_circuit_tex: null
     CompressedCircuit:
       __name__: null
+      compress_op_label_tuple: null
+      expand: null
+      expand_op_label_tuple: null
     to_label: null
   circuitstructure.py:
     CircuitPlaquette:
       __name__: null
+      copy: null
+      elementvec_to_matrix: null
+      expand_aliases: null
+      get_all_strs: null
+      iter_simplified: null
+      process_circuits: null
+      simplify_circuits: null
     CircuitStructure:
       __name__: null
+      create_plaquette: null
+      get_basestrings: null
+      get_plaquette: null
+      minor_xvals: null
+      minor_yvals: null
+      plaquette_rows_cols: null
+      simplify_plaquettes: null
+      used_xvals: null
+      used_yvals: null
+      xvals: null
+      yvals: null
     LsGermsSerialStructure:
       __name__: null
+      add_plaquette: null
+      add_unindexed: null
+      copy: null
+      create_plaquette: null
+      done_adding_strings: null
+      from_list: null
+      get_basestrings: null
+      get_plaquette: null
+      minor_xvals: null
+      minor_yvals: null
+      plaquette_rows_cols: null
+      process_circuits: null
+      simplify_plaquettes: null
+      truncate: null
+      used_xvals: null
+      used_yvals: null
+      xvals: null
+      yvals: null
     LsGermsStructure:
       __name__: null
+      add_plaquette: null
+      add_unindexed: null
+      copy: null
+      create_plaquette: null
+      done_adding_strings: null
+      get_basestrings: null
+      get_plaquette: null
+      minor_xvals: null
+      minor_yvals: null
+      plaquette_rows_cols: null
+      process_circuits: null
+      simplify_plaquettes: null
+      truncate: null
+      used_xvals: null
+      used_yvals: null
+      xvals: null
+      yvals: null
   cloudnoisemodel.py:
     CloudNoiseLayerLizard:
       __name__: null
+      get_effect: null
+      get_layer_component_cloudnoises: null
+      get_layer_component_targetop: null
+      get_operation: null
+      get_prep: null
     CloudNoiseModel:
       __name__: null
       basis: null
+      build_from_hops_and_weights: null
       dim: null
       evotype: null
+      get_clouds: null
       hyperparams: null
       simtype: null
       state_space_labels: null
@@ -574,9 +845,20 @@ objects:
       with_traceback: null
     CompilationLibrary:
       __name__: null
+      add_clifford_compilation_template: null
+      add_compilation_of: null
+      add_local_compilation_of: null
+      add_nonlocal_compilation_of: null
       clear: null
+      compute_connectivity_of: null
+      construct_local_compilation_of: null
+      construct_nonlocal_compilation_of: null
       copy: null
+      filter_connectivity: null
       get: null
+      get_compilation_of: null
+      get_local_compilation_of: null
+      get_nonlocal_compilation_of: null
       items: null
       keys: null
       move_to_end: null
@@ -589,15 +871,48 @@ objects:
   computationcache.py:
     ComputationCache:
       __name__: null
+      add_count_vectors: null
+      add_evaltree: null
+      has_count_vectors: null
+      has_evaltree: null
   confidenceregionfactory.py:
     ConfidenceRegionFactory:
       __name__: null
+      can_construct_views: null
+      compute_hessian: null
+      enable_linear_response_errorbars: null
+      get_model: null
+      has_hessian: null
+      project_hessian: null
+      set_parent: null
+      view: null
     ConfidenceRegionFactoryView:
       __name__: null
+      get_errobar_type: null
+      get_fn_confidence_interval: null
+      get_profile_likelihood_confidence_intervals: null
     P_RANK_TOL: null
   datacomparator.py:
     DataComparator:
       __name__: null
+      get_aggregate_llr: null
+      get_aggregate_llr_threshold: null
+      get_aggregate_nsigma: null
+      get_aggregate_nsigma_threshold: null
+      get_aggregate_pvalue: null
+      get_aggregate_pvalue_threshold: null
+      get_jsd: null
+      get_jsd_pseudothreshold: null
+      get_llr: null
+      get_llr_pseudothreshold: null
+      get_maximum_sstvd: null
+      get_pvalue: null
+      get_pvalue_pseudothreshold: null
+      get_ssjsd: null
+      get_sstvd: null
+      get_tvd: null
+      get_worst_circuits: null
+      implement: null
     compute_llr_threshold: null
     is_circuit_allowed_by_exclusion: null
     is_circuit_allowed_by_inclusion: null
@@ -613,17 +928,73 @@ objects:
     DATAROW_AUTOCACHECOUNT_THRESHOLD: null
     DataSet:
       __name__: null
+      add_auxiliary_info: null
+      add_count_dict: null
+      add_counts_from_dataset: null
+      add_outcome_labels: null
+      add_raw_series_data: null
+      add_series_data: null
+      add_series_from_dataset: null
+      add_std_nqubit_outcome_labels: null
+      build_repetition_counts: null
+      copy: null
+      copy_nonstatic: null
+      done_adding_data: null
+      get_degrees_of_freedom: null
+      get_gate_labels: null
+      get_meantimestep: null
+      get_outcome_labels: null
+      get_row: null
+      has_constant_totalcounts: null
+      has_constant_totalcounts_pertime: null
+      has_trivial_timedependence: null
+      items: null
+      keys: null
+      load: null
+      merge_outcomes: null
+      merge_std_nqubit_outcomes: null
+      process_circuits: null
+      remove: null
+      rename_outcome_labels: null
+      save: null
+      set_row: null
+      strip_occurence_tag: null
+      time_slice: null
+      to_str: null
+      totalcounts_pertime: null
+      truncate: null
+      update_ol: null
+      values: null
     DataSetKVIterator:
       __name__: null
+      next: null
     DataSetRow:
       __name__: null
       allcounts: null
+      as_dict: null
       counts: null
+      counts_at_time: null
+      fraction: null
       fractions: null
+      get_expanded_ol: null
+      get_expanded_oli: null
+      get_expanded_times: null
+      get_meantimestep: null
+      get_number_of_times: null
+      get_reps_timeseries: null
+      get_times: null
+      get_timeseries: null
+      get_timeseries_for_outcomes: null
+      get_totalcounts_per_timestep: null
+      has_constant_totalcounts: null
       outcomes: null
+      scale: null
+      timeseries: null
+      to_str: null
       total: null
     DataSetValueIterator:
       __name__: null
+      next: null
   evaltree.py:
     EvalTree:
       __name__: null
@@ -631,114 +1002,308 @@ objects:
       clear: null
       copy: null
       count: null
+      distribute: null
       extend: null
+      final_element_indices: null
+      final_slice: null
+      final_view: null
+      generate_circuit_list: null
+      get_evaluation_order: null
+      get_init_indices: null
+      get_init_labels: null
+      get_sub_trees: null
       index: null
+      initialize: null
       insert: null
+      is_split: null
+      num_final_elements: null
+      num_final_strings: null
+      permute_computation_to_original: null
+      permute_original_to_computation: null
       pop: null
+      print_analysis: null
       remove: null
       reverse: null
       sort: null
+      split: null
   explicitcalc.py:
     ExplicitOpModelCalc:
       __name__: null
+      copy: null
+      deriv_wrt_params: null
+      diamonddist: null
+      frobeniusdist: null
+      get_nongauge_projector: null
+      iter_objs: null
+      jtracedist: null
+      residuals: null
     P_RANK_TOL: null
   explicitmodel.py:
     ExplicitOpModel:
       __name__: null
       basis: null
+      bulk_dproduct: null
+      bulk_hproduct: null
+      bulk_product: null
+      decrease_dimension: null
       default_gauge_group: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dim: null
+      dproduct: null
       effects: null
       evotype: null
+      frobeniusdist: null
+      get_clifford_symplectic_reps: null
+      get_nongauge_projector: null
+      get_primitive_instrument_labels: null
+      get_primitive_op_labels: null
+      get_primitive_povm_labels: null
+      get_primitive_prep_labels: null
+      hproduct: null
       hyperparams: null
+      increase_dimension: null
+      iter_objs: null
+      jtracedist: null
+      kick: null
+      num_elements: null
+      num_gauge_params: null
+      num_nongauge_params: null
       prep: null
+      print_info: null
+      product: null
+      randomize_with_unitary: null
+      residuals: null
+      rotate: null
+      set_all_parameterizations: null
+      set_primitive_instrument_labels: null
+      set_primitive_op_labels: null
+      set_primitive_povm_labels: null
+      set_primitive_prep_labels: null
       simtype: null
       state_space_labels: null
+      strdiff: null
+      tpdist: null
+      transform: null
   forwardsim.py:
     ForwardSimulator:
       __name__: null
+      bulk_dprobs: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_hprobs: null
+      bulk_hprobs_by_block: null
+      bulk_prep_probs: null
+      bulk_probs: null
+      construct_evaltree: null
+      dprobs: null
+      from_vector: null
+      hprobs: null
+      probs: null
+      propagate: null
+      to_vector: null
   gaugegroup.py:
     DiagGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     DiagGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     FullGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     FullGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     GaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     GaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     OpGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     OpGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     SpamGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     SpamGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     TPDiagGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     TPDiagGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     TPGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     TPGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     TPSpamGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     TPSpamGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     TrivialGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     TrivialGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
     UnitaryGaugeGroup:
       __name__: null
+      get_element: null
+      get_initial_params: null
+      num_params: null
     UnitaryGaugeGroupElement:
       __name__: null
+      deriv_wrt_params: null
+      from_vector: null
+      get_transform_matrix: null
+      get_transform_matrix_inverse: null
+      num_params: null
+      to_vector: null
   hypothesistest.py:
     HypothesisTest:
       __name__: null
+      add_pvalues: null
+      implement: null
   implicitmodel.py:
     ImplicitOpModel:
       __name__: null
       basis: null
       dim: null
       evotype: null
+      get_clifford_symplectic_reps: null
+      get_primitive_instrument_labels: null
+      get_primitive_op_labels: null
+      get_primitive_povm_labels: null
+      get_primitive_prep_labels: null
       hyperparams: null
+      set_primitive_instrument_labels: null
+      set_primitive_op_labels: null
+      set_primitive_povm_labels: null
+      set_primitive_prep_labels: null
       simtype: null
       state_space_labels: null
   instrument.py:
     Instrument:
       __name__: null
+      acton: null
       clear: null
+      depolarize: null
       dirty: null
+      from_vector: null
       get: null
       gpindices: null
       items: null
       keys: null
       move_to_end: null
+      num_elements: null
+      num_params: null
       parent: null
       pop: null
       popitem: null
+      rotate: null
       setdefault: null
+      simplify_operations: null
+      to_vector: null
+      transform: null
       update: null
       values: null
     TPInstrument:
       __name__: null
       clear: null
+      depolarize: null
       dirty: null
+      from_vector: null
       get: null
       gpindices: null
       items: null
       keys: null
       move_to_end: null
+      num_elements: null
+      num_params: null
       parent: null
       pop: null
       popitem: null
+      rotate: null
       setdefault: null
+      simplify_operations: null
+      to_vector: null
+      transform: null
       update: null
       values: null
     convert: null
@@ -748,14 +1313,23 @@ objects:
       args: null
       components: null
       count: null
+      depth: null
+      expand_subcircuits: null
+      has_prefix: null
       index: null
+      issimple: null
+      map_state_space_labels: null
       name: null
       number_of_qubits: null
       qubits: null
+      replacename: null
       reps: null
       sslbls: null
+      tonative: null
     Label:
       __name__: null
+      depth: null
+      expand_subcircuits: null
       reps: null
     LabelStr:
       __name__: null
@@ -765,13 +1339,17 @@ objects:
       center: null
       components: null
       count: null
+      depth: null
       encode: null
       endswith: null
+      expand_subcircuits: null
       expandtabs: null
       find: null
       format: null
       format_map: null
+      has_prefix: null
       index: null
+      init: null
       isalnum: null
       isalpha: null
       isascii: null
@@ -781,6 +1359,7 @@ objects:
       islower: null
       isnumeric: null
       isprintable: null
+      issimple: null
       isspace: null
       istitle: null
       isupper: null
@@ -793,6 +1372,7 @@ objects:
       partition: null
       qubits: null
       replace: null
+      replacename: null
       reps: null
       rfind: null
       rindex: null
@@ -807,6 +1387,7 @@ objects:
       strip: null
       swapcase: null
       title: null
+      tonative: null
       translate: null
       upper: null
       zfill: null
@@ -815,50 +1396,84 @@ objects:
       args: null
       components: null
       count: null
+      depth: null
+      expand_subcircuits: null
+      has_prefix: null
       index: null
+      init: null
+      issimple: null
+      map_state_space_labels: null
       name: null
       number_of_qubits: null
       qubits: null
+      replacename: null
       reps: null
       sslbls: null
+      tonative: null
     LabelTupTup:
       __name__: null
       args: null
       components: null
       count: null
+      depth: null
+      expand_subcircuits: null
+      has_prefix: null
       index: null
+      init: null
+      issimple: null
+      map_state_space_labels: null
       name: null
       number_of_qubits: null
       qubits: null
+      replacename: null
       reps: null
       sslbls: null
+      tonative: null
     LabelTupTupWithArgs:
       __name__: null
       args: null
       components: null
       count: null
+      depth: null
+      expand_subcircuits: null
+      has_prefix: null
       index: null
+      init: null
+      issimple: null
+      map_state_space_labels: null
       name: null
       number_of_qubits: null
       qubits: null
+      replacename: null
       reps: null
       sslbls: null
+      tonative: null
     LabelTupWithArgs:
       __name__: null
       args: null
       components: null
       count: null
+      depth: null
+      expand_subcircuits: null
+      has_prefix: null
       index: null
+      init: null
+      issimple: null
+      map_state_space_labels: null
       name: null
       number_of_qubits: null
       qubits: null
+      replacename: null
       reps: null
       sslbls: null
+      tonative: null
     debug_record: null
   labeldicts.py:
     OrderedMemberDict:
       __name__: null
+      cast_to_obj: null
       clear: null
+      copy: null
       get: null
       items: null
       keys: null
@@ -872,13 +1487,18 @@ objects:
     OutcomeLabelDict:
       __name__: null
       clear: null
+      contains_unsafe: null
+      copy: null
       get: null
+      get_unsafe: null
       items: null
       keys: null
       move_to_end: null
       pop: null
       popitem: null
+      set_unsafe: null
       setdefault: null
+      to_outcome: null
       update: null
       values: null
     PrefixOrderedDict:
@@ -896,17 +1516,40 @@ objects:
       values: null
     StateSpaceLabels:
       __name__: null
+      copy: null
+      num_tensor_prod_blocks: null
+      product_dim: null
+      reduce_dims_densitymx_to_state: null
+      tensor_product_block_dims: null
+      tensor_product_block_labels: null
   layerlizard.py:
     ExplicitLayerLizard:
       __name__: null
+      from_vector: null
+      get_circuitlabel_op: null
+      get_effect: null
+      get_evotype: null
+      get_operation: null
+      get_prep: null
+      set_opcache: null
     ImplicitLayerLizard:
       __name__: null
+      from_vector: null
+      get_circuitlabel_op: null
+      get_effect: null
+      get_evotype: null
+      get_operation: null
+      get_prep: null
+      set_opcache: null
     LayerLizard:
       __name__: null
+      get_circuitlabel_op: null
+      set_opcache: null
   localnoisemodel.py:
     LocalNoiseModel:
       __name__: null
       basis: null
+      build_from_parameterization: null
       dim: null
       evotype: null
       hyperparams: null
@@ -914,6 +1557,10 @@ objects:
       state_space_labels: null
     SimpleCompLayerLizard:
       __name__: null
+      get_effect: null
+      get_layer_component_operation: null
+      get_operation: null
+      get_prep: null
     id2x2: null
     sigmax: null
     sigmay: null
@@ -923,56 +1570,155 @@ objects:
     MapEvalTree:
       __name__: null
       append: null
+      cache_size: null
       clear: null
+      copy: null
       count: null
       extend: null
+      generate_circuit_list: null
+      get_num_applies: null
       index: null
+      initialize: null
       insert: null
       pop: null
       remove: null
       reverse: null
       sort: null
+      split: null
+      squeeze: null
+      trim_nonfinal_els: null
   mapforwardsim.py:
     CLIFFORD: null
     MapForwardSimulator:
       __name__: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_fill_timedep_chi2: null
+      bulk_fill_timedep_dchi2: null
+      bulk_fill_timedep_deriv: null
+      bulk_fill_timedep_dloglpp: null
+      bulk_fill_timedep_loglpp: null
+      bulk_hprobs_by_block: null
+      construct_evaltree: null
+      copy: null
+      default_distribute_method: null
+      dm_mapfill_hprobs_block: null
+      dpr: null
+      estimate_cache_size: null
+      estimate_mem_usage: null
+      hpr: null
+      prs: null
     SUPEROP: null
     UNITARY: null
   matrixevaltree.py:
     MatrixEvalTree:
       __name__: null
       append: null
+      cache_size: null
       clear: null
+      copy: null
       count: null
       extend: null
+      generate_circuit_list: null
+      get_analysis_plot_infos: null
+      get_min_tree_size: null
       index: null
+      initialize: null
       insert: null
       pop: null
+      recompute_spamtuple_indices: null
       remove: null
       reverse: null
       sort: null
+      split: null
   matrixforwardsim.py:
     DSMALL: null
     HSMALL: null
     MatrixForwardSimulator:
       __name__: null
+      bulk_dproduct: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_hprobs_by_block: null
+      bulk_hproduct: null
+      bulk_product: null
+      construct_evaltree: null
+      copy: null
+      default_distribute_method: null
+      doperation: null
+      dpr: null
+      dproduct: null
+      estimate_cache_size: null
+      estimate_mem_usage: null
+      hoperation: null
+      hpr: null
+      hproduct: null
+      product: null
+      prs: null
     PSMALL: null
   model.py:
     Model:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_hprobs: null
+      bulk_hprobs_by_block: null
+      bulk_probs: null
+      copy: null
+      dprobs: null
+      from_vector: null
+      hprobs: null
       hyperparams: null
+      num_params: null
+      probs: null
       state_space_labels: null
+      to_vector: null
     OpModel:
       __name__: null
       basis: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_hprobs: null
+      bulk_hprobs_by_block: null
+      bulk_prep_probs: null
+      bulk_probs: null
+      bulk_probs_paths_are_sufficient: null
+      copy: null
       dim: null
+      dprobs: null
       evotype: null
+      from_vector: null
+      get_dimension: null
+      get_num_outcomes: null
+      get_simtype: null
+      hprobs: null
       hyperparams: null
+      num_params: null
+      probs: null
+      set_simtype: null
+      set_state_space: null
+      simplify_circuit: null
+      simplify_circuits: null
       simtype: null
+      split_circuit: null
       state_space_labels: null
+      to_vector: null
   modelfunction.py:
     ModelFunction:
       __name__: null
+      evaluate: null
+      evaluate_nearby: null
+      get_dependencies: null
     modelfn_factory: null
     opfn_factory: null
     opsfn_factory: null
@@ -983,93 +1729,560 @@ objects:
   modelmember.py:
     ModelChild:
       __name__: null
+      copy: null
       parent: null
     ModelMember:
       __name__: null
+      allocate_gpindices: null
+      clear_gpindices: null
+      copy: null
       dirty: null
+      from_vector: null
+      get_dimension: null
       gpindices: null
+      gpindices_as_array: null
+      num_params: null
       parent: null
+      relink_parent: null
+      set_gpindices: null
+      submembers: null
+      to_vector: null
+      unlink_parent: null
   multidataset.py:
     MultiDataSet:
       __name__: null
+      add_auxiliary_info: null
+      add_dataset: null
+      copy: null
+      get_datasets_aggregate: null
+      get_outcome_labels: null
+      items: null
+      keys: null
+      load: null
+      save: null
+      values: null
     MultiDataSetKVIterator:
       __name__: null
+      next: null
     MultiDataSetValueIterator:
       __name__: null
+      next: null
   objectivefns.py:
     CHECK: null
     CHECK_JACOBIAN: null
     Chi2Function:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     ChiAlphaFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     DeltaLogLFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     FLOATSIZE: null
     FreqWeightedChi2Function:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     LogLWildcardFunction:
       __name__: null
+      dlsvec: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      lsvec: null
+      terms: null
     MDSObjectiveFunction:
       __name__: null
+      approximate_hessian: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      jacobian: null
+      lsvec: null
       name: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      terms: null
     MaxLogLFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     ObjectiveFunction:
       __name__: null
+      get_chi2k_distributed_qty: null
     ObjectiveFunctionBuilder:
       __name__: null
+      build: null
+      create_from: null
+      simple: null
     PoissonPicDeltaLogLFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     RawChi2Function:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_dweights: null
+      get_hweights: null
+      get_weights: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      hterms_alt: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawChiAlphaFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawDeltaLogLFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawFreqWeightedChi2Function:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_dweights: null
+      get_hweights: null
+      get_weights: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      hterms_alt: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawMaxLogLFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawObjectiveFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawPoissonPicDeltaLogLFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     RawTVDFunction:
       __name__: null
+      dlsvec: null
+      dlsvec_and_lsvec: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      hessian: null
+      hlsvec: null
+      hterms: null
+      jacobian: null
+      lsvec: null
+      set_regularization: null
+      terms: null
+      zero_freq_dterms: null
+      zero_freq_hterms: null
+      zero_freq_terms: null
     TVDFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     TimeDependentChi2Function:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      jacobian: null
+      lsvec: null
       name: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      set_regularization: null
+      terms: null
     TimeDependentMDSObjectiveFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      jacobian: null
+      lsvec: null
       name: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      set_regularization: null
+      terms: null
     TimeDependentPoissonPicLogLFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      jacobian: null
+      lsvec: null
       name: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      set_regularization: null
+      terms: null
     TimeIndependentMDSObjectiveFunction:
       __name__: null
+      approximate_hessian: null
+      builder: null
+      compute_count_vectors: null
       description: null
+      dlsvec: null
+      dpercircuit: null
+      dterms: null
+      fill_dterms_penalty: null
+      fill_lspenaltyvec_jac: null
+      fn: null
+      get_chi2k_distributed_qty: null
+      get_evaltree_subcalls: null
+      get_num_data_params: null
+      get_persistent_memory_estimate: null
+      hessian: null
+      hessian_brute: null
+      jacobian: null
+      lspenaltyvec: null
+      lsvec: null
       name: null
+      omitted_prob_first_dterms: null
+      omitted_prob_first_terms: null
+      penaltyvec: null
+      percircuit: null
+      precompute_omitted_freqs: null
+      set_penalties: null
+      terms: null
+      update_dlsvec_for_omitted_probs: null
+      update_dterms_for_omitted_probs: null
+      update_lsvec_for_omitted_probs: null
+      update_terms_for_omitted_probs: null
     objfn: null
   opcalc:
     fastopcalc.cpython-37m-x86_64-linux-gnu.so:
@@ -1085,145 +2298,739 @@ objects:
   operation.py:
     BasedDenseOperatorInterface:
       __name__: null
+      deriv_wrt_params: null
+      todense: null
+      tosparse: null
     CliffordOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      todense: null
+      tosparse: null
+      transform: null
     ComposedDenseOp:
       __name__: null
+      acton: null
+      append: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      remove: null
+      residuals: null
+      rotate: null
+      set_gpindices: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     ComposedErrorgen:
       __name__: null
+      acton: null
+      append: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_coeffs: null
+      get_error_rates: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
+      onenorm_upperbound: null
       parent: null
+      remove: null
+      residuals: null
+      rotate: null
+      set_coeffs: null
+      set_error_rates: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     ComposedOp:
       __name__: null
+      acton: null
+      append: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      remove: null
+      residuals: null
+      rotate: null
+      set_gpindices: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     DenseOperator:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      todense: null
+      tosparse: null
+      transform: null
     DenseOperatorInterface:
       __name__: null
+      deriv_wrt_params: null
+      todense: null
+      tosparse: null
     DepolarizeOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     EigenvalueParamDenseOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     EmbeddedDenseOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     EmbeddedErrorgen:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_coeffs: null
+      get_error_rates: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
+      onenorm_upperbound: null
       parent: null
+      residuals: null
+      rotate: null
+      set_coeffs: null
+      set_error_rates: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     EmbeddedOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     ExponentiatedOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     FullDenseOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     IMAG_TOL: null
     LindbladDenseOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      decomp_paramtype: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_operation_matrix: null
+      from_operation_obj: null
+      from_vector: null
+      get_errgen_coeffs: null
+      get_error_rates: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_errgen_coeffs: null
+      set_error_rates: null
+      set_gpindices: null
+      set_time: null
+      set_value: null
       size: null
+      spam_transform: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     LindbladErrorgen:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_error_generator: null
+      from_vector: null
+      get_coeffs: null
+      get_error_rates: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
+      onenorm_upperbound: null
       parent: null
+      residuals: null
+      rotate: null
+      set_coeffs: null
+      set_error_rates: null
+      set_time: null
+      set_value: null
       size: null
+      spam_transform: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     LindbladOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      decomp_paramtype: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_operation_matrix: null
+      from_operation_obj: null
+      from_vector: null
+      get_errgen_coeffs: null
+      get_error_rates: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_errgen_coeffs: null
+      set_error_rates: null
+      set_gpindices: null
+      set_time: null
+      set_value: null
       size: null
+      spam_transform: null
+      submembers: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     LinearOperator:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      todense: null
+      tosparse: null
+      transform: null
     LinearlyParamDenseOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     LinearlyParameterizedElementTerm:
       __name__: null
+      copy: null
     StaticDenseOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      todense: null
+      tosparse: null
+      transform: null
     StochasticNoiseOp:
       __name__: null
+      acton: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     TOL: null
     TPDenseOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     TPInstrumentOp:
       __name__: null
+      acton: null
       base: null
+      compose: null
+      convert_to_matrix: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
+      diamonddist: null
       dirty: null
+      frobeniusdist: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      jtracedist: null
+      num_params: null
       parent: null
+      residuals: null
+      rotate: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      tosparse: null
+      transform: null
     check_deriv_wrt_params: null
     compose: null
     convert: null
@@ -1232,46 +3039,127 @@ objects:
   opfactory.py:
     ComposedOpFactory:
       __name__: null
+      create_object: null
+      create_op: null
+      create_simplified_op: null
       dirty: null
+      from_vector: null
       gpindices: null
+      num_params: null
       parent: null
+      submembers: null
+      to_vector: null
+      transform: null
     EmbeddedOpFactory:
       __name__: null
+      create_object: null
+      create_op: null
+      create_simplified_op: null
       dirty: null
+      from_vector: null
       gpindices: null
+      num_params: null
       parent: null
+      submembers: null
+      to_vector: null
+      transform: null
     EmbeddingOpFactory:
       __name__: null
+      create_object: null
+      create_op: null
+      create_simplified_op: null
       dirty: null
+      from_vector: null
       gpindices: null
+      num_params: null
       parent: null
+      submembers: null
+      to_vector: null
+      transform: null
     OpFactory:
       __name__: null
+      create_object: null
+      create_op: null
+      create_simplified_op: null
       dirty: null
       gpindices: null
       parent: null
+      transform: null
     UnitaryOpFactory:
       __name__: null
+      create_object: null
+      create_op: null
+      create_simplified_op: null
       dirty: null
       gpindices: null
       parent: null
+      transform: null
     op_from_factories: null
   oplessmodel.py:
     AnyErrorCausesFailureModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
+      to_dict: null
     AnyErrorCausesRandomOutputModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
+      to_dict: null
     ErrorRatesModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
+      to_dict: null
     OplessModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      probs: null
       state_space_labels: null
     OplessModelTree:
       __name__: null
@@ -1288,133 +3176,289 @@ objects:
       sort: null
     SuccessFailModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
     TwirledGatesModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
+      to_dict: null
     TwirledLayersModel:
       __name__: null
+      bulk_dprobs: null
+      bulk_evaltree: null
+      bulk_evaltree_from_resources: null
+      bulk_fill_dprobs: null
+      bulk_fill_probs: null
+      bulk_probs: null
+      dprobs: null
+      get_dimension: null
+      get_num_outcomes: null
       hyperparams: null
+      poly_probs: null
+      probs: null
+      simplify_circuits: null
       state_space_labels: null
+      to_dict: null
     compact_poly_list: null
   polynomial.py:
     FASTPolynomial:
       __name__: null
       coeffs: null
+      compact: null
+      copy: null
+      deriv: null
+      evaluate: null
+      fromrep: null
+      get_degree: null
+      get_vindices_per_int: null
+      map_indices: null
+      map_indices_inplace: null
+      mapvec_indices: null
+      mapvec_indices_inplace: null
       max_num_vars: null
+      mult: null
+      product: null
+      scalar_mult: null
+      scale: null
+      torep: null
       vindices_per_int: null
     PLATFORM_BITS: null
     Polynomial:
       __name__: null
       coeffs: null
+      compact: null
+      copy: null
+      deriv: null
+      evaluate: null
+      fromrep: null
+      get_degree: null
+      get_vindices_per_int: null
+      map_indices: null
+      map_indices_inplace: null
+      mapvec_indices: null
+      mapvec_indices_inplace: null
       max_num_vars: null
+      mult: null
+      product: null
+      scalar_mult: null
+      scale: null
+      torep: null
       vindices_per_int: null
     SLOWPolynomial:
       __name__: null
+      check_fastpoly: null
       clear: null
+      compact: null
+      copy: null
+      deriv: null
+      evaluate: null
+      fromrep: null
       get: null
+      get_degree: null
+      get_vindices_per_int: null
       items: null
       keys: null
+      map_indices: null
+      map_indices_inplace: null
+      mult: null
       pop: null
       popitem: null
+      scalar_mult: null
+      scale: null
       setdefault: null
+      torep: null
       update: null
       values: null
     bulk_load_compact_polys: null
   povm.py:
     ComputationalBasisPOVM:
       __name__: null
+      acton: null
       clear: null
+      depolarize: null
       dirty: null
-      get: null
-      gpindices: null
-      move_to_end: null
-      parent: null
-      pop: null
-      popitem: null
-      setdefault: null
-      update: null
-    LindbladPOVM:
-      __name__: null
-      clear: null
-      dirty: null
-      get: null
-      gpindices: null
-      move_to_end: null
-      parent: null
-      pop: null
-      popitem: null
-      setdefault: null
-      update: null
-    MarginalizedPOVM:
-      __name__: null
-      clear: null
-      dirty: null
-      get: null
-      gpindices: null
-      move_to_end: null
-      parent: null
-      pop: null
-      popitem: null
-      setdefault: null
-      update: null
-    POVM:
-      __name__: null
-      clear: null
-      dirty: null
+      from_vector: null
       get: null
       gpindices: null
       items: null
       keys: null
       move_to_end: null
+      num_elements: null
+      num_params: null
       parent: null
       pop: null
       popitem: null
       setdefault: null
+      simplify_effects: null
+      to_vector: null
+      transform: null
+      update: null
+      values: null
+    LindbladPOVM:
+      __name__: null
+      acton: null
+      allocate_gpindices: null
+      clear: null
+      depolarize: null
+      dirty: null
+      from_vector: null
+      get: null
+      gpindices: null
+      items: null
+      keys: null
+      move_to_end: null
+      num_elements: null
+      num_params: null
+      parent: null
+      pop: null
+      popitem: null
+      relink_parent: null
+      set_gpindices: null
+      setdefault: null
+      simplify_effects: null
+      submembers: null
+      to_vector: null
+      transform: null
+      update: null
+      values: null
+    MarginalizedPOVM:
+      __name__: null
+      acton: null
+      clear: null
+      depolarize: null
+      dirty: null
+      from_vector: null
+      get: null
+      gpindices: null
+      items: null
+      keys: null
+      marginalize_effect_label: null
+      move_to_end: null
+      num_elements: null
+      num_params: null
+      parent: null
+      pop: null
+      popitem: null
+      setdefault: null
+      simplify_effects: null
+      to_vector: null
+      transform: null
+      update: null
+      values: null
+    POVM:
+      __name__: null
+      acton: null
+      clear: null
+      depolarize: null
+      dirty: null
+      from_vector: null
+      get: null
+      gpindices: null
+      items: null
+      keys: null
+      move_to_end: null
+      num_elements: null
+      num_params: null
+      parent: null
+      pop: null
+      popitem: null
+      setdefault: null
+      to_vector: null
+      transform: null
       update: null
       values: null
     TPPOVM:
       __name__: null
+      acton: null
       clear: null
+      depolarize: null
       dirty: null
+      from_vector: null
       get: null
       gpindices: null
       items: null
       keys: null
       move_to_end: null
+      num_elements: null
+      num_params: null
       parent: null
       pop: null
       popitem: null
       setdefault: null
+      simplify_effects: null
+      to_vector: null
+      transform: null
       update: null
       values: null
     TensorProdPOVM:
       __name__: null
+      acton: null
       clear: null
+      depolarize: null
       dirty: null
-      get: null
-      gpindices: null
-      move_to_end: null
-      parent: null
-      pop: null
-      popitem: null
-      setdefault: null
-      update: null
-    UnconstrainedPOVM:
-      __name__: null
-      clear: null
-      dirty: null
+      from_vector: null
       get: null
       gpindices: null
       items: null
       keys: null
       move_to_end: null
+      num_elements: null
+      num_params: null
       parent: null
       pop: null
       popitem: null
       setdefault: null
+      simplify_effects: null
+      to_vector: null
+      transform: null
+      update: null
+      values: null
+    UnconstrainedPOVM:
+      __name__: null
+      acton: null
+      clear: null
+      depolarize: null
+      dirty: null
+      from_vector: null
+      get: null
+      gpindices: null
+      items: null
+      keys: null
+      move_to_end: null
+      num_elements: null
+      num_params: null
+      parent: null
+      pop: null
+      popitem: null
+      setdefault: null
+      simplify_effects: null
+      to_vector: null
+      transform: null
       update: null
       values: null
     convert: null
@@ -1422,18 +3466,60 @@ objects:
     IDENT: null
     ProcessorSpec:
       __name__: null
+      add_multiqubit_inversion_relations: null
+      add_one_q_gate_relations: null
+      add_std_compilations: null
+      add_std_model: null
+      get_all_connected_sets: null
+      get_all_connected_sets_new: null
+      get_edges: null
+      get_std_model: null
   profiler.py:
     BtoGB: null
     DummyProfiler:
       __name__: null
+      add_count: null
+      add_time: null
+      mem_check: null
     Profiler:
       __name__: null
+      add_count: null
+      add_time: null
+      format_counts: null
+      format_memory: null
+      format_times: null
+      mem_check: null
+      print_mem: null
+      print_msg: null
   protectedarray.py:
     ProtectedArray:
       __name__: null
   qubitgraph.py:
     QubitGraph:
       __name__: null
+      add_edge: null
+      add_edges: null
+      are_glob_connected: null
+      common_graph: null
+      connected_combos: null
+      copy: null
+      edges: null
+      get_node_names: null
+      has_edge: null
+      is_connected: null
+      is_directly_connected: null
+      move_in_direction: null
+      move_in_directions: null
+      radius: null
+      remove_edge: null
+      resolve_relative_nodelabel: null
+      shortest_path: null
+      shortest_path_distance: null
+      shortest_path_distance_matrix: null
+      shortest_path_edges: null
+      shortest_path_intersect: null
+      shortest_path_predecessor_matrix: null
+      subgraph: null
   replib:
     fastreplib.cpython-37m-x86_64-linux-gnu.so:
       CircuitSetupCacheEl:
@@ -1725,36 +3811,73 @@ objects:
       DEBUG_FCOUNT: null
       DMEffectRep:
         __name__: null
+        probability: null
       DMEffectRepComputational:
         __name__: null
+        parity: null
+        probability: null
+        todense: null
       DMEffectRepDense:
         __name__: null
+        probability: null
       DMEffectRepErrgen:
         __name__: null
+        probability: null
       DMEffectRepTensorProd:
         __name__: null
+        probability: null
+        todense: null
       DMOpRep:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
       DMOpRepComposed:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
+        reinit_factor_op_reps: null
       DMOpRepDense:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
       DMOpRepEmbedded:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
       DMOpRepExponentiated:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
       DMOpRepLindblad:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
+        get_exp_params: null
+        set_exp_params: null
       DMOpRepSparse:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
         data: null
         indices: null
         indptr: null
       DMOpRepSum:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        aslinearoperator: null
       DMStateRep:
         __name__: null
+        copy_from: null
         dim: null
+        todense: null
       DM_mapfill_TDchi2_terms: null
       DM_mapfill_TDdchi2_terms: null
       DM_mapfill_TDdloglpp_terms: null
@@ -1766,56 +3889,92 @@ objects:
       LARGE: null
       PolyRep:
         __name__: null
+        abs: null
+        add_inplace: null
+        add_scalar_to_all_coeffs_inplace: null
         clear: null
+        compact_complex: null
+        compact_real: null
+        copy: null
+        degree: null
         get: null
         int_coeffs: null
         items: null
         keys: null
+        mapvec_indices_inplace: null
+        mult: null
         pop: null
         popitem: null
+        reinit: null
+        scale: null
         setdefault: null
         update: null
         values: null
       SBEffectRep:
         __name__: null
+        amplitude: null
         dim: null
         nqubits: null
+        probability: null
       SBOpRep:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
       SBOpRepClifford:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
         unitary_dagger: null
       SBOpRepComposed:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
       SBOpRepEmbedded:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
       SBOpRepExponentiated:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
       SBOpRepSum:
         __name__: null
+        acton: null
+        adjoint_acton: null
         dim: null
         nqubits: null
       SBStateRep:
         __name__: null
         amps: null
+        copy: null
         dim: null
         nqubits: null
         pvectors: null
         smatrix: null
       SBTermDirectRep:
         __name__: null
+        composed: null
+        copy: null
+        mapvec_indices_inplace: null
+        scalar_mult: null
+        set_magnitude: null
       SBTermRep:
         __name__: null
+        composed: null
+        copy: null
+        mapvec_indices_inplace: null
+        scalar_mult: null
+        set_magnitude: null
       SB_compute_pruned_path_polys_given_threshold: null
       SB_find_best_pathmagnitude_threshold: null
       SB_prs_as_polys: null
@@ -1823,31 +3982,68 @@ objects:
       SMALL: null
       SVEffectRep:
         __name__: null
+        amplitude: null
+        probability: null
       SVEffectRepComputational:
         __name__: null
+        amplitude: null
+        probability: null
+        todense: null
       SVEffectRepDense:
         __name__: null
+        amplitude: null
+        probability: null
       SVEffectRepTensorProd:
         __name__: null
+        amplitude: null
+        probability: null
+        todense: null
       SVOpRep:
         __name__: null
+        acton: null
+        adjoint_acton: null
       SVOpRepComposed:
         __name__: null
+        acton: null
+        adjoint_acton: null
+        reinit_factor_op_reps: null
       SVOpRepDense:
         __name__: null
+        acton: null
+        adjoint_acton: null
       SVOpRepEmbedded:
         __name__: null
+        acton: null
+        adjoint_acton: null
       SVOpRepExponentiated:
         __name__: null
+        acton: null
+        adjoint_acton: null
       SVOpRepSum:
         __name__: null
+        acton: null
+        adjoint_acton: null
       SVStateRep:
         __name__: null
+        copy_from: null
         dim: null
+        todense: null
       SVTermDirectRep:
         __name__: null
+        composed: null
+        copy: null
+        mapvec_indices_inplace: null
+        scalar_mult: null
+        set_magnitude: null
+        set_magnitude_only: null
       SVTermRep:
         __name__: null
+        composed: null
+        copy: null
+        mapvec_indices_inplace: null
+        scalar_mult: null
+        set_magnitude: null
+        set_magnitude_only: null
       SV_circuit_achieved_and_max_sopm: null
       SV_compute_pruned_path_polys_given_threshold: null
       SV_find_best_pathmagnitude_threshold: null
@@ -1862,24 +4058,85 @@ objects:
   reportableqty.py:
     ReportableQty:
       __name__: null
+      absdiff: null
+      from_val: null
+      get_err_bar: null
+      get_value: null
+      get_value_and_err_bar: null
+      has_eb: null
+      hermitian_to_real: null
+      imag: null
+      infidelity_diff: null
+      log: null
+      mod: null
+      real: null
+      render_with: null
+      reshape: null
+      scale: null
       size: null
     maximum: null
     minimum: null
   resourceallocation.py:
     ResourceAllocation:
       __name__: null
+      copy: null
+      create_from: null
   results.py:
     Results:
       __name__: null
+      add_estimate: null
+      add_estimates: null
+      add_model_test: null
+      copy: null
+      init_circuits: null
+      init_dataset: null
+      rename_estimate: null
+      view: null
   simplifierhelper.py:
     BasicSimplifierHelper:
       __name__: null
+      get_default_povm_lbl: null
+      get_default_prep_lbl: null
+      get_effect_labels_for_povm: null
+      get_member_labels_for_instrument: null
+      has_povms: null
+      has_preps: null
+      is_instrument_lbl: null
+      is_povm_lbl: null
+      is_prep_lbl: null
     ImplicitModelSimplifierHelper:
       __name__: null
+      get_default_povm_lbl: null
+      get_default_prep_lbl: null
+      get_effect_labels_for_povm: null
+      get_member_labels_for_instrument: null
+      has_povms: null
+      has_preps: null
+      is_instrument_lbl: null
+      is_povm_lbl: null
+      is_prep_lbl: null
     MemberDictDictSimplifierHelper:
       __name__: null
+      get_default_povm_lbl: null
+      get_default_prep_lbl: null
+      get_effect_labels_for_povm: null
+      get_member_labels_for_instrument: null
+      has_povms: null
+      has_preps: null
+      is_instrument_lbl: null
+      is_povm_lbl: null
+      is_prep_lbl: null
     MemberDictSimplifierHelper:
       __name__: null
+      get_default_povm_lbl: null
+      get_default_prep_lbl: null
+      get_effect_labels_for_povm: null
+      get_member_labels_for_instrument: null
+      has_povms: null
+      has_preps: null
+      is_instrument_lbl: null
+      is_povm_lbl: null
+      is_prep_lbl: null
     SimplifierHelper:
       __name__: null
   smartcache.py:
@@ -1891,6 +4148,12 @@ objects:
     SmartCache:
       StaticCacheList: null
       __name__: null
+      add_digest: null
+      avg_timedict: null
+      cached_compute: null
+      global_status: null
+      low_overhead_cached_compute: null
+      status: null
     average: null
     call_key: null
     csize: null
@@ -1904,106 +4167,338 @@ objects:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     ComplementSPAMVec:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     ComputationalSPAMVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_dense_vec: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     DenseSPAMVec:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     FullSPAMVec:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     IMAG_TOL: null
     LindbladSPAMVec:
       __name__: null
+      convert_to_vector: null
+      copy: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_lindblad_terms: null
+      from_spam_vector: null
+      from_spamvec_obj: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
+      get_total_term_magnitude: null
+      get_total_term_magnitude_deriv: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_gpindices: null
+      set_time: null
+      set_value: null
       size: null
+      submembers: null
+      to_vector: null
+      todense: null
+      transform: null
     PureStateSPAMVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     SPAMVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     StabilizerEffectVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_dense_purevec: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     StabilizerSPAMVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_dense_purevec: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     StaticSPAMVec:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     TPSPAMVec:
       __name__: null
       base: null
       base_1d: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     TensorProdSPAMVec:
       __name__: null
+      convert_to_vector: null
+      depolarize: null
+      deriv_wrt_params: null
       dirty: null
+      frobeniusdist2: null
+      from_vector: null
+      get_highmagnitude_terms: null
+      get_taylor_order_terms: null
+      get_taylor_order_terms_above_mag: null
       gpindices: null
+      has_nonzero_hessian: null
+      hessian_wrt_params: null
+      num_params: null
       outcomes: null
       parent: null
+      residuals: null
+      set_time: null
+      set_value: null
       size: null
+      to_vector: null
+      todense: null
+      transform: null
     check_deriv_wrt_params: null
     convert: null
     finite_difference_deriv_wrt_params: null
@@ -2011,11 +4506,23 @@ objects:
   stabilizer.py:
     StabilizerFrame:
       __name__: null
+      clifford_update: null
+      copy: null
+      extract_all_amplitudes: null
+      extract_amplitude: null
+      from_zvals: null
+      get_state_str: null
+      measurement_probability: null
       nqubits: null
+      pop_view: null
+      push_view: null
+      to_statevec: null
+      torep: null
     sframe_kronecker: null
   term.py:
     HasMagnitude:
       __name__: null
+      compose: null
       logmagnitude: null
       magnitude: null
     HasNumericalCoefficient:
@@ -2024,61 +4531,150 @@ objects:
     HasPolyCoefficient:
       __name__: null
       coeff: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
     NoMagnitude:
       __name__: null
+      compose: null
     RankOneDirectEffectTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOneDirectOpTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOneDirectPrepTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOneEffectTerm:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOneEffectTermWithMagnitude:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      torep: null
     RankOneOpTerm:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOneOpTermWithMagnitude:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      torep: null
     RankOnePolyEffectTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      copy_with_magnitude: null
+      embed: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      simple_init: null
+      torep: null
     RankOnePolyEffectTermWithMagnitude:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      torep: null
     RankOnePolyOpTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      copy_with_magnitude: null
+      embed: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      simple_init: null
+      torep: null
     RankOnePolyOpTermWithMagnitude:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      torep: null
     RankOnePolyPrepTerm:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      copy_with_magnitude: null
+      embed: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      simple_init: null
+      torep: null
     RankOnePolyPrepTermWithMagnitude:
       __name__: null
       coeff: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      map_indices_inplace: null
+      mapvec_indices_inplace: null
+      torep: null
     RankOnePrepTerm:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
+      simple_init: null
+      torep: null
     RankOnePrepTermWithMagnitude:
       __name__: null
+      compose: null
+      copy: null
+      embed: null
       logmagnitude: null
       magnitude: null
+      torep: null
     RankOneTerm:
       __name__: null
+      copy: null
+      torep: null
     compose_terms: null
     compose_terms_with_mag: null
     exp_terms: null
@@ -2086,42 +4682,116 @@ objects:
   termevaltree.py:
     SplitTreeTermPathSet:
       __name__: null
+      get_allowed_path_fraction: null
     TermEvalTree:
       __name__: null
       append: null
+      cache_p_polys: null
+      cache_size: null
       clear: null
+      copy: null
       count: null
       extend: null
+      find_minimal_paths_set: null
+      generate_circuit_list: null
+      get_achieved_and_max_sopm: null
+      get_achieved_and_max_sopm_jacobian: null
+      get_paths_set: null
+      get_sopm_gaps: null
+      get_sopm_gaps_jacobian: null
       index: null
+      initialize: null
       insert: null
       pop: null
       remove: null
       reverse: null
+      select_paths_set: null
       sort: null
+      split: null
     TermPathSet:
       __name__: null
+      get_allowed_path_fraction: null
     UnsplitTreeTermPathSet:
       __name__: null
+      get_allowed_path_fraction: null
   termforwardsim.py:
     TermForwardSimulator:
       __name__: null
+      bulk_fill_dprobs: null
+      bulk_fill_hprobs: null
+      bulk_fill_probs: null
+      bulk_get_achieved_and_max_sopm: null
+      bulk_get_sopm_gaps: null
+      bulk_get_sopm_gaps_jacobian: null
+      bulk_prep_probs: null
+      bulk_test_if_paths_are_sufficient: null
+      circuit_achieved_and_max_sopm: null
+      compute_pruned_pathmag_threshold: null
+      construct_evaltree: null
+      copy: null
+      default_distribute_method: null
+      dpr: null
+      dprs_directly: null
+      estimate_mem_usage: null
+      find_minimal_paths_set: null
+      get_current_pathset: null
+      hpr: null
+      pr_as_poly: null
+      propagate_state: null
+      prs: null
+      prs_as_compact_polys: null
+      prs_as_polys: null
+      prs_as_pruned_polyreps: null
+      prs_directly: null
+      select_paths_set: null
   verbosityprinter.py:
     VerbosityPrinter:
       __name__: null
+      build_printer: null
+      clone: null
+      error: null
+      is_recording: null
+      log: null
+      progress_logging: null
+      show_progress: null
+      start_recording: null
+      stop_recording: null
+      verbosity_env: null
+      warning: null
   wildcardbudget.py:
     PrimitiveOpsWildcardBudget:
       __name__: null
+      circuit_budget: null
+      circuit_budgets: null
+      from_vector: null
+      get_descriptive_dict: null
+      get_op_budget: null
+      get_precomp_for_circuits: null
+      slow_update_probs: null
+      to_vector: null
+      update_probs: null
     WildcardBudget:
       __name__: null
+      circuit_budget: null
+      circuit_budgets: null
+      from_vector: null
+      get_descriptive_dict: null
+      get_precomp_for_circuits: null
+      slow_update_probs: null
+      to_vector: null
+      update_probs: null
 optimize:
   customcg.py:
     fmax_cg: null
   customlm.py:
     CustomLMOptimizer:
       __name__: null
+      create_from: null
+      run: null
     MACH_PRECISION: null
     Optimizer:
       __name__: null
+      create_from: null
     OptimizerResult:
       __name__: null
     custom_leastsq: null
@@ -2143,21 +4813,40 @@ protocols:
       model: null
     Estimate:
       __name__: null
+      add_confidence_region_factory: null
+      add_gaugeoptimized: null
+      copy: null
+      gauge_propagate_confidence_region_factory: null
+      get_confidence_region_factory: null
+      get_effective_dataset: null
+      get_start_model: null
+      gst_init: null
+      has_confidence_region_factory: null
+      misfit_sigma: null
+      set_parent: null
+      view: null
   gst.py:
     DEFAULT_BAD_FIT_THRESHOLD: null
     GST:
       __name__: null
+      run: null
     GSTBadFitOptions:
       __name__: null
+      create_from: null
     GSTDesign:
       __name__: null
       child_category: null
     GSTInitialModel:
       __name__: null
+      create_from: null
+      get_model: null
     GSTObjFnBuilders:
       __name__: null
+      create_from: null
+      init_simple: null
     GateSetTomography:
       __name__: null
+      run: null
     GateSetTomographyDesign:
       __name__: null
       child_category: null
@@ -2165,14 +4854,27 @@ protocols:
       __name__: null
     LGST:
       __name__: null
+      check_if_runnable: null
+      run: null
     LinearGateSetTomography:
       __name__: null
+      check_if_runnable: null
+      run: null
     ModelEstimateResults:
       __name__: null
+      add_estimate: null
+      add_estimates: null
+      add_model_test: null
+      as_nameddict: null
+      copy: null
       dataset: null
+      from_dir: null
+      rename_estimate: null
+      view: null
     ROBUST_SUFFIX_LIST: null
     StandardGST:
       __name__: null
+      run: null
     StandardGSTDesign:
       __name__: null
       child_category: null
@@ -2185,49 +4887,115 @@ protocols:
   modeltest.py:
     ModelTest:
       __name__: null
+      create_builder: null
+      run: null
   protocol.py:
     CircuitListsDesign:
       __name__: null
+      add_default_protocol: null
       child_category: null
+      create_subdata: null
+      from_dir: null
+      set_actual_circuits_executed: null
+      setup_nameddict: null
+      truncate: null
+      write: null
     CombinedExperimentDesign:
       __name__: null
+      add_default_protocol: null
       child_category: null
+      create_subdata: null
+      from_dir: null
+      set_actual_circuits_executed: null
+      setup_nameddict: null
+      write: null
     DefaultRunner:
       __name__: null
+      run: null
     ExperimentDesign:
       __name__: null
+      add_default_protocol: null
       child_category: null
+      create_subdata: null
+      from_dir: null
+      set_actual_circuits_executed: null
+      setup_nameddict: null
+      write: null
     MultiPassProtocol:
       __name__: null
+      from_dir: null
+      run: null
+      setup_nameddict: null
+      write: null
     MultiPassResults:
       __name__: null
+      as_dataframe: null
+      as_nameddict: null
+      from_dir: null
+      write: null
     Protocol:
       __name__: null
+      from_dir: null
+      run: null
+      setup_nameddict: null
+      write: null
     ProtocolData:
       __name__: null
       child_category: null
+      filter_paths: null
+      from_dir: null
+      is_multipass: null
       passes: null
+      setup_nameddict: null
+      write: null
     ProtocolPostProcessor:
       __name__: null
+      from_dir: null
+      run: null
+      write: null
     ProtocolResults:
       __name__: null
+      as_dataframe: null
+      as_nameddict: null
+      from_dir: null
+      write: null
     ProtocolResultsDir:
       __name__: null
+      as_dataframe: null
+      as_nameddict: null
       child_category: null
+      from_dir: null
+      write: null
     ProtocolRunner:
       __name__: null
+      run: null
     SimpleRunner:
       __name__: null
+      run: null
     SimultaneousExperimentDesign:
       __name__: null
+      add_default_protocol: null
       child_category: null
+      create_subdata: null
+      from_dir: null
+      set_actual_circuits_executed: null
+      setup_nameddict: null
+      write: null
     TreeRunner:
       __name__: null
+      run: null
     run_default_protocols: null
   rb.py:
     Benchmark:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
       summary_datatypes: null
     BenchmarkingDesign:
@@ -2239,60 +5007,125 @@ protocols:
     CliffordRBDesign:
       __name__: null
       child_category: null
+      from_existing_circuits: null
     DirectRBDesign:
       __name__: null
       child_category: null
+      from_existing_circuits: null
     MirrorRBDesign:
       __name__: null
       child_category: null
+      from_existing_circuits: null
     PredictedVolumetricBenchmark:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     RB:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     RBResults:
       __name__: null
+      plot: null
     RandomizedBenchmarking:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     RandomizedBenchmarkingResults:
       __name__: null
+      plot: null
     VB:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     VBGrid:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     VBResults:
       __name__: null
     VolumetricBenchmark:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     VolumetricBenchmarkGrid:
       __name__: null
+      add_bootstrap_qtys: null
       circuit_datatypes: null
+      compute_circuit_data: null
+      compute_dict: null
+      compute_dscmp_data: null
+      compute_predicted_probs: null
+      compute_summary_data: null
+      create_depthwidth_dict: null
       dscmp_datatypes: null
+      run: null
       summary_datatypes: null
     VolumetricBenchmarkGridPP:
       __name__: null
+      run: null
     VolumetricBenchmarkingResults:
       __name__: null
   rpe.py:
     RPE:
       __name__: null
+      parse_dataset: null
+      raw_angles: null
+      run: null
     RPEDesign:
       __name__: null
       child_category: null
@@ -2303,6 +5136,9 @@ protocols:
       raw_angles: null
     RobustPhaseEstimation:
       __name__: null
+      parse_dataset: null
+      raw_angles: null
+      run: null
     RobustPhaseEstimationDesign:
       __name__: null
       child_category: null
@@ -2314,6 +5150,7 @@ protocols:
   stability.py:
     StabilityAnalysis:
       __name__: null
+      run: null
     StabilityAnalysisDesign:
       __name__: null
       child_category: null
@@ -2323,23 +5160,58 @@ protocols:
     TreeNode:
       __name__: null
       child_category: null
+      filter_paths: null
+      from_dir: null
+      get_tree_paths: null
+      items: null
+      keys: null
+      view: null
+      write: null
+      write_children: null
 report:
   autotitle.py:
     generate_name: null
   cell.py:
     Cell:
       __name__: null
+      render: null
   colormaps.py:
     Colormap:
       __name__: null
+      besttxtcolor: null
+      get_color: null
+      get_colorscale: null
+      get_matplotlib_norm_and_cmap: null
+      normalize: null
     DivergingColormap:
       __name__: null
+      besttxtcolor: null
+      get_color: null
+      get_colorscale: null
+      get_matplotlib_norm_and_cmap: null
+      normalize: null
     LinlogColormap:
       __name__: null
+      besttxtcolor: null
+      get_color: null
+      get_colorscale: null
+      get_matplotlib_norm_and_cmap: null
+      manual_transition_pt: null
+      normalize: null
     PiecewiseLinearColormap:
       __name__: null
+      besttxtcolor: null
+      get_color: null
+      get_colorscale: null
+      get_matplotlib_norm_and_cmap: null
+      normalize: null
     SequentialColormap:
       __name__: null
+      besttxtcolor: null
+      get_color: null
+      get_colorscale: null
+      get_matplotlib_norm_and_cmap: null
+      normalize: null
     as_rgb_array: null
     interpolate_plotly_colorscale: null
   convert.py:
@@ -2363,6 +5235,7 @@ report:
   formatter.py:
     Formatter:
       __name__: null
+      variant: null
   formatters.py:
     format_dict: null
     html: null
@@ -2407,9 +5280,26 @@ report:
     Notebook:
       DefaultTemplate: null
       __name__: null
+      add: null
+      add_block: null
+      add_code: null
+      add_code_file: null
+      add_file: null
+      add_markdown: null
+      add_markdown_file: null
+      add_notebook_file: null
+      add_notebook_files: null
+      add_notebook_text: null
+      add_notebook_text_file: null
+      add_notebook_text_files: null
+      launch: null
+      launch_new: null
+      save_to: null
+      to_json_dict: null
   notebookcell.py:
     NotebookCell:
       __name__: null
+      to_json_dict: null
   plothelpers.py:
     drift_maxtvd_matrices: null
     drift_neglog10pvalue_matrices: null
@@ -2432,16 +5322,27 @@ report:
   report.py:
     Report:
       __name__: null
+      write_html: null
+      write_notebook: null
+      write_pdf: null
   reportables.py:
     CircuitEigenvalues:
       __name__: null
+      evaluate: null
+      evaluate_nearby: null
     CircuitHalfDiamondNorm:
       __name__: null
+      evaluate: null
+      evaluate_nearby: null
     FINITE_DIFF_EPS: null
     GateEigenvalues:
       __name__: null
+      evaluate: null
+      evaluate_nearby: null
     HalfDiamondNorm:
       __name__: null
+      evaluate: null
+      evaluate_nearby: null
     angles_btwn_rotn_axes: null
     average_gateset_infidelity: null
     avg_gate_infidelity: null
@@ -2510,94 +5411,204 @@ report:
   row.py:
     Row:
       __name__: null
+      add: null
+      render: null
   section:
     datacomparison.py:
       DataComparisonSection:
         __name__: null
+        dataset_comparison_box_plot: null
+        dataset_comparison_histogram: null
+        dataset_comparison_summary: null
+        render: null
     drift.py:
       DriftSection:
         __name__: null
+        drift_details_table: null
+        drift_detector_colorbox_plot: null
+        drift_size_colorbox_plot: null
+        drift_summary_table: null
+        germ_fiducial_power_spectra_plot: null
+        germ_fiducial_prob_trajectories_plot: null
+        global_power_spectra_plot: null
     gauge.py:
       GaugeInvariantsGatesSection:
         __name__: null
+        final_gates_vs_target_table_gauge_inv: null
+        final_gauge_inv_metric_table: null
+        final_gauge_inv_model_table: null
+        final_model_eval_table: null
+        final_model_spam_parameters_table: null
+        final_model_vs_target_table: null
+        gram_bar_plot: null
+        render: null
+        single_metric_table_gauge_inv: null
       GaugeInvariantsGermsSection:
         __name__: null
+        final_gates_vs_target_table_gauge_invgerms: null
+        germs_eigenvalue_table: null
       GaugeVariantSection:
         __name__: null
+        final_gates_vs_target_table_gauge_var: null
+        final_gates_vs_target_table_gauge_vargerms: null
+        final_model_spam_vs_target_table: null
+        render: null
+        single_metric_table_gauge_var: null
       GaugeVariantsDecompSection:
         __name__: null
+        final_model_choi_eigenvalue_table: null
+        final_model_decomposition_table: null
       GaugeVariantsErrGenNQubitSection:
         __name__: null
+        errorgen_type: null
+        final_model_errorgen_box_table: null
       GaugeVariantsErrGenSection:
         __name__: null
+        errorgen_type: null
+        final_model_errorgen_box_table: null
       GaugeVariantsRawSection:
         __name__: null
+        final_gates_box_table: null
+        final_model_brief_spam_table: null
     goodness.py:
       GoodnessColorBoxPlotSection:
         __name__: null
+        final_model_fit_colorbox_plot: null
+        final_model_tvd_colorbox_plot: null
+        maxlength_switchboard1: null
       GoodnessScalingSection:
         __name__: null
+        data_scaling_colorbox_plot: null
+        final_model_fit_colorbox_plot_scl: null
+        final_model_fit_colorscatter_plot_scl: null
+        final_model_fit_histogram_scl: null
+        final_model_fit_progress_bar_plot_scl: null
+        final_model_fit_progress_table_scl: null
       GoodnessSection:
         __name__: null
+        final_model_fit_colorscatter_plot: null
+        final_model_fit_progress_bar_plot: null
+        final_model_fit_progress_table: null
       GoodnessUnmodeledSection:
         __name__: null
+        final_model_fit_colorbox_plot_ume: null
+        final_model_fit_colorscatter_plot_ume: null
+        final_model_fit_histogram_ume: null
+        final_model_fit_progress_bar_plot_ume: null
+        final_model_fit_progress_table_ume: null
+        unmodeled_error_budget_table: null
     help.py:
       HelpSection:
         __name__: null
+        example_table: null
     idle.py:
       IdleTomographySection:
         __name__: null
+        idt_intrinsic_errors_table: null
+        idt_observed_rates_table: null
     meta.py:
       InputSection:
         __name__: null
+        dataset_overview_table: null
+        fiducial_list_table: null
+        germ_list_2col_table: null
+        target_gates_box_table: null
+        target_spam_brief_table: null
       MetaSection:
         __name__: null
+        metadata_table: null
+        profiler_table: null
+        software_environment_table: null
+        stdout_block: null
     summary.py:
       SummarySection:
         __name__: null
+        final_fits_comparison_plot: null
+        final_gates_vs_target_table_insummary: null
+        final_model_fit_histogram: null
+        final_model_fit_progress_bar_plot_sum: null
   table.py:
     ReportTable:
       __name__: null
+      addrow: null
+      col: null
       col_names: null
+      finish: null
+      keys: null
       num_cols: null
       num_rows: null
+      render: null
+      row: null
       row_names: null
   workspace.py:
     NotApplicable:
       __name__: null
       default_render_options: null
+      display: null
+      render: null
+      saveas: null
+      set_render_options: null
     SwitchValue:
       __name__: null
     Switchboard:
       __name__: null
+      add: null
+      add_unswitched: null
       clear: null
       copy: null
+      display: null
       get: null
+      get_switch_change_handlerjs: null
+      get_switch_valuejs: null
       items: null
       keys: null
       move_to_end: null
       pop: null
       popitem: null
+      render: null
       setdefault: null
       update: null
       values: null
+      view: null
     SwitchboardView:
       __name__: null
+      display: null
+      render: null
     VALIDATE_PLOTLY: null
     Workspace:
       __name__: null
+      init_notebook_mode: null
+      load_cache: null
+      save_cache: null
+      switched_compute: null
     WorkspaceOutput:
       __name__: null
       default_render_options: null
+      display: null
+      render: null
+      saveas: null
+      set_render_options: null
     WorkspacePlot:
       __name__: null
       default_render_options: null
+      display: null
+      render: null
+      saveas: null
+      set_render_options: null
     WorkspaceTable:
       __name__: null
       default_render_options: null
+      display: null
+      render: null
+      saveas: null
+      set_render_options: null
     WorkspaceText:
       __name__: null
       default_render_options: null
+      display: null
+      render: null
+      saveas: null
+      set_render_options: null
     disable_plotly_pickling: null
     display_ipynb: null
     enable_plotly_pickling: null
@@ -2659,10 +5670,21 @@ tools:
     MX_UNIT_VEC_2Q: null
     MatrixBasisConstructor:
       __name__: null
+      constructor: null
+      labeler: null
+      matrix_dim: null
+      sizes: null
     SingleElementMatrixBasisConstructor:
       __name__: null
+      constructor: null
+      labeler: null
+      matrix_dim: null
+      sizes: null
     VectorBasisConstructor:
       __name__: null
+      constructor: null
+      labeler: null
+      sizes: null
     cl_labels: null
     cl_vectors: null
     gm_labels: null
@@ -2739,6 +5761,10 @@ tools:
   group.py:
     MatrixGroup:
       __name__: null
+      get_inv: null
+      get_matrix: null
+      get_matrix_inv: null
+      product: null
     construct_1q_clifford_group: null
     is_integer: null
   hypothesis.py:
@@ -2886,6 +5912,7 @@ tools:
   nameddict.py:
     NamedDict:
       __name__: null
+      as_dataframe: null
       clear: null
       copy: null
       get: null
