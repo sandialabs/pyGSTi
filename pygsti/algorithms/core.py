@@ -1,4 +1,6 @@
-""" Core GST algorithms """
+"""
+Core GST algorithms
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -54,9 +56,13 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
     dataset : DataSet
         The data used to generate the LGST estimates
 
-    prep_fiducials,effect_fiducials : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective preparation.
+
+    effect_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         A model used to specify which operation labels should be estimated, a
@@ -503,8 +509,13 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
     dataset : DataSet
         The data used to populate the Gram matrix
 
-    prep_fiducials, effect_fiducials : list
-        Lists of preparation and measurement fiducial sequences.
+    prep_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective preparation.
+
+    effect_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         A model used to make sense of operation sequence elements, and to compute the
@@ -537,8 +548,11 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
 def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
                resource_alloc, cache, verbosity=0):
     """
-    Performs Gate Set Tomography on the dataset by optimizing the objective function
-    built by `objective_function_builder`.
+    Performs core Gate Set Tomography function of model optimization.
+
+    Optimizes the parameters of `start_model` by minimizing the objective function
+    built by `objective_function_builder`.  Probabilities are computed by the model,
+    and outcome counts are supplied by `dataset`.
 
     Parameters
     ----------
@@ -649,10 +663,13 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
         The optimizer to use, or a dictionary of optimizer parameters
         from which a default optimizer can be built.
 
-    iteration_objfn_builders, final_objfn_builders: list
-        Lists of ObjectiveFunctionBuilder objects defining which objective functions
-        should be optimizized (successively) on each iteration, and the additional
-        objective functions to optimize on the final iteration.
+    iteration_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on each iteration.
+
+    final_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on the final iteration.
 
     resource_alloc : ResourceAllocation
         A resource allocation object containing information about how to
@@ -893,8 +910,10 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
 
 def find_closest_unitary_opmx(operation_mx):
     """
-    Get the closest operation matrix (by maximizing fidelity)
-      to operation_mx that describes a unitary quantum gate.
+    Find the closest (in fidelity) unitary superoperator to `operation_mx`.
+
+    Finds the closest operation matrix (by maximizing fidelity)
+    to `operation_mx` that describes a unitary quantum gate.
 
     Parameters
     ----------

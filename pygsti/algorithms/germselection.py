@@ -1,4 +1,6 @@
-""" Functions for selecting a complete set of germs for a GST analysis."""
+"""
+Functions for selecting a complete set of germs for a GST analysis.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -246,7 +248,47 @@ def calculate_germset_score(germs, target_model=None, neighborhood=None,
                             neighborhood_size=5,
                             randomization_strength=1e-2, score_func='all',
                             op_penalty=0.0, l1_penalty=0.0):
-    """Calculate the score of a germ set with respect to a model.
+    """
+    Calculate the score of a germ set with respect to a model.
+
+    More precisely, this function computes the maximum score (roughly equal
+    to the number of amplified parameters) for a cloud of models.
+    If `target_model` is given, it serves as the center of the cloud,
+    otherwise the cloud must be supplied directly via `neighborhood`.
+
+
+    Parameters
+    ----------
+    germs : list
+        The germ set
+
+    target_model : Model, optional
+        The target model, used to generate a neighborhood of randomized models.
+
+    neighborhood : list of Models, optional
+        The "cloud" of models for which scores are computed.  If not None, this
+        overrides `target_model`, `neighborhood_size`, and `randomization_strength`.
+
+    neighborhood_size : int, optional
+        Number of randomized models to construct around `target_model`.
+
+    randomization_strength : float, optional
+        Strength of unitary randomizations, as passed to :method:`target_model.randomize_with_unitary`.
+
+    score_func : {'all', 'worst'}
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/input_array)``. If 'worst', score is ``1/min(input_array)``.
+
+    op_penalty : float, optional
+        Coefficient for a penalty linear in the sum of the germ lengths.
+
+    l1_penalty : float, optional
+        Coefficient for a penalty linear in the number of germs.
+
+    Returns
+    -------
+    CompositeScore
+        The maximum score for `germs`, indicating how many parameters it amplifies.
     """
     def score_fn(x): return _scoring.list_score(x, score_func=score_func)
     if neighborhood is None:
@@ -262,12 +304,16 @@ def calculate_germset_score(germs, target_model=None, neighborhood=None,
 
 
 def get_model_params(model_list):
-    """Get the number of gates and gauge parameters of the models in a list.
-    Also verify all models have the same number of gates and gauge parameters.
+    """
+    Get the number of gates and gauge parameters of the models in a list.
+
+    Also verifies all models have the same number of gates and gauge parameters.
+
     Parameters
     ----------
     model_list : list of Model
         A list of models for which you want an AC germ set.
+
     Returns
     -------
     reducedModelList : list of Model
@@ -278,6 +324,7 @@ def get_model_params(model_list):
         The number of non-SPAM non-gauge parameters for all models.
     numOps : int
         The number of gates for all models.
+
     Raises
     ------
     ValueError
@@ -315,6 +362,7 @@ def get_model_params(model_list):
     return reducedModelList, numGaugeParams, numNonGaugeParams, numOps
 
 
+#PRIVATE
 def setup_model_list(model_list, randomize, randomization_strength,
                      num_copies, seed):
     """
@@ -351,6 +399,7 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
     This allows partial germ set scores to be compared against one-another
     sensibly, where a larger value of `N` always beats a smaller value of `N`,
     and ties in the value of `N` are broken by the score for that value of `N`.
+
     Parameters
     ----------
     score_fn : callable
@@ -358,11 +407,14 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
         :func:`~pygsti.algorithms.scoring.list_score`.
+
     threshold_ac : float, optional
         Value which the score (before penalties are applied) must be lower than
         for the germ set to be considered AC.
+
     init_n : int
         The number of largest eigenvalues to begin with checking.
+
     partial_deriv_dagger_deriv : numpy.array, optional
         Array with three axes, where the first axis indexes individual germs
         within the partial germ set and the remaining axes index entries in the
@@ -371,27 +423,35 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
         If this array is not supplied it will need to be computed from
         `germs_list` and `model`, which will take longer, so it is recommended
         to precompute this array if this routine will be called multiple times.
+
     model : Model, optional
         The model against which the germ set is to be scored. Not needed if
         `partial_deriv_dagger_deriv` is provided.
+
     partial_germs_list : list of Circuit, optional
         The list of germs in the partial germ set to be evaluated. Not needed
         if `partial_deriv_dagger_deriv` (and `germ_lengths` when
         ``op_penalty > 0``) are provided.
+
     eps : float, optional
         Used when calculating `partial_deriv_dagger_deriv` to determine if two
         eigenvalues are equal (see :func:`bulk_twirled_deriv` for details). Not
         used if `partial_deriv_dagger_deriv` is provided.
+
     num_gauge_params : int
         The number of gauge parameters of the model. Not needed if `model`
         is provided.
+
     op_penalty : float, optional
         Coefficient for a penalty linear in the sum of the germ lengths.
+
     germ_lengths : numpy.array, optional
         The length of each germ. Not needed if `op_penalty` is ``0.0`` or
         `partial_germs_list` is provided.
+
     l1_penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
+
     Returns
     -------
     CompositeScore
@@ -458,12 +518,43 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
     return ret
 
 
+#PRIVATE
 def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
                           germ_lengths=None, comm=None):
-    """Calculate the positive squares of the germ Jacobians.
+    """
+    Calculate the positive squares of the germ Jacobians.
+
     twirledDerivDaggerDeriv == array J.H*J contributions from each germ
     (J=Jacobian) indexed by (iGerm, iModelParam1, iModelParam2)
     size (nGerms, vec_model_dim, vec_model_dim)
+
+    Parameters
+    ----------
+    model : Model
+        The model defining the parameters to differentiate with respect to.
+
+    germs_list : list
+        The germ set
+
+    eps : float, optional
+        Tolerance used for testing whether two eigenvectors are degenerate
+        (i.e. abs(eval1 - eval2) < eps ? )
+
+    check : bool, optional
+        Whether to perform internal consistency checks, at the expense of
+        making the function slower.
+
+    germ_lengths : numpy.ndarray, optional
+        A pre-computed array of the length (depth) of each germ.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    Returns
+    -------
+    twirledDerivDaggerDeriv : numpy.ndarray
+        A complex array of shape `(len(germs), model.num_params(), model.num_params())`.
     """
     if germ_lengths is None:
         germ_lengths = _np.array([len(germ) for germ in germs_list])
@@ -487,10 +578,28 @@ def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
 
 
 def calc_twirled_ddd(model, germ, eps=1e-6):
-    """Calculate the positive squares of the germ Jacobian.
+    """
+    Calculate the positive squares of the germ Jacobian.
+
     twirledDerivDaggerDeriv == array J.H*J contributions from `germ`
     (J=Jacobian) indexed by (iModelParam1, iModelParam2)
     size (vec_model_dim, vec_model_dim)
+
+    Parameters
+    ----------
+    model : Model
+        The model defining the parameters to differentiate with respect to.
+
+    germ : Circuit
+        The (single) germ circuit to consider.
+
+    eps : float, optional
+        Tolerance used for testing whether two eigenvectors are degenerate
+        (i.e. abs(eval1 - eval2) < eps ? )
+
+    Returns
+    -------
+    numpy.ndarray
     """
     twirledDeriv = twirled_deriv(model, germ, eps) / len(germ)
     #twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
@@ -502,16 +611,65 @@ def calc_twirled_ddd(model, germ, eps=1e-6):
     return twirledDerivDaggerDeriv
 
 
+#PRIVATE?
 def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
                   force_indices, force_score,
                   n_gauge_params, op_penalty, germ_lengths, l1_penalty=1e-2,
                   score_dict=None):
-    """Returns a germ set "score" in which smaller is better.  Also returns
-    intentionally bad score (`force_score`) if `weights` is zero on any of
+    """
+    Returns a germ set "score" in which smaller is better.
+
+    Also returns intentionally bad score (`force_score`) if `weights` is zero on any of
     the "forced" germs (i.e. at any index in `forcedIndices`).
     This function is included for use by :func:`optimize_integer_germs_slack`,
     but is not convenient for just computing the score of a germ set. For that,
     use :func:`calculate_germset_score`.
+
+    Parameters
+    ----------
+    weights : list
+        The per-germ "selection weight", indicating whether the germ
+        is present in the selected germ set or not.
+
+    model_num : int
+        index into `deriv_dagger_deriv_list` indicating which model (typically in 
+        a neighborhood) we're computing scores for.
+
+    score_func : {'all', 'worst'}
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/input_array)``. If 'worst', score is ``1/min(input_array)``.
+
+    deriv_dagger_deriv_list : numpy.ndarray
+        Array of J.T * J contributions for each model.
+
+    force_indices : list of ints
+        Indices marking the germs that *must* be in the final set (or else `force_score`
+        will be returned).
+
+    force_score : float
+        The score that is returned when any of the germs indexed by `force_indices` are
+        not present (i.e. their weights are <= 0).
+
+    n_gauge_params : int
+        The number of gauge (not amplifiable) parameters in the model.
+
+    op_penalty : float
+        Coefficient for a penalty linear in the sum of the germ lengths.
+
+    germ_lengths : numpy.ndarray
+        A pre-computed array of the length (depth) of each germ.
+
+    l1_penalty : float
+        Coefficient for a penalty linear in the number of germs.
+
+    score_dict : dict, optional
+        A dictionary to cache the score valies for the given `model_num` and
+        `weights`, i.e. `score_dict[model_num, tuple(weights)]` is set to the
+        returned value.
+
+    Returns
+    -------
+    float
     """
     if force_indices is not None and _np.any(weights[force_indices] <= 0):
         score = force_score
@@ -537,7 +695,7 @@ def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
 def randomize_model_list(model_list, randomization_strength, num_copies,
                          seed=None):
     """
-    Applies random unitary perturbations to a models.
+    Applies random unitary perturbations to a model or list of models.
 
     If `model_list` is a length-1 list, then `num_copies` determines how
     many randomizations to create.  If `model_list` containes multiple
@@ -549,10 +707,8 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     model_list : Model or list
         A list of Model objects.
 
-    randomizationStrengh : float
-        The strength (input as the `scale` argument to
-        :func:`Model.randomize_with_unitary`) of random unitary
-        perturbations.
+    randomization_strength : float, optional
+        Strength of unitary randomizations, as passed to :method:`Model.randomize_with_unitary`.
 
     num_copies : int
         The number of random perturbations of `model_list[0]` to generate when
@@ -562,6 +718,11 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     seed : int, optional
         Starting seed for randomization.  Successive randomizations receive
         successive seeds.  `None` results in random seeds.
+
+    Returns
+    -------
+    list
+        A list of the randomized Models.
     """
     if len(model_list) > 1 and num_copies is not None:
         raise ValueError("Input multiple models XOR request multiple "
@@ -582,10 +743,36 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
 
 
 def check_germs_list_completeness(model_list, germs_list, score_func, threshold):
-    """Check to see if the germs_list is amplificationally complete (AC)
+    """
+    Check to see if the germs_list is amplificationally complete (AC).
+
     Checks for AC with respect to all the Models in `model_list`, returning
     the index of the first Model for which it is not AC or `-1` if it is AC
     for all Models.
+
+    Parameters
+    ----------
+    model_list : list
+        A list of models to test.  Often this list is a neighborhood ("cloud") of
+        models around a model of interest.
+
+    germs_list : list
+        A list of the germ :class:`Circuit`s (the "germ set") to test for completeness.
+
+    score_func : {'all', 'worst'}
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/eigval_array)``. If 'worst', score is ``1/min(eigval_array)``.
+
+    threshold : float, optional
+        An eigenvalue of jacobian^T*jacobian is considered zero and thus a
+        parameter un-amplified when its reciprocal is greater than threshold.
+        Also used for eigenvector degeneracy testing in twirling operation.
+
+    Returns
+    -------
+    int
+        The index of the first model in `model_list` to fail the amplficational
+        completeness test.
     """
     for modelNum, model in enumerate(model_list):
         initial_test = test_germ_list_infl(model, germs_list,
@@ -605,6 +792,7 @@ def remove_spam_vectors(model):
     Parameters
     ----------
     model : Model
+        The model to act on.
 
     Returns
     -------
@@ -627,6 +815,11 @@ def num_non_spam_gauge_params(model):
     Parameters
     ---------
     model : Model
+
+    Parameters
+    ----------
+    model : Model
+        The model to act on.
 
     Returns
     -------
@@ -675,7 +868,9 @@ def _super_op_for_perfect_twirl(wrt, eps):
 
 
 def sq_sing_vals_from_deriv(deriv, weights=None):
-    """Calculate the squared singulare values of the Jacobian of the germ set.
+    """
+    Calculate the squared singular values of the Jacobian of the germ set.
+
     Parameters
     ----------
     deriv : numpy.array
@@ -684,10 +879,12 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
         vectorized gate representation of that germ raised to some power with
         respect to the model parameters, normalized by dividing by the length
         of each germ after repetition.
+
     weights : numpy.array
         Array of length ``nGerms``, giving the relative contributions of each
         individual germ's Jacobian to the combined Jacobian (which is calculated
         as a convex combination of the individual Jacobians).
+
     Returns
     -------
     numpy.array
@@ -707,7 +904,9 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
 
 
 def twirled_deriv(model, circuit, eps=1e-6):
-    """Compute the "Twirled Derivative" of a circuit.
+    """
+    Compute the "Twirled Derivative" of a circuit.
+
     The twirled derivative is obtained by acting on the standard derivative of
     a operation sequence with the twirling superoperator.
 
@@ -715,8 +914,10 @@ def twirled_deriv(model, circuit, eps=1e-6):
     ----------
     model : Model object
         The Model which associates operation labels with operators.
+
     circuit : Circuit object
         The operation sequence to take a twirled derivative of.
+
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
@@ -724,7 +925,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
     Returns
     -------
     numpy array
-      An array of shape (op_dim^2, num_model_params)
+        An array of shape (op_dim^2, num_model_params)
     """
     prod = model.product(circuit)
 
@@ -762,9 +963,8 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         making the function slower.
 
     comm : mpi4py.MPI.Comm, optional
-      When not None, an MPI communicator for distributing the computation
-      across multiple processors.
-
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     Returns
     -------
@@ -811,28 +1011,35 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
 def test_germ_list_finitel(model, germs_to_test, length, weights=None,
                            return_spectrum=False, tol=1e-6):
-    """Test whether a set of germs is able to amplify all non-gauge parameters.
+    """
+    Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
     ----------
     model : Model
         The Model (associates operation matrices with operation labels).
+
     germs_to_test : list of Circuits
         List of germs operation sequences to test for completeness.
+
     length : int
         The finite length to use in amplification testing.  Larger
         values take longer to compute but give more robust results.
+
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germs_to_test),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germs_to_test) is applied.
+
     return_spectrum : bool, optional
         If True, return the jacobian^T*jacobian spectrum in addition
         to the success flag.
+
     tol : float, optional
         Tolerance: an eigenvalue of jacobian^T*jacobian is considered
         zero and thus a parameter un-amplified when it is less than tol.
+
     Returns
     -------
     success : bool
@@ -881,32 +1088,40 @@ def test_germ_list_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_list_infl(model, germs_to_test, score_func='all', weights=None,
                         return_spectrum=False, threshold=1e6, check=False):
-    """Test whether a set of germs is able to amplify all non-gauge parameters.
+    """
+    Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
     ----------
     model : Model
         The Model (associates operation matrices with operation labels).
+
     germs_to_test : list of Circuit
         List of germs operation sequences to test for completeness.
+
     score_func : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
+
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germs_to_test),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germs_to_test) is applied.
+
     return_spectrum : bool, optional
         If ``True``, return the jacobian^T*jacobian spectrum in addition
         to the success flag.
+
     threshold : float, optional
         An eigenvalue of jacobian^T*jacobian is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
+
     check : bool, optional
-      Whether to perform internal consistency checks, at the
-      expense of making the function slower.
+        Whether to perform internal consistency checks, at the
+        expense of making the function slower.
+
     Returns
     -------
     success : bool
@@ -952,11 +1167,75 @@ def build_up(model_list, germs_list, randomize=True,
              randomization_strength=1e-3, num_copies=None, seed=0, op_penalty=0,
              score_func='all', tol=1e-6, threshold=1e6, check=False,
              force="singletons", verbosity=0):
-    """Greedy algorithm starting with 0 germs.
+    """
+    Greedy germ selection algorithm starting with 0 germs.
+
     Tries to minimize the number of germs needed to achieve amplificational
     completeness (AC). Begins with 0 germs and adds the germ that increases the
     score used to check for AC by the largest amount at each step, stopping when
     the threshold for AC is achieved.
+
+    Parameters
+    ----------
+    model_list : Model or list
+        The model or list of `Model`s to select germs for.
+
+    germs_list : list of Circuit
+        The list of germs to contruct a germ set from.
+
+    randomize : bool, optional
+        Whether or not to randomize `model_list` (usually just a single
+        `Model`) with small (see `randomizationStrengh`) unitary maps
+        in order to avoid "accidental" symmetries which could allow for
+        fewer germs but *only* for that particular model.  Setting this
+        to `True` will increase the run time by a factor equal to the
+        numer of randomized copies (`num_copies`).
+
+    randomization_strength : float, optional
+        The strength of the unitary noise used to randomize input Model(s);
+        is passed to :func:`~pygsti.objects.Model.randomize_with_unitary`.
+
+    num_copies : int, optional
+        The number of randomized models to create when only a *single* gate
+        set is passed via `model_list`.  Otherwise, `num_copies` must be set
+        to `None`.
+
+    seed : int, optional
+        Seed for generating random unitary perturbations to models.
+
+    op_penalty : float, optional
+        Coefficient for a penalty linear in the sum of the germ lengths.
+
+    score_func : {'all', 'worst'}, optional
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/eigenvalues)``. If 'worst', score is
+        ``1/min(eiganvalues)``.
+
+    tol : float, optional
+        Tolerance (`eps` arg) for :func:`calc_bulk_twirled_ddd`, which sets
+        the differece between eigenvalues below which they're treated as
+        degenerate.
+
+    threshold : float, optional
+        Value which the score (before penalties are applied) must be lower than
+        for a germ set to be considered AC.
+
+    check : bool, optional
+        Whether to perform internal checks (will slow down run time
+        substantially).
+
+    force : list of Circuits
+        A list of `Circuit` objects which *must* be included in the final
+        germ set.  If the special string "singletons" is given, then all of
+        the single gates (length-1 sequences) must be included.
+
+    verbosity : int, optional
+        Level of detail printed to stdout.
+
+    Returns
+    -------
+    list
+        A list of the built-up germ set (a list of :class:`Circuit` objects).
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -1076,10 +1355,9 @@ def build_up_breadth(model_list, germs_list, randomize=True,
         to `True` will increase the run time by a factor equal to the
         numer of randomized copies (`num_copies`).
 
-    randomizationStrengh : float, optional
-        The strength (input as the `scale` argument to
-        :func:`Model.randomize_with_unitary`) of random unitary
-        perturbations (used only when `randomize == True`).
+    randomization_strength : float, optional
+        The strength of the unitary noise used to randomize input Model(s);
+        is passed to :func:`~pygsti.objects.Model.randomize_with_unitary`.
 
     num_copies : int, optional
         The number of randomized models to create when only a *single* gate
@@ -1131,6 +1409,11 @@ def build_up_breadth(model_list, germs_list, randomize=True,
 
     verbosity : int, optional
         Level of detail printed to stdout.
+
+    Returns
+    -------
+    list
+        A list of the built-up germ set (a list of :class:`Circuit` objects).
     """
     if comm is not None and comm.Get_size() > 1:
         from mpi4py import MPI  # not at top so pygsti doesn't require mpi4py
@@ -1356,12 +1639,15 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
                                  check=False, force="singletons",
                                  force_score=1e100, threshold=1e6,
                                  verbosity=1):
-    """Find a locally optimal subset of the germs in germs_list.
+    """
+    Find a locally optimal subset of the germs in germs_list.
+
     Locally optimal here means that no single germ can be excluded
     without making the smallest non-gauge eigenvalue of the
     Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
     by more than a fixed or variable amount of "slack", as
     specified by `fixed_slack` or `slack_frac`.
+
     Parameters
     ----------
     model_list : Model or list of Model
@@ -1372,8 +1658,10 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         be made (set by the kwarg `num_copies`), or the user may specify their
         own list of Models, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
+
     germs_list : list of Circuit
         List of all germs operation sequences to consider.
+
     randomize : Bool, optional
         Whether or not the input Model(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
@@ -1384,78 +1672,83 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is ``True``.
+
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
         is passed to :func:`~pygsti.objects.Model.randomize_with_unitary`.
         Default is ``1e-3``.
+
     num_copies : int, optional
         The number of Model copies to be made of the input Model (prior to
         unitary randomization).  If more than one Model is passed in,
         `num_copies` should be ``None``.  If only one Model is passed in and
         `num_copies` is ``None``, no extra copies are made.
+
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple Models
         are to be randomized, ``model_list[i]`` is randomized with ``seed +
         i``.  Default is 0.
+
     l1_penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
         single germ.  Default is 1e-2.
+
     op_penalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
         list by a single gate.  Default is 0.
+
     initial_weights : list-like
         List or array of either booleans or (0 or 1) integers
         specifying which germs in `germ_list` comprise the initial
         germ set.  If ``None``, then starting point includes all
         germs.
+
     score_func : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
+
     max_iter : int, optional
         The maximum number of iterations before giving up.
+
     fixed_slack : float, optional
         If not ``None``, a floating point number which specifies that excluding
         a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         `fixed_slack`.  You must specify *either* `fixed_slack` or `slack_frac`.
+
     slack_frac : float, optional
         If not ``None``, a floating point number which specifies that excluding
         a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         `fixedFrac`*100 percent.  You must specify *either* `fixed_slack` or
         `slack_frac`.
+
     return_all : bool, optional
         If ``True``, return the final ``weights`` vector and score dictionary
         in addition to the optimal germ list (see below).
+
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling
         operation.
+
     check : bool, optional
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
+
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
         be included.  Seting to None is the same as an empty list.
+
     force_score : float, optional (default is 1e100)
         When `force` designates a non-empty set of operation sequences, the score to
         assign any germ set that does not contain each and every required germ.
+
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
         set is rejected as amplificationally incomplete.
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
-    Returns
-    -------
-    finalGermList : list
-        Sublist of `germ_list` specifying the final, optimal set of germs.
-    weights : array
-        Integer array, of length ``len(germ_list)``, containing 0s and 1s to
-        indicate which elements of `germ_list` were chosen as `finalGermList`.
-        Only returned when `return_all` is ``True``.
-    scoreDictionary : dict
-        Dictionary with keys which are tuples of 0s and 1s of length
-        ``len(germ_list)``, specifying a subset of germs, and values ==
-        1.0/smallest-non-gauge-eigenvalue "scores".
     See Also
     --------
     :class:`~pygsti.objects.Model`
@@ -1633,27 +1926,35 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
 
 def germ_breadth_score_fn(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
                           non_ac_kwargs, init_n=1):
-    """Score a germ set against a collection of models.
+    """
+    Score a germ set against a collection of models.
+
     Calculate the score of the germ set with respect to each member of a
     collection of models and return the worst score among that collection.
+
     Parameters
     ----------
     germ_set : list of Circuit
         The set of germs to score.
+
     germs_list : list of Circuit
         The list of all germs whose Jacobians are provided in
         `twirled_deriv_dagger_deriv_list`.
+
     twirled_deriv_dagger_deriv_list : numpy.array
         Jacobians for all the germs in `germs_list` stored as a 3-dimensional
         array, where the first index indexes the particular germ.
+
     non_ac_kwargs : dict
         Dictionary containing further arguments to pass to
         :func:`compute_composite_germ_score` for the scoring of the germ set against
         individual models.
+
     init_n : int
         The number of eigenvalues to begin checking for amplificational
         completeness with respect to. Passed as an argument to
         :func:`compute_composite_germ_score`.
+
     Returns
     -------
     CompositeScore
@@ -1693,8 +1994,10 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         be made (set by the kwarg `num_copies`, or the user may specify their
         own list of Models, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
+
     germs_list : list of Circuit
         List of all germs operation sequences to consider.
+
     alpha : float
         A number between 0 and 1 that roughly specifies a score theshold
         relative to the spread of scores that a germ must score better than in
@@ -1703,6 +2006,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         included in the RCL), while a value of 1 for `alpha` will include all
         germs in the RCL.
         See :func:`pygsti.algorithms.scoring.composite_rcl_fn` for more details.
+
     randomize : Bool, optional
         Whether or not the input Model(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
@@ -1713,53 +2017,67 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).
+
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
         is passed to :func:`~pygsti.objects.Model.randomize_with_unitary`.
         Default is ``1e-3``.
+
     num_copies : int, optional
         The number of Model copies to be made of the input Model (prior to
         unitary randomization).  If more than one Model is passed in,
         `num_copies` should be ``None``.  If only one Model is passed in and
         `num_copies` is ``None``, no extra copies are made.
+
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple Models
         are to be randomized, ``model_list[i]`` is randomized with ``seed +
         i``.
+
     l1_penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
         single germ. Used for choosing between outputs of various GRASP
         iterations.
+
     op_penalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
         list by a single gate.
+
     score_func : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
+
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling
         operation.
+
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
         set is rejected as amplificationally incomplete.
+
     check : bool, optional
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
+
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
         be included.  Seting to None is the same as an empty list.
+
     iterations : int, optional
         The number of GRASP iterations to perform.
+
     return_all : bool, optional
         Flag set to tell the routine if it should return lists of all
         initial constructions and local optimizations in addition to the
         optimal solution (useful for diagnostic purposes or if you're not sure
         what your `finalScoreFn` should really be).
+
     shuffle : bool, optional
         Whether the neighborhood should be presented to the optimizer in a
         random order (important since currently the local optimizer updates the
         solution to the first better solution it finds in the neighborhood).
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 

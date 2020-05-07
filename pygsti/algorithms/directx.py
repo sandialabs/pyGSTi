@@ -1,4 +1,6 @@
-""" Functions for generating Direct-(LGST, MC2GST, MLGST) models """
+"""
+Functions for generating Direct-(LGST, MC2GST, MLGST) models
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,7 +18,7 @@ from . import core as _core
 
 
 def model_with_lgst_circuit_estimates(
-        circuits_to_estimate, dataset, prep_strs, effect_strs,
+        circuits_to_estimate, dataset, prep_fiducials, meas_fiducials,
         target_model, include_target_ops=True, op_label_aliases=None,
         guess_model_for_gauge=None, circuit_labels=None, svd_truncate_to=None,
         verbosity=0):
@@ -35,9 +37,13 @@ def model_with_lgst_circuit_estimates(
     dataset : DataSet
         The data to use for LGST
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+       Fiducial circuits used to construct a informationally complete
+       effective preparation.
+
+    meas_fiducials : list of Circuits
+       Fiducial circuits used to construct a informationally complete
+       effective measurement.
 
     target_model : Model
         A model used by LGST to specify which operation labels should be estimated,
@@ -104,13 +110,13 @@ def model_with_lgst_circuit_estimates(
             if targetOpLabel not in opLabels:  # very unlikely that this is false
                 opLabels.append(targetOpLabel)
 
-    return _core.do_lgst(dataset, prep_strs, effect_strs, target_model,
+    return _core.do_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
                          opLabels, aliases, guess_model_for_gauge,
                          svd_truncate_to, verbosity)
 
 
 def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
-                      prep_strs, effect_strs, target_model,
+                      prep_fiducials, meas_fiducials, target_model,
                       op_label_aliases=None, svd_truncate_to=None, verbosity=0):
     """
     Constructs a model of LGST estimates for target gates and circuit_to_estimate.
@@ -127,9 +133,13 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
     dataset : DataSet
         The data to use for LGST
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -156,12 +166,12 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         and the gates of target_model.
     """
     return model_with_lgst_circuit_estimates(
-        [circuit_to_estimate], dataset, prep_strs, effect_strs, target_model,
+        [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
         True, op_label_aliases, None, [circuit_label], svd_truncate_to,
         verbosity)
 
 
-def direct_lgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
+def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target_model,
                        op_label_aliases=None, svd_truncate_to=None, verbosity=0):
     """
     Constructs a dictionary with keys == operation sequences and values == Direct-LGST Models.
@@ -175,9 +185,13 @@ def direct_lgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
     dataset : DataSet
         The data to use for all LGST estimates.
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -213,13 +227,13 @@ def direct_lgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string -", suffix='---')
             directLGSTmodels[sigma] = direct_lgst_model(
-                sigma, "GsigmaLbl", dataset, prep_strs, effect_strs, target_model,
+                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, target_model,
                 op_label_aliases, svd_truncate_to, verbosity)
     return directLGSTmodels
 
 
 def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
-                        prep_strs, effect_strs, target_model,
+                        prep_fiducials, meas_fiducials, target_model,
                         op_label_aliases=None, svd_truncate_to=None,
                         min_prob_clip_for_weighting=1e-4,
                         prob_clip_interval=(-1e6, 1e6), verbosity=0):
@@ -230,11 +244,11 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     using the same strings that LGST would have used to estimate circuit_to_estimate
     and each of the target gates.  That is, LSGST is run with strings of the form:
 
-    1. prepStr
-    2. effectStr
-    3. prepStr + effectStr
-    4. prepStr + singleGate + effectStr
-    5. prepStr + circuit_to_estimate + effectStr
+    1. prep_fiducial
+    2. meas_fiducial
+    3. prep_fiducial + meas_fiducial
+    4. prep_fiducial + single_gate + meas_fiducial
+    5. prep_fiducial + circuit_to_estimate + meas_fiducial
 
     and the resulting Model estimate is returned.
 
@@ -250,9 +264,13 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     dataset : DataSet
         The data to use for LGST
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -287,14 +305,15 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
         and the gates of target_model.
     """
     direct_lgst = model_with_lgst_circuit_estimates(
-        [circuit_to_estimate], dataset, prep_strs, effect_strs, target_model,
+        [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
         True, op_label_aliases, None, [circuit_label], svd_truncate_to, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    circuits = prep_strs + effect_strs + [prepStr + effectStr for prepStr in prep_strs for effectStr in effect_strs]
+    circuits = prep_fiducials + meas_fiducials + [prepC + measC for prepC in prep_fiducials
+                                                  for measC in meas_fiducials]
     for opLabel in direct_lgst.operations:
-        circuits.extend([prepStr + _objs.Circuit((opLabel,)) + effectStr
-                         for prepStr in prep_strs for effectStr in effect_strs])
+        circuits.extend([prepC + _objs.Circuit((opLabel,)) + measC
+                         for prepC in prep_fiducials for measC in meas_fiducials])
 
     aliases = {} if (op_label_aliases is None) else op_label_aliases.copy()
     aliases[circuit_label] = circuit_to_estimate.replace_layers_with_aliases(op_label_aliases)
@@ -309,7 +328,7 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     return direct_lsgst
 
 
-def direct_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
+def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
                          target_model, op_label_aliases=None,
                          svd_truncate_to=None, min_prob_clip_for_weighting=1e-4,
                          prob_clip_interval=(-1e6, 1e6), verbosity=0):
@@ -325,9 +344,13 @@ def direct_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -370,7 +393,7 @@ def direct_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string-", suffix='---')
             directLSGSTmodels[sigma] = direct_mc2gst_model(
-                sigma, "GsigmaLbl", dataset, prep_strs, effect_strs, target_model,
+                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, target_model,
                 op_label_aliases, svd_truncate_to, min_prob_clip_for_weighting,
                 prob_clip_interval, verbosity)
 
@@ -378,7 +401,7 @@ def direct_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
 
 
 def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
-                       prep_strs, effect_strs, target_model,
+                       prep_fiducials, meas_fiducials, target_model,
                        op_label_aliases=None, svd_truncate_to=None, min_prob_clip=1e-6,
                        prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
@@ -388,11 +411,11 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     using the same strings that LGST would have used to estimate circuit_to_estimate
     and each of the target gates.  That is, MLEGST is run with strings of the form:
 
-    1. prepStr
-    2. effectStr
-    3. prepStr + effectStr
-    4. prepStr + singleGate + effectStr
-    5. prepStr + circuit_to_estimate + effectStr
+    1. prep_fiducial
+    2. meas_fiducial
+    3. prep_fiducial + meas_fiducial
+    4. prep_fiducial + singleGate + meas_fiducial
+    5. prep_fiducial + circuit_to_estimate + meas_fiducial
 
     and the resulting Model estimate is returned.
 
@@ -408,9 +431,13 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     dataset : DataSet
         The data to use for LGST
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -445,14 +472,15 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
         and the gates of target_model.
     """
     direct_lgst = model_with_lgst_circuit_estimates(
-        [circuit_to_estimate], dataset, prep_strs, effect_strs, target_model,
+        [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
         True, op_label_aliases, None, [circuit_label], svd_truncate_to, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    circuits = prep_strs + effect_strs + [prepStr + effectStr for prepStr in prep_strs for effectStr in effect_strs]
+    circuits = prep_fiducials + meas_fiducials + [prepC + measC for prepC in prep_fiducials
+                                                  for measC in meas_fiducials]
     for opLabel in direct_lgst.operations:
-        circuits.extend([prepStr + _objs.Circuit((opLabel,)) + effectStr
-                         for prepStr in prep_strs for effectStr in effect_strs])
+        circuits.extend([prepC + _objs.Circuit((opLabel,)) + measC
+                         for prepC in prep_fiducials for measC in meas_fiducials])
 
     aliases = {} if (op_label_aliases is None) else op_label_aliases.copy()
     aliases[circuit_label] = circuit_to_estimate.replace_layers_with_aliases(op_label_aliases)
@@ -467,7 +495,7 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     return direct_mlegst
 
 
-def direct_mlgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
+def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target_model,
                         op_label_aliases=None, svd_truncate_to=None, min_prob_clip=1e-6,
                         prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
@@ -482,9 +510,13 @@ def direct_mlgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         The target model used by LGST to extract operation labels and an initial gauge
@@ -527,7 +559,7 @@ def direct_mlgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string ", suffix="---")
             directMLEGSTmodels[sigma] = direct_mlgst_model(
-                sigma, "GsigmaLbl", dataset, prep_strs, effect_strs, target_model,
+                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, target_model,
                 op_label_aliases, svd_truncate_to, min_prob_clip,
                 prob_clip_interval, verbosity)
 
@@ -535,7 +567,7 @@ def direct_mlgst_models(circuits, dataset, prep_strs, effect_strs, target_model,
 
 
 def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
-                         prep_strs, effect_strs, start_model,
+                         prep_fiducials, meas_fiducials, start_model,
                          op_label_aliases=None, min_prob_clip_for_weighting=1e-4,
                          prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
@@ -543,7 +575,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
 
     Starting with start_model, run LSGST with the same operation sequences that LGST
     would use to estimate circuit_to_estimate.  That is, LSGST is run with
-    strings of the form:  prepStr + circuit_to_estimate + effectStr
+    strings of the form:  prep_fiducial + circuit_to_estimate + meas_fiducial
     and return the resulting Model.
 
     Parameters
@@ -558,9 +590,13 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     dataset : DataSet
         The data to use for LGST
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     start_model : Model
         The model to seed LSGST with. Often times obtained via LGST.
@@ -587,7 +623,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     Model
         A model containing LSGST estimate of circuit_to_estimate.
     """
-    circuits = [prepStr + circuit_to_estimate + effectStr for prepStr in prep_strs for effectStr in effect_strs]
+    circuits = [prepC + circuit_to_estimate + measC for prepC in prep_fiducials for measC in meas_fiducials]
 
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
@@ -601,7 +637,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     return focused_lsgst
 
 
-def focused_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
+def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
                           start_model, op_label_aliases=None,
                           min_prob_clip_for_weighting=1e-4,
                           prob_clip_interval=(-1e6, 1e6), verbosity=0):
@@ -617,9 +653,13 @@ def focused_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct a informationally complete
+        effective measurement.
 
     start_model : Model
         The model to seed LSGST with. Often times obtained via LGST.
@@ -656,6 +696,6 @@ def focused_mc2gst_models(circuits, dataset, prep_strs, effect_strs,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string", suffix='---')
             focusedLSGSTmodels[sigma] = focused_mc2gst_model(
-                sigma, "GsigmaLbl", dataset, prep_strs, effect_strs, start_model,
+                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, start_model,
                 op_label_aliases, min_prob_clip_for_weighting, prob_clip_interval, verbosity)
     return focusedLSGSTmodels

@@ -1,4 +1,6 @@
-""" RB circuit sampling functions """
+"""
+RB circuit sampling functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,10 +27,25 @@ import itertools as _itertools
 
 def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslabel=False):
     """
-    todo.
+    <TODO summary>
 
-    n : int . the number of two-qubit gates to have in the set.
+    Parameters
+    ----------
+    edgelist : <TODO typ>
+        <TODO description>
 
+    n : int
+        The number of two-qubit gates to have in the set.
+
+    gatename : <TODO typ>, optional
+        <TODO description>
+
+    aslabel : <TODO typ>, optional
+        <TODO description>
+
+    Returns
+    -------
+    <TODO typ>
     """
     co2Qgates = []
 
@@ -51,6 +68,8 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 def circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gate_names='all',
                                     two_q_gate_names='all', modelname='clifford'):
     """
+    Creates a circuit by randomply placing 2-qubit gates on qubit pairs.
+
     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
     not check that this condition is satisfied (more generally, it assumes that all gates can be
@@ -67,9 +86,9 @@ def circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, on
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit layer is being sampled for. This
-       function assumes all-to-all connectivity, but does not check this is satisfied. Unless
-       `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit layer is being sampled for. This
+        function assumes all-to-all connectivity, but does not check this is satisfied. Unless
+        `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list, optional
         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
@@ -172,8 +191,25 @@ def circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, on
 
 def circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=1, modelname='clifford'):
     """
-    todo
+    <TODO summary>
 
+    Parameters
+    ----------
+    pspec : <TODO typ>
+        <TODO description>
+
+    qubit_labels : <TODO typ>, optional
+        <TODO description>
+
+    mean_two_q_gates : <TODO typ>, optional
+        <TODO description>
+
+    modelname : <TODO typ>, optional
+        <TODO description>
+
+    Returns
+    -------
+    <TODO typ>
     """
     assert(modelname == 'clifford'), "This function currently assumes sampling from a Clifford model!"
     if qubit_labels is None:
@@ -226,9 +262,11 @@ def circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=1, mode
 def circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gates='all',
                                    two_q_gates='all', modelname='clifford'):
     """
-    Samples a random circuit layer by eliminating qubits one by one. This sampler works
-    with any connectivity, but the expected number of 2-qubit gates in a layer depends
-    on both the specified 2-qubit gate probability and the exact connectivity graph.
+    Samples a random circuit layer by eliminating qubits one by one.
+
+    This sampler works with any connectivity, but the expected number of 2-qubit gates
+    in a layer depends on both the specified 2-qubit gate probability and the exact
+    connectivity graph.
 
     This sampler is the following algorithm: List all the qubits, and repeat the
     following steps until all qubits are deleted from this list. 1) Uniformly at random
@@ -242,8 +280,8 @@ def circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
-       `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+        `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list, optional
         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
@@ -407,8 +445,9 @@ def circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one
 def circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_prob='uniform', two_q_prob=1.0,
                                  one_q_gate_names='all', modelname='clifford'):
     """
-    Samples a random circuit layer using the specified list of "compatible two-qubit gates"
-    (co2_q_gates). That is, the user inputs a list (`co2_q_gates`) specifying 2-qubit gates that are
+    Samples a random circuit layer using the specified list of "compatible two-qubit gates" (co2_q_gates).
+
+    That is, the user inputs a list (`co2_q_gates`) specifying 2-qubit gates that are
     "compatible" -- meaning that they can be implemented simulatenously -- and a distribution
     over the different compatible sets, and a layer is sampled from this via:
 
@@ -446,8 +485,8 @@ def circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_p
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
-       `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+        `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list
         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
@@ -567,15 +606,16 @@ def circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_p
 def circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_names='all', pdist='uniform',
                                  modelname='clifford'):
     """
-    Samples a random circuit layer containing only 1-qubit gates. The allowed
-    1-qubit gates are specified by `one_q_gate_names`, and the 1-qubit gates are
+    Samples a random circuit layer containing only 1-qubit gates.
+
+    The allowed 1-qubit gates are specified by `one_q_gate_names`, and the 1-qubit gates are
     sampled independently and uniformly.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
-       `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+        `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list, optional
         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
@@ -654,15 +694,17 @@ def circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_names='all
 
 def random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[]):
     """
-    Samples a random circuit of the specified length (or ~ twice this length), using layers
-    independently sampled according to the specified sampling distribution.
+    Samples a random circuit of the specified length (or ~ twice this length).
+
+    The created circuit's layers are independently sampled according to the specified
+    sampling distribution.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for. This is always
-       handed to the sampler, as the first argument of the sampler function. Unless
-       `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit is being sampled for. This is always
+        handed to the sampler, as the first argument of the sampler function. Unless
+        `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
 
     length : int
         If `addlocal` is False, this is the length of the sampled circuit. If `addlocal is
@@ -774,11 +816,11 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler).
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler).
 
     length : int
         The length of the circuit. Todo: update for varying length in different subsets.
@@ -812,12 +854,10 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
         layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
 
-
     Returns
     -------
     Circuit
         A random circuit sampled as specified.
-
     Tuple
         A length-n tuple of floats in [0,1], corresponding to the error-free *marginalized* probabilities
         for the "1" outcome of a computational basis measurement at the end of this circuit, with the standard
@@ -911,11 +951,11 @@ def simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler).
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler).
 
     depths : int
         Todo : update (needs to include list option)
@@ -1099,17 +1139,17 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, cir
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler).
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler).
 
-    allowed_depths :
-        Todo
-        .
-    total_circuits_per_subset : int
-        Todo
+    allowed_depths : <TODO typ>
+        <TODO description>
+
+    circuits_per_subset : <TODO typ>
+        <TODO description>
 
     structure : str or tuple.
         Defines the "structure" of the simultaneous circuit. TODO : more details.
@@ -1134,10 +1174,12 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, cir
     descriptor : str, optional
         A description of the experiment being generated. Stored in the output dictionary.
 
+    verbosity : int, optional
+        How much output to sent to stdout.
+
     Returns
     -------
     dict
-
     """
     experiment_dict = {}
     experiment_dict['spec'] = {}
@@ -1201,23 +1243,24 @@ def direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
                       lsargs=[], randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
                       compilerargs=[], partitioned=False):
     """
-    Generates a "direct randomized benchmarking" (DRB) circuit, which is the protocol introduced in
-    arXiv:1807.07975 (2018). The length of the "core" sequence is given by `length` and may be any
-    integer >= 0. An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random
-    stabilizer state; (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled
-    according to some user-specified distribution (specified by `sampler`), (3) a circuit that maps the
-    output of the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
-    details.
+    Generates a "direct randomized benchmarking" (DRB) circuit.
+
+    DRB is the protocol introduced in arXiv:1807.07975 (2018). The length of the "core" sequence is
+    given by `length` and may be any integer >= 0. An n-qubit DRB circuit consists of (1) a circuit
+    the prepares a uniformly random stabilizer state; (2) a length-l circuit (specified by `length`)
+    consisting of circuit layers sampled according to some user-specified distribution (specified by
+    `sampler`), (3) a circuit that maps the output of the preceeding circuit to a computational
+    basis state. See arXiv:1807.07975 (2018) for further details.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
-       `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+        `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
 
     length : int
         The "direct RB length" of the circuit, which is closely related to the circuit depth. It
@@ -1307,7 +1350,6 @@ def direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
         and then (3) to (1) [except in the case of cliffordtwirl=False, when it is a list of two circuits].
-
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -1404,22 +1446,24 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
                                    addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
                                    conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False):
     """
-    Generates a simultansous "direct randomized benchmarking" (DRB) circuit, where DRB is the protocol introduced in
-    arXiv:1807.07975 (2018). An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random
-    stabilizer state; (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled
-    according to some user-specified distribution (specified by `sampler`), (3) a circuit that maps the
-    output of the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
-    details. Todo : what SDRB is.
+    Generates a simultaneous "direct randomized benchmarking" (DRB) circuit.
+
+    DRB is the protocol introduced in arXiv:1807.07975 (2018). An n-qubit DRB circuit consists of
+    (1) a circuit the prepares a uniformly random stabilizer state; (2) a length-l circuit
+    (specified by `length`) consisting of circuit layers sampled according to some user-specified
+    distribution (specified by `sampler`), (3) a circuit that maps the output of the preceeding
+    circuit to a computational basis state. See arXiv:1807.07975 (2018) for further details. Todo :
+    what SDRB is.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
-       `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+        `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
 
     length : int
         The "direct RB length" of the circuit, which is closely related to the circuit depth. It
@@ -1507,7 +1551,6 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
         and then (3) to (1) [except in the case of cliffordtwirl=False, when it is a list of two circuits].
-
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -1665,24 +1708,24 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
                                       set_isolated=True, setcomplement_isolated=False,
                                       descriptor='A set of simultaneous DRB experiments', verbosity=1):
     """
-    Generates a simultaneous "direct randomized benchmarking" (DRB) experiments, where DRB is the protocol introduced in
-    arXiv:1807.07975 (2018). The
+    Generates a simultaneous "direct randomized benchmarking" (DRB) experiments (circuits).
 
+    DRB is the protocol introduced in arXiv:1807.07975 (2018).
     An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
     (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to
     some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
     the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
-    details. In simultaneous DRB ...... TODO.
+    details. In simultaneous DRB ...... <TODO more description>.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
-       is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
-       `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+        is always handed to the sampler, as the first argument of the sampler function (this is only
+        of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+        `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
 
     depths : int
         The set of "direct RB depths" for the circuits. The DRB depths must be integers >= 0.
@@ -1785,7 +1828,6 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
         and then (3) to (1).
-
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -1793,9 +1835,6 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
         `qubit_labels`, if `qubit_labels` is not None; the ith element of `pspec.qubit_labels`, otherwise.
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
-
-    Returns
-    -------
     dict
         A dictionary containing the generated RB circuits, the error-free outputs of the circuit,
         and the specification used to generate the circuits. The keys are:
@@ -1924,10 +1963,11 @@ def simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, struct
 
 def clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, citerations=20, compilerargs=[]):
     """
-    Generates a "Clifford randomized benchmarking" (CRB) circuit, which is the current-standard
-    RB protocol defined in "Scalable and robust randomized benchmarking of quantum processes",
-    Magesan et al. PRL 106 180504 (2011). This consists of a sequence of `length`+1 uniformly random
-    n-qubit Clifford gates followed by the unique inversion Clifford, with all the Cliffords compiled
+    Generates a "Clifford randomized benchmarking" (CRB) circuit.
+
+    CRB is the current-standard RB protocol defined in "Scalable and robust randomized benchmarking of quantum
+    processes", Magesan et al. PRL 106 180504 (2011). This consists of a sequence of `length`+1 uniformly
+    random n-qubit Clifford gates followed by the unique inversion Clifford, with all the Cliffords compiled
     into the "native" gates of a device as specified by `pspec`. The circuit output by this function will
     respect the connectivity of the device, as encoded into `pspec` (see the ProcessorSpec object docstring
     for how to construct the relevant `pspec`).
@@ -1942,9 +1982,9 @@ def clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, ci
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for, which defines the
-       "native" gate-set and the connectivity of the device. The returned CRB circuit will be over
-       the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
+        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned CRB circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
 
     length : int
         The "CRB length" of the circuit -- an integer >= 0 --  which is the number of Cliffords in the
@@ -1995,7 +2035,6 @@ def clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, ci
     -------
     Circuit
         A random CRB circuit over the "native" gate-set specified.
-
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -2063,13 +2102,12 @@ def clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, ci
 
 def pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=False):
     """
-    Samples a uniformly random n-qubit Pauli and then converts
-    it to the native gate-set of `pspec`.
+    Samples a uniformly random n-qubit Pauli and converts it to the gate-set of `pspec`.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device.
+        The ProcessorSpec for the device.
 
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
@@ -2081,7 +2119,8 @@ def pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=False):
     Returns
     -------
     Circuit
-        A circuit corresponding to a uniformly random n-qubit Pauli.
+        A circuit corresponding to a uniformly random n-qubit Pauli, 
+        converted to the native gate-set of `pspec`.
     """
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
     else: qubits = pspec.qubit_labels[:]  # copy this list
@@ -2107,7 +2146,9 @@ def pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=False):
 
 def one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None):
     """
-    Samples a uniformly random layer of 1-qubit Cliffords on all
+    Samples a uniformly random layer of 1-qubit Cliffords.
+
+    Create a uniformly random layer of 1-qubit Cliffords on all
     the qubits, and then converts it to the native gate-set of `pspec`.
     That is, an independent and uniformly random 1-qubit Clifford is
     sampled for each qubit.
@@ -2115,7 +2156,7 @@ def one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None):
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device.
+        The ProcessorSpec for the device.
 
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
@@ -2154,17 +2195,19 @@ def one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None):
 def mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], localclifford=True,
                       paulirandomize=True):
     """
-    Generates a "mirror randomized benchmarking" (MRB) circuit, for the case of Clifford gates and with the option
-    of Pauli-randomization and Clifford-twirling. This RB method is currently in development; this docstring will
-    be updated in the future with further information on this technique.
+    Generates a "mirror randomized benchmarking" (MRB) circuit.
+
+    This is specific to the case of Clifford gates and can be performed, optionally, with Pauli-randomization
+    and Clifford-twirling. This RB method is currently in development; this docstring will be updated in the
+    future with further information on this technique.
 
     To implement mirror RB it is necessary for U^(-1) to in the gate-set for every U in the gate-set.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
-       handed to the sampler, as the first argument of the sampler function.
+        The ProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
+        handed to the sampler, as the first argument of the sampler function.
 
     length : int
         The "mirror RB length" of the circuit, which is closely related to the circuit depth. It
@@ -2212,11 +2255,11 @@ def mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
         The first argument handed to the sampler is `pspec` and `samplerargs` lists the
         remaining arguments handed to the sampler.
 
-    localclifford: bool, optional
+    localclifford : bool, optional
         Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
         qubits (compiled into the native gates of the device).
 
-    paulirandomize: bool, optional
+    paulirandomize : bool, optional
         Whether to have uniformly random Pauli operators on all of the qubits before and
         after all of the layers in the "out" and "back" random circuits. At length 0 there
         is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
@@ -2236,7 +2279,6 @@ def mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', 
             - 2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
               that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
               qubit Clifford gates are "native" gates in the ProcessorSpec).
-
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -2334,8 +2376,10 @@ def one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=
                                   group_inverse_only=False, group_prep=False, compilation=None,
                                   generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
     """
-    Makes a random 1-qubit RB sequence, with RB over an arbitrary group and with a range of other
-    options that allow circuits for many types of RB to be generated, including:
+    Makes a random 1-qubit RB sequence, with RB over an arbitrary group.
+
+    This function also contains a range of other options that allow circuits for many
+    types of RB to be generated, including:
 
     - Clifford RB
     - Direct RB
@@ -2361,20 +2405,35 @@ def one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=
         is generated. Therefore, if inverse is true and the function is called
         multiple times, it will be much faster if the MatrixGroup is provided.
 
-    inverse: Bool, optional
+    inverse : Bool, optional
         If true, the random sequence is followed by its inverse gate. The model
         must form a group if this is true. If it is true then the sequence
         returned is length m+1 (2m+1) if interleaved is False (True).
 
-    interleaved: Str, optional
+    random_pauli : <TODO typ>, optional
+        <TODO description>
+
+    interleaved : Str, optional
         If not None, then a oplabel string. When a oplabel string is provided,
         every random gate is followed by this gate. So the returned sequence is of
         length 2m+1 (2m) if inverse is True (False).
 
-    group_prep: bool, optional
+    group_inverse_only : <TODO typ>, optional
+        <TODO description>
+
+    group_prep : bool, optional
         If group_inverse_only is True and inverse is True, setting this to true
         creates a "group pre-twirl". Does nothing otherwise (which should be changed
         at some point).
+
+    compilation : <TODO typ>, optional
+        <TODO description>
+
+    generated_group : <TODO typ>, optional
+        <TODO description>
+
+    model_to_group_labels : <TODO typ>, optional
+        <TODO description>
 
     seed : int, optional
         Seed for random number generator; optional.
@@ -2507,7 +2566,25 @@ def one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=
 
 def random_germ(pspec, depths, interacting_qs_density, qubit_labels):
     """
-    todo.
+    <TODO summary>
+
+    Parameters
+    ----------
+    pspec : <TODO typ>
+        <TODO description>
+
+    depths : <TODO typ>
+        <TODO description>
+
+    interacting_qs_density : <TODO typ>
+        <TODO description>
+
+    qubit_labels : <TODO typ>
+        <TODO description>
+
+    Returns
+    -------
+    <TODO typ>
     """
     if qubit_labels is None:
         qubits = list(pspec.qubit_labels[:])  # copy this list
@@ -2666,6 +2743,26 @@ def random_germpower_circuits(pspec, depths, interacting_qs_density, qubit_label
     #import numpy as _np
     #from pygsti.objects import circuit as _cir
 
+    """
+    <TODO summary>
+
+    Parameters
+    ----------
+    pspec : <TODO typ>
+        <TODO description>
+
+    depths : <TODO typ>
+        <TODO description>
+
+    interacting_qs_density : <TODO typ>
+        <TODO description>
+
+    qubit_labels : <TODO typ>
+        <TODO description>
+
+    fixed_versus_depth : <TODO typ>, optional
+        <TODO description>
+    """
     if qubit_labels is None:
         qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
@@ -2711,6 +2808,33 @@ def random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, localclif
                                      interacting_qs_density=1 / 8, fixed_versus_depth=False):
     """
     length : consistent with RB length.
+
+    Parameters
+    ----------
+    pspec : <TODO typ>
+        <TODO description>
+
+    depths : <TODO typ>
+        <TODO description>
+
+    qubit_labels : <TODO typ>, optional
+        <TODO description>
+
+    localclifford : <TODO typ>, optional
+        <TODO description>
+
+    paulirandomize : <TODO typ>, optional
+        <TODO description>
+
+    interacting_qs_density : <TODO typ>, optional
+        <TODO description>
+
+    fixed_versus_depth : <TODO typ>, optional
+        <TODO description>
+
+    Returns
+    -------
+    <TODO typ>
     """
     from pygsti.tools import symplectic as _symp
 
@@ -2811,6 +2935,41 @@ def random_germpower_mirror_circuit_experiment(pspec, depths, circuits_per_lengt
                                                sampler='edgegrab', samplerargs=[1 / 4], localclifford=True,
                                                paulirandomize=True, fixed_versus_depth=False, descriptor=''):
 
+    """
+    <TODO summary>
+
+    Parameters
+    ----------
+    pspec : <TODO typ>
+        <TODO description>
+
+    depths : <TODO typ>
+        <TODO description>
+
+    circuits_per_length : <TODO typ>
+        <TODO description>
+
+    qubit_labels : <TODO typ>, optional
+        <TODO description>
+
+    sampler : <TODO typ>, optional
+        <TODO description>
+
+    samplerargs : <TODO typ>, optional
+        <TODO description>
+
+    localclifford : <TODO typ>, optional
+        <TODO description>
+
+    paulirandomize : <TODO typ>, optional
+        <TODO description>
+
+    fixed_versus_depth : <TODO typ>, optional
+        <TODO description>
+
+    descriptor : <TODO typ>, optional
+        <TODO description>
+    """
     assert(sampler == 'edgegrab'), "The germ must be selected with edgegrab sampling!"
     experiment_dict = {}
     experiment_dict['spec'] = {}

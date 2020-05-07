@@ -1,4 +1,6 @@
-""" Functions for selecting a complete set of fiducials for a GST analysis."""
+"""
+Functions for selecting a complete set of fiducials for a GST analysis.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -20,7 +22,8 @@ from . import scoring as _scoring
 def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                        ops_to_omit=None, force_empty=True, max_fid_length=2,
                        algorithm='grasp', algorithm_kwargs=None, verbosity=1):
-    """Generate prep and measurement fiducials for a given target model.
+    """
+    Generate prep and measurement fiducials for a given target model.
 
     Parameters
     ----------
@@ -71,14 +74,15 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         for functions referred to in the `algorithm` keyword documentation for
         what options are available for each algorithm.
 
+    verbosity : int, optional
+        How much detail to send to stdout.
+
     Returns
     -------
     prepFidList : list of Circuits
         A list containing the operation sequences for the prep fiducials.
-
     measFidList : list of Circuits
         A list containing the operation sequences for the measurement fiducials.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     if ops_to_omit is None:
@@ -206,7 +210,8 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
 #    return output
 
 def xor(*args):
-    """Implements logical xor function for arbitrary number of inputs.
+    """
+    Implements logical xor function for arbitrary number of inputs.
 
     Parameters
     ----------
@@ -215,11 +220,10 @@ def xor(*args):
         satisfaction.
 
     Returns
-    ---------
+    -------
     output : bool
         True if and only if one and only one element of args is True and the
         rest are False.  False otherwise.
-
     """
 
     output = sum(bool(x) for x in args) == 1
@@ -227,7 +231,8 @@ def xor(*args):
 
 
 def make_prep_mxs(mdl, prep_fid_list):
-    """Make a list of matrices for the model preparation operations.
+    """
+    Make a list of matrices for the model preparation operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
     preparation operation in the model, and the column of each matrix is a
@@ -239,14 +244,14 @@ def make_prep_mxs(mdl, prep_fid_list):
         The model (associates operation matrices with operation labels).
 
     prep_fid_list : list of Circuits
-        List of fiducial operation sequences for preparation.
+        List of fiducial circuits for constructing an informationally complete state preparation.
 
     Returns
-    ----------
-    outputMatList : list of arrays
-        List of arrays, where each array corresponds to one preparation in the
-        model, and each column therein corresponds to a single fiducial.
-
+    -------
+    list
+        A list of matrices, each of shape `(dim, len(prep_fid_list))` where
+        `dim` is the dimension of `mdl` (4 for a single qubit).  The length
+        of this list is equal to the number of state preparations in `mdl`.
     """
 
     dimRho = mdl.get_dimension()
@@ -261,8 +266,9 @@ def make_prep_mxs(mdl, prep_fid_list):
     return outputMatList
 
 
-def make_meas_mxs(mdl, prep_meas_list):
-    """Make a list of matrices for the model measurement operations.
+def make_meas_mxs(mdl, meas_fid_list):
+    """
+    Make a list of matrices for the model measurement operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
     measurement effect in the model, and the column of each matrix is the
@@ -273,25 +279,25 @@ def make_meas_mxs(mdl, prep_meas_list):
     mdl : Model
         The model (associates operation matrices with operation labels).
 
-    measFidList : list of Circuits
-        List of fiducial operation sequences for measurement.
+    meas_fid_list : list of Circuits
+        List of fiducial circuits for constructing an informationally complete measurement.
 
     Returns
-    ----------
-    outputMatList : list of arrays
-        List of arrays, where each array corresponds to one measurement in the
-        model, and each column therein corresponds to a single fiducial.
-
+    -------
+    list
+        A list of matrices, each of shape `(dim, len(meas_fid_list))` where
+        `dim` is the dimension of `mdl` (4 for a single qubit).  The length
+        of this list is equal to the number of POVM effects in `mdl`.
     """
 
     dimE = mdl.get_dimension()
-    numFid = len(prep_meas_list)
+    numFid = len(meas_fid_list)
     outputMatList = []
     for povm in mdl.povms.values():
         for E in povm.values():
             if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
-            for i, measFid in enumerate(prep_meas_list):
+            for i, measFid in enumerate(meas_fid_list):
                 outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0, :]
             outputMatList.append(outputMat)
     return outputMatList
@@ -300,7 +306,8 @@ def make_meas_mxs(mdl, prep_meas_list):
 def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='all',
                                      threshold=1e6, return_all=False, op_penalty=0.0,
                                      l1_penalty=0.0):
-    """Compute a composite score for a fiducial list.
+    """
+    Compute a composite score for a fiducial list.
 
     Parameters
     ----------
@@ -334,23 +341,21 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     return_all : bool, optional (default is False)
         Whether the spectrum should be returned along with the score.
 
-    l1_penalty : float, optional (defailt is 0.0)
-        Coefficient of a penalty linear in the number of fiducials that is
-        added to ``score.minor``.
-
     op_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
+
+    l1_penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the number of fiducials that is
+        added to ``score.minor``.
 
     Returns
     -------
     score : CompositeScore
         The score of the fiducials.
-
     spectrum : numpy.array, optional
         The eigenvalues of the square of the absolute value of the score
         matrix.
-
     """
     # dimRho = model.get_dimension()
     if prep_or_meas == 'prep':
@@ -388,7 +393,8 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
 def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
                        return_all=False, threshold=1e6, l1_penalty=0.0,
                        op_penalty=0.0):
-    """Tests a prep or measure fiducial list for informational completeness.
+    """
+    Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
     ----------
@@ -439,14 +445,11 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
         Whether or not the specified fiducial list is informationally complete
         for the provided model, to within the tolerance specified by
         threshold.
-
     spectrum : array, optional
         The number of fiducials times the reciprocal of the spectrum of the
         score matrix.  Only returned if return_all == True.
-
     score : float, optional
         The score for the fiducial set; only returned if return_all == True.
-
     """
 
     score, spectrum = compute_composite_fiducial_score(
@@ -463,21 +466,21 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
 
 
 def build_bitvec_mx(n, k):
-    """Create an array of all fixed length and Hamming weight binary vectors.
+    """
+    Create an array of all length-`n` and Hamming weight `k` binary vectors.
 
     Parameters
     ----------
     n : int
         The length of each bit string.
+
     k : int
         The hamming weight of each bit string.
 
     Returns
-    ----------
-    bitVecMx : _np array
-        this is the array of binary vectors of a fixed length n and fixed
-        Hamming weight k.
-
+    -------
+    numpy.ndarray
+        An array of shape `(binom(n,k), n)` whose rows are the sought binary vectors.
     """
     bitVecMx = _np.zeros([int(scipy.special.binom(n, k)), n])
     diff = n - k
@@ -537,7 +540,8 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
                                      fixed_num=None, threshold=1e6,
                                      # forceMinScore=1e100,
                                      verbosity=1):
-    """Find a locally optimal subset of the fiducials in fid_list.
+    """
+    Find a locally optimal subset of the fiducials in fid_list.
 
     Locally optimal here means that no single fiducial can be excluded without
     increasing the sum of the reciprocals of the singular values of the "score
@@ -553,6 +557,9 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
 
     fid_list : list of Circuits
         List of all fiducials operation sequences to consider.
+
+    prep_or_meas : {'prep', 'meas'}
+        Whether preparation or measturement fiducials are being selected.
 
     initial_weights : list-like
         List or array of either booleans or (0 or 1) integers specifying which
@@ -601,17 +608,8 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         When force_empty is True, what score to assign any fiducial set that
         does not contain the empty operation sequence as a fiducial.
 
-    forceMin : bool, optional (default is False)
-        If True, forces fiducial selection to choose a fiducial set that is *at
-        least* as large as forceMinNum.
-
-    forceMinNum : int, optional (default is None)
-        If not None, and forceMin == True, the minimum size of the returned
-        fiducial set.
-
-    forceMinScore : float, optional (default is 1e100)
-        When forceMin is True, what score to assign any fiducial set that does
-        not contain at least forceMinNum fiducials.
+    fixed_num : int, optional
+        Require the output list of fiducials to contain exactly `fixed_num` elements.
 
     threshold : float, optional (default is 1e6)
         Entire fiducial list is first scored before attempting to select
@@ -624,19 +622,16 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
 
     Returns
     -------
-    finalFidList : list
-        Sublist of fid_list specifying the final, optimal, set of fiducials.
+    fiducial_list : list
+        A list of the selected (optimized) fiducial circuits.
 
-    weights : array
-        Integer array, of length len(fid_list), containing 0s and 1s to indicate
-        which elements of fid_list were chosen as finalFidList.  Only returned
-        when return_all == True.
+    weights : list
+        Only returned if `return_all=True`.  The internal weights
+        for each candidate germ.
 
-    scoreDictionary : dict
-        Dictionary with keys == tuples of 0s and 1s of length len(fid_list),
-        specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
-        eigenvalue "scores".
-
+    score : dict
+        Only returned if `return_all=True`.  The internal dictionary
+        mapping weights (as a tuple) to scores.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -868,8 +863,84 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
                                 l1_penalty=0.0, return_all=False,
                                 force_empty=True, threshold=1e6, seed=None,
                                 verbosity=0):
-    """Use GRASP to find a high-performing set of fiducials.
+    """
+    Use GRASP to find a high-performing set of fiducials.
 
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    fids_list : list of Circuits
+        List of fiducial operation sequences to test.
+
+    prep_or_meas : string ("prep" or "meas")
+        Are we testing preparation or measurement fiducials?
+
+    alpha : float
+        A number between 0 and 1 that roughly specifies a score threshold
+        relative to the spread of scores that a germ must score better than in
+        order to be included in the RCL. A value of 0 for `alpha` corresponds
+        to a purely greedy algorithm (only the best-scoring element is
+        included in the RCL), while a value of 1 for `alpha` will include all
+        elements in the RCL.
+
+    iterations : int, optional
+        Number of GRASP iterations.
+
+    score_func : str ('all' or 'worst'), optional (default is 'all')
+        Sets the objective function for scoring a fiducial set.  If 'all',
+        score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
+        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
+        matrix).  Note:  Choosing 'worst' corresponds to trying to make the
+        optimizer make the "worst" direction (the one we are least sensitive to
+        in Hilbert-Schmidt space) as minimally bad as possible.  Choosing 'all'
+        corresponds to trying to make the optimizer make us as sensitive as
+        possible to all directions in Hilbert-Schmidt space.  (Also note-
+        because we are using a simple integer program to choose fiducials, it
+        is possible to get stuck in a local minimum, and choosing one or the
+        other objective function can help avoid such minima in different
+        circumstances.)
+
+    op_penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the total number of gates in all
+        fiducials that is added to ``score.minor``.
+
+    l1_penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the number of fiducials that is
+        added to ``score.minor``.
+
+    return_all : bool, optional (default is False)
+        If true, function returns reciprocals of eigenvalues of fiducial score
+        matrix, and the score of the fiducial set as specified by score_func, in
+        addition to a boolean specifying whether or not the fiducial set is
+        informationally complete
+
+    force_empty : bool, optional
+        When `True`, the empty circuit must be a member of the chosen set.
+
+    threshold : float, optional (default is 1e6)
+        Specifies a maximum score for the score matrix, above which the
+        fiducial set is rejected as informationally incomplete.
+
+    seed : int, optional
+        The seed value used for each individual iteration.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+    Returns
+    -------
+    best_fiducials : list
+        The best-scoring list of fiducial circuits.
+
+    initial_fiducials : list of lists
+        Only returned if `return_all=True`.  A list of the initial solution
+        (a solution is a list of fiducial circuits) for each grasp iteration.
+
+    local_solutions : list of lists
+        Only returned if `return_all=True`.  A list of the best solution
+        (a solution is a list of fiducial circuits) for each grasp iteration.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
