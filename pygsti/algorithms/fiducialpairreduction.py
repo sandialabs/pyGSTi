@@ -69,11 +69,11 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         The target model used to determine amplificational completeness.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     germs : list of Circuits
@@ -320,11 +320,11 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
         The target model used to determine amplificational completeness.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     germs : list of Circuits
@@ -530,11 +530,11 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         The target model used to determine amplificational completeness.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     germs : list of Circuits

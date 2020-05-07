@@ -38,11 +38,11 @@ def model_with_lgst_circuit_estimates(
         The data to use for LGST
 
     prep_fiducials : list of Circuits
-       Fiducial circuits used to construct a informationally complete
+       Fiducial circuits used to construct an informationally complete
        effective preparation.
 
     meas_fiducials : list of Circuits
-       Fiducial circuits used to construct a informationally complete
+       Fiducial circuits used to construct an informationally complete
        effective measurement.
 
     target_model : Model
@@ -134,11 +134,11 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         The data to use for LGST
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -186,11 +186,11 @@ def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target
         The data to use for all LGST estimates.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -265,11 +265,11 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
         The data to use for LGST
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -345,11 +345,11 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         The data to use for all LGST and LSGST estimates.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -432,11 +432,11 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
         The data to use for LGST
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -511,11 +511,11 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
         The data to use for all LGST and LSGST estimates.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     target_model : Model
@@ -591,11 +591,11 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
         The data to use for LGST
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     start_model : Model
@@ -654,11 +654,11 @@ def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         The data to use for all LGST and LSGST estimates.
 
     prep_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective preparation.
 
     meas_fiducials : list of Circuits
-        Fiducial circuits used to construct a informationally complete
+        Fiducial circuits used to construct an informationally complete
         effective measurement.
 
     start_model : Model
