@@ -6,7 +6,9 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-""" Functions for creating RPE Models and Circuit lists """
+"""
+Functions for creating RPE Models and Circuit lists
+"""
 import numpy as _np
 from . import modelconstruction as _setc
 from . import datasetconstruction as _dsc
@@ -18,33 +20,34 @@ from .. import tools as _tools
 def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
                                     gate_depol=None, with_id=True):
     """
-    Make a model for simulating RPE, paramaterized by rotation angles.  Note
-    that the output model also has thetaTrue, alpha_true, and epsilon_true
+    Make a model for simulating RPE, paramaterized by rotation angles.
+
+    Note that the output model also has thetaTrue, alpha_true, and epsilon_true
     added attributes.
 
     Parameters
     ----------
     alpha_true : float
-       Angle of Z rotation (canonical RPE requires alpha_true to be close to
-       pi/2).
+        Angle of Z rotation (canonical RPE requires alpha_true to be close to
+        pi/2).
 
     epsilon_true : float
-       Angle of X rotation (canonical RPE requires epsilon_true to be close to
-       pi/4).
+        Angle of X rotation (canonical RPE requires epsilon_true to be close to
+        pi/4).
 
     y_rot : float
-       Angle of rotation about Y axis that, by similarity transformation,
-       rotates X rotation.
+        Angle of rotation about Y axis that, by similarity transformation,
+        rotates X rotation.
 
     spam_depol : float
-       Amount to depolarize SPAM by.
+        Amount to depolarize SPAM by.
 
     gate_depol : float, optional
-       Amount to depolarize gates by (defaults to None).
+        Amount to depolarize gates by (defaults to None).
 
     with_id : bool, optional
-       Do we include (perfect) identity or no identity? (Defaults to False;
-       should be False for RPE, True for GST)
+        Do we include (perfect) identity or no identity? (Defaults to False;
+        should be False for RPE, True for GST)
 
     Returns
     -------
@@ -97,14 +100,15 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
 
 def make_rpe_alpha_str_lists_gx_gz(k_list):
     """
-    Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
-    gates. These operation sequences are used to estimate alpha (Z rotation angle).
+    Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
+
+    These operation sequences are used to estimate alpha (Z rotation angle).
 
     Parameters
     ----------
     k_list : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of
-       two; e.g. [1,2,4,8,16].
+        The list of "germ powers" to be used.  Typically successive powers of
+        two; e.g. [1,2,4,8,16].
 
     Returns
     -------
@@ -149,15 +153,15 @@ def make_rpe_alpha_str_lists_gx_gz(k_list):
 
 def make_rpe_epsilon_str_lists_gx_gz(k_list):
     """
-    Make epsilon cosine and sine circuit lists for (approx) X pi/4 and
-    Z pi/2 gates. These operation sequences are used to estimate epsilon (X rotation
-    angle).
+    Make epsilon cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
+
+    These operation sequences are used to estimate epsilon (X rotation angle).
 
     Parameters
     ----------
     k_list : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of
-       two; e.g. [1,2,4,8,16].
+        The list of "germ powers" to be used.  Typically successive powers of
+        two; e.g. [1,2,4,8,16].
 
     Returns
     -------
@@ -191,14 +195,15 @@ def make_rpe_epsilon_str_lists_gx_gz(k_list):
 
 def make_rpe_theta_str_lists_gx_gz(k_list):
     """
-    Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
-    gates. These operation sequences are used to estimate theta (X-Z axes angle).
+    Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
+
+    These operation sequences are used to estimate theta (X-Z axes angle).
 
     Parameters
     ----------
     k_list : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of
-       two; e.g. [1,2,4,8,16].
+        The list of "germ powers" to be used.  Typically successive powers of
+        two; e.g. [1,2,4,8,16].
 
     Returns
     -------
@@ -236,13 +241,14 @@ def make_rpe_theta_str_lists_gx_gz(k_list):
 
 def make_rpe_string_list_d(log2k_max):
     """
-    Generates a dictionary that contains operation sequences for all RPE cosine and
-    sine experiments for all three angles.
+    Creates a dictionary containing all the circuits needed for RPE.
+
+    This includes circuits for all RPE cosine and sine experiments for all three angles.
 
     Parameters
     ----------
     log2k_max : int
-       Maximum number of times to repeat an RPE "germ"
+        Maximum number of times to repeat an RPE "germ"
 
     Returns
     -------
@@ -289,6 +295,7 @@ def make_rpe_string_list_d(log2k_max):
 def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='binomial', seed=None):
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
+
     Is a thin wrapper for pygsti.construction.generate_fake_data, changing
     default behavior of sample_error, and taking a dictionary of operation sequences
     as input.
@@ -339,7 +346,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     Returns
     -------
     DataSet
-       A static data set filled with counts for the specified operation sequences.
+        A static data set filled with counts for the specified operation sequences.
     """
     return _dsc.generate_fake_data(model_or_dataset,
                                    string_list_d['totalStrList'],
@@ -347,9 +354,12 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
 
 
 #TODO savePlot arg is never used?
+#PRIVATE
 def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n, runs):
     #                  plot=False):
-    """ Experimental test function """
+    """
+    Experimental test function
+    """
     kList = [2**k for k in range(log2k_max + 1)]
 
     alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
