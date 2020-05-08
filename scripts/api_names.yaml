@@ -215,8 +215,8 @@ construction:
     sigmaz: null
   nqnoiseconstruction.py:
     RANK_TOL: null
-    build_cloud_crosstalk_model: null
-    build_cloudnoise_model_from_hops_and_weights: null
+    build_cloud_crosstalk_model: null  # XXX REFACTOR into CloudCrosstalkModel
+    build_cloudnoise_model_from_hops_and_weights: null  # XXX DEPRECATE
     check_kcoverage_template: null
     create_cloudnoise_sequences: create_cloudnoise_circuits
     create_standard_cloudnoise_sequences: create_standard_cloudnoise_circuits
@@ -563,7 +563,7 @@ objects:
       expand_subcircuits: null
       factorize_repetitions: null
       from_pythonstr: null
-      fromtup: null
+      fromtup: from_tuple
       get_idling_lines: idling_lines
       get_labels: extract
       get_layer: layer
@@ -680,7 +680,7 @@ objects:
       get_prep: null
     CloudNoiseModel:
       __name__: null
-      build_from_hops_and_weights: create_from_hops_and_weights
+      build_from_hops_and_weights: from_hops_and_weights
       get_clouds: null
     basis_product_matrix: null
     id2x2: null
@@ -1172,7 +1172,7 @@ objects:
   localnoisemodel.py:
     LocalNoiseModel:
       __name__: null
-      build_from_parameterization: create_from_parameterization
+      build_from_parameterization: from_parameterization
     SimpleCompLayerLizard:
       __name__: null
       get_effect: effect
@@ -1677,7 +1677,7 @@ objects:
     LindbladErrorgen:
       __name__: null
       deriv_wrt_params: null
-      from_error_generator: create_from_error_generator  # XXX parameter `errgen` -> `errorgen`
+      from_error_generator: null  # XXX parameter `errgen` -> `errorgen`
       from_vector: null
       get_coeffs: coefficients
       get_error_rates: error_rates
