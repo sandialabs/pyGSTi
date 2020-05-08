@@ -387,8 +387,8 @@ extras:
     rpetools.py:
       analyze_rpe_data: null
       consistency_check: null
-      est_angle_list: null
-      est_theta_list: null
+      est_angle_list: estimate_angle_list
+      est_theta_list: estimate_theta_list
       extract_alpha: null
       extract_epsilon: null
       extract_rotation_hat: null
@@ -2942,7 +2942,7 @@ protocols:
     StandardGSTDesign:
       __name__: null
     add_badfit_estimates: null
-    add_gauge_opt: null
+    add_gauge_opt: null  # XXX parameter `base_est_label` -> `base_estimate_label`
     gaugeopt_suite_to_dictionary: null
     get_robust_scaling: compute_robust_scaling  # XXX parameter `circuit_list` -> `circuits`
     get_wildcard_budget: compute_wildcard_budget  # XXX parameter `circuits_to_use` -> `circuits`
@@ -3376,12 +3376,12 @@ report:
         final_gates_vs_target_table_gauge_inv: null
         final_gauge_inv_metric_table: null
         final_gauge_inv_model_table: null
-        final_model_eval_table: final_model_eigenvalue_table
+        final_model_eval_table: final_model_eigenvalue_table  # TODO update in template
         final_model_spam_parameters_table: null
         final_model_vs_target_table: null
         gram_bar_plot: null
-        render: null
-        single_metric_table_gauge_inv: null
+        render: null  # XXX parameter `est_labels` -> `estimate_labels`
+        single_metric_table_gauge_inv: null  # XXX parameter `est_labels` -> `estimate_labels`
       GaugeInvariantsGermsSection:
         __name__: null
         final_gates_vs_target_table_gauge_invgerms: null
@@ -3391,8 +3391,8 @@ report:
         final_gates_vs_target_table_gauge_var: null
         final_gates_vs_target_table_gauge_vargerms: null
         final_model_spam_vs_target_table: null
-        render: null
-        single_metric_table_gauge_var: null
+        render: null  # XXX parameter `est_labels` -> `estimate_labels`
+        single_metric_table_gauge_var: null  # XXX parameter `est_labels` -> `estimate_labels`
       GaugeVariantsDecompSection:
         __name__: null
         final_model_choi_eigenvalue_table: null
@@ -3461,7 +3461,7 @@ report:
     summary.py:
       SummarySection:
         __name__: null
-        final_fits_comparison_plot: null
+        final_fits_comparison_plot: null  # XXX parameter `est_labels` -> `estimate_labels`
         final_gates_vs_target_table_insummary: null
         final_model_fit_histogram: null
         final_model_fit_progress_bar_plot_sum: null
