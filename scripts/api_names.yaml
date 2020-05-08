@@ -40,7 +40,7 @@ algorithms:
     compile_symplectic_using_riag_algoritm: null
     compile_symplectic_using_rogge_algorithm: null
     convert_submatrix_to_echelon_form_using_cnots: null
-    create_standard_cost_function: null
+    create_standard_cost_function: _create_standard_costfunction  # XXX "function" suffix is OK -- idiomatic to QI
     do_albert_factorization_transform_using_cnots: find_albert_factorization_transform_using_cnots
     make_submatrix_invertable_using_hadamards: null
     make_submatrix_invertable_using_phases_and_idsubmatrix: null
@@ -82,7 +82,7 @@ algorithms:
     compute_composite_germ_score: null
     compute_score: null
     generate_germs: find_germs
-    germ_breadth_score_fn: null
+    germ_breadth_score_fn: score_germ_breadth
     get_model_params: null
     grasp_germ_set_optimization: optimize_germ_set_grasp
     num_non_spam_gauge_params: null
@@ -138,7 +138,7 @@ algorithms:
   scoring.py:
     CompositeScore:
       __name__: null
-    composite_rcl_fn: null
+    composite_rcl_fn: filter_composite_rcl
     list_score: null
 construction:
   circuitconstruction.py:
@@ -289,13 +289,13 @@ extras:
     probtrajectory.py:  # XXX verbs in fn names -- especially helpful when at module level? Tim?
       ConstantProbTrajectory:
         __name__: null
-        basisfunction: null
+        basisfunction: null  # XXX "function" suffix is OK -- idiomatic to DCT
       CosineProbTrajectory:
         __name__: null
-        basisfunction: null
+        basisfunction: null  # XXX "function" suffix is OK -- idiomatic to DCT
       ProbTrajectory:
         __name__: null
-        basisfunction: null
+        basisfunction: null  # XXX "function" suffix is OK -- idiomatic to DCT
         copy: null
         get_parameters: null  # XXX make property
         get_parameters_as_list: null  # XXX make property -- needed?
@@ -311,7 +311,7 @@ extras:
       amplitudes_at_frequencies: null
       bartlett_spectrum: null
       dct: null
-      dct_basisfunction: null
+      dct_basisfunction: null  # XXX "function" suffix is OK -- idiomatic to DCT
       dft: null
       fourier_frequencies_from_times: null
       frequencies_from_timestep: null
@@ -393,7 +393,7 @@ extras:
       extract_epsilon: null
       extract_rotation_hat: null
       extract_theta: null
-      sin_phi2_func: null
+      sin_phi2_func: _sin_phi2
 io:
   circuitparser:
     fastcircuitparser.pyx:
@@ -457,7 +457,7 @@ io:
       parse_multidatafile: null
       parse_stringfile: null
       parse_tddatafile: null
-    get_display_progress_fn: null
+    get_display_progress_fn: _create_display_progress_fn
     read_model: load_model
   writers.py:
     fill_in_empty_dataset_with_fake_data: null
@@ -2865,7 +2865,7 @@ optimize:
     custom_leastsq: null
   optimize.py:
     check_jac: null
-    create_obj_func_printer: null
+    create_obj_func_printer: create_objfn_printer
     fmin_evolutionary: null
     fmin_particle_swarm: null
     fmin_simplex: null
@@ -3688,7 +3688,7 @@ tools:
     sums_of_negative_choi_evals: null
   legacytools.py:
     deprecate_imports: null
-    deprecated_fn: null
+    deprecated_fn: deprecate
     warn_deprecated: null
   likelihoodfns.py:
     TOL: null
@@ -3706,7 +3706,7 @@ tools:
     two_delta_logl: null  # XXX parameter `circuit_list` -> `circuits`
     two_delta_logl_nsigma: null  # XXX parameter `circuit_list` -> `circuits`
     two_delta_logl_per_circuit: null  # XXX parameter `circuit_list` -> `circuits`
-    two_delta_loglfn: null
+    two_delta_loglfn: two_delta_logl_term
   lindbladtools.py:
     affine_lindbladian: null
     hamiltonian_to_lindbladian: null
