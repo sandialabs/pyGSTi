@@ -436,7 +436,7 @@ io:
     full_class_name: null
     load_meta_based_dir: null
     obj_to_meta_json: null
-    read_json_or_pkl_files_to_dict: null
+    read_json_or_pkl_files_to_dict: _read_json_or_pkl_files_to_dict
     write_dict_to_json_or_pkl_files: null
     write_meta_based_dir: null
     write_obj_to_meta_based_dir: null
@@ -458,7 +458,7 @@ io:
       parse_stringfile: null
       parse_tddatafile: null
     get_display_progress_fn: null
-    read_model: null
+    read_model: load_model
   writers.py:
     fill_in_empty_dataset_with_fake_data: null
     write_circuit_list: null  # XXX "circuit_list" OK in name? parameter `circuit_list` -> `circuits`
@@ -3209,8 +3209,8 @@ report:
     merge_jinja_template_dir: null
     merge_latex_template: null
     process_call: null
-    read_and_preprocess_template: null
-    read_contents: null
+    read_and_preprocess_template: load_and_preprocess_template
+    read_contents: _read_contents
     render_as_html: null
     render_as_latex: null
     rsync_offline_dir: null
