@@ -36,7 +36,6 @@ extras = {
         'cvxopt',
         'cvxpy'
     ],
-    'nose testing': ['nose'],
     'accurate memory profiling': ['psutil'],
     'multi-processor support': ['mpi4py'],
     'evolutionary optimization algorithm': ['deap'],
