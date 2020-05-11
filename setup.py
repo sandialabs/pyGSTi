@@ -74,6 +74,10 @@ extras = {
 # Add `complete' target, which will install all extras listed above
 extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 
+# Add `no_mpi' target, identical to `complete' target but without mpi4py,
+# which is unavailable in some common environments.
+extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
+
 
 # Configure setuptools_scm to build the post-release version number
 def custom_version():
