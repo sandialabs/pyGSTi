@@ -32,13 +32,9 @@ before_install:
   - gcc --version
 
 install:
-  # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
-  - pip install cython
-  # Install base dependencies
-  - pip install .
-  # Install test dependencies
+  # see https://github.com/cvxgrp/cvxpy/issues/968
+  - pip install "numpy>=1.16.0"
   - pip install .[testing]
-  # Show pip environment, for diagnostics
   - pip freeze
 
 # Default `test' stage script
