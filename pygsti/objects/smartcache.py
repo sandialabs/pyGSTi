@@ -388,6 +388,7 @@ def smart_cached(obj):
     function or method
     '''
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
+
     @_functools.wraps(obj)
     def _cacher(*args, **kwargs):
         _, v = cache.cached_compute(obj, args, kwargs)
