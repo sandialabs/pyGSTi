@@ -380,7 +380,7 @@ def _eformat(f, prec):
 
 
 def _num_non_nan(array):
-    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]  # noqa: E721
+    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]  # noqa: E712
     return int(len(ixs))
 
 
@@ -401,7 +401,7 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
         reshape_subMxs = _np.array(_np.reshape(subMxs, (s[0] * s[1], s[2], s[3])))
 
         #Get all the boxes where the entries are not all NaN
-        non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]  # noqa: E721,E501
+        non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]  # noqa: E712,E501
         s = _np.shape(non_all_NaN)
         dof_each_box = [_num_non_nan(k) * element_dof for k in non_all_NaN]
 

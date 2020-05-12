@@ -540,7 +540,7 @@ def _create_drift_switchboard(ws, results, gss):
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in gss.prepStrs],
              [c.str for c in gss.effectStrs],
              [i.str for i in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
@@ -554,7 +554,7 @@ def _create_drift_switchboard(ws, results, gss):
     else:
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
-            [[c.str for c in gss.germs], [c.str for c in(gss.prepStrs)],
+            [[c.str for c in gss.germs], [c.str for c in gss.prepStrs],
              [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
