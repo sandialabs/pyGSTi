@@ -17,6 +17,7 @@ env:
     - NOSE_WITH_COVERAGE=1
     - NOSE_COVER_PACKAGE="pygsti"
     - NOSE_PROCESSES=-1
+    - NOSE_NOPATH=1 # use installed package, not source tree under CWD
     - NOSE_PROCESS_TIMEOUT=2400 # timeout after 40 minutes (travis job timeout is 50 minutes)
   matrix:
     - NOSE_WHERE="test/unit/"
@@ -42,7 +43,7 @@ install:
 
 # Default `test' stage script
 script:
-  - mv "pygsti" "do-not-import-this-pygsti"
+  - python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
   - echo "nosetests $NOSETESTS"
   - nosetests $NOSETESTS
 
