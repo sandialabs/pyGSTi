@@ -32,22 +32,22 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
-    'diamond norm computation': [
+    'diamond_norm': [
         'cvxopt',
         'cvxpy'
     ],
-    'accurate memory profiling': ['psutil'],
-    'multi-processor support': ['mpi4py'],
-    'evolutionary optimization algorithm': ['deap'],
-    'pickling report tables': ['pandas'],
-    'generating PDFs of report figures': ['matplotlib'],
-    'generating html reports': ['jinja2'],
-    'generating report notebooks': [
+    'memory_profiling': ['psutil'],
+    'multiprocessor': ['mpi4py'],
+    'evolutionary_optimization': ['deap'],
+    'report_pickling': ['pandas'],
+    'report_pdf_figures': ['matplotlib'],
+    'html_reports': ['jinja2'],
+    'notebooks': [
         'ipython',
         'notebook'
     ],
-    'read/write message pack format': ['msgpack'],
-    'extension modules': ['cython'],
+    'msgpack': ['msgpack'],
+    'extensions': ['cython'],
     'linting': [
         'autopep8',
         'flake8'
