@@ -96,7 +96,8 @@ jobs:
       env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
+      # MPI nose utils needs sys.path
+      env: NOSE_WHERE="test/test_packages/" NOSE_NOPATH="" NOSETESTS="mpi"
 
     - stage: push
       env: PUSH_BRANCH="beta"
