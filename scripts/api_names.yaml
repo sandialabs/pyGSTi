@@ -26,19 +26,19 @@ algorithms:
     apply_phase_to_all: null
     compile_clifford: null
     compile_cnot_circuit: null
-    compile_cnot_circuit_using_bge_algorithm: null
-    compile_cnot_circuit_using_ocage_algorithm: null
-    compile_cnot_circuit_using_oicage_algorithm: null
+    compile_cnot_circuit_using_bge_algorithm: _compile_cnot_circuit_using_bge_algorithm
+    compile_cnot_circuit_using_ocage_algorithm: _compile_cnot_circuit_using_ocage_algorithm
+    compile_cnot_circuit_using_oicage_algorithm: _compile_cnot_circuit_using_oicage_algorithm
     compile_conditional_symplectic: null
     compile_stabilizer_measurement: null
     compile_stabilizer_state: null
     compile_symplectic: null
-    compile_symplectic_using_ag_algorithm: null
-    compile_symplectic_using_gge_core: null
-    compile_symplectic_using_iag_algorithm: null
-    compile_symplectic_using_ogge_algorithm: null
-    compile_symplectic_using_riag_algoritm: null
-    compile_symplectic_using_rogge_algorithm: null
+    compile_symplectic_using_ag_algorithm: _compile_symplectic_using_ag_algorithm
+    compile_symplectic_using_gge_core: _compile_symplectic_using_gge_core
+    compile_symplectic_using_iag_algorithm: _compile_symplectic_using_iag_algorithm
+    compile_symplectic_using_ogge_algorithm: _compile_symplectic_using_ogge_algorithm
+    compile_symplectic_using_riag_algoritm: _compile_symplectic_using_riag_algoritm
+    compile_symplectic_using_rogge_algorithm: _compile_symplectic_using_rogge_algorithm
     convert_submatrix_to_echelon_form_using_cnots: null
     create_standard_cost_function: _create_standard_costfunction  # XXX "function" suffix is OK -- idiomatic to QI
     do_albert_factorization_transform_using_cnots: find_albert_factorization_transform_using_cnots
@@ -143,36 +143,36 @@ algorithms:
 construction:
   circuitconstruction.py:
     circuit_list: to_circuits
-    compose_alias_dicts: null
+    compose_alias_dicts: _compose_alias_dicts
     create_circuit_list: create_circuits
     filter_circuit: null
     filter_circuits: null
     gen_all_circuits: iter_all_circuits
     gen_all_circuits_onelen: iter_all_circuits_onelen
     list_all_circuits: null
-    list_all_circuits_onelen: null
+    list_all_circuits_onelen: list_all_circuits_onelen
     list_all_circuits_without_powers_and_cycles: null
     list_lgst_circuits: create_lgst_circuits
     list_partial_strings: list_partial_circuits
     list_random_circuits_onelen: null
-    list_strings_lgst_can_estimate: null
+    list_strings_lgst_can_estimate: list_circuits_lgst_can_estimate
     manipulate_circuit: null
     manipulate_circuit_list: manipulate_circuits  # XXX parameter `circuit_list` -> `circuits`
     repeat: null
     repeat_and_truncate: null
     repeat_count_with_max_length: null
-    repeat_remainder_for_truncation: null
+    repeat_remainder_for_truncation: _repeat_remainder_for_truncation
     repeat_with_max_length: null
-    simplify_str: simplify_circuit_string
+    simplify_str: _simplify_circuit_string
     translate_circuit: null
     translate_circuit_list: translate_circuits  # XXX parameter `circuit_list` -> `circuits`
   datasetconstruction.py:
-    create_merge_dict: null
-    create_qubit_merge_dict: null
+    create_merge_dict: _create_merge_dict
+    create_qubit_merge_dict: _create_qubit_merge_dict
     filter_dataset: null  # XXX maybe a "marginalize" method of DataSet
     generate_fake_data: simulate_data  # XXX DEPRECATE, parameter `circuit_list` -> `circuits`
     merge_outcomes: aggregate_dataset_outcomes  # XXX maybe "aggregate_outcomes" as method of DataSet?
-    subsample_timeseries_data: null
+    subsample_timeseries_data: _subsample_timeseries_data
     trim_to_constant_numtimesteps: null
   gateconstruction.py:
     id2x2: null
@@ -217,39 +217,39 @@ construction:
     RANK_TOL: null
     build_cloud_crosstalk_model: null  # XXX REFACTOR into CloudCrosstalkModel
     build_cloudnoise_model_from_hops_and_weights: null  # XXX DEPRECATE
-    check_kcoverage_template: null
-    create_cloudnoise_sequences: create_cloudnoise_circuits
-    create_standard_cloudnoise_sequences: create_standard_cloudnoise_circuits
-    create_standard_localnoise_sequences: create_standard_localnoise_circuits
-    create_xycnot_cloudnoise_sequences: create_xycnot_cloudnoise_circuits
-    fidpairs_to_gatename_fidpair_list: null
-    filter_nqubit_sequences: filter_nqubit_circuits
-    find_amped_polys_for_clifford_syntheticidle: find_amped_polynomials_for_clifford_syntheticidle
-    find_amped_polys_for_syntheticidle: find_amped_polynomials_for_syntheticidle
-    gatename_fidpair_list_to_fidpairs: null
-    get_candidates_for_core: null
-    get_fidpairs_needed_to_access_amped_polys: get_fidpairs_needed_to_access_amped_polynomials  # XXX parameter `amped_poly_j` -> `amped_polynomial_j`
+    check_kcoverage_template: _check_kcoverage_template
+    create_cloudnoise_sequences: _create_cloudnoise_circuits
+    create_standard_cloudnoise_sequences: _create_standard_cloudnoise_circuits
+    create_standard_localnoise_sequences: _create_standard_localnoise_circuits
+    create_xycnot_cloudnoise_sequences: _create_xycnot_cloudnoise_circuits
+    fidpairs_to_gatename_fidpair_list: _fidpairs_to_gatename_fidpair_list
+    filter_nqubit_sequences: _filter_nqubit_circuits
+    find_amped_polys_for_clifford_syntheticidle: _find_amped_polynomials_for_clifford_syntheticidle
+    find_amped_polys_for_syntheticidle: _find_amped_polynomials_for_syntheticidle
+    gatename_fidpair_list_to_fidpairs: _gatename_fidpair_list_to_fidpairs
+    get_candidates_for_core: _get_candidates_for_core
+    get_fidpairs_needed_to_access_amped_polys: _get_fidpairs_needed_to_access_amped_polynomials  # XXX parameter `amped_poly_j` -> `amped_polynomial_j`
     get_kcoverage_template: null
-    nparams_xycnot_cloudnoise_model: null  # XXX get_?
-    reps_for_synthetic_idle: compute_reps_for_synthetic_idle
-    test_amped_polys_for_syntheticidle: test_amped_polynomials_for_syntheticidle
-    tile_cloud_fidpairs: null
-    tile_idle_fidpairs: null
+    nparams_xycnot_cloudnoise_model: _nparams_xycnot_cloudnoise_model  # XXX get_?
+    reps_for_synthetic_idle: _compute_reps_for_synthetic_idle
+    test_amped_polys_for_syntheticidle: _test_amped_polynomials_for_syntheticidle
+    tile_cloud_fidpairs: _tile_cloud_fidpairs
+    tile_idle_fidpairs: _tile_idle_fidpairs
   qutrit.py:
     make_qutrit_model: create_qutrit_model
-    ms2qubit: null
-    ms_3: null
+    ms2qubit: _ms_2qubit
+    ms_3: _ms_qutrit
     to_qutrit_space: null
-    x_2qubit: null
-    xx_3: null
-    y_2qubit: null
-    yy_3: null
+    x_2qubit: _x_2qubit
+    xx_3: _xx_qutrit
+    y_2qubit: _y_2qubit
+    yy_3: _yy_qutrit
   stdlists.py:
     make_elgst_experiment_list: create_elgst_experiment_list  # XXX DEPRECATE
     make_elgst_lists: create_elgst_lists  # XXX DEPRECATE
     make_lsgst_experiment_list: create_lsgst_circuits
     make_lsgst_lists: create_lsgst_circuit_lists
-    make_raw_lsgst_lists: create_raw_lsgst_lists
+    make_raw_lsgst_lists: _create_raw_lsgst_lists
   stdtarget.py: {}
 drivers:
   bootstrap.py:
@@ -538,14 +538,14 @@ objects:
     Circuit:
       __name__: null
       append_circuit: null
-      append_idling_layers: null
-      append_idling_lines: null
-      append_labels_as_lines: null
+      append_idling_layers: _append_idling_layers
+      append_idling_lines: _append_idling_lines
+      append_labels_as_lines: _append_labels_as_lines
       as_label: to_label
       change_gate_library: null
       clear: null
       clear_labels: null
-      combine_one_q_gates: null
+      combine_one_q_gates: _combine_one_q_gates
       compress_depth: null
       convert_to_cirq: null
       convert_to_openqasm: null
@@ -553,15 +553,15 @@ objects:
       copy: null
       create_from: null
       default_expand_subcircuits: null
-      delete_idle_layers: null
-      delete_idling_lines: null
+      delete_idle_layers: _delete_idling_layers
+      delete_idling_lines: _delete_idling_lines
       delete_layers: null
       delete_lines: null
       depth: null
       display_str: null
       done_editing: null
       expand_subcircuits: null
-      factorize_repetitions: null
+      factorize_repetitions: _factorize_repetitions
       from_pythonstr: null
       fromtup: from_tuple
       get_idling_lines: idling_lines
@@ -576,7 +576,7 @@ objects:
       insert_labels_as_lines: null
       insert_labels_into_layers: null
       insert_layer: null
-      is_line_idling: null
+      is_line_idling: _is_line_idling
       layertup: null
       line_labels: null
       map_names_inplace: null  # XXX better prefix?
@@ -591,6 +591,7 @@ objects:
       prefix_circuit: null
       reorder_lines: null
       repeat: null
+      # XXX can these be consolidated?
       replace_gatename: null
       replace_gatename_inplace: null
       replace_layer: null
@@ -600,7 +601,7 @@ objects:
       reverse: null
       serialize: null
       set_labels: null
-      shift_gates_forward: null
+      shift_gates_forward: _shift_gates_forward
       simulate: null
       size: null   # XXX make property?
       str: null
@@ -609,7 +610,7 @@ objects:
       tup: null
       two_q_gate_count: null
       width: null  # XXX make property?
-      write_q_circuit_tex: null
+      write_q_circuit_tex: _write_q_circuit_tex
     CompressedCircuit:
       __name__: null
       compress_op_label_tuple: null
@@ -698,8 +699,8 @@ objects:
       add_local_compilation_of: null
       add_nonlocal_compilation_of: null
       compute_connectivity_of: null
-      construct_local_compilation_of: create_local_compilation_of
-      construct_nonlocal_compilation_of: create_nonlocal_compilation_of
+      construct_local_compilation_of: _create_local_compilation_of
+      construct_nonlocal_compilation_of: _create_nonlocal_compilation_of
       filter_connectivity: null
       compilation_of: null
       local_compilation_of: null
@@ -750,19 +751,19 @@ objects:
       get_tvd: tvd
       get_worst_circuits: worst_circuits
       implement: null
-    compute_llr_threshold: null
-    is_circuit_allowed_by_exclusion: null
-    is_circuit_allowed_by_inclusion: null
-    jensen_shannon_divergence: null  # XXX COMPUTE? If method takes a while -- otherwise fine.
-    likelihood: null  # XXX ditto
-    llr_to_signed_nsigma: null
-    loglikelihood: null  # XXX ditto
-    loglikelihood_ratio: null  # XXX ditto
-    pval: null  # XXX ditto
-    tvd: null  # XXX ditto
-    xlogy: null  # XXX ditto
+    compute_llr_threshold: _compute_llr_threshold
+    is_circuit_allowed_by_exclusion: _is_circuit_allowed_by_exclusion
+    is_circuit_allowed_by_inclusion: _is_circuit_allowed_by_inclusion
+    jensen_shannon_divergence: _jensen_shannon_divergence  # XXX COMPUTE? If method takes a while -- otherwise fine.
+    likelihood: _likelihood  # XXX ditto
+    llr_to_signed_nsigma: _llr_to_signed_nsigma
+    loglikelihood: _loglikelihood  # XXX ditto
+    loglikelihood_ratio: _loglikelihood_ratio  # XXX ditto
+    pval: _pval  # XXX ditto
+    tvd: _tvd  # XXX ditto
+    xlogy: _xlogy  # XXX ditto
   dataset.py:
-    DATAROW_AUTOCACHECOUNT_THRESHOLD: null
+    DATAROW_AUTOCACHECOUNT_THRESHOLD: _DATAROW_AUTOCACHECOUNT_THRESHOLD
     DataSet:
       __name__: null
       add_auxiliary_info: null
@@ -803,10 +804,10 @@ objects:
       update_ol: null  # XXX check if this is needed in public API – if so, make more descriptive: update_internal_ol_mapping, if not -> _update_ol
       values: null
     DataSetKVIterator:
-      __name__: null
+      __name__: _DataSetKVIterator
       next: null
     DataSetRow:
-      __name__: null
+      __name__: _DataSetRow
       allcounts: null
       as_dict: to_dict
       counts: null
@@ -830,7 +831,7 @@ objects:
       to_str: null
       total: null
     DataSetValueIterator:
-      __name__: null
+      __name__: _DataSetValueIterator
       next: null
   evaltree.py:
     EvalTree:
@@ -849,7 +850,7 @@ objects:
       num_final_elements: null
       num_final_strings: num_final_circuits
       permute_computation_to_original: null
-      permute_original_to_computation: null
+      permute_original_to_computation: _permute_original_to_computation
       print_analysis: null
       split: null
   explicitcalc.py:
@@ -870,7 +871,7 @@ objects:
       bulk_dproduct: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_hproduct: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_product: null  # XXX parameter `eval_tree` -> `evaltree`
-      decrease_dimension: null
+      decrease_dimension: _decrease_dimension
       default_gauge_group: null
       depolarize: null
       deriv_wrt_params: null
@@ -904,7 +905,7 @@ objects:
       set_primitive_povm_labels: null  # XXX make property
       set_primitive_prep_labels: null  # XXX make property
       strdiff: null
-      tpdist: null
+      tpdist: _tpdist
       transform: null
   forwardsim.py:
     ForwardSimulator:
@@ -1127,11 +1128,11 @@ objects:
       replacename: null
       sslbls: null
       tonative: null
-    debug_record: null
+    debug_record: _debug_record
   labeldicts.py:
     OrderedMemberDict:
       __name__: null
-      cast_to_obj: null
+      cast_to_obj: null  # XXX Needs better name
       copy: null
     OutcomeLabelDict:
       __name__: null
@@ -1141,7 +1142,7 @@ objects:
       set_unsafe: setitem_unsafe
       to_outcome: null
     PrefixOrderedDict:
-      __name__: null
+      __name__: _PrefixOrderedDict
     StateSpaceLabels:  # XXX Better names?
       __name__: null
       copy: null
@@ -1174,7 +1175,7 @@ objects:
       __name__: null
       build_from_parameterization: from_parameterization
     SimpleCompLayerLizard:
-      __name__: null
+      __name__: _SimpleCompLayerLizard
       get_effect: effect
       get_layer_component_operation: layer_component_operation
       get_operation: operation
@@ -1217,22 +1218,22 @@ objects:
       estimate_mem_usage: _estimate_mem_usage
       hpr: _hpr
       prs: _prs  # XXX parameter `elabels` -> `effect_labels`
-    SUPEROP: null
-    UNITARY: null
+    SUPEROP: _SUPEROP
+    UNITARY: _UNITARY
   matrixevaltree.py:
     MatrixEvalTree:
       __name__: null
       cache_size: null
       copy: null
       generate_circuit_list: compute_circuits  # XXX or make property
-      get_analysis_plot_infos: compute_analysis_plot_infos
-      get_min_tree_size: min_tree_size  # XXX make property
+      get_analysis_plot_infos: _compute_analysis_plot_infos
+      get_min_tree_size: _min_tree_size  # XXX make property
       initialize: null  # XXX parameter `simplified_circuit_elabels` -> `simplified_circuit_effect_labels`
       recompute_spamtuple_indices: null
       split: null
   matrixforwardsim.py:
-    DSMALL: null
-    HSMALL: null
+    DSMALL: _DSMALL
+    HSMALL: _HSMALL
     MatrixForwardSimulator:
       __name__: null
       bulk_dproduct: null   # XXX parameter `eval_tree` -> `evaltree`
@@ -1245,17 +1246,17 @@ objects:
       construct_evaltree: create_evaltree
       copy: null
       default_distribute_method: null  # XXX make property
-      doperation: null
+      doperation: _doperation
       dpr: _dpr
       dproduct: null
       estimate_cache_size: _estimate_cache_size
       estimate_mem_usage: _estimate_mem_usage
-      hoperation: null
+      hoperation: _hoperation
       hpr: _hpr
       hproduct: null
       product: null
       prs: _prs  # XXX parameter `elabels` -> `effect_labels`
-    PSMALL: null
+    PSMALL: _PSMALL
   model.py:
     Model:  # XXX note dereference to forward simulator methods -- better design?
       __name__: null
@@ -1358,10 +1359,10 @@ objects:
       save: null
       values: null
     MultiDataSetKVIterator:
-      __name__: null
+      __name__: _MultiDataSetKVIterator
       next: null
     MultiDataSetValueIterator:
-      __name__: null
+      __name__: _MultiDataSetValueIterator
       next: null
   objectivefns.py:
     CHECK: null
@@ -1986,7 +1987,7 @@ objects:
       get_edges: find_qubit_connections  # XXX or `find_qubit_connections_within`
       get_std_model: create_std_model
   profiler.py:
-    BtoGB: null
+    BtoGB: _BtoGB
     DummyProfiler:
       __name__: null
       add_count: null
@@ -1996,9 +1997,9 @@ objects:
       __name__: null
       add_count: null
       add_time: null
-      format_counts: null
-      format_memory: null
-      format_times: null
+      format_counts: _format_counts
+      format_memory: _format_memory
+      format_times: _format_times
       mem_check: memory_check
       print_mem: print_memory
       print_msg: print_message
@@ -2588,7 +2589,7 @@ objects:
     DenseSPAMVec:
       __name__: null
       base: null
-      base_1d: null
+      base_1d: _base_1d
       todense: to_dense
     FullSPAMVec:
       __name__: null
@@ -2606,7 +2607,7 @@ objects:
       deriv_wrt_params: null
       from_lindblad_terms: null
       from_spam_vector: null
-      from_spamvec_obj: null
+      from_spamvec_obj: _from_spamvec_obj
       from_vector: null
       get_taylor_order_terms: taylor_order_terms  # XXX parameter `max_poly_vars` -> `max_polynomial_vars`, parameter `return_coeff_polys` -> `return_coeff_polynomials`
       get_taylor_order_terms_above_mag: taylor_order_terms_above_mag  # XXX parameter `max_poly_vars` -> `max_polynomial_vars`
@@ -2630,7 +2631,7 @@ objects:
       todense: to_dense
     SPAMVec:
       __name__: null
-      convert_to_vector: null
+      convert_to_vector: _to_vector
       depolarize: null
       deriv_wrt_params: null
       frobeniusdist2: null
@@ -2651,12 +2652,12 @@ objects:
       transform: null
     StabilizerEffectVec:
       __name__: null
-      from_dense_purevec: null
+      from_dense_purevec: _from_dense_purevec
       outcomes: null
       todense: to_dense
     StabilizerSPAMVec:
       __name__: null
-      from_dense_purevec: null
+      from_dense_purevec: _from_dense_purevec
       todense: to_dense
     StaticSPAMVec:
       __name__: null
@@ -2690,7 +2691,7 @@ objects:
       extract_all_amplitudes: null
       extract_amplitude: null
       from_zvals: null
-      get_state_str: null
+      get_state_str: _state_str
       measurement_probability: null
       nqubits: null
       pop_view: null
@@ -2698,22 +2699,22 @@ objects:
       to_statevec: null
       torep: to_rep
     sframe_kronecker: null
-  term.py:
+  term.py:  # XXX some RankOneTerm derived types should be made private -- figure out which ones
     HasMagnitude:
-      __name__: null
+      __name__: _HasMagnitude
       compose: null
       logmagnitude: null
       magnitude: null
     HasNumericalCoefficient:
-      __name__: null
+      __name__: _HasNumericalCoefficient
       coeff: null
     HasPolyCoefficient:
-      __name__: HasPolynomialCoefficient
+      __name__: _HasPolynomialCoefficient
       coeff: null
       map_indices_inplace: null
       mapvec_indices_inplace: null
     NoMagnitude:
-      __name__: null
+      __name__: _NoMagnitude
       compose: null
     RankOneDirectEffectTerm:
       __name__: null
@@ -2746,10 +2747,10 @@ objects:
     RankOnePolyOpTermWithMagnitude:
       __name__: RankOnePolynomialOpTermWithMagnitude
     RankOnePolyPrepTerm:
-      __name__: RankOnePolyPrepTerm
+      __name__: RankOnePolynomialPrepTerm
       copy_with_magnitude: null
     RankOnePolyPrepTermWithMagnitude:
-      __name__: RankOnePolyPrepTermWithMagnitude
+      __name__: RankOnePolynomialPrepTermWithMagnitude
     RankOnePrepTerm:
       __name__: null
       embed: null
@@ -2856,7 +2857,7 @@ optimize:
     CustomLMOptimizer:
       __name__: null
       run: null
-    MACH_PRECISION: null
+    MACH_PRECISION: _MACH_PRECISION
     Optimizer:
       __name__: null
       create_from: null
@@ -2866,10 +2867,10 @@ optimize:
   optimize.py:
     check_jac: null
     create_obj_func_printer: create_objfn_printer
-    fmin_evolutionary: null
-    fmin_particle_swarm: null
-    fmin_simplex: null
-    fmin_supersimplex: null
+    fmin_evolutionary: _fmin_evolutionary
+    fmin_particle_swarm: _fmin_particle_swarm
+    fmin_simplex: _fmin_simplex
+    fmin_supersimplex: _fmin_supersimplex
     minimize: null
 protocols:
   estimate.py:
