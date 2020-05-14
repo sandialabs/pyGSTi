@@ -9,7 +9,7 @@ import warnings
 import typing as T
 
 import rope.base
-from rope.refactor import rename
+import rope.refactor
 import yaml
 
 try:
@@ -31,6 +31,143 @@ def _custom_warning(message, category, filename, lineno, line=None) -> str:
 
 
 warnings.formatwarning = _custom_warning
+
+
+class ValidatePath(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        path = Path(values)
+        if not path.exists():
+            raise AttributeError(f"{option_string} {path} not found")
+        setattr(namespace, self.dest, path)
+
+
+# Parse args globally for script
+DEFAULT_PROJECT_ROOT = Path(__file__).absolute().parent.parent
+DEFAULT_CHANGESET_YAML = DEFAULT_PROJECT_ROOT / 'scripts' / 'api_names.yaml'
+DEFAULT_PROJECT_SOURCE = 'pygsti'
+parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-s', '--skip-unsure', action='store_true',
+                    help="skip any changes that may not be correct.")
+parser.add_argument('-f', '--force-unsure', action='store_true',
+                    help="make changes that may not be correct without prompting for confirmation.")
+parser.add_argument('-D', '--skip-docs', action='store_true',
+                    help="skip making changes in comments and strings.")
+parser.add_argument('-P', '--project-root', default=DEFAULT_PROJECT_ROOT, action=ValidatePath,
+                    help="path to the root of the project. Will be used as the rope project path.")
+parser.add_argument('-Y', '--changeset-yaml', default=DEFAULT_CHANGESET_YAML, action=ValidatePath,
+                    help="path to a changeset YAML describing the names in the project to change.")
+parser.add_argument('-S', '--project-source', default=DEFAULT_PROJECT_SOURCE, action=ValidatePath,
+                    help="relative path from the project root to the source tree.")
+
+args = parser.parse_args()
+if args.skip_unsure and args.force_unsure:
+    warnings.warn("Arguments `--skip-unsure' and `--force-unsure' conflict; ignoring `--force-unsure'.")
+    args.force_unsure = False
+
+project = rope.base.project.Project(str(args.project_root))
+
+occurrence_cache = {}
+
+_unsure_actions = {
+    'y': "rename this occurrence",
+    'Y': "rename this occurrence, and all other occurrences of {name} without prompting",
+    'n': "skip this occurrence",
+    'N': "skip this occurrence and all other occurrences of {name} without prompting",
+    'm': "skip any unsure changes for names from {module}",
+    'M': "make all unsure changes for names from {module} without prompting",
+    'o': "skip any unsure changes in {occurrence_module}",
+    'O': "make all unsure changes in {occurrence_module} without prompting"
+}
+
+
+def _prompt_for_unsure_action(prompt: str, on_eof: str = 'N', **context) -> str:
+    # Interactively prompt for a decision on how to proceed
+    print(prompt)
+    action_keys = ''.join(_unsure_actions.keys())
+    while True:
+        try:
+            choice = input(f"What action should be taken? [{action_keys}?] "
+                           + color('=> ', fg='yellow', style='blink'))
+        except EOFError:
+            return on_eof
+
+        if choice in _unsure_actions:
+            return choice
+        elif choice == '?':
+            # show help
+            print("The following actions are available:")
+            for k, msg in _unsure_actions.items():
+                print("    " + color(k, fg='white') + ": " + msg.format(**context))
+            print("or '?' to display this help message.")
+        else:
+            print(color(f"Please choose one of [{action_keys}], or '?' for help.", fg='red'))
+
+
+def _highlight(string: str, start: int, end: int, **kwargs):
+    return string[:start] + color(string[start:end], **kwargs) + string[end:]
+
+
+def _make_unsure_action_factory(module: str):
+    if args.skip_unsure:
+        return lambda: lambda o: False
+    elif args.force_unsure:
+        return lambda: lambda o: True
+
+    instance_fastforward = None
+
+    def make_unsure_action(name: str, new_name: str):
+        if instance_fastforward is not None:
+            return lambda o: instance_fastforward
+        fastforward = None
+
+        def action(occurrence: rope.refactor.occurrences.Occurrence) -> bool:
+            nonlocal fastforward, instance_fastforward
+            if fastforward is not None:
+                return fastforward
+            elif occurrence.resource.real_path in occurrence_cache:
+                return occurrence_cache[occurrence.resource.real_path]
+            else:
+                occurrence_module = occurrence.resource.path
+                prompt = f"Possible instance of `{name}' at {occurrence_module}:{occurrence.offset}"
+                # Include occurrence source in prompt
+                clip_source = occurrence.resource.read()
+                o_start, o_end = occurrence.get_primary_range()
+                clip_start = clip_source.rfind('\n', 0, o_start)
+                if clip_start == -1:
+                    clip_start = None
+                clip_end = clip_source.find('\n', o_end)
+                if clip_end == -1:
+                    clip_end = None
+
+                clip = _highlight(clip_source[clip_start:clip_end],
+                                  o_start - clip_start, o_end - clip_end,
+                                  fg='cyan', style='bold')
+
+                choice = _prompt_for_unsure_action(
+                    prompt + "\n" + clip + "\n",
+                    name=name,
+                    new_name=new_name,
+                    module=module,
+                    occurrence_module=color(occurrence_module, fg='green')
+                )
+
+                if choice == 'Y':
+                    fastforward = True
+                elif choice == 'N':
+                    fastforward = False
+                    return False
+                elif choice == 'm':
+                    instance_fastforward = fastforward = False
+                elif choice == 'M':
+                    instance_fastforward = fastforward = True
+                elif choice == 'o':
+                    occurrence_cache[occurrence.resource.real_path] = False
+                elif choice == 'O':
+                    occurrence_cache[occurrence.resource.real_path] = True
+
+                return choice in 'yYMO'
+        return action
+    return make_unsure_action
 
 
 class SkipName(Exception):
@@ -93,20 +230,19 @@ def _get_offset(module_source: str, name: T.Union[str, T.Iterable[str]]) -> T.Op
             return name_offset
 
 
-def _module_rename(rope_project: rope.base.project.Project, module_path: Path, name_map: dict) -> None:
+def _module_rename(module_path: Path, name_map: dict) -> None:
     """Execute name changes within a Python module.
 
     Parameters
     ----------
-    rope_project : rope.base.project.Project
-        Rope project instance.
     module_path : Path
         Path to the module source file to change names in.
     name_map : dict
         A map of old names to new names within the module.
     """
-    rope_file = rope_project.get_file(str(module_path))
+    rope_file = project.get_file(str(module_path))
     display_module = color(module_path, fg='yellow')
+    make_unsure_action = _make_unsure_action_factory(display_module)
 
     def iter_changes(change_map: dict):
         for key, value in change_map.items():
@@ -138,9 +274,16 @@ def _module_rename(rope_project: rope.base.project.Project, module_path: Path, n
                         )
                     else:
                         print(f"{display_module}: renaming `{display_name}' -> `{display_new_name}'")
-                        changes = rename.Rename(rope_project, rope_file, offset).get_changes(new_name)
-                        rope_project.do(changes)
-                        rope_project.validate()
+                        changes = rope.refactor.rename.Rename(
+                            project, rope_file, offset
+                        ).get_changes(
+                            new_name,
+                            unsure=make_unsure_action(display_name, display_new_name),
+                            docs=not args.skip_docs
+                        )
+
+                        project.do(changes)
+                        project.validate()
         except SkipName as e:
             display_msg = color(str(e), fg='red')
             warnings.warn(f"Skipping rename `{display_name}' -> `{display_new_name}':\n    {display_msg}")
@@ -149,13 +292,11 @@ def _module_rename(rope_project: rope.base.project.Project, module_path: Path, n
             debugger.post_mortem()
 
 
-def _project_rename(rope_project: rope.base.project.Project, name_map: dict) -> None:
+def _project_rename(name_map: dict) -> None:
     """Execute name changes within a Python project.
 
     Parameters
     ----------
-    rope_project : rope.base.project.Project
-        Rope project instance.
     name_map : dict
         A map of old names to new names within the project, organized by module.
     """
@@ -172,12 +313,10 @@ def _project_rename(rope_project: rope.base.project.Project, name_map: dict) -> 
         if module_path.suffix == '.pyx':
             warnings.warn(f"Skipping cython extension module `{module_path}' (can't be refactored)")
         else:
-            _module_rename(rope_project, module_path, module_map)
+            _module_rename(args.project_source / module_path, module_map)
 
 
-with open('scripts/api_names.yaml', 'r') as f:
+with open(args.changeset_yaml, 'r') as f:
     name_map = yaml.safe_load(f.read())
 
-project = rope.base.project.Project('pygsti')
-
-_project_rename(project, name_map)
+_project_rename(name_map)
