@@ -1884,27 +1884,6 @@ objects:
       torep: to_rep
       vindices_per_int: null
     PLATFORM_BITS: null
-    Polynomial:
-      __name__: null
-      coeffs: null
-      compact: null
-      copy: null
-      deriv: null
-      evaluate: null
-      fromrep: from_rep
-      get_degree: degree  # XXX make property
-      get_vindices_per_int: vindices_per_int
-      map_indices: null
-      map_indices_inplace: null
-      mapvec_indices: null
-      mapvec_indices_inplace: null
-      max_num_vars: null
-      mult: null
-      product: null  # XXX parameter `list_of_polys` -> `polynomials`
-      scalar_mult: null
-      scale: null
-      torep: to_rep
-      vindices_per_int: null
     SLOWPolynomial:  # XXX better naming?
       __name__: null
       check_fastpoly: check_fast_polynomial
@@ -2874,10 +2853,11 @@ optimize:
     minimize: null
 protocols:
   estimate.py:
-    CRFkey:  # XXX parameter `circuit_list` -> `circuits`
-      __name__: null
-      circuit_list: circuits
-      model: null
+    ## TODO this is a namedtuple; manually refactor
+    # CRFkey:  # XXX parameter `circuit_list` -> `circuits`
+    #   __name__: null
+    #   circuit_list: circuits
+    #   model: null
     Estimate:
       __name__: null
       add_confidence_region_factory: null
@@ -3082,22 +3062,10 @@ protocols:
     VolumetricBenchmarkingResults:
       __name__: null
   rpe.py:
-    RPE:
-      __name__: null
-      parse_dataset: null
-      raw_angles: compute_raw_angles  # XXX Kenny?
-      run: null
-    RPEDesign:
-      __name__: null
-    RPEResults:
-      __name__: null
-      angle_estimate: null
-      measured_counts: null
-      raw_angles: null
     RobustPhaseEstimation:
       __name__: null
       parse_dataset: null
-      raw_angles: null
+      raw_angles: compute_raw_angles  # XXX Kenny?
       run: null
     RobustPhaseEstimationDesign:
       __name__: null
