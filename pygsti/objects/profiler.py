@@ -16,6 +16,7 @@ import numpy as _np
 
 
 try:
+    # Get memory usage using psutil, if available
     import psutil as _psutil
 
     def _get_mem_usage():
@@ -23,14 +24,20 @@ try:
         return p.memory_info()[0]
 
 except ImportError:
-    import sys as _sys
-    import resource as _resource
+    try:
+        # If psutil is unavailable, get memory usage using resource (only available on Unix platforms)
+        import sys as _sys
+        import resource as _resource
 
-    def _get_mem_usage():
-        mem = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
-        # peak memory usage (bytes on OS X, kilobytes on Linux)
-        if _sys.platform != 'darwin': mem *= 1024  # now always in bytes
-        return mem
+        def _get_mem_usage():
+            mem = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
+            # peak memory usage (bytes on OS X, kilobytes on Linux)
+            if _sys.platform != 'darwin': mem *= 1024  # now always in bytes
+            return mem
+    except ImportError:
+        # No memory usage polling available
+        def _get_mem_usage():
+            raise EnvironmentError("Memory profiling is not available (hint: try `pip install psutil`)")
 
 
 def _get_root_mem_usage(comm):

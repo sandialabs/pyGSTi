@@ -2779,7 +2779,8 @@ class Circuit(object):
     def convert_to_cirq(self,
                         qubit_conversion,
                         wait_duration=None,
-                        gatename_conversion=None):
+                        gatename_conversion=None,
+                        idle_gate_name='Gi'):
         """
         Converts this circuit to a Cirq circuit.
 
@@ -2787,8 +2788,7 @@ class Circuit(object):
         ----------
         qubit_conversion : dict
             Mapping from qubit labels (e.g. integers) to Cirq qubit objects.
-        wait_duration: cirq.Duration, optional
-            NOT CURRENTLY WORKING
+        wait_duration : cirq.Duration, optional
             If no gatename_conversion dict is given, the idle operation is not
             converted to a gate. If wait_diration is specified and gatename_conversion
             is not specified, then the idle operation will be converted to a
@@ -2799,6 +2799,8 @@ class Circuit(object):
             are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
             be specified, and an automatic conversion to the standard Cirq names will be
             implemented.
+        idle_gate_name : str, optional
+            Name to use for idle gates. Defaults to 'Gi'
 
         Returns
         -------
@@ -2813,15 +2815,17 @@ class Circuit(object):
         if gatename_conversion is None:
             gatename_conversion = _itgs.get_standard_gatenames_cirq_conversions()
             if wait_duration is not None:
-                gatename_conversion['Gi'] = cirq.WaitGate(wait_duration)
+                gatename_conversion[idle_gate_name] = cirq.WaitGate(wait_duration)
 
         moments = []
         for i in range(self.num_layers()):
-            layer = self.get_layer(i)
+            layer = self.get_layer_with_idles(i, idle_gate_name)
             operations = []
             for gate in layer:
                 operation = gatename_conversion[gate.name]
-                if operation is None:  # TODO: How to handle idle?
+                if operation is None:
+                    # This happens if no idle gate it specified because
+                    # get_standard_gatenames_cirq_conversions maps 'Gi' to `None`
                     continue
                 qubits = map(qubit_conversion.get, gate.qubits)
                 operations.append(operation.on(*qubits))
