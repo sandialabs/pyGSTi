@@ -1,4 +1,6 @@
-""" Defines the QubitGraph class and supporting functions """
+"""
+Defines the QubitGraph class and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,12 +18,48 @@ from scipy.sparse.csgraph import floyd_warshall as _fw
 
 class QubitGraph(object):
     """
-    A directed or undirected graph data structure used to represent geometrical
-    layouts of qubits or qubit gates.
+    A directed or undirected graph data structure used to represent geometrical layouts of qubits or qubit gates.
 
     Qubits are nodes in the graph (and can be labeled), and edges represent the
     ability to perform one or more types of gates between qubits (equivalent,
     usually, to geometrical proximity).
+
+    Parameters
+    ----------
+    qubit_labels : list
+        A list of string or integer labels of the qubits.  The length of
+        this list equals the number of qubits (nodes) in the graph.
+
+    initial_connectivity : numpy.ndarray, optional
+        A (nqubits, nqubits) boolean or integer array giving the initial
+        connectivity of the graph.  If an integer array, then 0 indicates
+        no edge and positive integers indicate present edges in the
+        "direction" given by the positive integer.  For example `1` may
+        corresond to "left" and `2` to "right".  Names must be associated
+        with these directions using `direction_names`.  If a boolean array,
+        if there's an edge from qubit `i` to `j` then
+        `initial_connectivity[i,j]=True` (integer indices of qubit
+        labels are given by their position in `qubit_labels`).  When
+        `directed=False`, only the upper triangle is used.
+
+    initial_edges : list
+        A list of `(qubit_label1, qubit_label2)` 2-tuples or
+        `(qubit_label1, qubit_label2, direction)` 3-tuples
+        specifying which edges are initially present.  `direction`
+        can either be a positive integer, similar to those used in
+        `initial_connectivity` (in which case `direction_names` must
+        be specified) or a string labeling the direction, e.g. `"left"`.
+
+    directed : bool, optional
+        Whether the graph is directed or undirected.  Directions can only
+        be used when `directed=True`.
+
+    direction_names : iterable, optional
+        A list (or tuple, etc) of string-valued direction names such as
+        `"left"` or `"right"`.  These strings label the directions
+        referenced by index in either `initial_connectivity` or
+        `initial_edges`, and this argument is required whenever such
+        indices are used.
     """
 
     @classmethod
@@ -45,6 +83,9 @@ class QubitGraph(object):
             The labels for the qubits.  Must be of length `n_qubits`.
             If None, then the integers from 0 to `n_qubits-1` are used.
 
+        all_directions : bool, optional
+            Whether to include edges with all directions.  Typically it
+            only makes sense to set this to `True` when `directed=True` also.
 
         Returns
         -------
@@ -248,8 +289,10 @@ class QubitGraph(object):
 
     def get_node_names(self):
         """
-        Returns a tuple of node labels (correponding to integer indices
-        where appropriate, e.g. for :method:`shortest_path_distance_matrix`)
+        All the node labels of this graph.
+
+        These correpond to integer indices where appropriate,
+        e.g. for :method:`shortest_path_distance_matrix`.
 
         Returns
         -------
@@ -279,8 +322,11 @@ class QubitGraph(object):
 
         Parameters
         ----------
-        node1,node2 : object
-            Qubit (node) labels - typically strings or integers.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         direction : str or int, optional
             Either a direction name or a direction indicex
@@ -308,8 +354,11 @@ class QubitGraph(object):
 
         Parameters
         ----------
-        node1,node2 : object
-            Qubit (node) labels - typically strings or integers.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -352,9 +401,11 @@ class QubitGraph(object):
 
     def radius(self, base_nodes, max_hops):
         """
+        Find all the nodes reachable in `max_hops` from any node in `base_nodes`.
+
         Get a (sorted) array of node labels that can be reached
         from traversing at most `max_hops` edges starting
-        from a node (vertex) in base_nodes.
+        from a node (vertex) in `base_nodes`.
 
         Parameters
         ----------
@@ -387,8 +438,7 @@ class QubitGraph(object):
 
     def connected_combos(self, possible_nodes, size):
         """
-        Computes the number of different connected subsets of `possible_nodes`
-        containing `size` nodes.
+        Computes the number of different connected subsets of `possible_nodes` containing `size` nodes.
 
         Parameters
         ----------
@@ -416,13 +466,15 @@ class QubitGraph(object):
 
     def is_connected(self, node1, node2):
         """
-        Is `node1` connected to `node2` (does there exist a path of any length
-        between them?)
+        Is `node1` connected to `node2` (does there exist a path of any length between them?)
 
         Parameters
         ----------
-        node1, node2 : object
-            The node (qubit) labels to check.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -434,8 +486,10 @@ class QubitGraph(object):
 
     def has_edge(self, edge):
         """
-        Is `edge` an edge in this graph.  Note that if this graph is
-        undirected, either node order in `edge` will return True.
+        Is `edge` an edge in this graph.
+
+        Note that if this graph is undirected, either node
+        order in `edge` will return True.
 
         Parameters
         ----------
@@ -450,13 +504,15 @@ class QubitGraph(object):
 
     def is_directly_connected(self, node1, node2):
         """
-        Is `node1` *directly* connected to `node2` (does there exist an edge
-        between them?)
+        Is `node1` *directly* connected to `node2` (does there exist an edge  between them?)
 
         Parameters
         ----------
-        node1, node2 : object
-            The node (qubit) labels to check.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -467,9 +523,9 @@ class QubitGraph(object):
 
     def are_glob_connected(self, nodes):
         """
-        Does there exist a path from every node in `nodes`
-        to every other node in `nodes`.  That is, do these
-        nodes form a connected set?
+        Does there exist a path from every node in `nodes` to every other node in `nodes`?
+
+        That is, do these nodes form a connected set?
 
         Parameters
         ----------
@@ -510,8 +566,11 @@ class QubitGraph(object):
 
         Parameters
         ----------
-        node1, node2 : object
-            Node (qubit) labels, usually integers or strings.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -539,14 +598,18 @@ class QubitGraph(object):
 
     def shortest_path_edges(self, node1, node2):
         """
-        Like :method:`shortest_path`, but returns a list of (nodeA,nodeB)
-        tuples, where the first tuple's nodeA == `node1` and the final tuple's
-        nodeB == `node2`.
+        Like :method:`shortest_path`, but returns a list of (nodeA,nodeB) tuples.
+
+        These tuples define a path from `node1` to `node2`, so the first tuple's
+        nodeA == `node1` and the final tuple's nodeB == `node2`.
 
         Parameters
         ----------
-        node1, node2 : object
-            Node (qubit) labels, usually integers or strings.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -558,13 +621,15 @@ class QubitGraph(object):
 
     def shortest_path_intersect(self, node1, node2, nodes_to_intersect):
         """
-        Determine  whether the shortest path between `node1` and `node2`
-        contains any of the nodes in `nodes_to_intersect`.
+        Check whether the shortest path between `node1` and `node2` contains any of the nodes in `nodes_to_intersect`.
 
         Parameters
         ----------
-        node1, node2 : object
-            Node (qubit) labels, usually integers or strings.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         nodes_to_intersect : list
             A list of node labels.
@@ -583,8 +648,11 @@ class QubitGraph(object):
 
         Parameters
         ----------
-        node1, node2 : object
-            Node (qubit) labels, usually integers or strings.
+        node1 : str or int
+            Qubit (node) label.
+
+        node2 : str or int
+            Qubit (node) label.
 
         Returns
         -------
@@ -596,9 +664,11 @@ class QubitGraph(object):
 
     def shortest_path_distance_matrix(self):
         """
-        Returns a matrix of shortest path distances, indexed by the
-        integer-index of each node label (as specified to __init__).  The list
-        of index-ordered node labels is given by :method:`get_node_names`.
+        Returns a matrix of shortest path distances.
+
+        This matrix is indexed by the integer-index of each node label (as
+        specified to __init__).  The list of index-ordered node labels is given
+        by :method:`get_node_names`.
 
         Returns
         -------
@@ -611,10 +681,11 @@ class QubitGraph(object):
 
     def shortest_path_predecessor_matrix(self):
         """
-        Returns a matrix of predecessors used to construct the
-        shortest path between two nodes, indexed by the
-        integer-index of each node label (as specified to __init__).  The list
-        of index-ordered node labels is given by :method:`get_node_names`.
+        Returns a matrix of predecessors used to construct the shortest path between two nodes.
+
+        This matrix is indexed by the integer-index of each node label (as
+        specified to __init__).  The list of index-ordered node labels is given
+        by :method:`get_node_names`.
 
         Returns
         -------
@@ -627,8 +698,7 @@ class QubitGraph(object):
 
     def subgraph(self, nodes_to_keep, reset_nodes=False):
         """
-        Return a graph that includes only `nodes_to_keep` and
-        the edges between them.
+        Return a graph that includes only `nodes_to_keep` and the edges between them.
 
         Parameters
         ----------
@@ -694,6 +764,22 @@ class QubitGraph(object):
             raise ValueError("Unknown node: %s" % str(relative_nodelabel))
 
     def move_in_directions(self, start_node, directions):
+        """
+        The node you end up on after moving in `directions` from `start_node`.
+
+        Parameters
+        ----------
+        start_node : str or int
+            Qubit (node) label.
+
+        directions : iterable
+            A sequence of direction names.
+
+        Returns
+        -------
+        str or int or None
+            The ending node label or `None` if the directions were invalid.
+        """
         node = start_node
         for direction in directions:
             node = self.move_in_direction(node, direction)

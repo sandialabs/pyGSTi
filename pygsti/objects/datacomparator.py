@@ -1,4 +1,6 @@
-""" Defines the DataComparator class used to compare multiple DataSets."""
+"""
+Defines the DataComparator class used to compare multiple DataSets.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,7 +18,7 @@ import collections as _collections
 from .multidataset import MultiDataSet as _MultiDataSet
 from .hypothesistest import HypothesisTest as _HypothesisTest
 
-
+#PRIVATE
 def xlogy(x, y):
     """
     Returns x*log(y).
@@ -27,10 +29,10 @@ def xlogy(x, y):
         return x * _np.log(y)
 
 
+#PRIVATE
 def likelihood(p_list, n_list):
     """
-    The likelihood for probabilities `p_list` of a die,
-    given `n_list` counts for each outcome.
+    The likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
     """
     output = 1.
     for i, pVal in enumerate(p_list):
@@ -38,10 +40,10 @@ def likelihood(p_list, n_list):
     return output
 
 
+#PRIVATE
 def loglikelihood(p_list, n_list):
     """
-    The log of the likelihood for probabilities `p_list` of a die,
-    given `n_list` counts for each outcome.
+    The log of the likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
     """
     output = 0.
     for i, pVal in enumerate(p_list):
@@ -54,8 +56,11 @@ def loglikelihood(p_list, n_list):
 #     return _np.abs(dof - loglikelihood_ratio(alpha*n_list_list))
 
 
+#PRIVATE OR MOVE
 def loglikelihood_ratio(n_list_list):
     """
+    log(likelihood ratio) between one-context and multiple-context models.
+
     Calculates the log-likelood ratio between the null hypothesis
     that a die has *the same* probabilities in multiple "contexts" and
     that it has *different* probabilities in multiple "contexts".
@@ -82,10 +87,13 @@ def loglikelihood_ratio(n_list_list):
     return -2 * (lC - lS)
 
 
+#PRIVATE OR MOVE
 def jensen_shannon_divergence(n_list_list):
     """
-    Calculates the Jensen-Shannon divergence (JSD) between between different
-    observed frequencies, obtained in different "contexts", for the different
+    Calculates the Jensen-Shannon divergence (JSD) between one-context and multiple-context models.
+
+    The JSD is computed between between different observed frequencies,
+    obtained in different "contexts", for the different
     outcomes of a "die" (i.e., coin with more than two outcomes).
 
     Parameters
@@ -103,10 +111,12 @@ def jensen_shannon_divergence(n_list_list):
     return loglikelihood_ratio(n_list_list) / (2 * total_counts)
 
 
+#PRIVATE OR MOVE
 def pval(llrval, dof):
     """
-    The p-value of a log-likelihood ratio (LLR), comparing a
-    nested null hypothsis and a larger alternative hypothesis.
+    The p-value of a log-likelihood ratio (LLR).
+
+    This compares a nested null hypothsis and a larger alternative hypothesis.
 
     Parameters
     ----------
@@ -132,10 +142,12 @@ def pval(llrval, dof):
     return 1 - _stats.chi2.cdf(llrval, dof)
 
 
+#PRIVATE OR MOVE
 def llr_to_signed_nsigma(llrval, dof):
     """
-    Finds the signed number of standard deviations for the input
-    log-likelihood ratio (LLR). This is given by
+    Finds the signed number of standard deviations for the input log-likelihood ratio (LLR).
+
+    This is given by
 
     (llrval - dof) / (sqrt(2*dof)).
 
@@ -163,10 +175,23 @@ def llr_to_signed_nsigma(llrval, dof):
     return (llrval - dof) / _np.sqrt(2 * dof)
 
 
+#PRIVATE OR MOVE
 def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     """
-    Returns True if `circuit` does not contain any gates from `op_exclusions`.
-    Otherwise, returns False.
+    Checks if `circuit` does contains any gates from `op_exclusions`.
+
+    Parameters
+    ----------
+    op_exclusions : iterable
+        A sequence of gate labels to exclude.
+
+    circuit : Circuit
+        The circuit to test.
+
+    Returns
+    -------
+    bool
+        True only if circuit does not contain anything in `op_exclusions`.
     """
     for gate in op_exclusions:
         if gate in circuit:
@@ -174,11 +199,26 @@ def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     return True
 
 
+#PRIVATE OR MOVE
 def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     """
-    Returns True if `circuit` contains *any* of the gates from `op_inclusions`.
-    Otherwise, returns False. The exception is the empty circuit, which always
-    returns True.
+    Checks if `circuit` contains *any* of the gates from `op_inclusions`.
+
+    The empty circuit is a special case, for which this function always returns True.
+
+    Parameters
+    ----------
+    op_inclusions : iterable
+        A sequence of gate labels to include.
+
+    circuit : Circuit
+        The circuit to test.
+
+    Returns
+    -------
+    bool
+        True if `circuit` contains *any* of the gates from `op_inclusions`,
+        otherwise False.
     """
     if len(circuit) == 0: return True  # always include the empty string
     for gate in op_inclusions:
@@ -187,8 +227,11 @@ def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     return False
 
 
+#PRIVATE OR MOVE
 def compute_llr_threshold(significance, dof):
     """
+    Compute a log-likelihood-ratio threshold.
+
     Given a p-value threshold, *below* which a pvalue
     is considered statistically significant, it returns
     the corresponding log-likelihood ratio threshold, *above*
@@ -199,8 +242,8 @@ def compute_llr_threshold(significance, dof):
 
     Parameters
     ----------
-    pVal : float
-        The p-value
+    significance : float
+        p-value threshold.
 
     dof : int
         The number of degrees of freedom associated with
@@ -221,8 +264,11 @@ def compute_llr_threshold(significance, dof):
     return _scipy.stats.chi2.isf(significance, dof)
 
 
+#PRIVATE OR MOVE
 def tvd(n_list_list):
     """
+    Calculates the TVD between two contexts.
+
     Calculates the total variation distance (TVD) between between different
     observed frequencies, obtained in different "contexts", for the *two* set of
     outcomes for roles of a "die".
@@ -250,6 +296,8 @@ def tvd(n_list_list):
 
 class DataComparator():
     """
+    A comparison between multiple datasets, presumably taken in different contexts.
+
     This object can be used to implement all of the "context dependence detection" methods described
     in "Probing context-dependent errors in quantum processors", by Rudinger et al.
     (See that paper's supplemental material for explicit demonstrations of this object.)
@@ -263,6 +311,41 @@ class DataComparator():
           (2) various other quantifications of the "amount" of context dependence, and (3)
           the level of statistical significance at which any context dependence is detected.
 
+    Parameters
+    ----------
+    dataset_list_multidataset : List of DataSets or MultiDataSet
+        Either a list of DataSets, containing two or more sets of data to compare,
+        or a MultiDataSet object, containing two or more sets of data to compare. Note
+        that these DataSets should contain data for the same set of Circuits (although
+        if there are additional Circuits these can be ignored using the parameters below).
+        This object is then intended to be used test to see if the results are indicative
+        that the outcome probabilities for these Circuits has changed between the "contexts" that
+        the data was obtained in.
+
+    circuits : 'all' or list of Circuits, optional (default is 'all')
+        If 'all' the comparison is implemented for all Circuits in the DataSets. Otherwise,
+        this should be a list containing all the Circuits to implement the comparison for (although
+        note that some of these Circuits may be ignored with non-default options for the next two
+        inputs).
+
+    op_exclusions : None or list of gates, optional (default is None)
+        If not None, all Circuits containing *any* of the gates in this list are discarded,
+        and no comparison will be made for those strings.
+
+    op_exclusions : None or list of gates, optional (default is None)
+        If not None, a Circuit will be dropped from the list to implement the comparisons for
+        if it doesn't include *some* gate from this list (or is the empty circuit).
+
+    ds_names : None or list, optional (default is None)
+        If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
+        for the DataSets in the list. E.g., ["Time 0", "Time 1", "Time 3"] or ["Driving","NoDriving"].
+
+    allow_bad_circuits : bool, optional
+        Whether or not the data is allowed to have zero total counts for any circuits in any of the
+        passes. If false, then an error will be raise when there are such unimplemented circuits. If
+        true, then the data from those circuits that weren't run in one or more of the passes will
+        be discarded before any analysis is performed (equivalent to excluding them explicitly in with
+        the `circuits` input.
     """
 
     def __init__(self, dataset_list_or_multidataset, circuits='all',
@@ -310,7 +393,6 @@ class DataComparator():
         Returns
         -------
         A DataComparator object.
-
         """
         if ds_names is not None:
             if len(ds_names) != len(dataset_list_or_multidataset):
@@ -426,11 +508,13 @@ class DataComparator():
     def implement(self, significance=0.05, per_sequence_correction='Hochberg',
                   aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
-        Implements statistical hypothesis testing, to detect whether there is statistically
-        significant variation between the DateSets in this DataComparator. This performs
-        hypothesis tests on the data from individual circuits, and a joint hypothesis test
-        on all of the data. With the default settings, this is the method described and implemented
-        in "Probing context-dependent errors in quantum processors", by Rudinger et al. With
+        Runs statistical hypothesis testing.
+
+        This detects whether there is statistically significant variation between the
+        DateSets in this DataComparator. This performs hypothesis tests on the data from
+        individual circuits, and a joint hypothesis test on all of the data. With the
+        default settings, this is the method described and implemented in "Probing
+        context-dependent errors in quantum processors", by Rudinger et al. With
         non-default settings, this is some minor variation on that method.
 
         Note that the default values of all the parameters are likely sufficient for most
@@ -512,7 +596,6 @@ class DataComparator():
         Returns
         -------
         None
-
         """
         self.significance = significance
         assert(aggregate_test_weighting <= 1. or aggregate_test_weighting >= 0.), \
@@ -599,6 +682,7 @@ class DataComparator():
     def get_tvd(self, circuit):
         """
         Returns the observed total variation distacnce (TVD) for the specified circuit.
+
         This is only possible if the comparison is between two sets of data. See Eq. (19)
         in "Probing context-dependent errors in quantum processors", by Rudinger et al. for the
         definition of this observed TVD.
@@ -623,8 +707,9 @@ class DataComparator():
 
     def get_sstvd(self, circuit):
         """
-        Returns the "statistically significant total variation distacnce" (SSTVD) for the specified
-        circuit. This is only possible if the comparison is between two sets of data. The SSTVD
+        Returns the "statistically significant total variation distacnce" (SSTVD) for the specified circuit.
+
+        This is only possible if the comparison is between two sets of data. The SSTVD
         is None if the circuit has not been found to have statistically significant variation.
         Otherwise it is equal to the observed TVD. See Eq. (20) and surrounding discussion in
         "Probing context-dependent errors in quantum processors", by Rudinger et al., for more information.
@@ -650,8 +735,9 @@ class DataComparator():
 
     def get_maximum_sstvd(self):
         """
-        Returns the maximum, over circuits, of the "statistically significant total variation distance"
-        (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_sstvd()
+        Returns the maximum, over circuits, of the "statistically significant total variation distance" (SSTVD).
+
+        This is only possible if the comparison is between two sets of data. See the .get_sstvd()
         method for information on SSTVD.
 
         Returns
@@ -681,7 +767,7 @@ class DataComparator():
         circuit : Circuit
             The circuit to return the p-value of.
 
-       Returns
+        Returns
         -------
         float
             The p-value of the specified circuit.
@@ -690,10 +776,12 @@ class DataComparator():
 
     def get_pvalue_pseudothreshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence
-        p-values (obtained from the log-likehood ratio test). This is a "pseudo-threshold", because it
-        is data-dependent in general, but all the per-sequence p-values below this value are statistically
-        significant. This quantity is given by Eq. (9) in  "Probing context-dependent errors in quantum
+        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence p-values.
+        
+        The p-values under consideration are those obtained from the log-likehood ratio
+        test. This is a "pseudo-threshold", because it is data-dependent in general, but
+        all the per-sequence p-values below this value are statistically significant. This
+        quantity is given by Eq. (9) in "Probing context-dependent errors in quantum
         processors", by Rudinger et al.
 
         Returns
@@ -708,6 +796,7 @@ class DataComparator():
     def get_llr(self, circuit):
         """
         Returns the log-likelihood ratio (LLR) for the input circuit.
+
         This is the quantity defined in Eq (4) of "Probing context-dependent
         errors in quantum processors", by Rudinger et al.
 
@@ -725,10 +814,14 @@ class DataComparator():
 
     def get_llr_pseudothreshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence
-        log-likelihood ratio (LLR). This is a "pseudo-threshold", because it is data-dependent in
-        general, but all LLRs above this value are statistically significant. This quantity is given
-        by Eq (10) in  "Probing context-dependent errors in quantum processors", by Rudinger et al.
+        Returns the statistical significance pseudo-threshold for the per-sequence log-likelihood ratio (LLR).
+
+        This results has been multi-test-adjusted.
+
+        This is a "pseudo-threshold", because it is data-dependent in general, but all
+        LLRs above this value are statistically significant. This quantity is given by Eq
+        (10) in "Probing context-dependent errors in quantum processors", by Rudinger et
+        al.
 
         Returns
         -------
@@ -741,11 +834,12 @@ class DataComparator():
 
     def get_jsd(self, circuit):
         """
-        Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for
-        the specified circuit. The JSD is a rescaling of the LLR, given by dividing
-        the LLR by 2*N where N is the total number of counts (summed over contexts) for
-        this circuit. This quantity is given by Eq (15) in  "Probing context-dependent
-        errors in quantum processors", Rudinger et al.
+        Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for the specified circuit.
+
+        The JSD is a rescaling of the LLR, given by dividing the LLR by 2*N where N is the
+        total number of counts (summed over contexts) for this circuit. This quantity is
+        given by Eq (15) in "Probing context-dependent errors in quantum processors",
+        Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_tvd(), get_sstvd() and get_ssjsd()).
@@ -764,10 +858,12 @@ class DataComparator():
 
     def get_jsd_pseudothreshold(self):
         """
-        Returns the statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD)
-        between "contexts". This is a rescaling of the pseudo-threshold for the LLR, returned by the
-        method .get_llr_pseudothreshold(); see that method for more details. This threshold is also given by
-        Eq (17) in  "Probing context-dependent errors in quantum processors", by Rudinger et al.
+        The statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD) between "contexts".
+
+        This is a rescaling of the pseudo-threshold for the LLR, returned by the method
+        .get_llr_pseudothreshold(); see that method for more details. This threshold is
+        also given by Eq (17) in "Probing context-dependent errors in quantum processors",
+        by Rudinger et al.
 
         Note that this pseudo-threshold is not defined if the total number of counts (summed over
         contexts) for a sequence varies between sequences.
@@ -785,11 +881,12 @@ class DataComparator():
 
     def get_ssjsd(self, circuit):
         """
-        Returns the "statistically significanet Jensen-Shannon divergence" (SSJSD) between "contexts" for
-        the specified circuit. This is the JSD of the circuit (see .get_jsd()), if the circuit
-        has been found to be context dependent, and otherwise it is None. This quantity is the JSD version
-        of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum processors", by Rudinger
-        et al.
+        Returns the statistically significant Jensen-Shannon divergence" (SSJSD) between "contexts" for `circuit`.
+
+        This is the JSD of the circuit (see .get_jsd()), if the circuit has been found to
+        be context dependent, and otherwise it is None. This quantity is the JSD version
+        of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum
+        processors", by Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_tvd(), get_sstvd() and get_ssjsd()).
@@ -813,11 +910,12 @@ class DataComparator():
 
     def get_aggregate_llr(self):
         """
-        Returns the "aggregate" log-likelihood ratio (LLR), comparing the null
-        hypothesis of no context dependence in *any* sequence with the full model
-        of arbitrary context dependence. This is the sum of the per-sequence LLRs, and
-        it is defined in Eq (11) of "Probing context-dependent  errors in
-        quantum processors", by Rudinger et al.
+        Returns the "aggregate" log-likelihood ratio (LLR).
+
+        This values compares the null hypothesis of no context dependence in *any*
+        sequence with the full model of arbitrary context dependence. This is the sum of
+        the per-sequence LLRs, and it is defined in Eq (11) of "Probing context-dependent
+        errors in quantum processors", by Rudinger et al.
 
         Returns
         -------
@@ -828,11 +926,11 @@ class DataComparator():
 
     def get_aggregate_llr_threshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance threshold for the
-        "aggregate" log-likelihood ratio (LLR), above which this LLR is significant.
-        See .get_aggregate_llr() for more details. This quantity is the LLR version
-        of the quantity defined in Eq (14) of "Probing context-dependent errors in
-        quantum processors", by Rudinger et al.
+        The (multi-test-adjusted) statistical significance threshold for the "aggregate" log-likelihood ratio (LLR).
+
+        Above this value, the LLR is significant.  See .get_aggregate_llr() for more
+        details. This quantity is the LLR version of the quantity defined in Eq (14) of
+        "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
         Returns
         -------
@@ -845,11 +943,12 @@ class DataComparator():
 
     def get_aggregate_pvalue(self):
         """
-        Returns the p-value for the "aggregate" log-likelihood ratio (LLR), comparing the null
-        hypothesis of no context dependence in any sequence with the full model of arbitrary
-        dependence. This LLR is defined in Eq (11) in "Probing context-dependent errors in
-        quantum processors", by Rudinger et al., and it is converted to a p-value via Wilks'
-        theorem (see discussion therein).
+        Returns the p-value for the "aggregate" log-likelihood ratio (LLR).
+
+        This compares the null hypothesis of no context dependence in any sequence with
+        the full model of arbitrary dependence. This LLR is defined in Eq (11) in "Probing
+        context-dependent errors in quantum processors", by Rudinger et al., and it is
+        converted to a p-value via Wilks' theorem (see discussion therein).
 
         Note that this p-value is often zero to machine precision, when there is context dependence,
         so a more useful number is often returned by get_aggregate_nsigma() (that quantity is equivalent to
@@ -864,8 +963,9 @@ class DataComparator():
 
     def get_aggregate_pvalue_threshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance threshold for the p-value of
-        the "aggregate" log-likelihood ratio (LLR), below which this p-value is significant.
+        The (multi-test-adjusted) statistical significance threshold for the p-value of the "aggregate" LLR.
+
+        Here, LLR refers to the log-likelihood ratio. Below this p-value the LLR would be deemed significant.
         See the .get_aggregate_pvalue() method for more details.
 
         Returns
@@ -879,9 +979,12 @@ class DataComparator():
 
     def get_aggregate_nsigma(self):
         """
-        Returns the number of standard deviations above the context-independent mean that the "aggregate"
-        log-likelihood ratio (LLR) is. This quantity is defined in Eq (13) of "Probing context-dependent
-        errors in quantum processors", by Rudinger et al.
+        The number of standard deviations the "aggregate" LLR is above the context-independent mean.
+
+        More specifically, the number of standard deviations above the context-independent
+        mean that the "aggregate" log-likelihood ratio (LLR) is. This quantity is defined
+        in Eq (13) of "Probing context-dependent errors in quantum processors", by
+        Rudinger et al.
 
         Returns
         -------
@@ -892,7 +995,9 @@ class DataComparator():
 
     def get_aggregate_nsigma_threshold(self):
         """
-        Returns the (multi-test-adjusted) statistical significance threshold for the signed standard
+        The significance threshold above which the signed standard deviations of the aggregate LLR is significant.
+
+        The (multi-test-adjusted) statistical significance threshold for the signed standard
         deviations of the the "aggregate" log-likelihood ratio (LLR). See the .get_aggregate_nsigma()
         method for more details. This quantity is defined in Eq (14) of "Probing context-dependent errors
         in quantum processors", by Rudinger et al.
@@ -911,14 +1016,14 @@ class DataComparator():
         """
         Returns the "worst" circuits that have the smallest p-values.
 
-        Parmeters
-        ---------
+        Parameters
+        ----------
         number : int
             The number of circuits to return.
 
         Returns
         -------
-        List
+        list
             A list of tuples containing the worst `number` circuits along
             with the correpsonding p-values.
         """

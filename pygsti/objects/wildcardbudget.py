@@ -1,4 +1,6 @@
-"""Functions related to computation of the log-likelihood."""
+"""
+Functions related to computation of the log-likelihood.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,6 +19,8 @@ pos = abs
 
 class WildcardBudget(object):
     """
+    A fixed wildcard budget.
+
     Encapsulates a fixed amount of "wildcard budget" that allows each circuit
     an amount "slack" in its outcomes probabilities.  The way in which this
     slack is computed - or "distributed", though it need not necessarily sum to
@@ -30,6 +34,11 @@ class WildcardBudget(object):
     This is a base class, which must be inherited from in order to obtain a
     full functional wildcard budge (the `circuit_budget` method must be
     implemented and usually `__init__` should accept more customized args).
+
+    Parameters
+    ----------
+    w_vec : numpy.array
+        vector of wildcard budget components.
     """
 
     def __init__(self, w_vec):
@@ -72,12 +81,12 @@ class WildcardBudget(object):
 
     def circuit_budget(self, circuit):
         """
-        Get the amount of wildcard budget, or "outcome-probability-slack"
-        for `circuit`.
+        Get the amount of wildcard budget, or "outcome-probability-slack" for `circuit`.
 
         Parameters
         ----------
         circuit : Circuit
+            the circuit to get the budget for.
 
         Returns
         -------
@@ -87,7 +96,20 @@ class WildcardBudget(object):
 
     def circuit_budgets(self, circuits, precomp=None):
         """
-        TODO: docstring
+        Get the wildcard budgets for a list of circuits.
+
+        Parameters
+        ----------
+        circuits : list
+            The list of circuits to act on.
+
+        precomp : numpy.ndarray, optional
+            A precomputed quantity that speeds up the computation of circuit
+            budgets.  Given by :method:`get_precomp_for_circuits`.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         # XXX is this supposed to do something?
         # circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
@@ -95,6 +117,8 @@ class WildcardBudget(object):
 
     def get_descriptive_dict(self):
         """
+        A dictionary of quantities describing this budget.
+
         Return the contents of this budget in a dictionary containing
         (description, value) pairs for each element name.
 
@@ -111,8 +135,10 @@ class WildcardBudget(object):
 
     def get_precomp_for_circuits(self, circuits):
         """
-        Returns some pre-computed quantity that can be passed to `update_probs` whenever
-        this same `circuits` is passed to `update_probs` to speed things up.
+        Compute a pre-computed quantity for speeding up circuit calculations.
+
+        This value can be passed to `update_probs` or `circuit_budgets` whenever this
+        same `circuits` list is passed to `update_probs` to speed things up.
 
         Parameters
         ----------
@@ -132,6 +158,8 @@ class WildcardBudget(object):
 
     def slow_update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
         """
+        Updates `probs_in` to `probs_out` by applying this wildcard budget.
+
         Update a set of circuit outcome probabilities, `probs_in`, into a
         corresponding set, `probs_out`, which uses the slack alloted to each
         outcome probability to match (as best as possible) the data frequencies
@@ -167,6 +195,9 @@ class WildcardBudget(object):
             can be any valid index for a numpy array (an integer, a slice,
             or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
             the corresponding frequencies.
+
+        precomp : numpy.ndarray, optional
+            A precmputed quantity for speeding up this calculation.
 
         Returns
         -------
@@ -352,6 +383,8 @@ class WildcardBudget(object):
 
     def update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
         """
+        Updates `probs_in` to `probs_out` by applying this wildcard budget.
+
         Update a set of circuit outcome probabilities, `probs_in`, into a
         corresponding set, `probs_out`, which uses the slack alloted to each
         outcome probability to match (as best as possible) the data frequencies
@@ -387,6 +420,9 @@ class WildcardBudget(object):
             can be any valid index for a numpy array (an integer, a slice,
             or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
             the corresponding frequencies.
+
+        precomp : numpy.ndarray, optional
+            A precmputed quantity for speeding up this calculation.
 
         Returns
         -------
@@ -532,6 +568,21 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
     Primitive operations are the components of circuit layers, and so
     the wilcard budget for a circuit is just the sum of the (abs vals of)
     the parameters corresponding to each primitive operation in the circuit.
+
+    Parameters
+    ----------
+    primitive_op_labels : iterable
+        A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
+        which give all the possible primitive ops (components of circuit
+        layers) that will appear in circuits.  Each one of these operations
+        will be assigned it's own independent element in the wilcard-vector.
+
+    add_spam : bool, optional
+        Whether an additional "SPAM" budget should be included, which is
+        simply a uniform budget added to each circuit.
+
+    start_budget : float, optional
+        An initial value to set all the parameters to.
     """
 
     def __init__(self, primitive_op_labels, add_spam=True, start_budget=0.0):
@@ -566,12 +617,12 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def circuit_budget(self, circuit):
         """
-        Get the amount of wildcard budget, or "outcome-probability-slack"
-        for `circuit`.
+        Get the amount of wildcard budget, or "outcome-probability-slack" for `circuit`.
 
         Parameters
         ----------
         circuit : Circuit
+            the circuit to get the budget for.
 
         Returns
         -------
@@ -586,10 +637,23 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def circuit_budgets(self, circuits, precomp=None):
         """
-        TODO: docstring
+        Get the wildcard budgets for a list of circuits.
+
+        Parameters
+        ----------
+        circuits : list
+            The list of circuits to act on.
+
+        precomp : numpy.ndarray, optional
+            A precomputed quantity that speeds up the computation of circuit
+            budgets.  Given by :method:`get_precomp_for_circuits`.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if precomp is None:
-            circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
+            circuit_budgets = _np.array([self.circuit_budget(circ) for circ in circuits])
         else:
             Wvec = _np.abs(self.wildcard_vector)
             off = 0 if (self.spam_index is None) else Wvec[self.spam_index]
@@ -598,12 +662,15 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def get_descriptive_dict(self):
         """
+        A dictionary of quantities describing this budget.
+
         Return the contents of this budget in a dictionary containing
         (description, value) pairs for each element name.
 
         Returns
         -------
         dict
+            Keys are primitive op labels and values are (description_string, value) tuples.
         """
         wildcardDict = {}
         for lbl, index in self.primOpLookup.items():
@@ -622,6 +689,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         Parameters
         ----------
         op_label : Label
+            The operation label to extract a budget for.
 
         Returns
         -------

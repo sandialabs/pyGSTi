@@ -1,4 +1,6 @@
-""" Circuit list for bulk computation """
+"""
+Circuit list for bulk computation
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,8 +14,55 @@ from .circuit import Circuit as _Circuit
 
 
 class BulkCircuitList(list):
-    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
+    """
+    A list of :class:`Circuit` objects and associated metadata.
 
+    Parameters
+    ----------
+    circuit_list_or_structure : list or CircuitStructure
+        The list of circuits that constitutes the primary data held by this object.
+        If this list is obtained by providing a :class:`CircuitStructure`, this
+        object will hold the additional structure information as well.
+
+    op_label_aliases : dict, optional
+        Dictionary of circuit meta-data whose keys are operation label "aliases"
+        and whose values are circuits corresponding to what that operation label
+        should be expanded into before querying the dataset.  Defaults to the
+        empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
+        pygsti.obj.Circuit(['Gx','Gx','Gx'])
+
+    circuit_weights : numpy.ndarray, optional
+        If not None, an array of per-circuit weights (of length equal to the number of
+        circuits) that are typically used to multiply the counts extracted for each circuit.
+
+    name : str, optional
+        An optional name for this list, used for status messages.
+    """
+    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
+        """
+        Create a BulkCircuitList.
+
+        Parameters
+        ----------
+        circuit_list_or_structure : list or CircuitStructure
+            The list of circuits that constitutes the primary data held by this object.
+            If this list is obtained by providing a :class:`CircuitStructure`, this
+            object will hold the additional structure information as well.
+    
+        op_label_aliases : dict, optional
+            Dictionary of circuit meta-data whose keys are operation label "aliases"
+            and whose values are circuits corresponding to what that operation label
+            should be expanded into before querying the dataset.  Defaults to the
+            empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
+            pygsti.obj.Circuit(['Gx','Gx','Gx'])
+    
+        circuit_weights : numpy.ndarray, optional
+            If not None, an array of per-circuit weights (of length equal to the number of
+            circuits) that are typically used to multiply the counts extracted for each circuit.
+    
+        name : str, optional
+            An optional name for this list, used for status messages.
+        """
         #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_list_or_structure, (list, tuple)):
             circuit_list_or_structure = list(map(_Circuit.create_from, circuit_list_or_structure))

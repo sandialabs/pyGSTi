@@ -1,4 +1,6 @@
-""" Defines the Model class and supporting functionality."""
+"""
+Defines the Model class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -54,6 +56,15 @@ class Model(object):
     probabilities of :class:`Circuit` objects based on the action of the
     model's ideal operations plus (potentially) noise which makes the
     outcome probabilities deviate from the perfect ones.
+
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or list or tuple
+        The decomposition (with labels) of (pure) state-space this model
+        acts upon.  Regardless of whether the model contains operators or
+        superoperators, this argument describes the Hilbert space dimension
+        and imposed structure.  If a list or tuple is given, it must be
+        of a from that can be passed to `StateSpaceLabels.__init__`.
     """
 
     def __init__(self, state_space_labels):
@@ -82,18 +93,29 @@ class Model(object):
 
     @property
     def state_space_labels(self):
-        """ State space labels """
+        """
+        State space labels
+
+        Returns
+        -------
+        StateSpaceLabels
+        """
         return self._state_space_labels
 
     @property
     def hyperparams(self):
-        """ Dictionary of hyperparameters associated with this model """
+        """
+        Dictionary of hyperparameters associated with this model
+
+        Returns
+        -------
+        dict
+        """
         return self._hyperparams  # Note: no need to set this param - just set/update values
 
     def num_params(self):
         """
-        Return the number of free parameters when vectorizing
-        this model.
+        The number of free parameters when vectorizing this model.
 
         Returns
         -------
@@ -115,28 +137,34 @@ class Model(object):
 
     def from_vector(self, v, reset_basis=False):
         """
-        The inverse of to_vector.  Loads values of gates and rho and E vecs from
-        from the vector `v`.  Note that `v` does not specify the number of
-        gates, etc., and their labels: this information must be contained in
-        this `Model` prior to calling `from_vector`.  In practice, this just
-        means you should call the `from_vector` method using the same `Model`
-        that was used to generate the vector `v` in the first place.
+        Sets this Model's operations based on parameter values `v`.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            A vector of parameters, with length equal to `self.num_params()`.
+
+        reset_basis : bool, optional
+            UNUSED
+
+        Returns
+        -------
+        None
         """
         assert(len(v) == self.num_params())
         self._paramvec = v.copy()
 
     def probs(self, circuit, clip_to=None):
         """
-        Construct a dictionary containing the probabilities of every spam label
-        given a operation sequence.
+        Construct a dictionary containing the outcome probabilities of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip probabilities to if not None.
+            (min,max) to clip probabilities to if not None.
 
         Returns
         -------
@@ -149,20 +177,19 @@ class Model(object):
 
     def dprobs(self, circuit, return_pr=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome probability derivatives of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -176,24 +203,23 @@ class Model(object):
 
     def hprobs(self, circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome probability 2nd derivatives of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         return_deriv : bool, optional
-          when set to True, additionally return the derivatives of the
-          probabilities.
+            when set to True, additionally return the derivatives of the
+            probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -207,11 +233,133 @@ class Model(object):
     def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
                                      distribute_method="default", subcalls=[],
                                      dataset=None, verbosity=0):
+        """
+        Create an evaluation tree based on available memory and CPUs.
+
+        This tree can be used by other Bulk_* functions, and is it's own
+        function so that for many calls to Bulk_* made with the same
+        circuit_list, only a single call to bulk_evaltree is needed.
+
+        Parameters
+        ----------
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to include in the evaluation tree.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing computations
+            across multiple processors.
+
+        mem_limit : int, optional
+            A rough memory limit in bytes which is used to determine subtree
+            number and size.
+
+        distribute_method : {"circuits", "deriv"}
+            How to distribute calculation amongst processors (only has effect
+            when comm is not None).  "circuits" will divide the list of
+            circuits and thereby result in more subtrees; "deriv" will divide
+            the columns of any jacobian matrices, thereby resulting in fewer
+            (larger) subtrees.
+
+        subcalls : list, optional
+            A list of the names of the Model functions that will be called
+            using the returned evaluation tree, which are necessary for
+            estimating memory usage (for comparison to mem_limit).  If
+            mem_limit is None, then there's no need to specify `subcalls`.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+        verbosity : int, optional
+            How much detail to send to stdout.
+
+        Returns
+        -------
+        evt : EvalTree
+            The evaluation tree object, split as necesary.
+
+        paramBlockSize1 : int or None
+            The maximum size of 1st-deriv-dimension parameter blocks
+            (i.e. the maximum number of parameters to compute at once
+             in calls to dprobs, etc., usually specified as wrt_block_size
+             or wrt_block_size1).
+
+        paramBlockSize2 : int or None
+            The maximum size of 2nd-deriv-dimension parameter blocks
+            (i.e. the maximum number of parameters to compute at once
+             in calls to hprobs, etc., usually specified as wrt_block_size2).
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements returned by the 'bulk fill' routines.  Thus, to get the
+            final elements corresponding to `circuits[i]`, use
+            `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th operation sequences's final elements
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+        """
         raise NotImplementedError("Derived classes should implement this!")
         #return circuit_list # MORE?
 
     def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
                       num_subtree_comms=1, dataset=None, verbosity=0):
+        """
+        Create an evaluation tree for all the operation sequences in circuit_list.
+
+        This tree can be used by other Bulk_* functions, and is it's own
+        function so that for many calls to Bulk_* made with the same
+        circuit_list, only a single call to bulk_evaltree is needed.
+
+        Parameters
+        ----------
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to include in the evaluation tree.
+
+        min_subtrees : int , optional
+            The minimum number of subtrees the resulting EvalTree must have.
+
+        max_tree_size : int , optional
+            The maximum size allowed for the single un-split tree or any of
+            its subtrees.
+
+        num_subtree_comms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of the EvalTree among
+            when calling its `distribute` method.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+        verbosity : int, optional
+            How much detail to send to stdout.
+
+        Returns
+        -------
+        evt : EvalTree
+            An evaluation tree object.
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements returned by the 'bulk fill' routines.  Thus, to get the
+            final elements corresponding to `circuits[i]`, use
+            `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th operation sequences's final elements
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+        """
         raise NotImplementedError("Derived classes should implement this!")
         #return circuit_list # MORE?
 
@@ -228,23 +376,264 @@ class Model(object):
 
     def bulk_probs(self, circuit_list, clip_to=None, check=False,
                    comm=None, mem_limit=None, dataset=None, smartc=None):
+        """
+        Construct a dictionary containing the probabilities for an entire list of circuits.
+
+        Parameters
+        ----------
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to compute quantities for.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of evalTree (if it is split).
+
+        mem_limit : int, optional
+            A rough memory limit in bytes which is used to determine processor
+            allocation.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
+
+        Returns
+        -------
+        probs : dictionary
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
+            `(outcome, p)` tuples, where `outcome` is a tuple of labels
+            and `p` is the corresponding probability.
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
                     check=False, comm=None, wrt_block_size=None, dataset=None):
+        """
+        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
+
+        Parameters
+        ----------
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to compute quantities for.
+
+        return_pr : bool, optional
+            when set to True, additionally return the probabilities.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of evalTree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
+
+        wrt_block_size : int or float, optional
+            The maximum average number of derivative columns to compute *products*
+            for simultaneously.  None means compute all columns at once.
+            The minimum of wrt_block_size and the size that makes maximal
+            use of available processors is used as the final block size. Use
+            this argument to reduce amount of intermediate memory required.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+        Returns
+        -------
+        dprobs : dictionary
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
+            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, and `dp` is an array containing
+            the derivative of `p` with respect to each parameter.  If `return_pr`
+            if False, then `p` is not included in the tuples (so they're just
+            `(outcome, dp)`).
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_hprobs(self, circuit_list, return_pr=False, return_deriv=False,
                     clip_to=None, check=False, comm=None,
                     wrt_block_size1=None, wrt_block_size2=None, dataset=None):
+        """
+        Construct a dictionary containing the probability-Hessians for an entire list of circuits.
+
+        Parameters
+        ----------
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to compute quantities for.
+
+        return_pr : bool, optional
+            when set to True, additionally return the probabilities.
+
+        return_deriv : bool, optional
+            when set to True, additionally return the probability derivatives.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        wrt_block_size1 : int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+        Returns
+        -------
+        hprobs : dictionary
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
+            `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, `dp` is a 1D array containing
+            the derivative of `p` with respect to each parameter, and `hp` is a
+            2D array containing the Hessian of `p` with respect to each parameter.
+            If `return_pr` if False, then `p` is not included in the tuples.
+            If `return_deriv` if False, then `dp` is not included in the tuples.
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
+        """
+        Compute the outcome probabilities for an entire tree of circuits.
+
+        This routine fills a 1D array, `mx_to_fill` with the probabilities
+        corresponding to the *simplified* operation sequences found in an evaluation
+        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
+        objects is *simplified* into a lists of gate-only sequences along with
+        a mapping of final elements (i.e. probabilities) to gate-only sequence
+        and prep/effect pairs.  The evaluation tree organizes how to efficiently
+        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
+        must have length equal to the number of final elements (this can be
+        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
+        correspond to which strings and outcomes, you'll need the mappings
+        generated when the original list of `Circuits` was simplified.
+
+        Parameters
+        ----------
+        mx_to_fill : numpy ndarray
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. eval_tree.num_final_elements())
+
+        eval_tree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
+
+        Returns
+        -------
+        None
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_fill_dprobs(self, mx_to_fill, eval_tree, pr_mx_to_fill=None, clip_to=None,
                          check=False, comm=None, wrt_block_size=None,
                          profiler=None, gather_mem_limit=None):
+        """
+        Compute the outcome probability-derivatives for an entire tree of circuits.
+
+        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
+        probability-derivatives for each "final element" of `eval_tree`.
+
+        Parameters
+        ----------
+        mx_to_fill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            number of model parameters.
+
+        eval_tree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        pr_mx_to_fill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
+
+        wrt_block_size : int or float, optional
+            The maximum average number of derivative columns to compute *products*
+            for simultaneously.  None means compute all columns at once.
+            The minimum of wrt_block_size and the size that makes maximal
+            use of available processors is used as the final block size. Use
+            this argument to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+            A profiler object used for to track timing and memory usage.
+
+        gather_mem_limit : int, optional
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
+
+        Returns
+        -------
+        None
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def bulk_fill_hprobs(self, mx_to_fill, eval_tree=None,
@@ -252,10 +641,67 @@ class Model(object):
                          clip_to=None, check=False, comm=None,
                          wrt_block_size1=None, wrt_block_size2=None,
                          gather_mem_limit=None):
-        raise NotImplementedError("Derived classes should implement this!")
 
-    def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
-                             return_dprobs_12=False, comm=None):
+        """
+        Compute the outcome probability-Hessians for an entire tree of circuits.
+
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        probability-Hessians for each "final element" of `eval_tree`.
+
+        Parameters
+        ----------
+        mx_to_fill : numpy ndarray
+            an already-allocated ExMxM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+
+        eval_tree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
+
+        pr_mx_to_fill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
+
+        deriv_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        check : boolean, optional
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
+
+        wrt_block_size1 : int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        gather_mem_limit : int, optional
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
+
+        Returns
+        -------
+        None
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def _init_copy(self, copy_into):
@@ -303,10 +749,11 @@ class Model(object):
 
 class OpModel(Model):
     """
-    A Model containing operators (i.e. "members") which are independently
-    (sort of) parameterized and can be thought to have dense representations
-    (even if they're not actually stored that way).  This gives rise to the
-    model having `basis` and `evotype` members.
+    A Model that contains operators (i.e. "members"), having a container structure.
+
+    These operators are independently (sort of) parameterized and can be thought
+    to have dense representations (even if they're not actually stored that way).
+    This gives rise to the model having `basis` and `evotype` members.
 
     Secondly, attached to an `OpModel` is the idea of "circuit simplification"
     whereby the operators (preps, operations, povms, instruments) within
@@ -322,6 +769,31 @@ class OpModel(Model):
     simulator queries a :class:`LayerLizard` for layer operations, making it
     possible to build up layer operations in an on-demand fashion from pieces
     within the model.
+
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or list or tuple
+        The decomposition (with labels) of (pure) state-space this model
+        acts upon.  Regardless of whether the model contains operators or
+        superoperators, this argument describes the Hilbert space dimension
+        and imposed structure.  If a list or tuple is given, it must be
+        of a from that can be passed to `StateSpaceLabels.__init__`.
+
+    basis : Basis
+        The basis used for the state space by dense operator representations.
+
+    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+        The evolution type of this model, describing how states are
+        represented, allowing compatibility checks with (super)operator
+        objects.
+
+    simplifier_helper : SimplifierHelper
+        Provides a minimal interface for compiling circuits for forward
+        simulation.
+
+    sim_type : {"auto", "matrix", "map", "termorder:X"}
+        The type of forward simulator this model should use.  `"auto"`
+        tries to determine the best type automatically.
     """
 
     #Whether to perform extra parameter-vector integrity checks
@@ -329,8 +801,7 @@ class OpModel(Model):
 
     def __init__(self, state_space_labels, basis, evotype, simplifier_helper, sim_type="auto"):
         """
-        Creates a new OpModel.  Rarely used except from derived classes
-        `__init__` functions.
+        Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
 
         Parameters
         ----------
@@ -377,21 +848,42 @@ class OpModel(Model):
 
     @property
     def simtype(self):
-        """ Forward simulation type """
+        """
+        Forward simulation type
+
+        Returns
+        -------
+        str
+        """
         return self._sim_type
 
     @property
     def evotype(self):
-        """ Evolution type """
+        """
+        Evolution type
+
+        Returns
+        -------
+        str
+        """
         return self._evotype
 
     @property
     def basis(self):
-        """ The basis used to represent dense (super)operators of this model """
+        """
+        The basis used to represent dense (super)operators of this model
+
+        Returns
+        -------
+        Basis
+        """
         return self._basis
 
     @basis.setter
     def basis(self, basis):
+        """
+        The basis used to represent dense (super)operators of this model
+        """
         if isinstance(basis, _Basis):
             assert(basis.dim == self.state_space_labels.dim), \
                 "Cannot set basis w/dim=%d when sslbls dim=%d!" % (basis.dim, self.state_space_labels.dim)
@@ -405,7 +897,7 @@ class OpModel(Model):
 
         Parameters
         ----------
-        sim_type : {"auto", "matrix", "map", "termorder:X"}
+        sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
             The type of forward simulator this model should use.  `"auto"`
             tries to determine the best type automatically.
 
@@ -507,6 +999,9 @@ class OpModel(Model):
         self._sim_args = kwargs
 
     def get_simtype(self):
+        """
+        The forward simulation type of this model.
+        """
         return self._sim_type
 
     #TODO REMOVE
@@ -519,8 +1014,7 @@ class OpModel(Model):
 
     def set_state_space(self, lbls, basis="pp"):
         """
-        Sets labels for the components of the Hilbert space upon which
-        the gates of this Model act.
+        Sets labels for the components of the Hilbert space upon which the gates of this Model act.
 
         Parameters
         ----------
@@ -550,8 +1044,11 @@ class OpModel(Model):
     @property
     def dim(self):
         """
-        The dimension of the model, which equals d when the gate
-        matrices have shape d x d and spam vectors have shape d x 1.
+        The dimension of the model.
+
+        This equals d when the gate (or, more generally, circuit-layer) matrices
+        would have shape d x d and spam vectors would have shape d x 1 (if they
+        were computed).
 
         Returns
         -------
@@ -560,11 +1057,13 @@ class OpModel(Model):
         """
         return self._dim
 
+    #TODO REMOVE - use dim property
     def get_dimension(self):
         """
-        Get the dimension of the model, which equals d when the gate
-        matrices have shape d x d and spam vectors have shape d x 1.
-        Equivalent to model.dim.
+        Get the dimension of the model.
+
+        This equals d when the gate matrices have shape d x d and spam vectors
+        have shape d x 1.  Equivalent to model.dim.
 
         Returns
         -------
@@ -579,8 +1078,7 @@ class OpModel(Model):
 
     def num_params(self):
         """
-        Return the number of free parameters when vectorizing
-        this model.
+        The number of free parameters when vectorizing this model.
 
         Returns
         -------
@@ -816,12 +1314,18 @@ class OpModel(Model):
 
     def from_vector(self, v):
         """
-        The inverse of to_vector.  Loads values of gates and rho and E vecs from
-        from the vector `v`.  Note that `v` does not specify the number of
-        gates, etc., and their labels: this information must be contained in
-        this `Model` prior to calling `from_vector`.  In practice, this just
-        means you should call the `from_vector` method using the same `Model`
-        that was used to generate the vector `v` in the first place.
+        Sets this Model's operations based on parameter values `v`.
+
+        The inverse of to_vector.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            A vector of parameters, with length equal to `self.num_params()`.
+
+        Returns
+        -------
+        None
         """
         assert(len(v) == self.num_params())
 
@@ -855,8 +1359,9 @@ class OpModel(Model):
 
     def split_circuit(self, circuit, erroron=('prep', 'povm')):
         """
-        Splits a operation sequence into prepLabel + opsOnlyString + povmLabel
-        components.  If `circuit` does not contain a prep label or a
+        Splits a operation sequence into prepLabel + opsOnlyString + povmLabel components.
+
+        If `circuit` does not contain a prep label or a
         povm label a default label is returned if one exists.
 
         Parameters
@@ -934,20 +1439,17 @@ class OpModel(Model):
             is why this needs to be an ordered dictionary - when the lists of tuples
             are concatenated (by key) the resulting tuple orderings corresponds to
             the final-element axis of an output array that is being filled (computed).
-
         elIndices : collections.OrderedDict
             A dictionary whose keys are integer indices into `circuits` and
             whose values are slices and/or integer-arrays into the space/axis of
             final elements.  Thus, to get the final elements corresponding to
             `circuits[i]`, use `filledArray[ elIndices[i] ]`.
-
         outcomes : collections.OrderedDict
             A dictionary whose keys are integer indices into `circuits` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
             what outcomes the i-th operation sequences's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
-
         nTotElements : int
             The total number of "final elements" - this is how big of an array
             is need to hold all of the probabilities `circuits` generates.
@@ -1190,7 +1692,6 @@ class OpModel(Model):
             is why this needs to be an ordered dictionary - when the lists of tuples
             are concatenated (by key) the resulting tuple orderings corresponds to
             the final-element axis of an output array that is being filled (computed).
-
         outcomes : list
             A list of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels), corresponding to
@@ -1202,8 +1703,7 @@ class OpModel(Model):
 
     def get_num_outcomes(self, circuit):
         """
-        Returns the number of outcomes of `circuit`, given by it's existing
-        or implied POVM label.
+        The number of outcomes of `circuit`, given by it's existing or implied POVM label.
 
         Parameters
         ----------
@@ -1219,16 +1719,15 @@ class OpModel(Model):
 
     def probs(self, circuit, clip_to=None, time=None):
         """
-        Construct a dictionary containing the probabilities of every spam label
-        given a operation sequence.
+        Construct a dictionary containing the outcome probabilities of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip probabilities to if not None.
+            (min,max) to clip probabilities to if not None.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
@@ -1244,20 +1743,19 @@ class OpModel(Model):
 
     def dprobs(self, circuit, return_pr=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome probability derivatives of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -1271,24 +1769,23 @@ class OpModel(Model):
 
     def hprobs(self, circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome probability 2nd derivatives of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         return_deriv : bool, optional
-          when set to True, additionally return the derivatives of the
-          probabilities.
+            when set to True, additionally return the derivatives of the
+            probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -1348,15 +1845,31 @@ class OpModel(Model):
         -------
         evt : EvalTree
             The evaluation tree object, split as necesary.
+
         paramBlockSize1 : int or None
             The maximum size of 1st-deriv-dimension parameter blocks
             (i.e. the maximum number of parameters to compute at once
              in calls to dprobs, etc., usually specified as wrt_block_size
              or wrt_block_size1).
+
         paramBlockSize2 : int or None
             The maximum size of 2nd-deriv-dimension parameter blocks
             (i.e. the maximum number of parameters to compute at once
              in calls to hprobs, etc., usually specified as wrt_block_size2).
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements returned by the 'bulk fill' routines.  Thus, to get the
+            final elements corresponding to `circuits[i]`, use
+            `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `circuit_list` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th operation sequences's final elements
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
@@ -1624,10 +2137,10 @@ class OpModel(Model):
         circuit_list : list of (tuples or Circuits)
             Each element specifies a operation sequence to include in the evaluation tree.
 
-        min_subtrees : int (optional)
+        min_subtrees : int , optional
             The minimum number of subtrees the resulting EvalTree must have.
 
-        max_tree_size : int (optional)
+        max_tree_size : int , optional
             The maximum size allowed for the single un-split tree or any of
             its subtrees.
 
@@ -1648,14 +2161,12 @@ class OpModel(Model):
         -------
         evt : EvalTree
             An evaluation tree object.
-
         elIndices : collections.OrderedDict
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are slices and/or integer-arrays into the space/axis of
             final elements returned by the 'bulk fill' routines.  Thus, to get the
             final elements corresponding to `circuits[i]`, use
             `filledArray[ elIndices[i] ]`.
-
         outcomes : collections.OrderedDict
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
@@ -1697,8 +2208,9 @@ class OpModel(Model):
 
     def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
-        Performs initial computation, such as computing probability polynomials,
-        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        Performs initial computation needed for bulk_fill_probs and related calls.
+
+        For example, as computing probability polynomials. This is usually coupled with
         the creation of an evaluation tree, but is separated from it because this
         "preparation" may use `comm` to distribute a computationally intensive task.
 
@@ -1709,13 +2221,17 @@ class OpModel(Model):
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of `eval_tree` (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of `eval_tree` (if it is split).
 
         mem_limit : int, optional
             A rough memory limit in bytes which is used to determine resource
             allocation.
+
+        Returns
+        -------
+        None
         """
         return self._fwdsim().bulk_prep_probs(eval_tree, comm, mem_limit)
 
@@ -1739,13 +2255,17 @@ class OpModel(Model):
             probabilities.  If None, then the probabilities are computed internally.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of `eval_tree` (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of `eval_tree` (if it is split).
 
         mem_limit : int, optional
             A rough memory limit in bytes which is used to determine resource
             allocation.
+
+        verbosity : int, optional
+            Level of information to print to stdout.  0 means none, higher values
+            mean more information.
 
         Returns
         -------
@@ -1764,26 +2284,25 @@ class OpModel(Model):
     def bulk_probs(self, circuit_list, clip_to=None, check=False,
                    comm=None, mem_limit=None, dataset=None, smartc=None):
         """
-        Construct a dictionary containing the probabilities
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-          Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a operation sequence to compute quantities for.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of evalTree (if it is split).
 
         mem_limit : int, optional
             A rough memory limit in bytes which is used to determine processor
@@ -1797,7 +2316,6 @@ class OpModel(Model):
         smartc : SmartCache, optional
             A cache object to cache & use previously cached values inside this
             function.
-
 
         Returns
         -------
@@ -1818,45 +2336,43 @@ class OpModel(Model):
     def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
                     check=False, comm=None, wrt_block_size=None, dataset=None):
         """
-        Construct a dictionary containing the probability-derivatives
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
 
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-          Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a operation sequence to compute quantities for.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of evalTree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_block_size : int or float, optional
-          The maximum average number of derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrt_block_size and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+            The maximum average number of derivative columns to compute *products*
+            for simultaneously.  None means compute all columns at once.
+            The minimum of wrt_block_size and the size that makes maximal
+            use of available processors is used as the final block size. Use
+            this argument to reduce amount of intermediate memory required.
 
         dataset : DataSet, optional
             If not None, restrict what is computed to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
-
 
         Returns
         -------
@@ -1879,47 +2395,48 @@ class OpModel(Model):
                     clip_to=None, check=False, comm=None,
                     wrt_block_size1=None, wrt_block_size2=None, dataset=None):
         """
-        Construct a dictionary containing the probability-Hessians
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probability-Hessians for an entire list of circuits.
 
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-          Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a operation sequence to compute quantities for.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         return_deriv : bool, optional
-          when set to True, additionally return the probability derivatives.
+            when set to True, additionally return the probability derivatives.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrt_filter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_block_size1 : int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         dataset : DataSet, optional
             If not None, restrict what is computed to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
-
 
         Returns
         -------
@@ -1942,7 +2459,7 @@ class OpModel(Model):
 
     def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
         corresponding to the *simplified* operation sequences found in an evaluation
@@ -1959,26 +2476,25 @@ class OpModel(Model):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. eval_tree.num_final_elements())
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. eval_tree.num_final_elements())
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -1991,8 +2507,7 @@ class OpModel(Model):
                          check=False, comm=None, wrt_block_size=None,
                          profiler=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-derivatives for an entire tree of gate
-        strings.
+        Compute the outcome probability-derivatives for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
         probability-derivatives for each "final element" of `eval_tree`.
@@ -2000,46 +2515,46 @@ class OpModel(Model):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M is the
-          number of model parameters.
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            number of model parameters.
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_block_size : int or float, optional
-          The maximum average number of derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrt_block_size and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+            The maximum average number of derivative columns to compute *products*
+            for simultaneously.  None means compute all columns at once.
+            The minimum of wrt_block_size and the size that makes maximal
+            use of available processors is used as the final block size. Use
+            this argument to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+            A profiler object used for to track timing and memory usage.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -2056,8 +2571,7 @@ class OpModel(Model):
                          wrt_block_size1=None, wrt_block_size2=None,
                          gather_mem_limit=None):
         """
-        Compute the outcome probability-Hessians for an entire tree of gate
-        strings.
+        Compute the outcome probability-Hessians for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
         probability-Hessians for each "final element" of `eval_tree`.
@@ -2065,54 +2579,52 @@ class OpModel(Model):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+            an already-allocated ExMxM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
-          when not None, an already-allocated ExM numpy array that is filled
-          with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
+        deriv_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrt_filter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_block_size1 : int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
-        profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -2126,9 +2638,7 @@ class OpModel(Model):
     def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
                              return_dprobs_12=False, comm=None):
         """
-        Constructs a generator that computes the 2nd derivatives of the
-        probabilities generated by a each gate sequence given by eval_tree
-        column-by-column.
+        An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
         This routine can be useful when memory constraints make constructing
         the entire Hessian at once impractical, and one is able to compute
@@ -2137,17 +2647,11 @@ class OpModel(Model):
         can often be computed column-by-column from the using the columns of
         the operation sequences.
 
-
         Parameters
         ----------
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mx_to_fill, specifying the
-          correspondence between rows of mx_to_fill and spam labels.
-
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the operation sequences
-           to compute the bulk operation on.  This tree *cannot* be split.
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
@@ -2157,39 +2661,38 @@ class OpModel(Model):
             `slice` objects.
 
         return_dprobs_12 : boolean, optional
-           If true, the generator computes a 2-tuple: (hessian_col, d12_col),
-           where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
-           the probability generated by the sequence and spam label indexed
-           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
-           Hessian, and turns out to be useful when computing the Hessian
-           of functions of the probabilities.
+            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
+            where d12_col is a column of the matrix d12 defined by:
+            d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+            the probability generated by the sequence and spam label indexed
+            by iOpStr and iSpamLabel.  d12 has the same dimensions as the
+            Hessian, and turns out to be useful when computing the Hessian
+            of functions of the probabilities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed as in
-           bulk_product, bulk_dproduct, and bulk_hproduct.
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed as in
+            bulk_product, bulk_dproduct, and bulk_hproduct.
 
         Returns
         -------
         block_generator
-          A generator which, when iterated, yields the 3-tuple
-          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
-          (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
-          are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
-          arrays of shape K x S x B x B', where:
+            A generator which, when iterated, yields the 3-tuple
+            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+            (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
+            are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
+            arrays of shape K x S x B x B', where:
 
-          - K is the length of spam_label_rows,
-          - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
-          - B is the number of parameter rows (the length of rowSlice)
-          - B' is the number of parameter columns (the length of colSlice)
+            - K is the length of spam_label_rows,
+            - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
+            - B is the number of parameter rows (the length of rowSlice)
+            - B' is the number of parameter columns (the length of colSlice)
 
-          If `mx` and `dp` the outputs of :func:`bulk_fill_hprobs`
-          (i.e. args `mx_to_fill` and `deriv_mx_to_fill`), then:
+            If `mx` and `dp` the outputs of :func:`bulk_fill_hprobs`
+            (i.e. args `mx_to_fill` and `deriv_mx_to_fill`), then:
 
-          - `hprobs == mx[:,:,rowSlice,colSlice]`
-          - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
+            - `hprobs == mx[:,:,rowSlice,colSlice]`
+            - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
         return self._fwdsim().bulk_hprobs_by_block(
             eval_tree, wrt_slices_list,

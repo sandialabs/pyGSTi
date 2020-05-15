@@ -1,4 +1,6 @@
-""" Defines the MatrixEvalTree class which implements an evaluation tree. """
+"""
+Defines the MatrixEvalTree class which implements an evaluation tree.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,15 +21,19 @@ import time as _time  # DEBUG TIMERS
 
 class MatrixEvalTree(EvalTree):
     """
-    An Evaluation Tree.  Instances of this class specify how to
-      perform bulk Model operations.
+    An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
 
-    EvalTree instances create and store the decomposition of a list
-      of operation sequences into a sequence of 2-term products of smaller
-      strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of operation sequences, starting with just the
-      single gates, using the fewest number of multiplications, but
-      this optimality is not guaranteed.
+    MatrixEvalTree instances create and store the decomposition of a list of circuits into
+    a sequence of 2-term products of smaller strings.  Ideally, this sequence would
+    prescribe the way to obtain the entire list of circuits, starting with just the single
+    gates, using the fewest number of multiplications, but this optimality is not
+    guaranteed.
+
+    Parameters
+    ----------
+    items : list, optional
+        Initial items.  This argument should only be used internally
+        in the course of serialization.        
     """
 
     def __init__(self, items=[]):
@@ -45,37 +51,35 @@ class MatrixEvalTree(EvalTree):
         # each distinct spam_tuple
         self.spamtuple_indices = None
 
-        # list of the operation labels
-        self.opLabels = []
-
         super(MatrixEvalTree, self).__init__(items)
 
     def initialize(self, simplified_circuit_elabels, num_sub_tree_comms=1):
         """
-          Initialize an evaluation tree using a set of operation sequences.
-          This function must be called before using an EvalTree.
+        Initialize an evaluation tree using a set of "simplified" circuits.
 
-          Parameters
-          ----------
-          simplified_circuit_elabels : dict
-              A dictionary of `(circuit, elabels)` tuples specifying
-              the circuits that should be present in the evaluation tree.
-              `circuit` is a *simplified* circuit whose first layer is a
-              preparation label. `elabels` is a list of all the POVM
-              effect labels (corresponding to outcomes) for the
-              circuit (only a single label is needed rather than a
-              POVM-label, effect-label pair because these are *simplified*
-              effect labels).
+        This function must be called before using this evaluation tree.
 
-          num_sub_tree_comms : int, optional
-              The number of processor groups (communicators)
-              to divide the subtrees of this EvalTree among
-              when calling `distribute`.  By default, the
-              communicator is not divided.
+        Parameters
+        ----------
+        simplified_circuit_elabels : dict
+            A dictionary of `(circuit, elabels)` tuples specifying
+            the circuits that should be present in the evaluation tree.
+            `circuit` is a *simplified* circuit whose first layer is a
+            preparation label. `elabels` is a list of all the POVM
+            effect labels (corresponding to outcomes) for the
+            circuit (only a single label is needed rather than a
+            POVM-label, effect-label pair because these are *simplified*
+            effect labels).
 
-          Returns
-          -------
-          None
+        num_sub_tree_comms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of this EvalTree among
+            when calling `distribute`.  By default, the
+            communicator is not divided.
+
+        Returns
+        -------
+        None
         """
         #tStart = _time.time() #DEBUG TIMER
 
@@ -235,8 +239,14 @@ class MatrixEvalTree(EvalTree):
 
     def cache_size(self):
         """
-        Returns the size of the persistent "cache" of partial results
-        used during the computation of all the strings in this tree.
+        Returns the size of the persistent "cache".
+
+        This cache holds partial results used during the computation of all
+        the strings in this tree.
+
+        Returns
+        -------
+        int
         """
         return len(self)
 
@@ -253,14 +263,14 @@ class MatrixEvalTree(EvalTree):
         Parameters
         ----------
         permute : bool, optional
-           Whether to permute the returned list of strings into the
-           same order as the original list passed to initialize(...).
-           When False, the computed order of the operation sequences is
-           given, which is matches the order of the results from calls
-           to `Model` bulk operations.  Non-trivial permutation
-           occurs only when the tree is split (in order to keep
-           each sub-tree result a contiguous slice within the parent
-           result).
+            Whether to permute the returned list of strings into the
+            same order as the original list passed to initialize(...).
+            When False, the computed order of the operation sequences is
+            given, which is matches the order of the results from calls
+            to `Model` bulk operations.  Non-trivial permutation
+            occurs only when the tree is split (in order to keep
+            each sub-tree result a contiguous slice within the parent
+            result).
 
         Returns
         -------
@@ -294,21 +304,26 @@ class MatrixEvalTree(EvalTree):
 
     def get_min_tree_size(self):
         """
-        Returns the minimum sub tree size required to compute each
-        of the tree entries individually.  This minimum size is the
-        smallest "max_sub_tree_size" that can be passed to split(),
-        as any smaller value will result in at least one entry being
+        Returns the minimum sub tree size required to compute each of the tree entries individually.
+
+        This minimum size is the smallest "max_sub_tree_size" that can be passed to
+        split(), as any smaller value will result in at least one entry being
         uncomputable.
+
+        Returns
+        -------
+        int
         """
         singleItemTreeSetList = self._create_single_item_trees()
         return max(list(map(len, singleItemTreeSetList)))
 
     def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
-        Split this tree into sub-trees in order to reduce the
-          maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either max_sub_tree_size
-          or num_sub_trees.
+        Split this tree into sub-trees.
+
+        This is done in order to reduce the maximum size of any tree (useful for
+        limiting memory consumption or for using multiple cores).  Must specify
+        either max_sub_tree_size or num_sub_trees.
 
         Parameters
         ----------
@@ -698,11 +713,17 @@ class MatrixEvalTree(EvalTree):
             singleItemTreeSetList.append(newTreeSet)
         return singleItemTreeSetList
 
+    #PRIVATE
     def get_analysis_plot_infos(self):
         """
-        Returns debug plot information useful for
-        assessing the quality of a tree. This
+        Returns debug plot information.
+
+        This is useful for assessing the quality of a tree. This
         function is not guaranteed to work.
+
+        Returns
+        -------
+        dict
         """
 
         analysis = {}
@@ -741,7 +762,13 @@ class MatrixEvalTree(EvalTree):
         return analysis
 
     def copy(self):
-        """ Create a copy of this evaluation tree. """
+        """
+        Create a copy of this evaluation tree.
+
+        Returns
+        -------
+        MatrixEvalTree
+        """
         newTree = self._copy_base(MatrixEvalTree(self[:]))
         newTree.opLabels = self.opLabels[:]
         newTree.init_indices = self.init_indices[:]

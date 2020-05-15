@@ -1,4 +1,6 @@
-""" Defines HypothesisTest object and supporting functions """
+"""
+Defines HypothesisTest object and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,8 +16,92 @@ import copy as _copy
 
 class HypothesisTest(object):
     """
-    An object to defines, and can be used to implement, a set of statistical hypothesis
-    tests on a set of null hypotheses. This object has *not* been carefully tested.
+    A set of statistical hypothesis tests on a set of null hypotheses.
+
+    This object has *not* been carefully tested.
+
+    Parameters
+    ----------
+    hypotheses : list or tuple
+        Specifies the set of null hypotheses. This should be a list containing elements
+        that are either
+
+        - A "label" for a hypothesis, which is just some hashable object such
+          as a string.
+        - A tuple of "nested hypotheses", which are also just labels for some
+          null hypotheses.
+
+        The elements of this list are then subject to multi-test correction of the "closed test
+        procedure" type, with the exact correction method specified by `passing_graph`. For each element that
+        is itself a tuple of hypotheses, these hypotheses are then further corrected using the method
+        specified by `local_corrections`.
+
+    significance : float in (0,1), optional
+        The global significance level. If either there are no "nested hypotheses" or the
+        correction used for the nested hypotheses will locally control the family-wise error rate
+        (FWER) (such as if `local_correction`='Holms') then when the hypothesis test encoded by
+        this object will control the FWER to `significance`.
+
+    weighting : string or dict.
+        Specifies what proportion of `significance` is initially allocated to each element
+        of `hypotheses`. If a string, must be 'equal'. In this case, the local significance
+        allocated to each element of `hypotheses` is `significance`/len(`hypotheses`). If
+        not a string, a dictionary whereby each key is an element of `hypotheses` and each value
+        is a non-negative integer (which will be normalized to one inside the function).
+
+    passing_graph : string or numpy.array
+        Specifies where the local significance from each test in `hypotheses` that triggers is
+        passed to. If a string, then must be 'Holms'. In this case a test that triggers passes
+        it's local significance to all the remaining hypotheses that have not yet triggered, split
+        evenly over these hypotheses. If it is an array then its value for [i,j] is the proportion
+        of the "local significance" that is passed from hypothesis with index i (in the tuple
+        `hypotheses`) to the hypothesis with index j if the hypothesis with index i is rejected (and
+        if j hasn't yet been rejected; otherwise that proportion is re-distributed other the other
+        hypothesis that i is to pass it's significance to). The only restriction on restriction on
+        this array is that a row must sum to <= 1 (and it is sub-optimal for a row to sum to less
+        than 1).
+
+        Note that a nested hypothesis is not allowed to pass significance out of it, so any rows
+        that request doing this will be ignored. This is because a nested hypothesis represents a
+        set of hypotheses that are to be jointly tested using some multi-test correction, and so
+        this can only pass significance out if *all* of the hypotheses in that nested hypothesis
+        are rejected. As this is unlikely in most use-cases, this has not been allowed for.
+
+    local_corrections : str, optional
+        The type of multi-test correction used for testing any nested hypotheses. After all
+        of the "top level" testing as been implemented on all non-nested hypotheses, whatever
+        the "local" significance is for each of the "nested hypotheses" is multi-test corrected
+        using this procedure. Must be one of:
+
+        - 'Holms'. This implements the Holms multi-test compensation technique. This
+        controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
+        combination with the "top level" corrections). This requires no assumptions about the
+        null hypotheses.
+
+        - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
+        technique. This is strictly less powerful test than the Hochberg correction.
+
+        Note that neither 'Holms' nor 'Bonferronni' gained any advantage from being implemented
+        using "nesting", as if all the hypotheses were put into the "top level" the same corrections
+        could be achieved.
+
+        - 'Hochberg'. This implements the Hockberg multi-test compensation technique. It is
+        not a "closed test procedure", so it is not something that can be implemented in the
+        top level. To be provably valid, it is necessary for the p-values of the nested
+        hypotheses to be non-negatively dependent. When that is true, this is strictly better
+        than the Holms and Bonferroni corrections whilst still controlling the FWER.
+
+        - 'none'. This implements no multi-test compensation. This option does *not* control the
+        FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
+
+        -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
+        technique. This does *not* control the FWER of the nested hypotheses, and instead controls
+        the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
+        maintained in the sense that the probability of one or more tests triggering is at most `significance`.
+        But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
+        that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+        method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+        quantity.
     """
 
     def __init__(self, hypotheses, significance=0.05, weighting='equal',
@@ -194,7 +280,6 @@ class HypothesisTest(object):
         Returns
         -------
         None
-
         """
         # Testing this is slow, so we'll just leave it out.
         #for h in self.hypotheses:
@@ -212,14 +297,14 @@ class HypothesisTest(object):
 
     def implement(self):
         """
-        Implements the multiple hypothesis testing routine encoded by this object. This populates
-        the self.hypothesis_rejected dictionary, that shows which hypotheses can be rejected using
-        the procedure specified.
+        Implements the multiple hypothesis testing routine encoded by this object.
+
+        This populates the self.hypothesis_rejected dictionary, that shows which
+        hypotheses can be rejected using the procedure specified.
 
         Returns
         -------
         None
-
         """
         assert(self.pvalues is not None), "Data must be input before the test can be implemented!"
 

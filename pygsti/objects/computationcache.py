@@ -1,4 +1,6 @@
-""" Cache for distributed computation """
+"""
+Cache for distributed computation
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,8 +14,44 @@ import numpy as _np
 
 class ComputationCache(object):
     """
-    A cache of information and computated quantities for calculations involving
-    the same model, dataset, and set of circuits.
+    A cache used to speed up circuit probability calculations.
+
+    This object stores information and computated quantities for calculations
+    involving the *same* model, dataset, and set of circuits.
+
+    Parameters
+    ----------
+    eval_tree : EvalTree
+        An evaluation tree, storing the set of circuits in a simplified
+        and structured way in order to improve the efficiency of later computations.
+
+    lookup : collections.OrderedDict
+        A dictionary whose keys are integer indices into the master circuit list and
+        whose values are slices and/or integer-arrays into the space/axis of
+        final elements returned by the 'bulk fill' forward simulator routines.  Thus,
+        to get the  final elements corresponding to the ith circuits, use
+        `filledArray[ lookup[i] ]`.
+
+    outcomes : collections.OrderedDict
+        A dictionary whose keys are integer indices into the master circuit list
+        and whose values are lists of outcome labels (an outcome label is a tuple
+        of POVM-effect and/or instrument-element labels).  Thus, to obtain
+        what outcomes the i-th circuits's final elements (`filledArray[ lookup[i] ]`)
+        correspond to, use `outcomes[i]`.
+
+    wrt_block_size : int or float, optional
+      The maximum average number of derivative columns to compute quantities for
+      simultaneously.  None typically means to compute all the columns at once.
+
+    wrt_block_size2 : int or float, optional
+      The maximum average number of 2nd derivative columns to compute quantities for
+      simultaneously (for those which use second derivatives, e.g. Hessians).
+
+    counts : numpy.ndarray
+        A 1D vector of outcome counts, one per computed element.
+
+    total_counts : numpy.ndarray
+        A 1D vector of total (per-circuit) outcome counts, one per computed element.
     """
     def __init__(self,
                  eval_tree=None, lookup=None, outcomes_lookup=None,
@@ -73,6 +111,9 @@ class ComputationCache(object):
         """
         Whether this cache constains an evaluation tree.
 
+        If this function returns `False`, use :method:`add_evaltree` to create an
+        evaluation tree (if one is needed).
+
         Returns
         -------
         bool
@@ -81,14 +122,17 @@ class ComputationCache(object):
 
     def add_evaltree(self, model, dataset=None, circuits_to_use=None, resource_alloc=None, subcalls=(), verbosity=0):
         """
-        Add an evalution tree to this cache, based on the model, dataset,
-        and circuits it is associated with (but which aren't stored within it).
+        Create and add an evalution tree to this cache.
+
+        The created tree is based on `model`, `dataset`, and `circuits_to_use`, which should
+        be the model, data set, and and circuits this cache is associated with (but which
+        aren't stored within it).
 
         Parameters
         ----------
         model : Model
             The model to use.
-        
+
         dataset : DataSet
             The dataset to use (for filtering cicuits, so that only circuits
             present in the data set are used)
@@ -122,8 +166,11 @@ class ComputationCache(object):
 
     def has_count_vectors(self):
         """
-        Whether this cache contains .counts and .total_counts vectors of
-        per-element outcome counts and total circuit counts.
+        Whether this cache contains .counts and .total_counts vectors.
+
+        These vectors, when present, contain the per-element outcome
+        counts and total circuit counts.  If this function returns `False`,
+        use :method:`add_count_vectors` to compute these count vectors.
 
         Returns
         -------

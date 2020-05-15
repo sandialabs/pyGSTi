@@ -1,4 +1,6 @@
-""" Defines the VerbosityPrinter class, used for logging output. """
+"""
+Defines the VerbosityPrinter class, used for logging output.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -72,7 +74,8 @@ def _build_verbose_iteration(iteration, total, prefix, suffix, end):
 
 # The class responsible for optionally logging output
 class VerbosityPrinter(object):
-    '''Class responsible for logging things to stdout or a file.
+    """
+    Class responsible for logging things to stdout or a file.
 
     Controls verbosity and can print progress bars. ex:
 
@@ -117,7 +120,41 @@ class VerbosityPrinter(object):
 
     will output either a progress bar or iteration statuses depending on the
     printer's verbosity
-    '''
+
+    Parameters
+    ----------
+    verbosity : int
+        How verbose the printer should be.
+
+    filename : str, optional
+        Where to put output (If none, output goes to screen)
+
+    comm : mpi4py.MPI.Comm, optional
+        Restricts output if the program is running in parallel  (By default,
+        if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+
+    warnings : bool, optional
+        Whether or not to print warnings
+
+    split : bool, optional
+        Whether to split output between stdout and stderr as appropriate, or
+        to combine the streams so everything is sent to stdout.
+
+    clear_file : bool, optional
+        Whether or not `filename` should be cleared (overwritten) or simply
+        appended to.
+
+    Attributes
+    ----------
+    _comm_path : str
+        relative path where comm files (outputs of non-root ranks) are stored.
+
+    _comm_file_name : str
+        root filename for comm files (outputs of non-root ranks).
+
+    _comm_file_ext : str
+        filename extension for comm files (outputs of non-root ranks).
+    """
 
     # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the
     # beginning of the program
@@ -145,16 +182,18 @@ class VerbosityPrinter(object):
 
         Parameters
         ----------
-        verbosity - int, required:
-          How verbose the printer should be
-        filename - string, optional:
-          Where to put output (If none, output goes to screen)
-        comm - mpi4py.MPI.Comm object, optional:
-          Restricts output if the program is running in parallel
-            ( By default, if the core is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, and 3
-            (assuming 4 cores))
-        warnings - bool, optional:
-          don't print warnings
+        verbosity : int, optional
+            How verbose the printer should be.
+    
+        filename : str, optional
+            Where to put output (If none, output goes to screen)
+    
+        comm : mpi4py.MPI.Comm, optional
+            Restricts output if the program is running in parallel  (By default,
+            if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+    
+        warnings : bool, optional
+            Whether or not to print warnings
         '''
         if comm:
             if comm.Get_rank() != 0 and not filename:  # A filename will override the default comm behavior
@@ -175,9 +214,13 @@ class VerbosityPrinter(object):
         self.split = split
 
     def clone(self):
-        '''
+        """
         Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
-        '''
+
+        Returns
+        -------
+        VerbosityPrinter
+        """
         p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings, self.split, clear_file=False)
 
         p.defaultVerbosity = self.defaultVerbosity
@@ -194,23 +237,22 @@ class VerbosityPrinter(object):
     # Accepts either a verbosity level (integer) or a pre-constructed VerbosityPrinter
     @staticmethod
     def build_printer(verbosity, comm=None):
-        '''
+        """
         Function for converting between interfaces
 
         Parameters
         ----------
         verbosity : int or VerbosityPrinter object, required:
-          object to build a printer from
+            object to build a printer from
 
         comm : mpi4py.MPI.Comm object, optional
-          Comm object to build printers with. !Will override!
+            Comm object to build printers with. !Will override!
 
         Returns
         -------
-        VerbosityPrinter:
-          The printer object, constructed from either an integer or another printer
-
-        '''
+        VerbosityPrinter :
+            The printer object, constructed from either an integer or another printer
+        """
         if _compat.isint(verbosity):
             printer = VerbosityPrinter(verbosity, comm=comm)
         else:
@@ -277,70 +319,82 @@ class VerbosityPrinter(object):
 
     # special function reserved for logging errors
     def error(self, message):
-        '''
+        """
         Log an error to the screen/file
 
         Parameters
         ----------
         message : str
-          the error message
+            the error message
 
         Returns
         -------
         None
-        '''
+        """
         self._put('\nERROR: %s\n' % message, stderr=True)
         self._record("ERROR", 0, '\nERROR: %s\n' % message)
 
     # special function reserved for logging warnings
 
     def warning(self, message):
-        '''
+        """
         Log a warning to the screen/file if verbosity > 1
 
         Parameters
         ----------
         message : str
-          the warning message
+            the warning message
 
         Returns
         -------
         None
-        '''
+        """
         if self.warnings:
             self._put('\nWARNING: %s\n' % message, stderr=True)
             self._record("WARNING", 0, '\nWARNING: %s\n' % message)
 
     def log(self, message, message_level=None, indent_char='  ', show_statustype=False, do_indent=True,
             indent_offset=0, end='\n', flush=True):
-        '''
-        Log a status message to screen/file
+        """
+        Log a status message to screen/file.
+
         Determines whether the message should be printed based on current verbosity setting,
         then sends the message to the appropriate output
 
         Parameters
         ----------
-        message - str:
-          Status message to be printed
-        message_level - int, optional:
-          Verbosity level required for the message to be shown
-        indent_char - str, optional:
-          Number of spaces to indent relative to verbosity
-        show_statustype - bool, optional:
-          output the status level of the message
-        do_indent - bool, optional:
-          do/dont indent the message
-        indent_offset - int, optional:
-          change indent based on verbosity
-        end - str, optional:
-          allows printing with no newlines etc
-        flush - bool, optional:
-          option to flush output
+        message : str
+            the message to print (or log)
+
+        message_level : int, optional
+            the minimum verbosity level at which this level is printed.
+
+        indent_char : str, optional
+            what constitutes an "indent" (messages at higher levels are indented more
+            when `do_indent=True`).
+
+        show_statustype : bool, optional
+            if True, prepend lines with "Status Level X" indicating the `message_level`.
+
+        do_indent : bool, optional
+            whether messages at higher message levels should be indented.  Note that if
+            this is False it may be helpful to set `show_statustype=True`.
+
+        indent_offset : int, optional
+            an additional number of indentations to add, on top of any due to the
+            message level.
+
+        end : str, optional
+            the character (or string) to end message lines with.
+
+        flush : bool, optional
+            whether stdout should be flushed right after this message is printed
+            (this avoids delays in on-screen output due to buffering).
 
         Returns
         -------
         None
-        '''
+        """
         if message_level is None:
             message_level = self.defaultVerbosity
         if message_level <= self.verbosity:
@@ -384,9 +438,10 @@ class VerbosityPrinter(object):
 
     @_contextmanager
     def verbosity_env(self, level):
-        '''
-        Create a temporary environment with a different verbosity level,
-        controlled using Python's with statement:
+        """
+        Create a temporary environment with a different verbosity level.
+
+        This is context manager, controlled using Python's with statement:
 
             >>> with printer.verbosity_env(2):
                     printer.log('Message1') # printed at verbosity level 2
@@ -394,9 +449,9 @@ class VerbosityPrinter(object):
 
         Parameters
         ----------
-        level - int:
-            The new default verbosity value for the printer.log() function
-        '''
+        level : int
+            the verbosity level of the environment.
+        """
         original = self.defaultVerbosity
         try:
             self.defaultVerbosity = level
@@ -406,15 +461,16 @@ class VerbosityPrinter(object):
 
     @_contextmanager
     def progress_logging(self, message_level=1):
-        '''
-        Context manager for logging progress bars/iterations
+        """
+        Context manager for logging progress bars/iterations.
+
         (The printer will return to its normal, unrestricted state when the progress logging has finished)
 
         Parameters
         ----------
-        message_level - int, optional:
-          the verbosity level of the progressbar/set of iterations
-        '''
+        message_level : int, optional
+            progress messages will not be shown until the verbosity level reaches `message_level`.
+        """
         try:
             self._progressStack.append(message_level)
             self._progressParamsStack.append(None)
@@ -428,30 +484,52 @@ class VerbosityPrinter(object):
     def show_progress(self, iteration, total, bar_length=50, num_decimals=2, fill_char='#',
                       empty_char='-', prefix='Progress:', suffix='', verbose_messages=[], indent_char='  ', end='\n'):
         """
+        Displays a progress message (to be used within a `progress_logging` block).
+
         Parameters
         ----------
-        iteration   - int, required
-          current iteration
-        total       - int, required  :
-          total iterations
-        bar_length   - int, optional  :
-          character length of bar
-        num_decimals - int, optional  :
-          precision of progress percent
-        fill_char    - str, optional  :
-          replaces '#' as the bar-filling character
-        empty_char   - str, optional  :
-          replaces '-' as the empty-bar character
-        prefix      - str, optional  :
-          message in front of the bar
-        suffix      - str, optional  :
-          message after the bar
-        verbose_messages - list(str), optional:
-          list of messages to output alongside the iteration
-        end - str, optional:
-          String terminating the progress bar
-        indent_char - str, optional:
-          number of spaces to indent the progress bar
+        iteration : int
+            the 0-based current iteration -- the interation number this message is for.
+
+        total : int
+            the total number of iterations expected.
+
+        bar_length : int, optional
+            the length, in characters, of a text-format progress bar (only used when the
+            verbosity level is exactly equal to the `progress_logging` message level.
+
+        num_decimals : int, optional
+            number of places after the decimal point that are displayed in progress
+            bar's percentage complete.
+
+        fill_char : str, optional
+            replaces '#' as the bar-filling character
+
+        empty_char : str, optional
+            replaces '-' as the empty-bar character
+
+        prefix : str, optional
+            message in front of the bar
+
+        suffix : str, optional
+            message after the bar
+
+        verbose_messages : list, optional
+            A list of strings to display after an initial "Iter X of Y" line when
+            the verbosity level is higher than the `progress_logging` message level
+            and so more verbose messages are shown (and a progress bar is not).  The
+            elements of `verbose_messages` will occur, one per line, after the initial
+            "Iter X of Y" line.
+
+        indent_char : str, optional
+            what constitutes an "indentation".
+
+        end : str, optional
+            the character (or string) to end message lines with.
+
+        Returns
+        -------
+        None
         """
         indent = indent_char * (self._progressStack[-1] - 1 + self.extra_indents)
         # -1 so no indent at verbosity == 1
@@ -496,20 +574,38 @@ class VerbosityPrinter(object):
 
     def start_recording(self):
         """
+        Begins recording the output (to memory).
+
         Begins recording (in memory) a list of `(type, verbosityLevel, message)`
         tuples that is returned by the next call to :method:`stop_recording`.
+
+        Returns
+        -------
+        None
         """
         self.recorded_output = []
 
     def is_recording(self):
-        """ Returns whether this VerbosityPrinter is already recording """
+        """
+        Returns whether this VerbosityPrinter is currently recording.
+
+        Returns
+        -------
+        bool
+        """
         return bool(self.recorded_output is not None)
 
     def stop_recording(self):
         """
+        Stops recording and returns recorded output.
+
         Stops a "recording" started by :method:`start_recording` and returns the
         list of `(type, verbosityLevel, message)` tuples that have been recorded
         since then.
+
+        Returns
+        -------
+        list
         """
         recorded = self.recorded_output
         self.recorded_output = None  # always "stop" recording

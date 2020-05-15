@@ -1,4 +1,6 @@
-""" Defines the DataSet class and supporting classes and functions """
+"""
+Defines the DataSet class and supporting classes and functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -40,7 +42,17 @@ DATAROW_AUTOCACHECOUNT_THRESHOLD = 256
 
 
 class DataSetKVIterator(object):
-    """ Iterator class for op_string,DataSetRow pairs of a DataSet """
+    """
+    Iterator class for op_string,DataSetRow pairs of a DataSet
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The parent data set.
+
+    strip_occurrence_tags : bool, optional
+        Whether occurence tags should be stripped from circuits.
+    """
 
     def __init__(self, dataset, strip_occurrence_tags=False):
         self.dataset = dataset
@@ -76,7 +88,14 @@ class DataSetKVIterator(object):
 
 
 class DataSetValueIterator(object):
-    """ Iterator class for DataSetRow values of a DataSet """
+    """
+    Iterator class for DataSetRow values of a DataSet
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The parent data set.
+    """
 
     def __init__(self, dataset):
         self.dataset = dataset
@@ -108,9 +127,50 @@ class DataSetValueIterator(object):
 
 class DataSetRow(object):
     """
-    Encapsulates DataSet time series data for a single circuit.  Outwardly
-    looks similar to a list with `(outcome_label, time_index, repetition_count)`
-    tuples as the values.
+    Encapsulates DataSet time series data for a single circuit.
+
+    Outwardly, it looks similar to a list with
+    `(outcome_label, time_index, repetition_count)` tuples as the values.
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The parent data set.
+
+    row_oli_data : numpy.ndarray
+        The outcome label indices for each bin of this row.
+
+    row_time_data : numpy.ndarray
+        The timestamps for each bin of this row.
+
+    row_rep_data : numpy.ndarray
+        The repetition counts for each bin of this row (if None, assume 1 per bin).
+
+    cached_cnts : dict
+        A cached pre-computed count dictionary (for speed).
+
+    aux : dict
+        Dictionary of auxiliary information.
+
+    Attributes
+    ----------
+    outcomes : list
+        Returns this row's sequence of outcome labels, one per "bin" of repetition
+        counts (returned by :method:`get_counts`).
+
+    counts : dict
+        a dictionary of per-outcome counts.
+
+    allcounts : dict
+        a dictionary of per-outcome counts with *all* possible outcomes as keys
+        and zero values when an outcome didn't occur.  Note this can be expensive
+        to compute for many-qubit data.
+
+    fractions : dict
+        a dictionary of per-outcome fractions.
+
+    total : int
+        Returns the total number of counts contained in this row.
     """
 
     def __init__(self, dataset, row_oli_data, row_time_data, row_rep_data,
@@ -125,19 +185,26 @@ class DataSetRow(object):
     @property
     def outcomes(self):
         """
-        Returns this row's sequence of outcome labels, one per "bin" of repetition
-        counts (returned by :method:`get_counts`).
+        This row's sequence of outcome labels, one per "bin" of repetition counts.
         """
         return [self.dataset.ol[i] for i in self.oli]
 
     @outcomes.setter
     def outcomes(self, value):
+        """
+        This row's sequence of outcome labels, one per "bin" of repetition counts.
+        """
         raise ValueError("outcomes property is read-only")
 
     def get_expanded_ol(self):
         """
-        Returns this row's sequence of outcome labels, with repetition counts
-        expanded, so there's one element in the returned list for *each* count.
+        This row's sequence of outcome labels, with repetition counts expanded.
+
+        Thus, there's one element in the returned list for *each* count.
+
+        Returns
+        -------
+        list
         """
         if self.reps is not None:
             ol = []
@@ -149,8 +216,13 @@ class DataSetRow(object):
 
     def get_expanded_oli(self):
         """
-        Returns this row's sequence of outcome label indices, with repetition counts
-        expanded, so there's one element in the returned list for *each* count.
+        This row's sequence of outcome label indices, with repetition counts expanded.
+
+        Thus, there's one element in the returned list for *each* count.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if self.reps is not None:
             inds = []
@@ -162,8 +234,13 @@ class DataSetRow(object):
 
     def get_expanded_times(self):
         """
-        Returns this row's sequence of time stamps, with repetition counts
-        expanded, so there's one element in the returned list for *each* count.
+        This row's sequence of time stamps, with repetition counts expanded.
+
+        Thus, there's one element in the returned list for *each* count.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if self.reps is not None:
             times = []
@@ -175,8 +252,11 @@ class DataSetRow(object):
 
     def get_times(self):
         """
-        Returns the a list containing the unique data collection times
-        at which there is at least one measurement result.
+        A list containing the unique data collection times at which there is at least one measurement result.
+
+        Returns
+        -------
+        list
         """
         times = []
         last_time = None
@@ -189,9 +269,10 @@ class DataSetRow(object):
 
     def get_timeseries_for_outcomes(self):
         """
-        Returns data in a time-series format. This can be a much less
-        succinct format than returned by `get_timeseries`. E.g., it is
-        highly inefficient for many-qubit data.
+        Row data in a time-series format.
+
+        This can be a much less succinct format than returned by `get_timeseries`.
+        E.g., it is highly inefficient for many-qubit data.
 
         Returns
         -------
@@ -257,7 +338,6 @@ class DataSetRow(object):
         -------
         times : list
             The time steps, containing the unique data collection times.
-
         reps : list
             A list of dictionaries containing the counts dict corresponding
             to the list of unique data collection times in `times`.
@@ -287,8 +367,7 @@ class DataSetRow(object):
 
     def get_reps_timeseries(self):
         """
-        Tthe number of measurement results at each
-        data collection time.
+        The number of measurement results at each data collection time.
 
         Returns
         -------
@@ -319,13 +398,20 @@ class DataSetRow(object):
     def get_number_of_times(self):
         """
         Returns the number of data collection times.
+
+        Returns
+        -------
+        int
         """
         return len(self.get_times())
 
     def has_constant_totalcounts(self):
         """
-        Returns True if the numbers of counts is the same at
-        all data collection times. Otherwise returns False.
+        True if the numbers of counts is the same at all data collection times. Otherwise False.
+
+        Returns
+        -------
+        bool
         """
         times, reps = self.get_reps_timeseries()
         firstrep = reps[0]
@@ -335,20 +421,29 @@ class DataSetRow(object):
 
     def get_totalcounts_per_timestep(self):
         """
-        Returns the number of total counts per time-step, when this
-        is constant. If it varies over the times that there is at least
-        one measurement result for then this function will raise an error.
+        The number of total counts per time-step, when this is constant.
+
+        If the total counts vary over the times that there is at least
+        one measurement result, then this function will raise an error.
+
+        Returns
+        -------
+        int
         """
         times, reps = self.get_reps_timeseries()
         firstrep = reps[0]
         assert(all([firstrep == i for i in reps])), "The total counts is not the same at all time steps!"
-
         return firstrep
 
     def get_meantimestep(self):
         """
-        Returns the mean time-step. Will raise an error for data that is
-        a trivial time-series (i.e., data all at one time).
+        The mean time-step.
+
+        Will raise an error for data that is a trivial time-series (i.e., data all at one time).
+
+        Returns
+        -------
+        float
         """
         times = _np.array(self.get_times())
         assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
@@ -481,6 +576,9 @@ class DataSetRow(object):
 
     @property
     def counts(self):
+        """
+        Dictionary of per-outcome counts.
+        """
         if self._cntcache: return self._cntcache  # if not None *and* len > 0
         ret = self._get_counts()
         if self._cntcache is not None:  # == and empty dict {}
@@ -489,14 +587,18 @@ class DataSetRow(object):
 
     @property
     def allcounts(self):
+        """
+        Dictionary of per-outcome counts with *all* possible outcomes as keys.
+
+        This means that and zero values are included when an outcome didn't occur.
+        Note this can be expensive to assemble for many-qubit data.
+        """
         return self._get_counts(all_outcomes=True)
 
     @property
     def fractions(self, all_outcomes=False):
         """
-        Returns this row's sequence of "repetition counts", that is, the number of
-        repetitions of each outcome label in the `outcomes` list, or
-        equivalently, each outcome label index in this rows `.oli` member.
+        Dictionary of per-outcome fractions.
         """
         cnts = self._get_counts(all_outcomes)
         total = sum(cnts.values())
@@ -504,7 +606,9 @@ class DataSetRow(object):
 
     @property
     def total(self):
-        """ Returns the total number of counts contained in this row."""
+        """
+        The total number of counts contained in this row.
+        """
         if self.reps is None:
             return float(len(self.oli))
         else:
@@ -512,7 +616,18 @@ class DataSetRow(object):
 
     #TODO: remove in favor of fractions property?
     def fraction(self, outcomelabel):
-        """ Returns the fraction of total counts for `outcomelabel`."""
+        """
+        The fraction of total counts for `outcomelabel`.
+
+        Parameters
+        ----------
+        outcomelabel : str or tuple
+            The outcome label, e.g. `'010'` or `('0','11')`.
+
+        Returns
+        -------
+        float
+        """
         d = self.counts
         if outcomelabel not in d:
             return 0.0  # Note: similar to an "all_outcomes=True" default
@@ -520,13 +635,23 @@ class DataSetRow(object):
         return d[outcomelabel] / total
 
     def counts_at_time(self, timestamp):
-        """ Returns a dictionary of counts at a particular time """
+        """
+        Returns a dictionary of counts at a particular time
+
+        Parameters
+        ----------
+        timestamp : float
+            the time to get counts at.
+
+        Returns
+        -------
+        int
+        """
         return self._get_counts(timestamp)
 
     def timeseries(self, outcomelabel, timestamps=None):
         """
-        Returns timestamps and counts for a single outcome label
-        or for aggregated counts if `outcomelabel == "all"`.
+        Retrieve timestamps and counts for a single outcome label or for aggregated counts if `outcomelabel == "all"`.
 
         Parameters
         ----------
@@ -579,8 +704,19 @@ class DataSetRow(object):
         return _np.array(times, self.dataset.timeType), \
             _np.array(counts, self.dataset.repType)
 
-    def scale(self, factor):
-        """ Scales all the counts of this row by the given factor """
+    def scale(self, factor):  #INPLACE
+        """
+        Scales all the counts of this row by the given factor
+
+        Parameters
+        ----------
+        factor : float
+            scaling factor.
+
+        Returns
+        -------
+        None
+        """
         if self.dataset.bStatic: raise ValueError("Cannot scale rows of a *static* DataSet.")
         if self.reps is None:
             raise ValueError(("Cannot scale a DataSet without repetition "
@@ -590,7 +726,13 @@ class DataSetRow(object):
             self.reps[i] = cnt * factor
 
     def as_dict(self):
-        """ Returns the (outcomeLabel,count) pairs as a dictionary."""
+        """
+        Returns the (outcomeLabel,count) pairs as a dictionary.
+
+        Returns
+        -------
+        dict
+        """
         return dict(self.counts)
 
     def to_str(self, mode="auto"):
@@ -646,6 +788,8 @@ def _round_int_repcnt(nreps):
 
 class DataSet(object):
     """
+    An association between Circuits and outcome counts, serving as the input data for many QCVV protocols.
+
     The DataSet class associates circuits with counts or time series of
     counts for each outcome label, and can be thought of as a table with gate
     strings labeling the rows and outcome labels and/or time labeling the
@@ -660,10 +804,88 @@ class DataSet(object):
     `outcomeLabel = dataset[circuit][i].outcome`
     `count = dataset[circuit][i].count`
     `time = dataset[circuit][i].time`
+
+    Parameters
+    ----------
+    oli_data : list or numpy.ndarray
+        When `static == True`, a 1D numpy array containing outcome label
+        indices (integers), concatenated for all sequences.  Otherwise, a
+        list of 1D numpy arrays, one array per gate sequence.  In either
+        case, this quantity is indexed by the values of `circuit_indices`
+        or the index of `circuits`.
+
+    time_data : list or numpy.ndarray
+        Same format at `oli_data` except stores floating-point timestamp
+        values.
+
+    rep_data : list or numpy.ndarray
+        Same format at `oli_data` except stores integer repetition counts
+        for each "data bin" (i.e. (outcome,time) pair).  If all repetitions
+        equal 1 ("single-shot" timestampted data), then `rep_data` can be
+        `None` (no repetitions).
+
+    circuits : list of (tuples or Circuits)
+        Each element is a tuple of operation labels or a Circuit object.  Indices for these strings
+        are assumed to ascend from 0.  These indices must correspond to the time series of spam-label
+        indices (above).   Only specify this argument OR circuit_indices, not both.
+
+    circuit_indices : ordered dictionary
+        An OrderedDict with keys equal to circuits (tuples of operation labels) and values equal to
+        integer indices associating a row/element of counts with the circuit.  Only
+        specify this argument OR circuits, not both.
+
+    outcome_labels : list of strings or int
+        Specifies the set of spam labels for the DataSet.  Indices for the spam labels
+        are assumed to ascend from 0, starting with the first element of this list.  These
+        indices will associate each elememtn of `timeseries` with a spam label.  Only
+        specify this argument OR outcome_label_indices, not both.  If an int, specifies that
+        the outcome labels should be those for a standard set of this many qubits.
+
+    outcome_label_indices : ordered dictionary
+        An OrderedDict with keys equal to spam labels (strings) and value equal to
+        integer indices associating a spam label with given index.  Only
+        specify this argument OR outcome_labels, not both.
+
+    static : bool
+        When True, create a read-only, i.e. "static" DataSet which cannot be modified. In
+          this case you must specify the timeseries data, circuits, and spam labels.
+        When False, create a DataSet that can have time series data added to it.  In this case,
+          you only need to specify the spam labels.
+
+    file_to_load_from : string or file object
+        Specify this argument and no others to create a static DataSet by loading
+        from a file (just like using the load(...) function).
+
+    collision_action : {"aggregate","overwrite","keepseparate"}
+        Specifies how duplicate circuits should be handled.  "aggregate"
+        adds duplicate-sequence counts to the same circuit's data at the
+        next integer timestamp.  "overwrite" only keeps the latest given
+        data for a circuit.  "keepseparate" tags duplicate-sequences by
+        appending a final "#<number>" operation label to the duplicated gate
+        sequence, which can then be accessed via the `get_row` and `set_row`
+        functions.
+
+    comment : string, optional
+        A user-specified comment string that gets carried around with the
+        data.  A common use for this field is to attach to the data details
+        regarding its collection.
+
+    aux_info : dict, optional
+        A user-specified dictionary of per-circuit auxiliary information.
+        Keys should be the circuits in this DataSet and value should
+        be Python dictionaries.
     """
 
     @classmethod
     def strip_occurence_tag(cls, circuit):
+        """
+        Remove the occurenece tag from a circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to act on.
+        """
         return circuit[:-1] if (len(circuit) > 0 and circuit[-1].name.startswith("#")) else circuit
 
     def __init__(self, oli_data=None, time_data=None, rep_data=None,
@@ -932,9 +1154,10 @@ class DataSet(object):
 
     def get_row(self, circuit, occurrence=0):
         """
-        Get a row of data from this DataSet.  This gives the same
-        functionality as [ ] indexing except you can specify the
-        occurrence number separately from the gate sequence.
+        Get a row of data from this DataSet.
+
+        This gives the same functionality as [ ] indexing except you can specify
+        the occurrence number separately from the gate sequence.
 
         Parameters
         ----------
@@ -969,21 +1192,29 @@ class DataSet(object):
 
     def set_row(self, circuit, outcome_dict_or_series, occurrence=0):
         """
-        Set the counts for a row of this DataSet.  This gives the same
-        functionality as [ ] indexing except you can specify the
-        occurrence number separately from the gate sequence.
+        Set the counts for a row of this DataSet.
+
+        This gives the same functionality as [ ] indexing except you can specify
+        the occurrence number separately from the gate sequence.
 
         Parameters
         ----------
         circuit : Circuit or tuple
             The gate sequence to extract data for.
 
-        countDict : dict
-            The dictionary of counts (data).
+        outcome_dict_or_series : dict or tuple
+            The outcome count data, either a dictionary of outcome counts (with keys
+            as outcome labels) or a tuple of lists.  In the latter case this can be
+            a 2-tuple: (outcome-label-list, timestamp-list) or a 3-tuple:
+            (outcome-label-list, timestamp-list, repetition-count-list).
 
         occurrence : int, optional
             0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
+
+        Returns
+        -------
+        None
         """
         if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
@@ -1026,12 +1257,11 @@ class DataSet(object):
 
     def items(self, strip_occurrence_tags=False):
         """
-        Iterator over (circuit, timeSeries) pairs,
-        where circuit is a tuple of operation labels
-        and timeSeries is a DataSetRow instance,
-        which behaves similarly to a list of
-        spam labels whose index corresponds to
-        the time step.
+        Iterator over `(circuit, timeSeries)` pairs.
+
+        Here `circuit` is a tuple of operation labels and `timeSeries` is a
+        :class:`DataSetRow` instance, which behaves similarly to a list of spam
+        labels whose index corresponds to the time step.
 
         Parameters
         ----------
@@ -1041,13 +1271,20 @@ class DataSet(object):
             any final "#<number>" elements of (would-be duplicate)
             circuits are stripped so that the returned list
             may have *duplicate* entries.
+
+        Returns
+        -------
+        DataSetKVIterator
         """
         return DataSetKVIterator(self, strip_occurrence_tags)
 
     def values(self):
         """
-        Iterator over DataSetRow instances corresponding
-        to the time series data for each circuit.
+        Iterator over DataSetRow instances corresponding to the time series data for each circuit.
+
+        Returns
+        -------
+        DataSetValueIterator
         """
         return DataSetValueIterator(self)
 
@@ -1058,15 +1295,14 @@ class DataSet(object):
         Returns
         -------
         list of strings or tuples
-          A list where each element is an outcome label (which can
-          be a string or a tuple of strings).
+            A list where each element is an outcome label (which can
+            be a string or a tuple of strings).
         """
         return list(self.olIndex.keys())
 
     def get_gate_labels(self, prefix='G'):
         """
-        Get a list of all the distinct operation labels used
-        in the circuits of this dataset.
+        Get a list of all the distinct operation labels used in the circuits of this dataset.
 
         Parameters
         ----------
@@ -1089,8 +1325,7 @@ class DataSet(object):
     def get_degrees_of_freedom(self, circuit_list=None, method="present_outcomes-1",
                                aggregate_times=True):
         """
-        Returns the number of independent degrees of freedom in the data for
-        the circuits in `circuit_list`.
+        Returns the number of independent degrees of freedom in the data for the circuits in `circuit_list`.
 
         Parameters
         ----------
@@ -1156,12 +1391,17 @@ class DataSet(object):
 
         return circuit
 
+    #PRIVATE
     def build_repetition_counts(self):
         """
         Build internal repetition counts if they don't exist already.
 
         This method is usually unnecessary, as repetition counts are
         almost always build as soon as they are needed.
+
+        Returns
+        -------
+        None
         """
         if self.repData is not None: return
         if self.bStatic:
@@ -1193,7 +1433,6 @@ class DataSet(object):
 
         update_ol : bool, optional
             This argument is for internal use only and should be left as True.
-
 
         Returns
         -------
@@ -1349,9 +1588,14 @@ class DataSet(object):
 
     def update_ol(self):
         """
-        Updates the internal outcome-label list in this dataset.  Call this
-        after calling add_count_dict(...) or add_raw_series_data(...) with
-        `update_olIndex=False`.
+        Updates the internal outcome-label list in this dataset.
+
+        Call this after calling add_count_dict(...) or add_raw_series_data(...)
+        with `update_olIndex=False`.
+
+        Returns
+        -------
+        None
         """
         self.ol = _OrderedDict([(i, sl) for (sl, i) in self.olIndex.items()])
 
@@ -1410,8 +1654,9 @@ class DataSet(object):
 
     def merge_outcomes(self, label_merge_dict, record_zero_counts=True):
         """
-        Creates a DataSet which merges certain outcomes in this DataSet;
-        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        Creates a DataSet which merges certain outcomes in this DataSet.
+
+        Used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
         DataSet.
 
         Parameters
@@ -1535,16 +1780,14 @@ class DataSet(object):
 
     def merge_std_nqubit_outcomes(self, qubit_indices_to_keep, record_zero_counts=True):
         """
-        Creates a DataSet which merges certain outcomes in this DataSet;
-        used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+        Creates a DataSet which merges certain outcomes in this DataSet.
+        
+        Used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
         DataSet.  This assumes that outcome labels are in the standard format
         whereby each qubit corresponds to a single '0' or '1' character.
 
         Parameters
         ----------
-        nQubits : int
-            The total number of qubits
-
         qubit_indices_to_keep : list
             A list of integers specifying which qubits should be kept, that is,
             *not* aggregated.
@@ -1705,8 +1948,11 @@ class DataSet(object):
 
     def get_meantimestep(self):
         """
-        Returns the mean time-step, averaged over the time-step for each
-        circuit and over circuits.
+        The mean time-step, averaged over the time-step for each circuit and over circuits.
+
+        Returns
+        -------
+        float
         """
         timesteps = []
         for key in self.keys():
@@ -1716,13 +1962,16 @@ class DataSet(object):
 
     def has_constant_totalcounts_pertime(self):
         """
-        Returns True if the data for every circuit has the same number of
-        total counts at every data collection time. Otherwise, returns False.
+        True if the data for every circuit has the same number of total counts at every data collection time.
 
         This will return True if there is a different number of total counts
         per circuit (i.e., after aggregating over time), as long as every
         circuit has the same total counts per time step (this will happen
         when the number of time-steps varies between circuit).
+
+        Returns
+        -------
+        bool
         """
         for key in self.keys():
             numtotalcountspertime = None
@@ -1737,10 +1986,15 @@ class DataSet(object):
 
         return True
 
-    def totalcounts_pertime(self):
+    def totalcounts_pertime(self):  #PROPERTY
         """
-        Returns the total counts per time, if this is constant over times
-        and circuits. When that doesn't hold, an error is raised.
+        Total counts per time, if this is constant over times and circuits.
+
+        When that doesn't hold, an error is raised.
+
+        Returns
+        -------
+        float or int
         """
         self.has_constant_totalcounts_pertime()
         key = list(self.keys())[0]
@@ -1748,10 +2002,13 @@ class DataSet(object):
 
         return totalcountspertime
 
-    def has_constant_totalcounts(self):
+    def has_constant_totalcounts(self):  #PROPERTY?
         """
-        Returns True if the data for every circuit has the same number of
-        total counts.
+        `True` if the data for every circuit has the same number of total counts.
+
+        Returns
+        -------
+        bool
         """
         reps = []
         for key in self.keys():
@@ -1761,9 +2018,13 @@ class DataSet(object):
 
         return fixedtotalcounts
 
-    def has_trivial_timedependence(self):
+    def has_trivial_timedependence(self):  #PROPERTY?
         """
-        Returns `True` if all the data in this DataSet occurs at time 0.
+        `True` if all the data in this DataSet occurs at time 0.
+
+        Returns
+        -------
+        bool
         """
         return all([_np.all(self.timeData[gsi] == 0) for gsi in self.cirIndex.values()])
 
@@ -1805,8 +2066,7 @@ class DataSet(object):
 
     def truncate(self, list_of_circuits_to_keep, missing_action='raise'):
         """
-        Create a truncated dataset comprised of a subset of the circuits
-        in this dataset.
+        Create a truncated dataset comprised of a subset of the circuits in this dataset.
 
         Parameters
         ----------
@@ -1888,14 +2148,15 @@ class DataSet(object):
 
     def time_slice(self, start_time, end_time, aggregate_to_time=None):
         """
-        Creates a DataSet by aggregating the counts within the
-        [`start_time`,`end_time`) interval.
+        Creates a DataSet by aggregating the counts within the [`start_time`,`end_time`) interval.
 
         Parameters
         ----------
-        start_time, end_time : float or int
-            The time-stamps to use for the beginning (inclusive) and end
-            (exclusive) of the time interval.
+        start_time : float
+            The starting time.
+
+        end_time : float
+            The ending time.
 
         aggregate_to_time : float, optional
             If not None, a single timestamp to give all the data in
@@ -2091,7 +2352,13 @@ class DataSet(object):
             self.cirIndex[k] -= cnt                         # indices < self.cirIndex[k]
 
     def copy(self):
-        """ Make a copy of this DataSet. """
+        """
+        Make a copy of this DataSet.
+
+        Returns
+        -------
+        DataSet
+        """
         if self.bStatic:
             return self  # doesn't need to be copied since data can't change
         else:
@@ -2112,7 +2379,13 @@ class DataSet(object):
             return copyOfMe
 
     def copy_nonstatic(self):
-        """ Make a non-static copy of this DataSet. """
+        """
+        Make a non-static copy of this DataSet.
+
+        Returns
+        -------
+        DataSet
+        """
         if self.bStatic:
             copyOfMe = DataSet(outcome_labels=self.get_outcome_labels(),
                                collision_action=self.collisionAction)
@@ -2137,8 +2410,13 @@ class DataSet(object):
 
     def done_adding_data(self):
         """
-        Promotes a non-static DataSet to a static (read-only) DataSet.  This
-         method should be called after all data has been added.
+        Promotes a non-static DataSet to a static (read-only) DataSet.
+
+        This method should be called after all data has been added.
+
+        Returns
+        -------
+        None
         """
         if self.bStatic: return
         #Convert normal dataset to static mode.
@@ -2325,9 +2603,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        file_or_filename string or file object.
-            If a string,  interpreted as a filename.  If this filename ends
-            in ".gz", the file will be gzip uncompressed as it is read.
+        file_or_filename : str or buffer
+            The file or filename to load from.
 
         Returns
         -------

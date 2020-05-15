@@ -1,4 +1,6 @@
-""" Defines the ExplicitOpModel class and supporting functionality."""
+"""
+Defines the ExplicitOpModel class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -55,6 +57,65 @@ class ExplicitOpModel(_mdl.OpModel):
     An ExplictOpModel stores a set of labeled LinearOperator objects and
     provides dictionary-like access to their matrices.  State preparation
     and POVM effect operations are represented as column vectors.
+
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or list or tuple
+        The decomposition (with labels) of (pure) state-space this model
+        acts upon.  Regardless of whether the model contains operators or
+        superoperators, this argument describes the Hilbert space dimension
+        and imposed structure.  If a list or tuple is given, it must be
+        of a from that can be passed to `StateSpaceLabels.__init__`.
+
+    basis : {"auto","pp","gm","qt","std","sv"} or Basis
+        The basis used for the state space by dense operator representations.
+
+    default_param : {"full", "TP", "CPTP", etc.}, optional
+        Specifies the default gate and SPAM vector parameterization type.
+        Can be any value allowed by :method:`set_all_parameterizations`,
+        which also gives a description of each parameterization type.
+
+    prep_prefix: string, optional
+        Key prefixe for state preparations, allowing the model to determing what
+        type of object a key corresponds to.
+
+    effect_prefix : string, optional
+        Key prefix for POVM effects, allowing the model to determing what
+        type of object a key corresponds to.
+
+    gate_prefix : string, optional
+        Key prefix for gates, allowing the model to determing what
+        type of object a key corresponds to.
+
+    povm_prefix : string, optional
+        Key prefix for POVMs, allowing the model to determing what
+        type of object a key corresponds to.
+
+    instrument_prefix : string, optional
+        Key prefix for instruments, allowing the model to determing what
+        type of object a key corresponds to.
+
+    sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
+        The type of gate sequence / circuit simulation used to compute any
+        requested probabilities, e.g. from :method:`probs` or
+        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        selects the simulation type, and is usually what you want. Allowed
+        values are:
+
+        - "matrix" : op_matrix-op_matrix products are computed and
+          cached to get composite gates which can then quickly simulate
+          a circuit for any preparation and outcome.  High memory demand;
+          best for a small number of (1 or 2) qubits.
+        - "map" : op_matrix-state_vector products are repeatedly computed
+          to simulate circuits.  Slower for a small number of qubits, but
+          faster and more memory efficient for higher numbers of qubits (3+).
+        - "termorder", "termgap", "termdirect" : Use Taylor expansions of
+          gates in error rates to compute probabilities approximately.
+
+    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+        The evolution type of this model, describing how states are
+        represented, allowing compatibility checks with (super)operator
+        objects.
     """
 
     #Whether access to gates & spam vecs via Model indexing is allowed
@@ -90,13 +151,13 @@ class ExplicitOpModel(_mdl.OpModel):
             gates, POVM, and instruments respectively.  These prefixes allow
             the Model to determine what type of object a key corresponds to.
 
-        sim_type : {"auto", "matrix", "map", "termorder:<X>"}
+        sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
             The type of gate sequence / circuit simulation used to compute any
             requested probabilities, e.g. from :method:`probs` or
             :method:`bulk_probs`.  The default value of `"auto"` automatically
             selects the simulation type, and is usually what you want. Allowed
             values are:
-
+    
             - "matrix" : op_matrix-op_matrix products are computed and
               cached to get composite gates which can then quickly simulate
               a circuit for any preparation and outcome.  High memory demand;
@@ -104,9 +165,8 @@ class ExplicitOpModel(_mdl.OpModel):
             - "map" : op_matrix-state_vector products are repeatedly computed
               to simulate circuits.  Slower for a small number of qubits, but
               faster and more memory efficient for higher numbers of qubits (3+).
-            - "termorder:<X>" : Use Taylor expansions of gates in error rates
-              to compute probabilities out to some maximum order <X> (an
-              integer) in these rates.
+            - "termorder", "termgap", "termdirect" : Use Taylor expansions of
+              gates in error rates to compute probabilities approximately.
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
@@ -135,38 +195,106 @@ class ExplicitOpModel(_mdl.OpModel):
         self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
 
     def get_primitive_prep_labels(self):
-        """ Return the primitive state preparation labels of this model"""
+        """
+        Return the primitive state preparation labels of this model
+
+        Returns
+        -------
+        tuple
+        """
         return tuple(self.preps.keys())
 
     def set_primitive_prep_labels(self, lbls):
-        """ Set the primitive state preparation labels of this model"""
+        """
+        Set the primitive state preparation labels of this model
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
     def get_primitive_povm_labels(self):
-        """ Return the primitive POVM labels of this model"""
+        """
+        Return the primitive POVM labels of this model
+
+        Returns
+        -------
+        tuple
+        """
         return tuple(self.povms.keys())
 
     def set_primitive_povm_labels(self, lbls):
-        """ Set the primitive POVM labels of this model"""
+        """
+        Set the primitive POVM labels of this model
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels.
+
+        Returns
+        -------
+        None
+        """
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.povms dict)."))
 
     def get_primitive_op_labels(self):
-        """ Return the primitive operation labels of this model"""
+        """
+        Return the primitive operation labels of this model.
+
+        Returns
+        -------
+        tuple
+        """
         return tuple(self.operations.keys())
 
     def set_primitive_op_labels(self, lbls):
-        """ Set the primitive operation labels of this model"""
+        """
+        Set the primitive operation labels of this model.
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
     def get_primitive_instrument_labels(self):
-        """ Return the primitive instrument labels of this model"""
+        """
+        Return the primitive instrument labels of this model.
+
+        Returns
+        -------
+        tuple
+        """
         return tuple(self.instruments.keys())
 
-    def set_primitive_instrument_labels(self):
-        """ Set the primitive instrument labels of this model"""
+    def set_primitive_instrument_labels(self, lbls):
+        """
+        Set the primitive instrument labels of this model.
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.instrument dict)."))
 
@@ -255,20 +383,31 @@ class ExplicitOpModel(_mdl.OpModel):
     @property
     def default_gauge_group(self):
         """
-        Gets the default gauge group for performing gauge
-        transformations on this Model.
+        Gets the default gauge group for performing gauge transformations on this Model.
+
+        Returns
+        -------
+        GaugeGroup
         """
         return self._default_gauge_group
 
     @default_gauge_group.setter
     def default_gauge_group(self, value):
+        """
+        The default gauge group.
+        """
         self._default_gauge_group = value
 
     @property
     def prep(self):
         """
-        The unique state preparation in this model, if one exists.  If not,
-        a ValueError is raised.
+        The unique state preparation in this model, if one exists.
+
+        If not, a ValueError is raised.
+
+        Returns
+        -------
+        SPAMVec
         """
         if len(self.preps) != 1:
             raise ValueError("'.prep' can only be used on models"
@@ -279,8 +418,13 @@ class ExplicitOpModel(_mdl.OpModel):
     @property
     def effects(self):
         """
-        The unique POVM in this model, if one exists.  If not,
-        a ValueError is raised.
+        The unique POVM in this model, if one exists.
+
+        If not, a ValueError is raised.
+
+        Returns
+        -------
+        POVM
         """
         if len(self.povms) != 1:
             raise ValueError("'.effects' can only be used on models"
@@ -349,8 +493,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def set_all_parameterizations(self, parameterization_type, extra=None):
         """
-        Convert all gates and SPAM vectors to a specific parameterization
-        type.
+        Convert all gates and SPAM vectors to a specific parameterization type.
 
         Parameters
         ----------
@@ -382,6 +525,10 @@ class ExplicitOpModel(_mdl.OpModel):
             For `"H+S terms"` type, this may specify a dictionary
             of unitary gates and pure state vectors to be used
             as the *ideal* operation of each gate/SPAM vector.
+
+        Returns
+        -------
+        None
         """
         typ = parameterization_type
 
@@ -543,10 +690,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def num_elements(self):
         """
-        Return the number of total operation matrix and spam vector
-        elements in this model.  This is in general different
-        from the number of *parameters* in the model, which
-        are the number of free variables used to generate all of
+        Return the number of total operation matrix and spam vector elements in this model.
+
+        This is in general different from the number of *parameters* in the
+        model, which are the number of free variables used to generate all of
         the matrix and vector *elements*.
 
         Returns
@@ -562,8 +709,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def num_nongauge_params(self):
         """
-        Return the number of non-gauge parameters when vectorizing
-        this model according to the optional parameters.
+        Return the number of non-gauge parameters in this model.
 
         Returns
         -------
@@ -574,8 +720,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def num_gauge_params(self):
         """
-        Return the number of gauge parameters when vectorizing
-        this model according to the optional parameters.
+        Return the number of gauge parameters in this model.
 
         Returns
         -------
@@ -592,7 +737,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def deriv_wrt_params(self):
         """
-        Construct a matrix whose columns are the vectorized derivatives of all
+        The element-wise derivative of all this models' operations.
+
+        Constructs a matrix whose columns are the vectorized derivatives of all
         the model's raw matrix and vector *elements* (placed in a vector)
         with respect to each single model parameter.
 
@@ -611,9 +758,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
-        Construct a projector onto the non-gauge parameter space, useful for
-        isolating the gauge degrees of freedom from the non-gauge degrees of
-        freedom.
+        Construct a projector onto the non-gauge parameter space.
+
+        Useful for isolating the gauge degrees of freedom from the non-gauge
+        degrees of freedom.
 
         Parameters
         ----------
@@ -632,7 +780,6 @@ class ExplicitOpModel(_mdl.OpModel):
             essentially sets the off-diagonal block of the metric used for
             orthogonality in the "gauge + non-gauge" space.  It is for advanced
             usage and typically left as None (the default).
-.
 
         Returns
         -------
@@ -644,8 +791,10 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().get_nongauge_projector(item_weights, non_gauge_mix_mx)
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
+        Gauge transform this model.
+
         Update each of the operation matrices G in this model with inv(s) * G * s,
         each rhoVec with inv(s) * rhoVec, and each EVec with EVec * s
 
@@ -654,6 +803,10 @@ class ExplicitOpModel(_mdl.OpModel):
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         for rhoVec in self.preps.values():
             rhoVec.transform(s, 'prep')
@@ -706,10 +859,10 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels.
+            The sequence of operation labels.
 
         flat : bool, optional
-          Affects the shape of the returned derivative array (see below).
+            Affects the shape of the returned derivative array (see below).
 
         Returns
         -------
@@ -740,10 +893,10 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-          The sequence of operation labels.
+            The sequence of operation labels.
 
         flat : bool, optional
-          Affects the shape of the returned derivative array (see below).
+            Affects the shape of the returned derivative array (see below).
 
         Returns
         -------
@@ -774,17 +927,16 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the operation sequences
-           to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            to compute the bulk operation on.
 
         scale : bool, optional
-           When True, return a scaling factor (see below).
+            When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  This is done over operation sequences when a
-           *split* eval_tree is given, otherwise no parallelization is performed.
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  This is done over operation sequences when a
+            *split* eval_tree is given, otherwise no parallelization is performed.
 
         Returns
         -------
@@ -793,7 +945,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
             - S == the number of operation sequences
             - G == the linear dimension of a operation matrix (G x G operation matrices).
-
         scaleValues : numpy array
             Only returned when scale == True. A length-S array specifying
             the scaling that needs to be applied to the resulting products
@@ -809,58 +960,54 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the operation sequences
-           to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            to compute the bulk operation on.
 
         flat : bool, optional
-          Affects the shape of the returned derivative array (see below).
+            Affects the shape of the returned derivative array (see below).
 
         return_prods : bool, optional
-          when set to True, additionally return the products.
+            when set to True, additionally return the products.
 
         scale : bool, optional
-          When True, return a scaling factor (see below).
+            When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first done over the set
-           of parameters being differentiated with respect to.  If there are
-           more processors than model parameters, distribution over a split
-           eval_tree (if given) is possible.
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first done over the set
+            of parameters being differentiated with respect to.  If there are
+            more processors than model parameters, distribution over a split
+            eval_tree (if given) is possible.
 
         Returns
         -------
         derivs : numpy array
+            * if `flat` is ``False``, an array of shape S x M x G x G, where:
 
-          * if `flat` is ``False``, an array of shape S x M x G x G, where:
+              - S = len(circuit_list)
+              - M = the length of the vectorized model
+              - G = the linear dimension of a operation matrix (G x G operation matrices)
 
-            - S = len(circuit_list)
-            - M = the length of the vectorized model
-            - G = the linear dimension of a operation matrix (G x G operation matrices)
+              and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
+              of the i-th operation sequence product with respect to the j-th model
+              parameter.
 
-            and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
-            of the i-th operation sequence product with respect to the j-th model
-            parameter.
+            * if `flat` is ``True``, an array of shape S*N x M where:
 
-          * if `flat` is ``True``, an array of shape S*N x M where:
+              - N = the number of entries in a single flattened gate (ordering
+                same as numpy.flatten),
+              - S,M = as above,
 
-            - N = the number of entries in a single flattened gate (ordering
-              same as numpy.flatten),
-            - S,M = as above,
-
-            and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
-            entry of the ``(i / G^2)``-th flattened operation sequence product  with
-            respect to the j-th model parameter.
-
+              and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
+              entry of the ``(i / G^2)``-th flattened operation sequence product  with
+              respect to the j-th model parameter.
         products : numpy array
-          Only returned when `return_prods` is ``True``.  An array of shape
-          S x G x G; ``products[i]`` is the i-th operation sequence product.
-
+            Only returned when `return_prods` is ``True``.  An array of shape
+            S x G x G; ``products[i]`` is the i-th operation sequence product.
         scale_vals : numpy array
-          Only returned when `scale` is ``True``.  An array of shape S such
-          that ``scale_vals[i]`` contains the multiplicative scaling needed for
-          the derivatives and/or products for the i-th operation sequence.
+            Only returned when `scale` is ``True``.  An array of shape S such
+            that ``scale_vals[i]`` contains the multiplicative scaling needed for
+            the derivatives and/or products for the i-th operation sequence.
         """
         return self._fwdsim().bulk_dproduct(eval_tree, flat, return_prods,
                                             scale, comm)
@@ -873,27 +1020,26 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the operation sequences
-           to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            to compute the bulk operation on.
 
         flat : bool, optional
-          Affects the shape of the returned derivative array (see below).
+            Affects the shape of the returned derivative array (see below).
 
         return_dprods_and_prods : bool, optional
-          when set to True, additionally return the probabilities and
-          their derivatives.
+            when set to True, additionally return the probabilities and
+            their derivatives.
 
         scale : bool, optional
-          When True, return a scaling factor (see below).
+            When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first done over the
-           set of parameters being differentiated with respect to when the
-           *second* derivative is taken.  If there are more processors than
-           model parameters, distribution over a split eval_tree (if given)
-           is possible.
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first done over the
+            set of parameters being differentiated with respect to when the
+            *second* derivative is taken.  If there are more processors than
+            model parameters, distribution over a split eval_tree (if given)
+            is possible.
 
         Returns
         -------
@@ -916,38 +1062,35 @@ class ExplicitOpModel(_mdl.OpModel):
               and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
               of the (i / G^2)-th flattened operation sequence product with respect to
               the k-th then j-th model parameters.
-
         derivs : numpy array
-          Only returned if return_dprods_and_prods == True.
+            Only returned if return_dprods_and_prods == True.
 
-          * if flat == False, an array of shape S x M x G x G, where
+            * if flat == False, an array of shape S x M x G x G, where
 
-            - S == len(circuit_list)
-            - M == the length of the vectorized model
-            - G == the linear dimension of a operation matrix (G x G operation matrices)
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
 
-            and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th operation sequence product with respect to the j-th model
-            parameter.
+              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+              of the i-th operation sequence product with respect to the j-th model
+              parameter.
 
-          * if flat == True, an array of shape S*N x M where
+            * if flat == True, an array of shape S*N x M where
 
-            - N == the number of entries in a single flattened gate (ordering is
-                   the same as that used by numpy.flatten),
-            - S,M == as above,
+              - N == the number of entries in a single flattened gate (ordering is
+                     the same as that used by numpy.flatten),
+              - S,M == as above,
 
-            and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened operation sequence product  with respect to
-            the j-th model parameter.
-
+              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
+              the (i / G^2)-th flattened operation sequence product  with respect to
+              the j-th model parameter.
         products : numpy array
-          Only returned when return_dprods_and_prods == True.  An array of shape
-          S x G x G; products[i] is the i-th operation sequence product.
-
+            Only returned when return_dprods_and_prods == True.  An array of shape
+            S x G x G; products[i] is the i-th operation sequence product.
         scale_vals : numpy array
-          Only returned when scale == True.  An array of shape S such that
-          scale_vals[i] contains the multiplicative scaling needed for
-          the hessians, derivatives, and/or products for the i-th operation sequence.
+            Only returned when scale == True.  An array of shape S such that
+            scale_vals[i] contains the multiplicative scaling needed for
+            the hessians, derivatives, and/or products for the i-th operation sequence.
         """
         ret = self._fwdsim().bulk_hproduct(
             eval_tree, flat, return_dprods_and_prods, scale, comm)
@@ -959,12 +1102,12 @@ class ExplicitOpModel(_mdl.OpModel):
     def frobeniusdist(self, other_model, transform_mx=None,
                       item_weights=None, normalize=True):
         """
-        Compute the weighted frobenius norm of the difference between this
-        model and other_model.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using
-        `item_weights` as applicable), then summed.  The value returned is the
-        square root of this sum, or the square root of this sum divided by the
-        number of summands if normalize == True.
+        Compute the weighted frobenius norm of the difference between this model and other_model.
+
+        Differences in each corresponding gate matrix and spam vector element
+        are squared, weighted (using `item_weights` as applicable), then summed.
+        The value returned is the square root of this sum, or the square root of
+        this sum divided by the number of summands if normalize == True.
 
         Parameters
         ----------
@@ -979,19 +1122,19 @@ class ExplicitOpModel(_mdl.OpModel):
             not alter the values stored in this model.
 
         item_weights : dict, optional
-           Dictionary of weighting factors for individual gates and spam
-           operators. Weights are applied multiplicatively to the squared
-           differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels, as well
-           as the two special labels `"gates"` and `"spam"` which apply to all
-           of the gate or SPAM elements, respectively (but are overridden by
-           specific element values).  Values are floating point numbers.
-           By default, all weights are 1.0.
+            Dictionary of weighting factors for individual gates and spam
+            operators. Weights are applied multiplicatively to the squared
+            differences, i.e., (*before* the final square root is taken).  Keys
+            can be gate, state preparation, POVM effect, or spam labels, as well
+            as the two special labels `"gates"` and `"spam"` which apply to all
+            of the gate or SPAM elements, respectively (but are overridden by
+            specific element values).  Values are floating point numbers.
+            By default, all weights are 1.0.
 
         normalize : bool, optional
-           if True (the default), the sum of weighted squared-differences
-           is divided by the weighted number of differences before the
-           final square root is taken.  If False, the division is not performed.
+            if True (the default), the sum of weighted squared-differences
+            is divided by the weighted number of differences before the
+            final square root is taken.  If False, the division is not performed.
 
         Returns
         -------
@@ -1002,8 +1145,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def residuals(self, other_model, transform_mx=None, item_weights=None):
         """
-        Compute the weighted residuals between two models (the differences
-        in corresponding operation matrix and spam vector elements).
+        Compute the weighted residuals between two models.
+
+        Residuals are the differences in corresponding operation matrix and spam
+        vector elements.
 
         Parameters
         ----------
@@ -1018,15 +1163,15 @@ class ExplicitOpModel(_mdl.OpModel):
             not alter the values stored in this model.
 
         item_weights : dict, optional
-           Dictionary of weighting factors for individual gates and spam
-           operators. Weights applied such that they act multiplicatively on
-           the *squared* differences, so that the residuals themselves are
-           scaled by the square roots of these weights.  Keys can be gate, state
-           preparation, POVM effect, or spam labels, as well as the two special
-           labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
-           elements, respectively (but are overridden by specific element
-           values).  Values are floating point numbers.  By default, all weights
-           are 1.0.
+            Dictionary of weighting factors for individual gates and spam
+            operators. Weights applied such that they act multiplicatively on
+            the *squared* differences, so that the residuals themselves are
+            scaled by the square roots of these weights.  Keys can be gate, state
+            preparation, POVM effect, or spam labels, as well as the two special
+            labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
+            elements, respectively (but are overridden by specific element
+            values).  Values are floating point numbers.  By default, all weights
+            are 1.0.
 
         Returns
         -------
@@ -1039,10 +1184,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def jtracedist(self, other_model, transform_mx=None, include_spam=True):
         """
-        Compute the Jamiolkowski trace distance between this
-        model and other_model, defined as the maximum
-        of the trace distances between each corresponding gate,
-        including spam gates.
+        Compute the Jamiolkowski trace distance between this model and `other_model`.
+
+        This is defined as the maximum of the trace distances between each
+        corresponding gate, including spam gates.
 
         Parameters
         ----------
@@ -1068,9 +1213,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def diamonddist(self, other_model, transform_mx=None, include_spam=True):
         """
-        Compute the diamond-norm distance between this
-        model and other_model, defined as the maximum
-        of the diamond-norm distances between each
+        Compute the diamond-norm distance between this model and `other_model`.
+
+        This is defined as the maximum of the diamond-norm distances between each
         corresponding gate, including spam gates.
 
         Parameters
@@ -1089,7 +1234,6 @@ class ExplicitOpModel(_mdl.OpModel):
             Whether to add to the max-diamond-distance the frobenius distances
             between corresponding SPAM vectors.
 
-
         Returns
         -------
         float
@@ -1098,10 +1242,15 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def tpdist(self):
         """
-        Compute the "distance" between this model and the space of
-        trace-preserving (TP) maps, defined as the sqrt of the sum-of-squared
-        deviations among the first row of all operation matrices and the
-        first element of all state preparations.
+        Compute the "distance" between this model and the space of trace-preserving (TP) maps.
+
+        This is defined as the square root of the sum-of-squared deviations
+        among the first row of all operation matrices and the first element of
+        all state preparations.
+
+        Returns
+        -------
+        float
         """
         penalty = 0.0
         for operationMx in list(self.operations.values()):
@@ -1118,10 +1267,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def strdiff(self, other_model, metric='frobenius'):
         """
-        Return a string describing
-        the distances between
-        each corresponding gate, state prep,
-        and POVM effect.
+        Return a string describing the distances between this model and `other_model`.
+
+        The returned string displays differences between each corresponding gate,
+        state prep, and POVM effect.
 
         Parameters
         ----------
@@ -1212,6 +1361,12 @@ class ExplicitOpModel(_mdl.OpModel):
         return s
 
     def iter_objs(self):
+        """
+        Iterate over all of the (label, operator object) entities in this model.
+
+        This iterator runs over all state preparations, POVMS, operations,
+        and instruments.
+        """
         for lbl, obj in _itertools.chain(self.preps.items(),
                                          self.povms.items(),
                                          self.operations.items(),
@@ -1224,40 +1379,40 @@ class ExplicitOpModel(_mdl.OpModel):
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
-        Apply depolarization uniformly or randomly to this model's gate
-        and/or SPAM elements, and return the result, without modifying the
-        original (this) model.  You must specify either op_noise or
-        max_op_noise (for the amount of gate depolarization), and  either
-        spam_noise or max_spam_noise (for spam depolarization).
+        Apply depolarization uniformly or randomly to this model's gate and/or SPAM elements.
+
+        The result is returned without modifying the original (this) model.  You
+        must specify either `op_noise` or `max_op_noise` (for the amount of gate
+        depolarization), and either `spam_noise` or `max_spam_noise` (for spam
+        depolarization).
 
         Parameters
         ----------
         op_noise : float, optional
-         apply depolarizing noise of strength ``1-op_noise`` to all gates in
-          the model. (Multiplies each assumed-Pauli-basis operation matrix by the
-          diagonal matrix with ``(1.0-op_noise)`` along all the diagonal
-          elements except the first (the identity).
+            apply depolarizing noise of strength ``1-op_noise`` to all gates in
+             the model. (Multiplies each assumed-Pauli-basis operation matrix by the
+             diagonal matrix with ``(1.0-op_noise)`` along all the diagonal
+             elements except the first (the identity).
 
         spam_noise : float, optional
-          apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
-          vectors in the model. (Multiplies the non-identity part of each
-          assumed-Pauli-basis state preparation vector and measurement vector
-          by ``(1.0-spam_noise)``).
+            apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
+            vectors in the model. (Multiplies the non-identity part of each
+            assumed-Pauli-basis state preparation vector and measurement vector
+            by ``(1.0-spam_noise)``).
 
         max_op_noise : float, optional
-
-          specified instead of `op_noise`; apply a random depolarization
-          with maximum strength ``1-max_op_noise`` to each gate in the
-          model.
+            specified instead of `op_noise`; apply a random depolarization
+            with maximum strength ``1-max_op_noise`` to each gate in the
+            model.
 
         max_spam_noise : float, optional
-          specified instead of `spam_noise`; apply a random depolarization
-          with maximum strength ``1-max_spam_noise`` to SPAM vector in the
-          model.
+            specified instead of `spam_noise`; apply a random depolarization
+            with maximum strength ``1-max_spam_noise`` to SPAM vector in the
+            model.
 
         seed : int, optional
-          if not ``None``, seed numpy's random number generator with this value
-          before generating random depolarizations.
+            if not ``None``, seed numpy's random number generator with this value
+            before generating random depolarizations.
 
         Returns
         -------
@@ -1312,11 +1467,13 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
-        Apply a rotation uniformly (the same rotation applied to each gate)
-        or randomly (different random rotations to each gate) to this model,
-        and return the result, without modifying the original (this) model.
+        Apply a rotation uniformly or randomly to this model.
 
-        You must specify either 'rotate' or 'max_rotate'. This method currently
+        Uniformly means the same rotation applied to each gate and
+        randomly means different random rotations are applied to each gate of
+        this model.  The result is returned without modifying the original (this) model.
+
+        You must specify either `rotate` or `max_rotate`. This method currently
         only works on n-qubit models.
 
         Parameters
@@ -1338,8 +1495,8 @@ class ExplicitOpModel(_mdl.OpModel):
             component of each tuple is drawn uniformly from [0, `max_rotate`).
 
         seed : int, optional
-          if  not None, seed numpy's random number generator with this value
-          before generating random depolarizations.
+            if  not None, seed numpy's random number generator with this value
+            before generating random depolarizations.
 
         Returns
         -------
@@ -1390,12 +1547,12 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         scale : float
-          maximum element magnitude in the generator of each random unitary
-          transform.
+            maximum element magnitude in the generator of each random unitary
+            transform.
 
         seed : int, optional
-          if not None, seed numpy's random number generator with this value
-          before generating random depolarizations.
+            if not None, seed numpy's random number generator with this value
+            before generating random depolarizations.
 
         rand_state : numpy.random.RandomState
             A RandomState object to generate samples from. Can be useful to set
@@ -1439,6 +1596,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def increase_dimension(self, new_dimension):
         """
+        Enlarge the dimension of this model.
+
         Enlarge the spam vectors and operation matrices of model to a specified
         dimension, and return the resulting inflated model.  Spam vectors
         are zero-padded and operation matrices are padded with 1's on the diagonal
@@ -1447,10 +1606,10 @@ class ExplicitOpModel(_mdl.OpModel):
         Parameters
         ----------
         new_dimension : int
-          the dimension of the returned model.  That is,
-          the returned model will have rho and E vectors that
-          have shape (new_dimension,1) and operation matrices with shape
-          (new_dimension,new_dimension)
+            the dimension of the returned model.  That is,
+            the returned model will have rho and E vectors that
+            have shape (new_dimension,1) and operation matrices with shape
+            (new_dimension,new_dimension)
 
         Returns
         -------
@@ -1511,16 +1670,18 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def decrease_dimension(self, new_dimension):
         """
+        Decrease the dimension of this model.
+
         Shrink the spam vectors and operation matrices of model to a specified
         dimension, and return the resulting model.
 
         Parameters
         ----------
         new_dimension : int
-          the dimension of the returned model.  That is,
-          the returned model will have rho and E vectors that
-          have shape (new_dimension,1) and operation matrices with shape
-          (new_dimension,new_dimension)
+            the dimension of the returned model.  That is,
+            the returned model will have rho and E vectors that
+            have shape (new_dimension,1) and operation matrices with shape
+            (new_dimension,new_dimension)
 
         Returns
         -------
@@ -1574,9 +1735,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def kick(self, absmag=1.0, bias=0, seed=None):
         """
-        Kick model by adding to each gate a random matrix with values
-        uniformly distributed in the interval [bias-absmag,bias+absmag],
-        and return the resulting "kicked" model.
+        "Kick" this model by adding to each gate a random matrix.
+
+        The random matrices have values uniformly distributed in the interval
+        [bias-absmag,bias+absmag].
 
         Parameters
         ----------
@@ -1588,8 +1750,8 @@ class ExplicitOpModel(_mdl.OpModel):
             The bias of the entries in the "kick" matrix.
 
         seed : int, optional
-          if not None, seed numpy's random number generator with this value
-          before generating random depolarizations.
+            if not None, seed numpy's random number generator with this value
+            before generating random depolarizations.
 
         Returns
         -------
@@ -1608,9 +1770,10 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
-        Constructs a dictionary of the symplectic representations for all
-        the Clifford gates in this model.  Non-:class:`CliffordOp` gates
-        will be ignored and their entries omitted from the returned dictionary.
+        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+
+        Non-:class:`CliffordOp` gates will be ignored and their entries omitted
+        from the returned dictionary.
 
         Parameters
         ----------
@@ -1656,12 +1819,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def print_info(self):
         """
-        Print to stdout relevant information about this model,
-          including the Choi matrices and their eigenvalues.
+        Print to stdout relevant information about this model.
 
-        Parameters
-        ----------
-        None
+        This information includes the Choi matrices and their eigenvalues.
 
         Returns
         -------

@@ -1,4 +1,6 @@
-""" Defines the ProcessorSpec class and supporting functionality."""
+"""
+Defines the ProcessorSpec class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -29,10 +31,75 @@ IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
 
 class ProcessorSpec(object):
     """
-    An object that can be used to encapsulate the device specification for a one or more qubit
-    quantum computer. This is objected is geared towards multi-qubit devices; many of the contained
+    The device specification for a one or more qubit quantum computer.
+
+    This is objected is geared towards multi-qubit devices; many of the contained
     structures are superfluous in the case of a single qubit.
 
+    Parameters
+    ----------
+    n_qubits : int
+        The number of qubits in the device.
+
+    gate_names : list of strings
+        The names of gates in the device.  This may include standard gate
+        names known by pyGSTi (see below) or names which appear in the
+        `nonstd_gate_unitaries` argument. The set of standard gate names
+        includes, but is not limited to:
+
+        - 'Gi' : the 1Q idle operation
+        - 'Gx','Gy','Gz' : 1-qubit pi/2 rotations
+        - 'Gxpi','Gypi','Gzpi' : 1-qubit pi rotations
+        - 'Gh' : Hadamard
+        - 'Gp' : phase or S-gate (i.e., ((1,0),(0,i)))
+        - 'Gcphase','Gcnot','Gswap' : standard 2-qubit gates
+
+        Alternative names can be used for all or any of these gates, but
+        then they must be explicitly defined in the `nonstd_gate_unitaries`
+        dictionary.  Including any standard names in `nonstd_gate_unitaries`
+        overrides the default (builtin) unitary with the one supplied.
+
+    nonstd_gate_unitaries: dictionary of numpy arrays
+        A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying
+        quantum gates in terms of unitary matrices. This is an additional "lookup" database of unitaries -
+        to add a gate to this `ProcessorSpec` its names still needs to appear in the `gate_names` list.
+        This dictionary's values specify additional (target) native gates that can be implemented in the device
+        as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries
+        need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified
+        by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
+        All gate names must start with 'G'.  As an advanced behavior, a unitary-matrix-returning function which
+        takes a single argument - a tuple of label arguments - may be given instead of a single matrix to create
+        an operation *factory* which allows continuously-parameterized gates.  This function must also return
+        an empty/dummy unitary when `None` is given as it's argument.
+
+    availability : dict, optional
+        A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
+        strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon, and
+        causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values of
+        `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their
+        names imply, equate to all possible permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension). If a gate name is not present in `availability`, the default is
+        `"all-permutations"`.  So, the availability of a gate only needs to be specified when it cannot act in every
+        valid way on the qubits (e.g., the device does not have all-to-all connectivity).
+
+    qubit_labels : list or tuple, optional
+        The labels (integers or strings) of the qubits.  If `None`, then the integers starting with zero are used.
+
+    construct_models : tuple, optional
+        Standard model for the gates to add.
+            - If 'target' is in the tuple, "target" process matrices corresponding to ideal gates are added.
+            - If 'clifford' is in the tuple, the Clifford gates in the model are represented in their efficient-in-n
+            symplectic form (these are reps. of perfect gates).
+
+    construct_clifford_compilations : dict, optional
+        The compilations for "standard" Clifford gates that are constructed. These are mostly only of importance for
+        compiling many-qubit Clifford gates, and similar tasks related to creating randomized benchmarking circuits.
+        The standard option is exhaustive (i.e., there are no further allowed options), and leaving this as-is
+        should be fine for most purposes.
+
+    verbosity : int, optional
+        If > 0, information about the generation of the ProcessorSpec is printed to the screen.
     """
 
     def __init__(self, n_qubits, gate_names, nonstd_gate_unitaries={}, availability={},
@@ -247,7 +314,23 @@ class ProcessorSpec(object):
         return  # done with __init__(...)
 
     def get_edges(self, qubits):
-        # todo
+        """
+        Construct the list of edges between qubits in `qubits`.
+
+        An edge exists between two qubits if there is a two-qubit
+        gate that operates on the pair.
+
+        Parameters
+        ----------
+        qubits : container
+            A container (set, list, tuple, etc.) of qubit labels.  Returned
+            edges are limited to these qubits.
+
+        Returns
+        -------
+        list
+            A list of 2-tuples of qubit-label pairs.
+        """
         edgelist = []
 
         for oplabel in self.models['clifford'].get_primitive_op_labels():
@@ -260,11 +343,26 @@ class ProcessorSpec(object):
         return edgelist
 
     def get_std_model(self, model_name, parameterization='auto', sim_type='auto'):
-        # Erik future : improve docstring.
         """
-        Builds a standard model for the gates. For example, "target" process matrices are added
-        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
-        symplectic form, are added if model_name = 'clifford'.
+        Creates a commonly-used model for this processor specification.
+
+        For example, "target" process matrices are added if model_name = 'target_name';
+        Target Clifford gates, represented in their efficient-in-n symplectic form, are
+        added if model_name = 'clifford'.
+
+        Parameters
+        ----------
+        model_name : str
+            The name of the model to build.  Can be anything if `parameterization`
+            is also given.  If `parameterization = "auto"` then `model_name` must
+            be one of `{'clifford', 'target', 'static', 'TP', 'full'}`.
+
+        parameterization : str, optional
+            The parameterization of the created model.  Can be any valid parameterization
+            type, e.g. `"TP"`, `"CPTP"`, `"H+S"`, etc.
+
+        sim_type : {'matrix', 'map', 'auto'}, optional
+            The simulation type of the built model.
 
         Returns
         -------
@@ -311,17 +409,34 @@ class ProcessorSpec(object):
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         # Erik future : improve docstring.
         """
-        Adds a standard model for the gates. For example, "target" process matrices are added
-        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n
-        symplectic form, are added if model_name = 'clifford'.
+        Adds a commonly-used model to this processor specification.
+
+        Parameters
+        ----------
+        model_name : str
+            The name of the model to build.  Can be anything if `parameterization`
+            is also given.  If `parameterization = "auto"` then `model_name` must
+            be one of `{'clifford', 'target', 'static', 'TP', 'full'}`.
+
+        parameterization : str, optional
+            The parameterization of the created model.  Can be any valid parameterization
+            type, e.g. `"TP"`, `"CPTP"`, `"H+S"`, etc.
+
+        sim_type : {'matrix', 'map', 'auto'}, optional
+            The simulation type of the built model.
+
+        Returns
+        -------
+        None
         """
         self.models[model_name] = self.get_std_model(model_name, parameterization, sim_type)
 
     def add_std_compilations(self, compile_type, one_q_gates, two_q_gates, add_nonlocal_two_q_gates=False, verbosity=0):
         """
-        Constructions compilations for the requested standard gates, and stores them in
-        a CompilationLibrary object in the dictionary self.compilations. The key for
-        is given by `compile_type`.
+        Constructs and adds compilations for the requested standard gates.
+
+        The added compilations are stored in a CompilationLibrary object in
+        the dictionary `self.compilations`. The key for is given by `compile_type`.
 
         Parameters
         ----------
@@ -524,6 +639,8 @@ class ProcessorSpec(object):
 
     def add_multiqubit_inversion_relations(self):
         """
+        Populates `self.gate_inverse`.
+
         Finds whether any of the multi-qubit gates in this device also have their
         inverse in the model, and if so stores this is in the dictionary
         self.gate_inverse. That is, if the unitaries for the  multi-qubit gate with
@@ -555,20 +672,21 @@ class ProcessorSpec(object):
 
     def get_all_connected_sets(self, n):
         """
-        Returns all connected sets of `n` qubits. Note that for a large device with
-        this will be often be an unreasonably large number of sets of qubits, and so
+        Computes all connected sets of `n` qubits.
+
+        Note that for a large device with this will be often be an
+        unreasonably large number of sets of qubits, and so
         the run-time of this method will be unreasonable.
 
         Parameters
         ----------
-        n: int
+        n : int
             The number of qubits within each set.
 
         Returns
         -------
         list
             All sets of `n` connected qubits.
-
         """
         connectedqubits = []
         for combo in _iter.combinations(self.qubit_labels, n):
@@ -577,27 +695,38 @@ class ProcessorSpec(object):
 
         return connectedqubits
 
-    #Note:  Below method gets all subgraphs up to full graph size.
+    #PRIVATE?  - MOVE to QubitGraph.
     def get_all_connected_sets_new(self):
         """
-        todo
+        Finds all subgraphs (connected sets of vertices) up to the full graph size.
+
+        Graph edges are treated as undirected.
+
+        Returns
+        -------
+        dict
+            A dictionary with integer keys.  The value of key `k` is a
+            list of all the subgraphs of length `k`.  A subgraph is given
+            as a tuple of sorted vertex (qubit) labels.
         """
-        def fn(neighbor_dict, k_max, x, y, output_set):
-            vertices = neighbor_dict.keys()
-            if len(x) == k_max:
-                return output_set
-            if x:
-                T = set(a for x in x for a in neighbor_dict[x] if a not in y and a not in x)
-            else:
-                T = vertices
-            Y1 = set(y)
+        def add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, visited_vertices, output_set):
+            """ x holds subgraph so far.  y holds vertices already processed. """
+            if len(subgraph_vertices) == max_subgraph_size: return output_set  # can't add any more vertices; exit now.
+
+            T = set()  # vertices to process - those connected to vertices in x
+            if len(subgraph_vertices) == 0:  # special starting case
+                T.update(neighbor_dict.keys())  # all vertices are connected to the "nothing"/empty set of vertices.
+            else:  # normal case
+                for v in subgraph_vertices:
+                    T.update(filter(lambda w: (w not in visited_vertices and w not in subgraph_vertices),
+                                    neighbor_dict[v]))  # add neighboring vertices we haven't already processed.
+            V = set(visited_vertices)
             for v in T:
-                x.add(v)
-#                print (X)
-                output_set.add(frozenset(x))
-                fn(neighbor_dict, k_max, x, Y1, output_set)
-                x.remove(v)
-                Y1.add(v)
+                subgraph_vertices.add(v)
+                output_set.add(frozenset(subgraph_vertices))
+                add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, V, output_set)
+                subgraph_vertices.remove(v)
+                V.add(v)
 
         def addedge(a, b, neighbor_dict):
             neighbor_dict[a].append(b)
@@ -622,7 +751,7 @@ class ProcessorSpec(object):
             addedge(edge[0], edge[1], neighbor_dict)
         k_max = self.number_of_qubits
         output_set = set()
-        fn(neighbor_dict, k_max, set(), set(), output_set)
+        add_neighbors(neighbor_dict, k_max, set(), set(), output_set)
         grouped_subgraphs = group_subgraphs(output_set)
         return grouped_subgraphs
 

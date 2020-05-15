@@ -1,4 +1,6 @@
-"""Defines the Profiler class and supporting functionality"""
+"""
+Defines the Profiler class and supporting functionality
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -59,6 +61,14 @@ BtoGB = 1.0 / (1024.0**3)  # convert bytes -> GB
 class Profiler(object):
     """
     Profiler objects are used for tracking both time and memory usage.
+
+    Parameters
+    ----------
+    comm : mpi4py.MPI.Comm optional
+        The active MPI communicator.
+
+    default_print_memcheck : bool, optional
+        Whether to print memory checks.
     """
 
     def __init__(self, comm=None, default_print_memcheck=False):
@@ -83,18 +93,18 @@ class Profiler(object):
         Parameters
         ----------
         name : string
-           The name of the timer to add elapsed time into (if the name doesn't
-           exist, one is created and initialized to the elapsed time).
+            The name of the timer to add elapsed time into (if the name doesn't
+            exist, one is created and initialized to the elapsed time).
 
         start_time : float
-           The starting time used to compute the elapsed, i.e. the value
-           `time.time()-start_time`, which is added to the named timer.
+            The starting time used to compute the elapsed, i.e. the value
+            `time.time()-start_time`, which is added to the named timer.
 
         prefix : int, optional
-           Prefix to the timer name the current stack depth and this number
-           of function names, starting with the current function and moving
-           the call stack.  When zero, no prefix is added. For example,
-           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
 
         Returns
         -------
@@ -126,17 +136,17 @@ class Profiler(object):
         Parameters
         ----------
         name : string
-           The name of the counter to add `val` into (if the name doesn't exist,
-           one is created and initialized to `val`).
+            The name of the counter to add `val` into (if the name doesn't exist,
+            one is created and initialized to `val`).
 
         inc : int, optional
-           The increment (the value to add to the counter).
+            The increment (the value to add to the counter).
 
         prefix : int, optional
-           Prefix to the timer name the current stack depth and this number
-           of function names, starting with the current function and moving
-           the call stack.  When zero, no prefix is added. For example,
-           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
 
         Returns
         -------
@@ -164,19 +174,19 @@ class Profiler(object):
         Parameters
         ----------
         name : string
-           The name of the memory checkpoint.  (Later, memory information can
-           be organized by checkpoint name.)
+            The name of the memory checkpoint.  (Later, memory information can
+            be organized by checkpoint name.)
 
         printme : bool, optional
-           Whether or not to print the memory usage during this function call
-           (if None, the default, then the value of `default_print_memcheck`
-           specified during Profiler construction is used).
+            Whether or not to print the memory usage during this function call
+            (if None, the default, then the value of `default_print_memcheck`
+            specified during Profiler construction is used).
 
         prefix : int, optional
-           Prefix to the timer name the current stack depth and this number
-           of function names, starting with the current function and moving
-           the call stack.  When zero, no prefix is added. For example,
-           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
 
         Returns
         -------
@@ -305,7 +315,7 @@ class Profiler(object):
         Parameters
         ----------
         sort_by : {"name","count"}
-           What to sort list of counts by.
+            What to sort list of counts by.
 
         Returns
         -------
@@ -327,13 +337,12 @@ class Profiler(object):
 
     def format_memory(self, sort_by="name"):
         """
-        Formats a string to report the memory usage checkpoints recorded
-        in this Profiler.
+        Formats a string to report the memory usage checkpoints recorded in this Profiler.
 
         Parameters
         ----------
         sort_by : {"name","usage","timestamp"}
-           What to sort list of counts by.
+            What to sort list of counts by.
 
         Returns
         -------
@@ -386,6 +395,8 @@ class Profiler(object):
 
 class DummyProfiler(object):
     """
+    A dummy profiler that doesn't do anything.
+
     A class which implements the same interface as Profiler but
     which doesn't actually do any profiling (consists of stub functions).
     """
@@ -395,14 +406,80 @@ class DummyProfiler(object):
         Construct a new DummyProfiler instance.
         """
 
-    def add_time(self, name, start_time):
-        """Stub function that does nothing"""
+    def add_time(self, name, start_time, prefix=0):
+        """
+        Stub function that does nothing
+
+        Parameters
+        ----------
+        name : string
+            The name of the timer to add elapsed time into (if the name doesn't
+            exist, one is created and initialized to the elapsed time).
+
+        start_time : float
+            The starting time used to compute the elapsed, i.e. the value
+            `time.time()-start_time`, which is added to the named timer.
+
+        prefix : int, optional
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
+        Returns
+        -------
+        None
+        """
         pass
 
-    def add_count(self, name, inc=1):
-        """Stub function that does nothing"""
+    def add_count(self, name, inc=1, prefix=0):
+        """
+        Stub function that does nothing
+
+        Parameters
+        ----------
+        name : string
+            The name of the counter to add `val` into (if the name doesn't exist,
+            one is created and initialized to `val`).
+
+        inc : int, optional
+            The increment (the value to add to the counter).
+
+        prefix : int, optional
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
+        Returns
+        -------
+        None
+        """
         pass
 
-    def mem_check(self, name, printme=None):
-        """Stub function that does nothing"""
+    def mem_check(self, name, printme=None, prefix=0):
+        """
+        Stub function that does nothing
+
+        Parameters
+        ----------
+        name : string
+            The name of the memory checkpoint.  (Later, memory information can
+            be organized by checkpoint name.)
+
+        printme : bool, optional
+            Whether or not to print the memory usage during this function call
+            (if None, the default, then the value of `default_print_memcheck`
+            specified during Profiler construction is used).
+
+        prefix : int, optional
+            Prefix to the timer name the current stack depth and this number
+            of function names, starting with the current function and moving
+            the call stack.  When zero, no prefix is added. For example,
+            with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
+        Returns
+        -------
+        None
+        """
         pass

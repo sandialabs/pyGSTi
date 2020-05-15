@@ -1,4 +1,6 @@
-"""Defines the Factory class"""
+"""
+Defines the Factory class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,6 +26,32 @@ from ..tools import basistools as _bt
 
 
 def op_from_factories(factory_dict, lbl):
+    """
+    Create an operator for `lbl` from the factories in `factory_dict`.
+
+    If the label has arguments, then this function looks for an
+    operator factory associated with the label without its arguments.
+    If one exists, the operator is created by calling
+    :method:`OpFactory.create_simplified_op`.  with the label's
+    arguments.  Otherwise, it looks for a factory associated with the
+    label's name (`lbl.name`) and passes both the labe's
+    state-space-labels and arguments (if any) to
+    :method:`OpFactory.create_simplified_op`.
+
+    Raises a `KeyError` if a matching factory cannot be found.
+
+    Parameters
+    ----------
+    factory_dict : dict
+        A dictionary whose keys are labels and values are :class:`OpFactory` objects.
+
+    lbl : Label
+        The label to build an operation for.
+
+    Returns
+    -------
+    LinearOperator
+    """
     if lbl.args:
         lbl_without_args = _Lbl(lbl.name, lbl.sslbls)
         if lbl_without_args in factory_dict:
@@ -41,21 +69,29 @@ def op_from_factories(factory_dict, lbl):
 
 class OpFactory(_gm.ModelMember):
     """
-    An OpFactory is an object that can generate "on-demand" operators
-    (can be SPAM vecs, etc., as well) for a Model.  It is assigned
-    certain parameter indices (it's a ModelMember), which definie the
-    block of indices it may assign to its created operations.
+    An object that can generate "on-demand" operators (can be SPAM vecs, etc., as well) for a Model.
 
-    The central method of an OpFactory object is the `create_op` method,
-    which creates an operation that is associated with a given label.
-    This is very similar to a LayerLizard's function, though a
-    LayerLizard has detailed knowledge and access to a Model's internals
-    whereas an OpFactory is meant to create a self-contained class of
-    operators (e.g. continuously parameterized gates or on-demand
-    embedding).
+    It is assigned certain parameter indices (it's a ModelMember), which definie
+    the block of indices it may assign to its created operations.
 
-    This class just provides a skeleton for an operation factory -
-    derived classes add the actual code for creating custom objects.
+    The central method of an OpFactory object is the `create_op` method, which
+    creates an operation that is associated with a given label.  This is very
+    similar to a LayerLizard's function, though a LayerLizard has detailed
+    knowledge and access to a Model's internals whereas an OpFactory is meant to
+    create a self-contained class of operators (e.g. continuously parameterized
+    gates or on-demand embedding).
+
+    This class just provides a skeleton for an operation factory - derived
+    classes add the actual code for creating custom objects.
+
+    Parameters
+    ----------
+    dim : int
+        The state-space dimension of the operation(s) this factory builds.
+        (E.g. for a single qubit represented as a density matrix, `dim=4`)
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type of the operation(s) this factory builds.
     """
 
     def __init__(self, dim, evotype):
@@ -76,10 +112,9 @@ class OpFactory(_gm.ModelMember):
 
     def create_object(self, args=None, sslbls=None):
         """
-        Create the object which implements the operation associated
-        with the given `args` and `sslbls`.
+        Create the object that implements the operation associated with the given `args` and `sslbls`.
 
-        Note to developers:
+        **Note to developers**
         The difference beween this method and :method:`create_op` is that
         this method just creates the foundational object without needing
         to setup it's parameter indices (a technical detail which connects
@@ -143,14 +178,39 @@ class OpFactory(_gm.ModelMember):
 
     def create_simplified_op(self, args=None, sslbls=None, item_lbl=None):
         """
-        Same as create_op, but returns *simplified* operations.  In addition,
-        the `item_lbl` argument must be used for POVMs and Instruments, as
-        these need to know which (simple) member of themselves to return
-        (this machinery still needs work).
+        Create the *simplified* operation associated with the given `args`, `sslbls`, and `item_lbl`.
+
+        Similar to as :method:`create_op`, but returns a *simplified* operation
+        (i.e. not a POVM or Instrument).  In addition, the `item_lbl` argument
+        must be used for POVMs and Instruments, as these need to know which
+        (simple) member of themselves to return (this machinery still needs
+        work).
 
         That is, if `create_op` returns something like a POVM or an
         Instrument, this method returns a single effect or instrument-member
         operation (a single linear-operator or SPAM vector).
+
+        Parameters
+        ----------
+        args : list or tuple
+            The arguments for the operation to be created.  None means no
+            arguments were supplied.
+
+        sslbls : list or tuple
+            The list of state space labels the created operator should act on.
+            If None, then these labels are unspecified and should be irrelevant
+            to the construction of the operator (which typically, in this case,
+            has some fixed dimension and no noition of state space labels).
+
+        item_lbl : str, optional
+            Effect or instrument-member label (index) for factories that
+            create POVMs or instruments, respectively.
+
+        Returns
+        -------
+        ModelMember
+            Can be any type of siple operation, e.g. a LinearOperator or SPAMVec,
+            depending on the label requested.
         """
         op = self.create_op(args, sslbls)
         if isinstance(op, _instrument.Instrument):
@@ -160,16 +220,19 @@ class OpFactory(_gm.ModelMember):
         else:
             return op
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
-        Update OpFactory so that created ops G are additionally transformed
-        as inv(s) * G * s.
+        Update OpFactory so that created ops `O` are additionally transformed as `inv(s) * O * s`.
 
         Parameters
         ----------
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         raise NotImplementedError("Cannot currently transform factories!")
         # It think we'd need to keep track of all the transform calls
@@ -189,8 +252,36 @@ class OpFactory(_gm.ModelMember):
 
 class EmbeddedOpFactory(OpFactory):
     """
-    A factory that embeds a given factory's action into a single, pre-defined
-    set of target sectors.
+    A factory that embeds a given factory's action into a single, pre-defined set of target sectors.
+
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or a list of tuples
+        This argument specifies the density matrix space upon which the
+        operations this factory builds act.  If a list of tuples, each tuple
+        corresponds to a block of a density matrix in the standard basis
+        (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with
+        "L" (single Level) or "Q" (two-level; Qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.  (E.g. a 2-qubit
+        space might be labelled `[('Q0','Q1')]`).
+
+    target_labels : list of strs
+        The labels contained in `state_space_labels` which demarcate the
+        portions of the state space acted on by the operations produced
+        by `factory_to_embed` (the "contained" factory).
+
+    factory_to_embed : OpFactory
+        The factory object that is to be contained within this factory,
+        and that specifies the only non-trivial action of the operations
+        this factory produces.
+
+    dense : bool, optional
+        Whether dense embedding operations (ops which hold their entire
+        "action" matrix in memory) should be created.  When `True`,
+        :class:`EmbeddedDenseOp` objects are created; when `False`,
+        :class:`EmbeddedOp` objects are.
     """
 
     def __init__(self, state_space_labels, target_labels, factory_to_embed, dense=False):
@@ -219,6 +310,12 @@ class EmbeddedOpFactory(OpFactory):
             The factory object that is to be contained within this factory,
             and that specifies the only non-trivial action of the operations
             this factory produces.
+
+        dense : bool, optional
+            Whether dense embedding operations (ops which hold their entire
+            "action" matrix in memory) should be created.  When `True`,
+            :class:`EmbeddedDenseOp` objects are created; when `False`,
+            :class:`EmbeddedOp` objects are.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.embedded_factory = factory_to_embed
@@ -282,7 +379,7 @@ class EmbeddedOpFactory(OpFactory):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.embedded_factory.num_params()
 
@@ -307,6 +404,16 @@ class EmbeddedOpFactory(OpFactory):
             The 1D vector of gate parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this factory's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this operation should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option,
+            and should be left unless you know what you're doing.
+
         Returns
         -------
         None
@@ -317,11 +424,44 @@ class EmbeddedOpFactory(OpFactory):
 
 class EmbeddingOpFactory(OpFactory):
     """
-    A factory that "on-demand" embeds a given factory or operation into any
-    requested set of target sectors.  This is similar to an `EmbeddedOpFactory`
-    except in this case how the "contained" operation/factory is embedded is
-    *not* determined at creation time: the `sslbls` argument of
-    :method:`create_op` is used instead.
+    A factory that "on-demand" embeds a given factory or operation into any requested set of target sectors.
+
+    This is similar to an `EmbeddedOpFactory` except in this case how the
+    "contained" operation/factory is embedded is *not* determined at creation
+    time: the `sslbls` argument of :method:`create_op` is used instead.
+
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or a list of tuples
+        This argument specifies the density matrix space upon which the
+        operations this factory builds act.  If a list of tuples, each tuple
+        corresponds to a block of a density matrix in the standard basis
+        (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with
+        "L" (single Level) or "Q" (two-level; Qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.  (E.g. a 2-qubit
+        space might be labelled `[('Q0','Q1')]`).
+
+    factory_or_op_to_embed : LinearOperator or OpFactory
+        The factory or operation object that is to be contained within this
+        factory.  If a linear operator, this *same* operator (not a copy)
+        is embedded however is requested.  If a factory, then this object's
+        `create_op` method is called with any `args` that are passed to
+        the embedding-factory's `create_op` method, but the `sslbls` are
+        always set to `None` (as they are processed by the embedding
+
+    dense : bool, optional
+        Whether dense embedding operations (ops which hold their entire
+        "action" matrix in memory) should be created.  When `True`,
+        :class:`EmbeddedDenseOp` objects are created; when `False`,
+        :class:`EmbeddedOp` objects are.
+
+    num_target_labels : int, optional
+        If not `None`, the number of target labels that should be expected
+        (usually equal to the number of qubits the contained gate acts
+        upon).  If `None`, then the length of the `sslbls` passed to this
+        factory's `create_op` method is not checked at all.
     """
 
     def __init__(self, state_space_labels, factory_or_op_to_embed, dense=False, num_target_labels=None):
@@ -351,7 +491,9 @@ class EmbeddingOpFactory(OpFactory):
 
         dense : bool, optional
             Whether dense embedding operations (ops which hold their entire
-            "action" matrix in memory) should be created.
+            "action" matrix in memory) should be created.  When `True`, 
+            :class:`EmbeddedDenseOp` objects are created; when `False`,
+            :class:`EmbeddedOp` objects are.
 
         num_target_labels : int, optional
             If not `None`, the number of target labels that should be expected
@@ -422,7 +564,7 @@ class EmbeddingOpFactory(OpFactory):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.embedded_factory_or_op.num_params()
 
@@ -447,6 +589,16 @@ class EmbeddingOpFactory(OpFactory):
             The 1D vector of gate parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this factory's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this operation should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option,
+            and should be left unless you know what you're doing.
+
         Returns
         -------
         None
@@ -461,6 +613,30 @@ class ComposedOpFactory(OpFactory):
 
     Label arguments are passed unaltered through this factory to any component
     factories.
+
+    Parameters
+    ----------
+    factories_or_ops_to_compose : list
+        List of `LinearOperator` or `OpFactory`-derived objects
+        that are composed to form this factory.  There should be at least
+        one factory among this list, otherwise there's no need for a
+        factory.  Elements are composed with vectors in *left-to-right*
+        ordering, maintaining the same convention as operation sequences
+        in pyGSTi.  Note that this is *opposite* from standard matrix
+        multiplication order.
+
+    dim : int or "auto"
+        Dimension of the operations produced by this factory.  Can be set
+        to `"auto"` to take dimension from `factories_or_ops_to_compose[0]`
+        *if* there's at least one factory or operator being composed.
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+        The evolution type of this factory.  Can be set to `"auto"` to take
+        the evolution type of `factories_or_ops_to_compose[0]` *if* there's
+        at least one factory or operator being composed.
+
+    dense : bool, optional
+        Whether dense composed operations (ops which hold their entire
     """
 
     def __init__(self, factories_or_ops_to_compose, dim="auto", evotype="auto", dense=False):
@@ -555,7 +731,7 @@ class ComposedOpFactory(OpFactory):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return len(self.gpindices_as_array())
 
@@ -586,6 +762,16 @@ class ComposedOpFactory(OpFactory):
             The 1D vector of gate parameters.  Length
             must == num_params()
 
+        close : bool, optional
+            Whether `v` is close to this factory's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this operation should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option,
+            and should be left unless you know what you're doing.
+
         Returns
         -------
         None
@@ -602,8 +788,31 @@ class ComposedOpFactory(OpFactory):
 # because they include functions.
 class UnitaryOpFactory(OpFactory):
     """
-    Converts a function, f(arg_tuple), that outputs a unitary matrix (operation)
+    An operation factory based on a unitary-matrix-producing function.
+
+    Converts a function, `f(arg_tuple)`, that outputs a unitary matrix (operation)
     into a factory that produces a :class:`StaticDenseOp` superoperator.
+
+    Parameters
+    ----------
+    fn : function
+        A function that takes as it's only argument a tuple
+        of label-arguments (arguments included in circuit labels,
+        e.g. 'Gxrot;0.347') and returns a unitary matrix -- a
+        complex numpy array that has dimension 2^nQubits, e.g.
+        a 2x2 matrix in the 1-qubit case.
+
+    unitary_dim : int
+        The dimension of the unitary that is returned by `fn`,
+        e.g. 2 for a 1-qubit factory.
+
+    superop_basis : Basis or {"std","pp","gm","qt"}
+        The basis the resulting :class:`StaticDenseOp` superoperator
+        should be given in.  Usually the default of `"pp"` is what
+        you want.
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type of the operation(s) this factory builds.
     """
 
     def __init__(self, fn, unitary_dim, superop_basis="pp", evotype="densitymx"):
@@ -639,8 +848,7 @@ class UnitaryOpFactory(OpFactory):
 
     def create_object(self, args=None, sslbls=None):
         """
-        Create the object which implements the operation associated
-        with the given `args` and `sslbls`.
+        Create the object which implements the operation associated with the given `args` and `sslbls`.
 
         Parameters
         ----------

@@ -1,4 +1,6 @@
-"""Defines the ProtectedArray class"""
+"""
+Defines the ProtectedArray class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -15,8 +17,18 @@ from ..tools import compattools as _compat
 
 class ProtectedArray(object):
     """
-    A numpy ndarray-like class that allows certain elements to
-    be treated as read-only.
+    A numpy ndarray-like class that allows certain elements to be treated as read-only.
+
+    Parameters
+    ----------
+    input_array : numpy.ndarray
+        The base array.
+
+    indices_to_protect : tuple or list, optional
+        A list or tuple of length `input_array.shape`, specifying
+        the indices to protect along each axis.  Values may be
+        integers, slices, or lists of integers,
+        e.g. `(0, slice(None, None, None))`.
     """
 
     def __init__(self, input_array, indices_to_protect=None):
@@ -25,8 +37,7 @@ class ProtectedArray(object):
         #Get protected indices, a specified as:
         self.indicesToProtect = []
         if indices_to_protect is not None:
-            if not (isinstance(indices_to_protect, tuple)
-                    or isinstance(indices_to_protect, list)):
+            if not isinstance(indices_to_protect, (list, tuple)):
                 indices_to_protect = (indices_to_protect,)
 
             assert(len(indices_to_protect) <= len(self.base.shape))

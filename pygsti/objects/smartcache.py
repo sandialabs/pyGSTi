@@ -1,4 +1,6 @@
-""" Defines SmartCache and supporting functions """
+"""
+Defines SmartCache and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,11 +24,35 @@ from ..tools.opttools import timed_block as _timed_block
 DIGEST_TIMES = defaultdict(list)
 
 
-def csize(counter): return len(list(counter.elements()))
+def csize(counter):
+    """
+    Computes the size of (number of elements in) a given Counter.
+
+    Parameters
+    ----------
+    counter : Counter
+        The counter to get the size of.
+
+    Returns
+    -------
+    int
+    """
+    return len(list(counter.elements()))
 
 
 def average(l):
-    """ Computes the average of the items in a list """
+    """
+    Computes the average of the items in a list
+
+    Parameters
+    ----------
+    l : list
+        the list
+
+    Returns
+    -------
+    int
+    """
     nCalls = max(1, len(l))
     return sum(l) / nCalls
 
@@ -39,10 +65,16 @@ def show_cache_percents(hits, misses, printer):
     ----------
     hits : Counter
         cache hits
+
     misses : Counter
         cache misses
+
     printer : pygsti.objects.VerbosityPrinter
         logging object
+
+    Returns
+    -------
+    None
     """
     nHits = csize(hits)
     nMisses = csize(misses)
@@ -54,9 +86,24 @@ def show_cache_percents(hits, misses, printer):
 
 
 def show_kvs(title, kvs, printer):
-    '''
-    Pretty-print key-value pairs w/ a title and printer Object
-    '''
+    """
+    Pretty-print key-value pairs w/ a title and printer object
+
+    Parameters
+    ----------
+    title : str
+        Title to print
+
+    kvs : iterable
+        An object that yields (key, value) pairs when you iterate it.
+
+    printer : VerbosityPrinter
+        The printer object.
+
+    Returns
+    -------
+    None
+    """
     printer.log(title)
     for k, v in kvs:
         printer.log('    {:<40} {}'.format(k, v))
@@ -64,9 +111,19 @@ def show_kvs(title, kvs, printer):
 
 
 class SmartCache(object):
-    '''
+    """
     Cache object that profiles itself
-    '''
+
+    Parameters
+    ----------
+    decorating : tuple
+        module and function being decorated by the smart cache
+
+    Attributes
+    ----------
+    StaticCacheList : list
+        A list of all :class:`SmartCache` instances.
+    """
     StaticCacheList = []
 
     def __init__(self, decorating=(None, None)):
@@ -149,9 +206,8 @@ class SmartCache(object):
         return d
 
     def add_digest(self, custom):
-        '''
-        Add a "custom" digest function, used for hashing otherwise un-hashable
-        types.
+        """
+        Add a "custom" digest function, used for hashing otherwise un-hashable types.
 
         Parameters
         ----------
@@ -159,14 +215,33 @@ class SmartCache(object):
             A hashing function, which takes two arguments: `md5` (a running MD5
             hash) and `val` (the value to be hashed).  It should call
             `md5.update` to add to the running hash, and needn't return anything.
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.customDigests.append(custom)
 
     def low_overhead_cached_compute(self, fn, arg_vals, kwargs=None):
-        '''
-        Cached compute with less profiling:
-            see :method:`cached_compute` docstring
-        '''
+        """
+        Cached compute with less profiling. See :method:`cached_compute` docstring.
+
+        Parameters
+        ----------
+        fn : function
+            Cached function
+
+        arg_vals : tuple or list
+            Arguments to cached function
+
+        kwargs : dictionary
+            Keyword arguments to cached function
+
+        Returns
+        -------
+        key : the key used to hash the function call
+        result : result of fn called with arg_vals and kwargs
+        """
         if kwargs is None:
             kwargs = dict()
         name_key = get_fn_name_key(fn)
@@ -186,7 +261,7 @@ class SmartCache(object):
         return key, result
 
     def cached_compute(self, fn, arg_vals, kwargs=None):
-        '''
+        """
         Shows effectiveness of a cache
 
         Parameters
@@ -202,10 +277,9 @@ class SmartCache(object):
 
         Returns
         -------
-        key: the key used to hash the function call
+        key : the key used to hash the function call
         result : result of fn called with arg_vals and kwargs
-
-        '''
+        """
         special_kwargs = dict()
         if kwargs is None:
             kwargs = dict()
@@ -272,9 +346,18 @@ class SmartCache(object):
 
     @staticmethod
     def global_status(printer):
-        '''
+        """
         Show the statuses of all Cache objects
-        '''
+
+        Parameters
+        ----------
+        printer : VerbosityPrinter
+            The printer to use for output.
+
+        Returns
+        -------
+        None
+        """
         totalSaved = 0
         totalHits = Counter()
         totalMisses = Counter()
@@ -331,8 +414,18 @@ class SmartCache(object):
         printer.log('    {} seconds saved total'.format(totalSaved))
 
     def avg_timedict(self, d):
-        """ Given a dictionary of lists of times (`d`), returns a dict of the
-            summed times.  """
+        """
+        Given a dictionary of lists of times (`d`), returns a dict of the summed times.
+
+        Parameters
+        ----------
+        d : dict
+            A dictionary whose values are lists of times.
+
+        Returns
+        -------
+        dict
+        """
         ret = dict()
         for k, v in d.items():
             if k not in self.fhits:
@@ -343,9 +436,18 @@ class SmartCache(object):
         return ret
 
     def status(self, printer):
-        '''
+        """
         Show the status of a cache object instance
-        '''
+
+        Parameters
+        ----------
+        printer : VerbosityPrinter
+            The printer to use for output.
+
+        Returns
+        -------
+        None
+        """
         printer.log('Status of smart cache decorating {}.{}:\n'.format(
             self.decoratingModule, self.decoratingFn))
         show_cache_percents(self.hits, self.misses, printer)
@@ -383,10 +485,18 @@ class SmartCache(object):
 
 
 def smart_cached(obj):
-    '''
-    Decorator for applying a smart cache to a single
-    function or method
-    '''
+    """
+    Decorator for applying a smart cache to a single function or method.
+
+    Parameters
+    ----------
+    obj : function
+        function to decorate.
+
+    Returns
+    -------
+    function
+    """
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
     @_functools.wraps(obj)
     def _cacher(*args, **kwargs):
@@ -396,12 +506,31 @@ def smart_cached(obj):
 
 
 class CustomDigestError(Exception):
-    """ Custom Digest Exception type """
+    """
+    Custom Digest Exception type
+    """
     pass
 
 
 def digest(obj, custom_digests=None):
-    """Returns an MD5 digest of an arbitary Python object, `obj`."""
+    """
+    Returns an MD5 digest of an arbitary Python object, `obj`.
+
+    Parameters
+    ----------
+    obj : object
+        Object to digest.
+
+    custom_digests : list, optional
+        A list of custom digest functions.  Each function should have the signature
+        `digest(md5 : hashlib.md5, value)` and either digest `value` (calling `md5.update`
+        or similar) or raise a :class:`CustomDigestError` to indicate it was unable to
+        digest `value`.
+
+    Returns
+    -------
+    MD5_digest
+    """
     if custom_digests is None:
         custom_digests = []
 
@@ -455,7 +584,18 @@ def digest(obj, custom_digests=None):
 
 
 def get_fn_name_key(fn):
-    """ Get the name (str) used to has the function `fn` """
+    """
+    Get the name (str) used to hash the function `fn`
+
+    Parameters
+    ----------
+    fn : function
+        The function to get the hash key for.
+
+    Returns
+    -------
+    str
+    """
     name = fn.__name__
     if hasattr(fn, '__self__'):
         name = fn.__self__.__class__.__name__ + '.' + name
@@ -469,10 +609,16 @@ def call_key(fn, args, custom_digests):
     Parameters
     ----------
     fn : function
-       The function itself
+        The function itself
 
     args : list or tuple
-       The function's arguments.
+        The function's arguments.
+
+    custom_digests : list, optional
+        A list of custom digest functions.  Each function should have the signature
+        `digest(md5 : hashlib.md5, value)` and either digest `value` (calling `md5.update`
+        or similar) or raise a :class:`CustomDigestError` to indicate it was unable to
+        digest `value`.
 
     Returns
     -------

@@ -1,4 +1,6 @@
-""" Defines the Polynomial class """
+"""
+Defines the Polynomial class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -34,7 +36,7 @@ def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
 
 class FASTPolynomial(object):
     """
-    Encapsulates a polynomial as a subclass of the standard Python dict.
+    A polynomial that behaves like a Python dict of coefficients.
 
     Variables are represented by integer indices, e.g. "2" means "x_2".
     Keys are tuples of variable indices and values are numerical
@@ -42,16 +44,51 @@ class FASTPolynomial(object):
     to some power, its index is repeated in the key-tuple.
 
     E.g. x_0^2 + 3*x_1 + 4 is stored as {(0,0): 1.0, (1,): 3.0, (): 4.0}
+
+    Parameters
+    ----------
+    coeffs : dict
+        A dictionary of coefficients.  Keys are tuples of integers that
+        specify the polynomial term the coefficient value multiplies
+        (see above). If None, the zero polynomial (no terms) is created.
+
+    max_num_vars : int
+        The maximum number of independent variables this polynomial can
+        hold.  Placing a limit on the number of variables allows more
+        compact storage and efficient evaluation of the polynomial.
+
+    Attributes
+    ----------
+    coeffs : dict
+        A dictionary whose keys are tuples of variable indices (e.g.
+        `x0^2*x1` would translate to `(0,0,1)`) and values are the
+        coefficients.
+
+    max_num_vars : int
+        The maximum number of independent variables this polynomial can
+        hold.
+
+    vindices_per_int : int
+        The number of variable indices that can be compactly fit
+        into a single int when there are at most `max_num_vars` variables.
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):
+    def get_vindices_per_int(cls, max_num_vars):  #PRIVATE?
         """
-        Returns the number of variable indices that can be compactly fit
-        into a single int when there are at most `max_num_vars` variables.
+        The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
         This quantity is needed to directly construct Polynomial representations
         and is thus useful internally for forward simulators.
+
+        Parameters
+        ----------
+        max_num_vars : int
+            The maximum number of independent variables.
+
+        Returns
+        -------
+        int
         """
         # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
         # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
@@ -61,8 +98,7 @@ class FASTPolynomial(object):
     @classmethod
     def fromrep(cls, rep):
         """
-        Creates a Polynomial from a "representation" (essentially a
-        lite-version) of a Polynomial.
+        Creates a Polynomial from a "representation" (essentially a lite-version) of a Polynomial.
 
         Note: usually we only need to convert from full-featured Python objects
         to the lighter-weight "representation" objects.  Polynomials are an
@@ -84,7 +120,18 @@ class FASTPolynomial(object):
 
     @classmethod
     def product(cls, list_of_polys):
-        """TODO: docstring """
+        """
+        Take the product of multiple polynomials.
+
+        Parameters
+        ----------
+        list_of_polys : list
+            List of polynomials to take the product of.
+
+        Returns
+        -------
+        Polynomial
+        """
         rep = list_of_polys[0]._rep
         for p in list_of_polys[1:]:
             rep = rep.mult(p._rep)
@@ -120,6 +167,17 @@ class FASTPolynomial(object):
 
     @property
     def coeffs(self):
+        """
+        A dictionary of this polynoial's coefficients.
+
+        Keys are tuples of integers that specify the polynomial term the
+        coefficient value multiplies (see above). If None, the zero polynomial
+        (no terms) is created.
+
+        Returns
+        -------
+        dict
+        """
         max_num_vars = self._rep.max_num_vars
 
         def int_to_vinds(indx_tup):
@@ -137,16 +195,34 @@ class FASTPolynomial(object):
 
     @property
     def max_num_vars(self):  # so we can convert back to python Polys
+        """
+        The maximum number of independent variables this polynomial can hold.
+
+        Powers of variables are not "independent", e.g. the polynomial x0^2 + 2*x0 + 3
+        has a single indepdent variable.
+
+        Returns
+        -------
+        int
+        """
         return self._rep.max_num_vars
 
     @property
     def vindices_per_int(self):
+        """
+        The number of this polynoial's variable indices that can be compactly fit into a single int.
+
+        Returns
+        -------
+        int
+        """
         return self._rep.vindices_per_int
 
     def deriv(self, wrt_param):
         """
-        Take the derivative of this Polynomial with respect to a single
-        variable/parameter.  The result is another Polynomial.
+        Take the derivative of this Polynomial with respect to a single variable.
+
+        The result is another Polynomial.
 
         E.g. deriv(x_2^3 + 3*x_1, wrt_param=2) = 3x^2
 
@@ -172,8 +248,13 @@ class FASTPolynomial(object):
 
     def get_degree(self):
         """
-        Return the largest sum-of-exponents for any term (monomial) within this
-        polynomial. E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
+        The largest sum-of-exponents for any term (monomial) within this polynomial.
+
+        E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
+
+        Returns
+        -------
+        int
         """
         return 0 if len(self) == 0 else max([len(k) for k in self.coeffs.keys()])
 
@@ -226,6 +307,10 @@ class FASTPolynomial(object):
     def copy(self):
         """
         Returns a copy of this polynomial.
+
+        Returns
+        -------
+        Polynomial
         """
         return FASTPolynomial.fromrep(self._rep.copy())
 
@@ -275,16 +360,48 @@ class FASTPolynomial(object):
         self._rep.reinit(new_int_coeffs)
 
     def mapvec_indices(self, mapvec):
-        """TODO: docstring - map indices using a vector instead of a function (vector maps
-        *individual* variable indices old->new instead of tuples of them
+        """
+        Performs a bulk find & replace on this polynomial's variable indices.
+
+        This function is similar to :method:`map_indices` but uses a *vector*
+        to describe *individual* index updates instead of a function for
+        increased performance.
+
+        Parameters
+        ----------
+        mapvec : numpy.ndarray
+            An array whose i-th element gives the updated "new" index for
+            the i-th variable.  Note that this vector maps *individual*
+            variable indices old->new, whereas `mapfn` in :method:`map_indices`
+            maps between *tuples* of indices.
+
+        Returns
+        -------
+        Polynomial
         """
         ret = self.copy()
         ret._rep.mapvec_indices_inplace(mapvec)
         return ret
 
     def mapvec_indices_inplace(self, mapvec):
-        """TODO: docstring - map indices using a vector instead of a function (vector maps
-        *individual* variable indices old->new instead of tuples of them
+        """
+        Performs an in-place bulk find & replace on this polynomial's variable indices.
+
+        This function is similar to :method:`map_indices_inplace` but uses a *vector*
+        to describe *individual* index updates instead of a function for increased
+        performance.
+
+        Parameters
+        ----------
+        mapvec : numpy.ndarray
+            An array whose i-th element gives the updated "new" index for
+            the i-th variable.  Note that this vector maps *individual*
+            variable indices old->new, whereas `mapfn` in
+            :method:`map_indices_inplace` maps between *tuples* of indices.
+
+        Returns
+        -------
+        Polynomial
         """
         self._rep.mapvec_indices_inplace(mapvec)
 
@@ -300,7 +417,7 @@ class FASTPolynomial(object):
         Returns
         -------
         Polynomial
-             The polynomial representing self * x.
+            The polynomial representing self * x.
         """
         return FASTPolynomial.fromrep(self._rep.mult(x._rep))
 
@@ -449,24 +566,43 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     to some power, its index is repeated in the key-tuple.
 
     E.g. x_0^2 + 3*x_1 + 4 is stored as {(0,0): 1.0, (1,): 3.0, (): 4.0}
+
+    Parameters
+    ----------
+    coeffs : dict
+        A dictionary of coefficients.  Keys are tuples of integers that
+        specify the polynomial term the coefficient value multiplies
+        (see above). If None, the zero polynomial (no terms) is created.
+
+    max_num_vars : int
+        The maximum number of independent variables this polynomial can
+        hold.  Placing a limit on the number of variables allows more
+        compact storage and efficient evaluation of the polynomial.
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):
+    def get_vindices_per_int(cls, max_num_vars): #PRIVATE?
         """
-        Returns the number of variable indices that can be compactly fit
-        into a single int when there are at most `max_num_vars` variables.
+        The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
         This quantity is needed to directly construct Polynomial representations
         and is thus useful internally for forward simulators.
+
+        Parameters
+        ----------
+        max_num_vars : int
+            The maximum number of independent variables.
+
+        Returns
+        -------
+        int
         """
         return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
     @classmethod
     def fromrep(cls, rep):
         """
-        Creates a Polynomial from a "representation" (essentially a
-        lite-version) of a Polynomial.
+        Creates a Polynomial from a "representation" (essentially a lite-version) of a Polynomial.
 
         Note: usually we only need to convert from full-featured Python objects
         to the lighter-weight "representation" objects.  Polynomials are an
@@ -519,6 +655,11 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             A dictionary of coefficients.  Keys are tuples of integers that
             specify the polynomial term the coefficient value multiplies
             (see above). If None, the zero polynomial (no terms) is created.
+
+        max_num_vars : int
+            The maximum number of independent variables this polynomial can
+            hold.  Placing a limit on the number of variables allows more
+            compact storage and efficient evaluation of the polynomial.
         """
         super(Polynomial, self).__init__()
         if coeffs is not None:
@@ -527,7 +668,25 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         self.fastpoly = FASTPolynomial(coeffs, max_num_vars)
         self.check_fastpoly()
 
+    #PRIVATE
     def check_fastpoly(self, raise_err=True):
+        """
+        Check that included FASTPolynomial has remained in-sync with this one.
+
+        This is purely for debugging, to ensure that the FASTPolynomial
+        class implements its operations correctly.
+
+        Parameters
+        ----------
+        raise_err : bool, optional
+            Whether to raise an AssertionError if the check fails.
+
+        Returns
+        -------
+        bool
+            Whether or not the check has succeeded (True if the
+            fast and slow implementations are in sync).
+        """
         if set(self.fastpoly.coeffs.keys()) != set(self.keys()):
             print("FAST", self.fastpoly.coeffs, " != SLOW", dict(self))
             if raise_err: assert(False), "STOP"
@@ -546,8 +705,9 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
     def deriv(self, wrt_param):
         """
-        Take the derivative of this Polynomial with respect to a single
-        variable/parameter.  The result is another Polynomial.
+        Take the derivative of this Polynomial with respect to a single variable.
+
+        The result is another Polynomial.
 
         E.g. deriv(x_2^3 + 3*x_1, wrt_param=2) = 3x^2
 
@@ -576,8 +736,13 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
     def get_degree(self):
         """
-        Return the largest sum-of-exponents for any term (monomial) within this
-        polynomial. E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
+        The largest sum-of-exponents for any term (monomial) within this polynomial.
+
+        E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
+
+        Returns
+        -------
+        int
         """
         ret = 0 if len(self) == 0 else max([len(k) for k in self.keys()])
         assert(self.fastpoly.get_degree() == ret)
@@ -616,9 +781,10 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
         Parameters
         ----------
-        force_complex : bool, optional
-            Whether the `ctape` returned array is forced to be of complex type,
-            even if all of the polynomial coefficients are real.
+        complex_coeff_tape : bool, optional
+            Whether the `ctape` returned array is forced to be of complex type.
+            If False, the real part of all coefficients is taken (even if they're
+            complex).
 
         Returns
         -------
@@ -653,6 +819,10 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     def copy(self):
         """
         Returns a copy of this polynomial.
+
+        Returns
+        -------
+        Polynomial
         """
         fast_cpy = self.fastpoly.copy()
         ret = Polynomial(self, self.max_num_vars)
@@ -723,7 +893,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         Returns
         -------
         Polynomial
-             The polynomial representing self * x.
+            The polynomial representing self * x.
         """
         newpoly = Polynomial({}, self.max_num_vars)
         for k1, v1 in self.items():
@@ -961,21 +1131,27 @@ def bulk_load_compact_polys(vtape, ctape, keep_compact=False, max_num_vars=100):
 
     Parameters
     ----------
-    vtape, ctape : numpy.ndarray
-        Specifies "variable" and "coefficient" 1D numpy arrays to load.
-        These "tapes" can be generated by concatenating the tapes of individual
-        complact-polynomial tuples returned by :method:`Polynomial.compact`.
+    vtape : numpy.ndarray
+        A 1D array of variable indices that, together with `ctape`, specify an
+        efficient means for evaluating a set of polynoials.
+
+    ctape : numpy.ndarray
+        A 1D array of coefficients that, together with `vtape`, specify an
+       efficient means for evaluating a set of polynoials.
 
     keep_compact : bool, optional
         If True the returned list has elements which are (vtape,ctape) tuples
         for each individual polynomial.  If False, then the elements are
         :class:`Polynomial` objects.
 
-    TODO docstring: max_num_vars
+    max_num_vars : int, optional
+        The maximum number of variables the created polynomials
+        are allowed to have.
 
     Returns
     -------
     list
+        A list of Polynomial objects.
     """
     result = []
     c = 0; i = 0

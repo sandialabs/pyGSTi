@@ -1,4 +1,6 @@
-""" Defines classes which represent terms in gate expansions """
+"""
+Defines classes which represent terms in gate expansions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,7 +26,24 @@ from . import spamvec as _spamvec
 
 
 def compose_terms_with_mag(terms, magnitude):
-    """ TODO: docstring """
+    """
+    Compose multiple terms *and* set the resulting term's magnitude.
+
+    Usually, for performance reasons, the magnitude of a composed term
+    is not set.  This function explicitly does so.
+
+    Parameters
+    ----------
+    terms : sequence
+        A sequence of :class:`RankOneTerm`s.
+
+    magnitude : float
+        The magnitude of the compsed term.
+
+    Returns
+    -------
+    RankOneTerm
+    """
     assert(len(terms) > 0)
     return terms[0].compose(terms, magnitude)
 
@@ -45,11 +64,7 @@ def compose_terms(terms):
     Parameters
     ----------
     terms : list
-        A list of terms to compose.
-
-    magnitude : float, optional
-        The magnitude of the composed term (fine to leave as None
-        if you don't care about keeping track of magnitudes).
+        A list of :class:`RankOneTerm`s to compose.
 
     Returns
     -------
@@ -61,7 +76,9 @@ def compose_terms(terms):
 
 def exp_terms(terms, order, postterm, cache=None, order_base=None):
     """
-    Exponentiate a list of terms, collecting those terms of the orders given
+    Exponentiate a list of terms.
+
+    This function collects those terms of the orders given
     in `orders`. Optionally post-multiplies the single term `postterm` (so this
     term actually acts *before* the exponential-derived terms).
 
@@ -124,7 +141,9 @@ def exp_terms(terms, order, postterm, cache=None, order_base=None):
 
 def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     """
-    Exponentiate a list of terms, collecting those terms of the orders given
+    Exponentiate a list of terms with magnitude above `min_term_mag`.
+
+    This function collects those terms of the orders given
     in `orders`. Optionally post-multiplies the single term `postterm` (so this
     term actually acts *before* the exponential-derived terms).
 
@@ -141,7 +160,12 @@ def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
         A term that is composed *first* (so "post" in the sense of matrix
         multiplication, not composition).
 
-    TODO: docstring min_term_mag & return val
+    cache : dict, optional
+        A cache to speedup repeated calls.  Currently unused because
+        `min_term_mag` is likely to be different on every call.
+
+    min_term_mag : float, optional
+        The minimum term magnitude.
 
     Returns
     -------
@@ -295,9 +319,10 @@ def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
 
 class RankOneTerm(object):
     """
-    An operation, like a gate, that maps a density matrix to another density
-    matrix but in a more restricted way.  While a RankOneTerm doesn't have to
-    map pure states to pure states, its action can be written:
+    An operation, like a gate, that maps a density matrix to another density matrix but in a restricted way.
+
+    While a RankOneTerm doesn't have to map pure states to pure states, its action
+    can be written:
 
     `rho -> A*rho*B`
 
@@ -319,15 +344,30 @@ class RankOneTerm(object):
     Finally, a coefficient (usually a number or a :class:`Polynomial`) is held,
     representing the prefactor for this term as a part of a larger density
     matrix evolution.
+
+    Parameters
+    ----------
+    rep : SVTermRep or SBTermRep
+        The term representation object the acts as the core of this term.
     """
 
     def __init__(self, rep):
         self._rep = rep
 
     def torep(self):
+        """
+        Access to the underlying representation object.
+        """
         return self._rep
 
     def copy(self):
+        """
+        Copies this term.
+
+        Returns
+        -------
+        RankOneTerm
+        """
         return self.__class__(self._rep.copy())
 
     def __mul__(self, x):
@@ -349,27 +389,103 @@ class RankOneTerm(object):
 
 
 class HasMagnitude(object):
+    """
+    A base class that adds a `magnitude` property to a term class.
+
+    Magnitudes are used in pruned-path or direct term-based (path
+    integral) forward simulation.
+
+    Attributes
+    ----------
+    magnitude : float
+        This term's magnitude.
+
+    logmagnitude : float
+        The logarithm of this term's magnitude (held separately for performance).
+    """
+
     @property
     def magnitude(self):
+        """
+        This term's magnitude.
+        """
         return self._rep.magnitude
 
     @property
     def logmagnitude(self):
+        """
+        The logarithm of this term's magnitude (held separately for performance).
+        """
         return self._rep.logmagnitude
 
+    #WHY NOT A CLASSMETHOD? -- needs to be inherited by derived classes, but I think that should work.
     def compose(self, all_terms, magnitude):
+        """
+        Compose `all_terms` and set the composed term's magnitude to `magnitude`.
+
+        Parameters
+        ----------
+        all_terms : list
+            List of the terms to compose.
+
+        magnitude : float
+            The magnitude of the composed term.
+
+        Returns
+        -------
+        RankOneTerm
+        """
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
 
 
 class NoMagnitude(object):
+    """
+    A base class that adds a `magnitude` property to a term class.    
+    """
     def compose(self, all_terms):
+        """
+        Compose `all_terms` and set the composed term's magnitude to `magnitude`.
+
+        Parameters
+        ----------
+        all_terms : list
+            List of the terms to compose.
+
+        Returns
+        -------
+        RankOneTerm
+        """
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
 
 
 class RankOnePrepTerm(RankOneTerm, NoMagnitude):
+    """
+    A state preparation term.
+    """
 
     @classmethod
     def simple_init(cls, coeff, pre_state, post_state, evotype):
+        """
+        Creates a :class:`RankOnePrepTerm`s using natural arguments.
+
+        Parameters
+        ----------
+        coeff : Polynomial or complex
+            The term's coefficient.
+
+        pre_state : SPAMVec
+            The 'ket' (left-side) state of the operator.
+
+        post_state : SPAMVec
+            The 'bra' (right-side) state of the operator
+
+        evotype : str
+            The evolution type
+
+        Returns
+        -------
+        RankOnePrepTerm
+        """
         if evotype not in ('svterm', 'cterm'):
             raise ValueError("Invalid evotype: %s" % evotype)
 
@@ -390,6 +506,21 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
         return cls(rep)
 
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOnePrepTerm
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -400,8 +531,33 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
 
 
 class RankOneEffectTerm(RankOneTerm, NoMagnitude):
+    """
+    A POVM effect term.
+    """
+
     @classmethod
     def simple_init(cls, coeff, pre_effect, post_effect, evotype):
+        """
+        Creates a :class:`RankOneEffectTerm`s using natural arguments.
+
+        Parameters
+        ----------
+        coeff : Polynomial or complex
+            The term's coefficient.
+
+        pre_effect : SPAMVec
+            The 'bra' (left-side) effect of the operator.
+
+        post_effect : SPAMVec
+            The 'ket' (right-side) effect of the operator
+
+        evotype : str
+            The evolution type
+
+        Returns
+        -------
+        RankOneEffectTerm
+        """
         if evotype not in ('svterm', 'cterm'):
             raise ValueError("Invalid evotype: %s" % evotype)
 
@@ -424,6 +580,21 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
         return cls(rep)
 
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOneEffectTerm
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -434,8 +605,33 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
 
 
 class RankOneOpTerm(RankOneTerm, NoMagnitude):
+    """
+    An operation term.
+    """
+
     @classmethod
     def simple_init(cls, coeff, pre_op, post_op, evotype):
+        """
+        Creates a :class:`RankOneOpTerm`s using natural arguments.
+
+        Parameters
+        ----------
+        coeff : Polynomial or complex
+            The term's coefficient.
+
+        pre_op : SPAMVec
+            The left-side operator, i.e. `A` in `rho => A rho B^dag`.
+
+        post_op : SPAMVec
+            The right-side operator, i.e. `B` in `rho => A rho B^dag`.
+
+        evotype : str
+            The evolution type
+
+        Returns
+        -------
+        RankOneOpTerm
+        """
         if evotype not in ('svterm', 'cterm'):
             raise ValueError("Invalid evotype: %s" % evotype)
 
@@ -472,6 +668,21 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
         return cls(rep)
 
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOneOpTerm
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -482,7 +693,25 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
 
 
 class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
+    """
+    A state preparation term with magnitude tracking.
+    """
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOnePrepTermWithMagnitude
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -495,7 +724,25 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
 
 
 class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
+    """
+    A POVM effect term with magnitude tracking.
+    """
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOneEffectTermWithMagnitude
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -508,7 +755,25 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
 
 
 class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
+    """
+    An operation term with magnitude tracking.
+    """
     def embed(self, state_space_labels, target_labels):
+        """
+        Embeds this term's action as a part of a larger state space.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels
+            The state space labels for the full space.
+
+        target_labels : tuple
+            A tuple of the target labels.
+
+        Returns
+        -------
+        RankOneOpTermWithMagnitude
+        """
         evotype = "statevec" if isinstance(self._rep, replib.SVTermRep) else "stabilizer"
         pre_ops = [_embed_oprep(state_space_labels, target_labels, oprep, evotype)
                    for oprep in self._rep.pre_ops]
@@ -519,22 +784,45 @@ class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
 
 
 class HasNumericalCoefficient(object):
+    """
+    A base class for terms that have numerical coefficients.
+
+    Attributes
+    ----------
+    coeff : complex or float
+        The term's coefficient.
+    """
     @classmethod
     def _coeff_rep(cls, coeff):
         return coeff
 
     @property
     def coeff(self):
+        """
+        The term's coefficient (float or complex).
+        """
         return self._rep.coeff
 
 
 class HasPolyCoefficient(object):
+    """
+    A base class for terms that have polynomial coefficients..
+
+    Attributes
+    ----------
+    coeff : Polynomial
+        The term's coefficient.
+    """
+    
     @classmethod
     def _coeff_rep(cls, coeff):
         return coeff.torep()
 
     @property
     def coeff(self):
+        """
+        The term's coefficient (a :class:`Polynomial`).
+        """
         return _Polynomial.fromrep(self._rep.coeff)
 
     #def _coeff_copy(self):
@@ -542,8 +830,9 @@ class HasPolyCoefficient(object):
 
     def map_indices_inplace(self, mapfn):
         """
-        Performs a bulk find & replace on the coefficient polynomial's variable
-        indices.  This function should only be called when this term's
+        Performs a bulk find & replace on the coefficient polynomial's variable indices.
+
+        This function should only be called when this term's
         coefficient is a :class:`Polynomial`.
 
         Parameters
@@ -565,17 +854,22 @@ class HasPolyCoefficient(object):
 
     def mapvec_indices_inplace(self, mapvec):
         """
-        TODO: docstring: similar to map_indices_inplace, but uses vector (see polynomial.py)
-        Performs a bulk find & replace on the coefficient polynomial's variable
-        indices.  This function should only be called when this term's
+        Performs a bulk find & replace on this polynomial's variable indices.
+
+        This function is similar to :method:`map_indices` but uses a *vector*
+        to describe *individual* index updates instead of a function for
+        increased performance.
+
+        This function should only be called when this term's
         coefficient is a :class:`Polynomial`.
 
         Parameters
         ----------
-        mapfn : function
-            A function that takes as input an "old" variable-index-tuple
-            (a key of this Polynomial) and returns the updated "new"
-            variable-index-tuple.
+        mapvec : numpy.ndarray
+            An array whose i-th element gives the updated "new" index for
+            the i-th variable.  Note that this vector maps *individual*
+            variable indices old->new, whereas `mapfn` in :method:`map_indices`
+            maps between *tuples* of indices.
 
         Returns
         -------
@@ -586,7 +880,22 @@ class HasPolyCoefficient(object):
 
 
 class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
+    """
+    A state preparation term with polynomial coefficient.
+    """
     def copy_with_magnitude(self, mag):
+        """
+        Copy and set the magnitude of the copy to `mag`
+
+        Parameters
+        ----------
+        mag : float
+            Magnitude to set.
+
+        Returns
+        -------
+        RankOnePolyPrepTermWithMagnitude
+        """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
@@ -594,7 +903,22 @@ class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
 
 
 class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
+    """
+    A POVM effect term with polynomial coefficient.
+    """
     def copy_with_magnitude(self, mag):
+        """
+        Copy and set the magnitude of the copy to `mag`
+
+        Parameters
+        ----------
+        mag : float
+            Magnitude to set.
+
+        Returns
+        -------
+        RankOnePolyEffectTermWithMagnitude
+        """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
@@ -602,22 +926,65 @@ class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
 
 
 class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
+    """
+    An operation term with polynomial coefficient.
+    """
     def copy_with_magnitude(self, mag):
+        """
+        Copy and set the magnitude of the copy to `mag`
+
+        Parameters
+        ----------
+        mag : float
+            Magnitude to set.
+
+        Returns
+        -------
+        RankOnePolyOpTermWithMagnitude
+        """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
         return RankOnePolyOpTermWithMagnitude(rep)
 
 
-class RankOnePolyPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, HasPolyCoefficient): pass
+class RankOnePolyPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, HasPolyCoefficient):
+    """
+    A state preparation term with polynomial coefficient and magnitude tracking.
+    """
+    pass
 
 
-class RankOnePolyEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, HasPolyCoefficient): pass
+class RankOnePolyEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, HasPolyCoefficient):
+    """
+    A POVM effect term with polynomial coefficient and magnitude tracking.
+    """
+    pass
 
 
-class RankOnePolyOpTermWithMagnitude(RankOneOpTermWithMagnitude, HasPolyCoefficient): pass
+class RankOnePolyOpTermWithMagnitude(RankOneOpTermWithMagnitude, HasPolyCoefficient):
+    """
+    An operation term with polynomial coefficient and magnitude tracking.
+    """
+    pass
 
 
-class RankOneDirectPrepTerm(RankOnePrepTerm, HasNumericalCoefficient): pass
-class RankOneDirectEffectTerm(RankOneEffectTerm, HasNumericalCoefficient): pass
-class RankOneDirectOpTerm(RankOneOpTerm, HasNumericalCoefficient): pass
+class RankOneDirectPrepTerm(RankOnePrepTerm, HasNumericalCoefficient):
+    """
+    A state preparation term with numerical coefficient (and *no* magnitude tracking).
+    """
+    pass
+
+
+class RankOneDirectEffectTerm(RankOneEffectTerm, HasNumericalCoefficient):
+    """
+    A POVM effect term with numerical coefficient (and *no* magnitude tracking).
+    """
+    pass
+
+
+class RankOneDirectOpTerm(RankOneOpTerm, HasNumericalCoefficient):
+    """
+    An operation term with numerical coefficient (and *no* magnitude tracking).
+    """
+    pass
