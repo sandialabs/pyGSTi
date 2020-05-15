@@ -2405,6 +2405,8 @@ class Circuit(object):
         """
         layer_lbl = self.get_layer_label(j)  # (a Label)
         if layer_lbl.sslbls is None:
+            if layer_lbl == ():  # special case - the completely empty layer: sslbls=None but needs padding
+                return _Label([_Label(idle_gate_name, line_lbl) for line_lbl in self.line_labels])
             return layer_lbl  # all qubits used - no idles to pad
 
         components = list(layer_lbl.components)
