@@ -1,4 +1,6 @@
-""" Defines the Estimate class."""
+"""
+Defines the Estimate class.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,12 +29,24 @@ CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
 
 class Estimate(object):
     """
-    A class encapsulating the `Model` objects related to
-    a single GST estimate up-to-gauge freedoms.
+    A class encapsulating the `Model` objects related to a single GST estimate up-to-gauge freedoms.
 
     Thus, this class holds the "iteration" `Model`s leading up to a
     final `Model`, and then different gauge optimizations of the final
     set.
+
+    Parameters
+    ----------
+    parent : Results
+        The parent Results object containing the dataset and
+        operation sequence structure used for this Estimate.
+
+    models : dict, optional
+        A dictionary of models to included in this estimate
+
+    parameters : dict, optional
+        A dictionary of parameters associated with how these models
+        were obtained.
     """
 
     @classmethod
@@ -62,6 +76,10 @@ class Estimate(object):
         parameters : dict
             A dictionary of parameters associated with how these models
             were obtained.
+
+        Returns
+        -------
+        Estimate
         """
         models = {}
         if target_model: models['target'] = target_model
@@ -164,11 +182,11 @@ class Estimate(object):
             A default MPI communicator to use when one is not specified
             as the 'comm' element of/within `goparams`.
 
-       verbosity : int, optional
-            An integer specifying the level of detail printed to stdout
-            during the calculations performed in this function.  If not
-            None, this value will override any verbosity values set
-            within `goparams`.
+        verbosity : int, optional
+             An integer specifying the level of detail printed to stdout
+             during the calculations performed in this function.  If not
+             None, this value will override any verbosity values set
+             within `goparams`.
 
         Returns
         -------
@@ -289,8 +307,7 @@ class Estimate(object):
     def has_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final'):
         """
-        Checks whether a confidence region factory for the given model
-        and operation sequence list labels exists.
+        Checks whether a confidence region factory for the given model and circuit list labels exists.
 
         Parameters
         ----------
@@ -310,9 +327,9 @@ class Estimate(object):
     def get_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final', create_if_needed=False):
         """
-        Retrieves a confidence region factory for the given model
-        and operation sequence list labels.  For more information about
-        confidence region factories, see :func:`add_confidence_region_factory`.
+        Retrieves a confidence region factory for the given model and circuit list labels.
+
+        For more information about confidence region factories, see :func:`add_confidence_region_factory`.
 
         Parameters
         ----------
@@ -344,8 +361,11 @@ class Estimate(object):
             self, to_model_label, from_model_label='final iteration estimate',
             circuits_label='final', eps=1e-3, verbosity=0):
         """
-        Propagates an existing "reference" confidence region for a Model
-        "G0" to a new confidence region for a gauge-equivalent model "G1".
+        Propagates a confidence region among gauge-equivalent models.
+
+        More specifically, this function propagates an existing "reference"
+        confidence region for a Model "G0" to a new confidence region for a
+        gauge-equivalent model "G1".
 
         When successful, a new confidence region factory is created for the
         `.models[to_model_label]` `Model` and `circuits_label` gate
@@ -444,14 +464,17 @@ class Estimate(object):
 
     def get_effective_dataset(self, return_submxs=False):
         """
-        Generate a `DataSet` containing the effective counts as dictated by
-        the "weights" parameter, which specifies a dict of operation sequence weights.
+        Generate a `DataSet` containing the effective counts as dictated by the "weights" parameter.
+
+        An estimate's `self.parameters['weights']` value specifies a dictionary
+        of circuits weights, which modify (typically *reduce*) the counts given in
+        its (parent's) data set.
 
         This function rescales the actual data contained in this Estimate's
-        parent `Results` object according to the estimate's "weights" parameter.
-        The scaled data set is returned, along with (optionall) a list-of-lists
-        of matrices containing the scaling values which can be easily plotted
-        via a `ColorBoxPlot`.
+        parent :class:`ModelEstimteResults` object according to the estimate's
+        "weights" parameter.  The scaled data set is returned, along with
+        (optionall) a list-of-lists of matrices containing the scaling values
+        which can be easily plotted via a `ColorBoxPlot`.
 
         Parameters
         ----------
@@ -463,7 +486,6 @@ class Estimate(object):
         -------
         ds : DataSet
             The "effective" (scaled) data set.
-
         subMxs : list-of-lists
             Only returned if `return_submxs == True`.  Contains the
             scale values (see above).
@@ -557,8 +579,7 @@ class Estimate(object):
 
     def view(self, gaugeopt_keys, parent=None):
         """
-        Creates a shallow copy of this Results object containing only the
-        given gauge-optimization keys.
+        Creates a shallow copy of this Results object containing only the given gauge-optimization keys.
 
         Parameters
         ----------
@@ -592,7 +613,13 @@ class Estimate(object):
         return view
 
     def copy(self):
-        """ Creates a copy of this Estimate object. """
+        """
+        Creates a copy of this Estimate object.
+
+        Returns
+        -------
+        Estimate
+        """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Estimate(self.parent)
         cpy.parameters = _copy.deepcopy(self.parameters)
@@ -662,6 +689,18 @@ class Estimate(object):
 
     def set_parent(self, parent):
         """
-        Sets the parent Results object of this Estimate.
+        Sets the parent object of this estimate.
+
+        This is used, for instance, to re-establish parent-child links
+        after loading objects from disk.
+
+        Parameters
+        ----------
+        parent : ModelEstimateResults
+            This object's parent.
+
+        Returns
+        -------
+        None
         """
         self.parent = parent

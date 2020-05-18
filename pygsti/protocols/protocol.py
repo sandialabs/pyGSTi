@@ -1,4 +1,6 @@
-""" Protocol object """
+"""
+Protocol object
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,10 +29,19 @@ from ..tools import NamedDict as _NamedDict
 
 class Protocol(object):
     """
+    An analysis routine that is run on experimental data.  A generalized notion of a  QCVV protocol.
+
     A Protocol object represents things like, but not strictly limited to, QCVV protocols.
     This class is essentially a serializable `run` function that takes as input a
     :class:`ProtocolData` object and returns a :class:`ProtocolResults` object.  This
     function describes the working of the "protocol".
+
+    Parameters
+    ----------
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
     """
 
     @classmethod
@@ -38,14 +49,14 @@ class Protocol(object):
         """
         Initialize a new Protocol object from `dirname`.
 
-        quick_load : bool, optional
-            Setting this to True skips the loading of components that may take
-            a long time to load.
-
         Parameters
         ----------
         dirname : str
             The directory name.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
 
         Returns
         -------
@@ -163,11 +174,22 @@ class Protocol(object):
 
 class MultiPassProtocol(Protocol):
     """
-    A simple protocol that runs a given contained :class:`Protocol` on
-    all the passes within a :class:`ProtocolData` object that contains
-    a :class:`MultiDataSet`.  Instances of this class essentially act as
-    wrappers around other protocols enabling them to handle multi-pass
-    data.
+    Runs a (contained) :class:`Protocol` on all the passes of a multi-pass :class:`ProtocolData`.
+
+    A simple protocol that runs a "sub-protocol" on the passes of a :class:`ProtocolData`
+    containing a :class:`MultiDataSet`.  The sub-protocol therefore doesn't need to know
+    how to deal with multiple data passes. Instances of this class essentially act as
+    wrappers around other protocols enabling them to handle multi-pass data.
+
+    Parameters
+    ----------
+    protocol : Protocol
+        The protocol to run on each pass.
+
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
     """
 
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
@@ -226,12 +248,14 @@ class MultiPassProtocol(Protocol):
 
 class ProtocolRunner(object):
     """
-    A a :class:`ProtocolRunner` object is used to combine multiple calls to :method:`Protocol.run`,
-    that is, to run potentially multiple protocols on potentially different data.  From the outside,
-    a :class:`ProtocolRunner` object behaves similarly, and can often be used interchangably,
-    with a Protocol object.  It posesses a `run` method that takes a :class:`ProtocolData`
-    as input and returns a :class:`ProtocolResultsDir` that can contain multiple :class:`ProtocolResults`
-    objects within it.
+    Used to run :class:`Protocol`(s) on an entire *tree* of data
+
+    This class provides a way of combining multiple calls to :method:`Protocol.run`,
+    potentially running multiple protocols on different data.  From the outside, a
+    :class:`ProtocolRunner` object behaves similarly, and can often be used
+    interchangably, with a Protocol object.  It posesses a `run` method that takes a
+    :class:`ProtocolData` as input and returns a :class:`ProtocolResultsDir` that can
+    contain multiple :class:`ProtocolResults` objects within it.
     """
 
     def run(self, data, memlimit=None, comm=None):
@@ -260,6 +284,13 @@ class ProtocolRunner(object):
 class TreeRunner(ProtocolRunner):
     """
     Runs specific protocols on specific data-tree paths.
+
+    Parameters
+    ----------
+    protocol_dict : dict
+        A dictionary of :class:`Protocol` objects whose keys are paths
+        (tuples of strings) specifying where in the data-tree that
+        protocol should be run.
     """
 
     def __init__(self, protocol_dict):
@@ -314,6 +345,20 @@ class TreeRunner(ProtocolRunner):
 class SimpleRunner(ProtocolRunner):
     """
     Runs a single protocol on every data node that has no sub-nodes (possibly separately for each pass).
+
+    Parameters
+    ----------
+    protocol : Protocol
+        The protocol to run.
+
+    protocol_can_handle_multipass_data : bool, optional
+        Whether `protocol` is able to process multi-pass data, or
+        if :class:`MultiPassProtocol` objects should be created
+        implicitly.
+
+    edesign_type : type or 'all'
+        Only run `protocol` on leaves with this type.  (If 'all', then
+        no filtering is performed.)
     """
 
     def __init__(self, protocol, protocol_can_handle_multipass_data=False, edesign_type='all'):
@@ -383,8 +428,16 @@ class SimpleRunner(ProtocolRunner):
 
 class DefaultRunner(ProtocolRunner):
     """
-    Run the default protocol at each data-tree node.  (Default protocols
-    are given within :class:`ExperimentDesign` objects.)
+    Run the default protocol at each data-tree node.
+
+    (Default protocols are given within :class:`ExperimentDesign` objects.)
+
+    Parameters
+    ----------
+    run_passes_separately : bool, optional
+        If `True`, then when multi-pass data is encountered it is split into passes
+        before handing it off to the protocols.  Set this to `True` when the default
+        protocols being run expect single-pass data.
     """
 
     def __init__(self, run_passes_separately=False):
@@ -464,6 +517,35 @@ class ExperimentDesign(_TreeNode):
     can be used by muliple protocols).  Rather, a :class:`ExperimentDesign`
     specifies what is necessary to acquire and interpret the *data* needed for
     one or more QCVV protocols.
+
+    Parameters
+    ----------
+    circuits : list of Circuits, optional
+        A list of the circuits needing data.  If None, then the list is empty.
+
+    qubit_labels : tuple or "multiple", optional
+        The qubits that this experiment design applies to.  These should also
+        be the line labels of `circuits`.  If None,  the concatenation
+        of the qubit labels of any child experiment designs is used, or, if
+        there are no child designs, the line labels of the first circuit is used.
+        The special "multiple" value means that different circuits act on different
+        qubit lines.
+
+    children : dict, optional
+        A dictionary of whose values are child
+        :class:`ExperimentDesign` objects and whose keys are the
+        names used to identify them in a "path".
+
+    children_dirs : dict, optional
+        A dictionary whose values are directory names and keys are child
+        names (the same as the keys of `children`).  If None, then the
+        keys of `children` must be strings and are used as directory
+        names.  Directory names are used when saving the object (via
+        :method:`write`).
+
+    child_category : str, optional
+        The category that describes the children of this object.  This
+        is used as a heading for the keys of `children`.
     """
 
     @classmethod
@@ -595,11 +677,12 @@ class ExperimentDesign(_TreeNode):
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
-        Sets a list of circuits equivalent to those in
-        self.all_circuits_needing_data that will actually be
-        executed.  For example, when the circuits in this design
-        are run simultaneously with other circuits, the circuits
-        in this design may need to be padded with idles.
+        Sets a list of circuits that will actually be executed.
+
+        This list must be parallel, and corresponding circuits must be *logically
+        equivalent*, to those in `self.all_circuits_needing_data`.  For example,
+        when the circuits in this design are run simultaneously with other circuits,
+        the circuits in this design may need to be padded with idles.
 
         Parameters
         ----------
@@ -701,12 +784,27 @@ class ExperimentDesign(_TreeNode):
         tail[attr_val] = final_dict
         return head[None]
 
+    #PRIVATE
     def create_subdata(self, subdata_name, dataset):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        subdata_name : immutable
+            The child (node) name of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
@@ -714,6 +812,33 @@ class ExperimentDesign(_TreeNode):
 class CircuitListsDesign(ExperimentDesign):
     """
     Experiment deisgn specification that is comprised of multiple circuit lists.
+
+    Parameters
+    ----------
+    circuit_lists : list
+        A list whose elements are themselves lists of :class:`Circuit`
+        objects, specifying the data that needs to be taken.
+
+    all_circuits_needing_data : list, optional
+        A list of all the circuits needing data.  By default, This is just
+        the concatenation of the elements of `circuit_lists` with duplicates
+        removed.  The only reason to specify this separately is if you
+        happen to have this list lying around.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+
+    nested : bool, optional
+        Whether the elements of `circuit_lists` are nested, e.g. whether
+        `circuit_lists[i]` is a subset of `circuit_lists[i+1]`.  This
+        is useful to know because certain operations can be more efficient
+        when it is known that the lists are nested.
+
+    remove_duplicates : bool, optional
+        Whether to remove duplicates when automatically creating
+        all the circuits that need data (this argument isn't used
+        when `all_circuits_needing_data` is given).
     """
 
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
@@ -783,8 +908,7 @@ class CircuitListsDesign(ExperimentDesign):
 
     def truncate(self, list_indices_to_keep):
         """
-        Truncates this experiment design by only keeping a subset
-        of its circuit lists.
+        Truncates this experiment design by only keeping a subset of its circuit lists.
 
         Parameters
         ----------
@@ -802,10 +926,45 @@ class CircuitListsDesign(ExperimentDesign):
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
     """
-    An experiment design that combines the specifications of
-    one or more "sub-designs".  The sub-designs are preserved as children under
-    the :class:`CombinedExperimentDesign` instance, creating a "data-tree" structure.  The
-    :class:`CombinedExperimentDesign` object itself simply merges all of the circuit lists.
+    An experiment design that combines the specifications of one or more "sub-designs".
+
+    The sub-designs are preserved as children under the
+    :class:`CombinedExperimentDesign` instance, creating a "data-tree" structure.
+    The :class:`CombinedExperimentDesign` object itself simply merges all of the
+    circuit lists.
+
+    Parameters
+    ----------
+    sub_designs : dict or list
+        A dictionary of other :class:`ExperimentDesign` objects whose keys
+        are names for each sub-edesign (used for directories and to index
+        the sub-edesigns from this experiment design).  If a list is given instead,
+        a default names of the form "**<number>" are used.
+
+    all_circuits : list, optional
+        A list of :class:`Circuit`s, specifying all the circuits needing
+        data.  This can include additional circuits that are not in any
+        of `sub_designs`.  By default, the union of all the circuits in
+        the sub-designs is used.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the line labels
+        of the first circuit is used.
+
+    sub_design_dirs : dict, optional
+        A dictionary whose values are directory names and keys are sub-edesign
+        names (the same as the keys of `sub_designs`).  If None, then the
+        keys of `sub_designs` must be strings and are used as directory
+        names.  Directory names are used when saving the object (via
+        :method:`write`).
+
+    interleave : bool, optional
+        Whether the circuits of the `sub_designs` should be interleaved to
+        form the circuit ordering of this experiment design.
+
+    category : str, optional
+        The category that describes the sub-edesigns of this object.  This
+        is used as a heading for the keys of `sub_designs`.
     """
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
@@ -838,6 +997,10 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             names.  Directory names are used when saving the object (via
             :method:`write`).
 
+        interleave : bool, optional
+            Whether the circuits of the `sub_designs` should be interleaved to
+            form the circuit ordering of this experiment design.
+
         category : str, optional
             The category that describes the sub-edesigns of this object.  This
             is used as a heading for the keys of `sub_designs`.
@@ -868,12 +1031,27 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
 
+    #PRIVATE
     def create_subdata(self, sub_name, dataset):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        sub_name : immutable
+            The child (node) name of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
         sub_circuits = self[sub_name].all_circuits_needing_data
         if isinstance(dataset, dict):  # then do truncation "element-wise"
@@ -888,10 +1066,31 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
 class SimultaneousExperimentDesign(ExperimentDesign):
     """
-    An experiment design whose circuits are the tensor-products
-    of the circuits from one or more  :class:`ExperimentDesign` objects that
-    act on disjoint sets of qubits.  The sub-designs are preserved as children under
-    the :class:`SimultaneousExperimentDesign` instance, creating a "data-tree" structure.
+    An experiment design whose circuits are the tensor-products of the circuits from one or more sub-designs.
+
+    The sub-:class:`ExperimentDesign` objects must act on disjoint sets of qubits.  The sub-designs
+    are preserved as children under the :class:`SimultaneousExperimentDesign` instance, creating
+    a "data-tree" structure.
+
+    Parameters
+    ----------
+    edesigns : list
+        A list of :class:`ExperimentDesign` objects  whose circuits
+        are to occur simultaneously.
+
+    tensored_circuits : list, optional
+        A list of all the circuits for this experiment design.  By default,
+        these are the circuits of those in `edesigns` tensored together.
+        Typically this is left as the default.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        concatenated qubit labels of `edesigns` are used (this is usually
+        what you want).
+
+    category : str, optional
+        The category name for the qubit-label-tuples correspoding to the
+        elements of `edesigns`.
     """
 
     #@classmethod
@@ -981,10 +1180,24 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
     def create_subdata(self, qubit_labels, dataset):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        qubit_labels : tuple
+            The child (node) label of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
         if isinstance(dataset, _objs.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
@@ -1022,11 +1235,31 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
 class ProtocolData(_TreeNode):
     """
-    A :class:`ProtocolData` object represents the experimental data needed to
-    run one or more QCVV protocols.  This class contains a :class:`ProtocolIput`,
-    which describes a set of circuits, and a :class:`DataSet` (or :class:`MultiDataSet`)
-    that holds data for these circuits.  These members correspond to the `.edesign`
-    and `.dataset` attributes.
+    Represents the experimental data needed to run one or more QCVV protocols.
+
+    This class contains a :class:`ProtocolIput`, which describes a set of circuits,
+    and a :class:`DataSet` (or :class:`MultiDataSet`) that holds data for these
+    circuits.  These members correspond to the `.edesign` and `.dataset` attributes.
+
+    Parameters
+    ----------
+    edesign : ExperimentDesign
+        The experiment design describing what circuits this object
+        contains data for.  If None, then an unstructured
+        :class:`ExperimentDesign` is created containing the circuits
+        present in `dataset`.
+
+    dataset : DataSet or MultiDataSet, optional
+        The data counts themselves.
+
+    cache : dict, optional
+        A cache of values which holds values derived *only* from
+        the experiment design and data in this object.
+
+    Attributes
+    ----------
+    passes : dict
+        A dictionary of the data on a per-pass basis (works even it there's just one pass).
     """
 
     @classmethod
@@ -1153,14 +1386,21 @@ class ProtocolData(_TreeNode):
 
     @property
     def passes(self):
-        """A dictionary of the per-pass sub-results."""
+        """
+        A dictionary of the data on a per-pass basis (works even it there's just one pass).
+
+        Returns
+        -------
+        dict
+        """
         return self._passdatas
 
     def is_multipass(self):
         """
-        Whether this protocol data contains multiple passes (more
-        accurately, whether the `.dataset` of this object is a
-        :class:`MultiDataSet`).
+        Whether this protocol data contains multiple passes.
+
+        More accurately, whether the `.dataset` of this object is a
+        :class:`MultiDataSet`.
 
         Returns
         -------
@@ -1173,6 +1413,8 @@ class ProtocolData(_TreeNode):
 
     def filter_paths(self, paths, paths_are_sorted=False):
         """
+        Prune the tree rooted here to include only the given paths, discarding all else.
+
         Returns a new :class:`ProtocolData` object with a subset of the
         data-tree paths contained under this one.
 
@@ -1275,9 +1517,18 @@ class ProtocolData(_TreeNode):
 
 class ProtocolResults(object):
     """
-    A :class:`ProtocolResults` object contains a :class:`ProtocolData` object
-    and stores the results from running a QCVV protocol (a :class:`Protcocol`)
-    on this data.
+    Stores the results from running a QCVV protocol on data.
+
+    A :class:`ProtocolResults` object Contains a :class:`ProtocolData` object and stores
+    the results of running a :class:`Protcocol` on this data.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The input data from which these results are derived.
+
+    protocol_instance : Protocol
+        The protocol that created these results.
     """
 
     @classmethod
@@ -1439,14 +1690,50 @@ class ProtocolResults(object):
 
 class MultiPassResults(ProtocolResults):
     """
-    Holds the results of a single protocol on multiple "passes"
-    (sets of data, typically taken at different times).  The results
-    of each pass are held as a separate :class:`ProtcolResults` object
-    within the `.passes` attribute.
+    Holds the results of a single protocol on multiple "passes" (sets of data, typically taken at different times).
+
+    The results of each pass are held as a separate :class:`ProtcolResults`
+    object within the `.passes` attribute.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The input data from which these results are derived.
+
+    protocol_instance : Protocol
+        The protocol that created these results.
     """
 
     @classmethod
     def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+        """
+        Initialize a new MultiPassResults object from `dirname` / results / `name`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is are 'edesign',
+            'data', and 'results' subdirectories).
+
+        name : str
+            The sub-directory name of the particular results object to load
+            (there can be multiple under a given root `dirname`).  This is the
+            name of a subdirectory of `dirname` / results.
+
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
+        Returns
+        -------
+        ProtocolResults
+        """
         #Because 'dict-of-resultsobjs' only does *partial* loading/writing of the given results
         # objects, we need to finish the loading manually.  Only partial loading is performed so
         # because it is assumed that whatever object has a 'dict-of-resultsobjs' and isn't a
@@ -1482,6 +1769,13 @@ class MultiPassResults(ProtocolResults):
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
     def as_nameddict(self):
+        """
+        Create a :class:`NamedDict` of the results within this object.
+
+        Returns
+        -------
+        NamedDict
+        """
         # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
         ret = _NamedDict('Protocol Name', 'category')
         for pass_name, r in self.passes.items():
@@ -1497,10 +1791,35 @@ class MultiPassResults(ProtocolResults):
 
 class ProtocolResultsDir(_TreeNode):
     """
-    A :class:`ProtocolResultsDir` holds a dictionary of :class:`ProtocolResults`
-    objects.  It contains a :class:`ProtocolData` object and is rooted at the_model
-    corresponding node of the data-tree.  It contains links to child-:class:`ProtocolResultsDir`
-    objects representing sub-directories.
+    Holds a dictionary of :class:`ProtocolResults` objects.
+
+    It contains a :class:`ProtocolData` object and is rooted at the_model
+    corresponding node of the data-tree.  It contains links to
+    child-:class:`ProtocolResultsDir` objects representing sub-directories.
+
+    This container object holds two things:
+    1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
+       to different protocols (keys are protocol names).
+
+    2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
+       object directly using the name of the sub-directory.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The data from which *all* the Results objects in this
+        ProtocolResultsDir are derived.
+
+    protocol_results : ProtocolResults, optional
+        An initial (single) results object to add.  The name of the
+        results object is used as its key within the `.for_protocol`
+        dictionary.  If None, then an empty results directory is created.
+
+    children : dict, optional
+        A dictionary of the :class:`ProtocolResultsDir` objects that are
+        sub-directories beneath this one.  If None, then children are
+        automatically created based upon the tree given by `data`.  (To
+        avoid creating any children, you can pass an empty dict here.)
     """
 
     @classmethod
@@ -1708,8 +2027,15 @@ def run_default_protocols(data, memlimit=None, comm=None):
 
 class ProtocolPostProcessor(object):
     """
-    A :class:`ProtocolPostProcessor` is similar to a protocol, but runs on an
-    *existing* results object, and produces a new (updated?) Results object.
+    Similar to a protocol, but runs on an *existing* :class:`ProtocolResults` object.
+
+    Running a :class:`ProtocolPostProcessor` produces a new (or updated)
+    :class:`ProtocolResults` object.
+
+    Parameters
+    ----------
+    name : str
+        The name of this post-processor.
     """
 
     #Note: this is essentially a duplicate of the Protocol class (except run takes a results object)

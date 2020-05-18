@@ -1,4 +1,6 @@
-""" ModelTest Protocol objects """
+"""
+ModelTest Protocol objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -34,10 +36,67 @@ from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocati
 
 
 class ModelTest(_proto.Protocol):
-    """A protocol that tests how well a model agrees with a given set of data."""
+    """
+    A protocol that tests how well a model agrees with a given set of data.
+
+    Parameters
+    ----------
+    model_to_test : Model
+        The model to compare with data when :method:`run` is called.
+
+    target_model : Model, optional
+        The ideal or desired model of perfect operations.  It is often useful to bundle this
+        together with `model_to_test` so that comparison metrics can be easily computed.
+
+    gaugeopt_suite : str or list or dict, optional
+        Specifies which gauge optimizations to perform.  Often set to `None` to indicate
+        no gauge optimization.  See :class:`GateSetTomography` for more details.
+
+    gaugeopt_target : Model, optional
+        If not None, a model to be used as the "target" for gauge-
+        optimization (only).  This argument is useful when you want to
+        gauge optimize toward something other than the *ideal* target gates,
+        which are used as the default when `gaugeopt_target` is None.
+
+    objfn_builder : ObjectiveFunctionBuilder
+        The objective function (builder) that is used to compare the model to data,
+        i.e. the objective function that defines this model test.
+
+    badfit_options : GSTBadFitOptions
+        Options specifing what constitutes a "bad fit" (or "failed test") and what
+        additional actions to take if and when this occurs.
+
+    set_trivial_gauge_group : bool, optional
+        A convenience flag that updates the default gauge group of `model_to_test`
+        to the trivial gauge group before performing the test, so that no actual gauge
+        optimization is performed (even if `gaugeopt_suite` is non-None).
+
+    verbosity : int, optional
+        Level of detail printed to stdout.
+
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
+    """
 
     @classmethod
     def create_builder(cls, obj):
+        """
+        Creates objective function builders from `obj` that are commonly used in model tests.
+
+        Parameters
+        ----------
+        obj : object
+            If `obj` is already an :class:`ObjectiveFunctionBuilder` it is used directly.  A
+            dictionary is assumed to hold arguments of :method:`ObjectiveFunctionBuilder.simple`.
+            A list or tuple is assumed to hold positional arguments of 
+            :method:`ObjectiveFunctionBuilder.__init__`.
+
+        Returns
+        -------
+        ObjectiveFunctionBuilder
+        """
         builder_cls = _objfns.ObjectiveFunctionBuilder
         if isinstance(obj, builder_cls): return obj
         elif obj is None: return builder_cls.simple()
@@ -82,6 +141,25 @@ class ModelTest(_proto.Protocol):
     #    return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data, memlimit=None, comm=None):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+
+        Returns
+        -------
+        ModelEstimateResults
+        """
         the_model = self.model_to_test
 
         if self.target_model is not None:
