@@ -1,4 +1,6 @@
-""" The NamedDict class """
+"""
+The NamedDict class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,6 +14,31 @@ import numpy as _np
 
 
 class NamedDict(dict):
+    """
+    A dictionary that also holds category names and types.
+
+    This `dict`-derived class holds a catgory name applicable to
+    its keys, and key and value type names indicating the types
+    of its keys and values.
+
+    The main purpose of this class is to utilize its :method:`as_dataframe` method.
+
+    Parameters
+    ----------
+    name : str, optional
+        A category name for the keys of this dict.  For example, if the
+        dict contained the keys `"dog"` and `"cat"`, this might be `"animals"`.
+        This becomse a column header if this dict is converted to a data frame.
+
+    keytype : {"float", "int", "categor", None}, optional
+        The key-type, in correspondence with different pandas series types.
+
+    valtype : {"float", "int", "categor", None}, optional
+        The value-type, in correspondence with different pandas series types.
+
+    items : list or dict, optional
+        Initial items, used in serialization.
+    """
     def __init__(self, name=None, keytype=None, valtype=None, items=()):
         super().__init__(items)
         self.name = name
@@ -22,6 +49,13 @@ class NamedDict(dict):
         return (NamedDict, (self.name, self.keytype, self.valtype, list(self.items())), None)
 
     def as_dataframe(self):
+        """
+        Render this dict as a pandas data frame.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         import pandas as _pandas
 
         columns = {'value': []}

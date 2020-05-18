@@ -1,4 +1,6 @@
-""" Matrix related utility functions """
+"""
+Matrix related utility functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,8 +29,24 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
+#PRIVATE - or remove?
 def array_eq(a, b, tol=1e-8):
-    """Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol` """
+    """
+    Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol`
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+
+    b : numpy.ndarray
+
+    tol : float, optional
+        tolerance.
+
+    Returns
+    -------
+    float
+    """
     print(_np.linalg.norm(a - b))
     return _np.linalg.norm(a - b) < tol
 
@@ -112,8 +130,7 @@ def is_pos_def(mx, tol=1e-9):
 
 def is_valid_density_mx(mx, tol=1e-9):
     """
-    Test whether mx is a valid density matrix (hermitian,
-      positive-definite, and unit trace).
+    Test whether mx is a valid density matrix (hermitian, positive-definite, and unit trace).
 
     Parameters
     ----------
@@ -135,7 +152,7 @@ def frobeniusnorm(ar):
     """
     Compute the frobenius norm of an array (or matrix),
 
-       sqrt( sum( each_element_of_a^2 ) )
+    sqrt( sum( each_element_of_a^2 ) )
 
     Parameters
     ----------
@@ -155,7 +172,7 @@ def frobeniusnorm2(ar):
     """
     Compute the squared frobenius norm of an array (or matrix),
 
-       sum( each_element_of_a^2 ) )
+    sum( each_element_of_a^2 ) )
 
     Parameters
     ----------
@@ -178,10 +195,10 @@ def nullspace(m, tol=1e-7):
     Parameters
     ----------
     m : numpy array
-       An matrix of shape (M,N) whose nullspace to compute.
+        An matrix of shape (M,N) whose nullspace to compute.
 
-    tol : float (optional)
-       Nullspace tolerance, used when comparing singular values with zero.
+    tol : float , optional
+        Nullspace tolerance, used when comparing singular values with zero.
 
     Returns
     -------
@@ -202,10 +219,10 @@ def nullspace_qr(m, tol=1e-7):
     Parameters
     ----------
     m : numpy array
-       An matrix of shape (M,N) whose nullspace to compute.
+        An matrix of shape (M,N) whose nullspace to compute.
 
-    tol : float (optional)
-       Nullspace tolerance, used when comparing diagonal values of R with zero.
+    tol : float , optional
+        Nullspace tolerance, used when comparing diagonal values of R with zero.
 
     Returns
     -------
@@ -226,7 +243,18 @@ def nullspace_qr(m, tol=1e-7):
 
 
 def matrix_sign(m):
-    """ The "sign" matrix of `m` """
+    """
+    The "sign" matrix of `m`
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        the matrix.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     #Notes: sign(m) defined s.t. eigvecs of sign(m) are evecs of m
     # and evals of sign(m) are +/-1 or 0 based on sign of eigenvalues of m
 
@@ -284,6 +312,10 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     withbrackets : bool, optional
         whether to print brackets and commas to make the result
         something that Python can read back in.
+
+    Returns
+    -------
+    None
     """
     print(mx_to_string(mx, width, prec, withbrackets))
 
@@ -297,8 +329,8 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
 
     Parameters
     ----------
-    mx : numpy array
-        the matrix (2-D array) to convert.
+    m : numpy.ndarray
+        array to print.
 
     width : int, opitonal
         the width (in characters) of each converted element
@@ -338,8 +370,8 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
 
     Parameters
     ----------
-    mx : numpy array
-        the matrix (2-D array) to convert.
+    m : numpy array
+        array to format.
 
     real_width : int, opitonal
         the width (in characters) of the real part of each element.
@@ -369,12 +401,13 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
 
 def unitary_superoperator_matrix_log(m, mx_basis):
     """
-    Construct the logarithm of superoperator matrix `m`
-    that acts as a unitary on density-matrix space,
-    (`m: rho -> U rho Udagger`) so that log(m) can be
-    written as the action by Hamiltonian `H`:
-    `log(m): rho -> -i[H,rho]`.
+    Construct the logarithm of superoperator matrix `m`.
 
+    This function assumes that `m` acts as a unitary on density-matrix space,
+    (`m: rho -> U rho Udagger`) so that log(m) can be written as the action
+    by Hamiltonian `H`:
+
+    `log(m): rho -> -i[H,rho]`.
 
     Parameters
     ----------
@@ -409,8 +442,9 @@ def unitary_superoperator_matrix_log(m, mx_basis):
 
 def near_identity_matrix_log(m, tol=1e-8):
     """
-    Construct the logarithm of superoperator matrix `m` that is
-    near the identity.  If `m` is real, the resulting logarithm will be real.
+    Construct the logarithm of superoperator matrix `m` that is near the identity.
+
+    If `m` is real, the resulting logarithm will be real.
 
     Parameters
     ----------
@@ -441,10 +475,11 @@ def near_identity_matrix_log(m, tol=1e-8):
 
 def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     """
-    Construct an approximate logarithm of superoperator matrix `m` that is
-    real and near the `target_logm`.  The equation `m = exp( logM )` is
-    allowed to become inexact in order to make `logM` close to
-    `target_logm`.  In particular, the objective function that is
+    Construct an approximate logarithm of superoperator matrix `m` that is real and near the `target_logm`.
+
+
+    The equation `m = exp( logM )` is allowed to become inexact in order to make
+    `logM` close to `target_logm`.  In particular, the objective function that is
     minimized is (where `||` indicates the 2-norm):
 
     `|exp(logM) - m|_1 + target_weight * ||logM - target_logm||^2`
@@ -630,6 +665,20 @@ import itertools as _ittls
 def column_basis_vector(i, dim):
     """
     Returns the ith standard basis vector in dimension dim.
+
+    Parameters
+    ----------
+    i : int
+        Basis vector index.
+
+    dim : int
+        Vector dimension.
+
+    Returns
+    -------
+    numpy.ndarray
+        An array of shape `(dim, 1)` that is all zeros except for
+        its `i`-th element, which equals 1.
     """
     output = _np.zeros([dim, 1], float)
     output[i] = 1.
@@ -639,6 +688,14 @@ def column_basis_vector(i, dim):
 def vec(matrix_in):
     """
     Stacks the columns of a matrix to return a vector
+
+    Parameters
+    ----------
+    matrix_in : numpy.ndarray
+
+    Returns
+    -------
+    numpy.ndarray
     """
     return [b for a in _np.transpose(matrix_in) for b in a]
 
@@ -646,6 +703,14 @@ def vec(matrix_in):
 def unvec(vector_in):
     """
     Slices a vector into the columns of a matrix.
+
+    Parameters
+    ----------
+    vector_in : numpy.ndarray
+
+    Returns
+    -------
+    numpy.ndarray
     """
     dim = int(_np.sqrt(len(vector_in)))
     return _np.transpose(_np.array(list(
@@ -653,22 +718,40 @@ def unvec(vector_in):
                                    _ittls.repeat(None, dim - 1))] * dim))))
 
 
-def norm1(matr):
+def norm1(m):
     """
     Returns the 1 norm of a matrix
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix.
+
+    Returns
+    -------
+    numpy.ndarray
     """
-    return float(_np.real(_np.trace(_sqrtm(_np.dot(matr.conj().T, matr)))))
+    return float(_np.real(_np.trace(_sqrtm(_np.dot(m.conj().T, m)))))
 
 
-def random_hermitian(dimension):
+def random_hermitian(dim):
     """
     Generates a random Hermitian matrix
+
+    Parameters
+    ----------
+    dim : int
+        the matrix dimensinon.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     my_norm = 0.
     while my_norm < 0.5:
-        dimension = int(dimension)
-        a = _np.random.random(size=[dimension, dimension])
-        b = _np.random.random(size=[dimension, dimension])
+        dim = int(dim)
+        a = _np.random.random(size=[dim, dim])
+        b = _np.random.random(size=[dim, dim])
         c = a + 1.j * b + (a + 1.j * b).conj().T
         my_norm = norm1(c)
     return c / my_norm
@@ -676,19 +759,31 @@ def random_hermitian(dimension):
 
 def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
     """
-    Returns the Hermitian 1-to-1 norm of a superoperator represented in
-    the standard basis, calculated via Monte-Carlo sampling. Definition
-    of Hermitian 1-to-1 norm can be found in arxiv:1109.6887.
-    """
-    if mx_basis == 'gm':
-        std_operator = change_basis(operator, 'gm', 'std')
-    elif mx_basis == 'pp':
-        std_operator = change_basis(operator, 'pp', 'std')
-    elif mx_basis == 'std':
-        std_operator = operator
-    else:
-        raise ValueError("mx_basis should be 'gm', 'pp' or 'std'!")
+    The Hermitian 1-to-1 norm of a superoperator represented in the standard basis.
 
+    This is calculated via Monte-Carlo sampling.  The definition of Hermitian 1-to-1
+    norm can be found in arxiv:1109.6887.
+
+    Parameters
+    ----------
+    operator : numpy.ndarray
+        The operator matrix to take the norm of.
+
+    n_samples : int, optional
+        Number of Monte-Carlo samples.
+
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis
+        The basis of `operator`.
+
+    return_list : bool, optional
+        Whether the entire list of sampled values is returned or just the maximum.
+
+    Returns
+    -------
+    float or list
+        Depends on the value of `return_list`.
+    """
+    std_operator = change_basis(operator, mx_basis, 'std')
     rand_dim = int(_np.sqrt(float(len(std_operator))))
     vals = [norm1(unvec(_np.dot(std_operator, vec(random_hermitian(rand_dim)))))
             for n in range(n_samples)]
@@ -703,17 +798,18 @@ def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
 
 def complex_compare(a, b):
     """
-    Comparison function for complex numbers that compares real part, then
-    imaginary part.
+    Comparison function for complex numbers that compares real part, then imaginary part.
 
     Parameters
     ----------
-    a,b : complex
+    a : complex
+
+    b : complex
 
     Returns
     -------
     -1 if a < b
-     0 if a == b
+        0 if a == b
     +1 if a > b
     """
     if a.real < b.real: return -1
@@ -752,14 +848,18 @@ def prime_factors(n):
 def minweight_match(a, b, metricfn=None, return_pairs=True,
                     pass_indices_to_metricfn=False):
     """
-    Matches the elements of two vectors, `a` and `b` by minimizing the
-    weight between them, defined as the sum of `metricfn(x,y)` over
-    all `(x,y)` pairs (`x` in `a` and `y` in `b`).
+    Matches the elements of two vectors, `a` and `b` by minimizing the weight between them.
+
+    The weight is defined as the sum of `metricfn(x,y)` over all `(x,y)` pairs
+    (`x` in `a` and `y` in `b`).
 
     Parameters
     ----------
-    a, b : list or numpy.ndarray
-        1D arrays to match elements between.
+    a : list or numpy.ndarray
+        First 1D array to match elements between.
+
+    b : list or numpy.ndarray
+        Second 1D array to match elements between.
 
     metricfn : function, optional
         A function of two float parameters, `x` and `y`,which defines the cost
@@ -777,7 +877,6 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
     weight_array : numpy.ndarray
         The array of weights corresponding to the min-weight matching. The sum
         of this array's elements is the minimized total weight.
-
     pairs : list
         Only returned when `return_pairs == True`, a list of 2-tuple pairs of
         indices `(ix,iy)` giving the indices into `a` and `b` respectively of
@@ -813,8 +912,7 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
 def minweight_match_realmxeigs(a, b, metricfn=None,
                                pass_indices_to_metricfn=False, eps=1e-9):
     """
-    Matches the elements of two vectors, `a` and `b` whose elements
-    are assumed to either real or one-half of a conjugate pair.
+    Matches the elements of `a` and `b`, whose elements are assumed to either real or one-half of a conjugate pair.
 
     Matching is performed by minimizing the weight between elements,
     defined as the sum of `metricfn(x,y)` over all `(x,y)` pairs
@@ -827,8 +925,11 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
 
     Parameters
     ----------
-    a, b : list or numpy.ndarray
-        1D arrays to match elements between.
+    a : numpy.ndarray
+        First 1D array to match.
+
+    b : numpy.ndarray
+        Second 1D array to match.
 
     metricfn : function, optional
         A function of two float parameters, `x` and `y`,which defines the cost
@@ -837,6 +938,9 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     pass_indices_to_metricfn : bool, optional
         If True, the metric function is passed two *indices* into the `a` and
         `b` arrays, respectively, instead of the values.
+
+    eps : float, optional
+        Tolerance when checking if eigenvalues are equal to each other.
 
     Returns
     -------
@@ -1095,8 +1199,19 @@ def _findx(a, inds, always_copy=False):
 
 def safedot(a, b):
     """
-    Performs dot(a,b) correctly when neither, either, or both arguments
-    are sparse matrices
+    Performs dot(a,b) correctly when neither, either, or both arguments are sparse matrices.
+
+    Parameters
+    ----------
+    a : numpy.ndarray or scipy.sparse matrix.
+        First matrix.
+
+    b : numpy.ndarray or scipy.sparse matrix.
+        Second matrix.
+
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse matrix
     """
     if _sps.issparse(a):
         return a.dot(b)  # sparseMx.dot works for both sparse and dense args
@@ -1110,8 +1225,22 @@ def safedot(a, b):
 
 def safereal(a, inplace=False, check=False):
     """
-    Returns the real-part of `a` correctly when `a` is either a dense array or
-    a sparse matrix
+    Get the real-part of `a`, where `a` can be either a dense array or a sparse matrix.
+
+    Parameters
+    ----------
+    a : numpy.ndarray or scipy.sparse matrix.
+        Array to take real part of.
+
+    inplace : bool, optional
+        Whether this operation should be done in-place.
+
+    check : bool, optional
+        If True, raise a `ValueError` if `a` has a nonzero imaginary part.
+
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse matrix
     """
     if check:
         assert(safenorm(a, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
@@ -1132,8 +1261,22 @@ def safereal(a, inplace=False, check=False):
 
 def safeimag(a, inplace=False, check=False):
     """
-    Returns the imaginary-part of `a` correctly when `a` is either a dense array
-    or a sparse matrix
+    Get the imaginary-part of `a`, where `a` can be either a dense array or a sparse matrix.
+
+    Parameters
+    ----------
+    a : numpy.ndarray or scipy.sparse matrix.
+        Array to take imaginary part of.
+
+    inplace : bool, optional
+        Whether this operation should be done in-place.
+
+    check : bool, optional
+        If True, raise a `ValueError` if `a` has a nonzero real part.
+
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse matrix
     """
     if check:
         assert(safenorm(a, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
@@ -1154,12 +1297,11 @@ def safeimag(a, inplace=False, check=False):
 
 def safenorm(a, part=None):
     """
-    Returns the frobenius norm of a matrix or vector, `a` when it is either
-    a dense array or a sparse matrix.
+    Get the frobenius norm of a matrix or vector, `a`, when it is either a dense array or a sparse matrix.
 
     Parameters
     ----------
-    a : ndarray or sparse matrix
+    a : ndarray or scipy.sparse matrix
         The matrix or vector to take the norm of.
 
     part : {None,'real','imag'}
@@ -1297,8 +1439,10 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
 
 def get_csr_sum_flat_indices(csr_matrices):
     """
-    Precomputes two arrays which can be used to quickly compute
-    a linear combination of the CSR sparse matrices `csr_matrices`.
+    Precomputes quantities allowing fast computation of linear combinations of CSR sparse matrices.
+
+    The returned quantities can later be used to quickly compute a linear
+    combination of the CSR sparse matrices `csr_matrices`.
 
     Computes the index and data arrays needed for use in :method:`csr_sum_flat`,
     along with the index pointer and column-indices arrays for constructing
@@ -1342,7 +1486,7 @@ def get_csr_sum_flat_indices(csr_matrices):
 if _fastcalc is None:
     def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
         """
-        Accelerated summation of several CSR-format sparse matrices.
+        Computation of the summation of several CSR-format sparse matrices.
 
         :method:`get_csr_sum_flat_indices` precomputes the necessary indices for
         summing directly into the data-array of a destination CSR sparse matrix.
@@ -1362,10 +1506,15 @@ if _fastcalc is None:
         coeffs : ndarray
             The weight coefficients which multiply each summed matrix.
 
-        flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr : ndarray
-            The index, data, and nnz-pointer arrays generated by
-            :function:`get_csr_sum_flat_indices` given a set of CSR matrices
-            to sum.
+        flat_dest_index_array : ndarray
+            The index array generated by :function:`get_csr_sum_flat_indices`.
+
+        flat_csr_mx_data : ndarray
+            The data array generated by :function:`get_csr_sum_flat_indices`.
+
+        mx_nnz_indptr : ndarray
+            The number-of-nonzero-elements pointer array generated by
+            :function:`get_csr_sum_flat_indices`.
 
         Returns
         -------
@@ -1378,15 +1527,59 @@ if _fastcalc is None:
                 data[flat_dest_index_array[i]] += coeff * flat_csr_mx_data[i]
 else:
     def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+        """
+        Computes the summation of several CSR-format sparse matrices.
+
+        :method:`get_csr_sum_flat_indices` precomputes the necessary indices for
+        summing directly into the data-array of a destination CSR sparse matrix.
+        If `data` is the data-array of matrix `D` (for "destination"), then this
+        method performs:
+
+        `D += sum_i( coeff[i] * csr_mxs[i] )`
+
+        Note that `D` is not returned; the sum is done internally into D's
+        data-array.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            The data-array of the destination CSR-matrix.
+
+        coeffs : ndarray
+            The weight coefficients which multiply each summed matrix.
+
+        flat_dest_index_array : ndarray
+            The index array generated by :function:`get_csr_sum_flat_indices`.
+
+        flat_csr_mx_data : ndarray
+            The data array generated by :function:`get_csr_sum_flat_indices`.
+
+        mx_nnz_indptr : ndarray
+            The number-of-nonzero-elements pointer array generated by
+            :function:`get_csr_sum_flat_indices`.
+        """
         coeffs_complex = _np.ascontiguousarray(coeffs, dtype=complex)
         return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
 
 
 def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
     """
-    Returns "prepared" meta-info about matrix a,
-        including a shifted version of a, to be used
-        in `expm_multiply_fast`
+    Computes "prepared" meta-info about matrix `a`, to be used in `expm_multiply_fast`.
+
+    This includes a shifted version of `a`.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        the matrix that will belater exponentiated.
+
+    tol : float, optional
+        Tolerance used to within matrix exponentiation routines.
+
+    Returns
+    -------
+    tuple
+        A tuple of values to pass to `expm_multiply_fast`.
     """
     if len(a.shape) != 2 or a.shape[0] != a.shape[1]:
         raise ValueError('expected a to be like a square matrix')
@@ -1431,12 +1624,52 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
 
 if _fastcalc is None:
     def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+        """
+        Multiplies `v` by an exponentiated matrix.
+
+        Parameters
+        ----------
+        prep_a : tuple
+            A tuple of values from :function:`expm_multiply_prep` that
+            defines the matrix to be exponentiated and holds other pre-computed
+            quantities.
+
+        v : numpy.ndarray
+            Vector to multiply (take dot product with).
+
+        tol : float, optional
+            Tolerance used to within matrix exponentiation routines.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         A, mu, m_star, s, eta = prep_a
         return _custom_expm_multiply_simple_core(
             A, v, mu, m_star, s, tol, eta)  # t == 1.0 always, `balance` not implemented so removed
 
 else:
     def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+        """
+        Multiplies `v` by an exponentiated matrix.
+
+        Parameters
+        ----------
+        prep_a : tuple
+            A tuple of values from :function:`expm_multiply_prep` that
+            defines the matrix to be exponentiated and holds other pre-computed
+            quantities.
+
+        v : numpy.ndarray
+            Vector to multiply (take dot product with).
+
+        tol : float, optional
+            Tolerance used to within matrix exponentiation routines.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         A, mu, m_star, s, eta = prep_a
         return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
                                                           v, mu, m_star, s, tol, eta)
@@ -1486,10 +1719,25 @@ def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.
 
 def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
     """
-    Returns "prepared" meta-info about operation op,
-      which is assumed to be traceless (so no shift is needed).
-      Used as input for use with _custom_expm_multiply_simple_core
-      or fast C-reps.
+    Returns "prepared" meta-info about operation op, which is assumed to be traceless (so no shift is needed).
+
+    Used as input for use with `_custom_expm_multiply_simple_core` or fast C-reps.
+
+    Parameters
+    ----------
+    op : scipy.sparse.linalg.LinearOperator
+        The operator to exponentiate.
+
+    a_1_norm : float, optional
+        The 1-norm (if computed separately) of `op`.
+
+    tol : float, optional
+        Tolerance used to within matrix exponentiation routines.
+
+    Returns
+    -------
+    tuple
+        A tuple of values to pass to `expm_multiply_fast`.
     """
     assert(isinstance(op, _spsl.LinearOperator))
     if len(op.shape) != 2 or op.shape[0] != op.shape[1]:
@@ -1522,8 +1770,11 @@ def sparse_equal(a, b, atol=1e-8):
 
     Parameters
     ----------
-    a, b : scipy.sparse matrix
-        The two matrices to compare.
+    a : scipy.sparse matrix
+        First matrix.
+
+    b : scipy.sparse matrix
+        Second matrix.
 
     atol : float, optional
         The tolerance to use, passed to `numpy.allclose`, when comparing
@@ -1571,10 +1822,24 @@ def sparse_onenorm(a):
     return max(abs(a).sum(axis=0).flat)
 
 
+#REMOVE debug argument?
 def ndarray_base(a, debug=False):
     """
-    Get the base memory object for numpy array `a`,
-    found by following `.base` until it comes up None.
+    Get the base memory object for numpy array `a`.
+
+    This is found by following `.base` until it comes up None.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Array to get base of.
+
+    debug : bool, optional
+        Enable additional debugging.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     if debug: print("ndarray_base debug:")
     while a.base is not None:
@@ -1586,8 +1851,7 @@ def ndarray_base(a, debug=False):
 
 def to_unitary(scaled_unitary):
     """
-    Compute the scaling factor required to turn a scalar multiple of a unitary matrix
-    to a unitary matrix.
+    Compute the scaling factor required to turn a scalar multiple of a unitary matrix to a unitary matrix.
 
     Parameters
     ----------
@@ -1599,7 +1863,6 @@ def to_unitary(scaled_unitary):
     scale : float
     unitary : ndarray
         Such that `scale * unitary == scaled_unitary`.
-
     """
     scaled_identity = _np.dot(scaled_unitary, _np.conjugate(scaled_unitary.T))
     scale = _np.sqrt(scaled_identity[0, 0])
@@ -1610,9 +1873,20 @@ def to_unitary(scaled_unitary):
 
 def sorted_eig(mx):
     """
-    TODO: docstring
-    Like numpy.eig, but returns the eigenvalues and vectors sorted by eigenvalue,
+    Similar to `numpy.eig`, but returns sorted output.
+
+    In particular, the eigenvalues and vectors sorted by eigenvalue,
     where sorting is done according to (real_part, imaginary_part) tuple.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        Matrix to act on.
+
+    Returns
+    -------
+    eigenvalues : numpy.ndarray
+    eigenvectors : numpy.ndarray
     """
     ev, U = _np.linalg.eig(mx)
     sorted_evals = sorted(list(enumerate(ev)), key=lambda x: (x[1].real, x[1].imag))
@@ -1624,11 +1898,27 @@ def sorted_eig(mx):
     return sorted_ev, sorted_U
 
 
-def get_kite(evals):
-    """ TODO: docstring.  Assumes evals are sorted """
+def get_kite(eigenvalues):
+    """
+    Computes the "kite" corresponding to a list of eigenvalues.
+
+    The kite is defined as a list of integers, each indicating that
+    there is a degnenerate block of that many eigenvalues within
+    `eigenvalues`.  Thus the sum of the list values equals `len(eigenvalues)`.
+
+    Parameters
+    ----------
+    eigenvalues : numpy.ndarray
+        A *sorted* array of eigenvalues.
+
+    Returns
+    -------
+    list
+        A list giving the multiplicity structure of `evals`.
+    """
     kite = []
-    blk = 0; last_ev = evals[0]
-    for ev in evals:
+    blk = 0; last_ev = eigenvalues[0]
+    for ev in eigenvalues:
         if _np.isclose(ev, last_ev):
             blk += 1
         else:
@@ -1640,9 +1930,33 @@ def get_kite(evals):
 
 def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
     """
-    Find a matrix `R` such that u_inv R u0 is diagonal (so G = R G0 Rinv if
-    G and G0 share the same eigenvalues and have eigenvectors u and u0 respectively)
-    AND log(R) has no (zero) projection onto the commutant of G0 = u0 diag(evals) u0_inv.
+    Find a matrix `R` such that u_inv R u0 is diagonal AND log(R) has no projection onto the commutant of G0.
+
+    More specifically, find a matrix `R` such that u_inv R u0 is diagonal
+    (so G = R G0 Rinv if G and G0 share the same eigenvalues and have eigenvectors u
+    and u0 respectively) AND log(R) has no (zero) projection onto the commutant of
+    G0 = u0 diag(evals) u0_inv.
+
+    Parameters
+    ----------
+    u : numpy.ndarray
+        Usually the eigenvector matrix of a gate (G).
+
+    u_inv : numpy.ndarray
+        Inverse of `u`.
+
+    u0 : numpy.ndarray
+        Usually the eigenvector matrix of the corresponding target gate (G0).
+
+    u0_inv : numpy.ndarray
+        Inverse of `u0`.
+
+    kite : list
+        The kite structure of `u0`.
+
+    Returns
+    -------
+    numpy.ndarray
     """
 
     #0.  Let R be a matrix that maps G0 -> Gp, where Gp has evecs of G and evals of G0.
@@ -1694,6 +2008,18 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
 def project_onto_kite(mx, kite):
     """
     Project `mx` onto `kite`, so `mx` is zero everywhere except on the kite.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+       Matrix to project.
+
+    kite : list
+        A kite structure.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
     mx = mx.copy()
@@ -1711,6 +2037,18 @@ def project_onto_kite(mx, kite):
 def project_onto_antikite(mx, kite):
     """
     Project `mx` onto the complement of `kite`, so `mx` is zero everywhere *on* the kite.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+       Matrix to project.
+
+    kite : list
+        A kite structure.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     #Kite is a list of block sizes, such that sum(kite) == dimension of `mx`
     mx = mx.copy()

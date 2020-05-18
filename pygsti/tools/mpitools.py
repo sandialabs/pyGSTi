@@ -1,4 +1,6 @@
-"""Functions for working with MPI processor distributions"""
+"""
+Functions for working with MPI processor distributions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -42,7 +44,6 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     loc_indices : list
         A list containing the elements of `indices` belonging to the current
         processor.
-
     owners : dict
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
@@ -52,7 +53,6 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
         results.
-
     loc_comm : mpi4py.MPI.Comm or None
         The local communicator for the group of processors which have been
         given the same `loc_indices` to compute, obtained by splitting `comm`.
@@ -120,7 +120,6 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     loc_indices : list
         A list containing the elements of `indices` belonging to the current
         processor (i.e. the one specified by `rank`).
-
     owners : dict
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
@@ -199,7 +198,7 @@ def slice_up_slice(slc, num_slices):
         The slice to be divided.
 
     num_slices : int
-       The number of slices to divide the range into.
+        The number of slices to divide the range into.
 
     Returns
     -------
@@ -219,14 +218,14 @@ def slice_up_range(n, num_slices, start=0):
     Parameters
     ----------
     n : int
-       The number of (consecutive) indices in the range to be divided.
+        The number of (consecutive) indices in the range to be divided.
 
     num_slices : int
-       The number of slices to divide the range into.
+        The number of slices to divide the range into.
 
     start : int, optional
-       The starting entry of the range, so that the range to be
-       divided is `range(start,start+n)`.
+        The starting entry of the range, so that the range to be
+        divided is `range(start,start+n)`.
 
     Returns
     -------
@@ -277,14 +276,11 @@ def distribute_slice(s, comm, allow_split_comm=True):
         possible that a single slice (i.e. element of `slices`) is assigned
         to multiple processors (when there are more processors than indices
         in `s`.
-
     loc_slice : slice
         A slice specifying the indices belonging to the current processor.
-
     owners : dict
         A dictionary giving the owning rank of each slice.  Values are integer
         ranks and keys are integers into `slices`, specifying which slice.
-
     loc_comm : mpi4py.MPI.Comm or None
         The local communicator for the group of processors which have been
         given the same `loc_slice` to compute, obtained by splitting `comm`.
@@ -689,9 +685,10 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
 
 def distribute_for_dot(contracted_dim, comm):
     """
-    Prepares for one or muliple distributed dot products given the dimension
-    to be contracted (i.e. the number of columns of A or rows of B in dot(A,B)).
-    The returned slice should be passed as `loc_slice` to :func:`mpidot`.
+    Prepares for one or muliple distributed dot products given the dimension to be contracted.
+
+    That is, the number of columns of A or rows of B in dot(A,B).  The returned
+    slice should be passed as `loc_slice` to :func:`mpidot`.
 
     Parameters
     ----------
@@ -723,8 +720,11 @@ def mpidot(a, b, loc_slice, comm):
 
     Parameters
     ----------
-    a,b : numpy.ndarray
-        Arrays to dot together.
+    a : numpy.ndarray
+        First array to dot together.
+
+    b : numpy.ndarray
+        Second array to dot together.
 
     loc_slice : slice
         A slice specifying the indices along the contracted dimension belonging
@@ -760,14 +760,17 @@ def mpidot(a, b, loc_slice, comm):
 
 
 def parallel_apply(f, l, comm):
-    '''
-    Apply a function, f to every element of a list, l in parallel, using MPI
+    """
+    Apply a function, f to every element of a list, l in parallel, using MPI.
+
     Parameters
     ----------
     f : function
         function of an item in the list l
+
     l : list
         list of items as arguments to f
+
     comm : MPI Comm
         MPI communicator object for organizing parallel programs
 
@@ -775,7 +778,7 @@ def parallel_apply(f, l, comm):
     -------
     results : list
         list of items after f has been applied
-    '''
+    """
     locArgs, _, locComm = distribute_indices(l, comm)
     if locComm is None or locComm.Get_rank() == 0:  # only first proc in local comm group
         locResults = [f(arg) for arg in locArgs]  # needs to do anything
@@ -786,19 +789,35 @@ def parallel_apply(f, l, comm):
 
 
 def get_comm():
-    '''
+    """
     Get a comm object
 
     Returns
     -------
     MPI.Comm
         Comm object to be passed down to parallel pygsti routines
-    '''
+    """
     from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
     return MPI.COMM_WORLD
 
 
 def sum_across_procs(x, comm):
+    """
+    Sum a value across all processors in `comm`.
+
+    Parameters
+    ----------
+    x : object
+        Local value - the current processor's contrubution to the sum.
+
+    comm : mpi4py.MPI.Comm
+        MPI communicator
+
+    Returns
+    -------
+    object
+        Of the same type as the `x` objects that were summed.
+    """
     if comm is not None:
         from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
         return comm.allreduce(x, MPI.SUM)

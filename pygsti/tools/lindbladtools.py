@@ -1,4 +1,6 @@
-""" Utility functions relevant to Lindblad forms and projections """
+"""
+Utility functions relevant to Lindblad forms and projections
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,10 +29,10 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
     Parameters
     ----------
     hamiltonian : ndarray
-      The hamiltonian matrix used to construct the Lindbladian.
+        The hamiltonian matrix used to construct the Lindbladian.
 
     sparse : bool, optional
-      Whether to construct a sparse or dense (the default) matrix.
+        Whether to construct a sparse or dense (the default) matrix.
 
     Returns
     -------
@@ -69,10 +71,10 @@ def stochastic_lindbladian(q, sparse=False):
     Parameters
     ----------
     q : ndarray
-      The matrix used to construct the Lindbladian.
+        The matrix used to construct the Lindbladian.
 
     sparse : bool, optional
-      Whether to construct a sparse or dense (the default) matrix.
+        Whether to construct a sparse or dense (the default) matrix.
 
     Returns
     -------
@@ -123,10 +125,10 @@ def affine_lindbladian(q, sparse=False):
     Parameters
     ----------
     q : ndarray
-      The matrix used to construct the Lindbladian.
+        The matrix used to construct the Lindbladian.
 
     sparse : bool, optional
-      Whether to construct a sparse or dense (the default) matrix.
+        Whether to construct a sparse or dense (the default) matrix.
 
     Returns
     -------
@@ -155,8 +157,7 @@ def affine_lindbladian(q, sparse=False):
 
 def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
     """
-    Construct the Lindbladian corresponding to generalized
-    non-Hamiltonian (stochastic) errors.
+    Construct the Lindbladian corresponding to generalized non-Hamiltonian (stochastic) errors.
 
     Mathematically, for d-dimensional matrices Lm and Ln, this routine
     constructs the d^2-dimension Lindbladian matrix L whose action is
@@ -169,11 +170,14 @@ def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
 
     Parameters
     ----------
-    Lm, Ln : ndarray
-      The matrices used to construct the Lindbladian.
+    Lm : numpy.ndarray
+        d-dimensional matrix.
+
+    Ln : numpy.ndarray
+        d-dimensional matrix.
 
     sparse : bool, optional
-      Whether to construct a sparse or dense (the default) matrix.
+        Whether to construct a sparse or dense (the default) matrix.
 
     Returns
     -------

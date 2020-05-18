@@ -1,3 +1,6 @@
+"""
+General matrix utilities. Some, but not all, are specific to matrices over the ints modulo 2.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,31 +11,57 @@
 #***************************************************************************************************
 
 # Contains general matrix utilities. Some, but not all, of these tools are specific to
-# matrices over the ints modulo 2.
 
 import numpy as _np
 
 
 def dotmod2(m1, m2):
     """
-    Returns the product over the itegers modulo 2 of
-    two matrices.
+    Returns the product over the integers modulo 2 of two matrices.
+
+    Parameters
+    ----------
+    m1 : numpy.ndarray
+        First matrix
+
+    m2 : numpy.ndarray
+        Second matrix
+
+    Returns
+    -------
+    numpy.ndarray
     """
     return _np.dot(m1, m2) % 2
 
 
 def multidotmod2(mlist):
     """
-    Returns the product over the itegers modulo 2 of
-    a list of matrices.
+    Returns the product over the integers modulo 2 of a list of matrices.
+
+    Parameters
+    ----------
+    mlist : list
+        A list of matrices.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     return _np.linalg.multi_dot(mlist) % 2
 
 
 def detmod2(m):
     """
-    Returns the determinant of a matrix over the itegers
-    modulo 2 (GL(n,2)).
+    Returns the determinant of a matrix over the integers modulo 2 (GL(n,2)).
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        Matrix to take determinant of.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     return _np.round(_np.linalg.det(m)) % 2
 
@@ -42,6 +71,18 @@ def detmod2(m):
 def matrix_directsum(m1, m2):
     """
     Returns the direct sum of two square matrices of integers.
+
+    Parameters
+    ----------
+    m1 : numpy.ndarray
+        First matrix
+
+    m2 : numpy.ndarray
+        Second matrix
+
+    Returns
+    -------
+    numpy.ndarray
     """
     n1 = len(m1[0, :])
     n2 = len(m2[0, :])
@@ -55,6 +96,15 @@ def matrix_directsum(m1, m2):
 def inv_mod2(m):
     """
     Finds the inverse of a matrix over GL(n,2)
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        Matrix to take inverse of.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     t = len(m)
     c = _np.append(m, _np.eye(t), 1)
@@ -65,6 +115,17 @@ def Axb_mod2(A, b):  # noqa N803
     """
     Solves Ax = b over GF(2)
 
+    Parameters
+    ----------
+    A : numpy.ndarray
+        Matrix to operate on.
+
+    b : numpy.ndarray
+        Vector to operate on.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     b = _np.array([b]).T
     C = _np.append(A, b, 1)
@@ -75,6 +136,14 @@ def gaussian_elimination_mod2(a):
     """
     Gaussian elimination mod2 of a.
 
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Matrix to operate on.
+
+    Returns
+    -------
+    numpy.ndarray
     """
 
     a = _np.array(a, dtype='int')
@@ -98,6 +167,14 @@ def diagonal_as_vec(m):
     """
     Returns a 1D array containing the diagonal of the input square 2D array m.
 
+    Parameters
+    ----------
+    m : numpy.ndarray
+        Matrix to operate on.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     l = _np.shape(m)[0]
     vec = _np.zeros(l, int)
@@ -110,6 +187,14 @@ def strictly_upper_triangle(m):
     """
     Returns a matrix containing the strictly upper triangle of m and zeros elsewhere.
 
+    Parameters
+    ----------
+    m : numpy.ndarray
+        Matrix to operate on.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     l = _np.shape(m)[0]
     out = m.copy()
@@ -125,6 +210,14 @@ def diagonal_as_matrix(m):
     """
     Returns a diagonal matrix containing the diagonal of m.
 
+    Parameters
+    ----------
+    m : numpy.ndarray
+        Matrix to operate on.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     l = _np.shape(m)[0]
     out = _np.zeros((l, l), int)
@@ -142,13 +235,27 @@ def diagonal_as_matrix(m):
 
 def albert_factor(d, failcount=0):
     """
-    Returns a matrix M such that d = M M.T for symmetric d, where d and M are
-    matrices over [0,1] mod 2. The algorithm mostly follows the proof in "Orthogonal Matrices
-    Over Finite Fields" by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76, No. 2
-    (Feb., 1969), pp. 152-164
+    Returns a matrix M such that d = M M.T for symmetric d, where d and M are matrices over [0,1] mod 2.
 
-    There is generally not a unique albert factorization, and this algorthm is randomized. It will
-    general return a different factorizations from multiple calls.
+    The algorithm mostly follows the proof in "Orthogonal Matrices Over Finite
+    Fields" by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76,
+    No. 2 (Feb., 1969), pp. 152-164
+
+    There is generally not a unique albert factorization, and this algorthm is
+    randomized. It will general return a different factorizations from multiple
+    calls.
+
+    Parameters
+    ----------
+    d : array-like
+        Symmetric matrix mod 2.
+
+    failcount : int, optional
+        UNUSED.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     d = _np.array(d, dtype='int')
 
@@ -183,6 +290,21 @@ def albert_factor(d, failcount=0):
 def random_bitstring(n, p, failcount=0):
     """
     Constructs a random bitstring of length n with parity p
+
+    Parameters
+    ----------
+    n : int
+        Number of bits.
+
+    p : int
+        Parity.
+
+    failcount : int, optional
+        Internal use only.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     bitstring = _np.random.randint(0, 2, size=n)
     if _np.mod(sum(bitstring), 2) == p:
@@ -194,6 +316,18 @@ def random_bitstring(n, p, failcount=0):
 def random_invertable_matrix(n, failcount=0):
     """
     Finds a random invertable matrix M over GL(n,2)
+
+    Parameters
+    ----------
+    n : int
+        matrix dimension
+
+    failcount : int, optional
+        Internal use only.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     M = _np.array([random_bitstring(n, _np.random.randint(0, 2)) for x in range(n)])
     if detmod2(M) == 0:
@@ -206,6 +340,15 @@ def random_invertable_matrix(n, failcount=0):
 def random_symmetric_invertable_matrix(n):
     """
     Creates a random, symmetric, invertible matrix from GL(n,2)
+
+    Parameters
+    ----------
+    n : int
+        Matrix dimension.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     M = random_invertable_matrix(n)
     return dotmod2(M, M.T)
@@ -213,7 +356,22 @@ def random_symmetric_invertable_matrix(n):
 
 def onesify(a, failcount=0, maxfailcount=100):
     """
-    Returns M such that M a M.T has ones along the main diagonal
+    Returns M such that `M a M.T` has ones along the main diagonal
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The matrix.
+
+    failcount : int, optional
+        Internal use only.
+
+    maxfailcount : int, optional
+        Maximum number of tries before giving up.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     assert(failcount < maxfailcount), "The function has failed too many times! Perhaps the input is invalid."
 
@@ -246,6 +404,17 @@ def permute_top(a, i):
     """
     Permutes the first row & col with the i'th row & col
 
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The matrix to act on.
+
+    i : int
+        index to permute with first row/col.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     t = len(a)
     P = _np.eye(t)
@@ -258,10 +427,16 @@ def permute_top(a, i):
 
 def fix_top(a):
     """
-    Takes a symmetric binary matrix with ones along the diagonal
-    and returns the permutation matrix P such that the [1:t,1:t]
-    submatrix of P a P is invertible
+    Computes the permutation matrix `P` such that the [1:t,1:t] submatrix of `P a P` is invertible.
 
+    Parameters
+    ----------
+    a : numpy.ndarray
+        A symmetric binary matrix with ones along the diagonal.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     if a.shape == (1, 1):
         return _np.eye(1, dtype='int')
@@ -287,10 +462,16 @@ def fix_top(a):
 
 def proper_permutation(a):
     """
-    Takes a symmetric binary matrix with ones along the diagonal
-    and returns the permutation matrix P such that all [n:t,n:t]
-    submatrices of P a P are invertible.
+    Computes the permutation matrix `P` such that all [n:t,n:t] submatrices of `P a P` are invertible.
 
+    Parameters
+    ----------
+    a : numpy.ndarray
+        A symmetric binary matrix with ones along the diagonal.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     t = len(a)
     Ps = []  # permutation matrices
@@ -305,12 +486,21 @@ def proper_permutation(a):
     #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 
+#PRIVATE
 def check_proper_permutation(a):
     """
-    Check to see if the matrix has been properly permuted
-    This should be redundent to what is already built into
-    'fix_top'.
+    Check to see if the matrix has been properly permuted.
 
+    This should be redundent to what is already built into 'fix_top'.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        A matrix.
+
+    Returns
+    -------
+    bool
     """
     t = len(a)
     for ind in range(0, t):

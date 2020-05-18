@@ -1,4 +1,6 @@
-""" RB-related functions of gates and models """
+"""
+RB-related functions of gates and models
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,9 +23,11 @@ import warnings as _warnings
 
 def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
     """
-    Predicts the RB error rate from a model, using the "L-matrix" theory from
-    Proctor et al Phys. Rev. Lett. 119, 130502 (2017). Note that this gives the
-    same predictions as the theory in Wallman Quantum 2, 47 (2018).
+    Predicts the RB error rate from a model.
+
+    Uses the "L-matrix" theory from Proctor et al Phys. Rev. Lett. 119, 130502
+    (2017). Note that this gives the same predictions as the theory in Wallman
+    Quantum 2, 47 (2018).
 
     This theory is valid for various types of RB, including standard
     Clifford RB -- i.e., it will accurately predict the per-Clifford
@@ -46,7 +50,7 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
         Clifford gates; in "direct RB" this normally would be the
         physical primitives.
 
-    target_model: Model
+    target_model : Model
         The target model, corresponding to `mdl`. This function is not invariant
         under swapping `mdl` and `target_model`: this Model must be the target model,
         and should consistent of perfect gates.
@@ -94,11 +98,11 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
 
 def predicted_rb_decay_parameter(mdl, target_model, weights=None):
     """
-    Computes the second largest eigenvalue of the 'L matrix' (see the `L_matrix`
-    function). For standard Clifford RB and direct RB, this corresponds to the
-    RB decay parameter p in Pm = A + Bp^m for "reasonably low error" trace
-    preserving and completely positive gates. See also the `predicted_rb_number`
-    function.
+    Computes the second largest eigenvalue of the 'L matrix' (see the `L_matrix` function).
+
+    For standard Clifford RB and direct RB, this corresponds to the RB decay
+    parameter p in Pm = A + Bp^m for "reasonably low error" trace preserving and
+    completely positive gates. See also the `predicted_rb_number` function.
 
     Parameters
     ----------
@@ -144,12 +148,15 @@ def predicted_rb_decay_parameter(mdl, target_model, weights=None):
 
 def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
-    Computes the gauge transformation required so that, when the model is transformed
-    via this gauge-transformation, the RB number -- as predicted by the function
-    `predicted_rb_number` -- is the average model infidelity between the transformed
-    `mdl` model and the target model `target_model`. This transformation is defined
-    Proctor et al Phys. Rev. Lett. 119, 130502 (2017), and see also Wallman Quantum 2,
-    47 (2018).
+    Computes the gauge transformation required so that the RB number matches the average model infidelity.
+
+    This function computes the gauge transformation required so that, when the
+    model is transformed via this gauge-transformation, the RB number -- as
+    predicted by the function `predicted_rb_number` -- is the average model
+    infidelity between the transformed `mdl` model and the target model
+    `target_model`. This transformation is defined Proctor et al
+    Phys. Rev. Lett. 119, 130502 (2017), and see also Wallman Quantum 2, 47
+    (2018).
 
     Parameters
     ----------
@@ -185,7 +192,7 @@ def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighti
 
     Returns
     -------
-    l_operator: array
+    l_operator : array
         The matrix defining the gauge-transformation.
     """
     gam, vecs = _np.linalg.eig(L_matrix(mdl, target_model, weights=weights))
@@ -220,11 +227,12 @@ def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighti
 
 def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
-    Transforms a Model into the "RB gauge" (see the `RB_gauge` function), as
-    introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017). This gauge
-    is a function of both the model and its target. These may be input in any
-    gauge, for the purposes of obtaining "r = average model infidelity" between
-    the output Model and target_model.
+    Transforms a Model into the "RB gauge" (see the `RB_gauge` function).
+
+    This notion was introduced in Proctor et al Phys. Rev. Lett. 119, 130502
+    (2017). This gauge is a function of both the model and its target. These may
+    be input in any gauge, for the purposes of obtaining "r = average model
+    infidelity" between the output :class:`Model` and `target_model`.
 
     Parameters
     ----------
@@ -260,7 +268,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
 
     Returns
     -------
-    mdl_in_RB_gauge: Model
+    mdl_in_RB_gauge : Model
         The model `mdl` transformed into the "RB gauge".
     """
     l = rb_gauge(mdl, target_model, weights=weights, mx_basis=mx_basis,
@@ -273,14 +281,14 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
 
 def L_matrix(mdl, target_model, weights=None):  # noqa N802
     """
-    Constructs a generalization of the 'L-matrix' linear operator on superoperators,
-    from Proctor et al Phys. Rev. Lett. 119, 130502 (2017), represented as a
-    matrix via the "stack" operation. This eigenvalues of this matrix
-    describe the decay constant (or constants) in an RB decay curve for an
-    RB protocol whereby random elements of the provided model are sampled
-    according to the `weights` probability distribution over the
-    model. So, this facilitates predictions of Clifford RB and direct RB
-    decay curves.
+    Constructs a generalization of the 'L-matrix' linear operator on superoperators.
+
+    From Proctor et al Phys. Rev. Lett. 119, 130502 (2017), the 'L-matrix' is
+    represented as a matrix via the "stack" operation. This eigenvalues of this
+    matrix describe the decay constant (or constants) in an RB decay curve for
+    an RB protocol whereby random elements of the provided model are sampled
+    according to the `weights` probability distribution over the model. So, this
+    facilitates predictions of Clifford RB and direct RB decay curves.
 
     Parameters
     ----------
@@ -325,11 +333,13 @@ def L_matrix(mdl, target_model, weights=None):  # noqa N802
 
 def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
-    Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the
-    `R_matrix` function] introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
-    This number is a prediction of the RB decay parameter for trace-preserving gates and
-    a variety of forms of RB, including Clifford and direct RB. This function creates a
-    matrix which scales super-exponentially in the number of qubits.
+    Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the `R_matrix` function].
+
+    Introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017).  This
+    number is a prediction of the RB decay parameter for trace-preserving gates
+    and a variety of forms of RB, including Clifford and direct RB. This
+    function creates a matrix which scales super-exponentially in the number of
+    qubits.
 
     Parameters
     ----------
@@ -358,9 +368,6 @@ def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weigh
         weighting defaults to an equal weighting on all gates, as used in most RB
         protocols.
 
-    d : int, optional
-        The Hilbert space dimension. If None, then sqrt(mdl.dim) is used.
-
     Returns
     -------
     p : float
@@ -376,11 +383,11 @@ def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weigh
 
 def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
     """
-    Constructs a generalization of the 'R-matrix' of Proctor et al Phys.
-    Rev. Lett. 119, 130502 (2017). This matrix described the exact behaviour
-    of the average success probablities of RB sequences. This matrix is
-    super-exponentially large in the number of qubits, but can be
-    constructed for 1-qubit models.
+    Constructs a generalization of the 'R-matrix' of Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
+
+    This matrix described the exact behaviour of the average success
+    probablities of RB sequences. This matrix is super-exponentially large in
+    the number of qubits, but can be constructed for 1-qubit models.
 
     Parameters
     ----------
@@ -414,7 +421,6 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
     R : float
         A weighted, a subset-sampling generalization of the 'R-matrix' from Proctor
         et al Phys. Rev. Lett. 119, 130502 (2017).
-
     """
     if group_to_model is None:
         for key in list(mdl.operations.keys()):
@@ -455,11 +461,12 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
 def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
                   group_to_model=None, weights=None, compilation=None, group_twirled=False):
     """
-    Calculates the exact RB average success probablilites (ASP), using some
-    generalizations of the formula given Proctor et al Phys. Rev. Lett. 119,
-    130502 (2017). This formula does not scale well with group size and qubit
-    number, and for the Clifford group it is likely only practical for a single
-    qubit.
+    Calculates the exact RB average success probablilites (ASP).
+
+    Uses some generalizations of the formula given Proctor et al
+    Phys. Rev. Lett. 119, 130502 (2017). This formula does not scale well with
+    group size and qubit number, and for the Clifford group it is likely only
+    practical for a single qubit.
 
     Parameters
     ----------
@@ -490,7 +497,7 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
     success_outcomelabel : str or tuple, optional
         The outcome label associated with success.
 
-   group_to_model : dict, optional
+    group_to_model : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
         of mdl. This is required if the labels of the gates in `mdl` are different
         from the labels of the corresponding group elements in `group`.
@@ -563,12 +570,14 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
                   return_error_bounds=False, norm='diamond'):
     """
-    Computes RB average survival probablities, as predicted by the 'L-matrix'
-    theory of Proctor et al Phys. Rev. Lett. 119, 130502 (2017). Within the function,
-    the mdl is gauge-optimized to target_model. This is *not* optimized to the gauge specified
-    by Proctor et al, but instead performs the standard pyGSTi gauge-optimization (using the
-    frobenius distance). In most cases, this is likely to be a reasonable proxy for the gauge
-    optimization perscribed by Proctor et al.
+    Computes RB average survival probablities, as predicted by the 'L-matrix' theory.
+
+    This theory was introduced in Proctor et al Phys. Rev. Lett. 119, 130502
+    (2017). Within the function, the mdl is gauge-optimized to target_model. This is
+    *not* optimized to the gauge specified by Proctor et al, but instead performs the
+    standard pyGSTi gauge-optimization (using the frobenius distance). In most cases,
+    this is likely to be a reasonable proxy for the gauge optimization perscribed by
+    Proctor et al.
 
     Parameters
     ----------
@@ -590,13 +599,6 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     success_outcomelabel : str or tuple, optional
         The outcome label associated with success.
 
-    weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in mdl
-        and the values are the unnormalized probabilities to apply each gate at
-        for each layer of the RB protocol. If None, the weighting defaults to an
-        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
-        RB).
-
     compilation : dict, optional
         If `mdl` is not the full group, then a compilation for the group elements,
         used to implement the inversion gate (and the initial random group element,
@@ -606,6 +608,13 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     group_twirled : bool, optional
         If True, the random sequence starts with a single uniformly random group
         element before the m random elements of `mdl`.
+
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in mdl
+        and the values are the unnormalized probabilities to apply each gate at
+        for each layer of the RB protocol. If None, the weighting defaults to an
+        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+        RB).
 
     gauge_optimize : bool, optional
         If True a gauge-optimization to the target model is implemented before
@@ -631,12 +640,9 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     -------
     m : float
         Array of sequence length values that the ASPs have been calculated for.
-
     P_m : float
         Array containing predicted ASP values for the specified sequence length values.
-
-    if error_bounds is True:
-
+    if error_bounds is True :
         lower_bound: float
             Array containing lower bounds on the possible ASP values
 
@@ -699,13 +705,13 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
 
 def errormaps(mdl, target_model):
     """
-    Computes the 'left-multiplied' error maps associated with a noisy gate
-    set, along with the average error map. This is the model [E_1,...]
-    such that
+    Computes the 'left-multiplied' error maps associated with a noisy gate set, along with the average error map.
 
-        G_i = E_iT_i,
+    This is the model [E_1,...] such that
 
-    where T_i is the gate which G_i is a noisy
+        `G_i = E_iT_i`,
+
+    where `T_i` is the gate which `G_i` is a noisy
     implementation of. There is an additional gate in the set, that has
     the key 'Gavg'. This is the average of the error maps.
 

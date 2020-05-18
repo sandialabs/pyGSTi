@@ -1,4 +1,6 @@
-""" Functions related deprecating other functions """
+"""
+Functions related deprecating other functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,6 +26,10 @@ def warn_deprecated(name, replacement=None):
 
     replacement : str, optional
         the name of the function that should replace it.
+
+    Returns
+    -------
+    None
     """
     message = 'The function {} is deprecated, and may not be present in future versions of pygsti.'.format(name)
     if replacement is not None:
@@ -38,11 +44,12 @@ def deprecated_fn(replacement=None):
 
     Parameters
     ----------
-    fn : function
-        The function that is now deprecated.
-
     replacement : str, optional
         the name of the function that should replace it.
+
+    Returns
+    -------
+    function
     """
     def decorator(fn):
         def _inner(*args, **kwargs):
@@ -81,6 +88,10 @@ def deprecate_imports(module_name, replacement_map, warning_msg):
         deprecated name. Optionally, this may include the format
         string `name`, which will be formatted with the deprecated
         name.
+
+    Returns
+    -------
+    None
     """
     module = _sys.modules[module_name]
 
