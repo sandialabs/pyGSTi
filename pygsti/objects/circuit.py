@@ -553,7 +553,7 @@ class Circuit(object):
         """
         The name of this circuit.
 
-        Note: the name is *not* a part of the hashed value. 
+        Note: the name is *not* a part of the hashed value.
         The name is used to name the :class:`CircuitLabel` returned from :method:`as_label`.
         """
         return self._name
@@ -1727,7 +1727,7 @@ class Circuit(object):
 
     def prefix_circuit(self, circuit):
         """
-        Prefix a circuit to the beginning of this circuit. 
+        Prefix a circuit to the beginning of this circuit.
 
         This circuit must satisfy the requirements of the
         :method:`insert_circuit()`. See that method for more details.
@@ -2661,7 +2661,7 @@ class Circuit(object):
 
     def width(self):
         """
-        The circuit width. 
+        The circuit width.
 
         This is the number of qubits on which the circuit acts. This includes
         qubits that only idle, but are included as part of the circuit according
@@ -2704,7 +2704,7 @@ class Circuit(object):
 
     def two_q_gate_count(self):
         """
-        The number of two-qubit gates in the circuit. 
+        The number of two-qubit gates in the circuit.
 
         (Note that this cannot distinguish between "true" 2-qubit gates and gate
         that have been defined to act on two qubits but that represent some

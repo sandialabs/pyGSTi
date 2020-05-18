@@ -19,7 +19,7 @@ import copy as _copy
 
 def symplectic_form(n, convention='standard'):
     """
-    Creates the symplectic form for the number of qubits specified. 
+    Creates the symplectic form for the number of qubits specified.
 
     There are two variants, of the sympletic form over the finite field of the
     integers modulo 2, used in pyGSTi. These corresponding to the 'standard' and

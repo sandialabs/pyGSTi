@@ -440,7 +440,7 @@ class HasMagnitude(object):
 
 class NoMagnitude(object):
     """
-    A base class that adds a `magnitude` property to a term class.    
+    A base class that adds a `magnitude` property to a term class.
     """
     def compose(self, all_terms):
         """
@@ -813,7 +813,7 @@ class HasPolyCoefficient(object):
     coeff : Polynomial
         The term's coefficient.
     """
-    
+
     @classmethod
     def _coeff_rep(cls, coeff):
         return coeff.torep()

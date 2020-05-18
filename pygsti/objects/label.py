@@ -887,7 +887,7 @@ class CircuitLabel(Label, tuple):
 
     This class encapsulates a complete circuit as a single layer.  It
     lacks some of the methods and metadata of a true :class:`Circuit`
-    object, but contains the essentials: the tuple of layer labels 
+    object, but contains the essentials: the tuple of layer labels
     (held as the label's components) and line labels (held as the label's
     state-space labels)
     """

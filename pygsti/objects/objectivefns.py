@@ -3986,7 +3986,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         the objective function sum.  Yet, in many objective functions, zero-
         frequency terms that have non-zero probabilities still produce a
         non-zero contribution and must be included.  This is performed by
-        adding these "omitted-probability" contributions to the first 
+        adding these "omitted-probability" contributions to the first
         (nonzero-frequncy, thus present) term corresponding to the given
         circuit.  This function computes these omitted (zero-frequency)
         terms and returns them in an array of length equal to the number

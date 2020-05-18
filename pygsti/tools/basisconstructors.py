@@ -378,7 +378,7 @@ def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
 
-    Constructs the standard basis spanning the density-matrix space given by 
+    Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.
 
     The returned matrices are orthonormal basis under

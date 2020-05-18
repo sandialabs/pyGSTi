@@ -18,6 +18,7 @@ import collections as _collections
 from .multidataset import MultiDataSet as _MultiDataSet
 from .hypothesistest import HypothesisTest as _HypothesisTest
 
+
 #PRIVATE
 def xlogy(x, y):
     """
@@ -777,7 +778,7 @@ class DataComparator():
     def get_pvalue_pseudothreshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence p-values.
-        
+
         The p-values under consideration are those obtained from the log-likehood ratio
         test. This is a "pseudo-threshold", because it is data-dependent in general, but
         all the per-sequence p-values below this value are statistically significant. This

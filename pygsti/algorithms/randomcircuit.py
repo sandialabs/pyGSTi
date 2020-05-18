@@ -2119,7 +2119,7 @@ def pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=False):
     Returns
     -------
     Circuit
-        A circuit corresponding to a uniformly random n-qubit Pauli, 
+        A circuit corresponding to a uniformly random n-qubit Pauli,
         converted to the native gate-set of `pspec`.
     """
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list

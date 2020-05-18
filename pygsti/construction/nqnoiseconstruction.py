@@ -1277,6 +1277,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None,
     #print("Rank = %d, num params = %d" % (rank, Np))
     return rank, Np
 
+
 #PRIVATE
 def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, true_idle_pairs, idle_str, max_weight,
                                                 model, single_q_fiducials=None,

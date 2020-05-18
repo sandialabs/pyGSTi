@@ -581,7 +581,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars): #PRIVATE?
+    def get_vindices_per_int(cls, max_num_vars):  #PRIVATE?
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 

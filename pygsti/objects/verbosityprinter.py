@@ -184,14 +184,14 @@ class VerbosityPrinter(object):
         ----------
         verbosity : int, optional
             How verbose the printer should be.
-    
+
         filename : str, optional
             Where to put output (If none, output goes to screen)
-    
+
         comm : mpi4py.MPI.Comm, optional
             Restricts output if the program is running in parallel  (By default,
             if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
-    
+
         warnings : bool, optional
             Whether or not to print warnings
         '''

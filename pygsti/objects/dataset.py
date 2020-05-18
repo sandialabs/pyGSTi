@@ -1781,7 +1781,7 @@ class DataSet(object):
     def merge_std_nqubit_outcomes(self, qubit_indices_to_keep, record_zero_counts=True):
         """
         Creates a DataSet which merges certain outcomes in this DataSet.
-        
+
         Used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
         DataSet.  This assumes that outcome labels are in the standard format
         whereby each qubit corresponds to a single '0' or '1' character.

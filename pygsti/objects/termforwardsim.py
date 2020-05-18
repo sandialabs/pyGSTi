@@ -526,7 +526,7 @@ class TermForwardSimulator(ForwardSimulator):
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
 
-        #TODO REMOVE this case -- we don't check for cache hits anymore and I think we can just set prps = poly_reps here
+        #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
         else:

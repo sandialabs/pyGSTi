@@ -1456,7 +1456,7 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
 
     #Get gauge optimization dictionary
     gaugeopt_suite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
-                                                        unreliable_ops, printer - 1)
+                                                       unreliable_ops, printer - 1)
 
     if target_model is not None:
         assert(isinstance(target_model, _objs.Model)), "`gaugeOptTarget` must be None or a Model"

@@ -90,7 +90,7 @@ class ModelTest(_proto.Protocol):
         obj : object
             If `obj` is already an :class:`ObjectiveFunctionBuilder` it is used directly.  A
             dictionary is assumed to hold arguments of :method:`ObjectiveFunctionBuilder.simple`.
-            A list or tuple is assumed to hold positional arguments of 
+            A list or tuple is assumed to hold positional arguments of
             :method:`ObjectiveFunctionBuilder.__init__`.
 
         Returns

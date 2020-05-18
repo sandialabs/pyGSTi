@@ -790,7 +790,7 @@ class LazyBasis(Basis):
 
 class ExplicitBasis(Basis):
     """
-    A `Basis` whose elements are specified directly.  
+    A `Basis` whose elements are specified directly.
 
     All explicit bases are simple: their vector space is always taken to be that
     of the the flattened elements.

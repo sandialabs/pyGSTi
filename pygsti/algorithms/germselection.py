@@ -632,7 +632,7 @@ def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
         is present in the selected germ set or not.
 
     model_num : int
-        index into `deriv_dagger_deriv_list` indicating which model (typically in 
+        index into `deriv_dagger_deriv_list` indicating which model (typically in
         a neighborhood) we're computing scores for.
 
     score_func : {'all', 'worst'}

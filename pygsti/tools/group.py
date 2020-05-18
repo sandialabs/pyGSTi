@@ -23,7 +23,7 @@ def is_integer(x):
 
     Parameters
     ----------
-    x : object 
+    x : object
         Object to test.
 
     Returns

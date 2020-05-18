@@ -95,10 +95,10 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
           as the germ exponent (the number of germ repetitions).
 
     nest : boolean, optional
-        If True, the returned operation sequence lists are "nested", meaning
+        If True, the returned operation sequences lists are "nested", meaning
         that each successive list of operation sequences contains all the gate
         strings found in previous lists (and usually some additional
-        new ones).  If False, then the returned string list for maximum
+        new ones).  If False, then the returned circuit list for maximum
         length == L contains *only* those operation sequences specified in the
         description above, and *not* those for previous values of L.
 
@@ -354,7 +354,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         corresponding to what that operation label should be expanded into before querying
         the dataset.  This information is stored within the returned operation sequence
         structures.  Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     sequence_rules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement

@@ -491,7 +491,7 @@ class EmbeddingOpFactory(OpFactory):
 
         dense : bool, optional
             Whether dense embedding operations (ops which hold their entire
-            "action" matrix in memory) should be created.  When `True`, 
+            "action" matrix in memory) should be created.  When `True`,
             :class:`EmbeddedDenseOp` objects are created; when `False`,
             :class:`EmbeddedOp` objects are.
 

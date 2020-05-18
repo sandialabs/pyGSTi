@@ -63,13 +63,13 @@ class MapForwardSimulator(ForwardSimulator):
         ----------
         dim : int
             The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-    
+
         layer_op_server : LayerLizard
             An object that can be queried for circuit-layer operations.
-    
+
         paramvec : numpy.ndarray
             The current parameter vector of the Model.
-    
+
         max_cache_size : int, optional
             The maximum cache size allowed.  Cache elements are "scratch space"
             where state vectors can be stored to speed up the evaluation of

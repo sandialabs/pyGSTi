@@ -84,7 +84,7 @@ class ComputationCache(object):
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
             what outcomes the i-th circuits's final elements (`filledArray[ lookup[i] ]`)
             correspond to, use `outcomes[i]`.
-        
+
         wrt_block_size : int or float, optional
           The maximum average number of derivative columns to compute quantities for
           simultaneously.  None typically means to compute all the columns at once.

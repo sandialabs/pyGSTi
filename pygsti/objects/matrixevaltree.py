@@ -33,7 +33,7 @@ class MatrixEvalTree(EvalTree):
     ----------
     items : list, optional
         Initial items.  This argument should only be used internally
-        in the course of serialization.        
+        in the course of serialization.
     """
 
     def __init__(self, items=[]):

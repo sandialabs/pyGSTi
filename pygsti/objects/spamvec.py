@@ -404,7 +404,7 @@ class SPAMVec(_modelmember.ModelMember):
     def set_time(self, t):
         """
         Sets the current time for a time-dependent operator.
-        
+
         For time-independent operators (the default), this function does absolutely nothing.
 
         Parameters

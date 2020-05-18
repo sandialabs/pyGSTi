@@ -515,7 +515,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                  add_idle_noise_to_all_gates=True, sparse=False, verbosity=0):
         """
         Creates a CloudNoiseModel.
-        
+
         A CloudNoiseModle is a n-qubit model using a low-weight and geometrically local
         error model with a common "global idle" operation.
 

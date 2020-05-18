@@ -343,7 +343,7 @@ class CircuitStructure(object):
         ----------
         x : various
             x-value (not index)
- 
+
         y : various
             y-value (not index)
 

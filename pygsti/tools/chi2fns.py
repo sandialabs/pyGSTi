@@ -340,7 +340,7 @@ def chialpha(alpha, model, dataset, circuit_list=None,
         Default value (None) means "all strings in dataset".
 
     pfratio_stitchpt : float, optional
-        The x-value (x = probility/frequency ratio) below which the chi-alpha 
+        The x-value (x = probility/frequency ratio) below which the chi-alpha
         function is replaced with it second-order Taylor expansion.
 
     pfratio_derivpt : float, optional
@@ -409,7 +409,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
         Default value (None) means "all strings in dataset".
 
     pfratio_stitchpt : float, optional
-        The x-value (x = probility/frequency ratio) below which the chi-alpha 
+        The x-value (x = probility/frequency ratio) below which the chi-alpha
         function is replaced with it second-order Taylor expansion.
 
     pfratio_derivpt : float, optional

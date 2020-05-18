@@ -479,8 +479,8 @@ class DiagGaugeGroup(OpGaugeGroup):
         parameterArray = _np.zeros(dim, 'd')
         parameterToBaseIndicesMap = {i: [(i, i)] for i in range(dim)}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                        parameterToBaseIndicesMap,
-                                        ltrans, rtrans, real=True)
+                                             parameterToBaseIndicesMap,
+                                             ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, operation, DiagGaugeGroupElement, "Diagonal")
 
 
@@ -530,8 +530,8 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         parameterArray = _np.zeros(dim - 1, 'd')
         parameterToBaseIndicesMap = {i: [(i + 1, i + 1)] for i in range(dim - 1)}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                        parameterToBaseIndicesMap,
-                                        ltrans, rtrans, real=True)
+                                             parameterToBaseIndicesMap,
+                                             ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, operation, TPDiagGaugeGroupElement, "TP Diagonal")
 
 
@@ -635,8 +635,8 @@ class SpamGaugeGroup(OpGaugeGroup):
         parameterToBaseIndicesMap = {0: [(0, 0)],
                                      1: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                        parameterToBaseIndicesMap,
-                                        ltrans, rtrans, real=True)
+                                             parameterToBaseIndicesMap,
+                                             ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, operation, SpamGaugeGroupElement, "Spam")
 
 
@@ -687,8 +687,8 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         parameterArray = _np.zeros(1, 'd')
         parameterToBaseIndicesMap = {0: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
-                                        parameterToBaseIndicesMap,
-                                        ltrans, rtrans, real=True)
+                                             parameterToBaseIndicesMap,
+                                             ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, operation, TPSpamGaugeGroupElement, "TP Spam")
 
 

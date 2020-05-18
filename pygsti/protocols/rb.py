@@ -217,7 +217,7 @@ class CliffordRBDesign(BenchmarkingDesign):
             the all-zeros bit string. This is probably considered to be the "standard" in CRB. If True,
             the ideal output a circuit is randomized to a uniformly random bit-string. This setting is
             useful for, e.g., detecting leakage/loss/measurement-bias etc.
-    
+
         citerations : int, optional
             Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
             randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
