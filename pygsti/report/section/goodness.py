@@ -124,7 +124,7 @@ class GoodnessScalingSection(_Section):
     def data_scaling_colorbox_plot(workspace, switchboard=None, comm=None, bgcolor='white', **kwargs):
         return workspace.ColorBoxPlot(
             'scaling', switchboard.circuits_final, switchboard.eff_ds, None,
-            submatrices=switchboard.scaledSubMxsDict, comm=comm,
+            submatrices=switchboard.scaled_submxs_dict, comm=comm,
             bgcolor=bgcolor
         )
 

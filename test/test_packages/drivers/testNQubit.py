@@ -233,7 +233,7 @@ class NQubitTestCase(BaseTestCase):
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
               (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
-        opLabels = target_model.get_primitive_op_labels()
+        op_labels = target_model.get_primitive_op_labels()
         line_labels = tuple(range(nQubits))
         fids1Q = std1Q_XY.fiducials
         fiducials = []
@@ -244,7 +244,7 @@ class NQubitTestCase(BaseTestCase):
         prep_fiducials = meas_fiducials = fiducials
         #TODO: add fiducials for 2Q pairs (edges on graph)
 
-        germs = pygsti.construction.circuit_list([ (gl,) for gl in opLabels ], line_labels=line_labels)
+        germs = pygsti.construction.circuit_list([ (gl,) for gl in op_labels ], line_labels=line_labels)
         maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(mdl_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
         self.assertTrue( Circuit((),line_labels) in expList)
@@ -268,7 +268,7 @@ class NQubitTestCase(BaseTestCase):
         return
 
         results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
-                                              advanced_options={'maxIterations': 2}) #keep this short; don't care if it doesn't converge.
+                                              advanced_options={'max_iterations': 2}) #keep this short; don't care if it doesn't converge.
         print("DONE!")
 
 

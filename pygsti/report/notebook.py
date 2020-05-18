@@ -372,7 +372,7 @@ class Notebook(object):
         for serverinfo in servers:
             rel = _os.path.relpath(output_filename, serverinfo['notebook_dir'])
             if ".." not in rel:  # notebook servers don't allow moving up directories
-                if port == 'auto'or int(serverinfo['port']) == port:
+                if port == 'auto' or int(serverinfo['port']) == port:
                     url = _os.path.join(serverinfo['url'], 'notebooks', rel)
                     _browser.open(url); break
         else:

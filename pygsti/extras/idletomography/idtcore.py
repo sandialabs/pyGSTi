@@ -57,7 +57,7 @@ def hamiltonian_jac_element(prep, error, observable):
     """
     # dp/deps where p = eps * i * Tr(Obs (Err*rho - rho*Err)) = eps * i * ( Tr(Obs Err rho) - Tr(Obs rho Err))
     #                 = eps * i * Tr([Obs,Err] * rho)  so dp/deps just drops eps factor
-    com = error.icommutatorOver2(observable)
+    com = error.icommutator_over_2(observable)
     return 0 if (com is None) else com.statedot(prep)
 
 

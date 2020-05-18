@@ -521,11 +521,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
-    valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-    if isinstance(lsgst_lists, valid_struct_types) or isinstance(lsgst_lists[0], valid_struct_types):
-        exp_design = _proto.StructuredGSTDesign(target_model_filename_or_object, lsgst_lists)
-    else:
-        exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
+    exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)

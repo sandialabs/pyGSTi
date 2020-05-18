@@ -298,11 +298,11 @@ def get_standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gypi2'] = cirq.YPowGate(exponent=1 / 2)
     std_gatenames_to_cirq['Gympi2'] = cirq.YPowGate(exponent=-1 / 2)
     std_gatenames_to_cirq['Gypi'] = cirq.Y
-    std_gatenames_to_cirq['Gp'] = std_gatenames_to_cirq['Gzpi']  # todo : check that this is correct
-    std_gatenames_to_cirq['Gpdag'] = std_gatenames_to_cirq['Gzmpi2']  # todo : check that this is correct
+    std_gatenames_to_cirq['Gp'] = std_gatenames_to_cirq['Gzpi2']
+    std_gatenames_to_cirq['Gpdag'] = std_gatenames_to_cirq['Gzmpi2']
     std_gatenames_to_cirq['Gh'] = cirq.H
-    std_gatenames_to_cirq['Gt'] = cirq.T  # todo : check that this is correct
-    std_gatenames_to_cirq['Gtdag'] = cirq.T**-1  # todo : check that this is correct
+    std_gatenames_to_cirq['Gt'] = cirq.T
+    std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP

@@ -623,6 +623,10 @@ class GateSetTomography(_proto.Protocol):
         self.final_builders = objfn_builders.final_builders
 
         self.auxfile_types['initial_model'] = 'pickle'
+        self.auxfile_types['badfit_options'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['optimizer'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['iteration_builders'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['final_builders'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['iteration_builders'] = 'pickle'
@@ -1004,8 +1008,6 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['models_to_test'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'
         self.auxfile_types['gaugeopt_target'] = 'pickle'
-        self.auxfile_types['advancedOptions'] = 'pickle'
-        self.auxfile_types['comm'] = 'reset'
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes

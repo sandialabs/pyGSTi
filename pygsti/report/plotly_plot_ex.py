@@ -242,8 +242,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
              ow=orig_width if orig_width else "null",
              oh=orig_height if orig_height else "null",
              plotlyClickJS=plotly_click_js,
-             plotlyCreateJS=plotly_create_js,
-             plotlyResizeJS=plotly_resize_js)
+             plotlyCreateJS=plotly_create_js)
 
     #Add resize handler if needed
     if resizable:
