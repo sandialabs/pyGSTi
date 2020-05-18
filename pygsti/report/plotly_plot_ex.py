@@ -1,4 +1,6 @@
-""" Extends Plolty python library for additional needed functionality."""
+"""
+Extends Plolty python library for additional needed functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -69,6 +71,10 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         to be linked to by menu items.  For example, if `link_to` equals
         `("pdf",)` and `link_to_id` equals "plot1234", then a menu item linking
         to the file "plot1234.pdf" will be added to the renderd plot.
+
+    rel_figure_dir : str, optional
+        A relative path from the "current" path (the path of the generated
+        html documents) to figure files.  Usually something like `"figures"`.
 
     Returns
     -------
@@ -260,9 +266,19 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
 
 def init_notebook_mode_ex(connected=False):
     """
-    A copy of init_notebook_mode in plotly.offline except this version
-    loads the pyGSTi-customized plotly library when connected=False
-    (which contains fixes relevant to pyGSTi plots).
+    Similar to `init_notebook_mode` in `plotly.offline`.
+
+    The main difference is that this function loads the pyGSTi-customized plotly library
+    when `connected=False` (which contains fixes relevant to pyGSTi plots).
+
+    Parameters
+    ----------
+    connected : bool, optional
+        Whether an active internet connection should be assumed.
+
+    Returns
+    -------
+    str
     """
     global __PLOTLY_OFFLINE_INITIALIZED
 
@@ -304,7 +320,13 @@ def init_notebook_mode_ex(connected=False):
 
 
 def get_plotlyjs_ex():
-    """ Gets the custom pyGSTi version of plotly """
+    """
+    Gets the custom pyGSTi version of plotly
+
+    Returns
+    -------
+    str
+    """
     path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                          "templates", "offline", "plotly-latest.min.js")  # "plotly-polarfixed.js"
 

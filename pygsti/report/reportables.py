@@ -1,4 +1,6 @@
-"""Functions which compute named quantities for Models and Datasets."""
+"""
+Functions which compute named quantities for Models and Datasets.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -91,7 +93,23 @@ def evaluate(model_fn, cri=None, verbosity=0):
 
 
 def spam_dotprods(rho_vecs, povms):
-    """SPAM dot products (concatenates POVMS)"""
+    """
+    SPAM dot products (concatenates POVMS)
+
+    Parameters
+    ----------
+    rho_vecs : list
+        A list of state-preparation :class:`SPAMVec` objects.
+
+    povms : list
+        A list of :class:`POVM` objects.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 2D array of shape `(len(rho_vecs), num_evecs)` where `num_evecs`
+        is the total number of effect vectors in all of `povms`.
+    """
     nEVecs = sum(len(povm) for povm in povms)
     ret = _np.empty((len(rho_vecs), nEVecs), 'd')
     for i, rhoVec in enumerate(rho_vecs):
@@ -107,7 +125,21 @@ Spam_dotprods = _modf.spamfn_factory(spam_dotprods)  # init args == (model)
 
 
 def choi_matrix(gate, mx_basis):
-    """Choi matrix"""
+    """
+    Choi matrix
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     return _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
 
 
@@ -115,7 +147,21 @@ Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, op_label)
 
 
 def choi_evals(gate, mx_basis):
-    """Choi matrix eigenvalues"""
+    """
+    Choi matrix eigenvalues
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
@@ -125,7 +171,21 @@ Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, op_label)
 
 
 def choi_trace(gate, mx_basis):
-    """Trace of the Choi matrix"""
+    """
+    Trace of the Choi matrix
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    float
+    """
     choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
     return _np.trace(choi)
 
@@ -134,14 +194,35 @@ Choi_trace = _modf.opfn_factory(choi_trace)  # init args == (model, op_label)
 
 
 class GateEigenvalues(_modf.ModelFunction):
-    """Gate eigenvalues"""
+    """
+    Gate eigenvalues
+
+    Parameters
+    ----------
+    model : Model
+        Model gate is contained within.
+
+    oplabel : Label
+        The gate's label within `model`.
+    """
 
     def __init__(self, model, oplabel):
         self.oplabel = oplabel
         _modf.ModelFunction.__init__(self, model, [("gate", oplabel)])
 
     def evaluate(self, model):
-        """Evaluate at `model`"""
+        """
+        Evaluate at `model`
+
+        Parameters
+        ----------
+        model : Model
+            A model nearby in parameter space.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         evals, evecs = _np.linalg.eig(model.operations[self.oplabel].todense())
 
         ev_list = list(enumerate(evals))
@@ -157,7 +238,18 @@ class GateEigenvalues(_modf.ModelFunction):
         return self.evals
 
     def evaluate_nearby(self, nearby_model):
-        """Evaluate at a nearby model"""
+        """
+        Evaluate at a nearby model
+
+        Parameters
+        ----------
+        nearby_model : Model
+            A model nearby in parameter space.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         #avoid calling minweight_match again
         dMx = nearby_model.operations[self.oplabel] - self.G0
         #evalsM = evals0 + Uinv * (M-M0) * U
@@ -167,14 +259,35 @@ class GateEigenvalues(_modf.ModelFunction):
 
 
 class CircuitEigenvalues(_modf.ModelFunction):
-    """Circuit eigenvalues"""
+    """
+    Circuit eigenvalues
+
+    Parameters
+    ----------
+    model : Model
+        Model used to evaluate `circuit`.
+
+    circuit : Circuit
+        The circuit whose process matrix we want the eigenvalues of.
+    """
 
     def __init__(self, model, circuit):
         self.circuit = circuit
         _modf.ModelFunction.__init__(self, model, ["all"])
 
     def evaluate(self, model):
-        """Evaluate at `model`"""
+        """
+        Evaluate at `model`
+
+        Parameters
+        ----------
+        model : Model
+            Model to evaluate at.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         Mx = model.product(self.circuit)
         evals, evecs = _np.linalg.eig(Mx)
 
@@ -191,7 +304,18 @@ class CircuitEigenvalues(_modf.ModelFunction):
         return self.evals
 
     def evaluate_nearby(self, nearby_model):
-        """Evaluate at nearby model"""
+        """
+        Evaluate at nearby model
+
+        Parameters
+        ----------
+        nearby_model : Model
+            A model nearby in parameter space.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         #avoid calling minweight_match again
         Mx = nearby_model.product(self.circuit)
         dMx = Mx - self.Mx
@@ -209,7 +333,24 @@ class CircuitEigenvalues(_modf.ModelFunction):
 
 
 def rel_circuit_eigenvalues(model_a, model_b, circuit):
-    """Eigenvalues of dot(productB(circuit)^-1, productA(circuit))"""
+    """
+    Eigenvalues of dot(productB(circuit)^-1, productA(circuit))
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
@@ -221,7 +362,24 @@ Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
 
 
 def circuit_fro_diff(model_a, model_b, circuit):
-    """ Frobenius distance btwn productA(circuit) and productB(circuit)"""
+    """
+    Frobenius distance btwn productA(circuit) and productB(circuit)
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return fro_diff(A, B, model_b.basis)
@@ -232,8 +390,24 @@ Circuit_fro_diff = _modf.modelfn_factory(circuit_fro_diff)
 
 
 def circuit_entanglement_infidelity(model_a, model_b, circuit):
-    """ Entanglement infidelity btwn productA(circuit)
-        and productB(circuit)"""
+    """
+    Entanglement infidelity btwn productA(circuit) and productB(circuit)
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return entanglement_infidelity(A, B, model_b.basis)
@@ -244,8 +418,24 @@ Circuit_entanglement_infidelity = _modf.modelfn_factory(circuit_entanglement_inf
 
 
 def circuit_avg_gate_infidelity(model_a, model_b, circuit):
-    """ Average gate infidelity between productA(circuit)
-        and productB(circuit)"""
+    """
+    Average gate infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return avg_gate_infidelity(A, B, model_b.basis)
@@ -256,8 +446,24 @@ Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
 
 
 def circuit_jt_diff(model_a, model_b, circuit):
-    """ Jamiolkowski trace distance between productA(circuit)
-        and productB(circuit)"""
+    """
+    Jamiolkowski trace distance between productA(circuit) and productB(circuit)
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return jt_diff(A, B, model_b.basis)
@@ -269,8 +475,20 @@ Circuit_jt_diff = _modf.modelfn_factory(circuit_jt_diff)
 if _CVXPY_AVAILABLE:
 
     class CircuitHalfDiamondNorm(_modf.ModelFunction):
-        """ 1/2 diamond norm of difference between productA(circuit)
-            and productB(circuit)"""
+        """
+        1/2 diamond norm of difference between productA(circuit)  and productB(circuit)
+
+        Parameters
+        ----------
+        model_a : Model
+            The first model (to evaluate productA)
+
+        model_b : Model
+            The second model (to evaluate productB)
+
+        circuit : Circuit
+            The circuit.
+        """
 
         def __init__(self, model_a, model_b, circuit):
             self.circuit = circuit
@@ -279,7 +497,18 @@ if _CVXPY_AVAILABLE:
             _modf.ModelFunction.__init__(self, model_a, ["all"])
 
         def evaluate(self, model):
-            """Evaluate this function at `model`"""
+            """
+            Evaluate this function at `model`
+
+            Parameters
+            ----------
+            model : Model
+                Model to evaluate at.
+
+            Returns
+            -------
+            float
+            """
             A = model.product(self.circuit)
             dm, W = _tools.diamonddist(A, self.B, model.basis,
                                        return_x=True)
@@ -287,7 +516,18 @@ if _CVXPY_AVAILABLE:
             return 0.5 * dm
 
         def evaluate_nearby(self, nearby_model):
-            """Evaluate at a nearby model"""
+            """
+            Evaluate at a nearby model
+
+            Parameters
+            ----------
+            nearby_model : Model
+                A model nearby in parameter space.
+
+            Returns
+            -------
+            float
+            """
             mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
                 nearby_model.product(self.circuit), mxBasis)
@@ -308,8 +548,24 @@ else:
 
 
 def circuit_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
-    """ Nonunitary entanglement infidelity between productA(circuit)
-        and productB(circuit)"""
+    """
+    Nonunitary entanglement infidelity between productA(circuit) and productB(circuit)
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return nonunitary_entanglement_infidelity(A, B, model_b.basis)
@@ -320,8 +576,24 @@ Circuit_nonunitary_entanglement_infidelity = _modf.modelfn_factory(circuit_nonun
 
 
 def circuit_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
-    """ Nonunitary average gate infidelity between productA(circuit)
-        and productB(circuit)"""
+    """
+    Nonunitary average gate infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return nonunitary_avg_gate_infidelity(A, B, model_b.basis)
@@ -332,8 +604,24 @@ Circuit_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(circuit_nonunitar
 
 
 def circuit_eigenvalue_entanglement_infidelity(model_a, model_b, circuit):
-    """ Eigenvalue entanglement infidelity between productA(circuit)
-        and productB(circuit)"""
+    """
+    Eigenvalue entanglement infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_entanglement_infidelity(A, B, model_b.basis)
@@ -344,8 +632,24 @@ Circuit_eigenvalue_entanglement_infidelity = _modf.modelfn_factory(circuit_eigen
 
 
 def circuit_eigenvalue_avg_gate_infidelity(model_a, model_b, circuit):
-    """ Eigenvalue average gate infidelity between productA(circuit)
-        and productB(circuit)"""
+    """
+    Eigenvalue average gate infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_avg_gate_infidelity(A, B, model_b.basis)
@@ -356,8 +660,24 @@ Circuit_eigenvalue_avg_gate_infidelity = _modf.modelfn_factory(circuit_eigenvalu
 
 
 def circuit_eigenvalue_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
-    """ Eigenvalue nonunitary entanglement infidelity between
-        productA(circuit) and productB(circuit)"""
+    """
+    Eigenvalue nonunitary entanglement infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_entanglement_infidelity(A, B, model_b.basis)
@@ -369,8 +689,24 @@ Circuit_eigenvalue_nonunitary_entanglement_infidelity = _modf.modelfn_factory(
 
 
 def circuit_eigenvalue_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
-    """ Eigenvalue nonunitary average gate infidelity between
-        productA(circuit) and productB(circuit)"""
+    """
+    Eigenvalue nonunitary average gate infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_avg_gate_infidelity(A, B, model_b.basis)
@@ -382,8 +718,24 @@ Circuit_eigenvalue_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(
 
 
 def circuit_eigenvalue_diamondnorm(model_a, model_b, circuit):
-    """ Eigenvalue diamond distance between
-        productA(circuit) and productB(circuit)"""
+    """
+    Eigenvalue diamond distance between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_diamondnorm(A, B, model_b.basis)
@@ -394,8 +746,24 @@ Circuit_eigenvalue_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_diamon
 
 
 def circuit_eigenvalue_nonunitary_diamondnorm(model_a, model_b, circuit):
-    """ Eigenvalue nonunitary diamond distance between
-        productA(circuit) and productB(circuit)"""
+    """
+    Eigenvalue nonunitary diamond distance between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_diamondnorm(A, B, model_b.basis)
@@ -407,10 +775,26 @@ Circuit_eigenvalue_nonunitary_diamondnorm = _modf.modelfn_factory(circuit_eigenv
 
 def povm_entanglement_infidelity(model_a, model_b, povmlbl):
     """
-    POVM entanglement infidelity between `model_a` and `model_b`, equal to
-    `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is the extension
-    of the POVM from the classical space of k-outcomes to the space of
-    (diagonal) k by k density matrices.
+    POVM entanglement infidelity between `model_a` and `model_b`.
+
+    Equal to `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is
+    the extension of the POVM from the classical space of k-outcomes
+    to the space of (diagonal) k by k density matrices.
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model.
+
+    model_b : Model
+        The second model.
+
+    povmlbl : Label
+        The POVM label (must be present in both models).
+
+    Returns
+    -------
+    float
     """
     return 1.0 - _tools.povm_fidelity(model_a, model_b, povmlbl)
 
@@ -421,10 +805,26 @@ POVM_entanglement_infidelity = _modf.povmfn_factory(povm_entanglement_infidelity
 
 def povm_jt_diff(model_a, model_b, povmlbl):
     """
-    POVM Jamiolkowski trace distance between `model_a` and `model_b`, equal to
-    `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the extension
-    of the POVM from the classical space of k-outcomes to the space of
+    POVM Jamiolkowski trace distance between `model_a` and `model_b`
+
+    Equal to `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the
+    extension of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model.
+
+    model_b : Model
+        The second model.
+
+    povmlbl : Label
+        The POVM label (must be present in both models).
+
+    Returns
+    -------
+    float
     """
     return _tools.povm_jtracedist(model_a, model_b, povmlbl)
 
@@ -436,10 +836,26 @@ if _CVXPY_AVAILABLE:
 
     def povm_half_diamond_norm(model_a, model_b, povmlbl):
         """
-        Half the POVM diamond distance between `model_a` and `model_b`, equal
-        to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
+        Half the POVM diamond distance between `model_a` and `model_b`.
+
+        Equal to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
         of the POVM from the classical space of k-outcomes to the space of
         (diagonal) k by k density matrices.
+
+        Parameters
+        ----------
+        model_a : Model
+            The first model.
+
+        model_b : Model
+            The second model.
+
+        povmlbl : Label
+            The POVM label (must be present in both models).
+
+        Returns
+        -------
+        float
         """
         return 0.5 * _tools.povm_diamonddist(model_a, model_b, povmlbl)
     POVM_half_diamond_norm = _modf.povmfn_factory(povm_half_diamond_norm)
@@ -451,6 +867,15 @@ else:
 def decomposition(gate):
     """
     DEPRECATED: Decompose a 1Q `gate` into rotations about axes.
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    Returns
+    -------
+    ReportableQty
     """
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
@@ -466,7 +891,21 @@ def decomposition(gate):
 
 
 def upper_bound_fidelity(gate, mx_basis):
-    """ Upper bound on entanglement fidelity """
+    """
+    Upper bound on entanglement fidelity
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    float
+    """
     return _tools.fidelity_upper_bound(gate)[0]
 
 
@@ -475,7 +914,21 @@ Upper_bound_fidelity = _modf.opfn_factory(upper_bound_fidelity)
 
 
 def closest_ujmx(gate, mx_basis):
-    """ Jamiolkowski state of closest unitary to `gate` """
+    """
+    Jamiolkowski state of closest unitary to `gate`
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    float
+    """
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     return _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
 
@@ -485,7 +938,21 @@ Closest_ujmx = _modf.opfn_factory(closest_ujmx)
 
 
 def maximum_fidelity(gate, mx_basis):
-    """ Fidelity between `gate` and its closest unitary"""
+    """
+    Fidelity between `gate` and its closest unitary
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    float
+    """
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
@@ -497,7 +964,21 @@ Maximum_fidelity = _modf.opfn_factory(maximum_fidelity)
 
 
 def maximum_trace_dist(gate, mx_basis):
-    """ Jamiolkowski trace distance between `gate` and its closest unitary"""
+    """
+    Jamiolkowski trace distance between `gate` and its closest unitary
+
+    Parameters
+    ----------
+    gate : numpy.ndarray
+        the transfer-matrix specifying a gate's action.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `gate` is in.
+
+    Returns
+    -------
+    float
+    """
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     #closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
@@ -511,6 +992,11 @@ Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 def angles_btwn_rotn_axes(model):
     """
     Array of angles between the rotation axes of the gates of `model`.
+
+    Parameters
+    ----------
+    model : Model
+        The model to process.
 
     Returns
     -------
@@ -549,7 +1035,24 @@ Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 
 
 def entanglement_fidelity(a, b, mx_basis):
-    """Entanglement fidelity between a and b"""
+    """
+    Entanglement fidelity between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     return _tools.entanglement_fidelity(a, b, mx_basis)
 
 
@@ -558,7 +1061,24 @@ Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 
 
 def entanglement_infidelity(a, b, mx_basis):
-    """Entanglement infidelity between a and b"""
+    """
+    Entanglement infidelity between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     return 1 - _tools.entanglement_fidelity(a, b, mx_basis)
 
 
@@ -567,7 +1087,24 @@ Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 
 
 def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
-    """Entanglement infidelity between closest unitaries to a and b"""
+    """
+    Entanglement infidelity between closest unitaries to a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     decomp1 = _tools.decompose_gate_matrix(a)
     decomp2 = _tools.decompose_gate_matrix(b)
 
@@ -589,7 +1126,24 @@ Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
 
 
 def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
-    """ Frobenius distance between a and b """
+    """
+    Frobenius distance between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     return _tools.frobeniusdist(a, b)
 
 
@@ -598,7 +1152,24 @@ Fro_diff = _modf.opsfn_factory(fro_diff)
 
 
 def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
-    """ Jamiolkowski trace distance between a and b"""
+    """
+    Jamiolkowski trace distance between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     return _tools.jtracedist(a, b, mx_basis)
 
 
@@ -609,8 +1180,20 @@ Jt_diff = _modf.opsfn_factory(jt_diff)
 if _CVXPY_AVAILABLE:
 
     class HalfDiamondNorm(_modf.ModelFunction):
-        """Half the diamond distance bewteen `model_a.operations[op_label]` and
-           `model_b.operations[op_label]` """
+        """
+        Half the diamond distance bewteen `model_a.operations[op_label]` and `model_b.operations[op_label]`
+
+        Parameters
+        ----------
+        model_a : Model
+            The first model.
+
+        model_b : Model
+            The second model.
+
+        oplabel : Label
+            The operation (gate) label to compare.
+        """
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
@@ -619,7 +1202,18 @@ if _CVXPY_AVAILABLE:
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
         def evaluate(self, model):
-            """Evaluate at `model_a = model` """
+            """
+            Evaluate at `model_a = model`
+
+            Parameters
+            ----------
+            model : Model
+                Model to evaluate at.
+
+            Returns
+            -------
+            float
+            """
             gl = self.oplabel
             dm, W = _tools.diamonddist(model.operations[gl].todense(),
                                        self.B, model.basis, return_x=True)
@@ -627,7 +1221,18 @@ if _CVXPY_AVAILABLE:
             return 0.5 * dm
 
         def evaluate_nearby(self, nearby_model):
-            """Evaluates at a nearby model"""
+            """
+            Evaluates at a nearby model
+
+            Parameters
+            ----------
+            nearby_model : Model
+                A model nearby in parameter space.
+
+            Returns
+            -------
+            float
+            """
             gl = self.oplabel; mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
                 nearby_model.operations[gl].todense(), mxBasis)
@@ -636,6 +1241,20 @@ if _CVXPY_AVAILABLE:
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
 
     def half_diamond_norm(a, b, mx_basis):
+        """
+        Half the diamond distance between `a` and `b`.
+
+        Parameters
+        ----------
+        a : numpy.ndarray
+            The first process (transfer) matrix.
+
+        b : numpy.ndarray
+            The second process (transfer) matrix.
+
+        mx_basis : Basis or {'pp', 'gm', 'std'}
+            the basis that `a` and `b` are in.
+        """
         return 0.5 * _tools.diamonddist(a, b, mx_basis)
     #HalfDiamondNorm = _modf.opsfn_factory(half_diamond_norm)
     ## init args == (model1, model2, op_label)
@@ -646,13 +1265,44 @@ else:
 
 
 def std_unitarity(a, b, mx_basis):
-    """ a gauge-invariant quantity that behaves like the unitarity """
+    """
+    a gauge-invariant quantity that behaves like the unitarity
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     Lambda = _np.dot(a, _np.linalg.inv(b))
     return _tools.unitarity(Lambda, mx_basis)
 
 
 def eigenvalue_unitarity(a, b):
-    """ a gauge-invariant quantity that behaves like the unitarity """
+    """
+    a gauge-invariant quantity that behaves like the unitarity
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    Returns
+    -------
+    float
+    """
     Lambda = _np.dot(a, _np.linalg.inv(b))
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
@@ -660,7 +1310,24 @@ def eigenvalue_unitarity(a, b):
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
-    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of a*b^{-1} """
+    """
+    Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of a*b^{-1}
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     if isinstance(mx_basis, _DirectSumBasis): return -1  # deal w/block-dims later
     d2 = a.shape[0]; U = std_unitarity(a, b, mx_basis)
     return (d2 - 1.0) / d2 * (1.0 - _np.sqrt(U))
@@ -671,7 +1338,24 @@ Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement
 
 
 def nonunitary_avg_gate_infidelity(a, b, mx_basis):
-    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of a*b^{-1} """
+    """
+    Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of a*b^{-1}
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     if isinstance(mx_basis, _DirectSumBasis): return -1  # deal w/block-dims later
     d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
     U = std_unitarity(a, b, mx_basis)
@@ -683,7 +1367,24 @@ Nonunitary_avg_gate_infidelity = _modf.opsfn_factory(nonunitary_avg_gate_infidel
 
 
 def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis):
-    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1} """
+    """
+    Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1}
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]; U = eigenvalue_unitarity(a, b)
     return (d2 - 1.0) / d2 * (1.0 - _np.sqrt(U))
 
@@ -693,7 +1394,24 @@ Eigenvalue_nonunitary_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_n
 
 
 def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis):
-    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1} """
+    """
+    Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1}
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
     U = eigenvalue_unitarity(a, b)
     return (d - 1.0) / d * (1.0 - _np.sqrt(U))
@@ -704,7 +1422,24 @@ Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonun
 
 
 def eigenvalue_entanglement_infidelity(a, b, mx_basis):
-    """ Eigenvalue entanglement infidelity between a and b """
+    """
+    Eigenvalue entanglement infidelity between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
@@ -719,7 +1454,24 @@ Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement
 
 
 def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
-    """ Eigenvalue average gate infidelity between a and b """
+    """
+    Eigenvalue average gate infidelity between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
@@ -734,7 +1486,24 @@ Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidel
 
 
 def eigenvalue_diamondnorm(a, b, mx_basis):
-    """ Eigenvalue diamond distance between a and b """
+    """
+    Eigenvalue diamond distance between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
@@ -747,7 +1516,24 @@ Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)
 
 
 def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
-    """ Eigenvalue nonunitary diamond distance between a and b """
+    """
+    Eigenvalue nonunitary diamond distance between a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
@@ -760,7 +1546,24 @@ Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_di
 
 
 def avg_gate_infidelity(a, b, mx_basis):
-    """ Returns the average gate infidelity between a and b, where b is the "target" operation."""
+    """
+    Returns the average gate infidelity between a and b, where b is the "target" operation.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     return _tools.average_gate_infidelity(a, b, mx_basis)
 
 
@@ -769,7 +1572,24 @@ Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
 
 
 def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
-    """ Angle between the rotation axes of a and b (1-qubit gates)"""
+    """
+    Angle between the rotation axes of a and b (1-qubit gates)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     decomp = _tools.decompose_gate_matrix(a)
     decomp2 = _tools.decompose_gate_matrix(b)
     axisOfRotn = decomp.get('axis of rotation', None)
@@ -796,7 +1616,24 @@ Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
 
 
 def rel_eigvals(a, b, mx_basis):
-    """ Eigenvalues of b^{-1} * a"""
+    """
+    Eigenvalues of b^{-1} * a
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     target_op_inv = _np.linalg.inv(b)
     rel_op = _np.dot(target_op_inv, a)
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
@@ -807,7 +1644,24 @@ Rel_eigvals = _modf.opsfn_factory(rel_eigvals)
 
 
 def rel_log_tig_eigvals(a, b, mx_basis):
-    """ Eigenvalues of log(b^{-1} * a)"""
+    """
+    Eigenvalues of log(b^{-1} * a)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     rel_op = _tools.error_generator(a, b, mx_basis, "logTiG")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
@@ -817,7 +1671,24 @@ Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigvals)
 
 
 def rel_log_gti_eigvals(a, b, mx_basis):
-    """ Eigenvalues of log(a * b^{-1})"""
+    """
+    Eigenvalues of log(a * b^{-1})
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     rel_op = _tools.error_generator(a, b, mx_basis, "logGTi")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
@@ -827,7 +1698,24 @@ Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigvals)
 
 
 def rel_log_diff_eigvals(a, b, mx_basis):
-    """ Eigenvalues of log(a) - log(b)"""
+    """
+    Eigenvalues of log(a) - log(b)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     rel_op = _tools.error_generator(a, b, mx_basis, "logG-logT")
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
@@ -837,7 +1725,24 @@ Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigvals)
 
 
 def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigvals TODO
-    """ Eigenvalues of b^{-1} * a """
+    """
+    Eigenvalues of b^{-1} * a
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     rel_op = _np.dot(_np.linalg.inv(b), a)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
@@ -849,6 +1754,14 @@ Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 def errgen_and_projections(errgen, mx_basis):
     """
     Project `errgen` on all of the standard sets of error generators.
+
+    Parameters
+    ----------
+    errgen : numpy.ndarray
+        The error generator.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `errgen` is in.
 
     Returns
     -------
@@ -888,9 +1801,25 @@ def errgen_and_projections(errgen, mx_basis):
 
 def log_tig_and_projections(a, b, mx_basis):
     """
-    Projections of `log(b^{-1}*a)`.  Returns a dictionary of quantities with
-    keys 'error generator', '*X* projections', and '*X* projection power',
-    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    Projections of `log(b^{-1}*a)`.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    dict
+        A dictionary of quantities with keys 'error generator', '*X*
+        projections', and '*X* projection power', where *X* is 'hamiltonian',
+        'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logTiG")
     return errgen_and_projections(errgen, mx_basis)
@@ -902,9 +1831,25 @@ LogTiG_and_projections = _modf.opsfn_factory(log_tig_and_projections)
 
 def log_gti_and_projections(a, b, mx_basis):
     """
-    Projections of `log(a*b^{-1})`.  Returns a dictionary of quantities with
-    keys 'error generator', '*X* projections', and '*X* projection power',
-    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    Projections of `log(a*b^{-1})`.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    dict
+        A dictionary of quantities with keys 'error generator',
+        '*X* projections', and '*X* projection power',
+        where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logGTi")
     return errgen_and_projections(errgen, mx_basis)
@@ -916,9 +1861,25 @@ LogGTi_and_projections = _modf.opsfn_factory(log_gti_and_projections)
 
 def log_diff_and_projections(a, b, mx_basis):
     """
-    Projections of `log(a)-log(b)`.  Returns a dictionary of quantities with
-    keys 'error generator', '*X* projections', and '*X* projection power',
-    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    Projections of `log(a)-log(b)`.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    dict
+        A dictionary of quantities with keys 'error generator', '*X*
+        projections', and '*X* projection power',
+        where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logG-logT")
     return errgen_and_projections(errgen, mx_basis)
@@ -928,13 +1889,27 @@ LogGmlogT_and_projections = _modf.opsfn_factory(log_diff_and_projections)
 # init args == (model1, model2, op_label)
 
 
-def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_strs):
+def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     """
     Projections of `log(A*B^{-1})` using a gauge-robust technique.
-    Returns a dictionary of quantities with keys '*G* error generator',
-    '*G* *X* projections', and '*G* *X* projection power',
-    where *G* is a operation label and *X* is 'hamiltonian', 'stochastic', and
-    'affine'.
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (`A` gates).
+
+    model_b : Model
+        The second model (`B` gates).
+
+    synthetic_idle_circuits : list
+        Circuits that encode synthetic idles.
+
+    Returns
+    -------
+    dict
+        A dictionary of quantities with keys '*G* error generator', '*G* *X*
+        projections', and '*G* *X* projection power', where *G* is a operation
+        label and *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
     ret = {}
     mxBasis = model_b.basis  # target model is more likely to have a valid basis
@@ -1010,7 +1985,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_strs):
         return jac.real
 
     runningJac = None; runningY = None
-    for s in synthetic_idle_strs:
+    for s in synthetic_idle_circuits:
         Sa = model_a.product(s)
         Sb = model_b.product(s)
         assert(_np.linalg.norm(Sb - _np.identity(model_b.dim, 'd')) < 1e-6), \
@@ -1057,14 +2032,23 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_strs):
 
 
 Robust_LogGTi_and_projections = _modf.modelfn_factory(robust_log_gti_and_projections)
-# init args == (model_a, model_b, synthetic_idle_strs)
+# init args == (model_a, model_b, synthetic_idle_circuits)
 
 
 def general_decomposition(model_a, model_b):
     """
-    Decomposition of gates in `model_a` using those in `model_b` as their
-    targets.  This function uses a generalized decomposition algorithm that
+    Decomposition of gates in `model_a` using those in `model_b` as their targets.
+
+    This function uses a generalized decomposition algorithm that
     can gates acting on a Hilbert space of any dimension.
+
+    Parameters
+    ----------
+    model_a : Model
+        The model.
+
+    model_b : Model
+        The target model.
 
     Returns
     -------
@@ -1134,7 +2118,21 @@ General_decomposition = _modf.modelfn_factory(general_decomposition)
 
 
 def average_gateset_infidelity(model_a, model_b):
-    """ Average model infidelity """
+    """
+    Average model infidelity
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model.
+
+    model_b : Model
+        The second model.
+
+    Returns
+    -------
+    float
+    """
     # B is target model usually but must be "model_b" b/c of decorator coding...
     #TEMPORARILY disabled b/c RB analysis is broken
     #from ..extras.rb import theory as _rbtheory
@@ -1148,6 +2146,18 @@ Average_gateset_infidelity = _modf.modelfn_factory(average_gateset_infidelity)
 def predicted_rb_number(model_a, model_b):
     """
     Prediction of RB number based on estimated (A) and target (B) models
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model.
+
+    model_b : Model
+        The second model.
+
+    Returns
+    -------
+    float
     """
     #TEMPORARILY disabled b/c RB analysis is broken
     #from ..extras.rb import theory as _rbtheory
@@ -1159,7 +2169,24 @@ Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
 
 
 def vec_fidelity(a, b, mx_basis):
-    """ State fidelity between SPAM vectors a and b """
+    """
+    State fidelity between SPAM vectors a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
     rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return _tools.fidelity(rhoMx1, rhoMx2)
@@ -1170,7 +2197,24 @@ Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 
 
 def vec_infidelity(a, b, mx_basis):
-    """ State infidelity fidelity between SPAM vectors a and b """
+    """
+    State infidelity fidelity between SPAM vectors a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
     rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return 1 - _tools.fidelity(rhoMx1, rhoMx2)
@@ -1181,7 +2225,24 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 
 
 def vec_tr_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
-    """ Trace distance between SPAM vectors a and b """
+    """
+    Trace distance between SPAM vectors a and b
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
     rhoMx1 = _tools.vec_to_stdmx(a, mx_basis)
     rhoMx2 = _tools.vec_to_stdmx(b, mx_basis)
     return _tools.tracedist(rhoMx1, rhoMx2)
@@ -1192,7 +2253,22 @@ Vec_tr_diff = _modf.vecsfn_factory(vec_tr_diff)
 
 
 def vec_as_stdmx(vec, mx_basis):
-    """ SPAM vectors as a standard density matrix """
+    """
+    SPAM vectors as a standard density matrix
+
+    Parameters
+    ----------
+    vec : numpy.ndarray
+        SPAM vector as a 1D dense array.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `vec` is in.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 2D array (matrix) that is `vec` in the standard basis.
+    """
     return _tools.vec_to_stdmx(vec, mx_basis)
 
 
@@ -1201,7 +2277,21 @@ Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 
 
 def vec_as_stdmx_eigenvalues(vec, mx_basis):
-    """ Eigenvalues of the density matrix corresponding to a SPAM vector """
+    """
+    Eigenvalues of the density matrix corresponding to a SPAM vector
+
+    Parameters
+    ----------
+    vec : numpy.ndarray
+        SPAM vector as a 1D dense array.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `vec` is in.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     mx = _tools.vec_to_stdmx(vec, mx_basis)
     return _np.linalg.eigvals(mx)
 
@@ -1212,8 +2302,7 @@ Vec_as_stdmx_eigenvalues = _modf.vecfn_factory(vec_as_stdmx_eigenvalues)
 
 def info_of_opfn_by_name(name):
     """
-    Returns a nice human-readable name and tooltip for a given gate-function
-    abbreviation.
+    Returns a nice human-readable name and tooltip for a given gate-function abbreviation.
 
     Parameters
     ----------
@@ -1288,12 +2377,14 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     Parameters
     ----------
     name : str
-        An appreviation for a gate-function name.  Allowed values are the
+        An appreviation for a operation-function name.  Allowed values are the
         same as those of :func:`info_of_opfn_by_name`.
 
-    model, target_model : Model
-        The models to compare.  Only the element or product given by
-        `op_label_or_string` is compared using the named gate-function.
+    model : Model
+        The model used by the operation-function.
+
+    target_model : Model
+        The target model.
 
     op_label_or_string : str or Circuit or tuple
         The operation label or sequence of labels to compare.  If a sequence
