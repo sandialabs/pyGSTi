@@ -223,7 +223,7 @@ construction:
     create_standard_localnoise_sequences: create_standard_localnoise_circuits
     create_xycnot_cloudnoise_sequences: _create_xycnot_cloudnoise_circuits
     fidpairs_to_gatename_fidpair_list: _fidpairs_to_gatename_fidpair_list
-    filter_nqubit_sequences: _filter_nqubit_circuits
+    filter_nqubit_sequences: _filter_nqubit_circuittuple
     find_amped_polys_for_clifford_syntheticidle: _find_amped_polynomials_for_clifford_syntheticidle
     find_amped_polys_for_syntheticidle: _find_amped_polynomials_for_syntheticidle
     gatename_fidpair_list_to_fidpairs: _gatename_fidpair_list_to_fidpairs
@@ -750,7 +750,7 @@ objects:
       get_sstvd: sstvd
       get_tvd: tvd
       get_worst_circuits: worst_circuits
-      implement: null
+      implement: run
     compute_llr_threshold: _compute_llr_threshold
     is_circuit_allowed_by_exclusion: _is_circuit_allowed_by_exclusion
     is_circuit_allowed_by_inclusion: _is_circuit_allowed_by_inclusion
@@ -998,7 +998,7 @@ objects:
     HypothesisTest:
       __name__: null
       add_pvalues: null
-      implement: null
+      implement: run
   implicitmodel.py:
     ImplicitOpModel:
       __name__: null
@@ -2964,7 +2964,7 @@ protocols:
       write: null
     ProtocolData:
       __name__: null
-      filter_paths: null
+      filter_paths: prune_tree
       from_dir: null
       is_multipass: null
       passes: null
@@ -3041,7 +3041,7 @@ protocols:
     TreeNode:
       __name__: null
       child_category: null
-      filter_paths: null
+      filter_paths: prune_tree
       from_dir: null
       get_tree_paths: underlying_tree_paths
       items: null
