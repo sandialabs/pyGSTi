@@ -27,7 +27,7 @@ class AbstractCircuitStructureTester(BaseCase):
 
     def test_create_plaquette(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.create_plaquette(base_str="")
+            self.gss.create_plaquette(base_circuit="")
 
     def test_get_plaquette(self):
         with self.assertRaises(NotImplementedError):

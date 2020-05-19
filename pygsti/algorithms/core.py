@@ -619,10 +619,10 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
 
     #Step 3: solve least squares minimization problem
     if mdl.simtype in ("termgap", "termorder"):
-        opt_result = _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_term_runopt(objective, optimizer, resource_alloc, printer)
     else:
         #Normal case of just a single "sub-iteration"
-        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -879,7 +879,7 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
         optimizer.oob_check_interval = oob_check_interval
         # don't stop early on last iter - do as much as possible.
         optimizer.oob_action = "reject" if bFinalIter else "stop"
-        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
 
         if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
