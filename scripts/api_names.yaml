@@ -221,7 +221,7 @@ construction:
     create_cloudnoise_sequences: create_cloudnoise_circuits
     create_standard_cloudnoise_sequences: create_standard_cloudnoise_circuits
     create_standard_localnoise_sequences: create_standard_localnoise_circuits
-    create_xycnot_cloudnoise_sequences: create_xycnot_cloudnoise_circuits
+    create_xycnot_cloudnoise_sequences: _create_xycnot_cloudnoise_circuits
     fidpairs_to_gatename_fidpair_list: _fidpairs_to_gatename_fidpair_list
     filter_nqubit_sequences: _filter_nqubit_circuits
     find_amped_polys_for_clifford_syntheticidle: _find_amped_polynomials_for_clifford_syntheticidle
@@ -698,7 +698,7 @@ objects:
       add_compilation_of: null
       add_local_compilation_of: null
       add_nonlocal_compilation_of: null
-      compute_connectivity_of: null
+      compute_connectivity_of: _compute_connectivity_of
       construct_local_compilation_of: _create_local_compilation_of
       construct_nonlocal_compilation_of: _create_nonlocal_compilation_of
       filter_connectivity: null
@@ -774,7 +774,7 @@ objects:
       add_series_data: null
       add_series_from_dataset: null
       add_std_nqubit_outcome_labels: null
-      build_repetition_counts: add_explicit_repetition_counts
+      build_repetition_counts: _add_explicit_repetition_counts
       copy: null
       copy_nonstatic: null
       done_adding_data: null
@@ -851,7 +851,7 @@ objects:
       num_final_strings: num_final_circuits
       permute_computation_to_original: null
       permute_original_to_computation: _permute_original_to_computation
-      print_analysis: null
+      print_analysis: _print_analysis
       split: null
   explicitcalc.py:
     ExplicitOpModelCalc:
@@ -1168,7 +1168,7 @@ objects:
       get_prep: prep
     LayerLizard:
       __name__: null
-      get_circuitlabel_op: create_op_for_circuitlabel
+      get_circuitlabel_op: _create_op_for_circuitlabel
       set_opcache: null
   localnoisemodel.py:
     LocalNoiseModel:
@@ -1385,22 +1385,22 @@ objects:
     MDSObjectiveFunction:  # XXX parameter `circuit_list` -> `circuits`
       __name__: null
       approximate_hessian: null
-      compute_count_vectors: null
+      compute_count_vectors: _compute_count_vectors
       description: null
       dlsvec: null
       dpercircuit: null
       dterms: null
       fn: null
       get_chi2k_distributed_qty: chi2k_distributed_qty
-      get_evaltree_subcalls: evaltree_subcalls
+      get_evaltree_subcalls: _evaltree_subcalls
       get_num_data_params: num_data_params  # XXX make property?
-      get_persistent_memory_estimate: persistent_memory_estimate
+      get_persistent_memory_estimate: _persistent_memory_estimate
       hessian: null
       jacobian: null
       lsvec: null
       name: null
       percircuit: null
-      precompute_omitted_freqs: null
+      precompute_omitted_freqs: _precompute_omitted_freqs
       terms: null
     MaxLogLFunction:  # XXX parameter `circuit_list` -> `circuits`
       __name__: null
@@ -1453,9 +1453,9 @@ objects:
     RawFreqWeightedChi2Function:
       __name__: null
       get_chi2k_distributed_qty: chi2k_distributed_qty
-      get_dweights: dweights
-      get_hweights: hweights
-      get_weights: weights
+      get_dweights: _dweights
+      get_hweights: _hweights
+      get_weights: _weights
       set_regularization: null
       zero_freq_dterms: null
       zero_freq_hterms: null
@@ -1532,22 +1532,22 @@ objects:
       builder: null
       dlsvec: null
       dterms: null
-      fill_dterms_penalty: null
-      fill_lspenaltyvec_jac: null
+      fill_dterms_penalty: _fill_dterms_penalty
+      fill_lspenaltyvec_jac: _fill_lspenaltyvec_jac
       hessian: null
       hessian_brute: null
-      lspenaltyvec: null
+      lspenaltyvec: _lspenaltyvec
       lsvec: null
-      omitted_prob_first_dterms: null
-      omitted_prob_first_terms: null
-      penaltyvec: null
+      omitted_prob_first_dterms: _omitted_prob_first_dterms
+      omitted_prob_first_terms: _omitted_prob_first_terms
+      penaltyvec: _penaltyvec
       set_penalties: null
       terms: null
-      update_dlsvec_for_omitted_probs: null
-      update_dterms_for_omitted_probs: null
-      update_lsvec_for_omitted_probs: null
-      update_terms_for_omitted_probs: null
-    objfn: null
+      update_dlsvec_for_omitted_probs: _update_dlsvec_for_omitted_probs
+      update_dterms_for_omitted_probs: _update_dterms_for_omitted_probs
+      update_lsvec_for_omitted_probs: _update_lsvec_for_omitted_probs
+      update_terms_for_omitted_probs: _update_terms_for_omitted_probs
+    objfn: _objfn
   opcalc:
     fastopcalc.pyx:
       abs_sum_bulk_eval_compact_polys_complex: abs_sum_bulk_eval_compact_polynomials_complex
@@ -1871,7 +1871,7 @@ objects:
       evaluate: null
       fromrep: from_rep
       get_degree: degree  # XXX make property
-      get_vindices_per_int: vindices_per_int
+      get_vindices_per_int: _vindices_per_int
       map_indices: null  # again, better prefix for "map"? "update"?
       map_indices_inplace: null
       mapvec_indices: null
@@ -1886,14 +1886,14 @@ objects:
     PLATFORM_BITS: null
     SLOWPolynomial:  # XXX better naming?
       __name__: null
-      check_fastpoly: check_fast_polynomial
+      check_fastpoly: _check_fast_polynomial
       compact: null
       copy: null
       deriv: null
       evaluate: null
       fromrep: from_rep
       get_degree: degree   # XXX make property
-      get_vindices_per_int: vindices_per_int
+      get_vindices_per_int: _vindices_per_int
       map_indices: null
       map_indices_inplace: null
       mult: null
@@ -1961,8 +1961,6 @@ objects:
       add_one_q_gate_relations: null
       add_std_compilations: null  # XXX std
       add_std_model: null
-      get_all_connected_sets: find_all_connected_nqubit_sets
-      get_all_connected_sets_new: null  # TODO ask TIM how this is different
       get_edges: find_qubit_connections  # XXX or `find_qubit_connections_within`
       get_std_model: create_std_model
   profiler.py:
@@ -2818,7 +2816,7 @@ objects:
       circuit_budget: null
       circuit_budgets: null
       get_descriptive_dict: description  # XXX make property
-      get_op_budget: budget_for_operation
+      get_op_budget: budget_for
     WildcardBudget:
       __name__: null
       circuit_budget: null
@@ -2922,12 +2920,12 @@ protocols:
       run: null
     StandardGSTDesign:
       __name__: null
-    add_badfit_estimates: null
-    add_gauge_opt: null  # XXX parameter `base_est_label` -> `base_estimate_label`
+    add_badfit_estimates: _add_badfit_estimates
+    add_gauge_opt: _add_gauge_opt  # XXX parameter `base_est_label` -> `base_estimate_label`
     gaugeopt_suite_to_dictionary: null
-    get_robust_scaling: compute_robust_scaling  # XXX parameter `circuit_list` -> `circuits`
-    get_wildcard_budget: compute_wildcard_budget  # XXX parameter `circuits_to_use` -> `circuits`
-    reoptimize_with_weights: null  # XXX parameter `circuit_list` -> `circuits`
+    get_robust_scaling: _compute_robust_scaling  # XXX parameter `circuit_list` -> `circuits`
+    get_wildcard_budget: _compute_wildcard_budget  # XXX parameter `circuits_to_use` -> `circuits`
+    reoptimize_with_weights: _reoptimize_with_weights  # XXX parameter `circuit_list` -> `circuits`
   modeltest.py:
     ModelTest:
       __name__: null
@@ -2939,14 +2937,14 @@ protocols:
       truncate: null
     CombinedExperimentDesign:
       __name__: null
-      create_subdata: null
+      create_subdata: _create_subdata
     DefaultRunner:
       __name__: null
       run: null
     ExperimentDesign:
       __name__: null
       add_default_protocol: null
-      create_subdata: null
+      create_subdata: _create_subdata
       from_dir: null
       set_actual_circuits_executed: null
       setup_nameddict: null
@@ -2997,28 +2995,12 @@ protocols:
       run: null
     SimultaneousExperimentDesign:
       __name__: null
-      create_subdata: null
+      create_subdata: _create_subdata
     TreeRunner:
       __name__: null
       run: null
     run_default_protocols: null
   rb.py:
-    Benchmark:
-      __name__: null
-      add_bootstrap_qtys: null
-      circuit_datatypes: null
-      compute_circuit_data: null
-      compute_dict: null
-      compute_dscmp_data: null
-      compute_predicted_probs: null
-      compute_summary_data: null
-      create_depthwidth_dict: null
-      dscmp_datatypes: null
-      summary_datatypes: null
-    BenchmarkingDesign:
-      __name__: null
-    ByDepthDesign:
-      __name__: null
     CliffordRBDesign:
       __name__: null
       from_existing_circuits: null
@@ -3028,39 +3010,12 @@ protocols:
     MirrorRBDesign:
       __name__: null
       from_existing_circuits: null
-    PredictedVolumetricBenchmark:
-      __name__: null
-    RB:
-      __name__: null
-      run: null
-    RBResults:
-      __name__: null
-      plot: null
     RandomizedBenchmarking:
       __name__: null
       run: null
     RandomizedBenchmarkingResults:
       __name__: null
       plot: null
-    VB:
-      __name__: null
-      run: null
-    VBGrid:
-      __name__: null
-      run: null
-    VBResults:
-      __name__: null
-    VolumetricBenchmark:
-      __name__: null
-      run: null
-    VolumetricBenchmarkGrid:
-      __name__: null
-      run: null
-    VolumetricBenchmarkGridPP:
-      __name__: null
-      run: null
-    VolumetricBenchmarkingResults:
-      __name__: null
   rpe.py:
     RobustPhaseEstimation:
       __name__: null
@@ -3093,7 +3048,25 @@ protocols:
       keys: null
       view: null
       write: null
-      write_children: null
+      write_children: _write_children
+  vb.py:
+    BenchmarkingDesign:
+      __name__: null
+    ByDepthDesign:
+      __name__: null
+    SummaryStatistics:
+      __name__: null
+      add_bootstrap_qtys: _add_bootstrap_qtys
+      circuit_statistics: null
+      compute_circuit_data: _compute_circuit_statistics
+      compute_dict: _compute_dict
+      compute_dscmp_data: _compute_dscmp_statistics
+      compute_predicted_probs: _compute_predicted_probs
+      compute_summary_data: _compute_summary_statistics
+      create_depthwidth_dict: _create_depthwidth_dict
+      dscmp_statistics: null
+      summary_statistics: null
+
 report:
   autotitle.py:
     generate_name: null
@@ -3695,7 +3668,7 @@ tools:
   matrixmod2.py:  # XXX move to `matrixmodulo2.py`
     Axb_mod2: null
     albert_factor: null
-    check_proper_permutation: null
+    check_proper_permutation: _check_proper_permutation
     detmod2: det_mod2
     diagonal_as_matrix: null
     diagonal_as_vec: null
@@ -3715,7 +3688,7 @@ tools:
   matrixtools.py:
     EXPM_DEFAULT_TOL: null
     approximate_matrix_log: null
-    array_eq: null
+    array_eq: _array_eq
     column_basis_vector: null
     complex_compare: null
     csr_sum: null
