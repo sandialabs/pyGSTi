@@ -1,4 +1,6 @@
-""" Classes corresponding to text blocks within a Workspace context."""
+"""
+Classes corresponding to text blocks within a Workspace context.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,8 +15,18 @@ from .textblock import ReportText as _ReportText
 
 
 class StdoutText(WorkspaceText):
-    """A text block showing standard output recorded using
-       VerbosityPrinter objects"""
+    """
+    A text block showing standard output recorded using VerbosityPrinter objects.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    vb_recorded_output : list
+        A list of `(type,level,message)` tuples, one per line/message
+        as returned by :method:`VerbosityPrinter.stop_recording`.
+    """
 
     def __init__(self, ws, vb_recorded_output):
         """

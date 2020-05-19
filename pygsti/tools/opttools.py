@@ -1,4 +1,6 @@
-""" This module defines tools for optimization and profiling """
+"""
+This module defines tools for optimization and profiling
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,11 +24,21 @@ import warnings
 
 @deprecated_fn('functools.lru_cache')
 def cache_by_hashed_args(obj):
-    """ Decorator for caching a function values
+    """
+    Decorator for caching a function values
 
     .. deprecated:: v0.9.8.3
-       :func:`cache_by_hashed_args` will be removed in pyGSTi
-       v0.9.9. Use :func:`functools.lru_cache` instead.
+        :func:`cache_by_hashed_args` will be removed in pyGSTi
+        v0.9.9. Use :func:`functools.lru_cache` instead.
+
+    Parameters
+    ----------
+    obj : function
+        function to decorate
+
+    Returns
+    -------
+    function
     """
     return lru_cache(maxsize=128)(obj)
 
@@ -91,5 +103,11 @@ def timed_block(label, time_dict=None, printer=None, verbosity=2, round_places=6
 
 
 def time_hash():
-    """Get string-version of current time"""
+    """
+    Get string-version of current time
+
+    Returns
+    -------
+    str
+    """
     return str(datetime.now())

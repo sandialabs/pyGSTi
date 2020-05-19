@@ -1,4 +1,6 @@
-""" Helper Functions for generating plots """
+"""
+Helper Functions for generating plots
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -309,9 +311,6 @@ def small_eigval_err_rate(sigma, direct_gst_models):
     sigma : Circuit or tuple of operation labels
         The gate sequence that is used to estimate the error rate
 
-    dataset : DataSet
-        The dataset used obtain operation sequence frequencies
-
     direct_gst_models : dictionary of Models
         A dictionary with keys = operation sequences and
         values = Models.
@@ -608,8 +607,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
-    Computes matrix of 2*log-likelihood-ratios comparing the
-    datasets of `dscomparator`.
+    Computes matrix of 2*log-likelihood-ratios comparing the datasets of `dscomparator`.
 
     Parameters
     ----------
@@ -637,8 +635,9 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 @smart_cached
 def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     """
-    Computes matrix of -log10(pvalues) for testing the stable-circuit ("no drift") null hypothesis
-    in each cirucit, using the "max power in spectra" test.
+    Computes matrix of -log10(pvalues) for testing the stable-circuit ("no drift") null hypothesis in each circuit.
+
+    This uses the "max power in spectra" test.
 
     Parameters
     ----------
@@ -659,7 +658,6 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
         spectra" test, on the relevant sequences. This operation sequences correspond to the
         operation sequences where a base circuit is sandwiched between the each prep-fiducial
         and effect-fiducial pair.
-
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
     stabilityanalyzer = drifttuple[0]
@@ -698,7 +696,6 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
         The max tvd for quantifying deviations from the data mean. This
         operation sequences correspond to the operation sequences where a base circuit
         is sandwiched between the each prep-fiducial and effect-fiducial pair.
-
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
     stabilityanalyzer = drifttuple[0]
@@ -750,8 +747,9 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard=None, return_all=False,
                   comm=None, cache=None):
     """
-    Computes the number of standard deviations of model violation, comparing
-    the data in `dataset` with the `model` model at the "points" (sequences)
+    Computes the number of standard deviations of model violation between `model` and `data`.
+
+    Function compares the data in `dataset` with the `model` model at the "points" (circuits)
     specified by `circuit_list`.
 
     Parameters
@@ -767,7 +765,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         :class:`BulkCircuitList` object may be given to include additional information
         (e.g. aliases) along with the list of circuits.
 
-    objfn_builder: ObjectiveFunctionBuilder
+    objfn_builder : ObjectiveFunctionBuilder
         Builds the objective function to be used to compute the model violation.
 
     np : int, optional
@@ -797,23 +795,18 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
     -------
     Nsig : float
         The number of sigma of model violaition
-
     rating : int
         A 1-5 rating (e.g. "number of stars") used to indicate the rough
         abililty of the model to fit the data (better fit = higher rating).
-
     modelViolation : float
         The raw value of the objective function.  Only returned when
         `return_all==True`.
-
     expectedViolation : float
         The expected value of the objective function.  Only returned when
         `return_all==True`.
-
     Ns, np : int
         The number of dataset and model parameters, respectively. Only
         returned when `return_all==True`.
-
     """
     if isinstance(objfn_builder, str):
         objfn_builder = _objfns.ObjectiveFunctionBuilder.simple(objfn_builder)

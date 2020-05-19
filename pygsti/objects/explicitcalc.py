@@ -1,4 +1,6 @@
-""" Defines the ExplicitOpModelCalc class and supporting functionality."""
+"""
+Defines the ExplicitOpModelCalc class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -28,12 +30,33 @@ P_RANK_TOL = 1e-7
 
 class ExplicitOpModelCalc(object):
     """
+    Performs calculations with explicitly-represented objects.
+
     This class performs calculations with *simplified* objects (so don't
     need to worry abount POVMs or Instruments, just preps, ops, & effects),
-    but, unlike fwd simulators, these calculations require knowledge of *all*
+    but, unlike forward simulators, these calculations require knowledge of *all*
     of the possible operations in each category (not just the ones in a given
     circuti).  As such, instances of `ExplicitOpModelCalc` are almost always
     associated with an instance of `ExplicitOpModel`.
+
+    Parameters
+    ----------
+    dim : int
+        The dimenstion of the Hilbert-Schmidt space upon which the
+        various operators act.
+
+    simplified_preps : dict
+        Dictionary containing *all* the possible state preparations.
+
+    simplified_ops : dict
+        Dictionary containing *all* the possible layer operations.
+
+    simplified_effects : dict
+        Dictionary containing *all* the possible POVM effects.
+
+    np : int
+        The total number of parameters in all the operators (the
+        number of parameters of the associated :class:`ExplicitOpModel`).
     """
 
     def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, np):
@@ -62,8 +85,7 @@ class ExplicitOpModelCalc(object):
 
     def iter_objs(self):
         """
-        Return an iterator over all the state preparation,
-        POVM effect, and layer operations.
+        An iterator over all the state preparation, POVM effect, and layer operations.
         """
         for lbl, obj in _itertools.chain(self.preps.items(),
                                          self.effects.items(),
@@ -71,18 +93,24 @@ class ExplicitOpModelCalc(object):
             yield (lbl, obj)
 
     def copy(self):
-        """ Return a shallow copy of this ExplicitOpModelCalc """
+        """
+        Return a shallow copy of this ExplicitOpModelCalc
+
+        Returns
+        -------
+        ExplicitOpModelCalc
+        """
         return ExplicitOpModelCalc(self.dim, self.preps, self.operations, self.effects, self.Np)
 
     def frobeniusdist(self, other_calc, transform_mx=None,
                       item_weights=None, normalize=True):
         """
-        Compute the weighted frobenius norm of the difference between this
-        calc object and `other_calc`.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using
-        `item_weights` as applicable), then summed.  The value returned is the
-        square root of this sum, or the square root of this sum divided by the
-        number of summands if normalize == True.
+        Compute the weighted frobenius norm of the difference between this calc object and `other_calc`.
+
+        Differences in each corresponding gate matrix and spam vector element are squared,
+        weighted (using `item_weights` as applicable), then summed.  The value returned is
+        the square root of this sum, or the square root of this sum divided by the number
+        of summands if normalize == True.
 
         Parameters
         ----------
@@ -97,19 +125,19 @@ class ExplicitOpModelCalc(object):
             not alter the values stored in this model.
 
         item_weights : dict, optional
-           Dictionary of weighting factors for individual gates and spam
-           operators. Weights are applied multiplicatively to the squared
-           differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels, as well
-           as the two special labels `"gates"` and `"spam"` which apply to all
-           of the gate or SPAM elements, respectively (but are overridden by
-           specific element values).  Values are floating point numbers.
-           By default, all weights are 1.0.
+            Dictionary of weighting factors for individual gates and spam
+            operators. Weights are applied multiplicatively to the squared
+            differences, i.e., (*before* the final square root is taken).  Keys
+            can be gate, state preparation, POVM effect, or spam labels, as well
+            as the two special labels `"gates"` and `"spam"` which apply to all
+            of the gate or SPAM elements, respectively (but are overridden by
+            specific element values).  Values are floating point numbers.
+            By default, all weights are 1.0.
 
         normalize : bool, optional
-           if True (the default), the sum of weighted squared-differences
-           is divided by the weighted number of differences before the
-           final square root is taken.  If False, the division is not performed.
+            if True (the default), the sum of weighted squared-differences
+            is divided by the weighted number of differences before the
+            final square root is taken.  If False, the division is not performed.
 
         Returns
         -------
@@ -170,8 +198,10 @@ class ExplicitOpModelCalc(object):
 
     def residuals(self, other_calc, transform_mx=None, item_weights=None):
         """
-        Compute the weighted residuals between two models/calcs (the differences
-        in corresponding operation matrix and spam vector elements).
+        Compute the weighted residuals between two models/calcs.
+
+        Residuals are the differences in corresponding operation matrix
+        and spam vector elements.
 
         Parameters
         ----------
@@ -186,15 +216,15 @@ class ExplicitOpModelCalc(object):
             not alter the values stored in this model.
 
         item_weights : dict, optional
-           Dictionary of weighting factors for individual gates and spam
-           operators. Weights applied such that they act multiplicatively on
-           the *squared* differences, so that the residuals themselves are
-           scaled by the square roots of these weights.  Keys can be gate, state
-           preparation, POVM effect, or spam labels, as well as the two special
-           labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
-           elements, respectively (but are overridden by specific element
-           values).  Values are floating point numbers.  By default, all weights
-           are 1.0.
+            Dictionary of weighting factors for individual gates and spam
+            operators. Weights applied such that they act multiplicatively on
+            the *squared* differences, so that the residuals themselves are
+            scaled by the square roots of these weights.  Keys can be gate, state
+            preparation, POVM effect, or spam labels, as well as the two special
+            labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
+            elements, respectively (but are overridden by specific element
+            values).  Values are floating point numbers.  By default, all weights
+            are 1.0.
 
         Returns
         -------
@@ -260,8 +290,9 @@ class ExplicitOpModelCalc(object):
 
     def jtracedist(self, other_calc, transform_mx=None, include_spam=True):
         """
-        Compute the Jamiolkowski trace distance between two
-        models/calcs, defined as the maximum of the trace distances
+        Compute the Jamiolkowski trace distance between two models/calcs.
+
+        This is defined as the maximum of the trace distances
         between each corresponding gate, including spam gates.
 
         Parameters
@@ -328,10 +359,10 @@ class ExplicitOpModelCalc(object):
 
     def diamonddist(self, other_calc, transform_mx=None, include_spam=True):
         """
-        Compute the diamond-norm distance between two
-        models/calcs, defined as the maximum
-        of the diamond-norm distances between each
-        corresponding gate, including spam gates.
+        Compute the diamond-norm distance between two models/calcs.
+
+        This is defined as the maximum of the diamond-norm distances between
+        each corresponding gate, including spam gates.
 
         Parameters
         ----------
@@ -397,7 +428,9 @@ class ExplicitOpModelCalc(object):
 
     def deriv_wrt_params(self):
         """
-        Construct a matrix whose columns are the vectorized derivatives of all
+        The element-wise derivative of all this calculator's operations.
+
+        Constructs a matrix whose columns are the vectorized derivatives of all
         this calc object's (model's) raw matrix and vector *elements* (placed in
         a vector) with respect to each single model parameter.
 
@@ -531,9 +564,10 @@ class ExplicitOpModelCalc(object):
 
     def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
-        Construct a projector onto the non-gauge parameter space, useful for
-        isolating the gauge degrees of freedom from the non-gauge degrees of
-        freedom.
+        Constructs a projector onto the non-gauge parameter space.
+
+        This is useful for isolating the gauge degrees of freedom from the non-gauge
+        degrees of freedom.
 
         Parameters
         ----------
@@ -552,15 +586,14 @@ class ExplicitOpModelCalc(object):
             essentially sets the off-diagonal block of the metric used for
             orthogonality in the "gauge + non-gauge" space.  It is for advanced
             usage and typically left as None (the default).
-.
 
         Returns
         -------
         numpy array
-           The projection operator as a N x N matrix, where N is the number
-           of parameters (obtained via num_params()).  This projector acts on
-           parameter-space, and has rank equal to the number of non-gauge
-           degrees of freedom.
+            The projection operator as a N x N matrix, where N is the number
+            of parameters (obtained via num_params()).  This projector acts on
+            parameter-space, and has rank equal to the number of non-gauge
+            degrees of freedom.
         """
 
         # We want to divide the Model-space H (a Hilbert space, 56-dimensional in the 1Q, 3-gate, 2-vec case)

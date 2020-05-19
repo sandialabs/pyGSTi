@@ -1,4 +1,6 @@
-""" Defines the TermForwardSimulator calculator class"""
+"""
+Defines the TermForwardSimulator calculator class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -40,54 +42,194 @@ _dummy_profiler = _DummyProfiler()
 
 class TermForwardSimulator(ForwardSimulator):
     """
-    Encapsulates a calculation tool used by model objects that evaluates
-    probabilities to some order in a small (error) parameter using Gates
-    that can be expanded into terms of different orders and PureStateSPAMVecs.
+    A forward-simulation calculator that uses term-path-integration to compute probabilities.
+
+    Parameters
+    ----------
+    dim : int
+        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
+
+    layer_op_server : LayerLizard
+        An object that can be queried for circuit-layer operations.
+
+    paramvec : numpy.ndarray
+        The current parameter vector of the Model.
+
+    mode : {"taylor-order", "pruned", "direct"}
+        Overall method used to compute (approximate) circuit probabilities.
+        The `"taylor-order"` mode includes all taylor-expansion terms up to a
+        fixed and pre-defined order, fixing a single "path set" at the outset.
+        The `"pruned"` mode selects a path set based on a heuristic (sometimes a
+        true upper bound) calculation of the error in the approximate probabilities.
+        This method effectively "prunes" the paths to meet a fixed desired accuracy.
+        The `"direct"` method is still under development.  Its intention is to perform
+        path integrals directly without the use of polynomial computation and caching.
+        Initial testing showed the direct method to be much slower for common QCVV tasks,
+        making it less urgent to complete.
+
+    max_order : int
+        The maximum order of error-rate terms to include in probability
+        computations.  When polynomials are computed, the maximum Taylor
+        order to compute polynomials to.
+
+    desired_perr : float, optional
+        The desired maximum-error when computing probabilities..
+        Path sets are selected (heuristically) to target this error, within the
+        bounds set by `max_order`, etc.
+
+    allowed_perr : float, optional
+        The allowed maximum-error when computing probabilities.
+        When rigorous bounds cannot guarantee that probabilities are correct to
+        within this error, additional paths are added to the path set.
+
+    min_term_mag : float, optional
+        Terms with magnitudes less than this value will be ignored, i.e. not
+        considered candidates for inclusion in paths.  If this number is too
+        low, the number of possible paths to consder may be very large, impacting
+        performance.  If too high, then not enough paths will be considered to
+        achieve an accurate result.  By default this value is set automatically
+        based on the desired error and `max_paths_per_outcome`.  Only adjust this
+        if you know what you're doing.
+
+    max_paths_per_outcome : int, optional
+        The maximum number of paths that can be used (summed) to compute a
+        single outcome probability.
+
+    perr_heuristic : {"none", "scaled", "meanscaled"}
+        Which heuristic (if any) to use when deciding whether a given path set is
+        sufficient given the allowed error (`allowed_perr`).
+        - `"none"`:  This is the strictest setting, and is absence of any heuristic.
+        if the path-magnitude gap (the maximum - achieved sum-of-path-magnitudes,
+        a rigorous upper bound on the approximation error for a circuit
+        outcome probability) is greater than `allowed_perr` for any circuit, the
+        path set is deemed insufficient.
+        - `"scaled"`: a path set is deemed insufficient when, for any circuit, the
+        path-magnitude gap multiplied by a scaling factor is greater than `allowed_perr`.
+        This scaling factor is equal to the computed probability divided by the
+        achieved sum-of-path-magnitudes and is always less than 1.  This scaling
+        is essentially the ratio of the sum of the path amplitudes without and with
+        an absolute value, and tries to quantify and offset the degree of pessimism
+        in the computed path-magnitude gap.
+        - `"meanscaled"` : a path set is deemed insufficient when, the *mean* of all
+        the scaled (as above) path-magnitude gaps is greater than `allowed_perr`.  The
+        mean here is thus over the circuit outcomes.  This heuristic is even more
+        permissive of potentially bad path sets than `"scaled"`, as it allows badly
+        approximated circuits to be offset by well approximated ones.
+
+    max_term_stages : int, optional
+        The maximum number of "stage", i.e. re-computations of a path set, are
+        allowed before giving up.
+
+    path_fraction_threshold : float, optional
+        When greater than this fraction of the total available paths (set by
+        other constraints) are considered, no further re-compuation of the
+        path set will occur, as it is expected to give little improvement.
+
+    oob_check_interval : int, optional
+        The optimizer will check whether the computed probabilities have sufficiently
+        small error every `oob_check_interval` (outer) optimizer iteration.
+
+    cache : dict, optional
+        A dictionary of pre-computed compact polynomial objects.  Keys are
+        `(max_order, rholabel, elabel, circuit)` tuples, where
+        `max_order` is an integer, `rholabel` and `elabel` are
+        :class:`Label` objects, and `circuit` is a :class:`Circuit`.
+        Computed values are added to any dictionary that is supplied, so
+        supplying an empty dictionary and using this calculator will cause
+        the dictionary to be filled with values.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec,  # below here are simtype-specific args
+    def __init__(self, dim, layer_op_server, paramvec,  # below here are simtype-specific args
                  mode, max_order, desired_perr=None, allowed_perr=None,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
         Construct a new TermForwardSimulator object.
-        TODO: fix this docstring (and maybe other fwdsim __init__ functions?
 
         Parameters
         ----------
         dim : int
-            The gate-dimension.  All operation matrices should be dim x dim, and all
-            SPAM vectors should be dim x 1.
+            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
 
-        gates, preps, effects : OrderedDict
-            Ordered dictionaries of LinearOperator, SPAMVec, and SPAMVec objects,
-            respectively.  Must be *ordered* dictionaries to specify a
-            well-defined column ordering when taking derivatives.
+        layer_op_server : LayerLizard
+            An object that can be queried for circuit-layer operations.
 
-        paramvec : ndarray
-            The parameter vector of the Model.
+        paramvec : numpy.ndarray
+            The current parameter vector of the Model.
 
-        autogator : AutoGator
-            An auto-gator object that may be used to construct virtual gates
-            for use in computations.
+        mode : {"taylor-order", "pruned", "direct"}
+            Overall method used to compute (approximate) circuit probabilities.
+            The `"taylor-order"` mode includes all taylor-expansion terms up to a
+            fixed and pre-defined order, fixing a single "path set" at the outset.
+            The `"pruned"` mode selects a path set based on a heuristic (sometimes a
+            true upper bound) calculation of the error in the approximate probabilities.
+            This method effectively "prunes" the paths to meet a fixed desired accuracy.
+            The `"direct"` method is still under development.  Its intention is to perform
+            path integrals directly without the use of polynomial computation and caching.
+            Initial testing showed the direct method to be much slower for common QCVV tasks,
+            making it less urgent to complete.
 
         max_order : int
             The maximum order of error-rate terms to include in probability
-            computations.
+            computations.  When polynomials are computed, the maximum Taylor
+            order to compute polynomials to.
 
-        pathmag_gap : float
-            TODO: docstring
+        desired_perr : float, optional
+            The desired maximum-error when computing probabilities..
+            Path sets are selected (heuristically) to target this error, within the
+            bounds set by `max_order`, etc.
+
+        allowed_perr : float, optional
+            The allowed maximum-error when computing probabilities.
+            When rigorous bounds cannot guarantee that probabilities are correct to
+            within this error, additional paths are added to the path set.
+
+        min_term_mag : float, optional
+            Terms with magnitudes less than this value will be ignored, i.e. not
+            considered candidates for inclusion in paths.  If this number is too
+            low, the number of possible paths to consder may be very large, impacting
+            performance.  If too high, then not enough paths will be considered to
+            achieve an accurate result.  By default this value is set automatically
+            based on the desired error and `max_paths_per_outcome`.  Only adjust this
+            if you know what you're doing.
 
         max_paths_per_outcome : int, optional
-            The maximum number of paths that are allowed to be traversed when
-            computing any single circuit outcome probability.
+            The maximum number of paths that can be used (summed) to compute a
+            single outcome probability.
 
-        gap_inflation_factor : float, optional
-            A multiplicative factor typically > 1 that multiplies `pathmag_gap`
-            to creat a new "inflated gap".  If an achieved sum-of-path-magnitudes
-            is more than this inflated-gap below the maximum for a circuit,
-            computation of the circuit outcome's probability will result in an
-            error being raised.
+        perr_heuristic : {"none", "scaled", "meanscaled"}
+            Which heuristic (if any) to use when deciding whether a given path set is
+            sufficient given the allowed error (`allowed_perr`).
+            - `"none"`:  This is the strictest setting, and is absence of any heuristic.
+            if the path-magnitude gap (the maximum - achieved sum-of-path-magnitudes,
+            a rigorous upper bound on the approximation error for a circuit
+            outcome probability) is greater than `allowed_perr` for any circuit, the
+            path set is deemed insufficient.
+            - `"scaled"`: a path set is deemed insufficient when, for any circuit, the
+            path-magnitude gap multiplied by a scaling factor is greater than `allowed_perr`.
+            This scaling factor is equal to the computed probability divided by the
+            achieved sum-of-path-magnitudes and is always less than 1.  This scaling
+            is essentially the ratio of the sum of the path amplitudes without and with
+            an absolute value, and tries to quantify and offset the degree of pessimism
+            in the computed path-magnitude gap.
+            - `"meanscaled"` : a path set is deemed insufficient when, the *mean* of all
+            the scaled (as above) path-magnitude gaps is greater than `allowed_perr`.  The
+            mean here is thus over the circuit outcomes.  This heuristic is even more
+            permissive of potentially bad path sets than `"scaled"`, as it allows badly
+            approximated circuits to be offset by well approximated ones.
+
+        max_term_stages : int, optional
+            The maximum number of "stage", i.e. re-computations of a path set, are
+            allowed before giving up.
+
+        path_fraction_threshold : float, optional
+            When greater than this fraction of the total available paths (set by
+            other constraints) are considered, no further re-compuation of the
+            path set will occur, as it is expected to give little improvement.
+
+        oob_check_interval : int, optional
+            The optimizer will check whether the computed probabilities have sufficiently
+            small error every `oob_check_interval` (outer) optimizer iteration.
 
         cache : dict, optional
             A dictionary of pre-computed compact polynomial objects.  Keys are
@@ -118,7 +260,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
-            dim, simplified_op_server, paramvec)
+            dim, layer_op_server, paramvec)
 
         if self.evotype not in ("svterm", "cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
@@ -136,7 +278,13 @@ class TermForwardSimulator(ForwardSimulator):
         self.oob_check_interval = oob_check_interval if mode == "pruned" else 0
 
     def copy(self):
-        """ Return a shallow copy of this MatrixForwardSimulator """
+        """
+        Return a shallow copy of this TermForwardSimulator.
+
+        Returns
+        -------
+        TermForwardSimulator
+        """
         return TermForwardSimulator(self.dim, self.sos, self.paramvec,
                                     self.max_order, self.cache)
 
@@ -160,20 +308,23 @@ class TermForwardSimulator(ForwardSimulator):
         return rho, Es
 
     def propagate_state(self, rho, factors, adjoint=False):
-        # TODO UPDATE
         """
-        State propagation by MapOperator objects which have 'acton'
-        methods.  This function could easily be overridden to
+        State propagation by MapOperator objects which have 'acton' methods.
+
+        This function could easily be overridden to
         perform some more sophisticated state propagation
         (i.e. Monte Carlo) in the future.
 
         Parameters
         ----------
         rho : SPAMVec
-           The spam vector representing the initial state.
+            The spam vector representing the initial state.
 
-        circuit : Circuit or tuple
-           A tuple of labels specifying the gate sequence to apply.
+        factors : list or tuple
+            A list or tuple of operator objects possessing `acton` methods.
+
+        adjoint : bool, optional
+            Whether to use `adjoint_acton` instead of `acton` to propagate `rho`.
 
         Returns
         -------
@@ -188,7 +339,29 @@ class TermForwardSimulator(ForwardSimulator):
         return rho
 
     def prs_directly(self, eval_tree, comm=None, mem_limit=None, reset_wts=True, repcache=None):
+        """
+        Compute probabilities of `eval_tree`'s circuits using "direct" mode.
 
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
+
+        mem_limit : int, optional
+            A rough memory limit in bytes.
+
+        reset_wts : bool, optional
+            Whether term magnitudes should be updated based on current term coefficients
+            (which are based on the current point in model-parameter space) or not.
+
+        repcache : dict, optional
+            A cache of term representations for increased performance.
+        """
         prs = _np.empty(eval_tree.num_final_elements(), 'd')
         #print("Computing prs directly for %d circuits" % len(circuit_list))
         if repcache is None: repcache = {}  # new repcache...
@@ -210,8 +383,33 @@ class TermForwardSimulator(ForwardSimulator):
         return prs
 
     def dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
-        #Finite difference derivatives (SLOW!)
+        """
+        Compute probability derivatives of `eval_tree`'s circuits using "direct" mode.
 
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        wrt_slice : slice
+            A slice specifying which model parameters to differentiate with respect to.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
+
+        mem_limit : int, optional
+            A rough memory limit in bytes.
+
+        reset_wts : bool, optional
+            Whether term magnitudes should be updated based on current term coefficients
+            (which are based on the current point in model-parameter space) or not.
+
+        repcache : dict, optional
+            A cache of term representations for increased performance.
+        """
+        #Note: Finite difference derivatives are SLOW!
         if wrt_slice is None:
             wrt_indices = list(range(self.Np))
         elif isinstance(wrt_slice, slice):
@@ -238,121 +436,6 @@ class TermForwardSimulator(ForwardSimulator):
         self.from_vector(orig_vec, close=True)
         return dprobs
 
-    #TODO REMOVE - UNNEEDED NOW - except maybe for helping w/docstrings
-    # def OLD_prs_as_pruned_polyreps(self,
-    #                            rholabel,
-    #                            elabels,
-    #                            circuit,
-    #                            repcache,
-    #                            opcache,
-    #                            circuitsetup_cache,
-    #                            comm=None,
-    #                            mem_limit=None,
-    #                            pathmagnitude_gap=0.0,
-    #                            min_term_mag=0.01,
-    #                            max_paths=500,
-    #                            current_threshold=None,
-    #                            compute_polyreps=True):
-    #     """
-    #     Computes polynomial-representations of the probabilities for multiple
-    #     spam-tuples of `circuit`, sharing the same state preparation (so with
-    #     different POVM effects).  Employs a truncated or pruned path-integral
-    #     approach, as opposed to just including everything up to some Taylor
-    #     order as in :method:`prs_as_polys`.
-    #
-    #     Parameters
-    #     ----------
-    #     rho_label : Label
-    #         The state preparation label.
-    #
-    #     elabels : list
-    #         A list of :class:`Label` objects giving the *simplified* effect labels.
-    #
-    #     circuit : Circuit or tuple
-    #         A tuple-like object of *simplified* gates (e.g. may include
-    #         instrument elements like 'Imyinst_0')
-    #
-    #     repcache, opcache : dict, optional
-    #         Dictionaries used to cache operator representations and
-    #         operators themselves (respectively) to speed up future calls
-    #         to this function that would use the same set of operations.
-    #
-    #     comm : mpi4py.MPI.Comm, optional
-    #         When not None, an MPI communicator for distributing the computation
-    #         across multiple processors.
-    #
-    #     mem_limit : int, optional
-    #         A memory limit in bytes to impose on the computation.
-    #
-    #     pathmagnitude_gap : float, optional
-    #         The amount less than the perfect sum-of-path-magnitudes that
-    #         is desired.  This sets the target sum-of-path-magnitudes for each
-    #         circuit -- the threshold that determines how many paths are added.
-    #
-    #     min_term_mag : float, optional
-    #         A technical parameter to the path pruning algorithm; this value
-    #         sets a threshold for how small a term magnitude (one factor in
-    #         a path magnitude) must be before it is removed from consideration
-    #         entirely (to limit the number of even *potential* paths).  Terms
-    #         with a magnitude lower than this values are neglected.
-    #
-    #     current_threshold : float, optional
-    #         A more sophisticated aspect of the term-based calculation is that
-    #         path polynomials should not be re-computed when we've already
-    #         computed them up to a more stringent threshold than we currently
-    #         need them.  This can happen, for instance, if in iteration 5 we
-    #         compute all paths with magnitudes < 0.1 and now, in iteration 6,
-    #         we need all paths w/mags < 0.08.  Since we've already computed more
-    #         paths than what we need previously, we shouldn't recompute them now.
-    #         This argument tells this function that, before any paths are computed,
-    #         if it is determined that the threshold is less than this value, the
-    #         function should exit immediately and return an empty list of
-    #         polynomial reps.
-    #
-    #     Returns
-    #     -------
-    #     polyreps : list
-    #         A list of PolynomialRep objects.
-    #     npaths : int
-    #         The number of paths computed.
-    #     threshold : float
-    #         The path-magnitude threshold used.
-    #     target_sopm : float
-    #         The desired sum-of-path-magnitudes.  This is `pathmagnitude_gap`
-    #         less than the perfect "all-paths" sum.
-    #     achieved_sopm : float
-    #         The achieved sum-of-path-magnitudes.  Ideally this would equal
-    #         `target_sopm`.
-    #     """
-    #     #Cache hold *compact* polys now: see prs_as_compact_polys
-    #     #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
-    #     #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-    #     #    return [ self.cache[ck] for ck in cache_keys ]
-    #
-    #     fastmode = True
-    #     if repcache is None: repcache = {}
-    #     if current_threshold is None: current_threshold = -1.0  # use negatives to signify "None" in C
-    #     circuitsetup_cache = {}
-    #
-    #     if self.evotype == "svterm":
-    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-    #             replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-    #                                           comm, mem_limit, fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-    #                                           current_threshold, compute_polyreps)
-    #         # sopm = "sum of path magnitudes"
-    #     else:  # "cterm" (stabilizer-based term evolution)
-    #         poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
-    #             replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, opcache, comm, mem_limit,
-    #                                           fastmode, pathmagnitude_gap, min_term_mag, max_paths,
-    #                                           current_threshold, compute_polyreps)
-    #
-    #     if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
-    #         prps = None
-    #     else:
-    #         prps = poly_reps
-    #
-    #     return prps, npaths, threshold, target_sopm, achieved_sopm
-
     def prs_as_pruned_polyreps(self,
                                threshold,
                                rholabel,
@@ -365,7 +448,60 @@ class TermForwardSimulator(ForwardSimulator):
                                mem_limit=None,
                                mode="normal"):
         """
-        TODO: docstring - see OLD version
+        Computes polynomial-representations of circuit-outcome probabilities.
+
+        In particular, the circuit-outcomes under consideration share the same state
+        preparation and differ only in their POVM effects.  Employs a truncated or pruned
+        path-integral approach, as opposed to just including everything up to some Taylor
+        order as in :method:`prs_as_polys`.
+
+        Parameters
+        ----------
+        threshold : float
+            The path-magnitude threshold.  Only include (sum) paths whose magnitudes are
+            greater than or equal to this threshold.
+
+        rholabel : Label
+            The state preparation label.
+
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
+
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        repcache : dict, optional
+            Dictionaries used to cache operator representations  to speed up future
+            calls to this function that would use the same set of operations.
+
+        opcache : dict, optional
+            Dictionary used to cache operators themselves to speed up future calls
+            to this function that would use the same set of operations.
+
+        circuitsetup_cache : dict
+            A cache holding specialized elements that store and eliminate
+            the need to recompute per-circuit information.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        mode : {"normal", "achieved_sopm"}
+            Controls whether polynomials are actually computed (`"normal"`) or whether only the
+            achieved sum-of-path-magnitudes is computed (`"achieved_sopm"`).  The latter mode is
+            useful when a `threshold` is being tested but not committed to, as computing only the
+            achieved sum-of-path-magnitudes is significantly faster.
+
+        Returns
+        -------
+        list
+           A list of :class:`PolyRep` objects.  These polynomial represetations are essentially
+           bare-bones polynomials stored efficiently for performance.  (To get a full
+           :class:`Polynomial` object, use :classmethod:`Polynomial.fromrep`.)
         """
         #Cache hold *compact* polys now: see prs_as_compact_polys
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
@@ -390,6 +526,7 @@ class TermForwardSimulator(ForwardSimulator):
         else:  # "cterm" (stabilizer-based term evolution)
             raise NotImplementedError("Just need to mimic SV version")
 
+        #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
         else:
@@ -408,7 +545,55 @@ class TermForwardSimulator(ForwardSimulator):
                                          mem_limit=None,
                                          threshold_guess=None):
         """
-        TODO: docstring - see OLD version
+        Finds a good path-magnitude threshold for `circuit` at the current parameter-space point.
+
+        Parameters
+        ----------
+        rholabel : Label
+            The state preparation label.
+
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
+
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        repcache : dict, optional
+            Dictionaries used to cache operator representations  to speed up future
+            calls to this function that would use the same set of operations.
+
+        opcache : dict, optional
+            Dictionary used to cache operators themselves to speed up future calls
+            to this function that would use the same set of operations.
+
+        circuitsetup_cache : dict
+            A cache holding specialized elements that store and eliminate
+            the need to recompute per-circuit information.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        threshold_guess : float, optional
+            A guess estimate of a good path-magnitude threshold.
+
+        Returns
+        -------
+        npaths : int
+            The number of paths found.  (total over all circuit outcomes)
+
+        threshold : float
+            The final path-magnitude threshold used.
+
+        target_sopm : float
+            The target (desired) sum-of-path-magnitudes. (summed over all circuit outcomes)
+
+        achieved_sopm : float
+            The achieved sum-of-path-magnitudes. (summed over all circuit outcomes)
         """
         #Cache hold *compact* polys now: see prs_as_compact_polys
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
@@ -434,6 +619,39 @@ class TermForwardSimulator(ForwardSimulator):
 
     def circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache,
                                       opcache, threshold):
+        """
+        Computes the achieved and maximum sum-of-path-magnitudes for `circuit`.
+
+        Parameters
+        ----------
+        rholabel : Label
+            The state preparation label.
+
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
+
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates.
+
+        repcache : dict, optional
+            Dictionaries used to cache operator representations  to speed up future
+            calls to this function that would use the same set of operations.
+
+        opcache : dict, optional
+            Dictionary used to cache operators themselves to speed up future calls
+            to this function that would use the same set of operations.
+
+        threshold : float
+            path-magnitude threshold.  Only sum path magnitudes above or equal to this threshold.
+
+        Returns
+        -------
+        achieved_sopm : float
+            The achieved sum-of-path-magnitudes. (summed over all circuit outcomes)
+
+        max_sopm : float
+            The maximum possible sum-of-path-magnitudes. (summed over all circuit outcomes)
+        """
         if self.evotype == "svterm":
             return replib.SV_circuit_achieved_and_max_sopm(
                 self, rholabel, elabels, circuit, repcache, opcache, threshold, self.min_term_mag)
@@ -443,13 +661,14 @@ class TermForwardSimulator(ForwardSimulator):
     # LATER? , reset_wts=True, repcache=None):
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
-        Computes polynomials of the probabilities for multiple spam-tuples of
-        `circuit`, sharing the same state preparation (so with different
-        POVM effects).
+        Computes polynomial-representations of circuit-outcome probabilities.
+
+        In particular, the circuit-outcomes under consideration share the same state
+        preparation and differ only in their POVM effects.
 
         Parameters
         ----------
-        rho_label : Label
+        rholabel : Label
             The state preparation label.
 
         elabels : list
@@ -491,8 +710,7 @@ class TermForwardSimulator(ForwardSimulator):
 
     def pr_as_poly(self, spam_tuple, circuit, comm=None, mem_limit=None):
         """
-        Compute probability of a single "outcome" (spam-tuple) for a single
-        operation sequence.
+        Compute probability of a single "outcome" (spam-tuple) for a single circuit.
 
         Parameters
         ----------
@@ -519,9 +737,10 @@ class TermForwardSimulator(ForwardSimulator):
 
     def prs_as_compact_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
-        Computes compact-form polynomials of the probabilities for multiple
-        spam-tuples of `circuit`, sharing the same state preparation (so
-        with different POVM effects).
+        Compute compact-form polynomials of the outcome probabilities for `circuit`.
+
+        Note that these outcomes are defined as having the same state preparation
+        and different POVM effects.
 
         Parameters
         ----------
@@ -563,9 +782,10 @@ class TermForwardSimulator(ForwardSimulator):
 
     def prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
-        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
-        operation sequence.  The spam tuples may only vary in their effect-label (their
-        prep labels must be the same)
+        Compute the outcome probabilities for `circuit`.
+
+        Note that these outcomes are defined as having the same state preparation
+        and different POVM effects.
 
         Parameters
         ----------
@@ -580,14 +800,14 @@ class TermForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         use_scaling : bool, optional
-          Unused.  Present to match function signature of other calculators.
+            Unused.  Present to match function signature of other calculators.
 
         time : float, optional
-          The *start* time at which `circuit` is evaluated.
+            The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
@@ -605,9 +825,11 @@ class TermForwardSimulator(ForwardSimulator):
 
     def dpr(self, spam_tuple, circuit, return_pr, clip_to):
         """
-        Compute the derivative of a probability generated by a operation sequence and
-        spam tuple as a 1 x M numpy array, where M is the number of model
-        parameters.
+        Compute the outcome probability derivatives for `circuit`.
+
+        Note that these outcomes are defined as having the same state preparation
+        and different POVM effects.  The derivatives are computed as a 1 x M numpy
+        array, where M is the number of model parameters.
 
         Parameters
         ----------
@@ -619,11 +841,11 @@ class TermForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         return_pr : bool
-          when set to True, additionally return the probability itself.
+            when set to True, additionally return the probability itself.
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
@@ -649,9 +871,11 @@ class TermForwardSimulator(ForwardSimulator):
 
     def hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
         """
-        Compute the Hessian of a probability generated by a operation sequence and
-        spam tuple as a 1 x M x M array, where M is the number of model
-        parameters.
+        Compute the outcome probability second derivatives for `circuit`.
+
+        Note that these outcomes are defined as having the same state preparation
+        and different POVM effects.  The derivatives are computed as a 1 x M x M array,
+        where M is the number of model parameters.
 
         Parameters
         ----------
@@ -663,15 +887,15 @@ class TermForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         return_pr : bool
-          when set to True, additionally return the probability itself.
+            when set to True, additionally return the probability itself.
 
         return_deriv : bool
-          when set to True, additionally return the derivative of the
-          probability.
+            when set to True, additionally return the derivative of the
+            probability.
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
@@ -714,6 +938,10 @@ class TermForwardSimulator(ForwardSimulator):
     def default_distribute_method(self):
         """
         Return the preferred MPI distribution mode for this calculator.
+
+        Returns
+        -------
+        str
         """
         return "circuits"
 
@@ -729,8 +957,6 @@ class TermForwardSimulator(ForwardSimulator):
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
-
-        TODO: docstring opcache
 
         num_subtree_comms : int
             The number of processor groups that will be assigned to
@@ -859,8 +1085,35 @@ class TermForwardSimulator(ForwardSimulator):
         _fas(mx_to_fill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
 
     def bulk_test_if_paths_are_sufficient(self, eval_tree, probs, comm, mem_limit, printer):
-        """TODO: docstring
-           returns nFailures, failed_circuits """
+        """
+        Determine whether `eval_tree`'s current path set (perhaps heuristically) achieves the desired accuracy.
+
+        The current path set is determined by the current (per-circuti) path-magnitude thresholds
+        (stored in the evaluation tree) and the current parameter-space point (also reflected in
+        the terms cached in the evaluation tree).
+
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        probs : numpy.ndarray
+            The element array of (approximate) circuit outcome probabilities.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        printer : VerbosityPrinter
+            An printer object for displaying messages.
+
+        Returns
+        -------
+        bool
+        """
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
@@ -897,7 +1150,31 @@ class TermForwardSimulator(ForwardSimulator):
         return True
 
     def bulk_get_achieved_and_max_sopm(self, eval_tree, comm=None, mem_limit=None):
-        """TODO: docstring """
+        """
+        Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
+
+        These values are computed for the current set of paths contained in `eval_tree`.
+
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        Returns
+        -------
+        max_sopm : numpy.ndarray
+            An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
+
+        achieved_sopm : numpy.ndarray
+            An array containing the per-circuit-outcome achieved sum-of-path-magnitudes.
+        """
 
         assert(self.mode == "pruned")
         max_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
@@ -927,7 +1204,28 @@ class TermForwardSimulator(ForwardSimulator):
         return max_sopm, achieved_sopm
 
     def bulk_get_sopm_gaps(self, eval_tree, comm=None, mem_limit=None):
-        """TODO: docstring  """
+        """
+        Compute an element array sum-of-path-magnitude gaps (the difference between maximum and achieved).
+
+        These values are computed for the current set of paths contained in `eval_tree`.
+
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        Returns
+        -------
+        numpy.ndarray
+            An array containing the per-circuit-outcome sum-of-path-magnitude gaps.
+        """
         achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(eval_tree, comm, mem_limit)
         gaps = max_sopm - achieved_sopm
         # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
@@ -937,8 +1235,27 @@ class TermForwardSimulator(ForwardSimulator):
         return gaps
 
     def bulk_get_sopm_gaps_jacobian(self, eval_tree, comm=None, mem_limit=None):
-        """TODO: docstring """
+        """
+        Compute the jacobian of the the output of :method:`bulk_get_sopm_gaps`.
 
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        Returns
+        -------
+        numpy.ndarray
+            An number-of-elements by number-of-model-parameters array containing the jacobian
+            of the sum-of-path-magnitude gaps.
+        """
         assert(self.mode == "pruned")
         termgap_penalty_jac = _np.empty((eval_tree.num_final_elements(), self.Np), 'd')
         subtrees = eval_tree.get_sub_trees()
@@ -966,7 +1283,27 @@ class TermForwardSimulator(ForwardSimulator):
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
     def find_minimal_paths_set(self, eval_tree, comm=None, mem_limit=None, exit_after_this_many_failures=0):
         """
-        TODO: docstring
+        Find a good, i.e. minimial, path set for the current model-parameter space point.
+
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        mem_limit : int, optional
+            A memory limit in bytes to impose on the computation.
+
+        exit_after_this_many_failures : int, optional
+           If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
+           This short-circuits doomed attempts to find a good path set so they don't take too long.
+
+        Returns
+        -------
+        SplitTreeTermPathSet
         """
         subtrees = eval_tree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
@@ -986,7 +1323,22 @@ class TermForwardSimulator(ForwardSimulator):
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
     def select_paths_set(self, path_set, comm=None, mem_limit=None):
         """
-        TODO: docstring
+        Selects (makes "current") a path set *and* computes polynomials the new set.
+
+        Parameters
+        ----------
+        path_set : PathSet
+            The path set to select.
+
+        comm : mpy4py.MPI.Comm
+            An MPI communicator for dividing the compuational task.
+
+        mem_limit : int
+            Rough memory limit (per processor) in bytes.
+
+        Returns
+        -------
+        None
         """
         evalTree = path_set.tree
         subtrees = evalTree.get_sub_trees()
@@ -1002,7 +1354,25 @@ class TermForwardSimulator(ForwardSimulator):
                 evalSubTree.cache_p_polys(self, mySubComm)
 
     def get_current_pathset(self, eval_tree, comm):
-        """ TODO: docstring """
+        """
+        Returns the current path set (held in eval_tree).
+
+        Note that this works even when `eval_tree` is split,
+        and always returns a :class:`SplitTreeTermPathSet`.
+
+        Parameters
+        ----------
+        eval_tree : TermEvalTree
+            The evaluation tree.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        SplitTreeTermPathSet or None
+        """
         if self.mode == "pruned":
             subtrees = eval_tree.get_sub_trees()
             mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
@@ -1014,10 +1384,10 @@ class TermForwardSimulator(ForwardSimulator):
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
     def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
-        Performs initial computation, such as computing probability polynomials,
-        needed for bulk_fill_probs and related calls.  This is usually coupled with
-        the creation of an evaluation tree, but is separated from it because this
-        "preparation" may use `comm` to distribute a computationally intensive task.
+        Performs preparatory work for computing circuit outcome probabilities.
+
+        Finds a good path set that meets (if possible) the accuracy requirements
+        and computes needed polynomials.
 
         Parameters
         ----------
@@ -1026,11 +1396,16 @@ class TermForwardSimulator(ForwardSimulator):
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of `eval_tree` (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of `eval_tree` (if it is split).
 
-        mem_limit : TODO: docstring
+        mem_limit : int
+            Rough memory limit (per processor) in bytes.
+
+        Returns
+        -------
+        None
         """
         subtrees = eval_tree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
@@ -1080,26 +1455,25 @@ class TermForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. eval_tree.num_final_elements())
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. eval_tree.num_final_elements())
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -1135,8 +1509,7 @@ class TermForwardSimulator(ForwardSimulator):
                          comm=None, wrt_filter=None, wrt_block_size=None,
                          profiler=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-derivatives for an entire tree of gate
-        strings.
+        Compute the outcome probability-derivatives for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
         probability-derivatives for each "final element" of `eval_tree`.
@@ -1144,54 +1517,54 @@ class TermForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M is the
-          number of model parameters.
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            number of model parameters.
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_filter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrt_block_size.
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
 
         wrt_block_size : int or float, optional
-          The maximum number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrt_block_size and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrt_filter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+            A profiler object used for to track timing and memory usage.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -1294,8 +1667,7 @@ class TermForwardSimulator(ForwardSimulator):
                          clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
                          wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-Hessians for an entire tree of gate
-        strings.
+        Compute the outcome probability-Hessians for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
         probability-Hessians for each "final element" of `eval_tree`.
@@ -1303,59 +1675,74 @@ class TermForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+            an already-allocated ExMxM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
-          when not None, an already-allocated ExM numpy array that is filled
-          with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
+        deriv1_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 1st
+            differentiation (i.e. by wrt_filter1).
+
+        deriv2_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 2nd
+            differentiation (i.e. by wrt_filter2).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
-        wrt_filter1, wrt_filter2 : list of ints, optional
-          If not None, a list of integers specifying which model parameters
-          to differentiate with respect to in the first (row) and second (col)
-          derivative operations, respectively.
+        wrt_filter1 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the first (row) derivative operations.
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrt_filter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_filter2 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the second (col) derivative operations.
 
-        profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+        wrt_block_size1: int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------

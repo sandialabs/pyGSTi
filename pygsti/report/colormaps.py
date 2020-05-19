@@ -1,4 +1,6 @@
-""" Colormap and derived class definitions """
+"""
+Colormap and derived class definitions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,8 +27,16 @@ def _vnorm(x, vmin, vmax):
 @smart_cached
 def as_rgb_array(color_str):
     """
-    Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"`
-    to a numpy array of length 3.
+    Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"` to a numpy array of length 3.
+
+    Parameters
+    ----------
+    color_str : str
+        A color string, e.g. `"rgb(0,255,128)"` or `"#00FF88"`.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     color_str = color_str.strip()  # remove any whitespace
     if color_str.startswith('#') and len(color_str) >= 7:
@@ -87,10 +97,35 @@ def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
 
 class Colormap(object):
     """
-    A color map which encapsulates a plotly colorscale with a normalization,
-    and contains additional functionality such as the ability to compute the
-    color corresponding to a particular value and extract matplotlib
+    A color map which encapsulates a plotly colorscale with a normalization.
+
+    This class also contains additional functionality such as the ability to
+    compute the color corresponding to a particular value and extract matplotlib
     colormap and normalization objects.
+
+    Parameters
+    ----------
+    rgb_colors : list
+        A list of `[val, (R,G,B)]` elements where `val` is a floating point
+        number between 0 and 1 (plotly maps the post-'normalized' data linearly
+        onto the interval [0,1] before mapping to a color), and `R`,`G`,and `B`
+        are red, green, and blue floating point values in [0,1].  The color will
+        be interpolated between the different "point" elements in this list.
+
+    hmin : float
+        The minimum post-normalized values to be used for the heatmap.
+        That is, `hmin` is the value (after `normalize` has been
+        called) assigned the "0.0"-valued color in `rgb_colors`.
+
+    hmax : float
+        The maximum post-normalized values to be used for the heatmap.
+        That is, `hmax` is the value (after `normalize` has been
+        called) assigned the "1.0"-valued color in `rgb_colors`.
+
+    invalid_color : tuple, optional
+        If not None, an (R,G,B) tuple of values in [0,1] specifying the
+        color to use for *normalized* values (which usually should be
+        in [0,1]) that lie outside the [0,1] range of `rgb_colors`.
     """
 
     def __init__(self, rgb_colors, hmin, hmax, invalid_color=None):
@@ -129,11 +164,19 @@ class Colormap(object):
 
     def normalize(self, value):
         """
-        Normalize value as it would be prior to linearly interpolating
-        onto the [0,1] range of the color map.
+        Normalize value as it would be prior to linearly interpolating onto the [0,1] range of the color map.
 
         In this case, no additional normalization is performed, so this
         function just returns `value`.
+
+        Parameters
+        ----------
+        value : float or numpy.ndarray
+            The value to normalize.
+
+        Returns
+        -------
+        float or numpy.ndarray
         """
         #Default behavior for derived classes: no "normalization" is done
         # here because plotly automatically maps (linearly) the interval
@@ -142,8 +185,7 @@ class Colormap(object):
 
     def besttxtcolor(self, value):
         """
-        Return the better text color, "black" or "white", given an
-        un-normalized `value`.
+        Return the better text color, "black" or "white", given an un-normalized `value`.
 
         Parameters
         ----------
@@ -226,8 +268,7 @@ class Colormap(object):
 
     def get_matplotlib_norm_and_cmap(self):
         """
-        Creates and returns normalization and colormap
-        classes for matplotlib heatmap plots.
+        Creates and returns normalization and colormap classes for matplotlib heatmap plots.
 
         Returns
         -------
@@ -242,9 +283,32 @@ class Colormap(object):
 
 class LinlogColormap(Colormap):
     """
-    Colormap which combines a linear grayscale portion with a logarithmic
-    color (by default red) portion.  The transition between these occurs
-    at a point based on a percentile of chi^2 distribution.
+    Colormap which combines a linear grayscale portion with a logarithmic color (by default red) portion.
+
+    The transition between these occurs at a point based on a percentile of chi^2 distribution.
+
+    Parameters
+    ----------
+    vmin : float
+        The minium value of the data being colormapped.
+
+    vmax : float
+        The maximum value of the data being colormapped.
+
+    n_boxes : int
+        The number of boxes in the plot this colormap is being used with,
+        so that `pcntle` gives a percentage of the *worst* box being "red".
+
+    pcntle : float
+        A number between 0 and 1 giving the probability that the worst box
+        in the plot will be red.  Typically a value of 0.05 is used.
+
+    dof_per_box : int
+        The number of degrees of freedom represented by each box, so the
+        expected distribution of each box's values is chi^2_[dof_per_box].
+
+    color : {"red","blue","green","cyan","yellow","purple"}
+        The color to use for the non-grayscale part of the color scale.
     """
 
     def __init__(self, vmin, vmax, n_boxes, pcntle, dof_per_box, color="red"):
@@ -330,8 +394,11 @@ class LinlogColormap(Colormap):
 
         Parameters
         ----------
-        vmin, vmax : float
-            The min and max values of the data being colormapped.
+        vmin : float
+            The minium value of the data being colormapped.
+
+        vmax : float
+            The maximum value of the data being colormapped.
 
         trans : float
             The transition-point value between the linear grayscale and
@@ -357,11 +424,12 @@ class LinlogColormap(Colormap):
 
         Parameters
         ----------
-        value : float or ndarray
+        value : float or numpy.ndarray
+            The value to normalize.
 
         Returns
         -------
-        float or ndarray
+        float or numpy.ndarray
         """
         #Safety stuff -- needed anymore? TODO
         if isinstance(value, _np.ma.MaskedArray) and value.count() == 0:
@@ -417,8 +485,7 @@ class LinlogColormap(Colormap):
 
     def get_matplotlib_norm_and_cmap(self):
         """
-        Creates and returns normalization and colormap
-        classes for matplotlib heatmap plots.
+        Creates and returns normalization and colormap classes for matplotlib heatmap plots.
 
         Returns
         -------
@@ -432,7 +499,23 @@ class LinlogColormap(Colormap):
 
 
 class DivergingColormap(Colormap):
-    """ A diverging color map """
+    """
+    A diverging color map
+
+    Parameters
+    ----------
+    vmin : float
+        The minium value of the data being colormapped.
+
+    vmax : float
+        The maximum value of the data being colormapped.
+
+    midpoint : float, optional
+        The midpoint of the color scale.
+
+    color : {"RdBu"}
+        What colors to use.
+    """
 
     def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
         """
@@ -496,7 +579,20 @@ class DivergingColormap(Colormap):
 
 
 class SequentialColormap(Colormap):
-    """ A sequential color map """
+    """
+    A sequential color map
+
+    Parameters
+    ----------
+    vmin : float
+        The minium value of the data being colormapped.
+
+    vmax : float
+        The maximum value of the data being colormapped.
+
+    color : {"whiteToBlack", "blackToWhite"}
+        What colors to use.
+    """
 
     def __init__(self, vmin, vmax, color="whiteToBlack"):
         """
@@ -548,7 +644,18 @@ class SequentialColormap(Colormap):
 
 
 class PiecewiseLinearColormap(Colormap):
-    """ A piecewise-linear color map """
+    """
+    A piecewise-linear color map
+
+    Parameters
+    ----------
+    rgb_colors : list
+        A list of `[val, (R,G,B)]` elements where `val` is a floating point
+        number (pre-normalization) of the value corresponding to the color
+        given by `R`,`G`,and `B`: red, green, and blue floating point values
+        in [0,1].  The color will be interpolated between the different "point"
+        elements in this list.
+    """
 
     def __init__(self, rgb_colors):
         """

@@ -1,5 +1,6 @@
-""" Functions for creating the standard sets of matrices in the standard,
-    pauli, gell mann, and qutrit bases """
+"""
+Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -24,10 +25,29 @@ sigmax = _np.array([[0, 1], [1, 0]])
 sigmay = _np.array([[0, -1.0j], [1.0j, 0]])
 sigmaz = _np.array([[1, 0], [0, -1]])
 
+
 ##Matrix unit basis
-
-
 def mut(i, j, n):
+    """
+    A matrix unit.
+
+    Parameters
+    ----------
+    i : int
+        Row of the single "1" in the matrix unit.
+
+    j : int
+        Column of the single "1" in the matrix unit.
+
+    n : int
+        Dimension of matrix
+
+    Returns
+    -------
+    numpy.ndarray
+        A `(n,n)`-shaped array that is all zeros except a single "1"
+        in the `i`,`j` element.
+    """
     mx = _np.zeros((n, n), 'd'); mx[i, j] = 1.0
     return mx
 
@@ -56,8 +76,26 @@ def _check_dim(dim):
 
 class MatrixBasisConstructor(object):
     """
-    A factory class for constructing builtin basis types
-    whose elements are matrices.
+    A factory class for constructing builtin basis types whose elements are matrices.
+
+    Parameters
+    ----------
+    longname : str
+        The long name for the builtin basis.
+
+    matrixgen_fn : function
+        A function that generates the matrix elements for this
+        basis given the matrix dimension (i.e. the number of rows or
+        columns in the matrices to produce).
+
+    labelgen_fn : function
+        A function that generates the element labels for this
+        basis given the matrix dimension (i.e. the number of rows or
+        columns in the matrices to produce).
+
+    real : bool
+        Whether vectors expressed in this basis are required to have
+        real components.
     """
 
     def __init__(self, longname, matrixgen_fn, labelgen_fn, real):
@@ -89,8 +127,18 @@ class MatrixBasisConstructor(object):
         self.real = real
 
     def matrix_dim(self, dim):
-        """ Helper function that converts a *vector-space* dimension
-           `dim` to matrix-dimension by taking a sqrt."""
+        """
+        Helper function that converts a *vector-space* dimension `dim` to matrix-dimension by taking a sqrt.
+
+        Parameters
+        ----------
+        dim : int
+            Dimension
+
+        Returns
+        -------
+        int
+        """
         d = int(round(_np.sqrt(dim)))
         assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
         return d
@@ -175,7 +223,29 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     """
 
     def sizes(self, dim, sparse):
-        """ See docstring for :class:`MatrixBasisConstructor` """
+        """
+        See docstring for :class:`MatrixBasisConstructor`
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+            e.g. 4 for a basis of 2x2 matrices and 2 for
+            a basis of length=2 vectors.
+
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        nElements : int
+            The number of elements in the basis.
+        dim : int
+            The vector-space dimension of the basis.
+        elshape : tuple
+            The shape of the elements that might be
+            constructed (if `constructor` was called).
+        """
         nElements = 1   # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis is for
         # (== size for a full basis, > size for a partial basis)
@@ -185,8 +255,24 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
 
 class VectorBasisConstructor(object):
     """
-    A factory class for constructing builtin basis types
-    whose elements are vectors.
+    A factory class for constructing builtin basis types whose elements are vectors.
+
+    Parameters
+    ----------
+    longname : str
+        The long name for the builtin basis.
+
+    vectorgen_fn : function
+        A function that generates the vector elements for this
+        basis given the vector dimension.
+
+    labelgen_fn : function
+        A function that generates the element labels for this
+        basis given the vector dimension.
+
+    real : bool
+        Whether vectors expressed in this basis are required to have
+        real components.
     """
 
     def __init__(self, longname, vectorgen_fn, labelgen_fn, real):
@@ -290,16 +376,17 @@ class VectorBasisConstructor(object):
 
 def std_matrices(matrix_dim):
     """
-    Get the elements of the matrix unit, or "standard", basis
-    spanning the density-matrix space given by matrix_dim x matrix_dim
-    matrices.
+    Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
+
+    Constructs the standard basis spanning the density-matrix space given by
+    `matrix_dim` x `matrix_dim` matrices.
 
     The returned matrices are orthonormal basis under
     the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
 
     Parameters
     ----------
-    matrix_dim: int
+    matrix_dim : int
         matrix dimension of the density-matrix space, e.g. 2
         for a single qubit in a 2x2 density matrix basis.
 
@@ -363,8 +450,7 @@ def _get_gell_mann_non_identity_diag_mxs(dimension):
 
 def gm_matrices_unnormalized(matrix_dim):
     """
-    Get the elements of the generalized Gell-Mann
-    basis spanning the density-matrix space given by matrix_dim.
+    Get the elements of the generalized Gell-Mann basis spanning the density-matrix space given by matrix_dim.
 
     The returned matrices are given in the standard basis of the
     "embedding" density matrix space, that is, the space which
@@ -417,8 +503,9 @@ def gm_matrices_unnormalized(matrix_dim):
 
 def gm_matrices(matrix_dim):
     """
-    Get the normalized elements of the generalized Gell-Mann
-    basis spanning the density-matrix space given by matrix_dim.
+    Get the normalized elements of the generalized Gell-Mann basis with matrix dimension `matrix_dim`.
+
+    That is, construct the basis spanning the density-matrix space given by `matrix_dim`.
 
     The returned matrices are given in the standard basis of the
     "embedding" density matrix space, that is, the space which
@@ -450,6 +537,19 @@ def gm_matrices(matrix_dim):
 
 
 def gm_labels(matrix_dim):
+    """
+    Gell-Mann basis labels.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The labels (names) of the Gell-Mann basis elements
+        with a given matrix dimension.
+
+    Returns
+    -------
+    list
+    """
     if matrix_dim == 0: return []
     if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
     if matrix_dim == 2:  # Special case of Pauli's
@@ -478,8 +578,9 @@ def gm_labels(matrix_dim):
 
 def pp_matrices(matrix_dim, max_weight=None):
     """
-    Get the elements of the Pauil-product basis
-    spanning the space of matrix_dim x matrix_dim density matrices
+    Get the elements of the Pauil-product basis with matrix dimension `matrix_dim`.
+
+    These matrices span the space of matrix_dim x matrix_dim density matrices
     (matrix-dimension matrix_dim, space dimension matrix_dim^2).
 
     The returned matrices are given in the standard basis of the
@@ -503,7 +604,6 @@ def pp_matrices(matrix_dim, max_weight=None):
         element's "weight" is defined as the number of non-identity single-qubit
         factors of which it is comprised.  For example, if `matrix_dim == 4` and
         `max_weight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
-
 
     Returns
     -------
@@ -548,6 +648,18 @@ def pp_matrices(matrix_dim, max_weight=None):
 
 
 def pp_labels(matrix_dim):
+    """
+    Pauli-product basis labels.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension to get labels for.
+
+    Returns
+    -------
+    list
+    """
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
     if matrix_dim == 0: return []
@@ -565,10 +677,9 @@ def pp_labels(matrix_dim):
     return lblList
 
 
-def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
+def qt_matrices(matrix_dim, selected_pp_indices=(0, 5, 10, 11, 1, 2, 3, 6, 7)):
     """
-    Get the elements of a special basis spanning the density-matrix space of
-    a qutrit.
+    Get the elements of a special basis spanning the density-matrix space of a qutrit.
 
     The returned matrices are given in the standard basis of the
     density matrix space. These matrices form an orthonormal basis
@@ -579,6 +690,11 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
     matrix_dim : int
         Matrix-dimension of the density-matrix space.  Must equal 3
         (present just to maintain consistency which other routines)
+
+    selected_pp_indices : tuple, optional
+        The indices of the 2-qubit Pauli-product matrices that should be projected
+        onto the qutrit space to arrive at a qutrit basis.  Don't alter this value
+        unless you know what you're doing.
 
     Returns
     -------
@@ -622,7 +738,7 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0, 5, 10, 11, 1, 2, 3, 6, 7]):
 
 def qt_labels(matrix_dim):
     """
-    Return the qutrit-basis labels based on a matrix dimension.
+    The qutrit-basis labels based on a matrix dimension.
 
     Parameters
     ----------
@@ -641,6 +757,22 @@ def qt_labels(matrix_dim):
 
 
 def identity_matrices(matrix_dim):
+    """
+    Matrices for the "identity" basis of matrix dimension `matrix_dim`.
+
+    The "identity basis" consists of only the identity matrix, so
+    this function returns a list of a single `matrix_dim` x `matrix_dim`
+    identity matrix.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension.
+
+    Returns
+    -------
+    list
+    """
     if matrix_dim == 0: return []
     assert(isinstance(matrix_dim, _numbers.Integral))
     d = matrix_dim
@@ -648,18 +780,26 @@ def identity_matrices(matrix_dim):
 
 
 def identity_labels(dim):
+    """
+    The identity-basis labels based on a matrix dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The matrix dimension.
+    """
     return ['I']
 
 
 def cl_vectors(dim):
     """
-    Get the elements (vectors) of the classical basis with
-    dimension `dim` - i.e. the `dim` standard unit vectors
-    of length `dim`.
+    Get the elements (vectors) of the classical basis with dimension `dim`
+
+    That is, the `dim` standard unit vectors of length `dim`.
 
     Parameters
     ----------
-    dim: int
+    dim : int
         dimension of the vector space.
 
     Returns
@@ -695,13 +835,13 @@ def cl_labels(dim):
 
 def sv_vectors(dim):
     """
-    Get the elements (vectors) of the complex state-vectro basis with
-    dimension `dim` - i.e. the `dim` standard complex unit vectors
-    of length `dim`.
+    Get the elements (vectors) of the complex state-vector basis with dimension `dim`.
+
+    That is, the `dim` standard complex unit vectors of length `dim`.
 
     Parameters
     ----------
-    dim: int
+    dim : int
         dimension of the vector space.
 
     Returns
@@ -736,11 +876,35 @@ def sv_labels(dim):
 
 
 def unknown_els(dim):
+    """
+    The elements of the "unknown" basis.  Just returns an empty list.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the basis (doesn't really matter).
+
+    Returns
+    -------
+    list
+    """
     assert(dim == 0), "Unknown basis must have dimension 0!"
     return []
 
 
 def unknown_labels(dim):
+    """
+    The labels for the "unknown" basis.  Just returns an empty list.
+
+    Parameters
+    ----------
+    dim : int
+        Dimension
+
+    Returns
+    -------
+    list
+    """
     return []
 
 

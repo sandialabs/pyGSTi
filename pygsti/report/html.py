@@ -1,6 +1,7 @@
 """
-Routines for converting python objects to HTML.  Parallel rountines as
-latex.py has for latex conversion.
+Routines for converting python objects to HTML.
+
+Parallel rountines as latex.py has for latex conversion.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -21,23 +22,27 @@ everything else is used in creating formatters in formatters.py
 
 
 def table(custom_headings, col_headings_formatted, rows, spec):
-    '''
+    """
     Create an HTML table
 
     Parameters
     ----------
     custom_headings : None, dict
         optional dictionary of custom table headings
+
     col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains keys 'html' and 'js', which correspond to a html and js strings representing the table
-    '''
+    """
     tableclass = spec['tableclass']
     tableID = spec['table_id']
     html = ""
@@ -77,21 +82,24 @@ def table(custom_headings, col_headings_formatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of an HTML table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
+
     Returns
     -------
     string
-    '''
+    """
     if isinstance(data, dict) or label is None:
         return data
     return '<span title="{}">{}</span>'.format(label, data)

@@ -1,4 +1,6 @@
-""" Functions for analyzing RB data"""
+"""
+Functions for analyzing RB data
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -141,8 +143,9 @@ from ..tools import rbtools as _rbt
 
 def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, ftype='full', rtype='EI'):
     """
-    Implements a "standard" least-squares fit of RB data. Fits the average success probabilities to
-    the exponential decay A + Bp^m, using least-squares fitting.
+    Implements a "standard" least-squares fit of RB data.
+
+    Fits the average success probabilities to the exponential decay A + Bp^m, using least-squares fitting.
 
     Parameters
     ----------
@@ -152,6 +155,9 @@ def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, 
     asps : list
         The average survival probabilities to fit (the observed P_m values to fit
         to P_m = A + Bp^m).
+
+    n : int
+        The number of qubits the data was generated from.
 
     seed : list, optional
         Seeds for the fit of B and p (A, if a variable, is seeded to the asymptote defined by `asympote`).
@@ -208,7 +214,7 @@ def custom_least_squares_data_fitting(lengths, asps, n, a=None, b=None, seed=Non
         to P_m = a + Bp^m).
 
     n : int
-        The number of qubits the data is on..
+        The number of qubits the data was generated from.
 
     a : float, optional
         If not None, a value to fix a to.
@@ -346,8 +352,42 @@ def custom_least_squares_data_fitting(lengths, asps, n, a=None, b=None, seed=Non
 
 class FitResults(object):
     """
-    An object to contain the results from fitting RB data. Currently just a
-    container for the results, and does not include any methods.
+    An object to contain the results from fitting RB data.
+
+    Currently just a container for the results, and does not include any methods.
+
+    Parameters
+    ----------
+    fittype : str
+        A string to identity the type of fit.
+
+    seed : list
+        The seed used in the fitting.
+
+    rtype : {'IE','AGI'}
+        The type of RB error rate that the 'r' in these fit results corresponds to.
+
+    success : bool
+        Whether the fit was successful.
+
+    estimates : dict
+        A dictionary containing the estimates of all parameters
+
+    variable : dict
+        A dictionary that specifies which of the parameters in "estimates" where variables
+        to estimate (set to True for estimated parameters, False for fixed constants). This
+        is useful when fitting to A + B*p^m and fixing one or more of these parameters: because
+        then the "estimates" dict can still be queried for all three parameters.
+
+    stds : dict, optional
+        Estimated standard deviations for the parameters.
+
+    bootstraps : dict, optional
+        Bootstrapped values for the estimated parameters, from which the standard deviations
+        were calculated.
+
+    bootstraps_failrate : float, optional
+        The proporition of the estimates of the parameters from bootstrapped dataset failed.
     """
 
     def __init__(self, fittype, seed, rtype, success, estimates, variable, stds=None,

@@ -1,4 +1,6 @@
-"""Tools for general statistical hypothesis testing"""
+"""
+Tools for general statistical hypothesis testing
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,18 +15,19 @@ import numpy as _np
 
 def bonferroni_correction(significance, numtests):
     """
-    Calculates the standard Bonferroni correction, for reducing
-    the "local" significance for > 1 statistical hypothesis
-    test to guarantee maintaining a "global" significance (i.e.,
-    a family-wise error rate) of `significance`.
+    Calculates the standard Bonferroni correction.
+
+    This is used for reducing the "local" significance for > 1 statistical
+    hypothesis test to guarantee maintaining a "global" significance (i.e., a
+    family-wise error rate) of `significance`.
 
     Parameters
     ----------
-    confidence : float
-        The desired global significance (often 0.05).
+    significance : float
+        Significance of each individual test.
 
     numtests : int
-        The number of hypothesis tests
+        The number of hypothesis tests performed.
 
     Returns
     -------
@@ -32,23 +35,57 @@ def bonferroni_correction(significance, numtests):
     `significance` / `numtests`.
     """
     local_significance = significance / numtests
-
     return local_significance
 
 
 def sidak_correction(significance, numtests):
     """
-    Todo: docstring
+    Sidak correction.
+
+    TODO: docstring - better explanaition
+
+    Parameters
+    ----------
+    significance : float
+        Significance of each individual test.
+
+    numtests : int
+        The number of hypothesis tests performed.
+
+    Returns
+    -------
+    float
     """
     adjusted_significance = 1 - (1 - significance)**(1 / numtests)
-
     return adjusted_significance
 
 
 def generalized_bonferroni_correction(significance, weights, numtests=None,
                                       nested_method='bonferroni', tol=1e-10):
     """
-    Todo: docstring
+    Generalized Bonferroni correction.
+
+    Parameters
+    ----------
+    significance : float
+        Significance of each individual test.
+
+    weights : array-like
+        An array of non-negative floating-point weights, one per individual test,
+        that sum to 1.0.
+
+    numtests : int
+        The number of hypothesis tests performed.
+
+    nested_method : {'bonferroni', 'sidak'}
+        Which method is used to find the significance of the composite test.
+
+    tol : float, optional
+        Tolerance when checking that the weights add to 1.0.
+
+    Returns
+    -------
+    float
     """
     weights = _np.array(weights)
     assert(_np.abs(_np.sum(weights) - 1.) < tol), "Invalid weighting! The weights must add up to 1."

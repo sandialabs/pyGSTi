@@ -1,4 +1,6 @@
 """
+A standard multi-qubit gate set module.
+
 Variables for working with the a model containing X(pi/2) and Z(pi/2) gates.
 """
 #***************************************************************************************************

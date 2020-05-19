@@ -1,4 +1,6 @@
-""" Functions for creating datasets """
+"""
+Functions for creating datasets
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -26,7 +28,8 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
                        sample_error="multinomial", seed=None, rand_state=None,
                        alias_dict=None, collision_action="aggregate",
                        record_zero_counts=True, comm=None, mem_limit=None, times=None):
-    """Creates a DataSet using the probabilities obtained from a model.
+    """
+    Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
     ----------
@@ -105,12 +108,10 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
         each circuit in `circuit_list` will be evaluated with the given time
         value as its *start time*.
 
-
     Returns
     -------
     DataSet
-       A static data set filled with counts for the specified operation sequences.
-
+        A static data set filled with counts for the specified operation sequences.
     """
     NTOL = 10
     TOL = 10**-NTOL
@@ -255,9 +256,10 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
 
 def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     """
-    Creates a DataSet which merges certain outcomes in input DataSet;
-    used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
-    DataSet.
+    Creates a DataSet which merges certain outcomes in input DataSet.
+
+    This is used, for example, to aggregate a 2-qubit, 4-outcome DataSet into a
+    1-qubit, 2-outcome DataSet.
 
     Parameters
     ----------
@@ -333,9 +335,11 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
 
 def create_qubit_merge_dict(n_qubits, qubits_to_keep):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`,
-    that aggregates all but the specified `qubits_to_keep` when the outcome
-    labels are those of `n_qubits` qubits (i.e. strings of 0's and 1's).
+    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
+
+    The returned dictionary instructs `merge_outcomes` to aggregate all but
+    the specified `qubits_to_keep` when the outcome labels are those of
+    `n_qubits` qubits (i.e. strings of 0's and 1's).
 
     Parameters
     ----------
@@ -357,15 +361,14 @@ def create_qubit_merge_dict(n_qubits, qubits_to_keep):
 
 def create_merge_dict(indices_to_keep, outcome_labels):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`,
-    that aggregates all but the specified `indices_to_keep`.
+    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
 
-    In particular, each element of `outcome_labels` should be a n-character
-    string (or a 1-tuple of such a string).  The returned dictionary's keys
-    will be all the unique results of keeping only the characters indexed by
-    `indices_to_keep` from each outcome label.   The dictionary's values will
-    be a list of all the original outcome labels which reduce to the key value
-    when the non-`indices_to_keep` characters are removed.
+    Each element of `outcome_labels` should be a n-character string (or a
+    1-tuple of such a string).  The returned dictionary's keys will be all the
+    unique results of keeping only the characters indexed by `indices_to_keep`
+    from each outcome label.  The dictionary's values will be a list of all the
+    original outcome labels which reduce to the key value when the
+    non-`indices_to_keep` characters are removed.
 
     For example, if `outcome_labels == ['00','01','10','11']` and
     `indices_to_keep == [1]` then this function returns the dict
@@ -403,14 +406,13 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
                    new_sectors=None, idle=((),), record_zero_counts=True,
                    filtercircuits=True):
     """
-    Creates a DataSet is the restriction of `dataset`to the sectors
-    identified by `sectors_to_keep`.
+    Creates a DataSet that is the restriction of `dataset` to `sectors_to_keep`.
 
-    More specifically, this function aggregates (sums) outcomes in `dataset`
-    which differ only in sectors (usually qubits - see below)  *not* in
-    `sectors_to_keep`, and removes any operation labels which act specifically on
-    sectors not in `sectors_to_keep` (e.g. an idle gate acting on *all*
-    sectors because it's `.sslbls` is None will *not* be removed).
+    This function aggregates (sums) outcomes in `dataset` which differ only in
+    sectors (usually qubits - see below) *not* in `sectors_to_keep`, and removes
+    any operation labels which act specifically on sectors not in
+    `sectors_to_keep` (e.g. an idle gate acting on *all* sectors because it's
+    `.sslbls` is None will *not* be removed).
 
     Here "sectors" are state-space labels, present in the operation sequences of
     `dataset`.  Each sector also corresponds to a particular character position
@@ -492,6 +494,8 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
 
 def trim_to_constant_numtimesteps(ds):
     """
+    Trims a :class:`DataSet` so that each circuit's data comprises the same number of timesteps.
+
     Returns a new dataset that has data for the same number of time steps for
     every circuit. This is achieved by discarding all time-series data for every
     circuit with a time step index beyond 'min-time-step-index', where
@@ -526,6 +530,8 @@ def trim_to_constant_numtimesteps(ds):
 
 def subsample_timeseries_data(ds, step):
     """
+    Creates a :class:`DataSet` where each circuit's data is sub-sampled.
+
     Returns a new dataset where, for every circuit, we only keep the data at every
     'step' timestep. Specifically, the outcomes at the ith time for each circuit are
     kept for each i such that i modulo 'step' is zero.
@@ -534,6 +540,10 @@ def subsample_timeseries_data(ds, step):
     ----------
     ds : DataSet
         The dataset to subsample
+
+    step : int
+        The sub-sampling time step.  Only data at every `step` increment
+        in time is kept.
 
     Returns
     -------

@@ -1,4 +1,6 @@
-""" Functions for writing GST objects to text files."""
+"""
+Functions for writing GST objects to text files.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -44,6 +46,9 @@ def write_empty_dataset(filename, circuit_list,
     append_weights_column : bool, optional
         Add an additional 'weights' column.
 
+    Returns
+    -------
+    None
     """
 
     if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
@@ -101,6 +106,10 @@ def write_dataset(filename, dataset, circuit_list=None,
         can only be True when `fixed_column_mode=False`.  `"auto"` will set
         this to True if `fixed_column_mode=False` and `dataset` has data at
         non-trivial (non-zero) times.
+
+    Returns
+    -------
+    None
     """
     if circuit_list is not None:
         if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
@@ -194,6 +203,10 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
     outcome_label_order : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
+
+    Returns
+    -------
+    None
     """
 
     if circuit_list is not None:
@@ -259,6 +272,9 @@ def write_circuit_list(filename, circuit_list, header=None):
         Header line (first line of file).  Prepended with a pound sign (#), so no
         need to include one.
 
+    Returns
+    -------
+    None
     """
     if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
         raise ValueError("Argument circuit_list must be a list of Circuit objects!")
@@ -287,6 +303,9 @@ def write_model(mdl, filename, title=None):
         Header line (first line of file).  Prepended with a pound sign (#), so no
         need to include one.
 
+    Returns
+    -------
+    None
     """
 
     def writeprop(f, lbl, val):
@@ -443,6 +462,8 @@ def write_model(mdl, filename, title=None):
 
 def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
     """
+    Write to disk an empty :class:`ProtocolData` object.
+
     Write to a directory an experimental design (`edesign`) and the dataset
     template files needed to load in a :class:`ProtocolData` object, e.g.
     using the :function:`load_data_from_dir` function, after the template
@@ -514,11 +535,77 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     model : Model
         the model to use to simulate the data.
 
-    dataset_filename : strictly
+    dataset_filename : str
         the path to the text-formatted data set file.
 
-    rest_of_args : various
-        same as :function:`pygsti.construction.generate_fake_data`.
+    n_samples : int or list of ints or None
+        The simulated number of samples for each operation sequence.  This only has
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
+        integer, all operation sequences have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        operation sequence.  If ``None``, then `model_or_dataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-circuit basis).
+
+    sample_error : string, optional
+        What type of sample error is included in the counts.  Can be:
+
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the operation sequence and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in model_or_dataset.
+        - "multinomial" - counts are taken from a multinomial distribution.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
+
+    seed : int, optional
+        If not ``None``, a seed for numpy's random number generator, which
+        is used to sample from the binomial or multinomial distribution.
+
+    rand_state : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
+    alias_dict : dict, optional
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given operation sequences before values
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
+        contains the *un-translated* operation sequences as keys.
+
+    collision_action : {"aggregate", "keepseparate"}
+        Determines how duplicate operation sequences are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    record_zero_counts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors and ensuring that the *same* dataset is
+        generated on each processor.
+
+    mem_limit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
+
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `n_samples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+
+    fixed_column_mode : bool or 'auto', optional
+        How the underlying data set file is written - see :function:`write_dataset`.
 
     Returns
     -------

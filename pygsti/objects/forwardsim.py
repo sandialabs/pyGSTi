@@ -1,4 +1,6 @@
-""" Defines the ForwardSimulator calculator class"""
+"""
+Defines the ForwardSimulator calculator class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -26,39 +28,44 @@ _dummy_profiler = _DummyProfiler()
 
 class ForwardSimulator(object):
     """
-    Encapsulates a calculation tool used by model objects to perform product
-    and derivatives-of-product calculations.
+    A calculator of circuit outcome probability calculations and their derivatives w.r.t. model parameters.
 
-    This is contained in a class separate from Model to allow for additional
+    Some forward simulators may also be used to perform operation-product calculations.
+
+    This functionality exists in a class separate from Model to allow for additional
     model classes (e.g. ones which use entirely different -- non-gate-local
     -- parameterizations of operation matrices and SPAM vectors) access to these
-    fundamental operations.
+    fundamental operations.  It also allows for the easier addition of new forward simulators.
+
+    Parameters
+    ----------
+    dim : int
+        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
+
+    layer_op_server : LayerLizard
+        An object that can be queried for circuit-layer operations.
+
+    paramvec : numpy.ndarray
+        The current parameter vector of the Model.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec):
+    def __init__(self, dim, layer_op_server, paramvec):
         """
         Construct a new ForwardSimulator object.
 
         Parameters
         ----------
         dim : int
-            The gate-dimension.  All operation matrices should be dim x dim, and all
-            SPAM vectors should be dim x 1.
+            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
 
-        gates, preps, effects : OrderedDict
-            Ordered dictionaries of LinearOperator, SPAMVec, and SPAMVec objects,
-            respectively.  Must be *ordered* dictionaries to specify a
-            well-defined column ordering when taking derivatives.
+        layer_op_server : LayerLizard
+            An object that can be queried for circuit-layer operations.
 
-        paramvec : ndarray
-            The parameter vector of the Model.
-
-        autogator : AutoGator
-            An auto-gator object that may be used to construct virtual gates
-            for use in computations.
+        paramvec : numpy.ndarray
+            The current parameter vector of the Model.
         """
         self.dim = dim
-        self.sos = simplified_op_server
+        self.sos = layer_op_server
 
         #Conversion of labels -> integers for speed & C-compatibility
         #self.operation_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
@@ -71,12 +78,11 @@ class ForwardSimulator(object):
 
         self.paramvec = paramvec
         self.Np = len(paramvec)
-        self.evotype = simplified_op_server.get_evotype()
+        self.evotype = layer_op_server.get_evotype()
 
     def to_vector(self):
         """
-        Returns the elements of the parent Model vectorized as a 1D array.
-        Used for computing finite-difference derivatives.
+        Returns the parameter vector of the associated Model.
 
         Returns
         -------
@@ -87,8 +93,28 @@ class ForwardSimulator(object):
 
     def from_vector(self, v, close=False, nodirty=False):
         """
-        The inverse of to_vector.  Initializes the Model-like members of this
+        The inverse of to_vector.
+
+        Initializes the Model-like members of this
         calculator based on `v`. Used for computing finite-difference derivatives.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            The parameter vector.
+
+        close : bool, optional
+            Set to `True` if `v` is close to the current parameter vector.
+            This can make some operations more efficient.
+
+        nodirty : bool, optional
+            If True, the framework for marking and detecting when operations
+            have changed and a Model's parameter-vector needs to be updated
+            is disabled.  Disabling this will increases the speed of the call.
+
+        Returns
+        -------
+        None
         """
         #Note: this *will* initialize the parent Model's objects too,
         # since only references to preps, effects, and gates are held
@@ -105,13 +131,16 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    def propagate(self, state, simplified_circuit, time=None):
-        raise NotImplementedError()  # TODO - create an interface for running circuits
+    #UNUSED - REMOVE?
+    #def propagate(self, state, simplified_circuit, time=None):
+    #    """
+    #    Propagate a state given a set of operations.
+    #    """
+    #    raise NotImplementedError()  # TODO - create an interface for running circuits
 
     def probs(self, simplified_circuit, clip_to=None, time=None):
         """
-        Construct a dictionary containing the probabilities of every spam label
-        given a operation sequence.
+        Construct a dictionary containing the outcome probabilities of `simplified_circuit`
 
         Parameters
         ----------
@@ -122,7 +151,7 @@ class ForwardSimulator(object):
             labels).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip probabilities to if not None.
+            (min,max) to clip probabilities to if not None.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
@@ -146,8 +175,7 @@ class ForwardSimulator(object):
 
     def dprobs(self, simplified_circuit, return_pr=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome-probability derivatives of `simplified_circuit`.
 
         Parameters
         ----------
@@ -158,11 +186,11 @@ class ForwardSimulator(object):
             labels).
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -183,8 +211,7 @@ class ForwardSimulator(object):
 
     def hprobs(self, simplified_circuit, return_pr=False, return_deriv=False, clip_to=None):
         """
-        Construct a dictionary containing the probability derivatives of every
-        spam label for a given operation sequence.
+        Construct a dictionary containing the outcome-probability 2nd derivatives of `simplified_circuit`.
 
         Parameters
         ----------
@@ -195,15 +222,15 @@ class ForwardSimulator(object):
             labels).
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         return_deriv : bool, optional
-          when set to True, additionally return the derivatives of the
-          probabilities.
+            when set to True, additionally return the derivatives of the
+            probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         Returns
         -------
@@ -225,8 +252,7 @@ class ForwardSimulator(object):
     def bulk_probs(self, circuits, eval_tree, el_indices, outcomes,
                    clip_to=None, check=False, comm=None, smartc=None):
         """
-        Construct a dictionary containing the probabilities
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
@@ -259,7 +285,6 @@ class ForwardSimulator(object):
             A cache object to cache & use previously cached values inside this
             function.
 
-
         Returns
         -------
         probs : dictionary
@@ -286,8 +311,7 @@ class ForwardSimulator(object):
                     check=False, comm=None,
                     wrt_filter=None, wrt_block_size=None):
         """
-        Construct a dictionary containing the probability-derivatives
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
 
         Parameters
         ----------
@@ -305,39 +329,38 @@ class ForwardSimulator(object):
             operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_filter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrt_block_size.
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
 
         wrt_block_size : int or float, optional
-          The maximum average number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrt_block_size and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrt_filter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
-
+            The maximum average number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
 
         Returns
         -------
@@ -377,8 +400,7 @@ class ForwardSimulator(object):
                     wrt_filter1=None, wrt_filter2=None,
                     wrt_block_size1=None, wrt_block_size2=None):
         """
-        Construct a dictionary containing the probability-Hessians
-        for an entire list of operation sequences.
+        Construct a dictionary containing the probability-Hessians for an entire list of circuits.
 
         Parameters
         ----------
@@ -396,41 +418,52 @@ class ForwardSimulator(object):
             operation sequence.
 
         return_pr : bool, optional
-          when set to True, additionally return the probabilities.
+            when set to True, additionally return the probabilities.
 
         return_deriv : bool, optional
-          when set to True, additionally return the probability derivatives.
+            when set to True, additionally return the probability derivatives.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when return_pr == True.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when return_pr == True.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
-        wrt_filter1, wrt_filter2 : list of ints, optional
-          If not None, a list of integers specifying which model parameters
-          to differentiate with respect to in the first (row) and second (col)
-          derivative operations, respectively.
+        wrt_filter1 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the first (row) derivative operations.
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrt_filter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_filter2 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the second (col) derivative operations.
 
+        wrt_block_size1: int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         Returns
         -------
@@ -520,8 +553,9 @@ class ForwardSimulator(object):
 
     def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
         """
-        Performs initial computation, such as computing probability polynomials,
-        needed for bulk_fill_probs and related calls.  This is usually coupled with
+        Performs initial computation needed for bulk_fill_probs and related calls.
+
+        For example, as computing probability polynomials. This is usually coupled with
         the creation of an evaluation tree, but is separated from it because this
         "preparation" may use `comm` to distribute a computationally intensive task.
 
@@ -532,18 +566,23 @@ class ForwardSimulator(object):
             any computed quantities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of `eval_tree` (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of `eval_tree` (if it is split).
 
-        mem_limit : TODO: docstring
+        mem_limit : int
+            Rough memory limit in bytes.
+
+        Returns
+        -------
+        None
         """
         pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 
     def bulk_fill_probs(self, mx_to_fill, eval_tree,
                         clip_to=None, check=False, comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
         corresponding to the *simplified* operation sequences found in an evaluation
@@ -560,26 +599,25 @@ class ForwardSimulator(object):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. eval_tree.num_final_elements())
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. eval_tree.num_final_elements())
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -592,8 +630,7 @@ class ForwardSimulator(object):
                          comm=None, wrt_filter=None, wrt_block_size=None,
                          profiler=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-derivatives for an entire tree of gate
-        strings.
+        Compute the outcome probability-derivatives for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
         probability-derivatives for each "final element" of `eval_tree`.
@@ -601,54 +638,54 @@ class ForwardSimulator(object):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M is the
-          number of model parameters.
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            number of model parameters.
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_filter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrt_block_size.
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
 
         wrt_block_size : int or float, optional
-          The maximum number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrt_block_size and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrt_filter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+            A profiler object used for to track timing and memory usage.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -661,8 +698,7 @@ class ForwardSimulator(object):
                          clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
                          wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-Hessians for an entire tree of gate
-        strings.
+        Compute the outcome probability-Hessians for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
         probability-Hessians for each "final element" of `eval_tree`.
@@ -670,59 +706,74 @@ class ForwardSimulator(object):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+            an already-allocated ExMxM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
-          when not None, an already-allocated ExM numpy array that is filled
-          with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
+        deriv1_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 1st
+            differentiation (i.e. by wrt_filter1).
+
+        deriv2_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 2nd
+            differentiation (i.e. by wrt_filter2).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
-        wrt_filter1, wrt_filter2 : list of ints, optional
-          If not None, a list of integers specifying which model parameters
-          to differentiate with respect to in the first (row) and second (col)
-          derivative operations, respectively.
+        wrt_filter1 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the first (row) derivative operations.
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrt_filter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_filter2 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the second (col) derivative operations.
 
-        profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+        wrt_block_size1: int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -733,9 +784,7 @@ class ForwardSimulator(object):
     def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
                              return_dprobs_12=False, comm=None):
         """
-        Constructs a generator that computes the 2nd derivatives of the
-        probabilities generated by a each gate sequence given by eval_tree
-        column-by-column.
+        An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
         This routine can be useful when memory constraints make constructing
         the entire Hessian at once impractical, and one is able to compute
@@ -744,14 +793,8 @@ class ForwardSimulator(object):
         can often be computed column-by-column from the using the columns of
         the operation sequences.
 
-
         Parameters
         ----------
-        spam_label_rows : dictionary
-            a dictionary with keys == spam labels and values which
-            are integer row indices into mx_to_fill, specifying the
-            correspondence between rows of mx_to_fill and spam labels.
-
         eval_tree : EvalTree
             given by a prior call to bulk_evaltree.  Specifies the operation sequences
             to compute the bulk operation on.  This tree *cannot* be split.
@@ -764,38 +807,37 @@ class ForwardSimulator(object):
             `slice` objects.
 
         return_dprobs_12 : boolean, optional
-           If true, the generator computes a 2-tuple: (hessian_col, d12_col),
-           where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
-           the probability generated by the sequence and spam label indexed
-           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
-           Hessian, and turns out to be useful when computing the Hessian
-           of functions of the probabilities.
+            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
+            where d12_col is a column of the matrix d12 defined by:
+            d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+            the probability generated by the sequence and spam label indexed
+            by iOpStr and iSpamLabel.  d12 has the same dimensions as the
+            Hessian, and turns out to be useful when computing the Hessian
+            of functions of the probabilities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed as in
-           bulk_product, bulk_dproduct, and bulk_hproduct.
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed as in
+            bulk_product, bulk_dproduct, and bulk_hproduct.
 
         Returns
         -------
         block_generator
-          A generator which, when iterated, yields the 3-tuple
-          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
-          (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
-          are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
-          arrays of shape K x S x B x B', where:
+            A generator which, when iterated, yields the 3-tuple
+            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+            (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
+            are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
+            arrays of shape K x S x B x B', where:
 
-          - K is the length of spam_label_rows,
-          - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
-          - B is the number of parameter rows (the length of rowSlice)
-          - B' is the number of parameter columns (the length of colSlice)
+            - K is the length of spam_label_rows,
+            - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
+            - B is the number of parameter rows (the length of rowSlice)
+            - B' is the number of parameter columns (the length of colSlice)
 
-          If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
-          (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
+            If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
+            (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
 
-          - `hprobs == mx[:,:,rowSlice,colSlice]`
-          - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
+            - `hprobs == mx[:,:,rowSlice,colSlice]`
+            - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
         raise NotImplementedError("bulk_hprobs_by_block(...) is not implemented!")

@@ -1,4 +1,6 @@
-""" Defines the ModelChild and ModelMember classes, which represent Model members """
+"""
+Defines the ModelChild and ModelMember classes, which represent Model members
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,8 +18,17 @@ from ..tools import listtools as _lt
 
 class ModelChild(object):
     """
-    Base class for all objects contained in a Model that
-    hold a `parent` reference to their parent Model.
+    Base class for all objects contained in a Model that hold a `parent` reference to their parent Model.
+
+    Parameters
+    ----------
+    parent : Model, optional
+        The parent model.
+
+    Attributes
+    ----------
+    parent : Model
+        The parent of this object.
     """
 
     def __init__(self, parent=None):
@@ -27,6 +38,11 @@ class ModelChild(object):
     def copy(self, parent=None):
         """
         Copy this object. Resets parent to None or `parent`.
+
+        Parameters
+        ----------
+        parent : Model, optional
+            The parent of the new, copied, object.
 
         Returns
         -------
@@ -41,12 +57,24 @@ class ModelChild(object):
 
     @property
     def parent(self):
-        """ Gets the parent of this object."""
+        """
+        Gets the parent of this object.
+
+        Returns
+        -------
+        Model
+        """
         return self._parent
 
     @parent.setter
     def parent(self, value):
-        """ Sets the parent of this object."""
+        """
+        Sets the parent of this object.
+
+        Returns
+        -------
+        None
+        """
         self._parent = value
 
     def __getstate__(self):
@@ -58,13 +86,41 @@ class ModelChild(object):
 
 class ModelMember(ModelChild):
     """
-    Base class for all Model member objects which possess a definite
-    dimension, number of parmeters, and evolution type (_evotype).  A
-    ModelMember can be vectorized into/onto a portion of their parent
-    Model's (or other ModelMember's) parameter vector.  They therefore
-    contain a `gpindices` reference to the global Model indices "owned" by
-    this member.  Note that GateSetMembers may contain other GateSetMembers (may
-    be nested).
+    Base class for Model member objects that possess a definite dimension, parameters count, and evolution type.
+
+    A ModelMember can be vectorized into/onto a portion of their parent Model's
+    (or other ModelMember's) parameter vector.  They therefore contain a
+    `gpindices` reference to the global Model indices "owned" by this member.
+    Note that GateSetMembers may contain other GateSetMembers (may be nested).
+
+    Parameters
+    ----------
+    dim : int
+        The dimension.
+
+    evotype : str
+        The evolution type.
+
+    gpindices : slice or numpy.ndarray, optional
+        The indices of this member's local parameters into the parent Model's
+        parameter vector.
+
+    parent : Model, optional
+        The parent model.
+
+    Attributes
+    ----------
+    dirty : bool
+        Whether this member's local parameters may have been updated without
+        its parent's knowledge.  The parent model can check this flag and perform
+        re-synchronization of it's parameter vector when needed.
+
+    gpindices : slice or numpy.ndarray
+        The indices of this member's local parameters into the parent Model's
+        parameter vector.
+
+    parent : Model, optional
+        The parent model.
     """
 
     def __init__(self, dim, evotype, gpindices=None, parent=None):
@@ -79,15 +135,27 @@ class ModelMember(ModelChild):
         super(ModelMember, self).__init__(parent)
 
     def get_dimension(self):
-        """ Return the dimension of this object. """
+        """
+        Return the dimension of this object.
+
+        Returns
+        -------
+        int
+        """
         return self.dim
 
     @property
     def dirty(self):
+        """
+        Flag indicating whether this member's local parameters may have been updated without its parent's knowledge.
+        """
         return self._dirty
 
     @dirty.setter
     def dirty(self, value):
+        """
+        Flag indicating whether this member's local parameters may have been updated without its parent's knowledge.
+        """
         self._dirty = value
         if value and self.parent:  # propagate "True" dirty flag to parent (usually a Model)
             self.parent.dirty = value
@@ -95,31 +163,44 @@ class ModelMember(ModelChild):
     @property
     def gpindices(self):
         """
-        Gets the model parameter indices of this object.
+        The indices of this member's local parameters into the parent Model's parameter vector.
+
+        Returns
+        -------
+        slice or numpy.ndarray
         """
         return self._gpindices
 
     @gpindices.setter
     def gpindices(self, value):
+        """
+        The indices of this member's local parameters into the parent Model's parameter vector.
+        """
         raise ValueError(("Use set_gpindices(...) to set the gpindices member"
                           " of a ModelMember object"))
 
     @property
     def parent(self):
         """
-        Gets the parent of this object.
+        The parent of this object.
+
+        Returns
+        -------
+        Model
         """
         return self._parent
 
     @parent.setter
     def parent(self, value):
+        """
+        The parent of this object.
+        """
         raise ValueError(("Use set_gpindices(...) to set the parent"
                           " of a ModelMember object"))
 
     def submembers(self):
         """
-        Returns a sequence of any sub-ModelMember objects contained in
-        this one.
+        Returns a sequence of any sub-ModelMember objects contained in this one.
 
         Sub-members are processed by other :class:`ModelMember` methods
         (e.g. `unlink_parent` and `set_gpindices`) as though the parent
@@ -150,6 +231,15 @@ class ModelMember(ModelChild):
         depends upon) - much like allocate_gpindices.  To ensure a valid
         parent is not overwritten, the existing parent *must be None*
         prior to this call.
+
+        Parameters
+        ----------
+        parent : Model
+            The model to (re-)set as the parent of this member.
+
+        Returns
+        -------
+        None
         """
         for subm in self.submembers():
             subm.relink_parent(parent)
@@ -160,6 +250,8 @@ class ModelMember(ModelChild):
 
     def unlink_parent(self):
         """
+        Remove the parent-link of this member.
+
         Called when at least one reference (via `key`) to this object is being
         disassociated with `parent`.   If *all* references are to this object
         are now gone, set parent to None, invalidating any gpindices.
@@ -177,9 +269,11 @@ class ModelMember(ModelChild):
 
     def clear_gpindices(self):
         """
-        Sets gpindices to None, along with any submembers' gpindices.  This
-        essentially marks these members for parameter re-allocation (e.g. if
-        the number - not just the value - of parameters they have changes).
+        Sets gpindices to None, along with any submembers' gpindices.
+
+        This essentially marks these members for parameter re-allocation
+        (e.g. if the number - not just the value - of parameters they have
+        changes).
 
         Returns
         -------
@@ -191,8 +285,7 @@ class ModelMember(ModelChild):
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this ModelMember object.
+        Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
 
         Parameters
         ----------
@@ -237,12 +330,11 @@ class ModelMember(ModelChild):
 
     def allocate_gpindices(self, starting_index, parent, memo=None):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `starting_index`.
+        Sets gpindices array for this object or any objects it contains (i.e. depends upon).
+
+        Indices may be obtained from contained objects which have already been
+        initialized (e.g. if a contained object is shared with other top-level
+        objects), or given new indices starting with `starting_index`.
 
         Parameters
         ----------
@@ -259,7 +351,7 @@ class ModelMember(ModelChild):
 
         Returns
         -------
-        num_new: int
+        num_new : int
             The number of *new* allocated parameters (so
             the parent should mark as allocated parameter
             indices `starting_index` to `starting_index + new_new`).
@@ -321,9 +413,10 @@ class ModelMember(ModelChild):
 
     def gpindices_as_array(self):
         """
-        Returns gpindices as a `numpy.ndarray` of integers (gpindices itself
-        can be None, a slice, or an integer array).  If gpindices is None, an
-        empty array is returned.
+        Returns gpindices as a `numpy.ndarray` of integers.
+
+        The underlying `.gpindices` attribute itself can be None, a slice,
+        or an integer array.  If gpindices is None, an empty array is returned.
 
         Returns
         -------
@@ -339,12 +432,20 @@ class ModelMember(ModelChild):
     def num_params(self):
         """
         Get the number of independent parameters which specify this object.
+
+        Returns
+        -------
+        int
         """
         return 0  # by default, object has no parameters
 
     def to_vector(self):
         """
-        Get this object's parameters as an array of values.
+        Get this object's parameters as a 1D array of values.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         return _np.array([], 'd')  # no parameters
 
@@ -358,6 +459,13 @@ class ModelMember(ModelChild):
             The 1D vector of parameters.  Length
             must == num_params()
 
+        close : bool, optional
+            Whether `v` is close to the current parameter vector.
+
+        nodirty : bool, optional
+            Whether the member should refrain from setting `self.dirty=True` as
+            a result of this call.
+
         Returns
         -------
         None
@@ -367,6 +475,11 @@ class ModelMember(ModelChild):
     def copy(self, parent=None):
         """
         Copy this object.
+
+        Parameters
+        ----------
+        parent : Model, optional
+            The parent of the returned copy.
 
         Returns
         -------

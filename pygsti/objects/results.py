@@ -1,4 +1,6 @@
-""" Defines the Results class."""
+"""
+Defines the Results class.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -73,8 +75,7 @@ class Results(object):
 
     def init_circuits(self, structs_by_iter):
         """
-        Initialize the common set operation sequences used to form the
-        estimates of this Results object.
+        Initialize the common set operation sequences used to form the estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
         GST method was used, this is treated as a single iteration).
@@ -178,8 +179,7 @@ class Results(object):
 
     def rename_estimate(self, old_name, new_name):
         """
-        Rename an estimate in this Results object.  Ordering of estimates is
-        not changed.
+        Rename an estimate in this Results object.  Ordering of estimates is not changed.
 
         Parameters
         ----------
@@ -335,8 +335,9 @@ class Results(object):
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
-        Creates a shallow copy of this Results object containing only the
-        given estimate and gauge-optimization keys.
+        Creates a shallow copy of this Results object.
+
+        It contains only the given estimate and gauge-optimization keys.
 
         Parameters
         ----------
@@ -366,7 +367,13 @@ class Results(object):
         return view
 
     def copy(self):
-        """ Creates a copy of this Results object. """
+        """
+        Creates a copy of this Results object.
+
+        Returns
+        -------
+        Results
+        """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()

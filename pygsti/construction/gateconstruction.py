@@ -1,4 +1,6 @@
-""" Functions for creating gates """
+"""
+Functions for creating gates
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -54,7 +56,7 @@ def single_qubit_gate(hx, hy, hz, noise=0):
     hz : float
         Coefficient of sigma-Z matrix in exponent.
 
-    noise: float, optional
+    noise : float, optional
         The amount of uniform depolarizing noise.
 
     Returns
@@ -80,38 +82,52 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
     ----------
     ix : float, optional
         Coefficient of IX matrix in exponent.
+
     iy : float, optional
         Coefficient of IY matrix in exponent.
-    iy : float, optional
-        Coefficient of IY matrix in exponent.
+
     iz : float, optional
         Coefficient of IZ matrix in exponent.
+
     xi : float, optional
         Coefficient of XI matrix in exponent.
+
     xx : float, optional
         Coefficient of XX matrix in exponent.
+
     xy : float, optional
         Coefficient of XY matrix in exponent.
+
     xz : float, optional
         Coefficient of XZ matrix in exponent.
+
     yi : float, optional
         Coefficient of YI matrix in exponent.
+
     yx : float, optional
         Coefficient of YX matrix in exponent.
+
     yy : float, optional
         Coefficient of YY matrix in exponent.
+
     yz : float, optional
         Coefficient of YZ matrix in exponent.
+
     zi : float, optional
         Coefficient of ZI matrix in exponent.
+
     zx : float, optional
         Coefficient of ZX matrix in exponent.
+
     zy : float, optional
         Coefficient of ZY matrix in exponent.
+
     zz : float, optional
         Coefficient of ZZ matrix in exponent.
+
     ii : float, optional
         Coefficient of II matrix in exponent.
+
     Returns
     -------
     numpy array

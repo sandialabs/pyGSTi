@@ -1,4 +1,6 @@
-""" Defines msgpack package interface capable of encoding pyGSTi objects"""
+"""
+Defines msgpack package interface capable of encoding pyGSTi objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,24 +18,71 @@ from .jsoncodec import decode_obj
 
 
 def dumps(obj, **kwargs):
-    """ An overload of msgpack.dumps that works with pyGSTi types """
+    """
+    An overload of msgpack.dumps that works with pyGSTi types
+
+    Parameters
+    ----------
+    obj : object
+        object to serialize.
+
+    Returns
+    -------
+    str
+    """
     enc = encode_obj(obj, msgpack_uses_binary_strs)
     return _msgpack.packb(enc, **kwargs)
 
 
 def dump(obj, f, **kwargs):
-    """ An overload of msgpack.dump that works with pyGSTi types """
+    """
+    An overload of msgpack.dump that works with pyGSTi types
+
+    Parameters
+    ----------
+    obj : object
+        object to serialize
+
+    f : file
+        output file
+
+    Returns
+    -------
+    None
+    """
     enc = encode_obj(obj, msgpack_uses_binary_strs)
     _msgpack.pack(enc, f, **kwargs)
 
 
 def loads(s, **kwargs):
-    """ An overload of msgpack.loads that works with pyGSTi types """
+    """
+    An overload of msgpack.loads that works with pyGSTi types
+
+    Parameters
+    ----------
+    s : str
+        serialized object(s)
+
+    Returns
+    -------
+    object
+    """
     decoded_msgpack = _msgpack.unpackb(s, **kwargs)  # load normal MSGPACK
     return decode_obj(decoded_msgpack, msgpack_uses_binary_strs)  # makes pygsti objects
 
 
 def load(f, **kwargs):
-    """ An overload of msgpack.load that works with pyGSTi types """
+    """
+    An overload of msgpack.load that works with pyGSTi types
+
+    Parameters
+    ----------
+    f : file
+        open file to read from
+
+    Returns
+    -------
+    object
+    """
     decoded_msgpack = _msgpack.unpack(f, **kwargs)  # load normal MSGPACK
     return decode_obj(decoded_msgpack, msgpack_uses_binary_strs)  # makes pygsti objects

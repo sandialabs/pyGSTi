@@ -1,4 +1,6 @@
-""" Classes for constructing confidence regions """
+"""
+Classes for constructing confidence regions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -55,6 +57,32 @@ class ConfidenceRegionFactory(object):
 
     Alternative (non-Hessian-based) means of computing confidence intervals
     are also available, such as by using so-called "linear reponse error bars".
+
+    Parameters
+    ----------
+    parent : Estimate
+        the parent estimate object, needed to resolve model and gate
+        string list labels.
+
+    model_lbl : str
+        The key into the parent `Estimate`'s `.models` dictionary that
+        gives the `Model` about which confidence regions will be
+        constructed.
+
+    circuit_list_lbl : str
+        The key into the parent `Results`'s `.circuit_lists` dictionary
+        that specifies which operation sequences should be or were included
+        when computing fit functions (the log-likelihood or chi2).
+
+    hessian : numpy array, optional
+        A pre-computed n_params x n_params Hessian matrix, where n_params is
+        the number of dimensions of model space, i.e. model.num_params().
+
+    non_mark_radius_sq : float, optional
+        The non-Markovian radius associated with the goodness of fit found
+        at the point where `hessian` was computed.  This must be specified
+        whenver `hessian` is, and should be left as `None` when `hessian`
+        is not specified.
     """
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
@@ -123,6 +151,19 @@ class ConfidenceRegionFactory(object):
     def set_parent(self, parent):
         """
         Sets the parent Estimate object of this ConfidenceRegionFactory.
+
+        This function is usually only needed internally to re-link a
+        ConfidenceRegionFactory with its parent after be un-serialized
+        from disk.
+
+        Parameters
+        ----------
+        parent : Estimate
+            The parent of this object.
+
+        Returns
+        -------
+        None
         """
         self.parent = parent
 
@@ -146,9 +187,10 @@ class ConfidenceRegionFactory(object):
 
     def can_construct_views(self):
         """
-        Checks whether this factory has enough information to construct
-        'views' of itself (`ConfidenceRegionFactoryView` objects via the
-        :method:`view` method), which can then be used to construct
+        Checks whether this factory has enough information to construct 'views' of itself.
+
+        `ConfidenceRegionFactoryView` view objects are created using the
+        :method:`view` method, which can in turn be used to construct
         confidence intervals.
 
         Returns
@@ -354,8 +396,10 @@ class ConfidenceRegionFactory(object):
 
     def enable_linear_response_errorbars(self, resource_alloc=None):
         """
-        Stores the parameters needed to run (on-demand) the ML-GST
-        optimizations needed to compute error bars on quantities.
+        Stores the parameters needed to compute (on-demand) linear response error bars.
+
+        In particular, this function sets up the parameters needed to perform the
+        model optimizations needed to compute error bars on quantities.
 
         'linear response' mode obtains elements of the Hessian via the
         linear response of a "forcing term".  This requres a likelihood
@@ -399,9 +443,9 @@ class ConfidenceRegionFactory(object):
     def view(self, confidence_level, region_type='normal',
              hessian_projection_label=None):
         """
-        Constructs a "view" of this ConfidenceRegionFactory for a particular
-        type and confidence level.  The returned view object can then be used to
-        construct confidence intervals/regions.
+        Constructs a "view" of this ConfidenceRegionFactory for a particular type and confidence level.
+
+        The returned view object can then be used to construct confidence intervals/regions.
 
         Parameters
         ----------
@@ -566,12 +610,48 @@ class ConfidenceRegionFactory(object):
 
 class ConfidenceRegionFactoryView(object):
     """
-    Encapsulates a lightweight "view" of a ConfidenceRegionFactory,
-    which is principally defined by it's having a fixed confidence-level.
+    Encapsulates a lightweight "view" of a ConfidenceRegionFactory.
+
+    A view object is principally defined by it's having a fixed confidence-level.
     Thus, a "view" is like a factory that generates confidence intervals for
     just a single confidence level.  As such, it is a useful object to pass
     around to routines which compute and display error bars, as these routines
     typically don't depend on what confidence-level is being used.
+
+    Parameters
+    ----------
+    model : Model
+        The model at the center of this confidence region.
+
+    inv_projected_hessian : numpy.ndarray
+        The computed inverse of the non-gauge-projected Hessian.
+
+    mlgst_params : dict
+        A dictionary of ML-GST parameters only used for linear-response
+        error bars.
+
+    confidence_level : float
+        the confidence level (between 0 and 100) used in
+        the computation of confidence regions/intervals.
+
+    non_mark_radius_sq : float, optional
+        When non-zero, "a non-Markovian error region" is constructed using
+        this value as the squared "non-markovian radius". This specifies the
+        portion of 2*(max-log-likelihood - model-log-likelihood) that we
+        attribute to non-Markovian errors (typically the previous
+        difference minus it's expected value, the difference in number of
+        parameters between the maximal and model models).  If set to
+        zero (the default), a standard and thereby statistically rigorous
+        conficence region is created.  Non-zero values should only be
+        supplied if you really know what you're doing.
+
+    n_non_gauge_params : int
+        The numbers of non-gauge parameters.  This could be computed from `model`
+        but can be passed in to save compuational time.
+
+    n_gauge_params : int
+        The numbers of gauge parameters.  This could be computed from `model`
+        but can be passed in to save compuational time.
     """
 
     def __init__(self, model, inv_projected_hessian, mlgst_params, confidence_level,
@@ -705,8 +785,7 @@ class ConfidenceRegionFactoryView(object):
 
     def get_errobar_type(self):
         """
-        Return the type of error bars this view will generate, either
-        "standard" or "non-markovian".
+        Return the type of error bars this view will generate, either "standard" or "non-markovian".
 
         Returns
         -------
@@ -719,8 +798,7 @@ class ConfidenceRegionFactoryView(object):
 
     def get_profile_likelihood_confidence_intervals(self, label=None):
         """
-        Retrieve the profile-likelihood confidence intervals for a specified
-        model object (or all such intervals).
+        Retrieve the profile-likelihood confidence intervals for a specified model object (or all such intervals).
 
         Parameters
         ----------
@@ -788,7 +866,6 @@ class ConfidenceRegionFactoryView(object):
             Half-widths of confidence intervals for each of the elements
             in the float or array returned by fnOfOp.  Thus, shape of
             df matches that returned by fnOfOp.
-
         f0 : float or numpy array
             Only returned when return_fn_val == True. Value of fnOfOp
             at the gate specified by op_label.

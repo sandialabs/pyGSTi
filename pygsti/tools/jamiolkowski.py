@@ -1,4 +1,6 @@
-"""Utility functions related to the Choi representation of gates."""
+"""
+Utility functions related to the Choi representation of gates.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -63,8 +65,7 @@ from . import matrixtools as _mt
 
 def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     """
-    Given a operation matrix, return the corresponding Choi matrix that is normalized
-    to have trace == 1.
+    Given a operation matrix, return the corresponding Choi matrix that is normalized to have trace == 1.
 
     Parameters
     ----------
@@ -129,8 +130,9 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
 
 def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     """
-    Given a choi matrix, return the corresponding operation matrix.  This function
-    performs the inverse of jamiolkowski_iso(...).
+    Given a choi matrix, return the corresponding operation matrix.
+
+    This function performs the inverse of :function:`jamiolkowski_iso`.
 
     Parameters
     ----------
@@ -185,8 +187,7 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
 
 def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     """
-    Given a operation matrix, return the corresponding Choi matrix in the standard
-    basis that is normalized to have trace == 1.
+    The corresponding Choi matrix in the standard basis that is normalized to have trace == 1.
 
     This routine *only* computes the case of the Choi matrix being in the
     standard (matrix unit) basis, but does so more quickly than
@@ -234,7 +235,8 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
 def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     """
     Given a choi matrix in the standard basis, return the corresponding operation matrix.
-    This function performs the inverse of fast_jamiolkowski_iso_std(...).
+
+    This function performs the inverse of :function:`fast_jamiolkowski_iso_std`.
 
     Parameters
     ----------
@@ -271,8 +273,10 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
 
 def sum_of_negative_choi_evals(model, weights=None):
     """
-    Compute the amount of non-CP-ness of a model by summing the negative
-    eigenvalues of the Choi matrix for each gate in model.
+    Compute the amount of non-CP-ness of a model.
+
+    This is defined (somewhat arbitarily) by summing the negative
+    eigenvalues of the Choi matrix for each gate in `model`.
 
     Parameters
     ----------
@@ -300,8 +304,12 @@ def sum_of_negative_choi_evals(model, weights=None):
 
 def sums_of_negative_choi_evals(model):
     """
-    Compute the amount of non-CP-ness of a model by summing the negative
+    Compute the amount of non-CP-ness of a model.
+
+    This is defined (somewhat arbitarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in model separately.
+    This function is different from :function:`sum_of_negative_choi_evals`
+    in that it returns sums separately for each operation of `model`.
 
     Parameters
     ----------
@@ -327,8 +335,7 @@ def sums_of_negative_choi_evals(model):
 
 def mags_of_negative_choi_evals(model):
     """
-    Compute the magnitudes of the negative eigenvalues of the Choi matricies
-    for each gate in model.
+    Compute the magnitudes of the negative eigenvalues of the Choi matricies for each gate in `model`.
 
     Parameters
     ----------

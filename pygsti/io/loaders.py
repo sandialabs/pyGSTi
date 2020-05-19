@@ -1,4 +1,6 @@
-""" Functions for loading GST objects from text files."""
+"""
+Functions for loading GST objects from text files.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -20,8 +22,10 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
                  record_zero_counts=True, ignore_zero_count_lines=True,
                  with_times="auto", verbosity=1):
     """
-    Load a DataSet from a file.  First tries to load file as a
-    saved DataSet object, then as a standard text-formatted DataSet.
+    Load a DataSet from a file.
+
+    This function first tries to load file as a saved DataSet object,
+    then as a standard text-formatted DataSet.
 
     Parameters
     ----------
@@ -117,8 +121,10 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
 def load_multidataset(filename, cache=False, collision_action="aggregate",
                       record_zero_counts=True, verbosity=1):
     """
-    Load a MultiDataSet from a file.  First tries to load file as a
-    saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
+    Load a MultiDataSet from a file.
+
+    This function first tries to load file as a saved MultiDataSet object,
+    then as a standard text-formatted MultiDataSet.
 
     Parameters
     ----------
@@ -149,7 +155,6 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
         loading progress is shown.
-
 
     Returns
     -------
@@ -228,8 +233,7 @@ def load_tddataset(filename, cache=False, record_zero_counts=True):
 
 def load_model(filename):
     """
-    Load a Model from a file, formatted using the
-    standard text-format for models.
+    Load a Model from a file, formatted using the standard text-format for models.
 
     Parameters
     ----------
@@ -245,8 +249,7 @@ def load_model(filename):
 
 def load_circuit_dict(filename):
     """
-    Load a operation sequence dictionary from a file, formatted
-    using the standard text-format.
+    Load a circuit dictionary from a file, formatted using the standard text-format.
 
     Parameters
     ----------
@@ -256,7 +259,7 @@ def load_circuit_dict(filename):
     Returns
     -------
     Dictionary with keys = operation sequence labels and
-      values = Circuit objects.
+        values = Circuit objects.
     """
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
@@ -264,8 +267,7 @@ def load_circuit_dict(filename):
 
 def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_lines=None):
     """
-    Load a operation sequence list from a file, formatted
-    using the standard text-format.
+    Load a circuit list from a file, formatted using the standard text-format.
 
     Parameters
     ----------
@@ -382,8 +384,11 @@ def load_data_from_dir(dirname, quick_load=False, comm=None):
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=False, comm=None):
     """
-    Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a
-    directory on disk (depending on whether `name` is given).
+    Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a directory on disk.
+
+    Which object type is loaded depends on whether `name` is given: if it is, then
+    a :class:`ProtocolResults` object is loaded.  If not, a :class:`ProtocolsResultsDir`
+    results.
 
     Parameters
     ----------

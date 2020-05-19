@@ -1,4 +1,6 @@
-""" Defines the TermEvalTree class which implements an evaluation tree. """
+"""
+Defines the TermEvalTree class which implements an evaluation tree.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,37 +24,49 @@ import time as _time  # DEBUG TIMERS
 
 class TermEvalTree(EvalTree):
     """
-    An Evaluation Tree for term-based calcualtions.
+    An Evaluation Tree for Taylor-term-based (path integral) calculations.
+
+    Parameters
+    ----------
+    items : list, optional
+        Initial items.  This argument should only be used internally
+        in the course of serialization.
     """
 
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
-        # list of the operation labels
-        self.opLabels = []
-
         # Trivially init other members - to be filled in by initialize() or by subtree creation
         self.simplified_circuit_elabels = None
 
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, num_sub_tree_comms=1, max_cache_size=None):
+    def initialize(self, simplified_circuit_elabels, num_sub_tree_comms=1, max_cache_size=None):
         """
-        Initialize an evaluation tree using a set of complied operation sequences.
-        This function must be called before using this EvalTree.
+        Initialize an evaluation tree using a set of "simplified" circuits.
+
+        This function must be called before using this evaluation tree.
 
         Parameters
         ----------
-        TODO: docstring update needed
-        circuit_list : list of (tuples or Circuits)
-            A list of tuples of operation labels or Circuit
-            objects, specifying the operation sequences that
-            should be present in the evaluation tree.
+        simplified_circuit_elabels : dict
+            A dictionary of `(circuit, elabels)` tuples specifying
+            the circuits that should be present in the evaluation tree.
+            `circuit` is a *simplified* circuit whose first layer is a
+            preparation label. `elabels` is a list of all the POVM
+            effect labels (corresponding to outcomes) for the
+            circuit (only a single label is needed rather than a
+            POVM-label, effect-label pair because these are *simplified*
+            effect labels).
 
         num_sub_tree_comms : int, optional
             The number of processor groups (communicators)
             to divide the subtrees of this EvalTree among
             when calling `distribute`.  By default, the
             communicator is not divided.
+
+        max_cache_size : int, optional
+            The maximum cache size allowed. Currently this is
+            unused and should be treated as zero.
 
         Returns
         -------
@@ -61,14 +75,14 @@ class TermEvalTree(EvalTree):
         #tStart = _time.time() #DEBUG TIMER
 
         # opLabels : A list of all the distinct operation labels found in
-        #              simplified_circuit_list.  Used in calc classes
+        #              simplified_circuit_elabels.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.opLabels = self._get_op_labels(simplified_circuit_list)
+        self.opLabels = self._get_op_labels(simplified_circuit_elabels)
         if num_sub_tree_comms is not None:
             self.distribution['numSubtreeComms'] = num_sub_tree_comms
 
-        circuit_list = [tuple(opstr) for opstr in simplified_circuit_list.keys()]
-        self.simplified_circuit_elabels = list(simplified_circuit_list.values())
+        circuit_list = [tuple(opstr) for opstr in simplified_circuit_elabels.keys()]
+        self.simplified_circuit_elabels = list(simplified_circuit_elabels.values())
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_elabels])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
@@ -123,14 +137,14 @@ class TermEvalTree(EvalTree):
         Parameters
         ----------
         permute : bool, optional
-           Whether to permute the returned list of strings into the
-           same order as the original list passed to initialize(...).
-           When False, the computed order of the operation sequences is
-           given, which is matches the order of the results from calls
-           to `Model` bulk operations.  Non-trivial permutation
-           occurs only when the tree is split (in order to keep
-           each sub-tree result a contiguous slice within the parent
-           result).
+            Whether to permute the returned list of strings into the
+            same order as the original list passed to initialize(...).
+            When False, the computed order of the operation sequences is
+            given, which is matches the order of the results from calls
+            to `Model` bulk operations.  Non-trivial permutation
+            occurs only when the tree is split (in order to keep
+            each sub-tree result a contiguous slice within the parent
+            result).
 
         Returns
         -------
@@ -158,10 +172,11 @@ class TermEvalTree(EvalTree):
 
     def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
-        Split this tree into sub-trees in order to reduce the
-          maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either max_sub_tree_size
-          or num_sub_trees.
+        Split this tree into sub-trees.
+
+        This is done in order to reduce the maximum size of any tree (useful for
+        limiting memory consumption or for using multiple cores).  Must specify
+        either max_sub_tree_size or num_sub_trees.
 
         Parameters
         ----------
@@ -401,19 +416,45 @@ class TermEvalTree(EvalTree):
 
     def cache_size(self):
         """
-        Returns the size of the persistent "cache" of partial results
-        used during the computation of all the strings in this tree.
+        Returns the size of the persistent "cache" of partial results.
+
+        In the case of a TermEvalTree, this is always 0.
+
+        Returns
+        -------
+        int
         """
         return 0
 
     def copy(self):
-        """ Create a copy of this evaluation tree. """
+        """
+        Create a copy of this evaluation tree.
+
+        Returns
+        -------
+        TermEvalTree
+        """
         cpy = self._copy_base(TermEvalTree(self[:]))
         cpy.opLabels = self.opLabels[:]
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
     def get_achieved_and_max_sopm(self, calc):
+        """
+        Compute the achieved and maximum possible sum-of-path-magnitudes.
+
+        This gives a sense of how accurately the current path set is able
+        to compute probabilities.
+
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         achieved_sopm = []
         max_sopm = []
 
@@ -439,10 +480,41 @@ class TermEvalTree(EvalTree):
         return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
 
     def get_sopm_gaps(self, calc):
+        """
+        Compute the sum-of-path-magnitude gaps.
+
+        The "gap" here is the difference between the maximum possible and
+        achieved values.
+
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         achieved_sopm, max_sopm = self.get_achieved_and_max_sopm_gaps(calc)
         return max_sopm - achieved_sopm
 
     def get_achieved_and_max_sopm_jacobian(self, calc):
+        """
+        Compute the jacobian of the achieved and maximum possible sum-of-path-magnitudes.
+
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        Returns
+        -------
+        achieved_sopm_jacobian: numpy.ndarray
+            The jacobian of the achieved sum-of-path-magnitudes.
+
+        max_sopm_jacobian: numpy.ndarray
+            The jacobian of the maximum possible sum-of-path-magnitudes.
+        """
         nEls = self.num_final_elements()
         polys = self.merged_achievedsopm_compact_polys
         dpolys = _compact_deriv(polys[0], polys[1], _np.arange(calc.Np))
@@ -499,13 +571,46 @@ class TermEvalTree(EvalTree):
         return d_achieved_mags, d_max_sopms
 
     def get_sopm_gaps_jacobian(self, calc):
+        """
+        Compute the jacobian of the (maximum-possible - achieved) sum-of-path-magnitudes.
+
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        Returns
+        -------
+        numpy.ndarray
+            The jacobian of the sum-of-path-magnitudes gap.
+        """
         d_achieved_mags, d_max_sopms = self.get_achieved_and_max_sopm_jacobian(calc)
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
 
     def find_minimal_paths_set(self, calc, comm, mem_limit, exit_after_this_many_failures=0):
-        """TODO: docstring: returns caches but only when the # failures <= exit_after_this_many_failures """
+        """
+        Find the minimal (smallest) path set that achieves the desired accuracy conditions.
 
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        comm : mpy4py.MPI.Comm
+            An MPI communicator for dividing the compuational task.
+
+        mem_limit : int
+            Rough memory limit (per processor) in bytes.
+
+        exit_after_this_many_failures : int, optional
+           If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
+           This short-circuits doomed attempts to find a good path set so they don't take too long.
+
+        Returns
+        -------
+        PathSet
+        """
         tot_npaths = 0
         tot_target_sopm = 0
         tot_achieved_sopm = 0
@@ -563,11 +668,37 @@ class TermEvalTree(EvalTree):
                                       max_npaths, num_failed)
 
     def get_paths_set(self):
-        """TODO: docstring """
+        """
+        The current path set.
+
+        Returns
+        -------
+        PathSet
+        """
         return self.pathset
 
     def select_paths_set(self, calc, pathset, comm, mem_limit):
-        """ TODO: docstring  - selects *and* computes polys for the given "path set" defined by the arguments."""
+        """
+        Selects (makes "current") a path set *and* computes polynomials the new set.
+
+        Parameters
+        ----------
+        calc : TermForwardSimulator
+            The forward simulator object.
+
+        pathset : PathSet
+            The path set to select.
+
+        comm : mpy4py.MPI.Comm
+            An MPI communicator for dividing the compuational task.
+
+        mem_limit : int
+            Rough memory limit (per processor) in bytes.
+
+        Returns
+        -------
+        None
+        """
 
         #TODO: update this outdated docstring
         # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
@@ -618,9 +749,10 @@ class TermEvalTree(EvalTree):
 
     def cache_p_polys(self, calc, comm):
         """
-        Get the compact-form polynomials that evaluate to the probabilities
-        corresponding to all this tree's operation sequences sandwiched between
-        `rholabel` and each of the `elabels`.  The result is cached to speed
+        Compute and cache the compact-form polynomials that evaluate to this tree's probabilities.
+
+        These polynomials corresponding to all this tree's operation sequences sandwiched
+        between each state preparation and effect.  The result is cached to speed
         up subsequent calls.
 
         Parameters
@@ -659,23 +791,94 @@ class TermEvalTree(EvalTree):
 
 
 class TermPathSet(object):
-    """TODO: docstring"""
+    """
+    A set of error-term paths.
+
+    Each such path is comprised of a single "term" (usually a Taylor term of an
+    error-generator expansion) for each gate operation or circuit layer (more
+    generally, each factor within the product that evaluates to the probability).
+
+    A set of paths is specified by giving a path-magnitude threshold for each
+    circuit in an evaluation tree.  All paths with magnitude less than this threshold
+    are a part of the path set.  The term magnitudes that determine a path magnitude
+    are held in Term objects resulting from a Model at a particular parameter-space
+    point.  Representations of these term objects (actually just the "high-magnitude" ones,
+    as determined by a different, term-magnitude, threshold) are also held
+    within the path set.
+
+    Parameters
+    ----------
+    evaltree : TermEvalTree
+        The evaluation tree that is associated with this path set.
+
+    npaths : int
+        The number of total paths.
+
+    maxpaths : int
+        The maximum-allowed-paths limit that was in place when this
+        path set was created.
+
+    nfailed : int
+        The number of circuits that failed to meet the desired accuracy
+        (path-magnitude gap) requirements.
+    """
 
     def __init__(self, evaltree, npaths, maxpaths, nfailed):
-        """TODO: docstring """
         self.tree = evaltree
         self.npaths = npaths
         self.max_allowed_paths = maxpaths
         self.num_failures = nfailed  # number of failed *circuits* (not outcomes)
 
     def get_allowed_path_fraction(self):
+        """
+        The fraction of maximal allowed paths that are in this path set.
+
+        Returns
+        -------
+        float
+        """
         return self.npaths / self.max_allowed_paths
 
 
 class UnsplitTreeTermPathSet(TermPathSet):
+    """
+    A path set for an un-split :class:`TermEvalTree`.
+
+    Parameters
+    ----------
+    evaltree : TermEvalTree
+        The evaluation tree this path set is associated with.
+
+    thresholds : dict
+        A dictionary whose keys are circuits and values are path-magnitude thresholds.
+        These thresholds store what
+
+    highmag_termrep_cache : dict
+        A dictionary whose keys are gate or circuit-layer labels and whose values are
+        internally-used "rep-cache" elements that each hold a list of the term representations
+        for that gate having a "high" magnitude (magnitude above some threshold).  This
+        cache is an essential link between the path-magnitude thresholds in `thresholds` and
+        the actual set of paths that are evaluated by `evaltree` (e.g. updating this cache by
+        re-computing term magnitudes at a new parameter-space point will also update the set
+        of paths that are evaluated given the *same* set of `thresholds`).
+
+    circuitsetup_cache : dict
+        A dictionary that caches per-circuit setup information and can be used to
+        speed up multiple calls which use the same circuits.
+
+    npaths : int
+        The number of total paths.
+
+    maxpaths : int
+        The maximum-allowed-paths limit that was in place when this
+        path set was created.
+
+    nfailed : int
+        The number of circuits that failed to meet the desired accuracy
+        (path-magnitude gap) requirements.
+    """
     def __init__(self, evaltree, thresholds, highmag_termrep_cache,
                  circuitsetup_cache, npaths, maxpaths, nfailed):
-        """TODO: docstring """
         TermPathSet.__init__(self, evaltree, npaths, maxpaths, nfailed)
         self.thresholds = thresholds
         self.highmag_termrep_cache = highmag_termrep_cache
@@ -683,6 +886,22 @@ class UnsplitTreeTermPathSet(TermPathSet):
 
 
 class SplitTreeTermPathSet(TermPathSet):
+    """
+    A path set for a split :class:`TermEvalTree`.
+
+    Parameters
+    ----------
+    evaltree : TermEvalTree
+        The evaluation tree this path set is associated with.
+
+    local_subtree_pathsets : list
+        A list of path sets for each of the *local* sub-trees (i.e. the
+        sub-trees assigned to the current processor).
+
+    comm : mpi4py.MPI.Comm
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+    """
     def __init__(self, evaltree, local_subtree_pathsets, comm):
 
         #Get local-subtree totals

@@ -1,4 +1,6 @@
-"""Common functions used in scoring germ and fiducial sets."""
+"""
+Common functions used in scoring germ and fiducial sets.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -14,7 +16,8 @@ import numpy as _np
 
 
 def list_score(input_array, score_func='all'):
-    """Score an array of eigenvalues. Smaller scores are better.
+    """
+    Score an array of eigenvalues. Smaller scores are better.
 
     Parameters
     ----------
@@ -34,7 +37,6 @@ def list_score(input_array, score_func='all'):
     -------
     float
         Score for the eigenvalues.
-
     """
     # We're expecting division by zero in many instances when we call this
     # function, and the inf can be handled appropriately, so we suppress
@@ -54,7 +56,8 @@ def list_score(input_array, score_func='all'):
 
 @total_ordering
 class CompositeScore():
-    """Class for storing and comparing scores calculated from eigenvalues.
+    """
+    Class for storing and comparing scores calculated from eigenvalues.
 
     The comparison functions operate according to the logic that a lower score
     is better. The score value is broken into two parts: 'major' and 'minor'.
@@ -71,10 +74,14 @@ class CompositeScore():
 
     Parameters
     ----------
-    major, minor : float
-        The major and minor parts of the score.
-    N : int
-        The number of non-zero eigenvalues.
+    major : float
+        Major (more significant) component of score.
+
+    minor : float
+        Minor (less significant) component of score.
+
+    n : int
+        Number of non-zero eigenvalues.
     """
 
     def __init__(self, major, minor, n):
@@ -101,7 +108,8 @@ class CompositeScore():
 
 
 def composite_rcl_fn(candidate_scores, alpha):
-    """Create a restricted candidate list (RCL) based on CompositeScore objects.
+    """
+    Create a restricted candidate list (RCL) based on CompositeScore objects.
 
     Parameters
     ----------
@@ -109,7 +117,7 @@ def composite_rcl_fn(candidate_scores, alpha):
         List of scores to be sorted in RCL and not RCL.
 
     alpha : float
-        A number between 0 and 1 that roughly specifies a score theshold
+        A number between 0 and 1 that roughly specifies a score threshold
         relative to the spread of scores that a germ must score better than in
         order to be included in the RCL. A value of 0 for `alpha` corresponds
         to a purely greedy algorithm (only the best-scoring element is
@@ -127,7 +135,6 @@ def composite_rcl_fn(candidate_scores, alpha):
     -------
     numpy.array
         The indices of the scores sufficiently good to be in the RCL.
-
     """
     maxScore = max(candidate_scores)
     minScore = min(candidate_scores)

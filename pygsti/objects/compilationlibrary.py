@@ -1,4 +1,6 @@
-""" Defines CompilationLibrary class and supporting functions """
+"""
+Defines CompilationLibrary class and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,19 +27,23 @@ IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
 
 
 class CompilationError(Exception):
-    """ A compilation error, raised by :class:`CompilationLibrary` """
+    """
+    A compilation error, raised by :class:`CompilationLibrary`
+    """
     pass
 
 
 class CompilationLibrary(_collections.OrderedDict):
     """
-    An collection of compilations for gates. Essentially an ordered dictionary
-    whose keys are operation labels (:class:`Label` objects) and whose values are
-    operation sequences (:class:`Circuit` objects).  A `CompilationLibrary` holds a
-    :class:`Model` which specifies the "native" gates that all compilations
-    are made up of.  Currently, this model should only contain Clifford
-    gates, so that its `get_clifford_symplectic_reps` method gives
-    representations for all of its gates.
+    An collection of compilations for gates.
+
+    Essentially an ordered dictionary whose keys are operation labels
+    (:class:`Label` objects) and whose values are operation sequences
+    (:class:`Circuit` objects).  A `CompilationLibrary` holds a :class:`Model`
+    which specifies the "native" gates that all compilations are made up of.
+    Currently, this model should only contain Clifford gates, so that its
+    `get_clifford_symplectic_reps` method gives representations for all of its
+    gates.
 
     Compilations can be either "local" or "non-local". A local compilation
     ony uses gates that act on its target qubits.  All 1-qubit gates can be
@@ -54,6 +60,23 @@ class CompilationLibrary(_collections.OrderedDict):
 
     Compilation libraries are most often used within a :class:`ProcessorSpec`
     object.
+
+    Parameters
+    ----------
+    clifford_model : Model
+        The model of "native" Clifford gates which all compilations in
+        this library are composed from.
+
+    ctyp : {"absolute","paulieq"}
+        The "compilation type" for this library.  If `"absolute"`, then
+        compilations must match the gate operation being compiled exactly.
+        If `"paulieq"`, then compilations only need to match the desired
+        gate operation up to a Paui operation (which is useful for compiling
+        multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
+        gate over-heads).
+
+    items : list, optional
+        initial items (key,value pairs) to place in library.
     """
 
     def __init__(self, clifford_model, ctyp="absolute", items=[]):
@@ -118,11 +141,6 @@ class CompilationLibrary(_collections.OrderedDict):
         max_iterations : int, optional
             The maximum number of iterations for the iterative compilation
             algorithm.
-
-        force : bool, optional
-            If True, then a compilation is recomputed even if `oplabel`
-            already exists in this `CompilationLibrary`.  Otherwise
-            compilations are only computed when they are *not* present.
 
         verbosity : int, optional
             An integer >= 0 specifying how much detail to send to stdout.
@@ -281,7 +299,6 @@ class CompilationLibrary(_collections.OrderedDict):
         Returns
         -------
         None
-
         """
         self[oplabel] = self.get_local_compilation_of(oplabel, unitary, srep,
                                                       max_iterations, force,
@@ -313,6 +330,14 @@ class CompilationLibrary(_collections.OrderedDict):
         srep : tuple, optional
             The `(smatrix, svector)` tuple giving the symplectic representation
             of the gate being templated.
+
+        available_glabels : list
+            A list of the gate labels (:class:`Label` objects) that are available for
+            use in compilations.
+
+        available_sreps : dict
+            A dictionary of available symplectic representations.  Keys are gate
+            labels and values are numpy arrays.
 
         verbosity : int, optional
             An integer >= 0 specifying how much detail to send to stdout.
@@ -447,15 +472,18 @@ class CompilationLibrary(_collections.OrderedDict):
 
         return compilation
 
+    #PRIVATE
     def compute_connectivity_of(self, gate_name):
         """
-        Compuate the connectivity (the nearest-neighbor links) for `gate_name`
-        using the (compiled) gates available this library.  The result, a
-        :class:`QubitGraph`, is stored in `self.connectivity[gate_name]`.
+        Compute the connectivity for `gate_name` using the (compiled) gates available this library.
+
+        Connectivity is defined in terms of nearest-neighbor links, and the
+        resulting :class:`QubitGraph`, is stored in `self.connectivity[gate_name]`.
 
         Parameters
         ----------
         gate_name : str
+            gate name to compute connectivity for.
 
         Returns
         -------
@@ -475,14 +503,16 @@ class CompilationLibrary(_collections.OrderedDict):
 
         self.connectivity[gate_name] = _QubitGraph(qubit_labels, connectivity)
 
-    def filter_connectivity(self, gatename, allowed_filter):
+    def filter_connectivity(self, gate_name, allowed_filter):
         """
-        Compute the QubitGraph giving the available `gatename`
-        gates subject to the constraints imposed by `allowed_filter`.
+        Compute the QubitGraph giving the available `gate_name` gates subject to `allowed_filter`.
+
+        The filter adds constraints to by specifying the availability of `gate_name`.
 
         Parameters
         ----------
         gate_name : str
+            The gate name.
 
         allowed_filter : dict or set
             See :method:`get_nonlocal_compilation_of`.
@@ -491,13 +521,13 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         QubitGraph
         """
-        if gatename not in self.connectivity:  # need to recompute
-            self.compute_connectivity_of(gatename)
+        if gate_name not in self.connectivity:  # need to recompute
+            self.compute_connectivity_of(gate_name)
 
-        init_qgraph = self.connectivity[gatename]  # unconstrained
+        init_qgraph = self.connectivity[gate_name]  # unconstrained
 
         if isinstance(allowed_filter, dict):
-            graph_constraint = allowed_filter.get(gatename, None)
+            graph_constraint = allowed_filter.get(gate_name, None)
             if graph_constraint is not None:
                 directed = graph_constraint.directed or init_qgraph.directed
                 init_nodes = set(init_qgraph.get_node_names())
@@ -767,8 +797,9 @@ class CompilationLibrary(_collections.OrderedDict):
 
     def get_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
         """
-        Get a compilation of `oplabel` in the context of `allowed_filter`, if any. This is
-        often more convenient than querying the CompilationLibrary directly as a dictionary,
+        Get a compilation of `oplabel` in the context of `allowed_filter`, if any.
+
+        This is often more convenient than querying the CompilationLibrary directly as a dictionary,
         because:
 
         1. If allowed_filter is not None, this handles the correct querying of the dictionary
@@ -828,8 +859,9 @@ class CompilationLibrary(_collections.OrderedDict):
 
     def add_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
         """
-        Adds a compilation of `oplabel` in the context of `allowed_filter`, if any. If
-        `allowed_filter` is None then the compilation is recorded under the key `oplabel`.
+        Adds a compilation of `oplabel` in the context of `allowed_filter`, if any.
+
+        If `allowed_filter` is None then the compilation is recorded under the key `oplabel`.
         Otherwise, the compilation is recorded under the key (`oplabel`,`context_key`) where
         `context_key` is frozenset(`allowed_filter`) when `allowed_filter` is a set, and
         `context_key` is frozenset(`allowed_filter`.items()) when `allowed_filter` is a dict.

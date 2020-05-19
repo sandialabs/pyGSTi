@@ -1,4 +1,6 @@
-""" Defines the ImplicitOpModel class and supporting functionality."""
+"""
+Defines the ImplicitOpModel class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -50,12 +52,57 @@ from .label import Label as _Label
 
 class ImplicitOpModel(_mdl.OpModel):
     """
+    A model that stores the building blocks for layer operations and build circuit-layer operations on-demand.
+
     An ImplicitOpModel represents a flexible QIP model whereby only the
     building blocks for layer operations are stored, and custom layer-lizard
     logic is used to construct layer operations from these blocks on an
     on-demand basis.
-    """
 
+    Parameters
+    ----------
+    state_space_labels : StateSpaceLabels or list or tuple
+        The decomposition (with labels) of (pure) state-space this model
+        acts upon.  Regardless of whether the model contains operators or
+        superoperators, this argument describes the Hilbert space dimension
+        and imposed structure.  If a list or tuple is given, it must be
+        of a from that can be passed to `StateSpaceLabels.__init__`.
+
+    basis : Basis
+        The basis used for the state space by dense operator representations.
+
+    primitive_labels : dict, optional
+        A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
+        `"instruments`" giving the primitive-layer labels for each member
+        type.  This information is needed for interfacing with the LGST
+        algorithm and for circuit compiling.
+
+    layer_lizard_class : class, optional
+        The class of the layer lizard to use, which should usually be derived
+        from :class:`ImplicitLayerLizard` and will be created using:
+        `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
+
+    layer_lizard_args : tuple, optional
+        Additional arguments reserved for the custom layer lizard class.
+        These arguments are not passed to the `layer_lizard_class`'s
+        constructor, but are stored in the model's `._lizardArgs` member and
+        may be accessed from within the layer lizard object (which gets a
+        reference to the model upon initialization).
+
+    simplifier_helper_class : class, optional
+        The :class:`SimplifierHelper`-derived type used to provide the
+        mimial interface needed for circuit compiling.  Initalized
+        using `simplifier_helper_class(self)`.
+
+    sim_type : {"auto", "matrix", "map", "termorder:X"}
+        The type of forward simulator this model should use.  `"auto"`
+        tries to determine the best type automatically.
+
+    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+        The evolution type of this model, describing how states are
+        represented, allowing compatibility checks with (super)operator
+        objects.
+    """
     def __init__(self,
                  state_space_labels,
                  basis="pp",
@@ -139,35 +186,103 @@ class ImplicitOpModel(_mdl.OpModel):
         self._shlp = simplifier_helper_class(self)
 
     def get_primitive_prep_labels(self):
-        """ Return the primitive state preparation labels of this model"""
+        """
+        Return the primitive state preparation labels of this model
+
+        Returns
+        -------
+        tuple
+        """
         return self._primitive_prep_labels
 
     def set_primitive_prep_labels(self, lbls):
-        """ Set the primitive state preparation labels of this model"""
+        """
+        Set the primitive state preparation labels of this model.
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         self._primitive_prep_labels = tuple(lbls)
 
     def get_primitive_povm_labels(self):
-        """ Return the primitive POVM labels of this model"""
+        """
+        Return the primitive POVM labels of this model.
+
+        Returns
+        -------
+        tuple
+        """
         return self._primitive_povm_labels
 
     def set_primitive_povm_labels(self, lbls):
-        """ Set the primitive POVM labels of this model"""
+        """
+        Set the primitive POVM labels of this model.
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         self._primitive_povm_labels = tuple(lbls)
 
     def get_primitive_op_labels(self):
-        """ Return the primitive operation labels of this model"""
+        """
+        Return the primitive operation labels of this model.
+
+        Returns
+        -------
+        tuple
+        """
         return self._primitive_op_labels
 
     def set_primitive_op_labels(self, lbls):
-        """ Set the primitive operation labels of this model"""
+        """
+        Set the primitive operation labels of this model
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         self._primitive_op_labels = tuple(lbls)
 
     def get_primitive_instrument_labels(self):
-        """ Return the primitive instrument labels of this model"""
+        """
+        Return the primitive instrument labels of this model
+
+        Returns
+        -------
+        tuple
+        """
         return self._primitive_instrument_labels
 
     def set_primitive_instrument_labels(self, lbls):
-        """ Set the primitive instrument labels of this model"""
+        """
+        Set the primitive instrument labels of this model
+
+        Parameters
+        ----------
+        lbls : tuple
+            the labels
+
+        Returns
+        -------
+        None
+        """
         self._primitive_instrument_labels = tuple(lbls)
 
     #Functions required for base class functionality
@@ -241,9 +356,10 @@ class ImplicitOpModel(_mdl.OpModel):
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
-        Constructs a dictionary of the symplectic representations for all
-        the Clifford gates in this model.  Non-:class:`CliffordOp` gates
-        will be ignored and their entries omitted from the returned dictionary.
+        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+
+        Non-:class:`CliffordOp` gates will be ignored and their entries omitted
+        from the returned dictionary.
 
         Parameters
         ----------

@@ -1,4 +1,6 @@
-""" Defines the ReportTable class """
+"""
+Defines the ReportTable class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,9 +17,42 @@ from .convert import convert_dict as _convert_dict
 
 
 class ReportTable(object):
-    '''
+    """
     Table representation, renderable in multiple formats
-    '''
+
+    Parameters
+    ----------
+    col_headings : list or dict
+        Default column headings if list; dictionary of overrides if dict.
+
+    formatters : list
+        Names of default column heading formatters.
+
+    custom_header : dict
+        Dictionary of overriden headers.
+
+    col_heading_labels : list
+        Labels for column headings (tooltips).
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region used to display error
+        intervals.  Specifically, tells reportableqtys if they should use non
+        markovian error bars or not
+
+    Attributes
+    ----------
+    num_rows : int
+        The number of rows in this table
+
+    num_cols : int
+        The number of columns in this table
+
+    row_names : list
+        The names (keys) of the rows in this table
+
+    col_names : list
+        The names (keys) of the columns in this table
+    """
 
     def __init__(self, col_headings, formatters, custom_header=None,
                  col_heading_labels=None, confidence_region_info=None):
@@ -68,12 +103,17 @@ class ReportTable(object):
 
         Parameters
         ----------
-        data, formatters, labels : list
-            Parallel lists of the data, formatter names, and labels for each
-            cell within the new row.
+        data : list
+            A list of the data for each cell of the added row.
 
-        non_markovian_ebs : bool, optional
-            Whether non-Markovian error bars should be indicated.
+        formatters : list[string], optional
+            Formatting options for each cell of the added row.
+
+        labels : list[string], optional
+            Labeling options for each cell of the added row.
+
+        non_markovian_ebs : bool
+            Whether non-Markovian error bars should be used
 
         Returns
         -------
@@ -84,7 +124,13 @@ class ReportTable(object):
         self._rows.append(Row(data, formatters, labels, non_markovian_ebs))
 
     def finish(self):
-        """ Finish table creation.  Indicates no more rows will be added."""
+        """
+        Finish table creation.  Indicates no more rows will be added.
+
+        Returns
+        -------
+        None
+        """
         pass  # nothing to do currently
 
     def _get_col_headings(self, fmt, spec):
@@ -99,49 +145,64 @@ class ReportTable(object):
                output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complex_as_polar=True,
                brackets=False, click_to_display=False, link_to=None, render_includes=True):
-        '''
+        """
         Render a table object
 
         Parameters
         ----------
         fmt : string
             name of format to be used
-        output_dir     : string
+
+        longtables : bool
+            latex table option
+
+        table_id : string
+            id tag for HTML tables
+
+        tableclass : string
+            class tag for HTML tables
+
+        output_dir : string
             directory for latex figures to be rendered in
-        precision      : int
+
+        precision : int
             number of digits to render
+
         polarprecision : int
             number of digits to render for polars
-        sciprecision   : int
+
+        sciprecision : int
             number of digits to render for scientific notation
-        resizable      : bool
+
+        resizable : bool
             allow a table to be resized
-        autosize       : bool
+
+        autosize : bool
             allow a table to be automatically sized
-        click_to_display : bool
-            table plots must be clicked to prompt creation
-        fontsize       : int
+
+        fontsize : int
             override fontsize of a tabel
+
         complex_as_polar : bool
             render complex numbers as polars
-        brackets       : bool
+
+        brackets : bool
             render matrix like types w/ brackets
-        longtables     : bool
-            latex table option
-        table_id        : string
-            id tag for HTML tables
-        tableclass     : string
-            class tag for HTML tables
-        link_to        : list or {'tex', 'pdf', 'pkl'}
+
+        click_to_display : bool
+            table plots must be clicked to prompt creation
+
+        link_to : list or {'tex', 'pdf', 'pkl'}
             whether to create links to TEX, PDF, and/or PKL files
-        render_includes: bool
+
+        render_includes : bool
             whether files included in rendered latex should also be rendered
             (usually as PDFs for use with the 'includegraphics' latex statement)
 
         Returns
         -------
         string
-        '''
+        """
         spec = {
             'output_dir': output_dir,
             'precision': precision,
@@ -245,15 +306,28 @@ class ReportTable(object):
 
     def keys(self):
         """
-        Return a list of the first element of each row, which can be
-        used for indexing.
+        A list of the first element of each row, which can be used for indexing.
+
+        Returns
+        -------
+        list
         """
         return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
 
     def row(self, key=None, index=None):
         """
-        Retrieve a row's cell data.  A row is identified by either its `key`
-        (its first cell's value) OR its `index` (0-based).
+        Retrieve a row's cell data.
+
+        A row is identified by either its `key` (its first cell's value) OR its `index` (0-based).
+        You cannot specify both `key` and `index`.
+
+        Parameters
+        ----------
+        key : object, optional
+            Value of a row's first cell.
+
+        index : int, optional
+            Row index.
 
         Returns
         -------
@@ -279,8 +353,18 @@ class ReportTable(object):
 
     def col(self, key=None, index=None):
         """
-        Retrieve a column's cell data.  A column is identified by either its
-        `key` (its column header's value) OR its `index` (0-based).
+        Retrieve a column's cell data.
+
+        A column is identified by either its `key` (its column header's value) OR its `index` (0-based).
+        You cannot specify both `key` and `index`.
+
+        Parameters
+        ----------
+        key : object, optional
+            Value of a column's header value.
+
+        index : int, optional
+            Column index.
 
         Returns
         -------
@@ -305,20 +389,44 @@ class ReportTable(object):
 
     @property
     def num_rows(self):
-        """ The number of rows in this table """
+        """
+        The number of rows in this table
+
+        Returns
+        -------
+        int
+        """
         return len(self._rows)
 
     @property
     def num_cols(self):
-        """ The number of columns in this table """
+        """
+        The number of columns in this table
+
+        Returns
+        -------
+        int
+        """
         return len(self._columnNames)
 
     @property
     def row_names(self):
-        """ The names (keys) of the rows in this table """
+        """
+        The names (keys) of the rows in this table
+
+        Returns
+        -------
+        list
+        """
         return list(self.keys())
 
     @property
     def col_names(self):
-        """ The names (keys) of the columns in this table """
+        """
+        The names (keys) of the columns in this table
+
+        Returns
+        -------
+        list
+        """
         return self._columnNames

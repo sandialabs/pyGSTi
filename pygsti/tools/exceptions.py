@@ -1,4 +1,6 @@
-""" Defines GST exception classes """
+"""
+Defines GST exception classes
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -10,10 +12,14 @@
 
 
 class GSTRuntimeError(Exception):
-    """Gate Set Tomography run-time exception class."""
+    """
+    Gate Set Tomography run-time exception class.
+    """
     pass
 
 
 class GSTValueError(Exception):
-    """Gate Set Tomography value error exception class."""
+    """
+    Gate Set Tomography value error exception class.
+    """
     pass

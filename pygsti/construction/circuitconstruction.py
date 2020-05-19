@@ -1,4 +1,6 @@
-""" Utility functions for creating and acting on lists of operation sequences."""
+"""
+Utility functions for creating and acting on lists of operation sequences.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,9 +27,10 @@ def _run_expression(str_expression, my_locals):
 
 def create_circuit_list(*args, **kwargs):
     """
-    Create a list of operation sequences using a nested loop.  Positional arguments
-    specify evaluation strings, which are evaluated within the inner-loop
-    for a nested loop over all list or tuple type keyword arguments.
+    Create a list of circuits using a nested loop.
+
+    Positional arguments specify evaluation strings, which are evaluated within
+    the inner-loop for a nested loop over all list or tuple type keyword arguments.
 
     Parameters
     ----------
@@ -62,8 +65,6 @@ def create_circuit_list(*args, **kwargs):
     >>> list3 = create_circuit_list('a+b', a=As, b=Bs, order=['b', 'a'])
     >>> print(list(map(str, list3)))
     ['a1b1', 'a2b1', 'a1b2', 'a2b2']
-
-
     """
     lst = []
 
@@ -109,16 +110,16 @@ def repeat(x, n_times, assert_at_least_one_rep=False):
     Parameters
     ----------
     x : tuple or Circuit
-       the operation sequence to repeat
+        the operation sequence to repeat
 
     n_times : int
-       the number of times to repeat x
+        the number of times to repeat x
 
     assert_at_least_one_rep : bool, optional
-       if True, assert that n_times > 0.  This can be useful when used
-       within a create_circuit_list inner loop to build a operation sequence
-       lists where a string must be repeated at least once to be added
-       to the list.
+        if True, assert that n_times > 0.  This can be useful when used
+        within a create_circuit_list inner loop to build a operation sequence
+        lists where a string must be repeated at least once to be added
+        to the list.
 
     Returns
     -------
@@ -130,27 +131,26 @@ def repeat(x, n_times, assert_at_least_one_rep=False):
 
 def repeat_count_with_max_length(x, max_length, assert_at_least_one_rep=False):
     """
-    Compute the number of times a operation sequence x must be repeated such that
-    the repeated string has length <= max_length.
+    The maximum number of times `x` can be repeated such that its length is <= `max_length`.
 
     Parameters
     ----------
     x : tuple or Circuit
-       the operation sequence to repeat
+        the operation sequence to repeat
 
     max_length : int
-       the maximum length
+        the maximum length
 
     assert_at_least_one_rep : bool, optional
-       if True, assert that number of repetitions is > 0.
-       This can be useful when used within a create_circuit_list inner loop
-       to build a operation sequence lists where a string must be repeated at
-       least once to be added to the list.
+        if True, assert that number of repetitions is > 0.
+        This can be useful when used within a create_circuit_list inner loop
+        to build a operation sequence lists where a string must be repeated at
+        least once to be added to the list.
 
     Returns
     -------
     int
-      the number of repetitions.
+        the number of repetitions.
     """
     l = len(x)
     if assert_at_least_one_rep: assert(l <= max_length)
@@ -160,22 +160,21 @@ def repeat_count_with_max_length(x, max_length, assert_at_least_one_rep=False):
 
 def repeat_with_max_length(x, max_length, assert_at_least_one_rep=False):
     """
-    Repeat the operation sequence x an integer number of times such that
-    the repeated string has length <= max_length.
+    Repeat the `x` an integer number of times such that the result has length <= `max_length`.
 
     Parameters
     ----------
     x : tuple or Circuit
-       the operation sequence to repeat.
+        the operation sequence to repeat.
 
     max_length : int
-       the maximum length.
+        the maximum length.
 
     assert_at_least_one_rep : bool, optional
-       if True, assert that number of repetitions is > 0.
-       This can be useful when used within a create_circuit_list inner loop
-       to build a operation sequence lists where a string must be repeated at
-       least once to be added to the list.
+        if True, assert that number of repetitions is > 0.
+        This can be useful when used within a create_circuit_list inner loop
+        to build a operation sequence lists where a string must be repeated at
+        least once to be added to the list.
 
     Returns
     -------
@@ -191,20 +190,22 @@ def repeat_with_max_length(x, max_length, assert_at_least_one_rep=False):
 
 def repeat_and_truncate(x, n, assert_at_least_one_rep=False):
     """
-    Repeat the operation sequence x so the repeated string has length greater than n,
-    then truncate the string to be exactly length n.
+    Repeat and truncate `x` to yield a sequence with exactly length `n`.
+
+    Repeats `x` so the result has length greater than `n`,
+    then truncates it to have exactly length n.
 
     Parameters
     ----------
     x : tuple or Circuit
-       the operation sequence to repeat & truncate.
+        the operation sequence to repeat & truncate.
 
     n : int
-       the truncation length.
+        the truncation length.
 
     assert_at_least_one_rep : bool, optional
-       if True, assert that number of repetitions is > 0.
-       This is always the case when x has length > 0.
+        if True, assert that number of repetitions is > 0.
+        This is always the case when x has length > 0.
 
     Returns
     -------
@@ -217,28 +218,29 @@ def repeat_and_truncate(x, n, assert_at_least_one_rep=False):
 
 def repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
     """
+    Returns the portion truncated by :function:`repeat_and_truncate`.
+
     Repeat the operation sequence x the fewest number of times such that the repeated
-    string has length greater than or equal to n.  Return the portion of this
+    sequence has length greater than or equal to n.  Return the portion of this
     repeated string from the n-th position to the end. Note that this corresponds
-    to what is truncated in a call to repeateAndTruncate(x,n,assert_at_least_one_rep).
+    to what is truncated in a call to `repeate_and_truncate(x,n,assert_at_least_one_rep)`.
 
     Parameters
     ----------
     x : tuple or Circuit
-       the operation sequence to operate on.
+        the operation sequence to operate on.
 
     n : int
-       the truncation length.
+        the truncation length.
 
     assert_at_least_one_rep : bool, optional
-       if True, assert that number of repetitions is > 0.
-       This is always the case when x has length > 0.
+        if True, assert that number of repetitions is > 0.
+        This is always the case when x has length > 0.
 
     Returns
     -------
     tuple or Circuit (whichever x was)
         the remainder operation sequence
-
     """
     reps = repeat_count_with_max_length(x, n, assert_at_least_one_rep)
     return x[0:(n - reps * len(x))]
@@ -246,8 +248,10 @@ def repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
 
 def simplify_str(circuit_str):
     """
-    Simplify a string representation of a operation sequence.  The simplified
-      string should evaluate to the same operation label tuple as the original.
+    Simplify a string representation of a operation sequence.
+
+    The simplified string should evaluate to the same operation label tuple
+    as the original.
 
     Parameters
     ----------
@@ -296,7 +300,20 @@ def list_all_circuits(op_labels, minlength, maxlength):
 
 
 def gen_all_circuits(op_labels, minlength, maxlength):
-    """ Generator version of list_all_circuits """
+    """
+    Iterative version of :function:`list_all_circuits`
+
+    Parameters
+    ----------
+    op_labels : tuple
+        tuple of operation labels to include in operation sequences.
+
+    minlength : int
+        the minimum operation sequence length to return
+
+    maxlength : int
+        the maximum operation sequence length to return
+    """
     opTuples = _itertools.chain(*[_itertools.product(op_labels, repeat=N)
                                   for N in range(minlength, maxlength + 1)])
     for opTuple in opTuples:
@@ -325,18 +342,29 @@ def list_all_circuits_onelen(op_labels, length):
 
 
 def gen_all_circuits_onelen(op_labels, length):
-    """Generator version of list_all_circuits_onelen"""
+    """
+    Iterative version of :function:`list_all_circuits_onelen`
+
+    Parameters
+    ----------
+    op_labels : tuple
+        tuple of operation labels to include in operation sequences.
+
+    length : int
+        the operation sequence length
+    """
     for opTuple in _itertools.product(op_labels, repeat=length):
         yield _cir.Circuit(opTuple)
 
 
 def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
     """
-    Generate all distinct operation sequences up to a maximum length that are
-    aperiodic, i.e., that are not a shorter gate sequence raised to a power,
-    and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and
-    `('Gy','Gy','Gx')` are considered equivalent and only one would be
-    included in the returned list).
+    List all distinct aperiodic operation sequences up to a maximum length.
+
+    That is, list all sequences that are not a shorter gate sequence raised to a
+    power, and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and
+    `('Gy','Gy','Gx')` are considered equivalent and only one would be included
+    in the returned list).
 
     Parameters
     ----------
@@ -350,7 +378,7 @@ def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
     Returns
     -------
     list
-       Of :class:`Circuit` objects.
+        Of :class:`Circuit` objects.
     """
 
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
@@ -406,7 +434,6 @@ def list_random_circuits_onelen(op_labels, length, count, seed=None):
     seed : int, optional
         If not None, a seed for numpy's random number generator.
 
-
     Returns
     -------
     list of Circuits
@@ -423,9 +450,10 @@ def list_random_circuits_onelen(op_labels, length, count, seed=None):
 
 def list_partial_strings(circuit):
     """
-    List the parial strings of circuit, that is,
-      the strings that are the slices circuit[0:n]
-      for 0 <= l <= len(circuit).
+    List the partial sub-circuits of `circuit`.
+
+    The "parital circuits" are defined as
+    the slices `circuit[0:n]` for `0 <= n <= len(circuit)`.
 
     Parameters
     ----------
@@ -435,7 +463,7 @@ def list_partial_strings(circuit):
     Returns
     -------
     list of Circuit objects.
-       The parial operation sequences.
+        The parial operation sequences.
     """
     ret = []
     for l in range(len(circuit) + 1):
@@ -443,15 +471,19 @@ def list_partial_strings(circuit):
     return ret
 
 
-def list_lgst_circuits(prep_strs, effect_strs, op_label_src):
+def list_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     """
-    List the operation sequences required for running LGST.
+    List the circuits required for running LGST.
 
     Parameters
     ----------
-    prep_strs,effect_strs : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+       The preparation fiducial circuits, used to construct an informationally
+       complete effective preparation.
+
+    meas_fiducials : list of Circuits
+       The measurement fiducial circuits, used to construct an informationally
+       complete effective measurement.
 
     op_label_src : tuple or Model
         List/tuple of operation labels OR a Model whose gate and instrument
@@ -468,44 +500,49 @@ def list_lgst_circuits(prep_strs, effect_strs, op_label_src):
             list(op_label_src.instruments.keys())
     else: opLabels = list(map(tolabel, op_label_src))
 
-    line_labels = prep_strs[0].line_labels if len(prep_strs) > 0 else 'auto'
+    line_labels = prep_fiducials[0].line_labels if len(prep_fiducials) > 0 else 'auto'
     if line_labels is None or len(line_labels) == 0: line_labels = ('*',)
     singleOps = [_cir.Circuit((gl,), line_labels=line_labels)**1 for gl in opLabels]  # **1 adds parens to stringrep
     ret = create_circuit_list('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
-                              eStr=effect_strs, prepStr=prep_strs, g=singleOps,
+                              eStr=meas_fiducials, prepStr=prep_fiducials, g=singleOps,
                               order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
     return _lt.remove_duplicates(ret)
 
 
-def list_strings_lgst_can_estimate(dataset, prep_strs, effect_strs):
+def list_strings_lgst_can_estimate(dataset, prep_fiducials, meas_fiducials):
     """
-      Compute the operation sequences that LGST is able to estimate
-      given a set of fiducial strings.
+    Compute the circuits that LGST is able to estimate from `dataset` and sets of fiducials.
 
-      Parameters
-      ----------
-      dataset : DataSet
-          The data used to generate the LGST estimates
+    Here "estimate a circuit" means that LGST can estimate the process matrix
+    associated with that circuit.
 
-      prep_strs,effect_strs : list of Circuits
-          Fiducial Circuit lists used to construct a informationally complete
-          preparation and measurement.
+    Parameters
+    ----------
+    dataset : DataSet
+        The data used to generate the LGST estimates
 
-      Returns
-      -------
-      list of lists of tuples
-         each list of tuples specifyies a operation sequence that LGST can estimate.
+    prep_fiducials : list of Circuits
+       The preparation fiducial circuits, used to construct an informationally
+       complete effective preparation.
 
+    meas_fiducials : list of Circuits
+       The measurement fiducial circuits, used to construct an informationally
+       complete effective measurement.
+
+    Returns
+    -------
+    list of lists of tuples
+        each list of tuples specifyies a operation sequence that LGST can estimate.
     """
 
     estimatable = []
     circuits = list(dataset.keys())
-    pre = tuple(effect_strs[0]); l0 = len(pre)  # the first effect string
-    post = tuple(prep_strs[0]); l1 = len(post)  # the first prep string
+    pre = tuple(meas_fiducials[0]); l0 = len(pre)  # the first effect string
+    post = tuple(prep_fiducials[0]); l1 = len(post)  # the first prep string
 
     def _root_is_ok(root_str):
-        for estr in effect_strs:
-            for rhostr in prep_strs:
+        for estr in meas_fiducials:
+            for rhostr in prep_fiducials:
                 if tuple(rhostr) + tuple(root_str) + tuple(estr) not in circuits:  # LEXICOGRAPHICAL VS MATRIX ORDER
                     return False
         return True
@@ -523,8 +560,7 @@ def list_strings_lgst_can_estimate(dataset, prep_strs, effect_strs):
 
 def circuit_list(list_of_op_label_tuples_or_strings, line_labels="auto"):
     """
-    Converts a list of operation label tuples or strings to
-     a list of Circuit objects.
+    Converts a list of operation label tuples or strings to a list of :class:`Circuit` objects.
 
     Parameters
     ----------
@@ -558,7 +594,9 @@ def circuit_list(list_of_op_label_tuples_or_strings, line_labels="auto"):
 
 def translate_circuit(circuit, alias_dict):
     """
-    Creates a new Circuit object from an existing one by replacing
+    Translates `circuit` according to the aliases in `alias_dict`.
+
+    Creates a new :class:`Circuit` object from an existing one by replacing
     operation labels in `circuit` by (possibly multiple) new labels according
     to `alias_dict`.
 
@@ -587,6 +625,8 @@ def translate_circuit(circuit, alias_dict):
 
 def translate_circuit_list(circuit_list, alias_dict):
     """
+    Applies :function:`translate_circuit` to each element of `circuit_list`.
+
     Creates a new list of Circuit objects from an existing one by replacing
     operation labels in `circuit_list` by (possibly multiple) new labels according
     to `alias_dict`.
@@ -628,8 +668,11 @@ def compose_alias_dicts(alias_dict_1, alias_dict_2):
 
     Parameters
     ----------
-    alias_dict_1, alias_dict_2 : dict
-        The two dictionaries to compose.
+    alias_dict_1 : dict
+        The first alias dictionary to compose.
+
+    alias_dict_2 : dict
+        The second alias dictionary to compose.
 
     Returns
     -------
@@ -736,7 +779,9 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
 
 def manipulate_circuit_list(circuit_list, sequence_rules, line_labels="auto"):
     """
-    Creates a new list of Circuit objects from an existing one by performing
+    Applies :function:`manipulate_circuit` to each element of `circuit_list`.
+
+    This creates a new list of Circuit objects from an existing one by performing
     replacements according to `sequence_rules` (see :func:`manipulate_circuit`).
 
     Parameters
@@ -768,6 +813,8 @@ def manipulate_circuit_list(circuit_list, sequence_rules, line_labels="auto"):
 
 def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=()):
     """
+    Applies :function:`filter_circuit` to each element of `circuits`.
+
     Removes any labels from `circuits` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
     (its `.sslbls`) is `None`, then the label is retained in the returned
@@ -817,6 +864,8 @@ def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=
 
 def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
     """
+    Filters `circuit` by keeping only a subset of its "lines" (i.e. state space labels, often qubits).
+
     Removes any labels from `circuit` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
     (its `.sslbls`) is `None`, then the label is retained in the returned

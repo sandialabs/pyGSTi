@@ -1,4 +1,6 @@
-"""Functions to facilitate using GRASP."""
+"""
+Functions to facilitate using GRASP.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,7 +19,8 @@ from .. import objects as _objs
 
 
 def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
-    """Return the list of weights in the neighborhood of a given weight vector.
+    """
+    Return the list of weights in the neighborhood of a given weight vector.
 
     A weight vector is in the neighborhood of a given weight vector if it is
     only a single swap away from the given weight vector. There is an option to
@@ -43,7 +46,6 @@ def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
     -------
     list of numpy.array
         List of binary vectors corresponding to all the neighbors of `weights`.
-
     """
     if forced_weights is None:
         forced_weights = _np.zeros(len(weights))
@@ -265,7 +267,8 @@ def grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
 def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
                        get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
                        initial_elements=None, seed=None, verbosity=0):
-    """Perform one iteration of GRASP (greedy construction and local search).
+    """
+    Perform one iteration of GRASP (greedy construction and local search).
 
     Parameters
     ----------
@@ -324,10 +327,8 @@ def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     -------
     initialSoln : list
         The sublist of `elements` given by the greedy construction.
-
     localSoln : list
         The sublist of `elements` given by the local search.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -350,7 +351,8 @@ def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
 def do_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn,
              final_score_fn, iterations, feasible_threshold=None, feasible_fn=None,
              initial_elements=None, seed=None, verbosity=0):
-    """Perform GRASP to come up with an optimal feasible set of elements.
+    """
+    Perform GRASP to come up with an optimal feasible set of elements.
 
     Parameters
     ----------
@@ -418,7 +420,6 @@ def do_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn
     -------
     list of Circuits
         The best germ set from all locally-optimal germ sets constructed.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 

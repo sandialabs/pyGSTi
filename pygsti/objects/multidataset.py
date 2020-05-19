@@ -1,4 +1,6 @@
-""" Defines the MultiDataSet class and supporting classes and functions """
+"""
+Defines the MultiDataSet class and supporting classes and functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -20,7 +22,14 @@ from . import labeldicts as _ld
 
 
 class MultiDataSetKVIterator(object):
-    """ Iterator class for dataset_name,DataSet pairs of a MultiDataSet """
+    """
+    Iterator class for dataset_name,DataSet pairs of a MultiDataSet
+
+    Parameters
+    ----------
+    multidataset : MultiDataSet
+        The parent MultiDataSet.
+    """
 
     def __init__(self, multidataset):
         self.multidataset = multidataset
@@ -50,7 +59,14 @@ class MultiDataSetKVIterator(object):
 
 
 class MultiDataSetValueIterator(object):
-    """ Iterator class for DataSets of a MultiDataSet """
+    """
+    Iterator class for DataSets of a MultiDataSet
+
+    Parameters
+    ----------
+    multidataset : MultiDataSet
+        The parent multi data set.
+    """
 
     def __init__(self, multidataset):
         self.multidataset = multidataset
@@ -81,6 +97,8 @@ class MultiDataSetValueIterator(object):
 
 class MultiDataSet(object):
     """
+    A collection of :class:`DataSets` that hold data for the same circuits.
+
     The MultiDataSet class allows for the combined access and storage of
     several static DataSets that contain the same circuits (in the same
     order) AND the same time-dependence structure (if applicable).
@@ -91,6 +109,60 @@ class MultiDataSet(object):
     `dataset = multiDataset[dataset_name]`
 
     where `dataset_name` may be a string OR a tuple.
+
+    Parameters
+    ----------
+    oli_dict : ordered dictionary, optional
+      Keys specify dataset names.  Values are 1D numpy arrays which specify
+      outcome label indices.  Each value is indexed by the values of
+      `circuit_indices`.
+
+    time_dict : ordered dictionary, optional
+      Same format as `oli_dict` except stores arrays of floating-point time
+      stamp data.
+
+    rep_dict :  ordered dictionary, optional
+      Same format as `oli_dict` except stores arrays of integer repetition
+      counts (can be `None` if there are no repetitions)
+
+    circuit_indices : ordered dictionary, optional
+      An OrderedDict with keys equal to circuits (tuples of operation labels) and values equal to
+      integer indices associating a row/element of counts with the circuit.
+
+    outcome_labels : list of strings
+      Specifies the set of spam labels for the DataSet.  Indices for the spam labels
+      are assumed to ascend from 0, starting with the first element of this list.  These
+      indices will associate each elememtn of `timeseries` with a spam label.  Only
+      specify this argument OR outcome_label_indices, not both.
+
+    outcome_label_indices : ordered dictionary
+      An OrderedDict with keys equal to spam labels (strings) and value equal to
+      integer indices associating a spam label with given index.  Only
+      specify this argument OR outcome_labels, not both.
+
+    file_to_load_from : string or file object, optional
+      Specify this argument and no others to create a MultiDataSet by loading
+      from a file (just like using the load(...) function).
+
+    collision_actions : dictionary, optional
+        Specifies how duplicate circuits should be handled for the data
+        sets.  Keys must match those of `oli_dict` and values are "aggregate"
+        or "keepseparate".  See documentation for :class:`DataSet`.  If None,
+        then "aggregate" is used for all sets by default.
+
+    comment : string, optional
+        A user-specified comment string that gets carried around with the
+        data.  A common use for this field is to attach to the data details
+        regarding its collection.
+
+    comments : dict, optional
+        A user-specified dictionary of comments, one per dataset.  Keys
+        are dataset names (same as `oli_dict` keys).
+
+    aux_info : dict, optional
+        A user-specified dictionary of per-circuit auxiliary information.
+        Keys should be the circuits in this MultiDataSet and value should
+        be Python dictionaries.
     """
 
     def __init__(self, oli_dict=None, time_dict=None, rep_dict=None,
@@ -249,8 +321,8 @@ class MultiDataSet(object):
         Returns
         -------
         list of strings or tuples
-          A list where each element is an outcome label (which can
-          be a string or a tuple of strings).
+            A list where each element is an outcome label (which can
+            be a string or a tuple of strings).
         """
         if self.olIndex is not None:
             return list(self.olIndex.keys())
@@ -280,26 +352,38 @@ class MultiDataSet(object):
         return dataset_name in self.oliDict
 
     def keys(self):
-        """ Returns a list of the keys (dataset names) of this MultiDataSet """
+        """
+        A list of the keys (dataset names) of this MultiDataSet
+
+        Returns
+        -------
+        list
+        """
         return list(self.oliDict.keys())
 
     def items(self):
-        """ Iterator over (dataset name, DataSet) pairs """
+        """
+        Iterator over (dataset name, DataSet) pairs.
+        """
         return MultiDataSetKVIterator(self)
 
     def values(self):
-        """ Iterator over DataSets corresponding to each dataset name """
+        """
+        Iterator over DataSets corresponding to each dataset name.
+        """
         return MultiDataSetValueIterator(self)
 
     def get_datasets_aggregate(self, *dataset_names):
         """
-        Generate a new DataSet by combining the outcome counts of multiple
-        member Datasets.  Data with the same time-stamp and outcome are
-        merged into a single "bin" in the returned :class:`DataSet`.
+        Generate a new DataSet by combining the outcome counts of multiple member Datasets.
+
+        Data with the same time-stamp and outcome are merged into a single "bin"
+        in the returned :class:`DataSet`.
 
         Parameters
         ----------
-        dataset_names : one or more dataset names.
+        dataset_names : list of strs
+            one or more dataset names.
 
         Returns
         -------
@@ -374,10 +458,11 @@ class MultiDataSet(object):
 
     def add_dataset(self, dataset_name, dataset, update_auxinfo=True):
         """
-        Add a DataSet to this MultiDataSet.  The dataset
-        must be static and conform with the circuits and
-        time-dependent structure passed upon construction or
-        those inherited from the first dataset added.
+        Add a DataSet to this MultiDataSet.
+
+        The dataset must be static and conform with the circuits and
+        time-dependent structure passed upon construction or those inherited
+        from the first dataset added.
 
         Parameters
         ----------
@@ -391,6 +476,10 @@ class MultiDataSet(object):
         update_auxinfo : bool, optional
             Whether the auxiliary information (if any exists) in `dataset` is added to
             the information already stored in this `MultiDataSet`.
+
+        Returns
+        -------
+        None
         """
 
         #Check if dataset is compatible
@@ -534,7 +623,13 @@ class MultiDataSet(object):
         return s + "\n"
 
     def copy(self):
-        """ Make a copy of this MultiDataSet """
+        """
+        Make a copy of this MultiDataSet
+
+        Returns
+        -------
+        MultiDataSet
+        """
         return MultiDataSet(self.oliDict, self.timeDict, self.repDict,
                             circuit_indices=_copy.deepcopy(self.cirIndex) if (self.cirIndex is not None) else None,
                             outcome_label_indices=_copy.deepcopy(self.olIndex) if (self.olIndex is not None) else None,
@@ -581,6 +676,10 @@ class MultiDataSet(object):
         file_or_filename : file or string
             Either a filename or a file object.  In the former case, if the
             filename ends in ".gz", the file will be gzip compressed.
+
+        Returns
+        -------
+        None
         """
 
         toPickle = {'cirIndexKeys': list(map(_cir.CompressedCircuit,
@@ -627,6 +726,10 @@ class MultiDataSet(object):
         file_or_filename : file or string
             Either a filename or a file object.  In the former case, if the
             filename ends in ".gz", the file will be gzip uncompressed as it is read.
+
+        Returns
+        -------
+        None
         """
         # Compatability for unicode-literal filenames
         bOpen = not (hasattr(file_or_filename, 'write'))

@@ -1,4 +1,6 @@
-""" Defines the LayerLizard class and supporting functionality."""
+"""
+Defines the LayerLizard class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -48,10 +50,16 @@ from .label import Label as _Label, CircuitLabel as _CircuitLabel
 
 class LayerLizard(object):
     """
-    Helper class for interfacing a Model and a forward simulator
-    (which just deals with *simplified* operations).  Can be thought
+    Helper class for interfacing a Model and a forward simulator.
+
+    This class just deals with *simplified* operations, and can be thought
     of as a "server" of simplified operations for a forward simulator
     which pieces together layer operations from components.
+
+    Parameters
+    ----------
+    model : Model
+        The "parent" model for this layer lizard.
     """
 
     def __init__(self, model):
@@ -67,18 +75,41 @@ class LayerLizard(object):
         self.opcache = {}  # a cache of operators, which should get initialized by from_vector calls
 
     def set_opcache(self, cache_dict, v):
-        """ TODO: docstring - v is optional paramvec to init ops"""
+        """
+        Set this layer lizard's operation cache.
+
+        The operation cache is used to hold operations
+        that this layer lizard creates so that multiple
+        requestes for the same layer object 1) take less time
+        and 2) return the same object.  This method is often
+        called after creating a layer lizard when a previously
+        created cache (for the same model) has been preserved.
+
+        Parameters
+        ----------
+        cache_dict : dict
+            The cache dictionary with keys equal to layer labels and
+            values equal to operations.
+
+        v : numpy.ndarray, optional
+            If not None, a parameter vector that is used to (re-)initialize
+            all the elements of the cache by calling their `from_vector` methods.
+
+        Returns
+        -------
+        None
+        """
         self.opcache = cache_dict
         if v is not None:
             for _, obj in self.opcache.items():
                 obj.from_vector(v[obj.gpindices])  # , close, nodirty)
 
-    #Helper functions for derived classes:
+    #PRIVATE - Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):
         """
-        A helper function for derived classes, used for processing
-        :class:`CircuitLabel` labels (which encapsulate sub-circuits
-        repeated some integer number of times).
+        A helper method for derived classes used for processing :class:`CircuitLabel` labels.
+
+        (:class:`CircuitLabel` labels encapsulate sub-circuits repeated some integer number of times).
 
         This method build an operator for `circuitlbl` by creating a composed-op
         (using either :class:`ComposedOp` or :class:`ComposedDenseOp` depending
@@ -114,8 +145,28 @@ class LayerLizard(object):
 
 class ExplicitLayerLizard(LayerLizard):
     """
-    This layer lizard (see :class:`LayerLizard`) only serves up layer
-    operations it have been explicitly provided upon initialization.
+    A layer lizard that only serves up layer operations it have been explicitly provided upon initialization.
+
+    Parameters
+    ----------
+    preps : OrderedMemberDict
+        Dictionary of simplified state preparation layer operations
+        available for serving to a forwared simulator.
+
+    operations : OrderedMemberDict
+        Dictionary of simplified layer operations available for
+        serving to a forwared simulator.
+
+    povms : OrderedMemberDict
+        Dictionary of simplified measurement layer operations
+        available for serving to a forwared simulator.
+
+    instruments : OrderedMemberDict
+        Dictionary of simplified instrument layer operations
+        available for serving to a forwared simulator.
+
+    model : Model
+        The model associated with the simplified operations.
     """
 
     def __init__(self, preps, operations, povms, instruments, model):
@@ -124,14 +175,13 @@ class ExplicitLayerLizard(LayerLizard):
 
         Parameters
         ----------
-        preps, ops, effects : OrderedMemberDict
+        preps, operations, povms, instruments : OrderedMemberDict
             Dictionaries of simplified layer operations available for
             serving to a forwared simulator.
 
         model : Model
             The model associated with the simplified operations.
         """
-
         simplified_effects = _collections.OrderedDict()
         for povm_lbl, povm in povms.items():
             for k, e in povm.simplify_effects(povm_lbl).items():
@@ -167,6 +217,11 @@ class ExplicitLayerLizard(LayerLizard):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
+        Parameters
+        ----------
+        layerlbl : Label
+            The preparation layer label.
+
         Returns
         -------
         LinearOperator
@@ -177,6 +232,11 @@ class ExplicitLayerLizard(LayerLizard):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
+        Parameters
+        ----------
+        layerlbl : Label
+            The effect layer label
+
         Returns
         -------
         LinearOperator
@@ -186,6 +246,11 @@ class ExplicitLayerLizard(LayerLizard):
     def get_operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            The circuit (operation-) layer label.
 
         Returns
         -------
@@ -205,6 +270,19 @@ class ExplicitLayerLizard(LayerLizard):
         ----------
         v : numpy.ndarray
             A vector of parameters for `Model` associated with this layer lizard.
+
+        close : bool, optional
+            Set to `True` if `v` is close to the current parameter vector.
+            This can make some operations more efficient.
+
+        nodirty : bool, optional
+            If True, the framework for marking and detecting when operations
+            have changed and a Model's parameter-vector needs to be updated
+            is disabled.  Disabling this will increases the speed of the call.
+
+        Returns
+        -------
+        None
         """
         for _, obj in _itertools.chain(self.preps.items(),
                                        self.effects.items(),
@@ -215,14 +293,41 @@ class ExplicitLayerLizard(LayerLizard):
 
 class ImplicitLayerLizard(LayerLizard):
     """
+    A base class for objects which serve up layer operations for implicit models.
+
     This layer lizard (see :class:`LayerLizard`) is used as a base class for
     objects which serve up layer operations for implicit models (and so provide
     logic for how to construct layer operations from model components).
+
+    Parameters
+    ----------
+    prep_blks : dict
+        Dictionary of :class:`OrderedMemberDict` objects, one per
+        "category" of state preparations.  These are stored and used
+        to build layer operations for serving to a forward simulator.
+
+    op_blks : dict
+        Dictionary of :class:`OrderedMemberDict` objects, one per
+        "category" of operations.  These are stored and used
+        to build layer operations for serving to a forward simulator.
+
+    povm_blks : dict
+        Dictionary of :class:`OrderedMemberDict` objects, one per
+        "category" of POVMs.  These are stored and used
+        to build layer operations for serving to a forward simulator.
+
+    instrument_blks : dict
+        Dictionary of :class:`OrderedMemberDict` objects, one per
+        "category" of instruments.  These are stored and used
+        to build layer operations for serving to a forward simulator.
+
+    model : Model
+        The model associated with the operations.
     """
 
     def __init__(self, prep_blks, op_blks, povm_blks, instrument_blks, model):
         """
-        Creates a new ExplicitLayerLizard.
+        Creates a new ImplicitLayerLizard.
 
         Parameters
         ----------
@@ -263,6 +368,11 @@ class ImplicitLayerLizard(LayerLizard):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
+        Parameters
+        ----------
+        layerlbl : Label
+            The preparation layer label.
+
         Returns
         -------
         LinearOperator
@@ -273,6 +383,11 @@ class ImplicitLayerLizard(LayerLizard):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
+        Parameters
+        ----------
+        layerlbl : Label
+            The effect layer label
+
         Returns
         -------
         LinearOperator
@@ -282,6 +397,11 @@ class ImplicitLayerLizard(LayerLizard):
     def get_operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            The circuit (operation-) layer label.
 
         Returns
         -------
@@ -307,6 +427,19 @@ class ImplicitLayerLizard(LayerLizard):
         ----------
         v : numpy.ndarray
             A vector of parameters for `Model` associated with this layer lizard.
+
+        close : bool, optional
+            Set to `True` if `v` is close to the current parameter vector.
+            This can make some operations more efficient.
+
+        nodirty : bool, optional
+            If True, the framework for marking and detecting when operations
+            have changed and a Model's parameter-vector needs to be updated
+            is disabled.  Disabling this will increases the speed of the call.
+
+        Returns
+        -------
+        None
         """
         for _, objdict in _itertools.chain(self.prep_blks.items(),
                                            self.effect_blks.items(),

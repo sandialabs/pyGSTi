@@ -1,4 +1,6 @@
-""" Encapsulates a group in terms of matrices and relations """
+"""
+Encapsulates a group in terms of matrices and relations
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,12 +18,29 @@ from functools import reduce as _reduce
 
 
 def is_integer(x):
+    """
+    Check if `x` is an integer type.
+
+    Parameters
+    ----------
+    x : object
+        Object to test.
+
+    Returns
+    -------
+    bool
+    """
+    #TODO: combine with compattools.isint(x) ??
     return bool(isinstance(x, int) or isinstance(x, _np.integer))
 
 
 def construct_1q_clifford_group():
     """
     Returns the 1 qubit Clifford group as a MatrixGroup object
+
+    Returns
+    -------
+    MatrixGroup
     """
     mdl = std1Q_Cliffords.target_model()
     return MatrixGroup(mdl.operations.values(), mdl.operations.keys())
@@ -30,6 +49,15 @@ def construct_1q_clifford_group():
 class MatrixGroup(object):
     """
     Encapsulates a group where each element is represented by a matrix.
+
+    Parameters
+    ----------
+    list_of_matrices : list
+        A list of the group elements (should be 2d numpy arrays), and
+        can be mdl.gate.values() for some Model `mdl` that forms a group.
+
+    labels : list, optional
+        A label corresponding to each group element.
     """
 
     def __init__(self, list_of_matrices, labels=None):
@@ -136,8 +164,7 @@ class MatrixGroup(object):
 
     def product(self, indices):
         """
-        Returns the index/label of corresponding to the product of a list
-        or tuple of indices/labels.
+        Returns the index/label of corresponding to the product of a list or tuple of indices/labels.
 
         Parameters
         ----------

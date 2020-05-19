@@ -1,4 +1,6 @@
-""" Automatic report title generation. """
+"""
+Automatic report title generation.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,7 +14,13 @@ import numpy as _np
 
 
 def generate_name():
-    """ Generate a random adjective + noun name """
+    """
+    Generate a random adjective + noun name
+
+    Returns
+    -------
+    str
+    """
     adj = _adjectives[_np.random.randint(0, len(_adjectives))]
     noun = _nouns[_np.random.randint(0, len(_nouns))]
     return adj + " " + noun

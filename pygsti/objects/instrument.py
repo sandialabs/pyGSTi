@@ -1,4 +1,6 @@
-"""Defines the Instrument class"""
+"""
+Defines the Instrument class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,8 +24,10 @@ from . import spamvec as _sv
 
 def convert(instrument, to_type, basis, extra=None):
     """
-    Convert intrument to a new type of parameterization, potentially
-    creating a new object.  Raises ValueError for invalid conversions.
+    Convert intrument to a new type of parameterization.
+
+    This potentially creates a new object.
+    Raises ValueError for invalid conversions.
 
     Parameters
     ----------
@@ -45,8 +49,8 @@ def convert(instrument, to_type, basis, extra=None):
     Returns
     -------
     Instrument
-       The converted instrument, usually a distinct
-       object from the object passed as input.
+        The converted instrument, usually a distinct
+        object from the object passed as input.
     """
 
     if to_type == "TP":
@@ -63,10 +67,20 @@ def convert(instrument, to_type, basis, extra=None):
 
 class Instrument(_gm.ModelMember, _collections.OrderedDict):
     """
+    A generalized quantum instrument.
+
     Meant to correspond to a quantum instrument in theory, this class
     generalizes that notion slightly to include a collection of gates that may
     or may not have all of the properties associated by a mathematical quantum
     instrument.
+
+    Parameters
+    ----------
+    op_matrices : dict of LinearOperator objects
+        A dict (or list of key,value pairs) of the gates.
+
+    items : list or dict, optional
+        Initial values.  This should only be used internally in de-serialization.
     """
 
     def __init__(self, op_matrices, items=[]):
@@ -173,7 +187,9 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
 
     def simplify_operations(self, prefix=""):
         """
-        Returns a dictionary of gates that belong to the Instrument's parent
+        Creates a dictionary of simplified instrument operations.
+
+        Returns a dictionary of operations that belong to the Instrument's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this instruments's gpindices.  These are used internally within
         computations involving the parent `Model`.
@@ -208,6 +224,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.
+
         This is in general different from the number of *parameters*,
         which are the number of free variables used to generate all of
         the matrix *elements*.
@@ -225,7 +242,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return len(self._paramvec)
 
@@ -250,6 +267,16 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             The 1D vector of gate parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this Instrument's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this Instrument should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
+
         Returns
         -------
         None
@@ -259,15 +286,19 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
-        Update Instrument element matrix G with inv(s) * G * s.
+        Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
         Parameters
         ----------
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
@@ -373,9 +404,11 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
 
 class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
     """
-    A trace-preservng quantum instrument which is a collection of gates whose
-    sum is a trace-preserving map.  The instrument's elements may or may not
-    have all of the properties associated by a mathematical quantum instrument.
+    A trace-preservng quantum instrument.
+
+    This is essentially a collection of operations whose sum is a
+    trace-preserving map.  The instrument's elements may or may not have all of
+    the properties associated by a mathematical quantum instrument.
 
     If M1,M2,...Mn are the elements of the instrument, then we parameterize
     1. MT = (M1+M2+...Mn) as a TPParmeterizedGate
@@ -384,6 +417,15 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
     So to recover M1...Mn we compute:
     Mi = Di + MT for i = 1...(n-1)
        = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
+
+    Parameters
+    ----------
+    op_matrices : dict of numpy arrays
+        A dict (or list of key,value pairs) of the operation matrices whose sum
+        must be a trace-preserving (TP) map.
+
+    items : list or dict, optional
+        Initial values.  This should only be used internally in de-serialization.
     """
     #Scratch:
     #    Scratch
@@ -402,7 +444,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
 
         Parameters
         ----------
-        gates : dict of numpy arrays
+        op_matrices : dict of numpy arrays
             A dict (or list of key,value pairs) of the operation matrices whose sum
             must be a trace-preserving (TP) map.
         """
@@ -474,7 +516,9 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
 
     def simplify_operations(self, prefix=""):
         """
-        Returns a dictionary of gates that belong to the Instrument's parent
+        Creates a dictionary of simplified instrument operations.
+
+        Returns a dictionary of operations that belong to the Instrument's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this instruments's gpindices.  These are used internally within
         computations involving the parent `Model`.
@@ -513,6 +557,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.
+
         This is in general different from the number of *parameters*,
         which are the number of free variables used to generate all of
         the matrix *elements*.
@@ -530,7 +575,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return sum([g.num_params() for g in self.param_ops])
 
@@ -558,6 +603,16 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             The 1D vector of gate parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this Instrument's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this Instrument should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
+
         Returns
         -------
         None
@@ -567,15 +622,19 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
-        Update Instrument element matrix G with inv(s) * G * s.
+        Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
         Parameters
         ----------
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.

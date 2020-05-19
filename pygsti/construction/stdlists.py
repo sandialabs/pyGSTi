@@ -1,4 +1,6 @@
-""" Circuit list creation functions using repeated-germs limited by a max-length."""
+"""
+Circuit list creation functions using repeated-germs limited by a max-length.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -93,10 +95,10 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
           as the germ exponent (the number of germ repetitions).
 
     nest : boolean, optional
-        If True, the returned operation sequence lists are "nested", meaning
+        If True, the returned operation sequences lists are "nested", meaning
         that each successive list of operation sequences contains all the gate
         strings found in previous lists (and usually some additional
-        new ones).  If False, then the returned string list for maximum
+        new ones).  If False, then the returned circuit list for maximum
         length == L contains *only* those operation sequences specified in the
         description above, and *not* those for previous values of L.
 
@@ -126,7 +128,6 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
         this argument is `{('Gx',): 4}` and `max_length_list = [1,2,4,8,16]`,
         then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
         and 4 (whereas other germs use all the values in `max_length_list`).
-
 
     Returns
     -------
@@ -236,6 +237,9 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
                        op_label_aliases=None, sequence_rules=None,
                        dscheck=None, action_if_missing="raise", germ_length_limits=None,
                        verbosity=0):
+    """
+    Deprecated function.
+    """
     bulk_circuit_lists = make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                                           fid_pairs, trunc_scheme, nest,
                                           keep_fraction, keep_seed, include_lgst,
@@ -350,7 +354,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         corresponding to what that operation label should be expanded into before querying
         the dataset.  This information is stored within the returned operation sequence
         structures.  Defaults to the empty dictionary (no aliases defined)
-        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
     sequence_rules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement
@@ -377,7 +381,6 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
 
     verbosity : int, optional
         The level of output to print to stdout.
-
 
     Returns
     -------
@@ -551,8 +554,7 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
                                trunc_scheme="whole germ powers", keep_fraction=1,
                                keep_seed=None, include_lgst=True):
     """
-    Create a list of all the operation sequences (i.e. the experiments) required for
-    long-sequence GST (LSGST) algorithms.
+    List all the circuits (i.e. experiments) required for long-sequence GST (LSGST).
 
     Returns a single list containing, without duplicates, all the gate
     strings required throughout all the iterations of LSGST given by
@@ -621,7 +623,6 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
     include_lgst : boolean, optional
         If true, then ensure that LGST sequences are included in the
         returned list.
-
 
     Returns
     -------
@@ -700,7 +701,6 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
         `nest == True`, the length-1 sequences will be included in all
         the lists.
 
-
     Returns
     -------
     list of (lists of Circuits)
@@ -740,12 +740,12 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
     return elgst_listOfLists
 
 
+#PRIVATE OR REMOVE
 def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
                                trunc_scheme="whole germ powers",
                                include_lgst=True):
     """
-    Create a list of all the operation sequences (i.e. the experiments) required for
-    the extended LGST (eLGST) algorithm.
+    List of all the circuits (i.e. experiments) required for extended LGST (eLGST).
 
     Returns a single list containing, without duplicates, all the gate
     strings required throughout all the iterations of eLGST given by
@@ -783,7 +783,6 @@ def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     include_lgst : boolean, optional
         If true, then ensure that length-1 sequences are included in
         the returned list.
-
 
     Returns
     -------

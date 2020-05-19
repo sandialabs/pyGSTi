@@ -1,4 +1,6 @@
-""" Defines the Cell class """
+"""
+Defines the Cell class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -14,9 +16,20 @@ from .convert import convert_dict as _convert_dict
 
 
 class Cell(object):
-    '''
+    """
     Representation of a table cell, containing formatting and labeling info
-    '''
+
+    Parameters
+    ----------
+    data : ReportableQty
+        data to be reported
+
+    formatter_name : string, optional
+        name of the formatter to be used (ie 'Effect')
+
+    label : string, optional
+        label of the cell
+    """
 
     def __init__(self, data=None, formatter_name=None, label=None):
         '''
@@ -69,19 +82,21 @@ class Cell(object):
                 raise ValueError("Unformatted None in Cell")
 
     def render(self, fmt, spec):
-        '''
+        """
         Render full cell as a string
 
         Parameters
         ----------
         fmt : string
             name of format to be used
-        spec: dict
+
+        spec : dict
             dictionary of formatting options
+
         Returns
         -------
         string
-        '''
+        """
         format_cell = _convert_dict[fmt]['cell']  # Function for rendering a cell in the format "fmt"
         formattedData = self._render_data(fmt, spec)
 

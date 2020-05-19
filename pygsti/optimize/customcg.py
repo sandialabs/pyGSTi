@@ -1,4 +1,6 @@
-""" A custom conjugate gradient descent algorithm """
+"""
+A custom conjugate gradient descent algorithm
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,8 +27,8 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
 
     Parameters
     ----------
-    fn : function
-        The function to minimize.
+    f : function
+        The function to optimize
 
     x0 : numpy array
         The starting point (argument to fn).

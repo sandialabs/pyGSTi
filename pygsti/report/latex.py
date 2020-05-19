@@ -1,6 +1,7 @@
 """
-Routines for converting python objects to latex.  Parallel rountines as
-html.py has for HTML conversion.
+Routines for converting python objects to latex.
+
+Parallel rountines as html.py has for HTML conversion.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -21,23 +22,27 @@ everything else is used in creating formatters in formatters.py
 
 
 def table(custom_headings, col_headings_formatted, rows, spec):
-    '''
+    """
     Create a LaTeX table
 
     Parameters
     ----------
     custom_headings : None, dict
         optional dictionary of custom table headings
+
     col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains key 'latex', which corresponds to a latex string representing the table
-    '''
+    """
     longtables = spec['longtables']
     table = "longtable" if longtables else "tabular"
     if custom_headings is not None \
@@ -83,21 +88,24 @@ def table(custom_headings, col_headings_formatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of a latex table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
+
     Returns
     -------
     string
-    '''
+    """
     addMathMode = bool(("^" in data or "_" in data) and "$" not in data)
     return "$" + data + "$" if addMathMode else data
 

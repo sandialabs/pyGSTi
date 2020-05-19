@@ -1,4 +1,6 @@
-""" Defines the CloudNoiseModel class and supporting functions """
+"""
+Defines the CloudNoiseModel class and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -42,7 +44,22 @@ def _iter_basis_inds(weight):
 
 
 def basis_product_matrix(sigma_inds, sparse):
-    """ Construct the Pauli product matrix from the given `sigma_inds` """
+    """
+    Construct the Pauli product matrix from the given `sigma_inds`
+
+    Parameters
+    ----------
+    sigma_inds : iterable
+        A sequence of integers in the range [0,3] corresponding to the
+        I, X, Y, Z Pauli basis matrices.
+
+    sparse : bool
+        Whether to return a sparse matrix or not.
+
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse.csr_matrix
+    """
     sigmaVec = (id2x2 / sqrt2, sigmax / sqrt2, sigmay / sqrt2, sigmaz / sqrt2)
     M = _np.identity(1, 'complex')
     for i in sigma_inds:
@@ -52,8 +69,130 @@ def basis_product_matrix(sigma_inds, sparse):
 
 class CloudNoiseModel(_ImplicitOpModel):
     """
-    A noisy n-qubit model using a low-weight and geometrically local
-    error model with a common "global idle" operation.
+    A n-qubit model using a low-weight and geometrically local error model with a common "global idle" operation.
+
+    Parameters
+    ----------
+    n_qubits : int
+        The number of qubits
+
+    gatedict : dict
+        A dictionary (an `OrderedDict` if you care about insertion order) that
+        associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
+        `numpy.ndarray`, or :class:`OpFactory` objects. When the objects may act on
+        fewer than the total number of qubits (determined by their dimension/shape) then
+        they are repeatedly embedded into `n_qubits`-qubit gates as specified by their
+        `availability`.  These operations represent the ideal target operations, and
+        thus, any `LinearOperator` or `OpFactory` objects must be *static*, i.e., have
+        zero parameters.
+
+    availability : dict, optional
+        A dictionary whose keys are the same gate names as in
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
+        permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the geometry.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
+
+    qubit_labels : tuple, optional
+        The circuit-line labels for each of the qubits, which can be integers
+        and/or strings.  Must be of length `n_qubits`.  If None, then the
+        integers from 0 to `n_qubits-1` are used.
+
+    geometry : {"line","ring","grid","torus"} or QubitGraph
+        The type of connectivity among the qubits, specifying a
+        graph used to define neighbor relationships.  Alternatively,
+        a :class:`QubitGraph` object with node labels equal to
+        `qubit_labels` may be passed directly.
+
+    global_idle_layer : LinearOperator
+        A global idle operation which acts on all the qubits and
+        is, if `add_idle_noise_to_all_gates=True`, composed with the
+        actions of specific gates to form the layer operation of
+        any circuit layer.
+
+    prep_layers, povm_layers : None or operator or dict or list, optional
+        The SPAM operations as n-qubit layer operations.  If `None`, then
+        no preps (or POVMs) are created.  If a dict, then the keys are
+        labels and the values are layer operators.  If a list, then the
+        elements are layer operators and the labels will be assigned as
+        "rhoX" and "MX" where X is an integer starting at 0.  If a single
+        layer operation is given, then this is used as the sole prep or
+        POVM and is assigned the label "rho0" or "Mdefault" respectively.
+
+    build_cloudnoise_fn : function, optional
+        A function which takes a single :class:`Label` as an argument and
+        returns the cloud-noise operation for that primitive layer
+        operation.  Note that if `errcomp_type="gates"` the returned
+        operator should be a superoperator whereas if
+        `errcomp_type="errorgens"` then the returned operator should be
+        an error generator (not yet exponentiated).
+
+    build_cloudkey_fn : function, optional
+        An function which takes a single :class:`Label` as an argument and
+        returns a "cloud key" for that primitive layer.  The "cloud" is the
+        set of qubits that the error (the operator returned from
+        `build_cloudnoise_fn`) touches -- and the "key" returned from this
+        function is meant to identify that cloud.  This is used to keep track
+        of which primitive layer-labels correspond to the same cloud - e.g.
+        the cloud-key for ("Gx",2) and ("Gy",2) might be the same and could
+        be processed together when selecing sequences that amplify the parameters
+        in the cloud-noise operations for these two labels.  The return value
+        should be something hashable with the property that two noise
+        which act on the same qubits should have the same cloud key.
+
+    sim_type : {"matrix","map","termorder:<N>"}
+        The type of forward simulation (probability computation) to use for the
+        returned :class:`Model`.  That is, how should the model compute
+        operation sequence/circuit probabilities when requested.  `"matrix"` is better
+        for small numbers of qubits, `"map"` is better for larger numbers. The
+        `"termorder"` option is designed for even larger numbers.  Usually,
+        the default of `"auto"` is what you want.
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.
+
+    errcomp_type : {"gates","errorgens"}
+        How errors are composed when creating layer operations in the created
+        model.  `"gates"` means that the errors on multiple gates in a single
+        layer are composed as separate and subsequent processes.  Specifically,
+        the layer operation has the form `Composed(target,idleErr,cloudErr)`
+        where `target` is a composition of all the ideal gate operations in the
+        layer, `idleErr` is idle error (`.operation_blks['layers']['globalIdle']`),
+        and `cloudErr` is the composition (ordered as layer-label) of cloud-
+        noise contributions, i.e. a map that acts as the product of exponentiated
+        error-generator matrices.  `"errorgens"` means that layer operations
+        have the form `Composed(target, error)` where `target` is as above and
+        `error` results from composing the idle and cloud-noise error
+        *generators*, i.e. a map that acts as the exponentiated sum of error
+        generators (ordering is irrelevant in this case).
+
+    add_idle_noise_to_all_gates: bool, optional
+        Whether the global idle should be added as a factor following the
+        ideal action of each of the non-idle gates.
+
+    sparse : bool, optional
+        Whether embedded Lindblad-parameterized gates within the constructed
+        `n_qubits`-qubit gates are sparse or not.
+
+    verbosity : int, optional
+        An integer >= 0 dictating how must output to send to stdout.
     """
 
     @classmethod
@@ -66,14 +205,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                     spamtype="lindblad", add_idle_noise_to_all_gates=True,
                                     errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
-        Create a n-qubit model using a low-weight and geometrically local
-        error model with a common "global idle" operation.
-
-        This type of model is referred to as a "cloud noise" model because
-        noise specific to a gate may act on a neighborhood or cloud around
-        the gate's target qubits.  This type of model is generally useful
-        for performing GST on a multi-qubit system.
-
+        Create a :class:`CloudNoiseModel` from hopping rules.
 
         Parameters
         ----------
@@ -206,7 +338,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             "tensorproduct" mode exists for historical reasons and is *deprecated*
             in favor of `"lindblad"`; use it only if you know what you're doing.
 
-        add_idle_noise_to_all_gates: bool, optional
+        add_idle_noise_to_all_gates : bool, optional
             Whether the global idle should be added as a factor following the
             ideal action of each of the non-idle gates.
 
@@ -232,6 +364,10 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         verbosity : int, optional
             An integer >= 0 dictating how must output to send to stdout.
+
+        Returns
+        -------
+        CloudNoiseModel
         """
         printer = _VerbosityPrinter.build_printer(verbosity)
 
@@ -378,7 +514,9 @@ class CloudNoiseModel(_ImplicitOpModel):
                  sim_type="map", evotype="densitymx", errcomp_type="gates",
                  add_idle_noise_to_all_gates=True, sparse=False, verbosity=0):
         """
-        Create a n-qubit model using a low-weight and geometrically local
+        Creates a CloudNoiseModel.
+
+        A CloudNoiseModle is a n-qubit model using a low-weight and geometrically local
         error model with a common "global idle" operation.
 
         This constructor relies on factory functions being passed to it
@@ -815,8 +953,11 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     def get_clouds(self):
         """
-        Returns the set of cloud-sets used when creating sequences which
-        amplify the parameters of this model.
+        Returns the set of cloud-sets used when creating sequences which amplify the parameters of this model.
+
+        Returns
+        -------
+        dict
         """
         return self.clouds
 
@@ -1132,9 +1273,9 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
 
 class CloudNoiseLayerLizard(_ImplicitLayerLizard):
     """
-    The layer lizard class for a :class:`CloudNoiseModel`, which
-    creates layers by composing perfect target gates, global idle error,
-    and local "cloud" errors.
+    A layer-rule that creates layers by composing perfect target gates, global idle error, and local "cloud" errors.
+
+    This is the standard layer lizard class for a :class:`CloudNoiseModel`.
 
     The value of `model._lizardArgs['errcomp_type']` determines which of two
     composition strategies are employed.  When the errcomp_type is `"gates"`,
@@ -1153,9 +1294,33 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
     """
 
     def get_prep(self, layerlbl):
+        """
+        Retrieve or create the state preparation operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A state preparation label.
+
+        Returns
+        -------
+        LinearOperator
+        """
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layers'] are full prep ops
 
     def get_effect(self, layerlbl):
+        """
+        Retrieve or create the POVM effect operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A POVM effect label (typically a "simplified" label of the form POVM_label:outcome_label)
+
+        Returns
+        -------
+        LinearOperator
+        """
         if layerlbl in self.effect_blks['layers']:
             return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
         else:
@@ -1175,6 +1340,18 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
     def get_operation(self, layerlbl):
+        """
+        Retrieve or create the circuit layer operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
@@ -1236,7 +1413,20 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         self.model._init_virtual_obj(ret)  # so ret's gpindices get set
         return ret
 
+    #PRIVATE
     def get_layer_component_targetop(self, complbl):
+        """
+        Retrieves the target- or ideal-operation portion of one component of a layer operation.
+
+        Parameters
+        ----------
+        complbl : Label
+            A component label of a larger layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
@@ -1247,11 +1437,23 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
 
+    #PRIVATE
     def get_layer_component_cloudnoises(self, complbl_list):
         """
+        Retrieves cloud-noise portion of the components of a layer operation.
+
         Get any present cloudnoise ops from a list of components.  This function processes
         a list rather than an item because it's OK if some components don't have
         corresponding cloudnoise ops - we just leave those off.
+
+        Parameters
+        ----------
+        complbl_list : list
+            A list of circuit-layer component labels.
+
+        Returns
+        -------
+        list
         """
         ret = []
         for complbl in complbl_list:

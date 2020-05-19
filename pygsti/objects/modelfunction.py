@@ -1,4 +1,6 @@
-""" Defines the ModelFunction class """
+"""
+Defines the ModelFunction class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,14 +13,33 @@
 
 class ModelFunction(object):
     """
-    Encapsulates a "function of a Model" that one may want to compute
-    confidence-interval error bars for based on a confidence region of
-    the functions model argument.  The "function" may have other parameters,
-    and the reason for defining it as a class is so that it can hold
+    A "function of a model" for which one may want to compute error bars.
+
+    Specifically, one may want to compute confidence-interval error bars based
+    on a confidence region of the function's model argument.
+
+    The "function" may have other parameters, and the reason for defining it as
+    a class is so that it can hold
 
     1. relevant "meta" arguments in addition to the central Model, and
     2. information to speed up function evaluations at nearby Model "points",
        for computing finite-difference derivatives.
+
+    Parameters
+    ----------
+    model : Model
+        A sample model giving the constructor a template for what
+        type/parameterization of model to expect in calls to
+        :func:`evaluate`.
+
+    dependencies : list
+        A list of (*type*,*label*) tuples, or the special strings `"all"` and
+        `"spam"`, indicating which Model parameters the function depends
+        upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or
+        `"instrument"`, and  *label* can be any of the corresponding labels
+        found in the models being evaluated.  The reason for specifying
+        this at all is to speed up computation of the finite difference
+        derivative needed to find the error bars.
     """
 
     def __init__(self, model, dependencies):
@@ -45,21 +66,42 @@ class ModelFunction(object):
         self.dependencies = dependencies
 
     def evaluate(self, model):
-        """ Evaluate this gate-set-function at `model`."""
+        """
+        Evaluate this gate-set-function at `model`.
+
+        Parameters
+        ----------
+        model : Model
+            The "point" at which to evaluate this function.
+
+        Returns
+        -------
+        object
+        """
         return None
 
     def evaluate_nearby(self, nearby_model):
         """
-        Evaluate this gate-set-function at `nearby_model`, which can
-        be assumed is very close to the `model` provided to the last
-        call to :func:`evaluate`.
+        Evaluate this model-function at `nearby_model`.
+
+        `nearby_model` can be assumed to be very close to the `model` provided
+        to the last call to :method:`evaluate`.
+
+        Parameters
+        ----------
+        nearby_model : Model
+            A nearby "point" to evaluate this function at.
+
+        Returns
+        -------
+        object
         """
         # do stuff assuming nearby_model is eps away from model
         return self.evaluate(nearby_model)
 
     def get_dependencies(self):
         """
-        Return the dependencies of this gate-set-function.
+        Return the dependencies of this model-function.
 
         Returns
         -------
@@ -76,10 +118,10 @@ class ModelFunction(object):
 
 def spamfn_factory(fn):
     """
-    Ceates a class that evaluates
-    `fn(preps,povms,...)`, where `preps` and `povms` are lists of the
-    preparation SPAM vectors and POVMs of a Model, respectively,
-    and `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(preps,povms,...)`.
+
+    Here `preps` and `povms` are lists of the preparation SPAM vectors and POVMs
+    of a Model, respectively, and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -119,9 +161,10 @@ def spamfn_factory(fn):
 
 def opfn_factory(fn):
     """
-    Creates a class that evaluates `fn(gate,basis,...)`, where `gate` is a
-    single operation matrix, `basis` describes what basis it's in, and `...` are
-    additional arguments (see below).
+    Creates a class that evaluates `fn(gate,basis,...)`.
+
+    Hhere `gate` is a single operation matrix, `basis` describes what basis it's
+    in, and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -158,9 +201,10 @@ def opfn_factory(fn):
 # passed as additional args
 def opsfn_factory(fn):
     """
-    Creates a class that evaluates `fn(op1,op2,basis,...)`, where `op1`
-    and `op2` are a single operation matrices, `basis` describes what basis they're
-    in, and `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(op1,op2,basis,...)`.
+
+    Here `op1` and `op2` are a single operation matrices, `basis` describes what
+    basis they're in, and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -198,9 +242,10 @@ def opsfn_factory(fn):
 
 def vecfn_factory(fn):
     """
-    Creates a class that evaluates `fn(vec,basis,...)`, where `vec` is a
-    single SPAM vector, `basis` describes what basis it's in, and `...` are
-    additional arguments (see below).
+    Creates a class that evaluates `fn(vec,basis,...)`.
+
+    Here `vec` is a single SPAM vector, `basis` describes what basis it's in,
+    and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -248,9 +293,10 @@ def vecfn_factory(fn):
 
 def vecsfn_factory(fn):
     """
-    Creates a class that evaluates `fn(vec1, vec2, basis,...)`, where `vec1`
-    and `vec2` are SPAM vectors, `basis` describes what basis they're in, and
-    `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(vec1, vec2, basis,...)`.
+
+    Hhere `vec1` and `vec2` are SPAM vectors, `basis` describes what basis
+    they're in, and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -302,10 +348,9 @@ def vecsfn_factory(fn):
 
 def povmfn_factory(fn):
     """
-    Ceates a class that evaluates
-    `fn(model,...)` where `model` is the entire Model (and it is assumed
-    that `fn` is only a function of the POVM effect elements of the model),
-    and `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(model,...)` where `fn` *only* depends on the POVM effect elements `model`.
+
+    Here `model` is the entire Model and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -342,8 +387,9 @@ def povmfn_factory(fn):
 
 def modelfn_factory(fn):
     """
-    Creates a class that evaluates `fn(model,...)`, where `model` is a
-    `Model` object and `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(model,...)`.
+
+    Here `model` is a `Model` object and `...` are additional arguments (see below).
 
     Parameters
     ----------

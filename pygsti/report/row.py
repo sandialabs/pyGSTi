@@ -1,4 +1,6 @@
-""" Defines the Row class """
+"""
+Defines the Row class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -14,9 +16,23 @@ from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 
 class Row(object):
-    '''
+    """
     Representation of a table row
-    '''
+
+    Parameters
+    ----------
+    row_data : list
+        Raw data for the table
+
+    formatters : list[string], optional
+        Formatting options for each cell
+
+    labels : list[string], optional
+        Labeling options for each cell
+
+    non_markovian_ebs : bool
+        Whether non-Markovian error bars should be used
+    """
 
     def __init__(self, row_data=None, formatters=None, labels=None, non_markovian_ebs=False):
         '''
@@ -60,23 +76,42 @@ class Row(object):
         self.__dict__.update(d)
 
     def add(self, data, formatter=None, label=None):
-        """ Adds a cell with the given `data`, `formatter` and `label` """
+        """
+        Adds a cell with the given `data`, `formatter` and `label`
+
+        Parameters
+        ----------
+        data : ReportableQty
+            Cell data to be reported
+
+        formatter : string, optional
+            Name of the cell formatter to be used (ie 'Effect')
+
+        label : string, optional
+            Label of the cell
+
+        Returns
+        -------
+        None
+        """
         self.cells.append(Cell(data, formatter, label))
 
     def render(self, fmt, specs):
-        '''
+        """
         Render a row of cells
 
         Parameters
         ----------
         fmt : string
-            format to be rendered in
+            Format to be rendered in
+
         specs : dict
-            options for formatting
+            Options for formatting
+
         Returns
         -------
         list
-        '''
+        """
         formattedItems = []
         for cell in self.cells:
             formattedItem = cell.render(fmt, specs)

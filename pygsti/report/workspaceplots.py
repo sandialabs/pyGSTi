@@ -1,4 +1,6 @@
-""" Classes corresponding to plots within a Workspace context."""
+"""
+Classes corresponding to plots within a Workspace context.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -166,8 +168,10 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
                          colorbar=False, box_label_size=0, prec=0,
                          hover_label_fn=None):
     """
-    Creates a "nested" color box plot by tiling the plaquettes given
-    by `plt_data_list_of_lists` onto a single heatmap.
+    Creates a "nested" color box plot.
+
+    Tiles the plaquettes given by `plt_data_list_of_lists`
+    onto a single heatmap.
 
     Parameters
     ----------
@@ -269,17 +273,29 @@ def generate_boxplot(sub_mxs,
         or sum (if sum_up == True) displayed in iy-th row and ix-th column of the plot.  NaNs
         indicate elements should not be displayed.
 
-    x_labels, y_labels : list
-        Labels for the outer x- and y-axis values.
+    xlabels : list
+        Labels for the outer x-axis values.
 
-    inner_x_labels, inner_y_labels : list
-        Labels for the inner x- and y-axis values.
+    ylabels : list
+        Labels for the outer y-axis values.
 
-    xlabel, ylabel : str
-        Outer X and Y axis labels.
+    inner_xlabels : list
+        Labels for the inner x-axis values.
 
-    inner_xlabel, inner_ylabel : str
-        Inner X and Y axis labels.
+    inner_ylabels : list
+        Labels for the inner y-axis values.
+
+    xlabel : str
+        Outer x-axis label.
+
+    ylabel : str
+        Outer y-axis label.
+
+    inner_xlabel : str
+        Inner x-axis label.
+
+    inner_ylabel : str
+        Inner y-axis label.
 
     colormap : Colormap
         The colormap used to determine box color.
@@ -508,8 +524,9 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                           colorbar=False, box_labels=True, prec='compact', hover_info=True,
                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
     """
-    A wrapper around :func:`generate_boxplot` for creating color box plots
-    when the structure of the operation sequences is contained in  a
+    A wrapper around :func:`generate_boxplot` for creating color box plots displaying circuits.
+
+    Generates a plot from the structure of the circuits as contained in a
     `CircuitStructure` object.
 
     Parameters
@@ -662,16 +679,6 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
 
     colorbar : bool, optional
         Whether or not to show the color scale bar.
-
-    box_labels : bool, optional
-        Whether to display static value-labels over each box.
-
-    prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
 
     hover_info : bool, optional
         Whether to incude interactive hover labels.
@@ -843,14 +850,6 @@ def circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     colormap : Colormap
         The colormap used to determine box color.
 
-    hover_info : bool, optional
-        Whether to incude interactive hover labels.
-
-    sum_up : bool, optional
-        False displays each matrix element as it's own color box
-        True sums the elements of each (x,y) matrix and displays
-        a single color box for the sum.
-
     ylabel : str, optional
         The y-axis label to use.
 
@@ -965,16 +964,26 @@ def opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_ba
     op_matrix : numpy array
         The matrix to visualize.
 
-    color_min, color_max : float
-        Minimum and maximum of the color scale.
+    color_min : float
+        Color scale minimum.
 
-    mx_basis, mx_basis_y : str or Basis, optional
-      The name abbreviation for the basis or a Basis object. Used to label the
-      columns & rows (x- and y-ticklabels).  Typically in
-      {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
+    color_max : float
+        Color scale maximum.
 
-    xlabel, ylabel : str, optional
-      Axis labels for the plot.
+    mx_basis : str or Basis, optional
+        The name abbreviation for the basis or a Basis object. Used to label the
+        columns & rows (x- and y-ticklabels).  Typically in
+        {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
+
+    mx_basis_y : str or Basis, optional
+        Same as `mx_basis` but for just the y-ticklabels, overriding `mx_basis` and
+        allowing the y-ticklabels to be different.
+
+    xlabel : str, optional
+        X-axis label of the plot.
+
+    ylabel : str, optional
+        Y-axis label of the plot.
 
     box_labels : bool, optional
         Whether box labels are displayed.
@@ -1001,7 +1010,6 @@ def opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_ba
 
     title : str, optional
         A title for the plot
-
 
     Returns
     -------
@@ -1050,11 +1058,17 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     matrix : numpy array
         The matrix to visualize.
 
-    xlabels, ylabels: list, optional
-        List of (str) box labels for each axis.
+    xlabels : list, optional
+        List of (str) box labels along the x-axis.
 
-    xlabel, ylabel : str, optional
-        Axis labels for the plot.
+    ylabels : list, optional
+        List of (str) box labels along the y-axis.
+
+    xlabel : str, optional
+        X-axis label of the plot.
+
+    ylabel : str, optional
+        Y-axis label of the plot.
 
     box_labels : bool, optional
         Whether box labels are displayed.
@@ -1293,11 +1307,33 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
 class BoxKeyPlot(WorkspacePlot):
     """
-    Plot serving as a key for fiducial rows/columns of each plaquette of
-    a circuit color box plot.
+    Plot serving as a key for fiducial rows/columns of each plaquette of a circuit color box plot.
+
+    This plot shows the layout of a single sub-block of a goodness-of-fit
+    box plot (such as those produced by ColorBoxPlot)
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    prep_fiducials : list of Circuits
+        Preparation fiducials.
+
+    meas_fiducials : list of Circuits
+        Measurement fiducials.
+
+    xlabel: str, optional
+        X-axis label
+
+    ylabel: str, optional
+        Y-axis label
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
     """
 
-    def __init__(self, ws, prep_strs, effect_strs,
+    def __init__(self, ws, prep_fiducials, meas_fiducials,
                  xlabel="Preparation fiducial", ylabel="Measurement fiducial", scale=1.0):
         """
         Create a plot showing the layout of a single sub-block of a goodness-of-fit
@@ -1305,7 +1341,7 @@ class BoxKeyPlot(WorkspacePlot):
 
         Parameters
         ----------
-        prep_strs, effect_strs : list of Circuits
+        prep_fiducials, meas_fiducials : list of Circuits
             Preparation and measurement fiducials.
 
         xlabel, ylabel : str, optional
@@ -1315,12 +1351,12 @@ class BoxKeyPlot(WorkspacePlot):
             Scaling factor to adjust the size of the final figure.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
-        super(BoxKeyPlot, self).__init__(ws, self._create, prep_strs, effect_strs,
+        super(BoxKeyPlot, self).__init__(ws, self._create, prep_fiducials, meas_fiducials,
                                          xlabel, ylabel, scale)
 
         #size, save_to,
 
-    def _create(self, prep_strs, effect_strs, xlabel, ylabel, scale):
+    def _create(self, prep_fiducials, meas_fiducials, xlabel, ylabel, scale):
 
         #Copied from generate_boxplot
         def val_filter(vals):
@@ -1338,8 +1374,8 @@ class BoxKeyPlot(WorkspacePlot):
                     formatted_vals.append(str(val))
             return formatted_vals
 
-        nX = len(prep_strs)
-        nY = len(effect_strs)
+        nX = len(prep_fiducials)
+        nY = len(meas_fiducials)
         trace = go.Heatmap(z=_np.zeros((nY, nX), 'd'),
                            colorscale=[[0, 'white'], [1, 'black']],
                            showscale=False, zmin=0, zmax=1, hoverinfo='none')
@@ -1382,8 +1418,8 @@ class BoxKeyPlot(WorkspacePlot):
                 mirror=True,
                 ticks="",
                 linewidth=2,
-                ticktext=val_filter(prep_strs),
-                tickvals=[i for i in range(len(prep_strs))],
+                ticktext=val_filter(prep_fiducials),
+                tickvals=[i for i in range(len(prep_fiducials))],
                 tickangle=90
             ),
             yaxis=dict(
@@ -1395,8 +1431,8 @@ class BoxKeyPlot(WorkspacePlot):
                 mirror=True,
                 ticks="",
                 linewidth=2,
-                ticktext=list(reversed(val_filter(effect_strs))),
-                tickvals=[i for i in range(len(effect_strs))],
+                ticktext=list(reversed(val_filter(meas_fiducials))),
+                tickvals=[i for i in range(len(meas_fiducials))],
             ),
             shapes=gridlines,
             annotations=[
@@ -1423,13 +1459,112 @@ class BoxKeyPlot(WorkspacePlot):
         # margin = go_margin(l=50,r=50,b=50,t=50) #pad=0
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, "No data in box key plot!",
-                            special='keyplot', args=(prep_strs, effect_strs, xlabel, ylabel))
+                            special='keyplot', args=(prep_fiducials, meas_fiducials, xlabel, ylabel))
 
 
 class ColorBoxPlot(WorkspacePlot):
     """
-    Plot of colored boxes arranged into plaquettes showing various quanties
-    for each gate sequence in an analysis.
+    Plot of colored boxes arranged into plaquettes showing various quanties for each circuit in an analysis.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
+                "driftdetector", "driftsize"}
+        Specifies the type of plot. "errorate" requires that
+        `direct_gst_models` be set.
+
+    circuit_list : BulkCircuitList or list of Circuits
+        Specifies the set of circuits, usually along with their structure, e.g.
+        fiducials, germs, and maximum lengths.
+
+    dataset : DataSet
+        The data used to specify frequencies and counts.
+
+    model : Model
+        The model used to specify the probabilities and SPAM labels.
+
+    sum_up : bool, optional
+        False displays each matrix element as it's own color box
+        True sums the elements of each (x,y) matrix and displays
+        a single color box for the sum.
+
+    box_labels : bool, optional
+        Whether box labels are displayed.  It takes much longer to
+        generate the figure when this is set to True.
+
+    hover_info : bool, optional
+        Whether to include interactive hover labels.
+
+    invert : bool, optional
+        If True, invert the nesting order of the color box plot (applicable
+        only when sum_up == False).
+
+    prec : int, optional
+        Precision for box labels.  Allowed values are:
+          'compact' = round to nearest whole number using at most 3 characters
+          'compacthp' = show as much precision as possible using at most 3 characters
+          int >= 0 = fixed precision given by int
+          int <  0 = number of significant figures given by -int
+
+    linlg_pcntle : float, optional
+        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
+
+    direct_gst_models : dict, optional
+        A dictionary of "direct" Models used when displaying certain plot
+        types.  Keys are operation sequences and values are corresponding gate
+        sets (see `plottype` above).
+
+    dscomparator : DataComparator, optional
+        The data set comparator used to produce the "dscmp" plot type.
+
+    stabilityanalyzer : StabilityAnalyzer or 3-tuple, optional
+        Only used to produce the "driftdetector" and "driftsize" boxplot. If a StabilityAnalyzer, then
+        this contains the results of the drift / stability analysis to be displayed.
+        For non-expert users, this is the best option. If a tuple, then the first
+        element of the tuple is this StabilityAnalyzer object,
+        and the second and third elements of the tuple label which instability detection
+        results to display (a StabilityAnalyzer can contain multiple distinct tests for
+        instability). The second element is the "detectorkey", which can be None (the
+        default), or a string specifying which of the drift detection results to use for
+        the plot. If it is None, then the default set of results are used. The third element
+        of the tuple is either None, or a tuple that specifies which "level" of tests to
+        use from the drift detection run (specified by the detectorkey), e.g., per-circuit
+        with outcomes averaged or per-circuit per-outcome.
+
+    submatrices : dict, optional
+        A dictionary whose keys correspond to other potential plot
+        types and whose values are each a list-of-lists of the sub
+        matrices to plot, corresponding to the used x and y values
+        of the structure of `circuit_list`.
+
+    typ : {"boxes","scatter","histogram"}
+        Which type of plot to make: the standard grid of "boxes", a
+        "scatter" plot of the values vs. sequence length, or a "histogram"
+        of all the values.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function that increases
+        the goodness of fit by adjusting (by an amount measured in TVD) the
+        probabilities produced by `model` before comparing with the
+        frequencies in `dataset`.  Currently, this functionality is only
+        supported for `plottype == "logl"`.
+
+    colorbar : bool, optional
+        Whether to include a colorbar.
+
+    bgcolor : str, optional
+        Background color for this plot.  Can be common color names, e.g.
+        `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
     """
 
     def __init__(self, ws, plottype, circuit_list, dataset, model,
@@ -1980,8 +2115,63 @@ def _addl_mx_fn_outcomes(plaq, x, y, extra):
 #                        title=None, box_labels=False, prec=0, mxBasisDimsY=None):
 class GateMatrixPlot(WorkspacePlot):
     """
-    Plot of a operation matrix using colored boxes.  More specific than MatrixPlot
-    because of basis formatting for x and y labels.
+    Plot of a operation matrix using colored boxes.
+
+    More specific than :class:`MatrixPlot` because of basis formatting
+    for x and y labels.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    op_matrix : ndarray
+      The operation matrix data to display.
+
+    color_min : float, optional
+      Minimum value of the color scale.
+
+    color_max : float, optional
+      Maximum value of the color scale.
+
+    mx_basis : str or Basis object, optional
+        The basis, often of `op_matrix`, used to create the x-labels (and
+        y-labels when `mx_basis_y` is None). Typically in {"pp","gm","std","qt"}.
+        If you don't want labels, leave as None.
+
+    xlabel : str, optional
+        A x-axis label for the plot.
+
+    ylabel : str, optional
+        A y-axis label for the plot.
+
+    box_labels : bool, optional
+        Whether box labels are displayed.
+
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `box_labels == False`.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when box_labels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    mx_basis_y : str or Basis object, optional
+        The basis, used to create the y-labels (for rows) when these are
+        *different* from the x-labels.  Typically in
+        {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    eb_matrix : numpy array, optional
+        An array, of the same size as `op_matrix`, which gives error bars to be
+        be displayed in the hover info.
     """
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
 
@@ -1998,28 +2188,28 @@ class GateMatrixPlot(WorkspacePlot):
         Parameters
         ----------
         op_matrix : ndarray
-          The operation matrix data to display.
+            The operation matrix data to display.
 
         color_min, color_max : float, optional
-          Min and max values of the color scale.
+            Min and max values of the color scale.
 
         mx_basis : str or Basis object, optional
-          The basis, often of `op_matrix`, used to create the x-labels (and
-          y-labels when `mx_basis_y` is None). Typically in {"pp","gm","std","qt"}.
-          If you don't want labels, leave as None.
+            The basis, often of `op_matrix`, used to create the x-labels (and
+            y-labels when `mx_basis_y` is None). Typically in {"pp","gm","std","qt"}.
+            If you don't want labels, leave as None.
 
         xlabel : str, optional
-          An x-axis label for the plot.
+            A x-axis label for the plot.
 
         ylabel : str, optional
-          A y-axis label for the plot.
+            A y-axis label for the plot.
 
         box_labels : bool, optional
-          Whether box labels are displayed.
+            Whether box labels are displayed.
 
         colorbar : bool optional
-          Whether to display a color bar to the right of the box plot.  If None,
-          then a colorbar is displayed when `box_labels == False`.
+            Whether to display a color bar to the right of the box plot.  If None,
+            then a colorbar is displayed when `box_labels == False`.
 
         prec : int or {'compact','compacthp'}, optional
             Precision for box labels.  Only relevant when box_labels == True. Allowed
@@ -2031,9 +2221,9 @@ class GateMatrixPlot(WorkspacePlot):
             - int <  0 = number of significant figures given by -int
 
         mx_basis_y : str or Basis object, optional
-          The basis, used to create the y-labels (for rows) when these are
-          *different* from the x-labels.  Typically in
-          {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
+            The basis, used to create the y-labels (for rows) when these are
+            *different* from the x-labels.  Typically in
+            {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
@@ -2056,7 +2246,63 @@ class GateMatrixPlot(WorkspacePlot):
 
 
 class MatrixPlot(WorkspacePlot):
-    """ Plot of a general matrix using colored boxes """
+    """
+    Plot of a general matrix using colored boxes
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    matrix : ndarray
+      The operation matrix data to display.
+
+    color_min : float
+        Color scale minimum.
+
+    color_max : float
+        Color scale maximum.
+
+    xlabels : list, optional
+        List of (str) box labels along the x-axis.
+
+    ylabels : list, optional
+        List of (str) box labels along the y-axis.
+
+    xlabel : str, optional
+        A x-axis label for the plot.
+
+    ylabel : str, optional
+        A y-axis label for the plot.
+
+    box_labels : bool, optional
+        Whether box labels are displayed.
+
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `box_labels == False`.
+
+    colormap : Colormap, optional
+        A color map object used to convert the numerical matrix values into
+        colors.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when box_labels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    grid : {"white","black",None}
+        What color grid lines, if any, to add to the plot.  Advanced usage
+        allows the addition of `:N` where `N` is an integer giving the line
+        width.
+    """
 
     def __init__(self, ws, matrix, color_min=-1.0, color_max=1.0,
                  xlabels=None, ylabels=None, xlabel=None, ylabel=None,
@@ -2071,30 +2317,30 @@ class MatrixPlot(WorkspacePlot):
         Parameters
         ----------
         matrix : ndarray
-          The operation matrix data to display.
+            The operation matrix data to display.
 
         color_min, color_max : float, optional
-          Min and max values of the color scale.
+            Min and max values of the color scale.
 
         xlabels, ylabels: list, optional
-          List of (str) box labels for each axis.
+            List of (str) box labels for each axis.
 
         xlabel : str, optional
-          An x-axis label for the plot.
+            A x-axis label for the plot.
 
         ylabel : str, optional
-          A y-axis label for the plot.
+            A y-axis label for the plot.
 
         box_labels : bool, optional
-          Whether box labels are displayed.
+            Whether box labels are displayed.
 
         colorbar : bool optional
-          Whether to display a color bar to the right of the box plot.  If None,
-          then a colorbar is displayed when `box_labels == False`.
+            Whether to display a color bar to the right of the box plot.  If None,
+            then a colorbar is displayed when `box_labels == False`.
 
         colormap : Colormap, optional
-          An a color map object used to convert the numerical matrix values into
-          colors.
+            A color map object used to convert the numerical matrix values into
+            colors.
 
         prec : int or {'compact','compacthp'}, optional
             Precision for box labels.  Only relevant when box_labels == True. Allowed
@@ -2137,7 +2383,40 @@ class MatrixPlot(WorkspacePlot):
 #    rel_evals10 = rel_evals**10
 
 class PolarEigenvaluePlot(WorkspacePlot):
-    """ Polar plot of complex eigenvalues """
+    """
+    Polar plot of complex eigenvalues
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    evals_list : list
+        A list of eigenvalue arrays to display.
+
+    colors : list
+        A corresponding list of color names to use for arrays given
+        by `evals_list` (must have `len(colors) == len(evals_list)`).
+        Colors can be standard names, e.g. `"blue"`, or rgb strings
+        such as `"rgb(23,92,64)"`.
+
+    labels : list, optional
+        A list of labels, one for each element of `evals_list` to be
+        placed in the plot legend.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    amp : float, optional
+        An amount to amplify (raise to the exponent `amp`) each set of
+        eigenvalues.  (Amplified eigenvalues are shown in the same color
+        but with smaller markers.) If `amp` is None, no amplification is
+        performed.
+
+    center_text : str, optional
+        Text to be placed at the very center of the polar plot (sometimes
+        useful to use as a title).
+    """
 
     def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=None,
                  center_text=None):
@@ -2278,7 +2557,60 @@ class PolarEigenvaluePlot(WorkspacePlot):
 
 
 class ProjectionsBoxPlot(WorkspacePlot):
-    """ Plot of matrix of (usually error-generator) projections """
+    """
+    Plot of matrix of (usually error-generator) projections
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    projections : ndarray
+        A 1-dimensional array of length equal to the numer of elements in
+        the given basis (usually equal to the gate dimension).  Ordering of
+        the values is assumed to correspond to the ordering given by the
+        routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when
+        `projection_basis` equals "pp").
+
+    projection_basis : {'std', 'gm', 'pp', 'qt'}
+        The basis is used to construct the error generators onto which
+        the gate  error generator is projected.  Allowed values are
+        Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+
+    color_min : float, optional
+        Minimum value of the color scale. If None, then computed
+        automatically from the data range.
+
+    color_max : float, optional
+        Maximum value of the color scale. If None, then computed
+        automatically from the data range.
+
+    box_labels : bool, optional
+        Whether box labels are displayed.
+
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `box_labels == False`.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when box_labels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    eb_matrix : numpy array, optional
+        An array, of the same size as `projections`, which gives error bars to be
+        be displayed in the hover info.
+
+    title : str, optional
+        A title for the plot
+    """
 
     def __init__(self, ws, projections, projection_basis, color_min=None, color_max=None,
                  box_labels=False, colorbar=None, prec="compacthp", scale=1.0,
@@ -2412,7 +2744,24 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # xlabel="index", ylabel="Re[eigenvalue]", title=None
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
-    """ Bar plot of eigenvalues showing red bars for negative values """
+    """
+    Bar plot of eigenvalues showing red bars for negative values
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    evals : ndarray
+       An array containing the eigenvalues to plot.
+
+    errbars : ndarray, optional
+       An array containing the lengths of the error bars
+       to place on each bar of the plot.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+    """
 
     def __init__(self, ws, evals, errbars=None, scale=1.0):
         """
@@ -2498,7 +2847,34 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
 
 
 class GramMatrixBarPlot(WorkspacePlot):
-    """ Bar plot of Gram matrix eigenvalues stacked against those of target """
+    """
+    Bar plot of Gram matrix eigenvalues stacked against those of target
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    dataset : DataSet
+        The DataSet
+
+    target : Model
+        A target model which is used for it's mapping of SPAM labels to
+        SPAM specifiers and for Gram matrix comparision.
+
+    maxlen : integer, optional
+        The maximum length string used when searching for the
+        maximal (best) Gram matrix.  It's useful to make this
+        at least twice the maximum length fiducial sequence.
+
+    fixed_lists : (prep_fiducials, meas_fiducials), optional
+        2-tuple of operation sequence lists, specifying the preparation and
+        measurement fiducials to use when constructing the Gram matrix,
+        and thereby bypassing the search for such lists.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+    """
 
     def __init__(self, ws, dataset, target, maxlen=10,
                  fixed_lists=None, scale=1.0):
@@ -2520,7 +2896,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             maximal (best) Gram matrix.  It's useful to make this
             at least twice the maximum length fiducial sequence.
 
-        fixed_lists : (prep_strs, effect_strs), optional
+        fixed_lists : (prep_fiducials, meas_fiducials), optional
             2-tuple of operation sequence lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.
@@ -2588,8 +2964,55 @@ class GramMatrixBarPlot(WorkspacePlot):
 
 
 class FitComparisonBarPlot(WorkspacePlot):
-    """ Bar plot showing the overall (aggregate) goodness of fit
-        (along one dimension)"""
+    """
+    Bar plot showing the overall (aggregate) goodness of fit (along one dimension).
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    x_names : list
+        List of x-values. Typically these are the integer maximum lengths or
+        exponents used to index the different iterations of GST, but they
+        can also be strings.
+
+    circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+        Specifies the set of circuits used at each x-value.
+
+    model_by_x : list of Models
+        `Model`s corresponding to each x-value.
+
+    dataset_by_x : DataSet or list of DataSets
+        The data sets to compare each model against.  If a single
+        :class:`DataSet` is given, then it is used for all comparisons.
+
+    objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+        The objective function to use, or one of the given strings
+        to use a defaut log-likelihood or chi^2 function.
+
+    x_label : str, optional
+        A label for the 'x' variable which indexes the different models.
+        This string will be the x-label of the resulting bar plot.
+
+    np_by_x : list of ints, optional
+        A list of parameter counts to use for each x.  If None, then
+        the number of non-gauge parameters for each model is used.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function (`objective`),
+        which increases the goodness of fit by adjusting (by an amount
+        measured in TVD) the probabilities produced by a model before
+        comparing with the frequencies in `dataset`.  Currently, this
+        functionality is only supported for `objective == "logl"`.
+    """
 
     def __init__(self, ws, x_names, circuits_by_x, model_by_x, dataset_by_x,
                  objfn_builder="logl", x_label='L', np_by_x=None, scale=1.0,
@@ -2744,8 +3167,57 @@ class FitComparisonBarPlot(WorkspacePlot):
 
 
 class FitComparisonBoxPlot(WorkspacePlot):
-    """ Box plot showing the overall (aggregate) goodness of fit
-        (along 2 dimensions)"""
+    """
+    Box plot showing the overall (aggregate) goodness of fit (along 2 dimensions).
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    xs : list
+        List of X-values (converted to strings).
+
+    ys : list
+        List of Y-values (converted to strings).
+
+    circuits_by_y_then_x : list of lists of LsGermsStructure objects
+        Specifies the circuits used at each Y and X value, indexed as
+        `circuits_by_y_then_x[iY][iX]`, where `iX` and `iY`
+        are X and Y indices, respectively.
+
+    model_by_y_then_x : list of lists of Models
+        `Model`s corresponding to each X and Y value.
+
+    dataset_by_y_then_x : list of lists of DataSets
+        `DataSet`s corresponding to each X and Y value.
+
+    objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+        The objective function to use, or one of the given strings
+        to use a defaut log-likelihood or chi^2 function.
+
+    x_label : str, optional
+        Label for the 'X' variable which indexes different models.
+        This string will be the x-label of the resulting box plot.
+
+    y_label : str, optional
+        Label for the 'Y' variable which indexes different models.
+        This string will be the y-label of the resulting box plot.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function (`objective`),
+        which increases the goodness of fit by adjusting (by an amount
+        measured in TVD) the probabilities produced by a model before
+        comparing with the frequencies in `dataset`.  Currently, this
+        functionality is only supported for `objective == "logl"`.
+    """
 
     def __init__(self, ws, xs, ys, circuits_by_y_then_x, model_by_y_then_x, dataset_by_y_then_x,
                  objfn_builder="logl", x_label=None, y_label=None, scale=1.0, comm=None,
@@ -2835,7 +3307,44 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):
-    """ A grid of grayscale boxes comparing data sets pair-wise."""
+    """
+    A grid of grayscale boxes comparing data sets pair-wise.
+
+    This class creates a plot showing the total 2*deltaLogL values for each
+    pair of :class:`DataSet`s out of some number of total `DataSet`s.
+
+    Background: For every pair of data sets, the likelihood is computed for
+    two different models: 1) the model in which a single set of
+    probabilities (one per gate sequence, obtained by the combined outcome
+    frequencies) generates both data sets, and 2) the model in which each
+    data is generated from different sets of probabilities.  Twice the ratio
+    of these log-likelihoods can be compared to the value that is expected
+    when model 1) is valid.  This plot shows the difference between the
+    expected and actual twice-log-likelihood ratio in units of standard
+    deviations.  Zero or negative values indicate the data sets appear to be
+    generated by the same underlying probabilities.  Large positive values
+    indicate the data sets appear to be generated by different underlying
+    probabilities.
+
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    dslabels : list
+        A list of data set labels, specifying the ordering and the number
+        of data sets.
+
+    dsc_dict : dict
+        A dictionary of `DataComparator` objects whose keys are 2-tuples of
+        integers such that the value associated with `(i,j)` is a
+        `DataComparator` object that compares the `i`-th and `j`-th data
+        sets (as indexed by `dslabels`.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+    """
 
     def __init__(self, ws, dslabels, dsc_dict, scale=1.0):
         """
@@ -2942,7 +3451,33 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
 
 
 class DatasetComparisonHistogramPlot(WorkspacePlot):
-    """ Histogram of p-values comparing two data sets """
+    """
+    Histogram of p-values comparing two data sets
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    dsc : DataComparator
+        The data set comparator, which holds and compares the datasets.
+
+    nbins : int, optional
+        Bins in the histogram.
+
+    frequency : bool, optional
+        Whether the frequencies (instead of the counts) are used.
+        TODO: more detail.
+
+    log : bool, optional
+        Whether to set a log-scale on the x-axis or not.
+
+    display : {'pvalue', 'llr'}, optional
+        What quantity to display (in histogram).
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+    """
 
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                  log=True, display='pvalue', scale=1.0):
@@ -3077,7 +3612,51 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
-    """ Plot of RB Decay curve """
+    """
+    Plot of RB Decay curve
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    rb_r : RandomizedBenchmarkingResults
+        The RB results object containing all the relevant RB data.
+
+    fitkey : dict key, optional
+        The key of the self.fits dictionary to plot the fit for. If None, will
+        look for a 'full' key (the key for a full fit to A + Bp^m if the standard
+        analysis functions are used) and plot this if possible. It otherwise checks
+        that there is only one key in the dict and defaults to this. If there are
+        multiple keys and none of them are 'full', `fitkey` must be specified when
+        `decay` is True.
+
+    decay : bool, optional
+        Whether to plot a fit, or just the data.
+
+    success_probabilities : bool, optional
+        Whether to plot the success probabilities distribution, as a
+        "box & whisker" plot.
+
+    ylim : tuple, optional
+        The y limits for the figure.
+
+    xlim : tuple, optional
+        The x limits for the figure.
+
+    showpts : bool, optional
+        When `success_probabilities == True`, whether individual points
+        should be shown along with a "box & whisker".
+
+    legend : bool, optional
+        Whether to show a legend.
+
+    title : str, optional
+        A title to put on the figure.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+    """
 
     def __init__(self, ws, rb_r, fitkey=None, decay=True,
                  success_probabilities=True, ylim=None, xlim=None,

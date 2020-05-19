@@ -1,4 +1,6 @@
-""" Optimization (minimization) functions """
+"""
+Optimization (minimization) functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -336,7 +338,8 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
 def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     """
     A simple implementation of the Particle Swarm Optimization Algorithm.
-    Pradeep Gowda 2009-03-16
+
+    (Pradeep Gowda 2009-03-16)
 
     Parameters
     ----------
@@ -517,7 +520,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 
     Parameters
     ----------
-    fn : function
+    f : function
         The function to minimize.
 
     x0 : numpy array
@@ -531,7 +534,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         The number of individuals in each generation.  More individuals
         make finding the global optimum more likely, but take longer
         to run.
-
 
     Returns
     -------
@@ -720,7 +722,7 @@ def create_obj_func_printer(obj_func, start_time=None):
     obj_func : function
         The objective function to print.
 
-    start_time : float (optional)
+    start_time : float , optional
         A reference starting time to use when printing elapsed times. If None,
         then the system time when this function is called is used (which is
         often what you want).
@@ -790,6 +792,9 @@ def check_jac(f, x0, jac_to_check, eps=1e-10, tol=1e-6, err_type='rel',
         The allowd tolerance on the relative differene between the
         values of the finite difference and jac_to_check jacobians
         if err_type == 'rel' or the absolute difference if err_type == 'abs'.
+
+    err_type : {'rel', 'abs'), optional
+        How to interpret `tol` (see above).
 
     verbosity : int, optional
         Controls how much detail is printed to stdout.
