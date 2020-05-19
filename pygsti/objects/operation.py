@@ -931,7 +931,7 @@ class LinearOperator(_modelmember.ModelMember):
                 inv_transform, _np.dot(self.todense(), transform)),
                 other_op.todense())
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -957,7 +957,7 @@ class LinearOperator(_modelmember.ModelMember):
         Si = s.get_transform_matrix_inverse()
         self.set_value(_np.dot(Si, _np.dot(self.todense(), Smx)))
 
-    def depolarize(self, amount):  #INPLACE
+    def depolarize(self, amount):
         """
         Depolarize this operation by the given `amount`.
 
@@ -989,7 +989,7 @@ class LinearOperator(_modelmember.ModelMember):
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
         self.set_value(_np.dot(D, self.todense()))
 
-    def rotate(self, amount, mx_basis="gm"):  #INPLACE
+    def rotate(self, amount, mx_basis="gm"):
         """
         Rotate this operation by the given `amount`.
 
@@ -4196,7 +4196,7 @@ class LindbladOp(LinearOperator):
         self._update_rep()
         self.dirty = True
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -4239,7 +4239,7 @@ class LindbladOp(LinearOperator):
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(s)))
 
-    def spam_transform(self, s, typ):  #INPLACE
+    def spam_transform(self, s, typ):
         """
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 
@@ -5298,7 +5298,7 @@ class ComposedOp(LinearOperator):
         """
         return any([op.has_nonzero_hessian() for op in self.factorops])
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -6160,7 +6160,7 @@ class EmbeddedOp(LinearOperator):
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
         return derivMx  # Note: wrt_filter has already been applied above
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -7152,7 +7152,7 @@ class ComposedErrorgen(LinearOperator):
             eg.from_vector(v[factor_local_inds], close, nodirty)
         if not nodirty: self.dirty = True
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -8755,7 +8755,7 @@ class LindbladErrorgen(LinearOperator):
         """
         self.set_coeffs(lindblad_term_dict, action, logscale_nonham=True)
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update error generator E with inv(s) * E * s,
 
@@ -8795,7 +8795,7 @@ class LindbladErrorgen(LinearOperator):
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
                              % str(type(s)))
 
-    def spam_transform(self, s, typ):  #INPLACE
+    def spam_transform(self, s, typ):
         """
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 

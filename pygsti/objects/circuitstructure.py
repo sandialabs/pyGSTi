@@ -144,7 +144,7 @@ class CircuitPlaquette(object):
         """
         return [s for i, j, s in self.elements]
 
-    def simplify_circuits(self, model, dataset=None):  #INPLACE
+    def simplify_circuits(self, model, dataset=None):
         """
         Simplify the circuits in this plaquette.
 

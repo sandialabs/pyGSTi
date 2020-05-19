@@ -37,7 +37,7 @@ class NamedDict(dict):
     valname : str, optional
         A category name for the keys of this dict. This becomse a column header
         if this dict is converted to a data frame.
-        
+
     valtype : {"float", "int", "categor", None}, optional
         The value-type, in correspondence with different pandas series types.
 

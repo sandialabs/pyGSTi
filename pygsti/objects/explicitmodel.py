@@ -791,7 +791,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().get_nongauge_projector(item_weights, non_gauge_mix_mx)
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Gauge transform this model.
 

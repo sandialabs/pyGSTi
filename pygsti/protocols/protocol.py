@@ -2148,9 +2148,8 @@ class ProtocolPostProcessor(object):
 # the classes that utilize it above, so it would become a proper method.
 def _convert_nameddict_attributes(obj):
     """
-    A helper function that converts the elements of the 
-    "_nameddict_attributes" attribute of several classes to
-    the (key, value, type) array expected by 
+    A helper function that converts the elements of the "_nameddict_attributes"
+    attribute of several classes to the (key, value, type) array expected by
     :method:`NamedDict.create_nested`.
     """
     keys_vals_types = []
@@ -2181,7 +2180,7 @@ def _reset_index(df):
 def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
     """ See as_dataframe docstrings for argument descriptions. """
     if drop_columns:
-        if drop_columns is True:  drop_columns = (True,)
+        if drop_columns is True: drop_columns = (True,)
         for col in drop_columns:
             df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
 

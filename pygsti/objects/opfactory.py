@@ -220,7 +220,7 @@ class OpFactory(_gm.ModelMember):
         else:
             return op
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update OpFactory so that created ops `O` are additionally transformed as `inv(s) * O * s`.
 

@@ -309,7 +309,7 @@ class MapEvalTree(EvalTree):
             #Remove references to iMin element
             self._remove_from_cache(iMinTree)
 
-    def trim_nonfinal_els(self):  #INPLACE
+    def trim_nonfinal_els(self):
         """
         Removes from this tree all non-final elements (to facilitate computation sometimes).
 

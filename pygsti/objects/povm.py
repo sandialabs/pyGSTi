@@ -254,7 +254,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == 0)  # should be no parameters
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update each POVM effect E as s^T * E.
 
@@ -1364,7 +1364,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         self.error_map.from_vector(v, close, nodirty)
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update each POVM effect E as s^T * E.
 

@@ -1601,7 +1601,7 @@ class Circuit(object):
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth()),
                                 subc.sslbls)  # dump in the contents
 
-    def factorize_repetitions(self):  #INPLACE
+    def factorize_repetitions(self):
         """
         Attempt to replace repeated sub-circuits with :class:`CircuitLabel` objects.
 
@@ -2276,7 +2276,7 @@ class Circuit(object):
         self._line_labels = tuple([x for x in self.line_labels
                                    if x in all_sslbls])  # preserve order
 
-    def replace_with_idling_line(self, line_label, clear_straddlers=True):  #INPLACE
+    def replace_with_idling_line(self, line_label, clear_straddlers=True):
         """
         Converts the specified line to an idling line, by removing all its gates.
 
@@ -2299,7 +2299,7 @@ class Circuit(object):
         """
         self.clear_labels(lines=line_label, clear_straddlers=clear_straddlers)
 
-    def reverse(self):  #INPLACE
+    def reverse(self):
         """
         Reverses the order of the circuit.
 
@@ -2311,7 +2311,7 @@ class Circuit(object):
         self._labels = list(reversed(self._labels))  # reverses the layer order
         #FUTURE: would need to reverse each layer too, if layer can have *sublayers*
 
-    def combine_one_q_gates(self, one_q_gate_relations):  #INPLACE
+    def combine_one_q_gates(self, one_q_gate_relations):
         """
         Compresses sequences of 1-qubit gates in the circuit, using the provided gate relations.
 
@@ -2407,7 +2407,7 @@ class Circuit(object):
         # returns the flag that tells us whether the algorithm achieved anything.
         return compression_implemented
 
-    def shift_gates_forward(self):  #INPLACE
+    def shift_gates_forward(self):
         """
         Shift all gates forward (left) as far as is possible.
 
@@ -2459,7 +2459,7 @@ class Circuit(object):
         # Only return the bool if requested
         return compression_implemented
 
-    def delete_idle_layers(self):  #INPLACE
+    def delete_idle_layers(self):
         """
         Deletes all layers in this circuit that contain no gate operations.
 
@@ -2481,7 +2481,7 @@ class Circuit(object):
 
         return bool(len(inds_to_remove) > 0)  # whether compression was implemented
 
-    def compress_depth(self, one_q_gate_relations=None, verbosity=0):  #INPLACE
+    def compress_depth(self, one_q_gate_relations=None, verbosity=0):
         """
         Compresses the depth of this circuit using very simple re-write rules.
 

@@ -286,7 +286,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
@@ -622,7 +622,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
 
-    def transform(self, s):  #INPLACE
+    def transform(self, s):
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 

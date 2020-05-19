@@ -721,7 +721,7 @@ class SPAMVec(_modelmember.ModelMember):
                 return _gt.residuals(_np.dot(_np.transpose(transform),
                                              vec), other_spam_vec.todense())
 
-    def transform(self, s, typ):  #INPLACE
+    def transform(self, s, typ):
         """
         Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 
@@ -3618,7 +3618,7 @@ class LindbladSPAMVec(SPAMVec):
         self._update_rep()
         if not nodirty: self.dirty = True
 
-    def transform(self, s, typ):  #INPLACE
+    def transform(self, s, typ):
         """
         Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 

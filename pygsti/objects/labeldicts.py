@@ -684,7 +684,7 @@ class StateSpaceLabels(object):
 
         self.dim = sum(self.tpb_dims)
 
-    def reduce_dims_densitymx_to_state(self):  #INPLACE
+    def reduce_dims_densitymx_to_state(self):
         """
         Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector representation.
 

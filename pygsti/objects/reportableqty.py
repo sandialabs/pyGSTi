@@ -394,7 +394,7 @@ class ReportableQty(object):
         """
         return self.errbar is not None
 
-    def scale(self, factor):  #INPLACE
+    def scale(self, factor):
         """
         Scale the value and error bar (if present) by `factor`.
 

@@ -704,7 +704,7 @@ class DataSetRow(object):
         return _np.array(times, self.dataset.timeType), \
             _np.array(counts, self.dataset.repType)
 
-    def scale(self, factor):  #INPLACE
+    def scale(self, factor):
         """
         Scales all the counts of this row by the given factor
 
@@ -1985,7 +1985,7 @@ class DataSet(object):
 
         return True
 
-    def totalcounts_pertime(self):  #PROPERTY
+    def totalcounts_pertime(self):
         """
         Total counts per time, if this is constant over times and circuits.
 
@@ -2001,7 +2001,7 @@ class DataSet(object):
 
         return totalcountspertime
 
-    def has_constant_totalcounts(self):  #PROPERTY?
+    def has_constant_totalcounts(self):
         """
         `True` if the data for every circuit has the same number of total counts.
 
@@ -2017,7 +2017,7 @@ class DataSet(object):
 
         return fixedtotalcounts
 
-    def has_trivial_timedependence(self):  #PROPERTY?
+    def has_trivial_timedependence(self):
         """
         `True` if all the data in this DataSet occurs at time 0.
 
