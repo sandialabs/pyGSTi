@@ -11,6 +11,7 @@ Protocol object
 #***************************************************************************************************
 import numpy as _np
 import itertools as _itertools
+import os as _os
 import copy as _copy
 import json as _json
 import pickle as _pickle
@@ -49,6 +50,10 @@ class Protocol(object):
         """
         Initialize a new Protocol object from `dirname`.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
         Parameters
         ----------
         dirname : str
@@ -86,7 +91,7 @@ class Protocol(object):
         self.name = name if name else self.__class__.__name__
         self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
         self.auxfile_types = {}
-        self._nameddict_attributes = ()  # (('name', 'Protocol Name', 'category'),) implied in setup_nameddict
+        self._nameddict_attributes = ()  # (('name', 'ProtocolName', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -147,22 +152,11 @@ class Protocol(object):
         -------
         NamedDict
         """
-        ret = _NamedDict('Protocol Name', 'category'); tail = ret
-        attr_val = self.name
-
-        tail[attr_val] = _NamedDict('Protocol Type', 'category'); tail = tail[attr_val]
-        attr_val = self.__class__.__name__
-
-        for next_attr, *ndargs in self._nameddict_attributes:
-            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
-            attr_val = getattr(self, next_attr)
-
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-
-        tail[attr_val] = final_dict
-        return ret
+        keys_vals_types = [('ProtocolName', self.name, 'category'),
+                           ('ProtocolType', self.__class__.__name__, 'category')]
+        keys_vals_types.extend(_convert_nameddict_attributes(self))
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
 
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
@@ -583,10 +577,14 @@ class ExperimentDesign(_TreeNode):
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
         ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
+
         return ret
 
     def __init__(self, circuits=None, qubit_labels=None,
-                 children=None, children_dirs=None, child_category=None):
+                 children=None, children_dirs=None):
         """
         Create a new ExperimentDesign object, which holds a set of circuits (needing data).
 
@@ -615,10 +613,6 @@ class ExperimentDesign(_TreeNode):
             names.  Directory names are used when saving the object (via
             :method:`write`).
 
-        child_category : str, optional
-            The category that describes the children of this object.  This
-            is used as a heading for the keys of `children`.
-
         Returns
         -------
         ExperimentDesign
@@ -628,7 +622,7 @@ class ExperimentDesign(_TreeNode):
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
         self.tags = {}
-        self._nameddict_attributes = ()
+        self._nameddict_attributes = (('qubit_labels', 'Qubits', 'category'),)
         self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
@@ -643,7 +637,7 @@ class ExperimentDesign(_TreeNode):
                               'default_protocols': 'dict-of-protocolobjs'}
 
         # because TreeNode takes care of its own serialization:
-        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none', '_loaded_from': 'none'})
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
             if children:
@@ -673,7 +667,7 @@ class ExperimentDesign(_TreeNode):
             {subname: auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
-        super().__init__(children_dirs, children, child_category)
+        super().__init__(children_dirs, children)
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
@@ -772,17 +766,9 @@ class ExperimentDesign(_TreeNode):
         -------
         NamedDict
         """
-        head = tail = {}; attr_val = None
-        for next_attr, *ndargs in self._nameddict_attributes:
-            tail[attr_val] = _NamedDict(*ndargs); tail = tail[attr_val]
-            attr_val = getattr(self, next_attr)
-
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-
-        tail[attr_val] = final_dict
-        return head[None]
+        keys_vals_types = _convert_nameddict_attributes(self)
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
 
     #PRIVATE
     def create_subdata(self, subdata_name, dataset):
@@ -961,14 +947,10 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
     interleave : bool, optional
         Whether the circuits of the `sub_designs` should be interleaved to
         form the circuit ordering of this experiment design.
-
-    category : str, optional
-        The category that describes the sub-edesigns of this object.  This
-        is used as a heading for the keys of `sub_designs`.
     """
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
-                 interleave=False, category='EdesignBranch'):
+                 interleave=False):
         """
         Create a new CombinedExperimentDesign object.
 
@@ -1001,10 +983,6 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             Whether the circuits of the `sub_designs` should be interleaved to
             form the circuit ordering of this experiment design.
 
-        category : str, optional
-            The category that describes the sub-edesigns of this object.  This
-            is used as a heading for the keys of `sub_designs`.
-
         Returns
         -------
         CombinedExperimentDesign
@@ -1029,7 +1007,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             else:
                 qubit_labels = first
 
-        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
     #PRIVATE
     def create_subdata(self, sub_name, dataset):
@@ -1099,7 +1077,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
     # based on qubits, then copy (?) template edesign and just replace itself
     # all_circuits_needing_data member?
 
-    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='Qubits'):
+    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None):
         """
         Create a new SimultaneousExperimentDesign object.
 
@@ -1118,10 +1096,6 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             The qubits that this experiment design applies to. If None, the
             concatenated qubit labels of `edesigns` are used (this is usually
             what you want).
-
-        category : str, optional
-            The category name for the qubit-label-tuples correspoding to the
-            elements of `edesigns`.
 
         Returns
         -------
@@ -1176,7 +1150,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
         sub_designs = {des.qubit_labels: des for des in edesigns}
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
-        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
     def create_subdata(self, qubit_labels, dataset):
         """
@@ -1311,9 +1285,13 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+                # Note: setting with_times and ignore_zero_count_lines allows proper loading of circuits without data,
+                #  but we may want to update this in the future so we can load time-dependent data.
+                dataset = _io.load_dataset(dataset_files[0], with_times=False, ignore_zero_count_lines=False,
+                                           verbosity=0)
             else:
-                dataset = {pth.stem: _io.load_dataset(pth, verbosity=0) for pth in dataset_files}
+                dataset = {pth.stem: _io.load_dataset(pth, with_times=False, ignore_zero_count_lines=False, verbosity=0)
+                           for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
@@ -1366,7 +1344,7 @@ class ProtocolData(_TreeNode):
 
         if self.edesign is None:
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
-        super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
+        super().__init__(self.edesign._dirs, {})  # children created on-demand
 
     def __getstate__(self):
         # don't pickle ourself recursively if self._passdatas contains just ourself
@@ -1507,12 +1485,8 @@ class ProtocolData(_TreeNode):
         -------
         NamedDict
         """
-        head = tail = {}; attr_val = None
-        for tag_category, tag_value in self.tags.items():
-            tail[attr_val] = _NamedDict(tag_category, 'category'); tail = tail[attr_val]
-            attr_val = tag_value
-        tail[attr_val] = final_dict
-        return self.edesign.setup_nameddict(head[None])
+        keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
+        return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
 
 
 class ProtocolResults(object):
@@ -1655,32 +1629,59 @@ class ProtocolResults(object):
         -------
         NamedDict
         """
+        return self.protocol.setup_nameddict(
+            self.data.setup_nameddict(
+                self._my_attributes_as_nameddict()
+            ))
+
+    def _my_attributes_as_nameddict(self):
         #This function can be overridden by derived classes - this just
-        # tries to give a decent default implementation
-        final = _NamedDict('Qty', 'category')
-        ret = self.protocol.setup_nameddict(self.data.setup_nameddict(final))
+        # tries to give a decent default implementation.  Ideally derived
+        # implementatons would use ValueName and Value columns so results
+        # can be aggregated easily.
+        vals = _NamedDict('ValueName', 'category')
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                final[k] = v.as_nameddict()
+                vals[k] = v.as_nameddict()
             elif isinstance(v, _NamedDict):
-                final[k] = v
+                vals[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                final[k] = v
-        return ret
+                vals[k] = v
+        return vals
 
-    def as_dataframe(self):
+    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        df = self.as_nameddict().as_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
@@ -1777,10 +1778,10 @@ class MultiPassResults(ProtocolResults):
         NamedDict
         """
         # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
-        ret = _NamedDict('Protocol Name', 'category')
+        ret = _NamedDict('ProtocolName', 'category')
         for pass_name, r in self.passes.items():
-            sub = r.as_nameddict()  # should have outer-most 'Protocol Name' dict
-            assert(sub.name == 'Protocol Name' and len(sub) == 1)
+            sub = r.as_nameddict()  # should have outer-most 'ProtocolName' dict
+            assert(sub.keyname == 'ProtocolName' and len(sub) == 1)
             pname = r.protocol.name  # also list(sub.keys())[0]
             if pname not in ret:
                 ret[pname] = _NamedDict('Pass', 'category')
@@ -1915,7 +1916,7 @@ class ProtocolResultsDir(_TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.edesign._dirs, children, self.data.edesign._childcategory)
+        super().__init__(self.data.edesign._dirs, children)
 
     def write(self, dirname=None, parent=None):
         """
@@ -1956,6 +1957,25 @@ class ProtocolResultsDir(_TreeNode):
 
         self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
+    def _result_namedicts_on_this_node(self):
+        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"  # eg "ProtocolName"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+        return results_on_this_node
+
+    def _addto_bypath_nameddict(self, dest, path):
+        results_on_this_node = self._result_namedicts_on_this_node()
+        if results_on_this_node is not None:
+            dest[path] = results_on_this_node
+        for k, v in self.items():
+            v._addto_bypath_nameddict(dest, path + (k,))
+
     def as_nameddict(self):
         """
         Convert the results in this object into nested :class:`NamedDict` objects.
@@ -1964,37 +1984,39 @@ class ProtocolResultsDir(_TreeNode):
         -------
         NamedDict
         """
-        sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        nds = [v.as_nameddict() for v in self.for_protocol.values()]
-        if len(nds) > 0:
-            assert(all([nd.name == nds[0].name for nd in nds])), \
-                "All protocols on a given node must return a NamedDict with the *same* root name!"
-            results_on_this_node = nds[0]
-            for nd in nds[1:]:
-                results_on_this_node.update(nd)
-        else:
-            results_on_this_node = None
+        nd = _NamedDict('Path', 'object')  # so it can hold tuples of tuples, etc.
+        self._addto_bypath_nameddict(nd, path=())
+        return nd
 
-        if sub_results:
-            category = self.child_category if self.child_category else 'nocategory'
-            ret = _NamedDict(category, 'category')
-            if results_on_this_node:
-                #Results in this (self's) dir don't have a value for the sub-category, so put None
-                ret[None] = results_on_this_node
-            ret.update(sub_results)
-            return ret
-        else:  # no sub-results, so can just return a dict of results on this node
-            return results_on_this_node
-
-    def as_dataframe(self):
+    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        df = self.as_nameddict().as_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
@@ -2122,3 +2144,55 @@ class ProtocolPostProcessor(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+
+#In the future, we could put this function into a base class for
+# the classes that utilize it above, so it would become a proper method.
+def _convert_nameddict_attributes(obj):
+    """
+    A helper function that converts the elements of the 
+    "_nameddict_attributes" attribute of several classes to
+    the (key, value, type) array expected by 
+    :method:`NamedDict.create_nested`.
+    """
+    keys_vals_types = []
+    for tup in obj._nameddict_attributes:
+        if len(tup) == 1: attr, key, typ = tup[0], tup[0], None
+        elif len(tup) == 2: attr, key, typ = tup[0], tup[1], None
+        elif len(tup) == 3: attr, key, typ = tup
+        keys_vals_types.append((key, getattr(obj, attr), typ))
+    return keys_vals_types
+
+
+def _drop_constant_cols(df):
+    to_drop = [col for col in df.columns if len(df[col].unique()) == 1]
+    return df.drop(columns=to_drop)
+
+
+def _reset_index(df):
+    '''Returns DataFrame with index as columns - works with Categorical indices unlike DataFrame.reset_index'''
+    import pandas as _pd
+    index_df = df.index.to_frame(index=False)
+    df = df.reset_index(drop=True)
+    # In merge is important the order in which you pass the dataframes
+    # if the index contains a Categorical. I.e.,
+    # pd.merge(df, index_df, left_index=True, right_index=True) does not work.
+    return _pd.merge(index_df, df, left_index=True, right_index=True)
+
+
+def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
+    """ See as_dataframe docstrings for argument descriptions. """
+    if drop_columns:
+        if drop_columns is True:  drop_columns = (True,)
+        for col in drop_columns:
+            df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
+
+    if pivot_valuename is not None or pivot_value is not None:
+        if pivot_valuename is None: pivot_valuename = "ValueName"
+        if pivot_value is None: pivot_value = "Value"
+        index_columns = list(df.columns)
+        index_columns.remove(pivot_valuename)
+        index_columns.remove(pivot_value)
+        df = _reset_index(df.set_index(index_columns + [pivot_valuename])[pivot_value].unstack())
+
+    return df

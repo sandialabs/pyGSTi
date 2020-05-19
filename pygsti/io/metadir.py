@@ -138,6 +138,11 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     with open(root_dir / 'meta.json', 'r') as f:
         meta = _json.load(f)
 
+        #Convert lists => tuples, as we prefer immutable tuples
+        #for key in meta:
+        #    if type(meta[key]) == list:  # note: we don't want isinstance here - just simple *lists*
+        #        meta[key] = tuple(meta[key])
+
     for key, val in meta.items():
         if key in ignore_meta: continue
         ret[key] = val

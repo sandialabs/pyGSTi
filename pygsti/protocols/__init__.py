@@ -12,6 +12,7 @@ Sub-package containing protocol objects and related inputs, data, and results
 
 from .protocol import *
 from .gst import *
+from .vb import *
 from .rb import *
 from .rpe import *
 from .modeltest import *
