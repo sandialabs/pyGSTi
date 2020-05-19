@@ -287,6 +287,9 @@ class QubitGraph(object):
             self._connectivity[i, j] = dir_index
         self._dirty = True
 
+    def __len__(self):
+        return len(self._nodeinds)
+
     def get_node_names(self):
         """
         All the node labels of this graph.
@@ -559,6 +562,90 @@ class QubitGraph(object):
                 glob = set(); add_to_glob(glob, node)
                 if not set(nodes).issubset(glob): return False
             return True
+
+    def _brute_get_all_connected_sets(self, n):
+        """
+        Computes all connected sets of `n` qubits using a brute-force approach.
+
+        Note that for a large device with this will be often be an
+        unreasonably large number of sets of qubits, and so
+        the run-time of this method will be unreasonable.
+
+        Parameters
+        ----------
+        n : int
+            The number of qubits within each set.
+
+        Returns
+        -------
+        list
+            All sets of `n` connected qubits.
+        """
+        connectedqubits = []
+        for combo in _itertools.combinations(self.get_node_names(), n):
+            if self.subgraph(list(combo)).are_glob_connected(combo):
+                connectedqubits.append(combo)
+
+        return connectedqubits
+
+    def find_all_connected_sets(self):
+        """
+        Finds all subgraphs (connected sets of vertices) up to the full graph size.
+
+        Graph edges are treated as undirected.
+
+        Returns
+        -------
+        dict
+            A dictionary with integer keys.  The value of key `k` is a
+            list of all the subgraphs of length `k`.  A subgraph is given
+            as a tuple of sorted vertex labels.
+        """
+        def add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, visited_vertices, output_set):
+            """ x holds subgraph so far.  y holds vertices already processed. """
+            if len(subgraph_vertices) == max_subgraph_size: return output_set  # can't add any more vertices; exit now.
+
+            T = set()  # vertices to process - those connected to vertices in x
+            if len(subgraph_vertices) == 0:  # special starting case
+                T.update(neighbor_dict.keys())  # all vertices are connected to the "nothing"/empty set of vertices.
+            else:  # normal case
+                for v in subgraph_vertices:
+                    T.update(filter(lambda w: (w not in visited_vertices and w not in subgraph_vertices),
+                                    neighbor_dict[v]))  # add neighboring vertices we haven't already processed.
+            V = set(visited_vertices)
+            for v in T:
+                subgraph_vertices.add(v)
+                output_set.add(frozenset(subgraph_vertices))
+                add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, V, output_set)
+                subgraph_vertices.remove(v)
+                V.add(v)
+
+        def addedge(a, b, neighbor_dict):
+            neighbor_dict[a].append(b)
+            neighbor_dict[b].append(a)
+
+        def group_subgraphs(subgraph_list):
+            processed_subgraph_dict = _collections.defaultdict(list)
+            for subgraph in subgraph_list:
+                k = len(subgraph)
+                subgraph_as_list = list(subgraph)
+                subgraph_as_list.sort()
+                subgraph_as_tuple = tuple(subgraph_as_list)
+                processed_subgraph_dict[k].append(subgraph_as_tuple)
+            return processed_subgraph_dict
+
+        neighbor_dict = _collections.defaultdict(list)
+        directed_edge_list = self.edges()
+        undirected_edge_list = list(set([frozenset(edge) for edge in directed_edge_list]))
+        undirected_edge_list = [list(edge) for edge in undirected_edge_list]
+
+        for edge in undirected_edge_list:
+            addedge(edge[0], edge[1], neighbor_dict)
+        k_max = len(self)  # number of vertices in this graph
+        output_set = set()
+        add_neighbors(neighbor_dict, k_max, set(), set(), output_set)
+        grouped_subgraphs = group_subgraphs(output_set)
+        return grouped_subgraphs
 
     def shortest_path(self, node1, node2):
         """
