@@ -1,4 +1,6 @@
-""" The TypedDict class """
+"""
+The TypedDict class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -32,6 +34,29 @@ def _columndict_to_dataframe(columns, seriestypes):
 
 
 class TypedDict(dict):
+    """
+    A dictionary that holds per-key type information.
+
+    This type of `dict` is used for the "leaves" in a tree
+    of nested :class:`NamedDict` objects, specifying a collection
+    of data of different types pertaining to some set of category
+    labels (the index-path of the named dictionaries).
+
+    When converted to a data frame, each key specifies a
+    *different* column and values contribute the values of
+    a single data frame row.  Columns will be series of the
+    held data types.
+
+    Parameters
+    ----------
+    types : dict, optional
+        Keys are the keys that can appear in this dictionary, and
+        values are valid data frame type strings, e.g. `"int"`, `"float"`,
+        or `"category"`, that specify the type of each value.
+
+    items : dict or list
+        Initial data, used for serialization.
+    """
     def __init__(self, types=None, items=()):
         super().__init__(items)
         self._types = types if (types is not None) else {}
@@ -40,6 +65,13 @@ class TypedDict(dict):
         return (TypedDict, (self._types, list(self.items())), None)
 
     def as_dataframe(self):
+        """
+        Render this dict as a pandas data frame.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         columns = {}; seriestypes = {}
         self._add_to_columns(columns, seriestypes, {})
         return _columndict_to_dataframe(columns, seriestypes)

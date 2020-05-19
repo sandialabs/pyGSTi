@@ -1271,13 +1271,30 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
 
 class RandomizedBenchmarkingResults(_proto.ProtocolResults):
     """
-    The results of running a randomized benchmarking
+    The results of running randomized benchmarking.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The experimental data these results are generated from.
+
+    protocol_instance : Protocol
+        The protocol that generated these results.
+
+    fits : dict
+        A dictionary of RB fit parameters.
+
+    depths : list or tuple
+        A sequence of the depths used in the RB experiment. The x-values
+        of the RB fit curve.
+
+    defaultfit : str
+        The default key within `fits` to plot when calling :method:`plot`.
     """
 
     def __init__(self, data, protocol_instance, fits, depths, defaultfit):
         """
-        Initialize an empty Results object.
-        TODO: docstring
+        Initialize an empty RandomizedBenchmarkingResults object.
         """
         super().__init__(data, protocol_instance)
 
@@ -1312,11 +1329,11 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         size : tuple, optional
             The figure size
 
-        ylim : <TODO typ>, optional
-            <TODO description>
+        ylim : tuple, optional
+            The y-axis range.
 
-        xlim : <TODO typ>, optional
-            <TODO description>
+        xlim : tuple, optional
+            The x-axis range.
 
         legend : bool, optional
             Whether to show a legend.
@@ -1329,7 +1346,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
         Returns
         -------
-        <TODO typ>
+        None
         """
 
         # Future : change to a plotly plot.
