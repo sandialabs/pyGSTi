@@ -545,15 +545,15 @@ objects:
       change_gate_library: null
       clear: null
       clear_labels: null
-      combine_one_q_gates: _combine_one_q_gates
-      compress_depth: null
+      combine_one_q_gates: _combine_one_q_gates_inplace
+      compress_depth: compress_depth_inplace
       convert_to_cirq: null
       convert_to_openqasm: null
       convert_to_quil: null
       copy: null
       create_from: cast
       default_expand_subcircuits: null
-      delete_idle_layers: null
+      delete_idle_layers: delete_idle_layers_inplace
       delete_idling_lines: null
       delete_layers: null
       delete_lines: null
@@ -561,7 +561,7 @@ objects:
       display_str: format_display_str
       done_editing: null
       expand_subcircuits: null
-      factorize_repetitions: _factorize_repetitions
+      factorize_repetitions: _factorize_repetitions_inplace
       from_pythonstr: null
       fromtup: from_tuple
       get_idling_lines: idling_lines  
@@ -597,11 +597,11 @@ objects:
       replace_layer: null
       replace_layer_with_circuit: null
       replace_layers_with_aliases: null
-      replace_with_idling_line: null
-      reverse: null
+      replace_with_idling_line: replace_with_idling_line_inplace
+      reverse: reverse_inplace
       serialize: null
       set_labels: null
-      shift_gates_forward: _shift_gates_forward
+      shift_gates_forward: _shift_gates_forward_inplace
       simulate: null
       size: null   # XXX make property?
       str: null
@@ -626,7 +626,7 @@ objects:
       get_all_strs: all_strs  # XXX make property?
       iter_simplified: null
       process_circuits: null
-      simplify_circuits: null
+      simplify_circuits: simplify_circuits_inplace
     CircuitStructure:
       __name__: null
       create_plaquette: null
@@ -826,7 +826,7 @@ objects:
       get_totalcounts_per_timestep: totalcounts_per_timestep  # XXX make property
       has_constant_totalcounts: null  # XXX make property
       outcomes: null
-      scale: null
+      scale: scale_inplace
       timeseries: null  # XXX parameter `outcomelabel` -> `outcome_label`
       to_str: null
       total: null
@@ -906,7 +906,7 @@ objects:
       set_primitive_prep_labels: null  # XXX make property
       strdiff: null
       tpdist: _tpdist
-      transform: null
+      transform: transform_inplace
   forwardsim.py:
     ForwardSimulator:
       __name__: null
@@ -1022,7 +1022,7 @@ objects:
       rotate: null
       simplify_operations: null
       to_vector: null
-      transform: null
+      transform: transform_inplace
     TPInstrument:
       __name__: null
       depolarize: null
@@ -1032,7 +1032,7 @@ objects:
       rotate: null
       simplify_operations: null
       to_vector: null
-      transform: null
+      transform: transform_inplace
     convert: null
   label.py:
     CircuitLabel:
@@ -1148,7 +1148,7 @@ objects:
       copy: null
       num_tensor_prod_blocks: null
       product_dim: null
-      reduce_dims_densitymx_to_state: null
+      reduce_dims_densitymx_to_state: reduce_dims_densitymx_to_state_inplace
       tensor_product_block_dims: null
       tensor_product_block_labels: null
   layerlizard.py:
@@ -1195,7 +1195,7 @@ objects:
       initialize: null  # XXX parameter `circuit_list` -> `circuits`
       split: null
       squeeze: null
-      trim_nonfinal_els: trim_nonfinal_elements
+      trim_nonfinal_els: trim_nonfinal_elements_inplace
   mapforwardsim.py:
     CLIFFORD: null
     MapForwardSimulator:
@@ -1587,7 +1587,7 @@ objects:
       to_vector: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     ComposedOp:
       __name__: null
       append: null
@@ -1606,7 +1606,7 @@ objects:
       to_vector: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     DenseOperator:
       __name__: null
       base: null
@@ -1654,7 +1654,7 @@ objects:
       to_vector: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     ExponentiatedOp:
       __name__: null
       copy: null
@@ -1690,11 +1690,11 @@ objects:
       onenorm_upperbound: null
       set_coeffs: set_coefficients
       set_error_rates: null
-      spam_transform: null
+      spam_transform: spam_transform_inplace
       to_vector: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     LindbladOp:
       __name__: null
       copy: null
@@ -1716,12 +1716,12 @@ objects:
       set_error_rates: null
       set_gpindices: null
       set_value: set_dense
-      spam_transform: null
+      spam_transform: spam_transform_inplace
       submembers: null
       to_vector: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     LinearOperator:
       __name__: null
       acton: null
@@ -1747,7 +1747,7 @@ objects:
       size: null
       todense: to_dense
       tosparse: to_sparse
-      transform: null
+      transform: transform_inplace
     LinearlyParamDenseOp:
       __name__: null
       compose: null
@@ -1821,7 +1821,7 @@ objects:
       create_object: null
       create_op: null
       create_simplified_op: null
-      transform: null
+      transform: transform_inplace
     UnitaryOpFactory:
       __name__: null
       create_object: null
@@ -1920,7 +1920,7 @@ objects:
       simplify_effects: null
       submembers: null
       to_vector: null
-      transform: null
+      transform: transform_inplace
       values: null
     MarginalizedPOVM:
       __name__: null
@@ -1937,7 +1937,7 @@ objects:
       num_elements: null
       num_params: null
       to_vector: null
-      transform: null
+      transform: transform_inplace
     TPPOVM:
       __name__: null
     TensorProdPOVM:
@@ -2459,7 +2459,7 @@ objects:
       real: null
       render_with: null
       reshape: null
-      scale: null
+      scale: scale_inplace
       size: null
     maximum: null
     minimum: null
@@ -2596,7 +2596,7 @@ objects:
       submembers: null
       to_vector: null
       todense: to_dense
-      transform: null
+      transform: transform_inplace
     PureStateSPAMVec:
       __name__: null
       deriv_wrt_params: null
@@ -2626,7 +2626,7 @@ objects:
       size: null
       to_vector: null
       todense: to_dense
-      transform: null
+      transform: transform_inplace
     StabilizerEffectVec:
       __name__: null
       from_dense_purevec: null
