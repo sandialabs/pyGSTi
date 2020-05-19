@@ -315,7 +315,6 @@ class SummaryStatistics(_proto.Protocol):
     def __init__(self, name):
         super().__init__(name)
 
-    #PRIVATE
     def compute_summary_data(self, data):
         """
         Computes all summary statistics for the given data.
@@ -367,7 +366,6 @@ class SummaryStatistics(_proto.Protocol):
         return self.compute_dict(data, self.summary_statistics,
                                  get_summary_values, for_passes='all')
 
-    #PRIVATE
     def compute_circuit_data(self, data):
         """
         Computes all circuit statistics for the given data.
@@ -403,7 +401,6 @@ class SummaryStatistics(_proto.Protocol):
 
     #     return self.compute_dict(data, "dscmpdata", self.dsmp_statistics, get_dscmp_values, for_passes="none")
 
-    #PRIVATE
     def compute_predicted_probs(self, data, model):
         """
         Compute the predicted success probabilities of `model` given `data`.
@@ -433,7 +430,6 @@ class SummaryStatistics(_proto.Protocol):
         return self.compute_dict(data, ('success_probabilities',),
                                  get_success_prob, for_passes="none")
 
-    #PRIVATE
     def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
         """
         Executes a computation function row-by-row on the data in `data` and packages the results.
@@ -467,7 +463,8 @@ class SummaryStatistics(_proto.Protocol):
 
         depths = design.depths
         qty_data = _tools.NamedDict('Datatype', 'category', None, None,
-                                    {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
+                                    {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float',
+                                                            {depth: [] for depth in depths})
                                      for comp in component_names})
 
         #loop over all circuits
@@ -484,7 +481,6 @@ class SummaryStatistics(_proto.Protocol):
 
         return qty_data
 
-    #PRIVATE - or just a tool function - doesn't use self
     def create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
         """
         Create a nested :class:`NamedDict` with depht and width indices.
@@ -512,7 +508,6 @@ class SummaryStatistics(_proto.Protocol):
             'Depth', 'int', None, None, {depth: _tools.NamedDict(
                 'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
-    #PRIVATE
     def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
         Adds bootstrapped "summary datasets".
@@ -687,7 +682,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         return statistic_per_depth
 
     def run(self, data, memlimit=None, comm=None, dscomparator=None):
-                """
+        """
         Run this protocol on `data`.
 
         Parameters

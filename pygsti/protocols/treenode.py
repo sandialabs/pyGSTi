@@ -214,7 +214,6 @@ class TreeNode(object):
         # #  write_subdir_json = True  # True only for the "master" type that defines the directory keys ('edesign')
         # self.write_children(dirname, write_subdir_json)
 
-    #PRIVATE
     def write_children(self, dirname, write_subdir_json=True):
         """
         Writes this node's children to directories beneath `dirname`.

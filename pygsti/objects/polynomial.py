@@ -74,7 +74,7 @@ class FASTPolynomial(object):
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):  #PRIVATE?
+    def get_vindices_per_int(cls, max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -581,7 +581,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):  #PRIVATE?
+    def get_vindices_per_int(cls, max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -668,7 +668,6 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         self.fastpoly = FASTPolynomial(coeffs, max_num_vars)
         self.check_fastpoly()
 
-    #PRIVATE
     def check_fastpoly(self, raise_err=True):
         """
         Check that included FASTPolynomial has remained in-sync with this one.

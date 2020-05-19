@@ -28,7 +28,6 @@ CHECK_JACOBIAN = False
 FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
-#PRIVATE
 def objfn(objfn_cls, model, dataset, circuits=None,
           regularization=None, penalties=None, op_label_aliases=None,
           cache=None, comm=None, mem_limit=None, **addl_args):
@@ -1144,7 +1143,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    #PRIVATE
     def get_persistent_memory_estimate(self, num_elements=None):
         #  Estimate & check persistent memory (from allocs within objective function)
         """
@@ -1182,7 +1180,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
 
         return persistent_mem
 
-    #PRIVATE
     def get_evaltree_subcalls(self):
         """
         The types of calls that will be made to an evaluation tree.
@@ -1208,7 +1205,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
         return self.dataset.get_degrees_of_freedom(self.ds_circuits_to_use,
                                                    aggregate_times=not self.time_dependent)
 
-    #PRIVATE
     def precompute_omitted_freqs(self):
         """
         Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
@@ -1228,7 +1224,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
         else:
             self.firsts = None  # no omitted probs
 
-    #PRIVATE
     def compute_count_vectors(self):
         """
         Ensure self.cache contains count and total-count vectors.
@@ -1640,7 +1635,6 @@ class RawChi2Function(RawObjectiveFunction):
         return _np.where(probs == clipped_probs, 0.0, 2 * total_counts / clipped_probs)
 
     #Support functions
-    #PRIVATE
     def get_weights(self, p, f, total_counts):
         """
         Get the chi2 weighting factor.
@@ -1663,7 +1657,6 @@ class RawChi2Function(RawObjectiveFunction):
         cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         return _np.sqrt(total_counts / cp)  # nSpamLabels x nCircuits array (K x M)
 
-    #PRIVATE
     def get_dweights(self, p, f, wts):  # derivative of weights w.r.t. p
         """
         Get the derivative of the chi2 weighting factor.
@@ -1688,7 +1681,6 @@ class RawChi2Function(RawObjectiveFunction):
         dw[p < self.min_prob_clip_for_weighting] = 0.0
         return dw
 
-    #PRIVATE
     def get_hweights(self, p, f, wts):  # 2nd derivative of weights w.r.t. p
         # wts = sqrt(N/cp), dwts = (-1/2) sqrt(N) *cp^(-3/2), hwts = (3/4) sqrt(N) cp^(-5/2)
         """
@@ -2076,7 +2068,6 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         self.min_freq_clip_for_weighting = min_freq_clip_for_weighting
 
-    #PRIVATE
     def get_weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
         """
@@ -2099,7 +2090,6 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         return _np.sqrt(total_counts / _np.clip(f, self.min_freq_clip_for_weighting, None))
 
-    #PRIVATE
     def get_dweights(self, p, f, wts):
         """
         Get the derivative of the chi2 weighting factor.
@@ -2121,7 +2111,6 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         return _np.zeros(len(p), 'd')
 
-    #PRIVATE
     def get_hweights(self, p, f, wts):
         """
         Get the 2nd derivative of the chi2 weighting factor.
@@ -3863,7 +3852,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         return ex
 
-    #PRIVATE
     def lspenaltyvec(self, paramvec):
         """
         The least-squares penalty vector, an array of the square roots of the penalty terms.
@@ -3897,7 +3885,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec))
 
-    #PRIVATE
     def penaltyvec(self, paramvec):
         """
         The penalty vector, an array of all the penalty terms.
@@ -3913,7 +3900,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         """
         return self.lspenaltyvec(paramvec)**2
 
-    #PRIVATE
     def fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
         """
         Fill `lspenaltyvec_jac` with the jacobian of the least-squares (sqrt of the) penalty vector.
@@ -3953,7 +3939,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         assert(off == self.ex)
 
-    #PRIVATE
     def fill_dterms_penalty(self, paramvec, terms_jac):
         """
         Fill `terms_jac` with the jacobian of the penalty vector.
@@ -3977,7 +3962,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
     #Omitted-probability support functions
 
-    #PRIVATE
     def omitted_prob_first_terms(self, probs):
         """
         Extracts the value of the first term for each circuit that has omitted probabilities.
@@ -4015,7 +3999,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #          " <0=", _np.count_nonzero(omitted_probs < 0))
         #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
-    #PRIVATE
     def update_lsvec_for_omitted_probs(self, lsvec, probs):
         """
         Updates the least-squares vector `lsvec`, adding the omitted-probability contributions.
@@ -4066,7 +4049,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #          " <0=", _np.count_nonzero(omitted_probs < 0))
         #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
-    #PRIVATE
     def omitted_prob_first_dterms(self, probs):
         """
         Compute the derivative of the first-terms vector returned by :method:`omitted_prob_first_terms`.
@@ -4094,7 +4076,6 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_dterms(self.N[self.firsts], omitted_probs)
 
-    #PRIVATE
     def update_dterms_for_omitted_probs(self, dterms, probs, dprobs_omitted_rowsum):
         # terms => terms + zerofreqfn(omitted)
         # dterms => dterms + dzerofreqfn(omitted) * domitted  (and domitted = (-omitted_rowsum))

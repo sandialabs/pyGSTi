@@ -1079,7 +1079,6 @@ class StandardGST(_proto.Protocol):
 
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
-#PRIVAT
 def gaugeopt_suite_to_dictionary(gaugeopt_suite, model, unreliable_ops=(), verbosity=0):
     """
     Creates gauge-optimization dictionaries from "suite" names.
@@ -1411,7 +1410,6 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
 #def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
 #                  comm=None, verbosity=0):
 
-#PRIVATE? - or tools?
 def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                   unreliable_ops, comm=None, verbosity=0):
     """
@@ -1498,7 +1496,6 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
                     results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
-#PRIVATE? - or tools?
 def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
                          resource_alloc=None, verbosity=0):
     """
@@ -1630,7 +1627,6 @@ def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
     return fitqty
 
 
-#PRIVATE? - or tools?
 def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, comm, mem_limit):
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
@@ -1712,7 +1708,6 @@ def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, co
     return circuit_weights
 
 
-#PRIVATE - or tools?
 def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, cache, comm, mem_limit, verbosity):
     """
     Create a wildcard budget for a model estimate.
@@ -1883,7 +1878,6 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, 
     return budget
 
 
-#PRIVATE - or tools?
 def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
                             resource_alloc, cache, verbosity):
     """

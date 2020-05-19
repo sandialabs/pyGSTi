@@ -948,7 +948,6 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
             self.model._init_virtual_obj(ret)  # so ret's gpindices get set
             return ret
 
-    #PRIVATE
     def get_layer_component_operation(self, complbl, dense):
         """
         Retrieves the operation corresponding to one component of a layer operation.

@@ -353,10 +353,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
                                    n_samples, sample_error=sample_error, seed=seed)
 
 
-#TODO savePlot arg is never used?
-#PRIVATE
 def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n, runs):
-    #                  plot=False):
     """
     Experimental test function
     """

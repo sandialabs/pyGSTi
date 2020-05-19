@@ -29,28 +29,6 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
-#PRIVATE - or remove?
-def array_eq(a, b, tol=1e-8):
-    """
-    Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol`
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-
-    b : numpy.ndarray
-
-    tol : float, optional
-        tolerance.
-
-    Returns
-    -------
-    float
-    """
-    print(_np.linalg.norm(a - b))
-    return _np.linalg.norm(a - b) < tol
-
-
 def trace(m):  # memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
     """
     The trace of a matrix, sum_i m[i,i].

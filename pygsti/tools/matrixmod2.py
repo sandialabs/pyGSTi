@@ -486,7 +486,6 @@ def proper_permutation(a):
     #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 
-#PRIVATE
 def check_proper_permutation(a):
     """
     Check to see if the matrix has been properly permuted.

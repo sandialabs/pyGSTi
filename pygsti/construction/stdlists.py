@@ -634,6 +634,7 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
                             keep_fraction, keep_seed, include_lgst)[-1]
 
 
+@_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def make_elgst_lists(op_label_src, germ_list, max_length_list,
                      trunc_scheme="whole germ powers", nest=True,
                      include_lgst=True):
@@ -740,7 +741,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
     return elgst_listOfLists
 
 
-#PRIVATE OR REMOVE
+@_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
                                trunc_scheme="whole germ powers",
                                include_lgst=True):

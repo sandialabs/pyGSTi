@@ -21,7 +21,6 @@ import collections as _collections
 import pygsti.objects
 
 
-#PRIVATE
 def class_hasattr(instance, attr):
     """
     Helper function for checking if `instance.__class__` has an attribute
@@ -164,7 +163,6 @@ def encode_obj(py_obj, binary):
         return encode_std_obj(py_obj, binary)
 
 
-#PRIVATE
 def encode_std_obj(py_obj, binary):
     """
     Helper to :func:`encode_obj` that encodes only "standard" (non-pyGSTi) types
@@ -328,7 +326,6 @@ def decode_obj(json_obj, binary):
         return json_obj
 
 
-#PRIVATE
 def decode_std_base(json_obj, start, binary):
     """
     Helper to :func:`decode_obj` for decoding pyGSTi objects that are derived from a standard type.
@@ -380,7 +377,6 @@ def decode_std_base(json_obj, start, binary):
         assert(False), "No support for sub-classing slice"
 
 
-#PRIVATE
 def decode_std_obj(json_obj, binary):
     """
     Helper to :func:`decode_obj` that decodes standard (non-pyGSTi) types.
@@ -456,7 +452,6 @@ def decode_std_obj(json_obj, binary):
         return getattr(module, tostr(fnname))
 
 
-#PRIVATE
 def tostr(x):
     """
     Convert a value to the native string format.
@@ -476,7 +471,6 @@ def tostr(x):
         return str(x)
 
 
-#PRIVATE
 def tobin(x):
     """
     Serialize strings to UTF8

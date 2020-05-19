@@ -713,7 +713,6 @@ class MatrixEvalTree(EvalTree):
             singleItemTreeSetList.append(newTreeSet)
         return singleItemTreeSetList
 
-    #PRIVATE
     def get_analysis_plot_infos(self):
         """
         Returns debug plot information.

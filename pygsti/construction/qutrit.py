@@ -93,7 +93,6 @@ def ms2qubit(theta, phi):
 
 
 #Removes columns and rows from input_arr
-#PRIVATE
 def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
     input_arr = _np.array(input_arr)
     return output_type([
@@ -124,7 +123,6 @@ def to_qutrit_space(input_mat):
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
 
-#PRIVATE
 def ms_3(theta, phi):
     """
     Returns Qutrit Molmer-Sorenson unitary on the qutrit space
@@ -144,7 +142,6 @@ def ms_3(theta, phi):
     return to_qutrit_space(ms2qubit(theta, phi))
 
 
-#PRIVATE
 def xx_3(theta):
     """
     Returns Qutrit XX unitary
@@ -161,7 +158,6 @@ def xx_3(theta):
     return to_qutrit_space(x_2qubit(theta))
 
 
-#PRIVATE
 def yy_3(theta):
     """
     Returns Qutrit YY unitary

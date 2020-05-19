@@ -424,7 +424,6 @@ class MapForwardSimulator(ForwardSimulator):
         return mem * FLOATSIZE
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
-    #PRIVATE
     def dm_mapfill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
                                 eval_tree, param_indices1, param_indices2, comm):
 

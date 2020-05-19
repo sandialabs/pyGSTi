@@ -104,7 +104,6 @@ class LayerLizard(object):
             for _, obj in self.opcache.items():
                 obj.from_vector(v[obj.gpindices])  # , close, nodirty)
 
-    #PRIVATE - Helper functions for derived classes:
     def get_circuitlabel_op(self, circuitlbl, dense):
         """
         A helper method for derived classes used for processing :class:`CircuitLabel` labels.

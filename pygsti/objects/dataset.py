@@ -1391,7 +1391,6 @@ class DataSet(object):
 
         return circuit
 
-    #PRIVATE
     def build_repetition_counts(self):
         """
         Build internal repetition counts if they don't exist already.

@@ -770,7 +770,6 @@ class ExperimentDesign(_TreeNode):
         keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
         return _NamedDict.create_nested(keys_vals_types, final_dict)
 
-    #PRIVATE
     def create_subdata(self, subdata_name, dataset):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
@@ -1009,7 +1008,6 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    #PRIVATE
     def create_subdata(self, sub_name, dataset):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.

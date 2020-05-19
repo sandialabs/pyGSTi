@@ -47,7 +47,7 @@ from .modelconstruction import basis_build_vector as _basis_build_vector
 RANK_TOL = 1e-9
 
 
-#PRIVATE or DEPRECATE?
+@_deprecated_fn("This function is overly specific and will be removed soon.")
 def nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=1, maxhops=0,
                                     extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
                                     independent_1q_gates=True, zz_only=False, verbosity=0):
@@ -905,7 +905,6 @@ def _onqubit(s, i_qubit):
     return _objs.Circuit([_Lbl(nm, i_qubit) for nm in s])
 
 
-#PRIVATE
 def find_amped_polys_for_syntheticidle(qubit_filter, idle_str, model, single_q_fiducials=None,
                                        prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
                                        wrt_params=None, algorithm="greedy", require_all_amped=True,
@@ -1195,7 +1194,6 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idle_str, model, single_q_f
     return J, Jrank, selected_gatename_fidpair_lists
 
 
-#PRIVATE
 def test_amped_polys_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None, effect_lbls=None,
                                        wrt_params=None, verbosity=0):
     """
@@ -1278,7 +1276,6 @@ def test_amped_polys_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None,
     return rank, Np
 
 
-#PRIVATE
 def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, true_idle_pairs, idle_str, max_weight,
                                                 model, single_q_fiducials=None,
                                                 prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
@@ -1546,7 +1543,6 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, true_
     return J, Jrank, selected_gatename_fidpair_lists
 
 
-#PRIVATE
 def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germ_power_str, amped_poly_j,
                                               idle_gatename_fidpair_lists, model,
                                               single_q_fiducials=None, prep_lbl=None, effect_lbls=None,
@@ -1773,7 +1769,6 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germ_po
     #return gatename_fidpair_lists # (i.e. the rows of `amped_poly_j`)
 
 
-#PRIVATE
 def tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weight):
     """
     Tile a set of fiducial pairs that amplify idle errors.
@@ -2138,7 +2133,7 @@ def get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
     return candidate_germs
 
 
-#PRIVATE or DEPRECATE?
+@_deprecated_fn("Use pygsti.construction.create_standard_cloudnoise_sequences(...).")
 def create_xycnot_cloudnoise_sequences(n_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
                                        extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
                                        sparse=False, verbosity=0, cache=None, idle_only=False,
@@ -3551,7 +3546,6 @@ def check_kcoverage_template(rows, n, k, verbosity=0):
     if verbosity > 0: print(" check succeeded!")
 
 
-#PRIVATE
 def filter_nqubit_sequences(sequence_tuples, sectors_to_keep,
                             new_sectors=None, idle='Gi'):
     """

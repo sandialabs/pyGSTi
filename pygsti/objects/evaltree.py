@@ -764,7 +764,6 @@ class EvalTree(list):
     #        self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
     #        i += len(spamTuples)
 
-    #PRIVATE
     def print_analysis(self):
         """
         Print a brief analysis of this tree.

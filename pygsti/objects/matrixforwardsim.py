@@ -193,7 +193,6 @@ class MatrixForwardSimulator(ForwardSimulator):
     # vec( A * E(0,1) * B ) = vec( mx w/ col_i = A[col0] * B[0,1] ) = B^T tensor A * vec( E(0,1) )
     # In general: vec( A * X * B ) = B^T tensor A * vec( X )
 
-    #PRIVATE
     def doperation(self, op_label, flat=False, wrt_filter=None):
         """
         Return the derivative of a length-1 (single-gate) sequence
@@ -222,7 +221,6 @@ class MatrixForwardSimulator(ForwardSimulator):
             # axes = (gate_ij, prod_row, prod_col)
             return _np.swapaxes(flattened_dprod, 0, 1).reshape((num_deriv_cols, dim, dim))
 
-    #PRIVATE
     def hoperation(self, op_label, flat=False, wrt_filter1=None, wrt_filter2=None):
         """
         Return the hessian of a length-1 (single-gate) sequence

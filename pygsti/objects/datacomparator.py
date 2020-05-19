@@ -19,7 +19,6 @@ from .multidataset import MultiDataSet as _MultiDataSet
 from .hypothesistest import HypothesisTest as _HypothesisTest
 
 
-#PRIVATE
 def xlogy(x, y):
     """
     Returns x*log(y).
@@ -30,7 +29,6 @@ def xlogy(x, y):
         return x * _np.log(y)
 
 
-#PRIVATE
 def likelihood(p_list, n_list):
     """
     The likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
@@ -41,7 +39,6 @@ def likelihood(p_list, n_list):
     return output
 
 
-#PRIVATE
 def loglikelihood(p_list, n_list):
     """
     The log of the likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
@@ -57,7 +54,6 @@ def loglikelihood(p_list, n_list):
 #     return _np.abs(dof - loglikelihood_ratio(alpha*n_list_list))
 
 
-#PRIVATE OR MOVE
 def loglikelihood_ratio(n_list_list):
     """
     log(likelihood ratio) between one-context and multiple-context models.
@@ -88,7 +84,6 @@ def loglikelihood_ratio(n_list_list):
     return -2 * (lC - lS)
 
 
-#PRIVATE OR MOVE
 def jensen_shannon_divergence(n_list_list):
     """
     Calculates the Jensen-Shannon divergence (JSD) between one-context and multiple-context models.
@@ -112,7 +107,6 @@ def jensen_shannon_divergence(n_list_list):
     return loglikelihood_ratio(n_list_list) / (2 * total_counts)
 
 
-#PRIVATE OR MOVE
 def pval(llrval, dof):
     """
     The p-value of a log-likelihood ratio (LLR).
@@ -143,7 +137,6 @@ def pval(llrval, dof):
     return 1 - _stats.chi2.cdf(llrval, dof)
 
 
-#PRIVATE OR MOVE
 def llr_to_signed_nsigma(llrval, dof):
     """
     Finds the signed number of standard deviations for the input log-likelihood ratio (LLR).
@@ -176,7 +169,6 @@ def llr_to_signed_nsigma(llrval, dof):
     return (llrval - dof) / _np.sqrt(2 * dof)
 
 
-#PRIVATE OR MOVE
 def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     """
     Checks if `circuit` does contains any gates from `op_exclusions`.
@@ -200,7 +192,6 @@ def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     return True
 
 
-#PRIVATE OR MOVE
 def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     """
     Checks if `circuit` contains *any* of the gates from `op_inclusions`.
@@ -228,7 +219,6 @@ def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     return False
 
 
-#PRIVATE OR MOVE
 def compute_llr_threshold(significance, dof):
     """
     Compute a log-likelihood-ratio threshold.
@@ -265,7 +255,6 @@ def compute_llr_threshold(significance, dof):
     return _scipy.stats.chi2.isf(significance, dof)
 
 
-#PRIVATE OR MOVE
 def tvd(n_list_list):
     """
     Calculates the TVD between two contexts.

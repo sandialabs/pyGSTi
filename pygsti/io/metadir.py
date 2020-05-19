@@ -23,7 +23,6 @@ QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
 
 
 #Class-name utils...
-#PRIVATE
 def full_class_name(x):
     """
     Returns the <module>.<classname> for `x`.
@@ -40,7 +39,6 @@ def full_class_name(x):
     return x.__class__.__module__ + '.' + x.__class__.__name__
 
 
-#PRIVATE
 def class_for_name(module_and_class_name):
     """
     Return the class object given an name.
@@ -320,7 +318,6 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
         _json.dump(meta, f)
 
 
-#PRIVATE
 def cls_from_meta_json(dirname):
     """
     Get the object-type corresponding to the 'type' field in `dirname`/meta.json.
@@ -339,7 +336,6 @@ def cls_from_meta_json(dirname):
     return class_for_name(meta['type'])  # class of object to create
 
 
-#PRIVATE?
 def obj_to_meta_json(obj, dirname):
     """
     Create a meta.json file within `dirname` that contains (only) the type of `obj` in its 'type' field.

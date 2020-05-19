@@ -1413,7 +1413,6 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         self.model._init_virtual_obj(ret)  # so ret's gpindices get set
         return ret
 
-    #PRIVATE
     def get_layer_component_targetop(self, complbl):
         """
         Retrieves the target- or ideal-operation portion of one component of a layer operation.
@@ -1437,7 +1436,6 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
 
-    #PRIVATE
     def get_layer_component_cloudnoises(self, complbl_list):
         """
         Retrieves cloud-noise portion of the components of a layer operation.

@@ -362,7 +362,6 @@ def get_model_params(model_list):
     return reducedModelList, numGaugeParams, numNonGaugeParams, numOps
 
 
-#PRIVATE
 def setup_model_list(model_list, randomize, randomization_strength,
                      num_copies, seed):
     """
@@ -518,7 +517,6 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
     return ret
 
 
-#PRIVATE
 def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
                           germ_lengths=None, comm=None):
     """
@@ -611,7 +609,6 @@ def calc_twirled_ddd(model, germ, eps=1e-6):
     return twirledDerivDaggerDeriv
 
 
-#PRIVATE?
 def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
                   force_indices, force_score,
                   n_gauge_params, op_penalty, germ_lengths, l1_penalty=1e-2,
