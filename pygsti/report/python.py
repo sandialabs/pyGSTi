@@ -1,4 +1,6 @@
-""" Routines for converting python objects to python. """
+"""
+Routines for converting python objects to python.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -18,24 +20,28 @@ everything else is used in creating formatters in formatters.py
 
 
 def table(custom_headings, col_headings_formatted, rows, spec):
-    '''
+    """
     Create a "Python table" - really a pandas DataFrame
 
     Parameters
     ----------
     custom_headings : None, dict
         optional dictionary of custom table headings
+
     col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains key 'python', which corresponds to a
-           pandas.DataFrame object representing the table
-    '''
+        pandas.DataFrame object representing the table
+    """
     try:
         import pandas as _pd
     except ImportError:
@@ -111,28 +117,31 @@ def table(custom_headings, col_headings_formatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of a python table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
 
     Returns
     -------
     string
-    '''
+    """
     return data
 
 
 def list(l, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Convert a python list to python.)
 
     Parameters
@@ -153,6 +162,7 @@ def list(l, specs):
 def vector(v, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Convert a 1D numpy array to python.)
 
     Parameters
@@ -173,6 +183,7 @@ def vector(v, specs):
 def matrix(m, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     Convert a 2D numpy array to python.
 
     Parameters
@@ -193,6 +204,7 @@ def matrix(m, specs):
 def value(el, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (this function would be for converting python to python).
 
     Parameters
@@ -213,6 +225,7 @@ def value(el, specs):
 def escaped(txt, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Escape txt so it is python safe.)
 
     Parameters

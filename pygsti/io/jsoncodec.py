@@ -1,4 +1,6 @@
-""" Defines JSON-format encoding and decoding functions """
+"""
+Defines JSON-format encoding and decoding functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,8 +21,23 @@ import collections as _collections
 import pygsti.objects
 
 
+#PRIVATE
 def class_hasattr(instance, attr):
-    """Helper function for checking if `instance.__class__` has an attribute"""
+    """
+    Helper function for checking if `instance.__class__` has an attribute
+
+    Parameters
+    ----------
+    instance : obj
+        instance to check
+
+    attr : str
+        attribute name
+
+    Returns
+    -------
+    bool
+    """
     return hasattr(instance.__class__, attr)
 
 
@@ -147,9 +164,22 @@ def encode_obj(py_obj, binary):
         return encode_std_obj(py_obj, binary)
 
 
+#PRIVATE
 def encode_std_obj(py_obj, binary):
     """
     Helper to :func:`encode_obj` that encodes only "standard" (non-pyGSTi) types
+
+    Parameters
+    ----------
+    py_obj : object
+        standard Python object to encode
+
+    binary : bool
+        whether to use binary-mode strings
+
+    Returns
+    -------
+    dict
     """
     # Other builtin or standard object encoding
     #print("Encoding std type: ",str(type(py_obj)))
@@ -216,8 +246,10 @@ def encode_std_obj(py_obj, binary):
 
 def decode_obj(json_obj, binary):
     """
-    Inverse of :func:`encode_obj` that decodes the JSON-compatible `json_obj`
-    object into the original Python object that was encoded.
+    Inverse of :func:`encode_obj`.
+
+    Decodes the JSON-compatible `json_obj` object into the original Python
+    object that was encoded.
 
     Parameters
     ----------
@@ -296,10 +328,26 @@ def decode_obj(json_obj, binary):
         return json_obj
 
 
+#PRIVATE
 def decode_std_base(json_obj, start, binary):
     """
-    Helper to :func:`decode_obj` for decoding pyGSTi objects that are also
-    derived from a standard type.
+    Helper to :func:`decode_obj` for decoding pyGSTi objects that are derived from a standard type.
+
+    Parameters
+    ----------
+    json_obj : dict
+        json-loaded dict to decode from
+
+    start : various
+        Starting object that serves as a container for elements of the
+        standard-Python base class (e.g. a list).
+
+    binary : bool
+        Whether or not to use binary-mode strings as dict keys.
+
+    Returns
+    -------
+    object
     """
     B = tobin if binary else _ident
 
@@ -332,9 +380,22 @@ def decode_std_base(json_obj, start, binary):
         assert(False), "No support for sub-classing slice"
 
 
+#PRIVATE
 def decode_std_obj(json_obj, binary):
     """
     Helper to :func:`decode_obj` that decodes standard (non-pyGSTi) types.
+
+    Parameters
+    ----------
+    json_obj : dict
+        json-loaded dictionary encoding an object
+
+    binary : bool
+        Whether or not to use binary-mode strings as dict keys.
+
+    Returns
+    -------
+    object
     """
     B = tobin if binary else _ident
 
@@ -395,9 +456,19 @@ def decode_std_obj(json_obj, binary):
         return getattr(module, tostr(fnname))
 
 
+#PRIVATE
 def tostr(x):
     """
     Convert a value to the native string format.
+
+    Parameters
+    ----------
+    x : str or bytes
+        value to convert to a native string.
+
+    Returns
+    -------
+    str
     """
     if isinstance(x, bytes):
         return x.decode()
@@ -405,9 +476,19 @@ def tostr(x):
         return str(x)
 
 
+#PRIVATE
 def tobin(x):
     """
     Serialize strings to UTF8
+
+    Parameters
+    ----------
+    x : str or bytes
+        value to convert to a UTF8 binary string.
+
+    Returns
+    -------
+    bytes
     """
     if isinstance(x, str):
         return bytes(x, 'utf-8')

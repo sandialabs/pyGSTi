@@ -1,4 +1,6 @@
-""" Routines for building qutrit gates and models """
+"""
+Routines for building qutrit gates and models
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,19 +29,59 @@ Y = _np.matrix([[0, -1j], [1j, 0]])
 
 
 def x_2qubit(theta):
-    """ Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)"""
+    """
+    Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)
+
+    Parameters
+    ----------
+    theta : float
+        rotation angle: U = exp(-i/2 * theta * sigmaX)
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     x = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, 1], [1, 0]])))
     return _np.kron(x, x)
 
 
 def y_2qubit(theta):
-    """ Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)"""
+    """
+    Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)
+
+    Parameters
+    ----------
+    theta : float
+        rotation angle: U = exp(-i/2 * theta * sigmaY)
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     y = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, -1j], [1j, 0]])))
     return _np.kron(y, y)
 
 
 def ms2qubit(theta, phi):
-    """ Returns Molmer-Sorensen gate for two qubits """
+    """
+    Returns Molmer-Sorensen gate for two qubits
+
+    Returns the unitary given by:
+    `U = exp(i/2 * theta * A otimes A)` where
+    `A = cos(phi)*sigmaX + sin(phi)*sigmaY`
+
+    Parameters
+    ----------
+    theta : float
+        global rotation angle
+
+    phi : float
+        local rotation angle
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     return _np.matrix(_linalg.expm(-1j / 2 * theta
                                    * _np.kron(
                                        _np.cos(phi) * X + _np.sin(phi) * Y,
@@ -51,6 +93,7 @@ def ms2qubit(theta, phi):
 
 
 #Removes columns and rows from input_arr
+#PRIVATE
 def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
     input_arr = _np.array(input_arr)
     return output_type([
@@ -63,25 +106,75 @@ def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
 
 
 def to_qutrit_space(input_mat):
-    """ Projects a 2-qubit unitary matrix onto the symmetric "qutrit space" """
+    """
+    Projects a 2-qubit unitary matrix onto the symmetric "qutrit space"
+
+    Parameters
+    ----------
+    input_mat : numpy.ndarray
+        the unitary matrix to project.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     input_mat = _np.matrix(input_mat)
     return _remove_from_matrix(A * input_mat * A**-1, [2], [2])
 #    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
 
+#PRIVATE
 def ms_3(theta, phi):
-    """ Returns Qutrit Molmer-Sorenson unitary """
+    """
+    Returns Qutrit Molmer-Sorenson unitary on the qutrit space
+
+    Parameters
+    ----------
+    theta : float
+        rotation angle
+
+    phi : float
+        rotation angle
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     return to_qutrit_space(ms2qubit(theta, phi))
 
 
+#PRIVATE
 def xx_3(theta):
-    """ Returns Qutrit XX unitary """
+    """
+    Returns Qutrit XX unitary
+
+    Parameters
+    ----------
+    theta : float
+        rotation angle.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     return to_qutrit_space(x_2qubit(theta))
 
 
+#PRIVATE
 def yy_3(theta):
-    """ Returns Qutrit YY unitary """
+    """
+    Returns Qutrit YY unitary
+
+    Parameters
+    ----------
+    theta : float
+        rotation angle
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     return to_qutrit_space(y_2qubit(theta))
 
 
@@ -97,8 +190,9 @@ def make_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
                       ms_global=_np.pi / 2, ms_local=0,
                       similarity=False, seed=None, basis='qt'):
     """
-    Constructs a standard qutrit :class:`Model` containing the identity,
-    XX, YY, and Molmer-Sorenson gates.
+    Constructs a standard qutrit :class:`Model`.
+
+    This model contains the identity, XX, YY, and Molmer-Sorenson gates.
 
     Parameters
     ----------
@@ -106,18 +200,17 @@ def make_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
         Magnitude of random rotations to apply to the returned model.  If
         zero, then perfect "ideal" gates are constructed.
 
-    x_angle, y_angle : float
-        The angle of the single-qubit 'X' and 'Y' rotations in the 'XX' and 'YY'
-        gates.  An X-rotation by `theta` is given by `U = exp(-i/2 * theta * X)`
-        where `X` is a Pauli matrix, and likewise for the Y-rotation.
+    x_angle : float, optional
+        The rotation angle of each X in the XX gate.
 
-    ms_global, ms_local : float
-        "Global" and "local" angles for the Molmer-Sorenson gate, defined by
-        the corresponding 2-qubit unitary:
+    y_angle : float, optional
+        The rotation angle of each Y in the YY gate.
 
-        `U = exp(-i/2 * ms_global * (cos(ms_local)*X + sin(ms_local)*Y)^2)`
+    ms_global : float, optional
+        The global Molmer-Sorenson angle (theta)
 
-        where `x^2` means the *tensor product* of `x` with itself.
+    ms_local : float, optional
+        The local Molmer-Sorenson angle (theta)
 
     similarity : bool, optional
         If true, then apply the random rotations (whose strengths are given

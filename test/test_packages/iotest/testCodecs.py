@@ -39,10 +39,10 @@ class CodecsTestCase(BaseTestCase):
         self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
-        self.opLabels = list(self.model.operations.keys())
+        self.op_labels = list(self.model.operations.keys())
 
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
+            self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
@@ -64,7 +64,7 @@ class CodecsTestCase(BaseTestCase):
                                      self.germs, self.maxLens)
 
         #make a confidence region factory
-        estLbl = "default"
+        estLbl = self.results.name
         crfact = self.results.estimates[estLbl].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
@@ -134,8 +134,8 @@ class TestCodecs(CodecsTestCase):
         with open(temp_files + "/results.json",'r') as f:
             x = json.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
-        self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
-                         list(self.results.estimates['default'].confidence_region_factories.keys()))
+        self.assertEqual(list(x.estimates[x.name].confidence_region_factories.keys()),
+                         list(self.results.estimates[self.results.name].confidence_region_factories.keys()))
 
         # Workspace
         s = json.dumps(self.ws)
@@ -189,8 +189,8 @@ class TestCodecs(CodecsTestCase):
         with open(temp_files + "/results.mpk",'rb') as f:
             x = msgpack.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
-        self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
-                         list(self.results.estimates['default'].confidence_region_factories.keys()))
+        self.assertEqual(list(x.estimates[x.name].confidence_region_factories.keys()),
+                         list(self.results.estimates[self.results.name].confidence_region_factories.keys()))
 
         # Workspace
         s = msgpack.dumps(self.ws)
@@ -244,8 +244,8 @@ class TestCodecs(CodecsTestCase):
         with open(temp_files + "/results.pickle",'rb') as f:
             x = pickle.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
-        self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
-                         list(self.results.estimates['default'].confidence_region_factories.keys()))
+        self.assertEqual(list(x.estimates[x.name].confidence_region_factories.keys()),
+                         list(self.results.estimates[self.results.name].confidence_region_factories.keys()))
 
         # Workspace
         pygsti.report.workspace.enable_plotly_pickling() # b/c workspace cache may contain plotly figures

@@ -1,4 +1,6 @@
-""" GST gauge optimization algorithms """
+"""
+GST gauge optimization algorithms
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -121,12 +123,10 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
     Returns
     -------
     model                            if return_all == False
-
     (goodnessMin, gaugeMx, model)    if return_all == True
-
-      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
-      found, gaugeMx is the gauge matrix used to transform the model, and model is the
-      final gauge-transformed model.
+        where goodnessMin is the minimum value of the goodness function (the best 'goodness')
+        found, gaugeMx is the gauge matrix used to transform the model, and model is the
+        final gauge-transformed model.
     """
     if item_weights is None: item_weights = {}
 
@@ -229,12 +229,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     Returns
     -------
     model                            if return_all == False
-
     (goodnessMin, gaugeMx, model)    if return_all == True
-
-      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
-      found, gaugeMx is the gauge matrix used to transform the model, and model is the
-      final gauge-transformed model.
+        where goodnessMin is the minimum value of the goodness function (the best 'goodness')
+        found, gaugeMx is the gauge matrix used to transform the model, and model is the
+        final gauge-transformed model.
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)

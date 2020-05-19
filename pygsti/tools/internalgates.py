@@ -1,4 +1,6 @@
-"""The standard unitaries and gate names, used internal compilers and short-hand model init"""
+"""
+The standard unitaries and gate names, used internal compilers and short-hand model init
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,12 +18,13 @@ from . import symplectic as _symp
 
 def get_internal_gate_unitaries():
     """
-    The unitaries for the *internally* defined gates. These are gates that are used in
-    some circuit-compilation methods internally (e.g., compiling multi-qubit Clifford
-    gates), and under normal usage of functions/methods that internally make use of these
-    labels, circuits containing these gate names will not be returned to the user -- they
-    are first converted into gates with user-defined names and actions (with names starting
-    with 'G').
+    The unitaries for the *internally* defined gates.
+
+    These are gates that are used in some circuit-compilation methods internally (e.g.,
+    compiling multi-qubit Clifford gates), and under normal usage of functions/methods
+    that internally make use of these labels, circuits containing these gate names will
+    not be returned to the user -- they are first converted into gates with user-defined
+    names and actions (with names starting with 'G').
 
     Note that some unitaries in this dict do not have unique names. E.g., the key 'I' is the
     1-qubit identity unitary, but so is 'C0' (which refers to the zeroth element of the 1-qubit
@@ -82,11 +85,12 @@ def get_internal_gate_unitaries():
 
 def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
     """
-    Returns True if the unitary `gate_unitary` is, up to phase, the standard gate specified
-    by the name `standard_gate_name`. The correspondence between the standard names and
-    unitaries is w.r.t the internally-used gatenames (see get_internal_gate_unitaries()).
-    For example, one use of this function is to check whether some gate specifed by a user
-    with the name 'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
+    Whether a unitary is, up to a phase, the standard gate specified by the name `standard_gate_name`.
+
+    The correspondence between the standard names and unitaries is w.r.t the
+    internally-used gatenames (see get_internal_gate_unitaries()).  For example, one use
+    of this function is to check whether some gate specifed by a user with the name
+    'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
     Parameters
     ----------
@@ -117,10 +121,11 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
 
 def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary, standard_gate_name):
     """
-    Returns True if the unitary `gate_unitary` is, when pre- and post-multiplied by some
-    Pauli and up to phase, the standard gate specified by the name `standard_gate_name`.
-    The correspondence between the standard names and unitaries is w.r.t the internally-used
-    gatenames (see get_internal_gate_unitaries()).
+    Whether a unitary is the standard gate specified by `standard_gate_name`.
+
+    This equivalence is tested up to pre- and post-multiplication by some Pauli and up to
+    a phase, The correspondence between the standard names and unitaries is w.r.t the
+    internally-used gatenames (see get_internal_gate_unitaries()).
 
     Currently only supported for Clifford gates.
 
@@ -149,9 +154,9 @@ def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary, standard_gat
 
 def get_standard_gatename_unitaries():
     """
-    Constructs and returns a dictionary of unitary matrices describing the
-    action of "standard" gates. These gates (the keys of the returned
-    dictionary) are:
+    Constructs and returns a dictionary of unitary matrices describing the action of "standard" gates.
+
+    These gates (the keys of the returned dictionary) are:
 
     - Clifford Gates:
 
@@ -253,11 +258,63 @@ def get_standard_gatename_unitaries():
     return std_unitaries
 
 
+def get_standard_gatenames_cirq_conversions():
+    """
+    A dictionary converting the gates with standard names to the cirq names for these gates.
+
+    See :function:`get_standard_gatename_unitaries`.
+
+    By default, an idle operation will not be converted to a gate.
+    If you want an idle to be converted to a `cirq.WaitGate`, you will have
+    to modify this dictionary.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Currently there are some standard gate names with no conversion to cirq.
+
+    TODO: add Clifford gates with
+    https://cirq.readthedocs.io/en/latest/generated/cirq.SingleQubitCliffordGate.html
+
+    Returns
+    -------
+    dict mapping strings to string
+    """
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+    std_gatenames_to_cirq = {}
+    std_gatenames_to_cirq['Gi'] = None
+    std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gxpi'] = cirq.X
+    std_gatenames_to_cirq['Gzpi2'] = cirq.ZPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gzmpi2'] = cirq.ZPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gzpi'] = cirq.Z
+    std_gatenames_to_cirq['Gypi2'] = cirq.YPowGate(exponent=1 / 2)
+    std_gatenames_to_cirq['Gympi2'] = cirq.YPowGate(exponent=-1 / 2)
+    std_gatenames_to_cirq['Gypi'] = cirq.Y
+    std_gatenames_to_cirq['Gp'] = std_gatenames_to_cirq['Gzpi2']
+    std_gatenames_to_cirq['Gpdag'] = std_gatenames_to_cirq['Gzmpi2']
+    std_gatenames_to_cirq['Gh'] = cirq.H
+    std_gatenames_to_cirq['Gt'] = cirq.T
+    std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
+    std_gatenames_to_cirq['Gcphase'] = cirq.CZ
+    std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
+    std_gatenames_to_cirq['Gswap'] = cirq.SWAP
+
+    return std_gatenames_to_cirq
+
+
 def get_standard_gatenames_quil_conversions():
     """
-    A dictionary converting the gates with standard names
-    (see get_standard_gatename_unitaries()) to the QUIL
-    names for these gates.
+    A dictionary converting the gates with standard names to the QUIL names for these gates.
+
+    See :function:`get_standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user
@@ -319,9 +376,9 @@ def get_standard_gatenames_quil_conversions():
 
 def get_standard_gatenames_openqasm_conversions():
     """
-    A dictionary converting the gates with standard names
-    (see get_standard_gatename_unitaries()) to the QASM
-    names for these gates.
+    A dictionary converting the gates with standard names to the QASM names for these gates.
+
+    See :function:`get_standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user
@@ -385,9 +442,28 @@ def get_standard_gatenames_openqasm_conversions():
 
 def qasm_u3(theta, phi, lamb, output='unitary'):
     """
-    The u3 1-qubit gate of QASM, returned as a unitary
-    if output = 'unitary' and as a processmatrix in the
-    Pauli basis if out = 'superoperater.'
+    The u3 1-qubit gate of QASM, returned as a unitary.
+
+    if output = 'unitary' and as a processmatrix in the Pauli basis if out = 'superoperator.'
+
+    Parameters
+    ----------
+    theta : float
+        The theta parameter of the u3 gate.
+
+    phi : float
+        The phi parameter of the u3 gate.
+
+    lamb : float
+        The lambda parameter of the u3 gate.
+
+    output : {'unitary', 'superoperator'}
+        Whether the returned value is a unitary matrix or the Pauli-transfer-matrix
+        superoperator representing that unitary action.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     u3_unitary = _np.array([[_np.cos(theta / 2), -1 * _np.exp(1j * lamb) * _np.sin(theta / 2)],
                             [_np.exp(1j * phi) * _np.sin(theta / 2), _np.exp(1j * (lamb + phi)) * _np.cos(theta / 2)]])

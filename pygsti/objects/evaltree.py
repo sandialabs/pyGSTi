@@ -1,4 +1,6 @@
-""" Defines the EvalTree class which implements an evaluation tree. """
+"""
+Defines the EvalTree class which implements an evaluation tree.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,15 +23,16 @@ import warnings as _warnings
 
 class EvalTree(list):
     """
-    An Evaluation Tree.  Instances of this class specify how to
-      perform bulk Model operations.
+    An Evaluation Tree.  A structure that assists in performing bulk Model operations.
 
-    EvalTree instances create and store the decomposition of a list
-      of operation sequences into a sequence of 2-term products of smaller
-      strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of operation sequences, starting with just the
-      single gates, using the fewest number of multiplications, but
-      this optimality is not guaranteed.
+    EvalTree instances create and store a particular structure on or decomposition of
+    a list of circuits that facilitates fast computation of outcome probabilities.
+
+    Parameters
+    ----------
+    items : list, optional
+        Initial items.  This argument should only be used internally
+        in the course of serialization.
     """
 
     def __init__(self, items=[]):
@@ -69,6 +72,9 @@ class EvalTree(list):
         # The parent's index of each of this tree's *final* indices
         self.parentIndexMap = None
 
+        # list of the operation labels
+        self.opLabels = []
+
         # A dictionary whose keys are the "original" (as-given to initialize)
         # indices and whose values are the new "permuted" indices.  So if you
         # want to know where in a tree the ith-element of circuit_list (as
@@ -77,38 +83,41 @@ class EvalTree(list):
 
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, num_sub_tree_comms=1):
+    def initialize(self, simplified_circuit_elabels, num_sub_tree_comms=1):
         """
-          Initialize an evaluation tree using a set of operation sequences.
-          This function must be called before using an EvalTree.
+        Initialize an evaluation tree using a set of "simplified" circuits.
 
-          Parameters
-          ----------
-          circuit_list : list of (tuples or Circuits)
-              A list of tuples of operation labels or Circuit
-              objects, specifying the operation sequences that
-              should be present in the evaluation tree.
+        This function must be called before using this evaluation tree.
 
-          num_sub_tree_comms : int, optional
-              The number of processor groups (communicators)
-              to divide the subtrees of this EvalTree among
-              when calling `distribute`.  By default, the
-              communicator is not divided.
+        Parameters
+        ----------
+        simplified_circuit_elabels : dict
+            A dictionary of simplified circuits, i.e. circuits that do not include
+            POVM measurements and do not contain any instruments.  Keys are "raw"
+            operation sequences (circuits with state preparations and no instruments)
+            and values are lists of "simplified" effect labels (i.e. a single label
+            that identifies a POVM and outcome).
 
-          Returns
-          -------
-          None
+        num_sub_tree_comms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of this EvalTree among
+            when calling `distribute`.  By default, the
+            communicator is not divided.
+
+        Returns
+        -------
+        None
         """
         raise NotImplementedError("initialize(...) must be implemented by a derived class")
 
-    def _get_op_labels(self, simplified_circuit_list):
+    def _get_op_labels(self, simplified_circuit_elabels):
         """
         Returns a list of the distinct operation labels in
-        `simplified_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
+        `simplified_circuit_elabels` - a dictionary w/keys = "raw" operation sequences OR a list of them.
         """
         opLabels = set()
 
-        for simple_circuit_with_prep, elabels in simplified_circuit_list.items():
+        for simple_circuit_with_prep, elabels in simplified_circuit_elabels.items():
             if elabels == [None]:  # special case when circuit contains no prep
                 opLabels.update(simple_circuit_with_prep)
             else:
@@ -133,31 +142,47 @@ class EvalTree(list):
         return new_tree
 
     def get_init_labels(self):
-        """ Return a tuple of the operation labels (strings)
-            which form the beginning of the tree.
+        """
+        Return a tuple of the operation labels which form the beginning of the tree.
+
+        Returns
+        -------
+        tuple
         """
         return tuple(self.opLabels)
 
     def get_init_indices(self):
-        """ Return a tuple of the indices corresponding
-             to the initial operation labels (strings)
-             which form the beginning of the tree.
+        """
+        Return a tuple of the indices corresponding to the initial operation labels.
+
+        These "initial labels" are returned by :method:`get_init_labels` and
+        form the beginning of the tree.
+
+        Returns
+        -------
+        tuple
         """
         return tuple(self.init_indices)
 
     def get_evaluation_order(self):
-        """ Return a list of indices specifying the
-             order in which elements of this EvalTree
-             should be visited when doing a computation
-             (after computing the initial indices).
+        """
+        Return a list of indices specifying the evaluation order.
+
+        This is the order in which elements of this EvalTree should be visited when
+        doing a computation (after computing the initial indices).
+
+        Returns
+        -------
+        list
         """
         return self.eval_order
 
     def final_view(self, a, axis=None):
         """
-        Returns a view of array `a` restricting it to only the
-        *final* results computed by this tree (not the intermediate
-        results).
+        Create a view of array `a` restricting it to only the *final* results computed by this tree.
+
+        This need not be the entire array because there could be intermediate results
+        (e.g. "scratch space") that are excluded.
 
         Parameters
         ----------
@@ -191,8 +216,7 @@ class EvalTree(list):
 
     def final_slice(self, parent_tree):
         """
-        Return a slice that identifies the segment of `parent_tree`'s
-        final values that correspond to this tree's final values.
+        The slice of `parent_tree`'s final values corresponding to this tree's final values.
 
         Note that if `parent_tree` is not None, this tree must be a
         sub-tree of it (which means `parent_tree` is split).
@@ -210,6 +234,8 @@ class EvalTree(list):
         Returns
         -------
         slice
+            Identifies the segment of `parent_tree`'s final values that
+            correspond to this tree's final values.
         """
         if (self.myFinalToParentFinalMap is not None) and \
                 parent_tree.is_split():
@@ -219,9 +245,11 @@ class EvalTree(list):
 
     def final_element_indices(self, parent_tree):
         """
-        Return a slice or index array that identifies the segment of
-        `parent_tree`'s final "element" values that correspond to this tree's
-        final values, *including* spam indices.
+        The slice (or index array) of `parent_tree`'s final "element" values corresponding to this tree's final values.
+
+        These element values differ from the "values" of :method:`final_view` in that elements
+        correspond to circuits *including* SPAM, and so each element corresponds to a single
+        outcome probability..
 
         Note that if `parent_tree` is not None, this tree must be a
         sub-tree of it (which means `parent_tree` is split).
@@ -238,7 +266,9 @@ class EvalTree(list):
 
         Returns
         -------
-        slice
+        slice or numpy.ndarray
+            Identifies the segment of `parent_tree`'s final "element" values that
+            correspond to this tree's final "element" values (i.e. *including* spam indices).
         """
         if (self.myFinalElsToParentFinalElsMap is not None) and \
                 parent_tree.is_split():
@@ -248,17 +278,27 @@ class EvalTree(list):
 
     def num_final_strings(self):
         """
-        Returns the integer number of "final" operation sequences, equal
-          to the number of keys in the `simplified_circuit_list`
-          passed to :method:`initialize`.
+        Returns the integer number of "final" circuits.
+
+        This is equal to the number of keys in the `simplified_circuit_elabels`
+        passed to :method:`initialize`.
+
+        Returns
+        -------
+        int
         """
         return self.num_final_strs
 
     def num_final_elements(self):
         """
-        Returns the integer number of "final" elements, equal
-          to the number of (circuit, elabels) pairs contained in
-          the `simplified_circuit_list` passed to :method:`initialize`.
+        Returns the integer number of "final" elements.
+
+        This is equal to the number of (circuit, elabels) pairs contained in
+        the `simplified_circuit_elabels` passed to :method:`initialize`.
+
+        Returns
+        -------
+        int
         """
         return self.num_final_els
 
@@ -267,22 +307,22 @@ class EvalTree(list):
         Generate a list of the final operation sequences this tree evaluates.
 
         This method essentially "runs" the tree and follows its
-          prescription for sequentailly building up longer strings
-          from shorter ones.  When permute == True, the resulting list
-          should be the same as the one passed to initialize(...), and
-          so this method may be used as a consistency check.
+        prescription for sequentailly building up longer strings
+        from shorter ones.  When permute == True, the resulting list
+        should be the same as the one passed to initialize(...), and
+        so this method may be used as a consistency check.
 
         Parameters
         ----------
         permute : bool, optional
-           Whether to permute the returned list of strings into the
-           same order as the original list passed to initialize(...).
-           When False, the computed order of the operation sequences is
-           given, which is matches the order of the results from calls
-           to `Model` bulk operations.  Non-trivial permutation
-           occurs only when the tree is split (in order to keep
-           each sub-tree result a contiguous slice within the parent
-           result).
+            Whether to permute the returned list of strings into the
+            same order as the original list passed to initialize(...).
+            When False, the computed order of the operation sequences is
+            given, which is matches the order of the results from calls
+            to `Model` bulk operations.  Non-trivial permutation
+            occurs only when the tree is split (in order to keep
+            each sub-tree result a contiguous slice within the parent
+            result).
 
         Returns
         -------
@@ -294,17 +334,16 @@ class EvalTree(list):
 
     def permute_original_to_computation(self, a, axis=0):
         """
-        Permute an array's elements using mapping from the "original"
-        operation sequence ordering to the "computation" ordering.
+        Permute an array's elements from "original" to "computational" circuit ordering.
 
         This function converts arrays with elements corresponding
-        to operation sequences in the "original" ordering (i.e. the
+        to circuits in the "original" ordering (i.e. the
         ordering in the list passed to `initialize(...)`) to the
         ordering used in tree computation (i.e. by a `Model`'s
         bulk computation routines).
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         a : numpy array
            The array whose permuted elements are returned.
 
@@ -332,17 +371,16 @@ class EvalTree(list):
 
     def permute_computation_to_original(self, a, axis=0):
         """
-        Permute an array's elements using mapping from the "computation"
-        operation sequence ordering to the "original" ordering.
+        Permute an array's elements from "computational" to "original" circuit ordering.
 
         This function converts arrays with elements corresponding
-        to operation sequences in the ordering used in tree computation
+        to circuits in the ordering used in tree computation
         (i.e. the ordering returned by `Model`'s bulk computation routines)
-        to the "original" ordering (i.e. the ordering of the operation sequence list
+        to the "original" ordering (i.e. the ordering of the circuit list
         passed to `initialize(...)`).
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         a : numpy array
            The array whose permuted elements are returned.
 
@@ -446,10 +484,11 @@ class EvalTree(list):
 
     def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
-        Split this tree into sub-trees in order to reduce the
-          maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either max_sub_tree_size
-          or num_sub_trees.
+        Split this tree into sub-trees.
+
+        This is done in order to reduce the maximum size of any tree (useful for
+        limiting memory consumption or for using multiple cores).  Must specify
+        either max_sub_tree_size or num_sub_trees.
 
         Parameters
         ----------
@@ -692,14 +731,24 @@ class EvalTree(list):
         return updated_simplified_circuit_Xs, updated_elIndices
 
     def is_split(self):
-        """ Returns boolean indicating whether tree is split into sub-trees or not. """
+        """
+        Whether tree is split into sub-trees or not.
+
+        Returns
+        -------
+        bool
+        """
         return len(self.subTrees) > 0
 
     def get_sub_trees(self):
         """
-        Returns a list of all the sub-trees (also EvalTree instances) of
-          this tree.  If this tree is not split, returns a single-element
-          list containing just the tree.
+        A list of all the sub-trees (also EvalTree instances) of this tree.
+
+        If this tree is not split, returns a single-element list containing just the tree.
+
+        Returns
+        -------
+        list
         """
         if self.is_split():
             return self.subTrees
@@ -715,10 +764,16 @@ class EvalTree(list):
     #        self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
     #        i += len(spamTuples)
 
+    #PRIVATE
     def print_analysis(self):
         """
-        Print a brief analysis of this tree. Used for
-        debugging and assessing tree quality.
+        Print a brief analysis of this tree.
+
+        Used for debugging and assessing tree quality.
+
+        Returns
+        -------
+        None
         """
 
         #Analyze tree

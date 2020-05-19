@@ -1,4 +1,6 @@
-""" RPE Protocol objects """
+"""
+RPE Protocol objects
+"""
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,7 +19,70 @@ import numpy
 
 
 class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
-    """ Experimental design for robust phase estimation """
+    """
+    Experimental design for robust phase estimation (RPE).
+
+    Produces an Experiment Design to test the phase that develops on a target
+    gate, by applying it req_lengths times to a states prepared by sin_prep
+    and cos_prep circuits, and then measured in the computational basis after
+    (respective) action by sin_meas and cos_meas circuits.  outcomes_pos and
+    outcomes_neg determine which of those computational basis states count
+    towards each of the probabilities
+
+    P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2
+    P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2
+
+    (Computational basis state measurements in neither of these sets are
+    silently dropped.)
+
+    In the above, the +x refers to the |E_0> + |E_1> combination of eigenstates
+    of U, *not* of computational basis states.  For instance, if U is rotation
+    in the X basis, then cos_prep and cos_meas could be simply the identity:
+
+    |± U> = |0> ± |1>
+
+    where |±U> are the eigenstates of U, so that, in the notation of the above,
+
+    |+x> = |+U> + |-U> = |0>
+
+    The circuit would then calculate
+
+    P^+_{Nc} = |<+x| U^N | +x>|²
+
+    provided that cos_outcomes_pos = [0] and cos_outcomes_neg = [1].
+
+    Parameters
+    ----------
+    gate : <TODO typ>
+        <TODO description>
+
+    req_lengths : <TODO typ>
+        <TODO description>
+
+    sin_prep : <TODO typ>
+        <TODO description>
+
+    sin_meas : <TODO typ>
+        <TODO description>
+
+    sin_outcomes_pos : <TODO typ>
+        <TODO description>
+
+    sin_outcomes_neg : <TODO typ>
+        <TODO description>
+
+    cos_prep : <TODO typ>
+        <TODO description>
+
+    cos_meas : <TODO typ>
+        <TODO description>
+
+    cos_outcomes_pos : <TODO typ>
+        <TODO description>
+
+    cos_outcomes_neg : <TODO typ>
+        <TODO description>
+    """
 
     def __init__(
         self,
@@ -97,7 +162,9 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
 
 
 class RobustPhaseEstimation(_proto.Protocol):
-    """ Robust phase estimation (RPE) protocol """
+    """
+    Robust phase estimation (RPE) protocol
+    """
 
     def _parse_row(self, row, outcomes_pos, outcomes_neg):
         pos = 0
@@ -110,6 +177,17 @@ class RobustPhaseEstimation(_proto.Protocol):
         return pos, neg
 
     def parse_dataset(self, design, dataset):
+        """
+        <TODO summary>
+
+        Parameters
+        ----------
+        design : <TODO typ>
+            <TODO description>
+
+        dataset : <TODO typ>
+            <TODO description>
+        """
         measured = OrderedDict()
         for n, sin_circ, cos_circ in zip(design.req_lengths, *design.circuit_lists):
             m = measured[n] = numpy.zeros(4, dtype=int)
@@ -123,8 +201,18 @@ class RobustPhaseEstimation(_proto.Protocol):
 
     def raw_angles(self, measured):
         """
-        Determine the raw angles from the count data.  This corresponds to the angle of U^N,
-        i.e., it is N times the phase of U.
+        Determine the raw angles from the count data.
+
+        This corresponds to the angle of U^N, i.e., it is N times the phase of U.
+
+        Parameters
+        ----------
+        measured : <TODO typ>
+            <TODO description>
+
+        Returns
+        -------
+        <TODO typ>
         """
 
         angles = OrderedDict()
@@ -142,6 +230,25 @@ class RobustPhaseEstimation(_proto.Protocol):
         return angles
 
     def run(self, data, memlimit=None, comm=None):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+
+        Returns
+        -------
+        RobustPhaseEstimationResults
+        """
         meas = self.parse_dataset(data.edesign, data.dataset)
         angles = self.raw_angles(meas)
 
@@ -152,7 +259,31 @@ class RobustPhaseEstimation(_proto.Protocol):
 
 
 class RobustPhaseEstimationResults(_proto.ProtocolResults):
-    """ Results from the RPE protocol """
+    """
+    Results from the RPE protocol
+
+    Parameters
+    ----------
+    data : <TODO typ>
+        <TODO description>
+
+    protocol_instance : <TODO typ>
+        <TODO description>
+
+    angle_estimates : <TODO typ>
+        <TODO description>
+
+    Attributes
+    ----------
+    angle_estimate : <TODO typ>
+        <TODO description>
+
+    measured_counts : <TODO typ>
+        <TODO description>
+
+    raw_angles : <TODO typ>
+        <TODO description>
+    """
 
     def __init__(self, data, protocol_instance, angle_estimates):
         """
@@ -166,16 +297,25 @@ class RobustPhaseEstimationResults(_proto.ProtocolResults):
 
     @property
     def angle_estimate(self):
+        """
+        <TODO summary>
+        """
         return self.angle_estimates[-1]
 
     @property
     def measured_counts(self):
+        """
+        <TODO summary>
+        """
         return self.protocol_instance.parse_dataset(
             self.data.edesign, self.data.dataset
         )
 
     @property
     def raw_angles(self):
+        """
+        <TODO summary>
+        """
         return self.protocol_instance.rawn_angles(self.measured_counts)
 
 

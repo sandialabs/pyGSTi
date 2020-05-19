@@ -1,6 +1,5 @@
 """
-Defines classes with represent SPAM operations, along with supporting
-functionality.
+Defines classes with represent SPAM operations, along with supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -48,22 +47,22 @@ IMAG_TOL = 1e-8  # tolerance for imaginary part being considered zero
 
 def optimize_spamvec(vec_to_optimize, target_vec):
     """
-    Optimize the parameters of vec_to_optimize so that the
-      the resulting SPAM vector is as close as possible to
-      target_vec.
+    Optimize the parameters of vec_to_optimize.
 
-    This is trivial for the case of FullSPAMVec
-      instances, but for other types of parameterization
-      this involves an iterative optimization over all the
-      parameters of vec_to_optimize.
+    The optimization is performed so that the the resulting SPAM vector is as
+    close as possible to target_vec.
+
+    This is trivial for the case of FullSPAMVec instances, but for other types
+    of parameterization this involves an iterative optimization over all the
+    parameters of vec_to_optimize.
 
     Parameters
     ----------
     vec_to_optimize : SPAMVec
-      The vector to optimize. This object gets altered.
+        The vector to optimize. This object gets altered.
 
     target_vec : SPAMVec
-      The SPAM vector used as the target.
+        The SPAM vector used as the target.
 
     Returns
     -------
@@ -97,8 +96,10 @@ def optimize_spamvec(vec_to_optimize, target_vec):
 
 def convert(spamvec, to_type, basis, extra=None):
     """
-    Convert SPAM vector to a new type of parameterization, potentially
-    creating a new SPAMVec object.  Raises ValueError for invalid conversions.
+    Convert SPAM vector to a new type of parameterization.
+
+    This potentially creates a new SPAMVec object.
+    Raises ValueError for invalid conversions.
 
     Parameters
     ----------
@@ -118,12 +119,11 @@ def convert(spamvec, to_type, basis, extra=None):
     extra : object, optional
         Additional information for conversion.
 
-
     Returns
     -------
     SPAMVec
-       The converted SPAM vector, usually a distinct
-       object from the object passed as input.
+        The converted SPAM vector, usually a distinct
+        object from the object passed as input.
     """
     if to_type == "full":
         if isinstance(spamvec, FullSPAMVec):
@@ -237,6 +237,10 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
     spamvec : SPAMVec
         The spam vector object to compute a Jacobian for.
 
+    wrt_filter : list or numpy.ndarray
+        List of parameter indices to take derivative with respect to.
+        (None means to use all the this operation's parameters.)
+
     eps : float, optional
         The finite difference step to use.
 
@@ -284,6 +288,10 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e
         argument can be useful when the function is called *within* a LinearOperator
         class's `deriv_wrt_params()` method itself as a part of testing.
 
+    wrt_filter : list or numpy.ndarray
+        List of parameter indices to take derivative with respect to.
+        (None means to use all the this operation's parameters.)
+
     eps : float, optional
         The finite difference step to use.
 
@@ -317,9 +325,26 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e
 
 class SPAMVec(_modelmember.ModelMember):
     """
-    Excapulates a parameterization of a state preparation OR POVM effect
-    vector. This class is the  common base class for all specific
+    A parameterized state preparation OR POVM effect vector (operator).
+
+    This class is the  common base class for all specific
     parameterizations of a SPAM vector.
+
+    Parameters
+    ----------
+    rep : object
+        A representation object containing the core data for this spam vector.
+
+    evotype : str
+        The evolution type of this operator, for matching with forward simulators.
+
+    typ : {'prep','effect'}
+        Whether this is a state preparation or POVM effect. (The type of representation.)
+
+    Attributes
+    ----------
+    size : int
+        The number of independent elements in this SPAM vector (when viewed as a dense array).
     """
 
     def __init__(self, rep, evotype, typ):
@@ -337,21 +362,32 @@ class SPAMVec(_modelmember.ModelMember):
     def size(self):
         """
         Return the number of independent elements in this gate (when viewed as a dense array)
+
+        Returns
+        -------
+        int
         """
         return self.dim
 
     @property
     def outcomes(self):
         """
-        Return the z-value outcomes corresponding to this effect SPAM vector
-        in the context of a stabilizer-state simulation.
+        The z-value outcomes corresponding to this effect SPAM vector.
+
+        (Used in the context of a stabilizer-state simulation.)
+
+        Returns
+        -------
+        numpy.ndarray
         """
         raise NotImplementedError("'outcomes' property is not implemented for %s objects" % self.__class__.__name__)
 
     def set_value(self, vec):
         """
-        Attempts to modify SPAMVec parameters so that the specified raw
-        SPAM vector becomes vec.  Will raise ValueError if this operation
+        Set the dense-vector value of this SPAM vector.
+
+        Attempts to modify this SPAM vector's parameters so that the raw
+        SPAM vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
@@ -367,8 +403,9 @@ class SPAMVec(_modelmember.ModelMember):
 
     def set_time(self, t):
         """
-        Sets the current time for a time-dependent operator.  For time-independent
-        operators (the default), this function does absolutely nothing.
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does absolutely nothing.
 
         Parameters
         ----------
@@ -383,8 +420,18 @@ class SPAMVec(_modelmember.ModelMember):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.  The memory
-        in `scratch` maybe used when it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
 
@@ -425,7 +472,7 @@ class SPAMVec(_modelmember.ModelMember):
 #        else:
 #            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_poly_coeffs=False):
+    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -442,11 +489,13 @@ class SPAMVec(_modelmember.ModelMember):
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
-
         Parameters
         ----------
         order : int
             The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
             Whether a parallel list of locally-indexed (using variable indices
@@ -469,6 +518,8 @@ class SPAMVec(_modelmember.ModelMember):
 
     def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
         """
+        Get terms with magnitude above `min_term_mag`.
+
         Get the terms (from a Taylor expansion of this SPAM vector) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
         be the absolute value of its coefficient), considering only those
@@ -497,11 +548,15 @@ class SPAMVec(_modelmember.ModelMember):
             the maximum Taylor-order to consider when checking whether term-
             magnitudes exceed `min_term_mag`.
 
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
         Returns
         -------
         highmag_terms : list
             A list of the high-magnitude terms that were found.  These
             terms are *sorted* in descending order by term-magnitude.
+
         first_order_indices : list
             A list of the indices into `highmag_terms` that mark which
             of these terms are first-order Taylor terms (useful when
@@ -556,7 +611,29 @@ class SPAMVec(_modelmember.ModelMember):
         return [t[1] for t in sorted_terms], first_order_indices
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
-        """ TODO: docstring """
+        """
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+        """
         v = self.to_vector()
         terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_compact_polys_complex(
@@ -567,9 +644,10 @@ class SPAMVec(_modelmember.ModelMember):
     def frobeniusdist2(self, other_spam_vec, typ, transform=None,
                        inv_transform=None):
         """
-        Return the squared frobenius difference between this spam vector and
-        `other_spam_vec`, optionally transforming this vector first using
-        `transform` and `inv_transform` (depending on the value of `typ`).
+        Return the squared frobenius difference between this operation and `other_spam_vec`.
+
+        Optionally transforms this vector first using `transform` and
+        `inv_transform` (depending on the value of `typ`).
 
         Parameters
         ----------
@@ -579,8 +657,11 @@ class SPAMVec(_modelmember.ModelMember):
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed.
 
-        transform, inv_transform : numpy.ndarray
-            The transformation (if not None) to be performed.
+        transform : numpy.ndarray, optional
+            Transformation matrix.
+
+        inv_transform : numpy.ndarray, optional
+            Inverse of `tranform`.
 
         Returns
         -------
@@ -603,9 +684,10 @@ class SPAMVec(_modelmember.ModelMember):
 
     def residuals(self, other_spam_vec, typ, transform=None, inv_transform=None):
         """
-        Return a vector of residuals between this spam vector and
-        `other_spam_vec`, optionally transforming this vector first using
-        `transform` and `inv_transform` (depending on the value of `typ`).
+        Return a vector of residuals between this spam vector and `other_spam_vec`.
+
+        Optionally transforms this vector first using `transform` and
+        `inv_transform` (depending on the value of `typ`).
 
         Parameters
         ----------
@@ -615,8 +697,11 @@ class SPAMVec(_modelmember.ModelMember):
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed.
 
-        transform, inv_transform : numpy.ndarray
-            The transformation (if not None) to be performed.
+        transform : numpy.ndarray, optional
+            Transformation matrix.
+
+        inv_transform : numpy.ndarray, optional
+            Inverse of `tranform`.
 
         Returns
         -------
@@ -636,10 +721,9 @@ class SPAMVec(_modelmember.ModelMember):
                 return _gt.residuals(_np.dot(_np.transpose(transform),
                                              vec), other_spam_vec.todense())
 
-    def transform(self, s, typ):
+    def transform(self, s, typ):  #INPLACE
         """
-        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation
-        or  effect SPAM vectors, respectively.
+        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
         mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
@@ -658,6 +742,10 @@ class SPAMVec(_modelmember.ModelMember):
 
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
+
+        Returns
+        -------
+        None
         """
         if typ == 'prep':
             Si = s.get_transform_matrix_inverse()
@@ -705,7 +793,7 @@ class SPAMVec(_modelmember.ModelMember):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return 0  # no parameters
 
@@ -727,8 +815,18 @@ class SPAMVec(_modelmember.ModelMember):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -738,10 +836,18 @@ class SPAMVec(_modelmember.ModelMember):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
         An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -757,9 +863,7 @@ class SPAMVec(_modelmember.ModelMember):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -778,10 +882,13 @@ class SPAMVec(_modelmember.ModelMember):
 
         Parameters
         ----------
-        wrt_filter1, wrt_filter2 : list
-            Lists of indices of the paramters to take first and second
-            derivatives with respect to.  If None, then derivatives are
-            taken with respect to all of the vectors's parameters.
+        wrt_filter1 : list or numpy.ndarray
+            List of parameter indices to take 1st derivatives with respect to.
+            (None means to use all the this operation's parameters.)
+
+        wrt_filter2 : list or numpy.ndarray
+            List of parameter indices to take 2nd derivatives with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -799,12 +906,12 @@ class SPAMVec(_modelmember.ModelMember):
     @staticmethod
     def convert_to_vector(v):
         """
-        Static method that converts a vector-like object to a 2D numpy
-        dim x 1 column array.
+        Static method that converts a vector-like object to a 2D numpy dim x 1 column array.
 
         Parameters
         ----------
         v : array_like
+            Array-like object to convert to a numpy array.
 
         Returns
         -------
@@ -847,9 +954,30 @@ class SPAMVec(_modelmember.ModelMember):
 
 class DenseSPAMVec(SPAMVec):
     """
-    Excapulates a parameterization of a state preparation OR POVM effect
-    vector. This class is the  common base class for all specific
-    parameterizations of a SPAM vector.
+    A state preparation OR POVM effect vector that behaves like a numpy array.
+
+    This class is the common base class for parameterizations of a SPAM vector
+    that have a dense representation and can be accessed like a numpy array.
+
+    Parameters
+    ----------
+    vec : numpy.ndarray
+        The SPAM vector as a dense numpy array.
+
+    evotype : {"statevec", "densitymx"}
+        The evolution type.
+
+    prep_or_effect : { 'prep', 'effect' }
+        The type of SPAM vector.
+
+    Attributes
+    ----------
+    base_1d : numpy.ndarray
+        Direct access to the underlying 1D array.
+
+    base : numpy.ndarray
+        Direct access the the underlying data as column vector,
+        i.e, a (dim,1)-shaped array.
     """
 
     def __init__(self, vec, evotype, prep_or_effect):
@@ -881,18 +1009,34 @@ class DenseSPAMVec(SPAMVec):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.  The memory
-        in `scratch` maybe used when it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         #don't use scratch since we already have memory allocated
         return self.base_1d  # *must* be a numpy array for Cython arg conversion
 
     @property
     def base_1d(self):
+        """
+        Direct access to the underlying 1D array.
+        """
         return self._rep.base
 
     @property
     def base(self):
+        """
+        Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
+        """
         bv = self.base_1d.view()
         bv.shape = (bv.size, 1)  # 'base' is by convention a (N,1)-shaped array
         return bv
@@ -971,8 +1115,20 @@ class DenseSPAMVec(SPAMVec):
 
 class StaticSPAMVec(DenseSPAMVec):
     """
-    Encapsulates a SPAM vector that is completely fixed, or "static", meaning
-      that is contains no parameters.
+    A SPAM vector that is completely fixed, or "static" (i.e. that posesses no parameters).
+
+    Parameters
+    ----------
+    vec : array_like or SPAMVec
+        a 1D numpy array representing the SPAM operation.  The
+        shape of this array sets the dimension of the SPAM op.
+
+    evotype : {"densitymx", "statevec"}
+        the evolution type being used.
+
+    typ : {"prep", "effect"}
+        whether this is a state preparation or an effect (measurement)
+        SPAM vector.
     """
 
     def __init__(self, vec, evotype="auto", typ="prep"):
@@ -1005,8 +1161,20 @@ class StaticSPAMVec(DenseSPAMVec):
 
 class FullSPAMVec(DenseSPAMVec):
     """
-    Encapsulates a SPAM vector that is fully parameterized, that is,
-      each element of the SPAM vector is an independent parameter.
+    A "fully parameterized" SPAM vector where each element is an independent parameter.
+
+    Parameters
+    ----------
+    vec : array_like or SPAMVec
+        a 1D numpy array representing the SPAM operation.  The
+        shape of this array sets the dimension of the SPAM op.
+
+    evotype : {"densitymx", "statevec"}
+        the evolution type being used.
+
+    typ : {"prep", "effect"}
+        whether this is a state preparation or an effect (measurement)
+        SPAM vector.
     """
 
     def __init__(self, vec, evotype="auto", typ="prep"):
@@ -1035,8 +1203,10 @@ class FullSPAMVec(DenseSPAMVec):
 
     def set_value(self, vec):
         """
-        Attempts to modify SPAMVec parameters so that the specified raw
-        SPAM vector becomes vec.  Will raise ValueError if this operation
+        Set the dense-vector value of this SPAM vector.
+
+        Attempts to modify this SPAM vector's parameters so that the raw
+        SPAM vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
@@ -1061,7 +1231,7 @@ class FullSPAMVec(DenseSPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return 2 * self.size if self._evotype == "statevec" else self.size
 
@@ -1086,8 +1256,18 @@ class FullSPAMVec(DenseSPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -1101,9 +1281,17 @@ class FullSPAMVec(DenseSPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -1123,9 +1311,7 @@ class FullSPAMVec(DenseSPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -1136,11 +1322,19 @@ class FullSPAMVec(DenseSPAMVec):
 
 class TPSPAMVec(DenseSPAMVec):
     """
-    Encapsulates a SPAM vector that is fully parameterized except for the first
-    element, which is frozen to be 1/(d**0.25).  This is so that, when the SPAM
-    vector is interpreted in the Pauli or Gell-Mann basis, the represented
-    density matrix has trace == 1.  This restriction is frequently used in
-    conjuction with trace-preserving (TP) gates.
+    A fixed-unit-trace SPAM vector.
+
+    This SPAM vector is fully parameterized except for the first element, which
+    is frozen to be 1/(d**0.25).  This is so that, when the SPAM vector is
+    interpreted in the Pauli or Gell-Mann basis, the represented density matrix
+    has trace == 1.  This restriction is frequently used in conjuction with
+    trace-preserving (TP) gates, hence its name.
+
+    Parameters
+    ----------
+    vec : array_like or SPAMVec
+        a 1D numpy array representing the SPAM operation.  The
+        shape of this array sets the dimension of the SPAM op.
     """
 
     #Note: here we assume that the first basis element is (1/sqrt(x) * I),
@@ -1170,14 +1364,19 @@ class TPSPAMVec(DenseSPAMVec):
 
     @property
     def base(self):
+        """
+        Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
+        """
         bv = self.base_1d.view()
         bv.shape = (bv.size, 1)
         return _ProtectedArray(bv, indices_to_protect=(0, 0))
 
     def set_value(self, vec):
         """
-        Attempts to modify SPAMVec parameters so that the specified raw
-        SPAM vector becomes vec.  Will raise ValueError if this operation
+        Set the dense-vector value of this SPAM vector.
+
+        Attempts to modify this SPAM vector's parameters so that the raw
+        SPAM vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
@@ -1206,7 +1405,7 @@ class TPSPAMVec(DenseSPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.dim - 1
 
@@ -1228,8 +1427,18 @@ class TPSPAMVec(DenseSPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -1241,9 +1450,17 @@ class TPSPAMVec(DenseSPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -1259,9 +1476,7 @@ class TPSPAMVec(DenseSPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -1272,13 +1487,26 @@ class TPSPAMVec(DenseSPAMVec):
 
 class ComplementSPAMVec(DenseSPAMVec):
     """
-    Encapsulates a SPAM vector that is parameterized by
-    `I - sum(other_spam_vecs)` where `I` is a (static) identity element
-    and `other_param_vecs` is a list of other spam vectors in the same parent
-    :class:`POVM`.  This only *partially* implements the SPAMVec interface
-    (some methods such as `to_vector` and `from_vector` will thunk down to base
-    class versions which raise `NotImplementedError`), as instances are meant to
-    be contained within a :class:`POVM` which takes care of vectorization.
+    A POVM effect vector that ensures that all the effects of a POVM sum to the identity.
+
+    This SPAM vector is paramterized as `I - sum(other_spam_vecs)` where `I` is
+    a (static) identity element and `other_param_vecs` is a list of other spam
+    vectors in the same parent :class:`POVM`.  This only *partially* implements
+    the SPAMVec interface (some methods such as `to_vector` and `from_vector`
+    will thunk down to base class versions which raise `NotImplementedError`),
+    as instances are meant to be contained within a :class:`POVM` which takes
+    care of vectorization.
+
+    Parameters
+    ----------
+    identity : array_like or SPAMVec
+        a 1D numpy array representing the static identity operation from
+        which the sum of the other vectors is subtracted.
+
+    other_spamvecs : list of SPAMVecs
+        A list of the "other" parameterized SPAM vectors which are
+        subtracted from `identity` to compute the final value of this
+        "complement" SPAM vector.
     """
 
     def __init__(self, identity, other_spamvecs):
@@ -1321,7 +1549,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return len(self.gpindices_as_array())
 
@@ -1339,12 +1567,23 @@ class ComplementSPAMVec(DenseSPAMVec):
 
     def from_vector(self, v, close=False, nodirty=False):
         """
-        Initialize this SPAM vector using a vector of its parameters.
+        Initialize the SPAM vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of parameters.
+            The 1D vector of SPAM vector parameters.  Length
+            must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -1358,9 +1597,17 @@ class ComplementSPAMVec(DenseSPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -1386,9 +1633,7 @@ class ComplementSPAMVec(DenseSPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -1399,12 +1644,29 @@ class ComplementSPAMVec(DenseSPAMVec):
 
 class CPTPSPAMVec(DenseSPAMVec):
     """
-    Encapsulates a SPAM vector that is parameterized through the Cholesky
-    decomposition of it's standard-basis representation as a density matrix
-    (not a Liouville vector).  The resulting SPAM vector thus represents a
-    positive density matrix, and additional constraints on the parameters
-    also guarantee that the trace == 1.  This SPAM vector is meant for
-    use with CPTP processes, hence the name.
+    A SPAM vector constrained to correspond ot a positive density matrix.
+
+    This SPAM vector that is parameterized through the Cholesky decomposition of
+    it's standard-basis representation as a density matrix (not a Liouville
+    vector).  The resulting SPAM vector thus represents a positive density
+    matrix, and additional constraints on the parameters also guarantee that the
+    trace == 1.  This SPAM vector is meant for use with CPTP processes, hence
+    the name.
+
+    Parameters
+    ----------
+    vec : array_like or SPAMVec
+        a 1D numpy array representing the SPAM operation.  The
+        shape of this array sets the dimension of the SPAM op.
+
+    basis : {"std", "gm", "pp", "qt"} or Basis
+        The basis `vec` is in.  Needed because this parameterization
+        requires we construct the density matrix corresponding to
+        the Lioville vector `vec`.
+
+    trunctate : bool, optional
+        Whether or not a non-positive, trace=1 `vec` should
+        be truncated to force a successful construction.
     """
 
     def __init__(self, vec, basis, truncate=False):
@@ -1527,8 +1789,10 @@ class CPTPSPAMVec(DenseSPAMVec):
 
     def set_value(self, vec):
         """
-        Attempts to modify SPAMVec parameters so that the specified raw
-        SPAM vector becomes vec.  Will raise ValueError if this operation
+        Set the dense-vector value of this SPAM vector.
+
+        Attempts to modify this SPAM vector's parameters so that the raw
+        SPAM vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
@@ -1554,7 +1818,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         assert(self.dmDim**2 == self.dim)  # should at least be true without composite bases...
         return self.dmDim**2
@@ -1577,8 +1841,18 @@ class CPTPSPAMVec(DenseSPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -1591,9 +1865,17 @@ class CPTPSPAMVec(DenseSPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -1657,9 +1939,7 @@ class CPTPSPAMVec(DenseSPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -1677,10 +1957,13 @@ class CPTPSPAMVec(DenseSPAMVec):
 
         Parameters
         ----------
-        wrt_filter1, wrt_filter2 : list
-            Lists of indices of the paramters to take first and second
-            derivatives with respect to.  If None, then derivatives are
-            taken with respect to all of the vectors's parameters.
+        wrt_filter1 : list or numpy.ndarray
+            List of parameter indices to take 1st derivatives with respect to.
+            (None means to use all the this operation's parameters.)
+
+        wrt_filter2 : list or numpy.ndarray
+            List of parameter indices to take 2nd derivatives with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -1692,7 +1975,22 @@ class CPTPSPAMVec(DenseSPAMVec):
 
 class TensorProdSPAMVec(SPAMVec):
     """
-    Encapsulates a SPAM vector that is a tensor-product of other SPAM vectors.
+    A SPAM vector that is a tensor-product of other SPAM vectors.
+
+    Parameters
+    ----------
+    typ : {"prep","effect"}
+        The type of spam vector - either a product of preparation
+        vectors ("prep") or of POVM effect vectors ("effect")
+
+    factors : list of SPAMVecs or POVMs
+        if `typ == "prep"`, a list of the component SPAMVecs; if
+        `typ == "effect"`, a list of "reference" POVMs into which
+        `povm_effect_lbls` indexes.
+
+    povm_effect_lbls : array-like
+        Only non-None when `typ == "effect"`.  The effect label of each
+        factor POVM which is tensored together to form this SPAM vector.
     """
 
     def __init__(self, typ, factors, povm_effect_lbls=None):
@@ -1844,9 +2142,20 @@ class TensorProdSPAMVec(SPAMVec):
                 #outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
                 #rep = replib.SBEffectRep(outcomes)
 
-    def todense(self):
+    def todense(self, scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if self._evotype in ("statevec", "densitymx"):
             if len(self.factors) == 0: return _np.empty(0, complex if self._evotype == "statevec" else 'd')
@@ -1965,11 +2274,13 @@ class TensorProdSPAMVec(SPAMVec):
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
-
         Parameters
         ----------
         order : int
             The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
             Whether a parallel list of locally-indexed (using variable indices
@@ -1980,7 +2291,6 @@ class TensorProdSPAMVec(SPAMVec):
         -------
         terms : list
             A list of :class:`RankOneTerm` objects.
-
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
@@ -2061,7 +2371,7 @@ class TensorProdSPAMVec(SPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.Np
 
@@ -2088,8 +2398,18 @@ class TensorProdSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -2114,10 +2434,18 @@ class TensorProdSPAMVec(SPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
         An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -2176,9 +2504,7 @@ class TensorProdSPAMVec(SPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -2203,11 +2529,38 @@ class TensorProdSPAMVec(SPAMVec):
 
 class PureStateSPAMVec(SPAMVec):
     """
-    Encapsulates a SPAM vector that is a pure state but evolves according to
-    one of the density matrix evolution types ("denstiymx", "svterm", and
-    "cterm").  It is parameterized by a contained pure-state SPAMVec which
-    evolves according to a state vector evolution type ("statevec" or
-    "stabilizer").
+    A SPAM vector that is a rank-1 density matrix.
+
+    This is essentially a pure state that evolves according to one of the
+    density matrix evolution types ("denstiymx", "svterm", and "cterm").  It is
+    parameterized by a contained pure-state SPAMVec which evolves according to a
+    state vector evolution type ("statevec" or "stabilizer").
+
+    Parameters
+    ----------
+    pure_state_vec : array_like or SPAMVec
+        a 1D numpy array or object representing the pure state.  This object
+        sets the parameterization and dimension of this SPAM vector (if
+        `pure_state_vec`'s dimension is `d`, then this SPAM vector's
+        dimension is `d^2`).  Assumed to be a complex vector in the
+        standard computational basis.
+
+    evotype : {'densitymx', 'svterm', 'cterm'}
+        The evolution type of this SPAMVec.  Note that the evotype of
+        `pure_state_vec` must be compatible with this value.  In particular,
+        `pure_state_vec` must have an evotype of `"statevec"` (then allowed
+        values are `"densitymx"` and `"svterm"`) or `"stabilizer"` (then
+        the only allowed value is `"cterm"`).
+
+    dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for this SPAM vector - that is, for the *density matrix*
+        corresponding to `pure_state_vec`.  Allowed values are Matrix-unit
+        (std),  Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    typ : {"prep","effect"}
+        The type of spam vector - either a product of preparation
+        vectors ("prep") or of POVM effect vectors ("effect")
     """
 
     def __init__(self, pure_state_vec, evotype='densitymx', dm_basis='pp', typ="prep"):
@@ -2235,6 +2588,10 @@ class PureStateSPAMVec(SPAMVec):
             corresponding to `pure_state_vec`.  Allowed values are Matrix-unit
             (std),  Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
             (or a custom basis object).
+
+        typ : {"prep","effect"}
+            The type of spam vector - either a product of preparation
+            vectors ("prep") or of POVM effect vectors ("effect")
         """
         if not isinstance(pure_state_vec, SPAMVec):
             pure_state_vec = StaticSPAMVec(SPAMVec.convert_to_vector(pure_state_vec), 'statevec')
@@ -2262,8 +2619,18 @@ class PureStateSPAMVec(SPAMVec):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.  The memory
-        in `scratch` maybe used when it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         dmVec_std = _gt.state_to_dmvec(self.pure_state_vec.todense())
         return _bt.change_basis(dmVec_std, 'std', self.basis)
@@ -2285,11 +2652,13 @@ class PureStateSPAMVec(SPAMVec):
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
-
         Parameters
         ----------
         order : int
             The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
             Whether a parallel list of locally-indexed (using variable indices
@@ -2300,7 +2669,6 @@ class PureStateSPAMVec(SPAMVec):
         -------
         terms : list
             A list of :class:`RankOneTerm` objects.
-
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
@@ -2369,7 +2737,7 @@ class PureStateSPAMVec(SPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.pure_state_vec.num_params()
 
@@ -2391,8 +2759,18 @@ class PureStateSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -2403,10 +2781,18 @@ class PureStateSPAMVec(SPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
         An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -2417,9 +2803,7 @@ class PureStateSPAMVec(SPAMVec):
 
     def has_nonzero_hessian(self):
         """
-        Returns whether this SPAM vector has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
+        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -2434,15 +2818,37 @@ class PureStateSPAMVec(SPAMVec):
 
 
 class LindbladSPAMVec(SPAMVec):
-    """ A Lindblad-parameterized SPAMVec (that is also expandable into terms)"""
+    """
+    A Lindblad-parameterized SPAMVec (that is also expandable into terms).
+
+    Parameters
+    ----------
+    pure_vec : numpy array or SPAMVec
+        An array or SPAMVec in the *full* density-matrix space (this
+        vector will have dimension 4 in the case of a single qubit) which
+        represents a pure-state preparation or projection.  This is used as
+        the "base" preparation or projection that is followed or preceded
+        by, respectively, the parameterized Lindblad-form error generator.
+        (This argument is *not* copied if it is a SPAMVec.  A numpy array
+         is converted to a new StaticSPAMVec.)
+
+    errormap : MapOperator
+        The error generator action and parameterization, encapsulated in
+        a gate object.  Usually a :class:`LindbladOp`
+        or :class:`ComposedOp` object.  (This argument is *not* copied,
+        to allow LindbladSPAMVecs to share error generator
+        parameters with other gates and spam vectors.)
+
+    typ : {"prep","effect"}
+        Whether this is a state preparation or POVM effect vector.
+    """
 
     @classmethod
     def from_spamvec_obj(cls, spamvec, typ, param_type="GLND", purevec=None,
                          proj_basis="pp", mx_basis="pp", truncate=True,
                          lazy=False):
         """
-        Creates a LindbladSPAMVec from an existing SPAMVec object
-        and some additional information.
+        Creates a LindbladSPAMVec from an existing SPAMVec object and some additional information.
 
         This function is different from `from_spam_vector` in that it assumes
         that `spamvec` is a :class:`SPAMVec`-derived object, and if `lazy=True`
@@ -2475,7 +2881,7 @@ class LindbladSPAMVec(SPAMVec):
             If None, then it is taken to be `spamvec`, and so `spamvec` must
             represent a pure state in this case.
 
-        proj_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        proj_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
             The basis used to construct the Lindblad-term error generators onto
             which the SPAM vector's error generator is projected.  Allowed values
             are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
@@ -2556,9 +2962,12 @@ class LindbladSPAMVec(SPAMVec):
                          nonham_mode="all", truncate=True, mx_basis="pp",
                          evotype="densitymx"):
         """
-        Creates a Lindblad-parameterized spamvec from a state vector and a basis
-        which specifies how to decompose (project) the vector's error generator.
+        Creates a Lindblad-parameterized spamvec from a state vector and a basis.
 
+        The basis specifies how to decompose (project) the vector's error generator.
+
+        Parameters
+        ----------
         spam_vec : SPAMVec
             the SPAM vector to initialize from.  The error generator that
             tranforms `pure_vec` into `spam_vec` forms the parameterization
@@ -2848,6 +3257,11 @@ class LindbladSPAMVec(SPAMVec):
         """
         Copy this object.
 
+        Parameters
+        ----------
+        parent : Model, optional
+            The parent model to set for the copy.
+
         Returns
         -------
         LinearOperator
@@ -2861,8 +3275,7 @@ class LindbladSPAMVec(SPAMVec):
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this ModelMember object.
+        Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
 
         Parameters
         ----------
@@ -2871,6 +3284,9 @@ class LindbladSPAMVec(SPAMVec):
 
         parent : Model or ModelMember
             The parent whose parameter array gpindices references.
+
+        memo : dict, optional
+            A memo dict used to avoid circular references.
 
         Returns
         -------
@@ -2884,8 +3300,18 @@ class LindbladSPAMVec(SPAMVec):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.  The memory
-        in `scratch` maybe used when it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if self._prep_or_effect == "prep":
             #error map acts on dmVec
@@ -2944,11 +3370,13 @@ class LindbladSPAMVec(SPAMVec):
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
-
         Parameters
         ----------
         order : int
             The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
             Whether a parallel list of locally-indexed (using variable indices
@@ -2959,7 +3387,6 @@ class LindbladSPAMVec(SPAMVec):
         -------
         terms : list
             A list of :class:`RankOneTerm` objects.
-
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
@@ -2996,6 +3423,29 @@ class LindbladSPAMVec(SPAMVec):
             return self.terms[order]
 
     def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+        """
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+        """
         state_terms = self.state_vec.get_taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
         stateTerm = state_terms[0]
         stateTerm = stateTerm.copy_with_magnitude(1.0)
@@ -3034,8 +3484,10 @@ class LindbladSPAMVec(SPAMVec):
 
     def get_total_term_magnitude_deriv(self):
         """
+        The derivative of the sum of *all* this SPAM vector's terms.
+
         Get the derivative of the total (sum) of the magnitudes of all this
-        operator's terms with respect to the operators (local) parameters.
+        SPAM vector's terms with respect to the operators (local) parameters.
 
         Returns
         -------
@@ -3046,9 +3498,17 @@ class LindbladSPAMVec(SPAMVec):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
+        The element-wise derivative this SPAM vector.
+
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -3080,10 +3540,13 @@ class LindbladSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        wrt_filter1, wrt_filter2 : list
-            Lists of indices of the paramters to take first and second
-            derivatives with respect to.  If None, then derivatives are
-            taken with respect to all of the vectors's parameters.
+        wrt_filter1 : list or numpy.ndarray
+            List of parameter indices to take 1st derivatives with respect to.
+            (None means to use all the this operation's parameters.)
+
+        wrt_filter2 : list or numpy.ndarray
+            List of parameter indices to take 2nd derivatives with respect to.
+            (None means to use all the this operation's parameters.)
 
         Returns
         -------
@@ -3112,7 +3575,7 @@ class LindbladSPAMVec(SPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return self.error_map.num_params()
 
@@ -3129,13 +3592,23 @@ class LindbladSPAMVec(SPAMVec):
 
     def from_vector(self, v, close=False, nodirty=False):
         """
-        Initialize the gate using a vector of its parameters.
+        Initialize the SPAM vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
+            The 1D vector of SPAM vector parameters.  Length
+            must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------
@@ -3145,10 +3618,9 @@ class LindbladSPAMVec(SPAMVec):
         self._update_rep()
         if not nodirty: self.dirty = True
 
-    def transform(self, s, typ):
+    def transform(self, s, typ):  #INPLACE
         """
-        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation
-        or  effect SPAM vectors, respectively.
+        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
         mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
@@ -3167,6 +3639,10 @@ class LindbladSPAMVec(SPAMVec):
 
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
+
+        Returns
+        -------
+        None
         """
         #Defer everything to LindbladOp's
         # `spam_tranform` function, which applies either
@@ -3204,8 +3680,23 @@ class LindbladSPAMVec(SPAMVec):
 
 class StabilizerSPAMVec(SPAMVec):
     """
-    A stabilizer state preparation represented internally using a compact
-    representation of its stabilizer group.
+    A stabilizer state preparation.
+
+    This is represented internally using a compact representation of its stabilizer group.
+
+    Parameters
+    ----------
+    nqubits : int
+        Number of qubits
+
+    zvals : iterable, optional
+        An iterable over anything that can be cast as True/False
+        to indicate the 0/1 value of each qubit in the Z basis.
+        If None, the all-zeros state is created.
+
+    sframe : StabilizerFrame, optional
+        A complete stabilizer frame to initialize this state from.
+        If this is not None, then `nqubits` and `zvals` must be None.
     """
 
     @classmethod
@@ -3264,9 +3755,18 @@ class StabilizerSPAMVec(SPAMVec):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array of shape
-        (2^(nqubits), 1).  The memory in `scratch` maybe used when
-        it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         statevec = self.sframe.to_statevec()
         statevec.shape = (statevec.size, 1)
@@ -3293,8 +3793,19 @@ class StabilizerSPAMVec(SPAMVec):
 
 class StabilizerEffectVec(SPAMVec):  # FUTURE: merge this with ComptationalSPAMVec (w/evotype == "stabilizer")?
     """
-    A dummy SPAM vector that points to a set/product of 1-qubit POVM
-    outcomes from stabilizer-state measurements.
+    A dummy SPAM vector that points to a set/product of 1-qubit POVM outcomes from stabilizer-state measurements.
+
+    Parameters
+    ----------
+    outcomes : iterable
+        A list or other iterable of integer 0 or 1 outcomes specifying
+        which POVM effect vector this object represents within the
+        full `stabilizerPOVM`
+
+    Attributes
+    ----------
+    outcomes : numpy.ndarray
+        The 0/1 outcomes identifying this effect within its StabilizerZPOVM
     """
 
     @classmethod
@@ -3348,12 +3859,18 @@ class StabilizerEffectVec(SPAMVec):  # FUTURE: merge this with ComptationalSPAMV
 
     def todense(self):
         """
-        Return this SPAM vector as a dense state vector of shape
-        (2^(nqubits), 1)
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
 
         Returns
         -------
-        numpy array
+        numpy.ndarray
         """
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
         statevec = _functools.reduce(_np.kron, [v[i] for i in self.outcomes])
@@ -3362,7 +3879,13 @@ class StabilizerEffectVec(SPAMVec):  # FUTURE: merge this with ComptationalSPAMV
 
     @property
     def outcomes(self):
-        """ The 0/1 outcomes identifying this effect within its StabilizerZPOVM """
+        """
+        The 0/1 outcomes identifying this effect within its StabilizerZPOVM
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         return self._outcomes
 
     def __str__(self):
@@ -3376,6 +3899,19 @@ class ComputationalSPAMVec(SPAMVec):
     A static SPAM vector that is tensor product of 1-qubit Z-eigenstates.
 
     This is called a "computational basis state" in many contexts.
+
+    Parameters
+    ----------
+    zvals : iterable
+        A list or other iterable of integer 0 or 1 outcomes specifying
+        which computational basis element this object represents.  The
+        length of `zvals` gives the total number of qubits.
+
+    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+        The type of evolution being performed.
+
+    typ : {"prep","effect"}
+        Whether this is a state preparation or POVM effect vector.
     """
 
     @classmethod
@@ -3471,8 +4007,18 @@ class ComputationalSPAMVec(SPAMVec):
 
     def todense(self, scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.  The memory
-        in `scratch` maybe used when it is not-None.
+        Return this SPAM vector as a (dense) numpy array.
+
+        The memory in `scratch` maybe used when it is not-None.
+
+        Parameters
+        ----------
+        scratch : numpy.ndarray, optional
+            scratch space available for use.
+
+        Returns
+        -------
+        numpy.ndarray
         """
         if self._evotype == "densitymx":
             factor_dim = 4
@@ -3545,11 +4091,13 @@ class ComputationalSPAMVec(SPAMVec):
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
-
         Parameters
         ----------
         order : int
             The order of terms to get.
+
+        max_poly_vars : int, optional
+            maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
             Whether a parallel list of locally-indexed (using variable indices
@@ -3560,7 +4108,6 @@ class ComputationalSPAMVec(SPAMVec):
         -------
         terms : list
             A list of :class:`RankOneTerm` objects.
-
         coefficients : list
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
@@ -3600,7 +4147,7 @@ class ComputationalSPAMVec(SPAMVec):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return 0  # no parameters
 
@@ -3622,8 +4169,18 @@ class ComputationalSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length
+            The 1D vector of SPAM vector parameters.  Length
             must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this SPAM vector's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this SPAM vector should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this SPAM vector's parameters.
 
         Returns
         -------

@@ -279,21 +279,21 @@ class TestGateSetMethods(GateSetTestCase):
 
         for nprocs in (1,4,10,40,100):
             fake_comm = FakeComm(nprocs)
-            for distributeMethod in ('deriv','circuits'):
+            for distribute_method in ('deriv','circuits'):
                 for memLimit in (-100, 1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
-                    print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distributeMethod, memLimit))
+                    print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distribute_method, memLimit))
                     try:
                         evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
                             subcalls=['bulk_fill_hprobs'], comm=fake_comm)
                         evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distributeMethod,
+                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
                             subcalls=['bulk_fill_dprobs'], comm=fake_comm) #where bNp2Matters == False
 
                     except MemoryError:

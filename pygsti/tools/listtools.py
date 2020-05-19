@@ -1,4 +1,6 @@
-""" Utility functions for working with lists """
+"""
+Utility functions for working with lists
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -85,8 +87,7 @@ def remove_duplicates(l, index_to_test=None):
 
 def compute_occurrence_indices(lst):
     """
-    Returns a 0-based list of integers specifying which occurrence,
-    i.e. enumerated duplicate, each list item is.
+    A 0-based list of integers specifying which occurrence, i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
     returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This is useful
@@ -194,11 +195,6 @@ def sorted_partitions(n):
     ----------
     n : int
         The number to partition.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of descending integers (sorted partitions).
     """
 
     if n == 0:  # special case
@@ -252,11 +248,6 @@ def partitions(n):
     ----------
     n : int
         The number to partition.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of integers (partitions).
     """
     for p in sorted_partitions(n):
         previous = tuple()
@@ -286,11 +277,6 @@ def partition_into(n, nbins):
     nbins : int
         The fixed number of bins, equal to the length of all the
         partitions that are iterated over.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of integers (partitions).
     """
     if n == 0:
         a = _np.zeros(nbins, _np.int64)
@@ -341,17 +327,12 @@ def _partition_into_slow(n, nbins):
 
 def incd_product(*args):
     """
-    Like `itertools.product` but returns the first modified index (which was
-    incremented) along with the product tuple itself.
+    Like `itertools.product` but returns the first modified (incremented) index along with the product tuple itself.
 
     Parameters
     ----------
     *args : iterables
         Any number of iterable things that we're taking the product of.
-
-    Returns
-    -------
-    iterator over tuples
     """
     lists = [list(a) for a in args]  # so we can get new iterators to each argument
     iters = [iter(l) for l in lists]

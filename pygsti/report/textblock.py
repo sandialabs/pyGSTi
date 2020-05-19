@@ -1,4 +1,6 @@
-""" Defines the ReportText class """
+"""
+Defines the ReportText class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -14,9 +16,21 @@ from .row import Row
 
 
 class ReportText(object):
-    '''
+    """
     Text representation, renderable in multiple formats
-    '''
+
+    Parameters
+    ----------
+    text : str, bytes, or list
+        The text to display, possibly in need of processing as
+        specified by `fmt`.
+
+    form : { None, "VerbosityPrinter" }
+        What format `text` is in.  If None, then plain text that doesn't
+        require any processing is assumed.  If `"VerbosityPrinter`", then
+        `text` is assumed to be a list of `(type, level, message)` tuples
+        as recorded by a :class:`VerbosityPrinter` object.
+    """
 
     def __init__(self, text, form=None):
         '''
@@ -38,20 +52,21 @@ class ReportText(object):
         self._format = form
 
     def render(self, fmt, text_id=None):
-        '''
+        """
         Render this text-block object
 
         Parameters
         ----------
         fmt : string
             name of format to be used
+
         text_id : string
             an ID to use in formats where it is applicable
 
         Returns
         -------
         string
-        '''
+        """
         if self._format is None:
             return {fmt: str(self._raw)}
 

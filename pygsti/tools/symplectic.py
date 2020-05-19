@@ -1,4 +1,6 @@
-""" Symplectic representation utility functions """
+"""
+Symplectic representation utility functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -17,15 +19,17 @@ import copy as _copy
 
 def symplectic_form(n, convention='standard'):
     """
-    Creates the symplectic form for the number of qubits specified. There are two
-    variants, of the sympletic form over the finite field of the integers modulo 2,
-    used in pyGSTi. These corresponding to the 'standard' and 'directsum' conventions.
-    In the case of 'standard', the symplectic form is the 2n x 2n matrix of ((0,1),(1,0)),
-    where '1' and '0' are the identity and all-zeros matrices of size n x n. The
-    'standard' symplectic form is probably the most commonly used, and it is the
-    definition used throughout most of the code, including the Clifford compilers. In the
-    case of 'directsum', the symplectic form is the direct sum of n 2x2 bit-flip matrices.
-    This is only used in pyGSTi for sampling from the symplectic group.
+    Creates the symplectic form for the number of qubits specified.
+
+    There are two variants, of the sympletic form over the finite field of the
+    integers modulo 2, used in pyGSTi. These corresponding to the 'standard' and
+    'directsum' conventions.  In the case of 'standard', the symplectic form is the
+    2n x 2n matrix of ((0,1),(1,0)), where '1' and '0' are the identity and all-zeros
+    matrices of size n x n. The 'standard' symplectic form is probably the most
+    commonly used, and it is the definition used throughout most of the code,
+    including the Clifford compilers. In the case of 'directsum', the symplectic form
+    is the direct sum of n 2x2 bit-flip matrices.  This is only used in pyGSTi for
+    sampling from the symplectic group.
 
     Parameters
     ----------
@@ -41,7 +45,6 @@ def symplectic_form(n, convention='standard'):
     -------
     numpy array
         The specified symplectic form.
-
     """
     nn = 2 * n
     sym_form = _np.zeros((nn, nn), int)
@@ -63,14 +66,15 @@ def symplectic_form(n, convention='standard'):
 
 def change_symplectic_form_convention(s, outconvention='standard'):
     """
-    Maps the input symplectic matrix between the 'standard' and 'directsum'
-    symplectic form conventions. That is, if the input is a symplectic matrix
-    with respect to the 'directsum' convention and outconvention ='standard' the
-    output of this function is the equivalent symplectic matrix in the 'standard'
-    symplectic form convention. Similarily, if the input is a symplectic matrix
-    with respect to the 'standard' convention and outconvention = 'directsum'
-    the output of this function is the equivalent symplectic matrix in the
-    'directsum' symplectic form convention.
+    Maps the input symplectic matrix between the 'standard' and 'directsum' symplectic form conventions.
+
+    That is, if the input is a symplectic matrix with respect to the 'directsum'
+    convention and outconvention ='standard' the output of this function is the
+    equivalent symplectic matrix in the 'standard' symplectic form
+    convention. Similarily, if the input is a symplectic matrix with respect to the
+    'standard' convention and outconvention = 'directsum' the output of this function
+    is the equivalent symplectic matrix in the 'directsum' symplectic form
+    convention.
 
     Parameters
     ----------
@@ -125,7 +129,6 @@ def check_symplectic(m, convention='standard'):
     -------
     bool
         A bool specifying whether the matrix is symplectic
-
     """
     n = _np.shape(m)[0] // 2
     s_form = symplectic_form(n, convention=convention)
@@ -147,7 +150,6 @@ def inverse_symplectic(s):
     -------
     numpy array
         The inverse of s, over the field of the integers mod 2.
-
     """
     assert(check_symplectic(s)), "The input matrix is not symplectic!"
 
@@ -164,8 +166,9 @@ def inverse_symplectic(s):
 
 def inverse_clifford(s, p):
     """
-    Returns the inverse of a Clifford gate in the symplectic representation. This uses
-    the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
+    Returns the inverse of a Clifford gate in the symplectic representation.
+
+    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -179,10 +182,8 @@ def inverse_clifford(s, p):
     -------
     sinverse : numpy array
         The symplectic matrix representing the inverse of the input Clifford.
-
     pinverse : numpy array
         The 'phase vector' representing the inverse of the input Clifford.
-
     """
     assert(check_valid_clifford(s, p)), \
         "The input symplectic matrix - phase vector pair does not define a valid Clifford!"
@@ -225,8 +226,9 @@ def inverse_clifford(s, p):
 
 def check_valid_clifford(s, p):
     """
-    Checks if a symplectic matrix - phase vector pair (s,p) is the symplectic representation of
-    a Clifford. This usesthe formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
+    Checks if a symplectic matrix - phase vector pair (s,p) is the symplectic representation of a Clifford.
+
+    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -240,7 +242,6 @@ def check_valid_clifford(s, p):
     -------
     bool
         True if (s,p) is the symplectic representation of some Clifford.
-
     """
     # Checks if the matrix s is symplectic, which is the only constraint on s.
     is_symplectic_matrix = check_symplectic(s)
@@ -262,11 +263,12 @@ def check_valid_clifford(s, p):
 
 def construct_valid_phase_vector(s, pseed):
     """
-    Constructs a phase vector that, when paired with the provided symplectic matrix, defines
-    a Clifford gate. If the seed phase vector, when paired with `s`, represents some Clifford
-    this seed is returned. Otherwise 1 mod 4 is added to the required elements of the `pseed`
-    in order to make it at valid phase vector (which is one of many possible phase vectors
-    that, together with s, define a valid Clifford).
+    Constructs a phase vector that, when paired with the provided symplectic matrix, defines a Clifford gate.
+
+    If the seed phase vector, when paired with `s`, represents some Clifford this
+    seed is returned. Otherwise 1 mod 4 is added to the required elements of the
+    `pseed` in order to make it at valid phase vector (which is one of many possible
+    phase vectors that, together with s, define a valid Clifford).
 
     Parameters
     ----------
@@ -306,6 +308,8 @@ def construct_valid_phase_vector(s, pseed):
 
 def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
+    Finds the Pauli layer that should be appended to a circuit to implement a given Clifford.
+
     If some circuit implements the clifford described by the symplectic matrix s and
     the vector p_implemented, this function returns the Pauli layer that should be
     appended to this circuit to implement the clifford described by s and the vector
@@ -337,7 +341,6 @@ def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     list
         A list that defines a Pauli layer, with the ith element containig one of the
         4 tuples (P,qubit_labels[i]) with P = 'I', 'Z', 'Y' and 'Z'
-
     """
     n = _np.shape(s)[0] // 2
     s_form = symplectic_form(n)
@@ -362,6 +365,8 @@ def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
 
 def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
+    Finds the Pauli layer that should be prepended to a circuit to implement a given Clifford.
+
     If some circuit implements the clifford described by the symplectic matrix s and
     the vector p_implemented, this function returns the Pauli layer that should be
     prefixed to this circuit to implement the clifford described by s and the vector
@@ -393,7 +398,6 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     list
         A list that defines a Pauli layer, with the ith element containig one of the
         4 tuples ('I',i), ('X',i), ('Y',i), ('Z',i).
-
     """
     n = _np.shape(s)[0] // 2
     s_form = symplectic_form(n)
@@ -418,11 +422,12 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
 
 def compose_cliffords(s1, p1, s2, p2):
     """
-    Multiplies two cliffords in the symplectic representation. The output corresponds
-    to the symplectic representation of C2 times C1 (i.e., C1 acts first) where s1
-    (s2) and p1 (p2) are the symplectic matrix and phase vector, respectively, for
-    Clifford C1 (C2). This uses the formualas derived in Hostens and De Moor PRA 71,
-    042315 (2005).
+    Multiplies two cliffords in the symplectic representation.
+
+    The output corresponds to the symplectic representation of C2 times C1 (i.e., C1
+    acts first) where s1 (s2) and p1 (p2) are the symplectic matrix and phase vector,
+    respectively, for Clifford C1 (C2). This uses the formualas derived in Hostens
+    and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -442,10 +447,8 @@ def compose_cliffords(s1, p1, s2, p2):
     -------
     s : numpy array
         The symplectic matrix over the integers mod 2 representing the composite Clifford
-
     p : numpy array
         The 'phase vector' over the integers mod 4 representing the compsite Clifford
-
     """
     assert(_np.shape(s1) == _np.shape(s2)), "Input must be Cliffords acting on the same number of qubits!"
     assert(check_valid_clifford(s1, p1)), "The first matrix-vector pair is not a valid Clifford!"
@@ -476,6 +479,8 @@ def compose_cliffords(s1, p1, s2, p2):
 
 def symplectic_kronecker(sp_factors):
     """
+    Takes a kronecker product of symplectic representations.
+
     Construct a single `(s,p)` symplectic (or stabilizer) representation that
     corresponds to the tensor (kronecker) product of the objects represented
     by each `(s,p)` element of `sp_factors`.
@@ -494,7 +499,6 @@ def symplectic_kronecker(sp_factors):
     s : numpy.ndarray
         An array of shape (2n,2n) where n is the *total* number of qubits (the
         sum of the number of qubits in each `sp_factors` element).
-
     p : numpy.ndarray
         A 1D array of length 2n.
     """
@@ -519,8 +523,7 @@ def symplectic_kronecker(sp_factors):
 
 def prep_stabilizer_state(nqubits, zvals=None):
     """
-    Contruct the `(s,p)` stabilizer representation for a computational
-    basis state given by `zvals`.
+    Contruct the `(s,p)` stabilizer representation for a computational basis state given by `zvals`.
 
     Parameters
     ----------
@@ -551,9 +554,9 @@ def prep_stabilizer_state(nqubits, zvals=None):
 
 def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
     """
-    Applies a clifford in the symplectic representation to a stabilize state in the
-    standard stabilizer representation. The output corresponds to the stabilizer
-    representation of the output state.
+    Applies a clifford in the symplectic representation to a stabilizer state in the standard stabilizer representation.
+
+    The output corresponds to the stabilizer representation of the output state.
 
     Parameters
     ----------
@@ -573,10 +576,8 @@ def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
     -------
     out_s : numpy array
         The symplectic matrix over the integers mod 2 representing the output state
-
     out_p : numpy array
         The 'phase vector' over the integers mod 4 representing the output state
-
     """
     two_n = _np.shape(s)[0]; n = two_n // 2
     assert(_np.shape(state_s) == (two_n, two_n)), "Clifford and state must be for the same number of qubits!"
@@ -617,8 +618,7 @@ def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
 
 def pauli_z_measurement(state_s, state_p, qubit_index):
     """
-    Computes the probabilities of 0/1 (+/-) outcomes from measuring a
-    Pauli operator on a stabilizer state.
+    Computes the probabilities of 0/1 (+/-) outcomes from measuring a Pauli operator on a stabilizer state.
 
     Parameters
     ----------
@@ -635,11 +635,9 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     -------
     p0, p1 : float
         Probabilities of 0 (+ eigenvalue) and 1 (- eigenvalue) outcomes.
-
-    state_s_0, state_s_1: numpy array
+    state_s_0, state_s_1 : numpy array
         Matrix over the integers mod 2 representing the output stabilizer
         states.
-
     state_p_0, state_p_1 : numpy array
         Phase vectors over the integers mod 4 representing the output
         stabilizer states.
@@ -711,6 +709,7 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
 def colsum(i, j, s, p, n):
     """
     A helper routine used for manipulating stabilizer state representations.
+
     Updates the `i`-th stabilizer generator (column of `s` and element of `p`)
     with the group-action product of the `j`-th and the `i`-th generators, i.e.
 
@@ -718,12 +717,17 @@ def colsum(i, j, s, p, n):
 
     Parameters
     ----------
-    i,j : int
-        Column indices (see above).
+    i : int
+        Destination generator index.
 
-    s,p : numpy.ndarray
-        The generator matrix and phase vector of the stabilizer representation
-        being acted upon.
+    j : int
+        Sournce generator index.
+
+    s : numpy array
+        The matrix over the integers mod 2 representing the stabilizer state
+
+    p : numpy array
+        The 'phase vector' over the integers mod 4 representing the stabilizer state
 
     n : int
         The number of qubits.  `s` must be shape (2n,2n) and `p` must be
@@ -755,6 +759,7 @@ def colsum(i, j, s, p, n):
 def colsum_acc(acc_s, acc_p, j, s, p, n):
     """
     A helper routine used for manipulating stabilizer state representations.
+
     Similar to :function:`colsum` except a separate "accumulator" column is
     used instead of the `i`-th column of `s` and element of `p`. I.e., this
     performs:
@@ -763,16 +768,20 @@ def colsum_acc(acc_s, acc_p, j, s, p, n):
 
     Parameters
     ----------
-    acc_s, acc_p : numpy.ndarray
-        The "accumulator" generator.  `acc_s` is shape (2n,1) and `acc_p` is
-        length 1.
+    acc_s : numpy array
+        The matrix over the integers mod 2 representing the "accumulator" stabilizer state
+
+    acc_p : numpy array
+        The 'phase vector' over the integers mod 4 representing the "accumulator" stabilizer state
 
     j : int
         Index of the stabilizer generator being accumulated (see above).
 
-    s,p : numpy.ndarray
-        The generator matrix and phase vector of the stabilizer representation
-        being acted upon.
+    s : numpy array
+        The matrix over the integers mod 2 representing the stabilizer state
+
+    p : numpy array
+        The 'phase vector' over the integers mod 4 representing the stabilizer state
 
     n : int
         The number of qubits.  `s` must be shape (2n,2n) and `p` must be
@@ -805,9 +814,9 @@ def colsum_acc(acc_s, acc_p, j, s, p, n):
 def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
                                 return_state=False):
     """
-    Compute the probability of a given outcome when measuring some or all of the
-    qubits in a stabilizer state.  Returns this probability, optionally along
-    with the updated (post-measurement) stabilizer state.
+    Compute the probability of a given outcome when measuring some or all of the qubits in a stabilizer state.
+
+    Returns this probability, optionally along with the updated (post-measurement) stabilizer state.
 
     Parameters
     ----------
@@ -831,7 +840,6 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
     -------
     p : float
         The probability of the given measurement outcome.
-
     state_s,state_p : numpy.ndarray
         Only returned when `return_state=True`.  The post-measurement stabilizer
         state representation (an updated version of `state_sp_tuple`).
@@ -855,9 +863,9 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
 
 def embed_clifford(s, p, qubit_inds, n):
     """
-    Embeds the `(s,p)` Clifford symplectic representation into
-    a larger symplectic representation.  The action of `(s,p)`
-    takes place on the qubit indices specified by `qubit_inds`.
+    Embeds the `(s,p)` Clifford symplectic representation into a larger symplectic representation.
+
+    The action of `(s,p)` takes place on the qubit indices specified by `qubit_inds`.
 
     Parameters
     ----------
@@ -877,7 +885,6 @@ def embed_clifford(s, p, qubit_inds, n):
     -------
     s : numpy array
         The symplectic matrix over the integers mod 2 representing the embedded Clifford
-
     p : numpy array
         The 'phase vector' over the integers mod 4 representing the embedded Clifford
     """
@@ -900,8 +907,10 @@ def embed_clifford(s, p, qubit_inds, n):
 
 def get_internal_gate_symplectic_representations(gllist=None):
     """
-    Returns dictionaries containing the symplectic matrices and phase vectors that represent
-    the specified 'standard' Clifford gates, or the representations of all the standard gates
+    Creates a dictionary of the symplectic representations of 'standard' Clifford gates.
+
+    Returns a dictionary containing the symplectic matrices and phase vectors that represent
+    the specified 'standard' Clifford gates, or the representations of *all* the standard gates
     if no list of operation labels is supplied. These 'standard' Clifford gates are those gates that
     are already known to the code gates (e.g., the label 'CNOT' has a specfic meaning in the
     code), and are recorded as unitaries in "internalgates.py".
@@ -1019,9 +1028,9 @@ def get_internal_gate_symplectic_representations(gllist=None):
 
 def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
-    Returns the symplectic representation of the composite Clifford implemented by
-    the specified Clifford circuit. This uses the formualas derived in Hostens and
-    De Moor PRA 71, 042315 (2005).
+    Returns the symplectic representation of the composite Clifford implemented by the specified Clifford circuit.
+
+    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -1048,7 +1057,6 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     -------
     s : numpy array
         The symplectic matrix representing the Clifford implement by the input circuit
-
     p : dictionary of numpy arrays
         The phase vector representing the Clifford implement by the input circuit
     """
@@ -1075,9 +1083,10 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
 
 def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None):
     """
-    Returns the symplectic representation of the n-qubit Clifford implemented by a
-    single quantum circuit layer (gates in the layer must act on disjoint sets of qubits;
-    not all qubits need to be acted upon in the layer).
+    Constructs the symplectic representation of the n-qubit Clifford implemented by a single quantum circuit layer.
+
+    (Gates in a "single layer" must act on disjoint sets of qubits, but not all qubits
+    need to be acted upon in the layer.)
 
     Parameters
     ----------
@@ -1109,7 +1118,6 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
     s : numpy array
         The symplectic matrix representing the Clifford implement by specified
         circuit layer
-
     p : numpy array
         The phase vector representing the Clifford implement by specified
         circuit layer
@@ -1156,8 +1164,8 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
 
 def one_q_clifford_symplectic_group_relations():
     """
-    Returns a dictionary containing the group relationship between
-    the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
+    Gives the group relationship between the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
+
     The returned dictionary contains keys (A,B) for all A and B in
     the above list. The value for key (A,B) is C if BA = C x some
     Pauli operator. E,g, ('P','P') = 'I'.
@@ -1221,8 +1229,16 @@ def one_q_clifford_symplectic_group_relations():
 
 def unitary_is_a_clifford(unitary):
     """
-    Returns True if the unitary is a Clifford gate (w.r.t the standard
-    basis), and False otherwise.
+    Returns True if the unitary is a Clifford gate (w.r.t the standard basis), and False otherwise.
+
+    Parameters
+    ----------
+    unitary : numpy.ndarray
+        A unitary matrix to test.
+
+    Returns
+    -------
+    bool
     """
     s, p = unitary_to_symplectic(unitary, flagnonclifford=False)
     if s is None: return False
@@ -1382,8 +1398,9 @@ def _unitary_to_symplectic_2q(u, flagnonclifford=True):
 @smart_cached
 def unitary_to_symplectic(u, flagnonclifford=True):
     """
-    Returns the symplectic representation of a one-qubit or two-qubit Clifford
-    unitary, input as a complex matrix in the standard computational basis.
+    Returns the symplectic representation of a one-qubit or two-qubit Clifford unitary.
+
+    The Clifford is input as a complex matrix in the standard computational basis.
 
     Parameters
     ----------
@@ -1403,11 +1420,9 @@ def unitary_to_symplectic(u, flagnonclifford=True):
     s : numpy array or None
         The symplectic matrix representing the unitary, or None if the input unitary
         is not a Clifford and flagnonclifford is False
-
     p : numpy array or None
         The phase vector representing the unitary, or None if the input unitary
         is not a Clifford and flagnonclifford is False
-
     """
     assert(_np.shape(u) == (2, 2) or _np.shape(u) == (4, 4)), "Input must be a one or two qubit unitary!"
 
@@ -1421,10 +1436,10 @@ def unitary_to_symplectic(u, flagnonclifford=True):
 
 def random_symplectic_matrix(n, convention='standard'):
     """
-    Returns a symplectic matrix of dimensions 2n x 2n sampled uniformly at random
-    from the symplectic group S(n). This uses the method of Robert Koenig and John
-    A. Smolin, presented in "How to efficiently select an arbitrary Clifford group
-    element".
+    Returns a symplectic matrix of dimensions 2n x 2n sampled uniformly at random from the symplectic group S(n).
+
+    This uses the method of Robert Koenig and John A. Smolin, presented in "How to
+    efficiently select an arbitrary Clifford group element".
 
     Parameters
     ----------
@@ -1443,7 +1458,6 @@ def random_symplectic_matrix(n, convention='standard'):
     -------
     s : numpy array
         A uniformly sampled random symplectic matrix.
-
     """
     index = random_symplectic_index(n)
     s = get_symplectic_matrix(index, n)
@@ -1456,11 +1470,11 @@ def random_symplectic_matrix(n, convention='standard'):
 
 def random_clifford(n):
     """
-    Returns a Clifford, in the symplectic representation, sampled uniformly at random
-    from the n-qubit Clifford group. The core of this function uses the method of
-    Robert Koenig and John A. Smolin, presented in "How to efficiently select an
-    arbitrary Clifford group element", for sampling a uniformly random symplectic
-    matrix.
+    Returns a Clifford, in the symplectic representation, sampled uniformly at random from the n-qubit Clifford group.
+
+    The core of this function uses the method of Robert Koenig and John A. Smolin,
+    presented in "How to efficiently select an arbitrary Clifford group element", for
+    sampling a uniformly random symplectic matrix.
 
     Parameters
     ----------
@@ -1471,10 +1485,8 @@ def random_clifford(n):
     -------
     s : numpy array
         The symplectic matrix representating the uniformly sampled random Clifford.
-
     p : numpy array
         The phase vector representating the uniformly sampled random Clifford.
-
     """
     s = random_symplectic_matrix(n, convention='standard')
     p = random_phase_vector(s, n)
@@ -1484,25 +1496,25 @@ def random_clifford(n):
 
 def random_phase_vector(s, n):
     """
-    Generates a uniformly random phase vector that, together with the
-    provided symplectic matrix, define a valid n-qubit Clifford. In
-    combination with a uniformly random `s` the returned `p` defines
-    a uniformly random Clifford gate.
+    Generates a uniformly random phase vector for a n-qubit Clifford.
+
+    (This vector, together with the provided symplectic matrix, define a valid
+    Clifford operation.)  In combination with a uniformly random `s` the returned `p`
+    defines a uniformly random Clifford gate.
 
     Parameters
     ----------
-    n : int
-        The number of qubits the Clifford group is over.
-
     s : numpy array
         The symplectic matrix to construct a random phase vector
+
+    n : int
+        The number of qubits the Clifford group is over.
 
     Returns
     -------
     p : numpy array
         A phase vector sampled uniformly at random from all those phase
         vectors that, as a pair with `s`, define a valid n-qubit Clifford.
-
     """
     p = _np.zeros(2 * n, int)
 
@@ -1541,8 +1553,20 @@ def random_phase_vector(s, n):
 
 def bitstring_for_pauli(p):
     """
+    Get the bitstring corresponding to a Pauli.
+
     The state, represented by a bitstring, that the Pauli operator represented by
     the phase-vector p creates when acting on the standard input state.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Phase vector of a symplectic representation, encoding a Pauli operation.
+
+    Returns
+    -------
+    list
+       A list of 0 or 1 elements.
     """
     n = len(p) // 2
     bitstring = p[n:]
@@ -1552,14 +1576,14 @@ def bitstring_for_pauli(p):
 
 def apply_internal_gate_to_symplectic(s, gate_name, qindex_list, optype='row'):
     """
-    Applies the Clifford gate, specified by the internally hard-coded name
-    `gate_name`, to the n-qubit Clifford gate specified by the 2n x 2n symplectic
-    matrix. This gate is applied to the qubits with *indices* in `qindex_list`,
-    where these indices are  w.r.t to indeices of `s`. This gate is applied from
-    the left (right) of `s` if `optype` is 'row' ('column'), and has a row-action
-    (column-action) on `s`. E.g., the Hadmard ('H') on qubit with index i swaps
-    the ith row (or column) with the (i+n)th row (or column) of `s`; CNOT adds
-    rows, etc.
+    Applies a Clifford gate to the n-qubit Clifford gate specified by the 2n x 2n symplectic matrix.
+
+    The Clifford gate is specified by the internally hard-coded name `gate_name`.
+    This gate is applied to the qubits with *indices* in `qindex_list`, where these
+    indices are w.r.t to indeices of `s`. This gate is applied from the left (right)
+    of `s` if `optype` is 'row' ('column'), and has a row-action (column-action) on
+    `s`. E.g., the Hadmard ('H') on qubit with index i swaps the ith row (or column)
+    with the (i+n)th row (or column) of `s`; CNOT adds rows, etc.
 
     Note that this function *updates* `s`, and returns None.
 
@@ -1575,10 +1599,17 @@ def apply_internal_gate_to_symplectic(s, gate_name, qindex_list, optype='row'):
         all of those gates are supported, and `gate_name` must be one of:
         'H', 'P', 'CNOT', 'SWAP'.
 
+    qindex_list : list or tuple
+        The qubit indices that `gate_name` acts on (can be either length
+        1 or 2 depending on whether the gate acts on 1 or 2 qubits).
+
+    optype : {'row', 'column'}, optional
+        Whether the symplectic operator type uses rows or columns:
+        TODO: docstring - better explanation.
+
     Returns
     -------
     None
-
     """
     n = _np.shape(s)[0] // 2
 
@@ -1619,6 +1650,7 @@ def apply_internal_gate_to_symplectic(s, gate_name, qindex_list, optype='row'):
 def numberofcliffords(n):
     """
     The number of Clifford gates in the n-qubit Clifford group.
+
     Code from "How to efficiently select an arbitrary Clifford
     group element" by Robert Koenig and John A. Smolin.
 
@@ -1630,19 +1662,26 @@ def numberofcliffords(n):
     Returns
     -------
     long integer
-       The cardinality of the n-qubit Clifford group.
-
+        The cardinality of the n-qubit Clifford group.
     """
     return (4**int(n)) * numberofsymplectic(n)
 
 
 def numberofsymplectic(n):
     """
-    The number of elements in the symplectic group S(n) over
-    the 2-element finite field. Code from "How to efficiently
-    select an arbitrary Clifford group element" by Robert Koenig and
-    John A. Smolin.
+    The number of elements in the symplectic group S(n) over the 2-element finite field.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    n : int
+        S(n) group parameter.
+
+    Returns
+    -------
+    int
     """
     x = 1
     for j in range(1, n + 1):
@@ -1653,10 +1692,19 @@ def numberofsymplectic(n):
 
 def numberofcosets(n):
     """
-    Returns the number of different cosets for the symplectic group
-    S(n) over the 2-element finite field. Code from "How to efficiently
-    select an arbitrary Clifford group element" by Robert Koenig and
-    John A. Smolin.
+    Returns the number of different cosets for the symplectic group S(n) over the 2-element finite field.
+
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    n : int
+        S(n) group parameter.
+
+    Returns
+    -------
+    int
     """
     x = 2**int(2 * n - 1) * ((2**int(2 * n)) - 1)
     return x
@@ -1664,10 +1712,23 @@ def numberofcosets(n):
 
 def symplectic_innerproduct(v, w):
     """
-    Returns the symplectic inner product of two vectors F_2^(2n), where
-    F_2 is the finite field containing 0 and 1, and 2n is the length of
+    Returns the symplectic inner product of two vectors in F_2^(2n).
+
+    Here F_2 is the finite field containing 0 and 1, and 2n is the length of
     the vectors. Code from "How to efficiently select an arbitrary Clifford
     group element" by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    v : numpy.ndarray
+        A length-2n vector.
+
+    w : numpy.ndarray
+        A length-2n vector.
+
+    Returns
+    -------
+    int
     """
     t = 0
     for i in range(0, _np.size(v) >> 1):
@@ -1678,20 +1739,45 @@ def symplectic_innerproduct(v, w):
 
 def symplectic_transvection(k, v):
     """
-    Applies transvection Z k to v. Code from "How to efficiently
-    select an arbitrary Clifford group element by Robert Koenig and
-    John A. Smolin.
+    Applies transvection Z k to v.
 
+    Code from "How to efficiently select an arbitrary Clifford group element
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    k : numpy.ndarray
+        A length-2n vector.
+
+    v : numpy.ndarray
+        A length-2n vector.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     return (v + symplectic_innerproduct(k, v) * k) % 2
 
 
 def int_to_bitstring(i, n):
     """
-    converts integer i to an length n array of bits. Code from "How to
-    efficiently select an arbitrary Clifford group element by Robert Koenig
-    and John A. Smolin.
+    Converts integer i to an length n array of bits.
 
+    Code from "How to efficiently select an arbitrary Clifford group element
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    i : int
+        Any integer.
+
+    n : int
+        Number of bits
+
+    Returns
+    -------
+    numpy.ndarray
+        Integer array of 0s and 1s.
     """
     output = _np.zeros(n, dtype='int8')
     for j in range(0, n):
@@ -1701,17 +1787,29 @@ def int_to_bitstring(i, n):
     return output
 
 
-def bitstring_to_int(b, nn):
+def bitstring_to_int(b, n):
     """
-    converts an nn-bit string b to an integer between 0 and 2^nn - 1. Code from
-    "How to efficiently select an arbitrary Clifford group element" by Robert
-    Koenig and John A. Smolin.
+    Converts an `n`-bit string `b` to an integer between 0 and 2^`n` - 1.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    b : list, tuple, or array
+        Sequence of bits (a bitstring).
+
+    n : int
+        Number of bits.
+
+    Returns
+    -------
+    int
     """
     output = 0
     tmp = 1
 
-    for j in range(0, nn):
+    for j in range(0, n):
         if b[j] == 1:
             output = output + tmp
         tmp = tmp * 2
@@ -1721,10 +1819,22 @@ def bitstring_to_int(b, nn):
 
 def find_symplectic_transvection(x, y):
     """
-    A utility function for selecting a random Clifford element. Code from
-    "How to efficiently select an arbitrary Clifford group element" by Robert
-    Koenig and John A. Smolin.
+    A utility function for selecting a random Clifford element.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        A length-2n vector.
+
+    y : numpy.ndarray
+        A length-2n vector.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     # finds h1,h2 such that y = Z h1 Z h2 x
     # Lemma 2 in the text
@@ -1784,10 +1894,22 @@ def find_symplectic_transvection(x, y):
 
 def get_symplectic_matrix(i, n):
     """
-    Returns the 2n x 2n symplectic matrix, over the finite field containing 0 and 1,
-    with the "canonical" index `i`. Code from "How to efficiently select an arbitrary
-    Clifford group element" by Robert Koenig and John A. Smolin.
+    Returns the 2n x 2n symplectic matrix, over the finite field containing 0 and 1, with the "canonical" index `i`.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    i : int
+        Canonical index.
+
+    n : int
+        Number of qubits.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     # output symplectic canonical matrix i of size 2nX2n
     #Note, compared to the text the transpose of the symplectic matrix is returned.
@@ -1853,10 +1975,23 @@ def get_symplectic_matrix(i, n):
 
 def get_symplectic_label(gn, n=None):
     """
-    Returns the "canonical" index of 2n x 2n symplectic matrix `gn` over the finite
-    field containing 0 and 1. Code from "How to efficiently select an arbitrary
-    Clifford group element" by Robert Koenig and John A. Smolin.
+    Returns the "canonical" index of 2n x 2n symplectic matrix `gn` over the finite field containing 0 and 1.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    gn : numpy.ndarray
+        symplectic matrix
+
+    n : int, optional
+        Number of qubits (if `None`, use `gn.shape[0] // 2`).
+
+    Returns
+    -------
+    int
+        The canonical index of `gn`.
     """
     # produce an index associated with group element gn
 
@@ -1918,11 +2053,19 @@ def get_symplectic_label(gn, n=None):
 
 def random_symplectic_index(n):
     """
-    The index of a uniformly random 2n x 2n symplectic matrix over
-    the finite field containing 0 and 1. Code from "How to efficiently
-    select an arbitrary Clifford group element" by Robert Koenig and
-    John A. Smolin.
+    The index of a uniformly random 2n x 2n symplectic matrix over the finite field containing 0 and 1.
 
+    Code from "How to efficiently select an arbitrary Clifford group element"
+    by Robert Koenig and John A. Smolin.
+
+    Parameters
+    ----------
+    n : int
+        Number of qubits (half dimension of symplectic matrix).
+
+    Returns
+    -------
+    numpy.ndarray
     """
     cardinality = numberofsymplectic(n)
     max_integer = 9223372036854775808  # The maximum integer of int64 type

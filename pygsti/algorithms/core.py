@@ -1,4 +1,6 @@
-""" Core GST algorithms """
+"""
+Core GST algorithms
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -54,9 +56,13 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
     dataset : DataSet
         The data used to generate the LGST estimates
 
-    prep_fiducials,effect_fiducials : list of Circuits
-        Fiducial Circuit lists used to construct a informationally complete
-        preparation and measurement.
+    prep_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective preparation.
+
+    effect_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         A model used to specify which operation labels should be estimated, a
@@ -503,8 +509,13 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
     dataset : DataSet
         The data used to populate the Gram matrix
 
-    prep_fiducials, effect_fiducials : list
-        Lists of preparation and measurement fiducial sequences.
+    prep_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective preparation.
+
+    effect_fiducials : list of Circuits
+        Fiducial Circuits used to construct a informationally complete
+        effective measurement.
 
     target_model : Model
         A model used to make sense of operation sequence elements, and to compute the
@@ -537,8 +548,11 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
 def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
                resource_alloc, cache, verbosity=0):
     """
-    Performs Gate Set Tomography on the dataset by optimizing the objective function
-    built by `objective_function_builder`.
+    Performs core Gate Set Tomography function of model optimization.
+
+    Optimizes the parameters of `start_model` by minimizing the objective function
+    built by `objective_function_builder`.  Probabilities are computed by the model,
+    and outcome counts are supplied by `dataset`.
 
     Parameters
     ----------
@@ -605,10 +619,10 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
 
     #Step 3: solve least squares minimization problem
     if mdl.simtype in ("termgap", "termorder"):
-        opt_result = _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_term_runopt(objective, optimizer, resource_alloc, printer)
     else:
         #Normal case of just a single "sub-iteration"
-        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -649,10 +663,13 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
         The optimizer to use, or a dictionary of optimizer parameters
         from which a default optimizer can be built.
 
-    iteration_objfn_builders, final_objfn_builders: list
-        Lists of ObjectiveFunctionBuilder objects defining which objective functions
-        should be optimizized (successively) on each iteration, and the additional
-        objective functions to optimize on the final iteration.
+    iteration_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on each iteration.
+
+    final_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on the final iteration.
 
     resource_alloc : ResourceAllocation
         A resource allocation object containing information about how to
@@ -736,9 +753,35 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     return models, optimums, final_cache
 
 
-def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
-    """ TODO: docstring """
+def _do_runopt(objective, optimizer, resource_alloc, printer):
+    """
+    Runs the core model-optimization step within a GST routine by optimizing
+    `objective` using `optimizer`.
 
+    This is factored out as a separate function because of the differences
+    when running Taylor-term simtype calculations, which utilize this
+    as a subroutine (see :function:`_do_term_runopt`).
+
+    Parameters
+    ----------
+    objective : MDSObjectiveFunction
+        A "model-dataset" objective function to optimize.
+
+    optimizer : Optimizer
+        The optimizer to use.
+
+    resource_alloc : ResourceAllocation
+        The resources allocated to this computation (MPI comm, memory limit, etc).
+
+    printer : VerbosityPrinter
+        An object for printing output.
+
+    Returns
+    -------
+    OptimizerResult
+    """
+
+    mdl = objective.mdl
     profiler = resource_alloc.profiler
 
     #Perform actual optimization
@@ -780,9 +823,36 @@ def _do_runopt(mdl, objective, optimizer, resource_alloc, printer):
     return opt_result
 
 
-def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
-    """ TODO: docstring """
+def _do_term_runopt(objective, optimizer, resource_alloc, printer):
+    """
+    Runs the core model-optimization step for models using the
+    Taylor-term (path integral) method of computing probabilities.
 
+    This routine serves the same purpose as :function:`_do_runopt`, but
+    is more complex because an appropriate "path set" must be found,
+    requiring a loop of model optimizations with fixed path sets until
+    a sufficient "good" path set is obtained.
+
+    Parameters
+    ----------
+    objective : MDSObjectiveFunction
+        A "model-dataset" objective function to optimize.
+
+    optimizer : Optimizer
+        The optimizer to use.
+
+    resource_alloc : ResourceAllocation
+        The resources allocated to this computation (MPI comm, memory limit, etc).
+
+    printer : VerbosityPrinter
+        An object for printing output.
+
+    Returns
+    -------
+    OptimizerResult
+    """
+
+    mdl = objective.mdl
     fwdsim = mdl._fwdsim()
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
@@ -809,7 +879,7 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
         optimizer.oob_check_interval = oob_check_interval
         # don't stop early on last iter - do as much as possible.
         optimizer.oob_action = "reject" if bFinalIter else "stop"
-        opt_result = _do_runopt(mdl, objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
 
         if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
@@ -840,8 +910,10 @@ def _do_term_runopt(mdl, objective, optimizer, resource_alloc, printer):
 
 def find_closest_unitary_opmx(operation_mx):
     """
-    Get the closest operation matrix (by maximizing fidelity)
-      to operation_mx that describes a unitary quantum gate.
+    Find the closest (in fidelity) unitary superoperator to `operation_mx`.
+
+    Finds the closest operation matrix (by maximizing fidelity)
+    to `operation_mx` that describes a unitary quantum gate.
 
     Parameters
     ----------

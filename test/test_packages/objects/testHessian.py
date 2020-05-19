@@ -6,9 +6,11 @@ from pygsti.modelpacks.legacy import std1Q_XY as stdxy
 from pygsti.objects import modelfunction as gsf
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L
+from pygsti import protocols as proto
 
 import numpy as np
-import sys, os
+import sys
+import os
 import pickle
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -25,9 +27,9 @@ class TestHessianMethods(BaseTestCase):
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
-        opLabels = list(self.model.operations.keys()) # also == std.gates
+        op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(opLabels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.construction.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
@@ -85,12 +87,8 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_nongauge_params()
         self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
-
     def test_hessian_projection(self):
-
-        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                                  return_gradient=True,
-                                                  return_hessian=True)
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         proj_non_gauge = self.model.get_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
@@ -127,20 +125,25 @@ class TestHessianMethods(BaseTestCase):
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
             if abs(val) > TOL or abs(chk) > TOL:
-                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=3)
+                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=2)
             # (else both chk and val are <= TOL, so both == 0 for our purposes)
         #print "eigvals = ",eigvals
 
     def test_confidenceRegion(self):
 
-        res = pygsti.obj.Results()
-        res.init_dataset(self.ds)
-        res.init_circuits(self.gss)
+        edesign = proto.CircuitListsDesign([pygsti.obj.BulkCircuitList(circuit_struct)
+                                            for circuit_struct in self.gss])
+        data = proto.ProtocolData(edesign, self.ds)
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="default")
+        builder = pygsti.obj.PoissonPicDeltaLogLFunction.builder()
+        res.add_estimate(
+            proto.estimate.Estimate.gst_init(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model] * len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
+            estimate_key="default"
+        )
 
         est = res.estimates['default']
         est.add_confidence_region_factory('final iteration estimate', 'final')
@@ -179,9 +182,12 @@ class TestHessianMethods(BaseTestCase):
 
 
         #Add estimate for linresponse-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="linresponse")
+        res.add_estimate(
+            proto.estimate.Estimate.gst_init(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
+            estimate_key="linresponse"
+        )
 
         estLR = res.estimates['linresponse']
 
@@ -204,9 +210,13 @@ class TestHessianMethods(BaseTestCase):
 
 
         #Add estimate for with bad objective ---------------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'},
-                         estimate_key="foo")
+        res.add_estimate(
+            proto.estimate.Estimate.gst_init(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'}),
+            estimate_key="foo"
+        )
+
         est = res.estimates['foo']
         est.add_confidence_region_factory('final iteration estimate', 'final')
         with self.assertRaises(ValueError): # bad objective
@@ -349,18 +359,24 @@ class TestHessianMethods(BaseTestCase):
 
         #TODO: assert values of df & f0 ??
 
-    def tets_pickle_ConfidenceRegion(self):
-        res = pygsti.obj.Results()
-        res.init_dataset(self.ds)
-        res.init_circuits(self.gss)
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="default")
+    def test_pickle_ConfidenceRegion(self):
+        edesign = proto.CircuitListsDesign([pygsti.obj.BulkCircuitList(circuit_struct)
+                                            for circuit_struct in self.gss])
+        data = proto.ProtocolData(edesign, self.ds)
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
-        res.add_confidence_region_factory('final iteration estimate', 'final')
-        self.assertTrue( res.has_confidence_region_factory('final iteration estimate', 'final'))
+        res.add_estimate(
+            proto.estimate.Estimate.gst_init(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'}),
+            estimate_key="default"
+        )
 
-        cfctry = res.get_confidence_region_factory('final iteration estimate', 'final')
+        est = res.estimates['default']
+        est.add_confidence_region_factory('final iteration estimate', 'final')
+        self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
+
+        cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
         cfctry.compute_hessian()
         self.assertTrue( cfctry.has_hessian() )
 
@@ -377,13 +393,11 @@ class TestHessianMethods(BaseTestCase):
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                        return_hessian=True)
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
-                                        return_hessian=True)
+        chi2Hessian_mapcalc = pygsti.chi2_hessian(self.model, self.ds)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
 

@@ -1,4 +1,6 @@
-""" Defines the SimplifierHelper class and supporting functionality."""
+"""
+Defines the SimplifierHelper class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -47,23 +49,52 @@ from .label import Label as _Label
 
 class SimplifierHelper(object):
     """
-    Defines the minimal interface for performing :class:`Circuit` "compiling"
-    (pre-processing for forward simulators, which only deal with preps, ops,
-    and effects) needed by :class:`Model`.
+    Defines the minimal interface for performing :class:`Circuit` "simplification".
 
-    To simplify a circuit a `Model` doesn't, for instance, need to know *all*
+    Simplification is a pre-processing for some forward simulators and is a process whereby
+    one circuit is transformed into potentially multiple "simplified circuits" that only
+    only contain with preps, ops, and effects.
+
+    This class is primarily utilized by a :class:`Model` (it is a "helper" to a model).
+
+    To simplify a circuit a :class:`Model` doesn't, for instance, need to know *all*
     possible state preparation labels, as a dict of preparation operations
     would provide - it only needs a function to check if a given value is a
     viable state-preparation label.
+
+    Parameters
+    ----------
+    sslbls : StateSpaceLabels
+        The state space labels for the model this helper is associated with.
     """
 
     def __init__(self, sslbls):
-        self.sslbls = sslbls  # the state space labels for the model this helper is associated with
+        self.sslbls = sslbls
 
 
 class BasicSimplifierHelper(SimplifierHelper):
     """
     Performs the work of a :class:`SimplifierHelper` using user-supplied lists
+
+    Parameters
+    ----------
+    preplbls : list
+        All the state preparation labels of the asociated model.
+
+    povmlbls : list
+        All the POVM labels of the asociated model.
+
+    instrumentlbls : list
+        All the instrument labels of the asociated model.
+
+    povm_effect_lbls : list
+        All the POVM-effect labels of the asociated model.
+
+    instrument_member_lbls : list
+        All the instrument-member labels of the asociated model.
+
+    sslbls : StateSpaceLabels
+        The state space labels for the model this helper is associated with.
     """
 
     def __init__(self, preplbls, povmlbls, instrumentlbls,
@@ -84,22 +115,56 @@ class BasicSimplifierHelper(SimplifierHelper):
         super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
-        """Whether `lbl` is a valid state prep label (returns boolean)"""
+        """
+        Whether `lbl` is a valid state prep label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.preplbls
 
     def is_povm_lbl(self, lbl):
-        """Whether `lbl` is a valid POVM label (returns boolean)"""
+        """
+        Whether `lbl` is a valid POVM label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.povmlbls
 
     def is_instrument_lbl(self, lbl):
-        """Whether `lbl` is a valid instrument label (returns boolean)"""
+        """
+        Whether `lbl` is a valid instrument label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.instrumentlbls
 
     def get_default_prep_lbl(self):
         """
-        Gets the default state prep label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default state prep label.
+
+        This is often used when a circuit is specified without a preparation layer.
+        Returns `None` if there is no default and one *must* be specified.
 
         Returns
         -------
@@ -110,9 +175,15 @@ class BasicSimplifierHelper(SimplifierHelper):
 
     def get_default_povm_lbl(self, sslbls):
         """
-        Gets the default POVM label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default POVM label.
+
+        This is often used when a circuit  is specified without an ending POVM layer.
+        Returns `None` if there is no default and one *must* be specified.
+
+        Parameters
+        ----------
+        sslbls : tuple or None
+            The state space labels being measured, and for which a default POVM is desired.
 
         Returns
         -------
@@ -123,21 +194,33 @@ class BasicSimplifierHelper(SimplifierHelper):
             if len(self.povmlbls) == 1 else None
 
     def has_preps(self):
-        """Whether this model contains any state preps (returns boolean)"""
+        """
+        Whether this model contains any state preparations.
+
+        Returns
+        -------
+        bool
+        """
         return len(self.preplbls) > 0
 
     def has_povms(self):
-        """Whether this model contains any POVM (returns boolean)"""
+        """
+        Whether this model contains any POVMs (measurements).
+
+        Returns
+        -------
+        bool
+        """
         return len(self.povmlbls) > 0
 
     def get_effect_labels_for_povm(self, povm_lbl):
         """
-        Gets the effect labels corresponding to the possible outcomes of POVM
-        label `povm_lbl`.
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
         Parameters
         ----------
-        pomv_lbl : Label
+        povm_lbl : Label
+            POVM label.
 
         Returns
         -------
@@ -148,12 +231,12 @@ class BasicSimplifierHelper(SimplifierHelper):
 
     def get_member_labels_for_instrument(self, inst_lbl):
         """
-        Gets the member labels corresponding to the possible outcomes of
-        the instrument labeled by `inst_lbl`.
+        Get the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 
         Parameters
         ----------
         inst_lbl : Label
+            Instrument label.
 
         Returns
         -------
@@ -165,9 +248,25 @@ class BasicSimplifierHelper(SimplifierHelper):
 
 class MemberDictSimplifierHelper(SimplifierHelper):
     """
-    Performs the work of a :class:`SimplifierHelper` using a set of
-    `OrderedMemberDict` objects, such as those contained in an
-    :class:`ExplicitOpModel`.
+    A :class:`SimplifierHelper` that extracts labels from keys of :class:`OrderedMemberDict` dictionaries.
+
+    This simplifier helper type just uses a set of :class:`OrderedMemberDict`
+    objects, such as those contained in an :class:`ExplicitOpModel`,
+    to identify available circuit labels.
+
+    Parameters
+    ----------
+    preps : OrderedMemberDict
+        A dictionary of state preparation objects (keys are available labels).
+
+    povms : OrderedMemberDict
+        A dictionary of POVM objects (keys are available labels).
+
+    instruments : OrderedMemberDict
+        A dictionary of Instrument objects (keys are available labels).
+
+    sslbls : StateSpaceLabels
+        The state space labels for the model this helper is associated with.
     """
 
     def __init__(self, preps, povms, instruments, sslbls):
@@ -184,22 +283,56 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
-        """Whether `lbl` is a valid state prep label (returns boolean)"""
+        """
+        Whether `lbl` is a valid state prep label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.preps
 
     def is_povm_lbl(self, lbl):
-        """Whether `lbl` is a valid POVM label (returns boolean)"""
+        """
+        Whether `lbl` is a valid POVM label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.povms
 
     def is_instrument_lbl(self, lbl):
-        """Whether `lbl` is a valid instrument label (returns boolean)"""
+        """
+        Whether `lbl` is a valid instrument label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return lbl in self.instruments
 
     def get_default_prep_lbl(self):
         """
-        Gets the default state prep label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default state prep label.
+
+        This is often used when a circuit is specified without a preparation layer.
+        Returns `None` if there is no default and one *must* be specified.
 
         Returns
         -------
@@ -210,9 +343,15 @@ class MemberDictSimplifierHelper(SimplifierHelper):
 
     def get_default_povm_lbl(self, sslbls):
         """
-        Gets the default POVM label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default POVM label.
+
+        This is often used when a circuit  is specified without an ending POVM layer.
+        Returns `None` if there is no default and one *must* be specified.
+
+        Parameters
+        ----------
+        sslbls : tuple
+            The state space labels being measured, and for which a default POVM is desired.
 
         Returns
         -------
@@ -225,21 +364,33 @@ class MemberDictSimplifierHelper(SimplifierHelper):
             if len(self.povms) == 1 else None
 
     def has_preps(self):
-        """Whether this model contains any state preps (returns boolean)"""
+        """
+        Whether this model contains any state preparations.
+
+        Returns
+        -------
+        bool
+        """
         return len(self.preps) > 0
 
     def has_povms(self):
-        """Whether this model contains any POVM (returns boolean)"""
+        """
+        Whether this model contains any POVMs (measurements).
+
+        Returns
+        -------
+        bool
+        """
         return len(self.povms) > 0
 
     def get_effect_labels_for_povm(self, povm_lbl):
         """
-        Gets the effect labels corresponding to the possible outcomes of POVM
-        label `povm_lbl`.
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
         Parameters
         ----------
-        pomv_lbl : Label
+        povm_lbl : Label
+            POVM label.
 
         Returns
         -------
@@ -250,12 +401,12 @@ class MemberDictSimplifierHelper(SimplifierHelper):
 
     def get_member_labels_for_instrument(self, inst_lbl):
         """
-        Gets the member labels corresponding to the possible outcomes of
-        the instrument labeled by `inst_lbl`.
+        Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 
         Parameters
         ----------
         inst_lbl : Label
+            Instrument label.
 
         Returns
         -------
@@ -267,9 +418,25 @@ class MemberDictSimplifierHelper(SimplifierHelper):
 
 class MemberDictDictSimplifierHelper(SimplifierHelper):
     """
+    A :class:`SimplifierHelper` that extracts labels from *dictionaries* of :class:`OrderedMemberDict` objects.
+
     Performs the work of a :class:`SimplifierHelper` using a set of
     dictionaries of `OrderedMemberDict` objects, such as those
     contained in an :class:`ImplicitOpModel`.
+
+    Parameters
+    ----------
+    prep_blks : dict
+        A dictionary of :class:`OrderedMemberDict`s holding state preparations.
+
+    povm_blks : dict
+        A dictionary of :class:`OrderedMemberDict`s holding POVMs.
+
+    instrument_blks : dict
+        A dictionary of :class:`OrderedMemberDict`s holding instruments.
+
+    sslbls : StateSpaceLabels
+        The state space labels for the model this helper is associated with.
     """
 
     def __init__(self, prep_blks, povm_blks, instrument_blks, sslbls):
@@ -286,22 +453,56 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         super().__init__(sslbls)
 
     def is_prep_lbl(self, lbl):
-        """Whether `lbl` is a valid state prep label (returns boolean)"""
+        """
+        Whether `lbl` is a valid state prep label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return any([(lbl in prepdict) for prepdict in self.prep_blks.values()])
 
     def is_povm_lbl(self, lbl):
-        """Whether `lbl` is a valid POVM label (returns boolean)"""
+        """
+        Whether `lbl` is a valid POVM label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return any([(lbl in povmdict) for povmdict in self.povm_blks.values()])
 
     def is_instrument_lbl(self, lbl):
-        """Whether `lbl` is a valid instrument label (returns boolean)"""
+        """
+        Whether `lbl` is a valid instrument label (returns boolean)
+
+        Parameters
+        ----------
+        lbl : Label
+            The label to test.
+
+        Returns
+        -------
+        bool
+        """
         return any([(lbl in idict) for idict in self.instrument_blks.values()])
 
     def get_default_prep_lbl(self):
         """
-        Gets the default state prep label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default state prep label.
+
+        This is often used when a circuit is specified without a preparation layer.
+        Returns `None` if there is no default and one *must* be specified.
 
         Returns
         -------
@@ -318,9 +519,15 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
 
     def get_default_povm_lbl(self, sslbls):
         """
-        Gets the default POVM label (used when a circuit
-        is specified without one).  Returns `None` if there is
-        no default and one *must* be specified.
+        Gets the default POVM label.
+
+        This is often used when a circuit  is specified without an ending POVM layer.
+        Returns `None` if there is no default and one *must* be specified.
+
+        Parameters
+        ----------
+        sslbls : tuple or None
+            The state space labels being measured, and for which a default POVM is desired.
 
         Returns
         -------
@@ -340,21 +547,33 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
             return None
 
     def has_preps(self):
-        """Whether this model contains any state preps (returns boolean)"""
+        """
+        Whether this model contains any state preparations.
+
+        Returns
+        -------
+        bool
+        """
         return any([(len(prepdict) > 0) for prepdict in self.prep_blks.values()])
 
     def has_povms(self):
-        """Whether this model contains any POVM (returns boolean)"""
+        """
+        Whether this model contains any POVMs (measurements).
+
+        Returns
+        -------
+        bool
+        """
         return any([(len(povmdict) > 0) for povmdict in self.povm_blks.values()])
 
     def get_effect_labels_for_povm(self, povm_lbl):
         """
-        Gets the effect labels corresponding to the possible outcomes of POVM
-        label `povm_lbl`.
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
         Parameters
         ----------
-        pomv_lbl : Label
+        povm_lbl : Label
+            POVM label.
 
         Returns
         -------
@@ -371,12 +590,12 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
 
     def get_member_labels_for_instrument(self, inst_lbl):
         """
-        Gets the member labels corresponding to the possible outcomes of
-        the instrument labeled by `inst_lbl`.
+        Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 
         Parameters
         ----------
         inst_lbl : Label
+            Instrument label.
 
         Returns
         -------
@@ -390,7 +609,14 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
 
 
 class ImplicitModelSimplifierHelper(MemberDictDictSimplifierHelper):
-    """ Performs the work of a "Simplifier Helper" using user-supplied dicts """
+    """
+    A :class:`SimplifierHelper` that extracts needed information from (and is assocated with) an implicit model.
+
+    Parameters
+    ----------
+    implicit_model : ImplicitOpModel
+        The model this helper is associated with.
+    """
 
     def __init__(self, implicit_model):
         """

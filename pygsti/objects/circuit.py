@@ -1,4 +1,6 @@
-""" Defines the Circuit class """
+"""
+Defines the Circuit class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -20,6 +22,7 @@ from ..io import CircuitParser as _CircuitParser
 from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
+
 
 #Internally:
 # when static: a tuple of Label objects labelling each top-level circuit layer
@@ -150,7 +153,18 @@ def _op_seq_to_str(seq, line_labels):
 
 
 def to_label(x):
-    """ Helper function for converting `x` to a single Label object """
+    """
+    Helper function for converting `x` to a single Label object
+
+    Parameters
+    ----------
+    x : various
+        An object to (attempt to) convert into a :class:`Label`.
+
+    Returns
+    -------
+    Label
+    """
     if isinstance(x, _Label): return x
     # # do this manually when desired, as it "boxes" a circuit being inserted
     #elif isinstance(x,Circuit): return x.to_circuit_label()
@@ -159,6 +173,8 @@ def to_label(x):
 
 class Circuit(object):
     """
+    A quantum circuit.
+
     A Circuit represents a quantum circuit, consisting of state preparation,
     gates, and measurement operations.  It is composed of some number of "lines",
     typically one per qubit, and stores the operations on these lines as a
@@ -167,17 +183,123 @@ class Circuit(object):
     created with 'editable=True', a rich set of operations may be used to
     construct the circuit in place, after which `done_editing()` should be
     called so that the Circuit can be properly hashed as needed.
+
+    Parameters
+    ----------
+    layer_labels : iterable of Labels or str
+        This argument provides a list of the layer labels specifying the
+        state preparations, gates, and measurements for the circuit.  This
+        argument can also be a :class:`Circuit` or a string, in which case
+        it is parsed as a text-formatted circuit.  Internally this will
+        eventually be converted to a list of `Label` objects, one per layer,
+        but it may be specified using anything that can be readily converted
+        to a Label objects.  For example, any of the following are allowed:
+
+        - `['Gx','Gx']` : X gate on each of 2 layers
+        - `[Label('Gx'),Label('Gx')] : same as above
+        - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
+        - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
+
+    line_labels : iterable, optional
+        The (string valued) label for each circuit line.  If `'auto'`, then
+        `line_labels` is taken to be the list of all state-space labels
+        present within `layer_labels`.  If there are no such labels (e.g.
+        if `layer_labels` contains just gate names like `('Gx','Gy')`), then
+        the special value `'*'` is used as a single line label.
+
+    num_lines : int, optional
+        Specify this instead of `line_labels` to set the latter to the
+        integers between 0 and `num_lines-1`.
+
+    editable : bool, optional
+        Whether the created `Circuit` is created in able to be modified.  If
+        `True`, then you should call `done_editing()` once the circuit is
+        completely assembled, as this makes the circuit read-only and
+        allows it to be hashed.
+
+    stringrep : string, optional
+        A string representation for the circuit.  If `None` (the default),
+        then this will be generated automatically when needed.  One
+        reason you'd want to specify this is if you know of a nice compact
+        string representation that you'd rather use, e.g. `"Gx^4"` instead
+        of the automatically generated `"GxGxGxGx"`.  If you want to
+        initialize a `Circuit` entirely from a string representation you
+        can either specify the string in as `layer_labels` or set
+        `layer_labels` to `None` and `stringrep` to any valid (one-line)
+        circuit string.
+
+    name : str, optional
+        A name for this circuit (useful if/when used as a block within
+        larger circuits).
+
+    check : bool, optional
+        Whether `stringrep` should be checked against `layer_labels` to
+        ensure they are consistent, and whether the labels in `layer_labels`
+        are a subset of `line_labels`.  The only reason you'd want to set
+        this to `False` is if you're absolutely sure `stringrep` and
+        `line_labels` are consistent and want to save computation time.
+
+    expand_subcircuits : bool or "default"
+        If `"default"`, then the value of `Circuit.default_expand_subcircuits`
+        is used.  If True, then any sub-circuits (e.g. anything exponentiated
+        like "(GxGy)^4") will be expanded when it is stored within the created
+        Circuit.  If False, then such sub-circuits will be left as-is.  It's
+        typically more robust to expand sub-circuits as this facilitates
+        comparison (e.g. so "GxGx" == "Gx^2"), but in cases when you have
+        massive exponents (e.g. "Gx^8192") it may improve performance to
+        set `expand_subcircuits=False`.
+
+    Attributes
+    ----------
+    default_expand_subcircuits : bool
+        By default, expand sub-circuit labels.
+
+    line_labels : tuple
+        The line labels (often qubit labels) of this circuit.
+
+    layertup : tuple
+        This Circuit's layers as a standard Python tuple of layer Labels.
+
+    tup : tuple
+        This Circuit as a standard Python tuple of layer Labels and line labels.
+
+    str : str
+        The Python string representation of this Circuit.
     """
     default_expand_subcircuits = True
 
     @classmethod
     def create_from(cls, obj):
+        """
+        Convert `obj` into a :class:`Circuit`.
+
+        Parameters
+        ----------
+        obj : object
+            Object to convert
+
+        Returns
+        -------
+        Circuit
+        """
         if isinstance(obj, cls): return obj
         if isinstance(obj, (tuple, list)): return cls.fromtup(obj)
         raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod
     def fromtup(cls, tup):
+        """
+        Creates a :class:`Circuit` from a tuple
+
+        Parameters
+        ----------
+        tup : tuple
+            The tuple to convert.
+
+        Returns
+        -------
+        Circuit
+        """
         if '@' in tup:
             k = tup.index('@')
             return cls(tup[0:k], tup[k + 1:])
@@ -403,10 +525,16 @@ class Circuit(object):
 
     @property
     def line_labels(self):
+        """
+        The line labels (often qubit labels) of this circuit.
+        """
         return self._line_labels
 
     @line_labels.setter
     def line_labels(self, value):
+        """
+        The line labels (often qubit labels) of this circuit.
+        """
         if value == self._line_labels: return
         #added_line_labels = set(value) - set(self._line_labels) # it's always OK to add lines
         removed_line_labels = set(self._line_labels) - set(value)
@@ -422,6 +550,12 @@ class Circuit(object):
 
     @property
     def name(self):
+        """
+        The name of this circuit.
+
+        Note: the name is *not* a part of the hashed value.
+        The name is used to name the :class:`CircuitLabel` returned from :method:`as_label`.
+        """
         return self._name
 
     #TODO REMOVE
@@ -431,7 +565,13 @@ class Circuit(object):
 
     @property
     def layertup(self):
-        """ This Circuit's layers as a standard Python tuple of layer Labels."""
+        """
+        This Circuit's layers as a standard Python tuple of layer Labels.
+
+        Returns
+        -------
+        tuple
+        """
         if self._static:
             return self._labels
         else:
@@ -439,7 +579,13 @@ class Circuit(object):
 
     @property
     def tup(self):
-        """ This Circuit as a standard Python tuple of layer Labels and line labels."""
+        """
+        This Circuit as a standard Python tuple of layer Labels and line labels.
+
+        Returns
+        -------
+        tuple
+        """
         if self._line_labels in (('*',), ()):  # No line labels
             return self.layertup
         else:
@@ -447,7 +593,13 @@ class Circuit(object):
 
     @property
     def str(self):
-        """ The Python string representation of this Circuit."""
+        """
+        The Python string representation of this Circuit.
+
+        Returns
+        -------
+        str
+        """
         if self._str is None:
             generated_str = _op_seq_to_str(self._labels, self.line_labels)  # lazy generation
             if self._static:  # if we're read-only then cache the string one and for all,
@@ -465,7 +617,13 @@ class Circuit(object):
 
     @str.setter
     def str(self, value):
-        """ The Python string representation of this Circuit."""
+        """
+        The Python string representation of this Circuit.
+
+        Returns
+        -------
+        str
+        """
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
              "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
@@ -527,6 +685,20 @@ class Circuit(object):
                        None, editable, s, check=False)
 
     def repeat(self, ntimes, expand="default"):
+        """
+        Repeat this circuit `ntimes` times.
+
+        Parameters
+        ----------
+        ntimes : int
+            Number of repetitions.
+
+        expand : bool or "default", optional
+            When `False`, the returned circuit will contain a :class:`CircuitLabel` encapsulating
+            the repetitions without explicitly storing them.  When `True`, the returned circuit will
+            be expanded into the `ntimes` repetitions.  `"default"` means to use the value in the
+            class variable `Circuit.default_expand_subcircuits`.
+        """
         if expand == "default": expand = Circuit.default_expand_subcircuits
         assert((_compat.isint(ntimes) or _np.issubdtype(ntimes, int)) and ntimes >= 0)
         mystr, mylines = self._labels_lines_str()
@@ -591,6 +763,10 @@ class Circuit(object):
     def clear(self):
         """
         Removes all the gates in a circuit (preserving the number of lines).
+
+        Returns
+        -------
+        None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         self._labels = []
@@ -760,9 +936,10 @@ class Circuit(object):
 
     def set_labels(self, lbls, layers=None, lines=None):
         """
-        Write `lbls`, which can be anything that can be interpreted as a
-        :class:`Label` or list of labels to the block defined by the
-        `layers` and `lines` arguments.
+        Write `lbls` to the block defined by the `layers` and `lines` arguments.
+
+        Note that `lbls` can be anything interpretable as a :class:`Label`
+        or list of labels.
 
         Parameters
         ----------
@@ -944,8 +1121,7 @@ class Circuit(object):
 
     def insert_labels_into_layers(self, lbls, layer_to_insert_before, lines=None):
         """
-        Inserts into this circuit the contents of `lbls` into new full or
-        partial layers.
+        Inserts into this circuit the contents of `lbls` into new full or partial layers.
 
         By default, complete layer(s) are inserted.  The `lines` argument
         allows you to insert partial layers (on only a subset of the lines).
@@ -1130,8 +1306,7 @@ class Circuit(object):
 
     def clear_labels(self, layers=None, lines=None, clear_straddlers=False):
         """
-        Removes all the gates within the given circuit region.  Does not reduce
-        the number of layers or lines.
+        Removes all the gates within the given circuit region.  Does not reduce the number of layers or lines.
 
         Parameters
         ----------
@@ -1226,17 +1401,19 @@ class Circuit(object):
 
     def to_pythonstr(self, op_labels):
         """
-        Convert this circuit to a python string, where each operation label is
-        represented as a **single** character, starting with 'A' and contining
-        down the alphabet.  This can be useful for processing operation sequences
-        using python's string tools (regex in particular).
+        Convert this circuit to an "encoded" python string.
+
+        In the returned string each operation label is represented as a
+        **single** character, starting with 'A' and continuing down the alphabet.
+        This can be useful for processing operation sequences using python's
+        string tools (regex in particular).
 
         Parameters
         ----------
         op_labels : tuple
-           An iterable containing at least all the layer-Labels that appear
-           in this Circuit, and which will be mapped to alphabet
-           characters, beginning with 'A'.
+            An iterable containing at least all the layer-Labels that appear
+            in this Circuit, and which will be mapped to alphabet
+            characters, beginning with 'A'.
 
         Returns
         -------
@@ -1245,7 +1422,7 @@ class Circuit(object):
 
         Examples
         --------
-            ('Gx','Gx','Gy','Gx') => "AABA"
+        ('Gx','Gx','Gy','Gx') => "AABA"
         """
         assert(len(op_labels) < 26)  # Complain if we go beyond 'Z'
         translateDict = {}; c = 'A'
@@ -1257,9 +1434,11 @@ class Circuit(object):
     @classmethod
     def from_pythonstr(cls, python_string, op_labels):
         """
+        Decode an "encoded string" into a :class:`Circuit`.
+
         Create a Circuit from a python string where each operation label is
-        represented as a **single** character, starting with 'A' and contining
-        down the alphabet.  This performs the inverse of to_pythonstr(...).
+        represented as a **single** character, starting with 'A' and continuing
+        down the alphabet.  This performs the inverse of :method:`to_pythonstr`.
 
         Parameters
         ----------
@@ -1268,8 +1447,8 @@ class Circuit(object):
             operation sequence.
 
         op_labels : tuple
-           tuple containing all the operation labels that will be mapped from alphabet
-           characters, beginning with 'A'.
+            tuple containing all the operation labels that will be mapped from alphabet
+            characters, beginning with 'A'.
 
         Returns
         -------
@@ -1277,7 +1456,7 @@ class Circuit(object):
 
         Examples
         --------
-            "AABA" => ('Gx','Gx','Gy','Gx')
+        "AABA" => ('Gx','Gx','Gy','Gx')
         """
         assert(len(op_labels) < 26)  # Complain if we go beyond 'Z'
         translateDict = {}; c = 'A'
@@ -1288,6 +1467,8 @@ class Circuit(object):
 
     def serialize(self):
         """
+        Serialize the parallel gate operations of this Circuit.
+
         Construct a new Circuit whereby all layers containing multiple gates are
         converted to separate single-gate layers, effectively putting each
         elementary gate operation into its own layer.  Ordering is dictated by
@@ -1307,6 +1488,8 @@ class Circuit(object):
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
+        Compress a circuit's gates by performing them in parallel.
+
         Construct a circuit with the same underlying labels as this one,
         but with as many gates performed in parallel as possible (with
         some restrictions - see the Parameters section below).  Generally,
@@ -1418,8 +1601,10 @@ class Circuit(object):
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth()),
                                 subc.sslbls)  # dump in the contents
 
-    def factorize_repetitions(self):
+    def factorize_repetitions(self):  #INPLACE
         """
+        Attempt to replace repeated sub-circuits with :class:`CircuitLabel` objects.
+
         More or less the reverse of :method:`expand_subcircuits`, this method
         attempts to collapse repetitions of the same labels into single
         :class:`CircuitLabel` labels within this circuit.
@@ -1489,13 +1674,14 @@ class Circuit(object):
 
     def insert_circuit(self, circuit, j):
         """
-        Inserts a circuit into this circuit. The circuit to insert can be over
-        more qubits than this circuit, as long as all qubits that are not part
-        of this circuit are idling. In this case, the idling qubits are all
-        discarded. The circuit to insert can also be on less qubits than this
-        circuit: all other qubits are set to idling. So, the labels of the
-        circuit to insert for all non-idling qubits must be a subset of the
-        labels of this circuit.
+        Inserts a circuit into this circuit.
+
+        The circuit to insert can be over more qubits than this circuit, as long
+        as all qubits that are not part of this circuit are idling. In this
+        case, the idling qubits are all discarded. The circuit to insert can
+        also be on less qubits than this circuit: all other qubits are set to
+        idling. So, the labels of the circuit to insert for all non-idling
+        qubits must be a subset of the labels of this circuit.
 
         Parameters
         ----------
@@ -1523,9 +1709,10 @@ class Circuit(object):
 
     def append_circuit(self, circuit):
         """
-        Append a circuit to the end of this circuit. This circuit must satisfy
-        the requirements of :method:`insert_circuit()`. See that method for
-        more details.
+        Append a circuit to the end of this circuit.
+
+        This circuit must satisfy the requirements of
+        :method:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -1540,9 +1727,10 @@ class Circuit(object):
 
     def prefix_circuit(self, circuit):
         """
-        Prefix a circuit to the beginning of this circuit. This circuit must
-        satisfy the requirements of the :method:`insert_circuit()`. See that
-        method for more details.
+        Prefix a circuit to the beginning of this circuit.
+
+        This circuit must satisfy the requirements of the
+        :method:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -1557,10 +1745,12 @@ class Circuit(object):
 
     def tensor_circuit(self, circuit, line_order=None):
         """
-        Tensors a circuit to this circuit. That is, it adds `circuit` to this
-        circuit as new lines.  The line labels of `circuit` must be disjoint
-        from the line labels of this circuit, as otherwise applying the circuits
-        in parallel does not make sense.
+        The tensor product of this circuit and `circuit`.
+
+        That is, it adds `circuit` to this circuit as new lines.  The line
+        labels of `circuit` must be disjoint from the line labels of this
+        circuit, as otherwise applying the circuits in parallel does not make
+        sense.
 
         Parameters
         ----------
@@ -1630,16 +1820,18 @@ class Circuit(object):
         """
         Changes the *name* of a gate throughout this Circuit.
 
-        Note that the "name" is only a part of the "label" identifying each
+        Note that the name is only a part of the label identifying each
         gate, and doesn't include the lines (qubits) a gate acts upon.  For
         example, the "Gx:0" and "Gx:1" labels both have the same name but
         act on different qubits.
 
         Parameters
         ----------
-        old_gatename, new_gatename : string
-            The gate name to find and the gate name to replace the found
-            name with.
+        old_gatename : str
+            The gate name to replace.
+
+        new_gatename : str
+            The name to replace `old_gatename` with.
 
         Returns
         -------
@@ -1660,8 +1852,7 @@ class Circuit(object):
 
     def replace_gatename(self, old_gatename, new_gatename):
         """
-        Returns a copy of this Circuit except that `old_gatename` is
-        changed to `new_gatename`.
+        Returns a copy of this Circuit except that `old_gatename` is changed to `new_gatename`.
 
         Note that the "name" is only a part of the "label" identifying each
         gate, and doesn't include the lines (qubits) a gate acts upon.  For
@@ -1670,9 +1861,11 @@ class Circuit(object):
 
         Parameters
         ----------
-        old_gatename, new_gatename : string
-            The gate name to find and the gate name to replace the found
-            name with.
+        old_gatename : str
+            The gate name to replace.
+
+        new_gatename : str
+            The name to replace `old_gatename` with.
 
         Returns
         -------
@@ -1690,13 +1883,15 @@ class Circuit(object):
 
     def replace_layer(self, old_layer, new_layer):
         """
-        Returns a copy of this Circuit except that `old_layer` is
-        changed to `new_layer`.
+        Returns a copy of this Circuit except that `old_layer` is changed to `new_layer`.
 
         Parameters
         ----------
-        old_layer, new_layer : string or Label
-            The layer to find and to replace found layers with, respectively.
+        old_layer : str or Label
+            The layer to find.
+
+        new_layer : str or Label
+            The layer to replace found layers with.
 
         Returns
         -------
@@ -1715,6 +1910,8 @@ class Circuit(object):
 
     def replace_layers_with_aliases(self, alias_dict):
         """
+        Performs a find and replace using layer aliases.
+
         Returns a copy of this Circuit except that it's layers that match
         keys of `alias_dict` are replaced with the corresponding values.
 
@@ -1804,6 +2001,10 @@ class Circuit(object):
             If a `set`, then it specifies a set of qubits and any gate in the current library that is confined within
             that set is allowed. If None, then all gates within the library are allowed.
 
+        allow_unchanged_gates : bool, optional
+            Whether to allow some gates to remain unchanged, and therefore to be absent from `compilation`.  When
+            `True` such gates are left alone; when `False` an error is raised if any such gates are encountered.
+
         depth_compression : bool, optional
             Whether to perform depth compression after changing the gate library. If one_q_gate_relations is None this
             will only remove idle layers and compress the circuit by moving everything as far forward as is possible
@@ -1815,7 +2016,6 @@ class Circuit(object):
             Gate relations for the one-qubit gates in the new gate library, that are used in the depth compression, to
             cancel / combine gates. E.g., one key-value pair might be ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
-
 
         Returns
         -------
@@ -1870,8 +2070,7 @@ class Circuit(object):
 
     def map_names_inplace(self, mapper):
         """
-        The names of all of the simple labels are updated in-place according to
-        the mapping function `mapper`.
+        The names of all of the simple labels are updated in-place according to the mapping function `mapper`.
 
         Parameters
         ----------
@@ -1905,15 +2104,14 @@ class Circuit(object):
 
     def map_state_space_labels_inplace(self, mapper):
         """
-        The labels of all of the lines (wires/qubits) are updated according to
-        the mapping function `mapper`.
+        The labels of all of the lines (wires/qubits) are updated according to the mapping function `mapper`.
 
         Parameters
         ----------
         mapper : dict or function
             A dictionary whose keys are the existing self.line_labels values
-            and whose values are the new labels (ints or strings), or a function
-            which takes a single (existing label) argument and returns a new label.
+            and whose value are the new labels, or a function which takes a
+            single (existing line-label) argument and returns a new line-label.
 
         Returns
         -------
@@ -1939,15 +2137,14 @@ class Circuit(object):
 
     def map_state_space_labels(self, mapper):
         """
-        Creates and returns a new Circuit whereby The names of all of the simple
-        labels are updated according to the mapping function `mapper`.
+        Creates a new Circuit whose line labels are updated according to the mapping function `mapper`.
 
         Parameters
         ----------
         mapper : dict or function
-            A dictionary whose keys are the existing gate name values
-            and whose values are the new names (strings) or a function
-            which takes a single (existing name) argument and returns a new name.
+            A dictionary whose keys are the existing self.line_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing line-label) argument and returns a new line-label.
 
         Returns
         -------
@@ -1961,8 +2158,9 @@ class Circuit(object):
 
     def reorder_lines(self, order):
         """
-        Reorders the lines (wires/qubits) of the circuit. Note that the ordering of the
-        lines is not important for most purposes.
+        Reorders the lines (wires/qubits) of the circuit.
+
+        Note that the ordering of the lines is unimportant for most purposes.
 
         Parameters
         ----------
@@ -2078,25 +2276,30 @@ class Circuit(object):
         self._line_labels = tuple([x for x in self.line_labels
                                    if x in all_sslbls])  # preserve order
 
-    def replace_with_idling_line(self, line_label, clear_straddlers=True):
+    def replace_with_idling_line(self, line_label, clear_straddlers=True):  #INPLACE
         """
-        Converts the specified line to an idling line, by removing all
-        its gates. If there are any multi-qubit gates acting on this line,
+        Converts the specified line to an idling line, by removing all its gates.
+
+        If there are any multi-qubit gates acting on this line,
         this function will raise an error when `clear_straddlers=False`.
 
         Parameters
         ----------
-        line_label: str or int
+        line_label : str or int
             The label of the line to convert to an idling line.
 
         clear_straddlers : bool, optional
             Whether or not gates which straddle the `line_label` should also
             be cleared.  If `False` and straddling gates exist, an error
             will be raised.
+
+        Returns
+        -------
+        None
         """
         self.clear_labels(lines=line_label, clear_straddlers=clear_straddlers)
 
-    def reverse(self):
+    def reverse(self):  #INPLACE
         """
         Reverses the order of the circuit.
 
@@ -2108,9 +2311,10 @@ class Circuit(object):
         self._labels = list(reversed(self._labels))  # reverses the layer order
         #FUTURE: would need to reverse each layer too, if layer can have *sublayers*
 
-    def combine_one_q_gates(self, one_q_gate_relations):
+    def combine_one_q_gates(self, one_q_gate_relations):  #INPLACE
         """
         Compresses sequences of 1-qubit gates in the circuit, using the provided gate relations.
+
         One of the steps of the depth_compression() method, and in most cases that method will
         be more useful.
 
@@ -2203,11 +2407,12 @@ class Circuit(object):
         # returns the flag that tells us whether the algorithm achieved anything.
         return compression_implemented
 
-    def shift_gates_forward(self):
+    def shift_gates_forward(self):  #INPLACE
         """
-        Shifted all gates forward (left) as far as is possible without any
-        knowledge of what any of the gates are.  One of the steps of the
-        `depth_compression()` method.
+        Shift all gates forward (left) as far as is possible.
+
+        This operation is performed without any knowledge of what any of the
+        gates are.  One of the steps of :method:`depth_compression()`.
 
         Returns
         -------
@@ -2254,10 +2459,11 @@ class Circuit(object):
         # Only return the bool if requested
         return compression_implemented
 
-    def delete_idle_layers(self):
+    def delete_idle_layers(self):  #INPLACE
         """
-        Deletes all layers in this circuit that contain no gate operations. One
-        of the steps of the `depth_compression()` method.
+        Deletes all layers in this circuit that contain no gate operations.
+
+        One of the steps of the `depth_compression()` method.
 
         Returns
         -------
@@ -2275,7 +2481,7 @@ class Circuit(object):
 
         return bool(len(inds_to_remove) > 0)  # whether compression was implemented
 
-    def compress_depth(self, one_q_gate_relations=None, verbosity=0):
+    def compress_depth(self, one_q_gate_relations=None, verbosity=0):  #INPLACE
         """
         Compresses the depth of this circuit using very simple re-write rules.
 
@@ -2334,8 +2540,7 @@ class Circuit(object):
 
     def get_layer(self, j):
         """
-        Returns a tuple of the *components*, i.e. the (non-identity) gates,
-        in the layer at depth `j`.
+        Returns a tuple of the *components*, i.e. the (non-identity) gates, in the layer at depth `j`.
 
         These are the `.components` of the :class:`Label` returned by indexing
         this Circuit (using square brackets) with `j`, i.e. this returns
@@ -2354,8 +2559,9 @@ class Circuit(object):
 
     def get_layer_label(self, j):
         """
-        Returns the layer, as a :class:`Label`, at depth j. This label contains
-        as components all the (non-identity) gates in the layer..
+        Returns the layer, as a :class:`Label`, at depth j.
+
+        This label contains as components all the (non-identity) gates in the layer..
 
         Parameters
         ----------
@@ -2372,14 +2578,19 @@ class Circuit(object):
 
     def get_layer_with_idles(self, j, idle_gate_name='I'):
         """
-        Returns a tuple of the components of the layer at depth `j`,
-        *including* `idle_gate_name` gates wherever there is an
-        identity operation.
+        Returns a tuple of the components of the layer at depth `j`, with `idle_gate_name` at empty circuit locations.
+
+        This effectively places an explicit `idle_gate_name` gates wherever there is an implied
+        identity operation in the circuit.
 
         Parameters
         ----------
         j : int
             The index (depth) of the layer to be returned
+
+        idle_gate_name : str, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
 
         Returns
         -------
@@ -2389,14 +2600,19 @@ class Circuit(object):
 
     def get_layer_label_with_idles(self, j, idle_gate_name='I'):
         """
-        Returns the layer, as a :class:`Label`, at depth j. This list contains
-        all the gates in the layer *including* `idle_gate_name` gates wherever
-        there is an identity operation.
+        Returns the layer, as a :class:`Label`, at depth j, with `idle_gate_name` at empty circuit locations.
+
+        This effectively places an explicit `idle_gate_name` gates wherever there is an implied
+        identity operation in the circuit.
 
         Parameters
         ----------
         j : int
             The index (depth) of the layer to be returned
+
+        idle_gate_name : str, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
 
         Returns
         -------
@@ -2404,6 +2620,8 @@ class Circuit(object):
         """
         layer_lbl = self.get_layer_label(j)  # (a Label)
         if layer_lbl.sslbls is None:
+            if layer_lbl == ():  # special case - the completely empty layer: sslbls=None but needs padding
+                return _Label([_Label(idle_gate_name, line_lbl) for line_lbl in self.line_labels])
             return layer_lbl  # all qubits used - no idles to pad
 
         components = list(layer_lbl.components)
@@ -2414,9 +2632,11 @@ class Circuit(object):
 
     def num_layers(self):
         """
-        The number of circuit layers. In simple circuits, this is also the
-        depth.  For circuits containing sub-circuit blocks, this gives the
-        number of top-level layers in this circuit.
+        The number of circuit layers.
+
+        In simple circuits, this is the same as the depth (given by :method:`depth`).
+        For circuits containing sub-circuit blocks, this gives the number of
+        top-level layers in this circuit.
 
         Returns
         -------
@@ -2426,9 +2646,11 @@ class Circuit(object):
 
     def depth(self):
         """
-        The circuit depth. This is the number of layers in simple circuits.
-        For circuits containing sub-circuit blocks, this includes the
-        depth of sub-circuits.
+        The circuit depth.
+
+        This is the number of layers in simple circuits. For circuits containing
+        sub-circuit blocks, this includes the full depth of these blocks.  If you
+        just want the number of top-level layers, use :method:`num_layers`.
 
         Returns
         -------
@@ -2441,9 +2663,11 @@ class Circuit(object):
 
     def width(self):
         """
-        The circuit width. This is the number of qubits on which the circuit
-        acts. This includes qubits that only idle, but are included as part
-        of the circuit according to self.line_labels.
+        The circuit width.
+
+        This is the number of qubits on which the circuit acts. This includes
+        qubits that only idle, but are included as part of the circuit according
+        to self.line_labels.
 
         Returns
         -------
@@ -2453,10 +2677,12 @@ class Circuit(object):
 
     def size(self):
         """
-        Returns the circuit size, which is the sum of the sizes of all the
-        gates in the circuit. A gate that acts on n-qubits has a size of n,
-        with the exception of the idle which has a size of 0. Hence, the
-        circuit is given by: `size = depth * num_lines - num_1Q_idles`.
+        Returns the circuit size.
+
+        This is the sum of the sizes of all the gates in the circuit. A gate
+        that acts on n-qubits has a size of n, with the exception of the idle
+        which has a size of 0. Hence, the circuit is given by: `size = depth *
+        num_lines - num_1Q_idles`.
 
         Returns
         -------
@@ -2480,9 +2706,11 @@ class Circuit(object):
 
     def two_q_gate_count(self):
         """
-        The number of two-qubit gates in the circuit. (Note that this cannot
-        distinguish between "true" 2-qubit gates and gate that have been defined
-        to act on two qubits but that represent some tensor-product gate.)
+        The number of two-qubit gates in the circuit.
+
+        (Note that this cannot distinguish between "true" 2-qubit gates and gate
+        that have been defined to act on two qubits but that represent some
+        tensor-product gate.)
 
         Returns
         -------
@@ -2492,10 +2720,11 @@ class Circuit(object):
 
     def nq_gate_count(self, nq):
         """
-        The number of `nq`-qubit gates in the circuit. (Note that this cannot
-        distinguish between "true" `nq`-qubit gates and gate that have been
-        defined to act on `nq` qubits but that represent some tensor-product
-        gate.)
+        The number of `nq`-qubit gates in the circuit.
+
+        (Note that this cannot distinguish between "true" `nq`-qubit gates and
+        gate that have been defined to act on `nq` qubits but that represent
+        some tensor-product gate.)
 
         Parameters
         ----------
@@ -2524,10 +2753,11 @@ class Circuit(object):
 
     def multi_q_gate_count(self):
         """
-        The number of multi-qubit (2+ qubits) gates in the circuit. (Note that
-        this cannot distinguish between "true" multi-qubit gates and gate that
-        have been defined to act on more than one qubit but that represent some
-        tensor-product gate.)
+        The number of multi-qubit (2+ qubits) gates in the circuit.
+
+        (Note that this cannot distinguish between "true" multi-qubit gates and
+        gate that have been defined to act on more than one qubit but that
+        represent some tensor-product gate.)
 
         Returns
         -------
@@ -2673,6 +2903,19 @@ class Circuit(object):
         return "Circuit(%s)" % self.str
 
     def display_str(self, width=80):
+        """
+        Formats a string for displaying this circuit suject to a maximum `width`.
+
+        Parameters
+        ----------
+        width : int, optional
+            The maximum width in characters.  If the circuit is longer than this
+            width it is wrapped using multiple lines (like a musical score).
+
+        Returns
+        -------
+        str
+        """
         ret = ""
         circuit_string = str(self).strip()  # get rid of trailing newline
         line_strings = circuit_string.split('\n')
@@ -2716,8 +2959,11 @@ class Circuit(object):
 
     def write_q_circuit_tex(self, filename):  # TODO
         """
-        Writes this circuit into a file, containing LaTex that will diplay this circuit using the
-        Qcircuit.tex LaTex import (running LaTex requires the Qcircuit.tex file).
+        Writes a LaTeX file for rendering this circuit nicely.
+
+        Creates a file containing LaTex that will display this circuit using the
+        Qcircuit.tex LaTex import (compiling the LaTex requires that you have the
+        Qcircuit.tex file).
 
         Parameters
         ----------
@@ -2773,6 +3019,65 @@ class Circuit(object):
         f.write("\end{document}")
         f.close()
 
+    def convert_to_cirq(self,
+                        qubit_conversion,
+                        wait_duration=None,
+                        gatename_conversion=None,
+                        idle_gate_name='Gi'):
+        """
+        Converts this circuit to a Cirq circuit.
+
+        Parameters
+        ----------
+        qubit_conversion : dict
+            Mapping from qubit labels (e.g. integers) to Cirq qubit objects.
+
+        wait_duration : cirq.Duration, optional
+            If no gatename_conversion dict is given, the idle operation is not
+            converted to a gate. If wait_diration is specified and gatename_conversion
+            is not specified, then the idle operation will be converted to a
+            `cirq.WaitGate` with the specified duration.
+
+        gatename_conversion : dict, optional
+            If not None, a dictionary that converts the gatenames in the circuit to the
+            Cirq gates that will appear in the Cirq circuit. If only standard pyGSTi names
+            are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
+            be specified, and an automatic conversion to the standard Cirq names will be
+            implemented.
+        idle_gate_name : str, optional
+            Name to use for idle gates. Defaults to 'Gi'
+
+        Returns
+        -------
+        A Cirq Circuit object.
+        """
+
+        try:
+            import cirq
+        except ImportError:
+            raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+        if gatename_conversion is None:
+            gatename_conversion = _itgs.get_standard_gatenames_cirq_conversions()
+            if wait_duration is not None:
+                gatename_conversion[idle_gate_name] = cirq.WaitGate(wait_duration)
+
+        moments = []
+        for i in range(self.num_layers()):
+            layer = self.get_layer_with_idles(i, idle_gate_name)
+            operations = []
+            for gate in layer:
+                operation = gatename_conversion[gate.name]
+                if operation is None:
+                    # This happens if no idle gate it specified because
+                    # get_standard_gatenames_cirq_conversions maps 'Gi' to `None`
+                    continue
+                qubits = map(qubit_conversion.get, gate.qubits)
+                operations.append(operation.on(*qubits))
+            moments.append(cirq.Moment(operations))
+
+        return cirq.Circuit(moments)
+
     def convert_to_quil(self,
                         num_qubits=None,
                         gatename_conversion=None,
@@ -2786,16 +3091,14 @@ class Circuit(object):
 
         Parameters
         ----------
-        gatename_conversion : dict,
-        optional
-            If not None, a dictionary that converts the gatenames in the circuit to the
-            gatenames that will appear in the quil output. If only standard pyGSTi names
-            are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
-            be specified, and an automatic conversion to the standard quil names will be
-            implemented.
+        num_qubits : int, optional
+            The number of qubits for the quil file.  If None, then this is assumed
+            to equal the number of line labels in this circuit.
 
-            * Currently some standard pyGSTi names do not have an inbuilt conversion to quil names.
-            This will be fixed in the future *
+        gatename_conversion : dict, optional
+            A dictionary mapping gate names contained in this circuit to the corresponding
+            gate names used in the rendered quil.  If None, a standard set of conversions
+            is used (see :function:`get_standard_gatenames_quil_conversions`).
 
         qubit_conversion : dict, optional
             If not None, a dictionary converting the qubit labels in the circuit to the
@@ -2812,6 +3115,16 @@ class Circuit(object):
             circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
             (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
             that qubit has Rigetti label 2.)
+
+        block_between_layers : bool, optional
+            When `True`, add in a barrier after every circuit layer.  Including such "pragma" blocks
+            can be important for QCVV testing, as this can help reduce the "behind-the-scenes"
+            compilation (beyond necessary conversion to native instructions) experience by the circuit.
+
+        block_idles : bool, optional
+            In the special case of global idle gates, pragma-block barriers are inserted *even*
+            when `block_between_layers=False`.  Set `block_idles=False` to disable this behavior,
+            whcih typically results in global idle gates being removed by the compiler.
 
         gate_declarations : dict, optional
             If not None, a dictionary that provides unitary maps for particular gates that
@@ -2934,12 +3247,17 @@ class Circuit(object):
 
     def convert_to_openqasm(self, num_qubits=None,
                             gatename_conversion=None, qubit_conversion=None,
-                            block_between_layers=True):  # TODO
+                            block_between_layers=True,
+                            block_between_gates=False):  # TODO
         """
         Converts this circuit to an openqasm string.
 
         Parameters
         ----------
+        num_qubits : in, optional
+            The number of qubits for the openqasm file.  If None, then this is assumed
+            to equal the number of line labels in this circuit.
+
         gatename_conversion : dict, optional
             If not None, a dictionary that converts the gatenames in the circuit to the
             gatenames that will appear in the openqasm output. If only standard pyGSTi names
@@ -2953,6 +3271,11 @@ class Circuit(object):
             labels are either (1) integers, or (2) of the form 'Qi' for integer i. In
             this case they are converted to integers (i.e., for (1) the mapping is trivial,
             for (2) the mapping strips the 'Q').
+
+        block_between_layers : bool, optional
+            When `True`, add in a barrier after every circuit layer.  Including such barriers
+            can be important for QCVV testing, as this can help reduce the "behind-the-scenes"
+            compilation (beyond necessary conversion to native instructions) experience by the circuit.
 
         Returns
         -------
@@ -3023,12 +3346,24 @@ class Circuit(object):
                     if gate.qubits is None:
                         for q in gate_qubits:
                             openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        if block_between_gates:
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels[:-1]:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
                     else:
                         for q in gate_qubits:
                             openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
                             if q != gate_qubits[-1]:
                                 openqasm_for_gate += ', '
                         openqasm_for_gate += ';\n'
+                        if block_between_gates:
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels[:-1]:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
                 else:
                     assert len(gate.qubits) == 1
                     q = gate.qubits[0]
@@ -3046,9 +3381,10 @@ class Circuit(object):
                 qubits_used.extend(gate_qubits)
 
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            for q in self.line_labels:
-                if q not in qubits_used:
-                    openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+            if not block_between_gates:
+                for q in self.line_labels:
+                    if q not in qubits_used:
+                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
@@ -3073,10 +3409,11 @@ class Circuit(object):
 
     def simulate(self, model, return_all_outcomes=False):
         """
-        Compute the outcome probabilities of this Circuit using `model` as a
-        model for the gates. The order of the outcome strings (e.g., '0100') is
-        w.r.t. to the ordering of the qubits in the circuit. That is, the ith
-        element of the outcome string corresponds to the qubit with label
+        Compute the outcome probabilities of this Circuit using `model` as a model for the gates.
+
+        The order of the outcome strings (e.g., '0100') is w.r.t. to the
+        ordering of the qubits in the circuit. That is, the ith element of the
+        outcome string corresponds to the qubit with label
         `self.qubit_labels[i]`.
 
         Parameters
@@ -3093,7 +3430,7 @@ class Circuit(object):
             be obtained by first creating a model only over the qubits in this
             circuit.
 
-        return_all_outcomes: bool, optional
+        return_all_outcomes : bool, optional
             Whether to include outcomes in the returned dictionary that have zero
             probability. When False, the threshold for discarding an outcome as z
             ero probability is 10^-12.
@@ -3140,8 +3477,7 @@ class Circuit(object):
 
     def done_editing(self):
         """
-        Make this circuit read-only, so that it can be hashed (e.g. used as a
-        dictionary key).
+        Make this circuit read-only, so that it can be hashed (e.g. used as a dictionary key).
 
         This is done automatically when attempting to hash a :class:`Circuit`
         for the first time, so there's calling this function can usually be
@@ -3158,14 +3494,31 @@ class Circuit(object):
 
 class CompressedCircuit(object):
     """
-    A "compressed" Circuit class which reduces the memory or disk space
-    required to hold the tuple part of a Circuit by compressing it.
+    A "compressed" Circuit that requires less disk space.
+
+    The tuple of circuit layers is compressed using a custom algorithm which looks for
+    repeated portions of the circuit.
 
     One place where CompressedCircuit objects can be useful is when saving
     large lists of long operation sequences in some non-human-readable format (e.g.
     pickle).  CompressedCircuit objects *cannot* be used in place of
     Circuit objects within pyGSTi, and so are *not* useful when manipulating
     and running algorithms which use operation sequences.
+
+    Parameters
+    ----------
+    circuit : Circuit
+        The operation sequence object which is compressed to create
+        a new CompressedCircuit object.
+
+    min_len_to_compress : int, optional
+        The minimum length string to compress.  If len(circuit)
+        is less than this amount its tuple is returned.
+
+    max_period_to_look_for : int, optional
+        The maximum period length to use when searching for periodic
+        structure within circuit.  Larger values mean the method
+        takes more time but could result in better compressing.
     """
 
     def __init__(self, circuit, min_len_to_compress=20, max_period_to_look_for=20):
@@ -3231,10 +3584,12 @@ class CompressedCircuit(object):
     @staticmethod
     def compress_op_label_tuple(circuit, min_len_to_compress=20, max_period_to_look_for=20):
         """
-        Compress a operation sequence.  The result is tuple with a special compressed-
-        gate-string form form that is not useable by other GST methods but is
-        typically shorter (especially for long operation sequences with a repetative
-        structure) than the original operation sequence tuple.
+        Compress a operation sequence.
+
+        The result is tuple with a special compressed- gate-string form form
+        that is not useable by other GST methods but is typically shorter
+        (especially for long operation sequences with a repetative structure)
+        than the original operation sequence tuple.
 
         Parameters
         ----------
@@ -3288,8 +3643,7 @@ class CompressedCircuit(object):
     @staticmethod
     def expand_op_label_tuple(compressed_op_labels):
         """
-        Expand a compressed tuple created with compress_op_label_tuple(...)
-        into a tuple of operation labels.
+        Expand a compressed tuple (created with :method:`compress_op_label_tuple`) into a tuple of operation labels.
 
         Parameters
         ----------

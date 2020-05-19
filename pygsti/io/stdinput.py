@@ -1,4 +1,6 @@
-""" Text-parsing classes and functions to read input files."""
+"""
+Text-parsing classes and functions to read input files.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -26,8 +28,20 @@ from . import CircuitParser as _CircuitParser
 
 def get_display_progress_fn(show_progress):
     """
-    Create and return a progress-displaying function if `show_progress == True`
-    and it's run within an interactive environment.
+    Create and return a progress-displaying function.
+
+    Only return a function that does somethign if `show_progress == True`
+    and the current environment is interactive. Otherwise, return a
+    do-nothing function.
+
+    Parameters
+    ----------
+    show_progress : bool
+        Whether or not to even try to get a real progress-displaying function.
+
+    Returns
+    -------
+    function
     """
 
     def _is_interactive():
@@ -108,6 +122,10 @@ class StdInputParser(object):
             The expected number of counts to accompany the operation sequence on this
             data line.  If < 0, no check is performed; otherwise raises ValueError
             if the number of counts does not equal expected_counts.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing string representations
+            or to just expand these into non-subcircuit labels.
 
         Returns
         -------
@@ -203,7 +221,6 @@ class StdInputParser(object):
             Specify this instead of `line_labels` to set the latter to the
             integers between 0 and `num_lines-1`.
 
-
         Returns
         -------
         list of Circuits
@@ -236,7 +253,7 @@ class StdInputParser(object):
         Returns
         -------
         dict
-           Dictionary with keys == operation sequence labels and values == Circuits.
+            Dictionary with keys == operation sequence labels and values == Circuits.
         """
         lookupDict = {}
         with open(filename, 'r') as dictfile:

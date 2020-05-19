@@ -1,4 +1,6 @@
-""" Defines the Results class."""
+"""
+Defines the Results class.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -73,8 +75,7 @@ class Results(object):
 
     def init_circuits(self, structs_by_iter):
         """
-        Initialize the common set operation sequences used to form the
-        estimates of this Results object.
+        Initialize the common set operation sequences used to form the estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
         GST method was used, this is treated as a single iteration).
@@ -129,8 +130,8 @@ class Results(object):
         # to the circuitLists used to obtain estimates
         finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure):  # FUTURE: do something sensible w/ LsGermsSerialStructure?
-            self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
-            self.circuit_lists['meas fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['prep fiducials'] = finalStruct.prep_fiducials
+            self.circuit_lists['meas fiducials'] = finalStruct.meas_fiducials
             self.circuit_lists['germs'] = finalStruct.germs
         else:
             self.circuit_lists['prep fiducials'] = []
@@ -178,8 +179,7 @@ class Results(object):
 
     def rename_estimate(self, old_name, new_name):
         """
-        Rename an estimate in this Results object.  Ordering of estimates is
-        not changed.
+        Rename an estimate in this Results object.  Ordering of estimates is not changed.
 
         Parameters
         ----------
@@ -248,8 +248,8 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate(self, target_model, seed_model,
-                                                                          models_by_iter, parameters)
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.gst_init(self, target_model, seed_model,
+                                                                                   models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \
@@ -335,8 +335,9 @@ class Results(object):
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
-        Creates a shallow copy of this Results object containing only the
-        given estimate and gauge-optimization keys.
+        Creates a shallow copy of this Results object.
+
+        It contains only the given estimate and gauge-optimization keys.
 
         Parameters
         ----------
@@ -366,7 +367,13 @@ class Results(object):
         return view
 
     def copy(self):
-        """ Creates a copy of this Results object. """
+        """
+        Creates a copy of this Results object.
+
+        Returns
+        -------
+        Results
+        """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()

@@ -1,4 +1,6 @@
-""" Utility functions related to Gram matrix construction."""
+"""
+Utility functions related to Gram matrix construction.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,27 +21,28 @@ from ..objects import ComplementSPAMVec as _ComplementSPAMVec
 
 def get_max_gram_basis(op_labels, dataset, max_length=0):
     """
-    Compute a maximal set of operation sequences that can be used as a basis for a Gram
-      matrix.  That is, a maximal set of strings {S_i} such that the gate
-      strings { S_i S_j } are all present in dataset.  If max_length > 0, then
-      restrict len(S_i) <= max_length.
+    Compute a maximal set of basis circuits for a Gram matrix.
+
+    That is, a maximal set of strings {S_i} such that the gate
+    strings { S_i S_j } are all present in dataset.  If max_length > 0, then
+    restrict len(S_i) <= max_length.
 
     Parameters
     ----------
     op_labels : list or tuple
-      the operation labels to use in Gram matrix basis strings
+        the operation labels to use in Gram matrix basis strings
 
     dataset : DataSet
-      the dataset to use when constructing the Gram matrix
+        the dataset to use when constructing the Gram matrix
 
     max_length : int, optional
-      the maximum string length considered for Gram matrix basis
-      elements.  Defaults to 0 (no limit).
+        the maximum string length considered for Gram matrix basis
+        elements.  Defaults to 0 (no limit).
 
     Returns
     -------
     list of tuples
-      where each tuple contains operation labels and specifies a single operation sequence.
+        where each tuple contains operation labels and specifies a single operation sequence.
     """
 
     datasetStrings = list(dataset.keys())
@@ -66,28 +69,28 @@ def get_max_gram_basis(op_labels, dataset, max_length=0):
 def max_gram_rank_and_evals(dataset, target_model, max_basis_string_length=10,
                             fixed_lists=None):
     """
-    Compute the rank and singular values of a maximal Gram matrix,that is, the
-    Gram matrix using a basis computed by:
+    Compute the rank and singular values of a maximal Gram matrix.
+
+    That is, compute the rank and singular values of the Gram matrix computed using the basis:
     get_max_gram_basis(dataset.get_gate_labels(), dataset, max_basis_string_length).
 
     Parameters
     ----------
     dataset : DataSet
-      the dataset to use when constructing the Gram matrix
+        the dataset to use when constructing the Gram matrix
 
     target_model : Model
-      A model used to make sense of operation sequences and for the construction of
-      a theoretical gram matrix and spectrum.
+        A model used to make sense of operation sequences and for the construction of
+        a theoretical gram matrix and spectrum.
 
     max_basis_string_length : int, optional
-      the maximum string length considered for Gram matrix basis
-      elements.  Defaults to 10.
+        the maximum string length considered for Gram matrix basis
+        elements.  Defaults to 10.
 
     fixed_lists : (prep_strs, effect_strs), optional
-      2-tuple of operation sequence lists, specifying the preparation and
-      measurement fiducials to use when constructing the Gram matrix,
-      and thereby bypassing the search for such lists.
-
+        2-tuple of operation sequence lists, specifying the preparation and
+        measurement fiducials to use when constructing the Gram matrix,
+        and thereby bypassing the search for such lists.
 
     Returns
     -------

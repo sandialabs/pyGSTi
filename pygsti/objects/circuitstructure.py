@@ -1,4 +1,6 @@
-""" Defines the CircuitStructure class and supporting functionality."""
+"""
+Defines the CircuitStructure class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -18,10 +20,35 @@ from .circuit import Circuit as _Circuit
 
 class CircuitPlaquette(object):
     """
-    Encapsulates a single "plaquette" or "sub-matrix" within a
-    circuit-structure.  Typically this corresponds to a matrix
-    whose rows and columns correspdond to measurement and preparation
-    fiducial sequences.
+    Encapsulates a single "plaquette" or "sub-matrix" within a circuit plot.
+
+    This often corresponds to a matrix whose rows and columns correspond to
+    measurement and preparation fiducial sequences.
+
+    Parameters
+    ----------
+    base : Circuit
+        The "base" operation sequence of this plaquette.  Typically the sequence
+        that is sandwiched between fiducial pairs.
+
+    rows : int
+        The number of rows in this plaquette.
+
+    cols : int
+        The number of columns in this plaquette.
+
+    elements : list
+        A list of `(i,j,s)` tuples where `i` and `j` are row and column
+        indices and `s` is the corresponding `Circuit`.
+
+    aliases : dict
+        A dictionary of operation label aliases that is carried along
+        for calls to :func:`expand_aliases`.
+
+    fidpairs : list, optional
+        A list of `(prepStr, effectStr)` tuples specifying how
+        `elements` is generated from `base`, i.e. by
+        `prepStr + base + effectStr`.
     """
 
     def __init__(self, base, rows, cols, elements, aliases, fidpairs=None):
@@ -64,9 +91,11 @@ class CircuitPlaquette(object):
 
     def expand_aliases(self, ds_filter=None, circuit_simplifier=None):
         """
-        Returns a new CircuitPlaquette with any aliases
-        expanded (within the operation sequences).  Optionally keeps only
-        those strings which, after alias expansion, are in `ds_filter`.
+        Returns a new CircuitPlaquette with any aliases expanded.
+
+        Aliases are expanded (i.e. applied) within the circuits of this
+        plaquette.  Optionally keeps only those strings which, after
+        alias expansion, are in `ds_filter`.
 
         Parameters
         ----------
@@ -106,13 +135,21 @@ class CircuitPlaquette(object):
         return ret
 
     def get_all_strs(self):
-        """Return a list of all the operation sequences contained in this plaquette"""
+        """
+        Return a list of all the operation sequences contained in this plaquette
+
+        Returns
+        -------
+        list
+        """
         return [s for i, j, s in self.elements]
 
-    def simplify_circuits(self, model, dataset=None):
+    def simplify_circuits(self, model, dataset=None):  #INPLACE
         """
-        Simplified this plaquette so that the `num_simplified_elements` property and
-        the `iter_simplified()` and `elementvec_to_matrix` methods may be used.
+        Simplify the circuits in this plaquette.
+
+        The result is a plaquette that has a `num_simplified_elements` property and
+        whose `iter_simplified()` and `elementvec_to_matrix` methods may be used.
 
         Parameters
         ----------
@@ -123,6 +160,10 @@ class CircuitPlaquette(object):
             If not None, restrict what is simplified to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
+
+        Returns
+        -------
+        None
         """
         all_strs = self.get_all_strs()
         if len(all_strs) > 0:
@@ -133,12 +174,18 @@ class CircuitPlaquette(object):
         self.num_simplified_elements = nEls
 
     def iter_simplified(self):
+        """
+        Iterate over (row_index, col_index, simplified_circuit, element_index, outcome_index) tuples.
+        """
         assert(self.num_simplified_elements is not None), \
             "Plaquette must be simplified first!"
         for k, (i, j, s) in enumerate(self.elements):
             yield i, j, s, self._elementIndicesByStr[k], self._outcomesByStr[k]
 
     def __iter__(self):
+        """
+        Iterate over (row_index, col_index, circuit) tuples.
+        """
         for i, j, s in self.elements:
             yield i, j, s
         #iterate over non-None entries (i,j,GateStr)
@@ -148,8 +195,9 @@ class CircuitPlaquette(object):
 
     def elementvec_to_matrix(self, elementvec, mergeop="sum"):
         """
-        Form a matrix of values for this plaquette from  a given vector,
-        `elementvec` of individual-outcome elements (e.g. the bulk probabilities
+        Form a matrix of values corresponding to this plaquette from an element vector.
+
+        An element vector holds individual-outcome elements (e.g. the bulk probabilities
         computed by a model).
 
         Parameters
@@ -185,8 +233,7 @@ class CircuitPlaquette(object):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`
-        and return a new `CircuitPlaquette` object.
+        Manipulate this object's circuits according to `processor_fn`.
 
         Parameters
         ----------
@@ -213,6 +260,10 @@ class CircuitPlaquette(object):
     def copy(self):
         """
         Returns a copy of this `CircuitPlaquette`.
+
+        Returns
+        -------
+        CircuitPlaquette
         """
         aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) \
             else None
@@ -245,19 +296,43 @@ class CircuitStructure(object):
             self.uuid = _uuid.uuid4()  # create a new uuid
 
     def xvals(self):
-        """ Returns a list of the x-values"""
+        """
+        Returns a list of the x-values
+
+        Returns
+        -------
+        list
+        """
         raise NotImplementedError("Derived class must implement this.")
 
     def yvals(self):
-        """ Returns a list of the y-values"""
+        """
+        Returns a list of the y-values
+
+        Returns
+        -------
+        list
+        """
         raise NotImplementedError("Derived class must implement this.")
 
     def minor_xvals(self):
-        """ Returns a list of the minor x-values"""
+        """
+        Returns a list of the minor x-values
+
+        Returns
+        -------
+        list
+        """
         raise NotImplementedError("Derived class must implement this.")
 
     def minor_yvals(self):
-        """ Returns a list of the minor y-values"""
+        """
+        Returns a list of the minor y-values
+
+        Returns
+        -------
+        list
+        """
         raise NotImplementedError("Derived class must implement this.")
 
     def get_plaquette(self, x, y):
@@ -266,9 +341,11 @@ class CircuitStructure(object):
 
         Parameters
         ----------
-        x, y : values
-            Coordinates which should be members of the lists returned by
-            :method:`xvals` and :method:`yvals` respectively.
+        x : various
+            x-value (not index)
+
+        y : various
+            y-value (not index)
 
         Returns
         -------
@@ -276,13 +353,14 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
-    def create_plaquette(self, base_str):
+    def create_plaquette(self, base_circuit):
         """
-        Creates a the plaquette for the given base string.
+        Creates a the plaquette for the given base circuit.
 
         Parameters
         ----------
-        base_str : Circuit
+        base_circuit : Circuit
+            the base circuit to use.
 
         Returns
         -------
@@ -291,19 +369,30 @@ class CircuitStructure(object):
         raise NotImplementedError("Derived class must implement this.")
 
     def used_xvals(self):
-        """Lists the x-values which have at least one non-empty plaquette"""
+        """
+        Lists the x-values which have at least one non-empty plaquette
+
+        Returns
+        -------
+        list
+        """
         return [x for x in self.xvals() if any([len(self.get_plaquette(x, y)) > 0
                                                 for y in self.yvals()])]
 
     def used_yvals(self):
-        """Lists the y-values which have at least one non-empty plaquette"""
+        """
+        Lists the y-values which have at least one non-empty plaquette
+
+        Returns
+        -------
+        list
+        """
         return [y for y in self.yvals() if any([len(self.get_plaquette(x, y)) > 0
                                                 for x in self.xvals()])]
 
     def plaquette_rows_cols(self):
         """
-        Return the number of rows and columns contained in each plaquette of
-        this CircuitStructure.
+        Return the number of rows and columns contained in each plaquette of this CircuitStructure.
 
         Returns
         -------
@@ -312,7 +401,13 @@ class CircuitStructure(object):
         return len(self.minor_yvals()), len(self.minor_xvals())
 
     def get_basestrings(self):
-        """Lists the base strings (without duplicates) of all the plaquettes"""
+        """
+        Lists the base strings (without duplicates) of all the plaquettes
+
+        Returns
+        -------
+        list
+        """
         baseStrs = set()
         for x in self.xvals():
             for y in self.yvals():
@@ -323,9 +418,10 @@ class CircuitStructure(object):
 
     def simplify_plaquettes(self, model, dataset=None):
         """
-        Simplifies all the plaquettes in this structure so that their
-        `num_simplified_elements` property and the `iter_simplified()` methods
-        may be used.
+        Simplifies all the plaquettes in this circuit structure.
+
+        This endows the plaquettes with a `num_simplified_elements` property
+        and allows their `iter_simplified()` methods to be used.
 
         Parameters
         ----------
@@ -336,6 +432,10 @@ class CircuitStructure(object):
             If not None, restrict what is simplified to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
+
+        Returns
+        -------
+        None
         """
         for x in self.xvals():
             for y in self.yvals():
@@ -346,8 +446,29 @@ class CircuitStructure(object):
 
 class LsGermsStructure(CircuitStructure):
     """
-    A type of operation sequence structure whereby sequences can be
-    indexed by L, germ, preparation-fiducial, and measurement-fiducial.
+    A circuit structure where circuits are indexed by L, germ, preparation-fiducial, and measurement-fiducial.
+
+    Parameters
+    ----------
+    max_lengths : list of ints
+        List of maximum lengths (x values)
+
+    germs : list of Circuits
+        List of germ sequences (y values)
+
+    prep_fiducials : list of Circuits
+        List of preparation fiducial sequences (minor x values)
+
+    effecStrs : list of Circuits
+        List of measurement fiducial sequences (minor y values)
+
+    aliases : dict
+        Operation label aliases to be propagated to all plaquettes.
+
+    sequence_rules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of operation labels
+        (or `Circuit` objects).
     """
 
     def __init__(self, max_lengths, germs, prep_fiducials, meas_fiducials, aliases=None,
@@ -392,27 +513,59 @@ class LsGermsStructure(CircuitStructure):
         self._baseStrToLGerm = {}
         super(LsGermsStructure, self).__init__()
 
+    def __iter__(self):
+        yield from self.allstrs
+
+    def __len__(self):
+        return len(self.allstrs)
+
+    def __getitem__(self, key: int):
+        return self.allstrs[key]
+
     #Base class access in terms of generic x,y coordinates
     def xvals(self):
-        """ Returns a list of the x-values"""
+        """
+        Returns a list of the x-values
+
+        Returns
+        -------
+        list
+        """
         return self.Ls
 
     def yvals(self):
-        """ Returns a list of the y-values"""
+        """
+        Returns a list of the y-values
+
+        Returns
+        -------
+        list
+        """
         return self.germs
 
     def minor_xvals(self):
-        """ Returns a list of the minor x-values"""
+        """
+        Returns a list of the minor x-values
+
+        Returns
+        -------
+        list
+        """
         return self.prep_fiducials
 
     def minor_yvals(self):
-        """ Returns a list of the minor y-values"""
+        """
+        Returns a list of the minor y-values
+
+        Returns
+        -------
+        list
+        """
         return self.meas_fiducials
 
     def add_plaquette(self, basestr, max_length, germ, fidpairs=None, dsfilter=None):
         """
-        Adds a plaquette with the given fiducial pairs at the
-        `(max_length,germ)` location.
+        Adds a plaquette with the given fiducial pairs at the `(max_length,germ)` location.
 
         Parameters
         ----------
@@ -420,8 +573,10 @@ class LsGermsStructure(CircuitStructure):
             The base operation sequence of the new plaquette.
 
         max_length : int
+            The maximum length (x) coordinate of the new plaquette.
 
         germ : Circuit
+            The germ (y) coordinate of the new plaquette.
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -517,6 +672,10 @@ class LsGermsStructure(CircuitStructure):
     def done_adding_strings(self):
         """
         Called to indicate the user is done adding plaquettes.
+
+        Returns
+        -------
+        None
         """
         #placeholder in case there's some additional init we need to do.
         pass
@@ -569,9 +728,11 @@ class LsGermsStructure(CircuitStructure):
         germs : list, optional
             The (Circuit) germs to keep.  If None, then all are kept.
 
-        prep_fiducials, meas_fiducials : list, optional
-            The (Circuit) preparation and measurement fiducial sequences to keep.
-            If None, then all are kept.
+        prep_fiducials : list, optional
+            The preparation fiducial circuits.
+
+        meas_fiducials : list, optional
+            The measurement fiducial circuits.
 
         seqs : list
             Keep only sequences present in this list of Circuit objects.
@@ -608,13 +769,14 @@ class LsGermsStructure(CircuitStructure):
         cpy.add_unindexed(self.unindexed)  # preserve unindexed strings
         return cpy
 
-    def create_plaquette(self, base_str, fidpairs=None):
+    def create_plaquette(self, base_circuit, fidpairs=None):
         """
         Creates a the plaquette for the given base string and pairs.
 
         Parameters
         ----------
-        base_str : Circuit
+        base_circuit : Circuit
+            The base circuit to use.
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -629,18 +791,17 @@ class LsGermsStructure(CircuitStructure):
             fidpairs = list(_itertools.product(range(len(self.prep_fiducials)),
                                                range(len(self.meas_fiducials))))
 
-        elements = [(j, i, self.prep_fiducials[i] + base_str + self.meas_fiducials[j])
+        elements = [(j, i, self.prep_fiducials[i] + base_circuit + self.meas_fiducials[j])
                     for i, j in fidpairs]  # note preps are *cols* not rows
         real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # circuits, not indices
 
-        return CircuitPlaquette(base_str, len(self.meas_fiducials),
+        return CircuitPlaquette(base_circuit, len(self.meas_fiducials),
                                 len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
     def plaquette_rows_cols(self):
         """
-        Return the number of rows and columns contained in each plaquette of
-        this LsGermsStructure.
+        Return the number of rows and columns contained in each plaquette of this circuit structure.
 
         Returns
         -------
@@ -650,8 +811,7 @@ class LsGermsStructure(CircuitStructure):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`,
-        returning a new circuit structure with processed circuits.
+        Manipulate this object's circuits according to `processor_fn`.
 
         Parameters
         ----------
@@ -684,6 +844,10 @@ class LsGermsStructure(CircuitStructure):
     def copy(self):
         """
         Returns a copy of this `LsGermsStructure`.
+
+        Returns
+        -------
+        LsGermsStructure
         """
         cpy = LsGermsStructure(self.Ls, self.germs, self.prep_fiducials,
                                self.meas_fiducials, self.aliases, self.sequenceRules)
@@ -698,8 +862,31 @@ class LsGermsStructure(CircuitStructure):
 
 class LsGermsSerialStructure(CircuitStructure):
     """
-    A type of operation sequence structure whereby sequences can be
-    indexed by L, germ, preparation-fiducial, and measurement-fiducial.
+    A circuit structure where circuits are indexed by L, germ, preparation-fiducial, and measurement-fiducial.
+
+    Parameters
+    ----------
+    max_lengths : list of ints
+        List of maximum lengths (x values)
+
+    germs : list of Circuits
+        List of germ sequences (y values)
+
+    n_minor_rows : int
+        The number of minor rows to allocate space for.
+        These should be the maximum values required for any plaquette.
+
+    n_minor_cols : int
+        The number of minor columns to allocate space for.
+        These should be the maximum values required for any plaquette.
+
+    aliases : dict
+        Operation label aliases to be propagated to all plaquettes.
+
+    sequence_rules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of operation labels
+        (or `Circuit` objects).
     """
 
     @classmethod
@@ -709,6 +896,20 @@ class LsGermsSerialStructure(CircuitStructure):
 
         This factory method is used when a default structure is required for a
         given simple list of circuits.
+
+        Parameters
+        ----------
+        circuit_list : list
+            A list of :class:`Circuit` objects.
+
+        dsfilter : DataSet, optional
+            A data set which filters the elements of `circuit_list`, so that only
+            those circuits contained in `dsfilter` are included in the returned
+            circuit structure.
+
+        Returns
+        -------
+        LsGermsSerialStructure
         """
         max_length = 0  # just a single "0" length
         empty_circuit = _Circuit((), line_labels=circuit_list[0].line_labels if len(circuit_list) > 0 else "auto")
@@ -722,7 +923,7 @@ class LsGermsSerialStructure(CircuitStructure):
     def __init__(self, max_lengths, germs, n_minor_rows, n_minor_cols, aliases=None,
                  sequence_rules=None):
         """
-        Create an empty LsGermSerialStructure.
+        Create an empty LsGermsSerialStructure.
 
         This type of operation sequence structure is useful for holding multi-qubit
         operation sequences which have a germ and max-length structure but which have
@@ -767,25 +968,48 @@ class LsGermsSerialStructure(CircuitStructure):
 
     #Base class access in terms of generic x,y coordinates
     def xvals(self):
-        """ Returns a list of the x-values"""
+        """
+        Returns a list of the x-values
+
+        Returns
+        -------
+        list
+        """
         return self.Ls
 
     def yvals(self):
-        """ Returns a list of the y-values"""
+        """
+        Returns a list of the y-values
+
+        Returns
+        -------
+        list
+        """
         return self.germs
 
     def minor_xvals(self):
-        """ Returns a list of the minor x-values (0-based integers)"""
+        """
+        Returns a list of the minor x-values (0-based integers)
+
+        Returns
+        -------
+        list
+        """
         return list(range(self.nMinorCols))
 
     def minor_yvals(self):
-        """ Returns a list of the minor y-values (0-based integers)"""
+        """
+        Returns a list of the minor y-values (0-based integers)
+
+        Returns
+        -------
+        list
+        """
         return list(range(self.nMinorRows))
 
     def add_plaquette(self, basestr, max_length, germ, fidpairs, dsfilter=None):
         """
-        Adds a plaquette with the given fiducial pairs at the
-        `(max_length,germ)` location.
+        Adds a plaquette with the given fiducial pairs at the `(max_length,germ)` location.
 
         Parameters
         ----------
@@ -892,6 +1116,10 @@ class LsGermsSerialStructure(CircuitStructure):
     def done_adding_strings(self):
         """
         Called to indicate the user is done adding plaquettes.
+
+        Returns
+        -------
+        None
         """
         #placeholder in case there's some additional init we need to do.
         pass
@@ -934,7 +1162,7 @@ class LsGermsSerialStructure(CircuitStructure):
 
     def truncate(self, max_lengths=None, germs=None, n_minor_rows=None, n_minor_cols=None):
         """
-        Truncate this operation sequence structure to a subset of its current strings.
+        Truncate this circuit structure to a subset of its current circuits.
 
         Parameters
         ----------
@@ -944,11 +1172,13 @@ class LsGermsSerialStructure(CircuitStructure):
         germs : list, optional
             The (Circuit) germs to keep.  If None, then all are kept.
 
-        n_minor_rows, n_minor_cols : int or "auto", optional
-            The number of minor rows and columns in the new structure.  If the
-            special "auto" value is used, the number or rows/cols is chosen
-            automatically (to be as small as possible). If None, then the values
-            of the original (this) circuit structure are kept.
+        n_minor_rows : int or "auto", optional
+            The number of plaquette rows in the truncated circuit structure.
+            If "auto" then this is computed automatically.
+
+        n_minor_cols : int or "auto", optional
+            The number of plaquette columns in the truncated circuit structure.
+            If "auto" then this is computed automatically.
 
         Returns
         -------
@@ -991,13 +1221,14 @@ class LsGermsSerialStructure(CircuitStructure):
         cpy.add_unindexed(self.unindexed)  # preserve unindexed strings
         return cpy
 
-    def create_plaquette(self, base_str, fidpairs):
+    def create_plaquette(self, base_circuit, fidpairs):
         """
         Creates a the plaquette for the given base string and pairs.
 
         Parameters
         ----------
-        base_str : Circuit
+        base_circuit : Circuit
+            The base circuit to use.
 
         fidpairs : list
             A list if `(prep,meas)` tuples of Circuit objects, specifying
@@ -1012,18 +1243,17 @@ class LsGermsSerialStructure(CircuitStructure):
                                           list(range(self.nMinorCols))))
         assert(len(ji_list) >= len(fidpairs)), "Number of minor rows/cols is too small!"
 
-        elements = [(j, i, prepStr + base_str + effectStr)
+        elements = [(j, i, prepStr + base_circuit + effectStr)
                     for (j, i), (prepStr, effectStr) in
                     zip(ji_list[0:len(fidpairs)], fidpairs)]  # note preps are *cols* not rows
 
-        return CircuitPlaquette(base_str, self.nMinorRows,
+        return CircuitPlaquette(base_circuit, self.nMinorRows,
                                 self.nMinorCols, elements,
                                 self.aliases, fidpairs[:])
 
     def plaquette_rows_cols(self):
         """
-        Return the number of rows and columns contained in each plaquette of
-        this LsGermsStructure.
+        Return the number of rows and columns contained in each plaquette of this LsGermsStructure.
 
         Returns
         -------
@@ -1033,8 +1263,7 @@ class LsGermsSerialStructure(CircuitStructure):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`,
-        returning a new circuit structure with processed circuits.
+        Manipulate this object's circuits according to `processor_fn`.
 
         Parameters
         ----------
@@ -1067,6 +1296,10 @@ class LsGermsSerialStructure(CircuitStructure):
     def copy(self):
         """
         Returns a copy of this `LsGermsSerialStructure`.
+
+        Returns
+        -------
+        LsGermsSerialStructure
         """
         cpy = LsGermsSerialStructure(self.Ls, self.germs, self.nMinorRows,
                                      self.nMinorCols, self.aliases, self.sequenceRules)

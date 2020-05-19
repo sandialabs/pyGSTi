@@ -1,4 +1,6 @@
-"""Utility functions for working with Python slice objects"""
+"""
+Utility functions for working with Python slice objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -18,7 +20,7 @@ def length(s):
     Parameters
     ----------
     s : slice
-      The slice to operate upon.
+        The slice to operate upon.
 
     Returns
     -------
@@ -40,10 +42,10 @@ def shift(s, offset):
     Parameters
     ----------
     s : slice
-      The slice to operate upon.
+        The slice to operate upon.
 
     offset : int
-      The amount to shift the start and stop members of `s`.
+        The amount to shift the start and stop members of `s`.
 
     Returns
     -------
@@ -59,8 +61,11 @@ def intersect(s1, s2):
 
     Parameters
     ----------
-    s1, s2 : slice
-      The slices to intersect.
+    s1 : slice
+        First slice.
+
+    s2 : slice
+        Second slice.
 
     Returns
     -------
@@ -95,11 +100,11 @@ def indices(s, n=None):
     Parameters
     ----------
     s : slice
-      The slice to operate upon.
+        The slice to operate upon.
 
     n : int, optional
-      The number of elements in the array being indexed,
-      used for computing *negative* start/stop points.
+        The number of elements in the array being indexed,
+        used for computing *negative* start/stop points.
 
     Returns
     -------
@@ -130,24 +135,25 @@ def indices(s, n=None):
 
 def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """
-    Returns a slice corresponding to a given list of (integer) indices,
-    if this is possible.  If not, `array_ok` determines the behavior.
+    Returns a slice corresponding to a given list of (integer) indices, if this is possible.
+
+    If not, `array_ok` determines the behavior.
 
     Parameters
     ----------
     lst : list
-      The list of integers to convert to a slice (must be contiguous
-      if `require_contiguous == True`).
+        The list of integers to convert to a slice (must be contiguous
+        if `require_contiguous == True`).
 
     array_ok : bool, optional
-      If True, an integer array (of type `numpy.ndarray`) is returned
-      when `lst` does not correspond to a single slice.  Otherwise,
-      an AssertionError is raised.
+        If True, an integer array (of type `numpy.ndarray`) is returned
+        when `lst` does not correspond to a single slice.  Otherwise,
+        an AssertionError is raised.
 
     require_contiguous : bool, optional
-      If True, then lst will only be converted to a contiguous (step=1)
-      slice, otherwise either a ValueError is raised (if `array_ok`
-      is False) or an array is returned.
+        If True, then lst will only be converted to a contiguous (step=1)
+        slice, otherwise either a ValueError is raised (if `array_ok`
+        is False) or an array is returned.
 
     Returns
     -------
@@ -182,6 +188,15 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
 def as_array(slc_or_list_like):
     """
     Returns `slc_or_list_like` as an index array (an integer numpy.ndarray).
+
+    Parameters
+    ----------
+    slc_or_list_like : slice or list
+        A slice, list, or array.
+
+    Returns
+    -------
+    numpy.ndarray
     """
     if isinstance(slc_or_list_like, slice):
         return _np.array(indices(slc_or_list_like), _np.int64)
@@ -191,8 +206,7 @@ def as_array(slc_or_list_like):
 
 def divide(slc, max_len):
     """
-    Divides a slice into sub-slices based on a maximum length (for each
-    sub-slice).
+    Divides a slice into sub-slices based on a maximum length (for each sub-slice).
 
     For example:
     `divide(slice(0,10,2), 2) == [slice(0,4,2), slice(4,8,2), slice(8,10,2)]`

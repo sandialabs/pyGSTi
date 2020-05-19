@@ -1,4 +1,6 @@
-""" Defines the MapEvalTree class which implements an evaluation tree. """
+"""
+Defines the MapEvalTree class which implements an evaluation tree.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,22 +23,17 @@ import time as _time  # DEBUG TIMERS
 
 class MapEvalTree(EvalTree):
     """
-    An Evaluation Tree.  Instances of this class specify how to
-      perform bulk Model operations.
+    An Evaluation Tree that structures a circuit list for map-based calculations.
 
-    EvalTree instances create and store the decomposition of a list
-      of operation sequences into a sequence of 2-term products of smaller
-      strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of operation sequences, starting with just the
-      single gates, using the fewest number of multiplications, but
-      this optimality is not guaranteed.
+    Parameters
+    ----------
+    items : list, optional
+        Initial items.  This argument should only be used internally
+        in the course of serialization.
     """
 
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
-        # list of the operation labels
-        self.opLabels = []
-
         # Trivially init other members - to be filled in by initialize() or by subtree creation
         self.simplified_circuit_elabels = None
         self.element_offsets_for_circuit = None
@@ -47,40 +44,48 @@ class MapEvalTree(EvalTree):
 
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, simplified_circuit_list, num_sub_tree_comms=1, max_cache_size=None):
+    def initialize(self, simplified_circuit_elabels, num_sub_tree_comms=1, max_cache_size=None):
         """
-          Initialize an evaluation tree using a set of operation sequences.
-          This function must be called before using an EvalTree.
+        Initialize an evaluation tree using a set of circuits.
 
-          Parameters
-          ----------
-          TODO: docstring update needed
-          circuit_list : list of (tuples or Circuits)
-              A list of tuples of operation labels or Circuit
-              objects, specifying the operation sequences that
-              should be present in the evaluation tree.
+        This function must be called before using this evaluation tree.
 
-          num_sub_tree_comms : int, optional
-              The number of processor groups (communicators)
-              to divide the subtrees of this EvalTree among
-              when calling `distribute`.  By default, the
-              communicator is not divided.
+        Parameters
+        ----------
+        simplified_circuit_elabels : dict
+            A dictionary of `(circuit, elabels)` tuples specifying
+            the circuits that should be present in the evaluation tree.
+            `circuit` is a *simplified* circuit whose first layer is a
+            preparation label. `elabels` is a list of all the POVM
+            effect labels (corresponding to outcomes) for the
+            circuit (only a single label is needed rather than a
+            POVM-label, effect-label pair because these are *simplified*
+            effect labels).
 
-          Returns
-          -------
-          None
+        num_sub_tree_comms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of this EvalTree among
+            when calling `distribute`.  By default, the
+            communicator is not divided.
+
+        max_cache_size : int, optional
+            Maximum cache size, used for holding common circuit prefixes.
+
+        Returns
+        -------
+        None
         """
         #tStart = _time.time() #DEBUG TIMER
 
         # opLabels : A list of all the distinct operation labels found in
-        #              simplified_circuit_list.  Used in calc classes
+        #              simplified_circuit_elabels.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.opLabels = self._get_op_labels(simplified_circuit_list)
+        self.opLabels = self._get_op_labels(simplified_circuit_elabels)
         if num_sub_tree_comms is not None:
             self.distribution['numSubtreeComms'] = num_sub_tree_comms
 
-        circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_list.keys()]
-        self.simplified_circuit_elabels = list(simplified_circuit_list.values())
+        circuit_list = [tuple(simple_circuit) for simple_circuit in simplified_circuit_elabels.keys()]
+        self.simplified_circuit_elabels = list(simplified_circuit_elabels.values())
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_elabels))
         self.element_offsets_for_circuit = _np.cumsum(
             [0] + [nEls for nEls in self.simplified_circuit_nEls])[:-1]
@@ -88,7 +93,7 @@ class MapEvalTree(EvalTree):
             self._build_elabels_lookups()
 
         self.rholabels = set()
-        for c, elabels in simplified_circuit_list.items():
+        for c, elabels in simplified_circuit_elabels.items():
             if elabels != [None]:  # so we know c[0] is a prep label
                 self.rholabels.add(c[0])
         self.rholabels = sorted(list(self.rholabels))
@@ -252,12 +257,12 @@ class MapEvalTree(EvalTree):
 
     def squeeze(self, max_cache_size):
         """
-        Remove items from cache (if needed) so it contains less than or equal
-        to `max_cache_size` elements.
+        Remove items from cache (if needed) so it contains less than or equal to `max_cache_size` elements.
 
-        Paramteters
-        -----------
+        Parameters
+        ----------
         max_cache_size : int
+            The maximum cache size.
 
         Returns
         -------
@@ -304,10 +309,13 @@ class MapEvalTree(EvalTree):
             #Remove references to iMin element
             self._remove_from_cache(iMinTree)
 
-    def trim_nonfinal_els(self):
+    def trim_nonfinal_els(self):  #INPLACE
         """
-        Removes from this tree all non-final elements (used to facilitate
-        computation sometimes)
+        Removes from this tree all non-final elements (to facilitate computation sometimes).
+
+        Returns
+        -------
+        None
         """
         nFinal = self.num_final_strings()
         self._delete_els(list(range(nFinal, len(self))))
@@ -348,8 +356,14 @@ class MapEvalTree(EvalTree):
 
     def cache_size(self):
         """
-        Returns the size of the persistent "cache" of partial results
-        used during the computation of all the strings in this tree.
+        Returns the size of the persistent "cache" of partial results.
+
+        This cache is used during the computation of all the strings in
+        this tree.
+
+        Returns
+        -------
+        int
         """
         return self.cachesize
 
@@ -366,14 +380,14 @@ class MapEvalTree(EvalTree):
         Parameters
         ----------
         permute : bool, optional
-           Whether to permute the returned list of strings into the
-           same order as the original list passed to initialize(...).
-           When False, the computed order of the operation sequences is
-           given, which is matches the order of the results from calls
-           to `Model` bulk operations.  Non-trivial permutation
-           occurs only when the tree is split (in order to keep
-           each sub-tree result a contiguous slice within the parent
-           result).
+            Whether to permute the returned list of strings into the
+            same order as the original list passed to initialize(...).
+            When False, the computed order of the operation sequences is
+            given, which is matches the order of the results from calls
+            to `Model` bulk operations.  Non-trivial permutation
+            occurs only when the tree is split (in order to keep
+            each sub-tree result a contiguous slice within the parent
+            result).
 
         Returns
         -------
@@ -423,10 +437,11 @@ class MapEvalTree(EvalTree):
 
     def split(self, el_indices_dict, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
         """
-        Split this tree into sub-trees in order to reduce the
-          maximum size of any tree (useful for limiting memory consumption
-          or for using multiple cores).  Must specify either max_sub_tree_size
-          or num_sub_trees.
+        Split this tree into sub-trees.
+
+        This is done in order to reduce the maximum size of any tree (useful for
+        limiting memory consumption or for using multiple cores).  Must specify
+        either max_sub_tree_size or num_sub_trees.
 
         Parameters
         ----------
@@ -772,7 +787,13 @@ class MapEvalTree(EvalTree):
         return updated_elIndices
 
     def copy(self):
-        """ Create a copy of this evaluation tree. """
+        """
+        Create a copy of this evaluation tree.
+
+        Returns
+        -------
+        MapEvalTree
+        """
         cpy = self._copy_base(MapEvalTree(self[:]))
         cpy.cachesize = self.cachesize  # member specific to MapEvalTree
         cpy.opLabels = self.opLabels[:]

@@ -1,4 +1,6 @@
-""" Custom implementation of the Levenberg-Marquardt Algorithm """
+"""
+Custom implementation of the Levenberg-Marquardt Algorithm
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -27,6 +29,36 @@ MACH_PRECISION = 1e-12
 
 
 class OptimizerResult(object):
+    """
+    The result from an optimization.
+
+    Parameters
+    ----------
+    objective_func : ObjectiveFunction
+        The objective function that was optimized.
+
+    opt_x : numpy.ndarray
+        The optimal argument (x) value.  Often a vector of parameters.
+
+    opt_f : numpy.ndarray
+        the optimal objective function (f) value.  Often this is the least-squares
+        vector of objective function values.
+
+    opt_jtj : numpy.ndarray, optional
+        the optimial `dot(transpose(J),J)` value, where `J`
+        is the Jacobian matrix.  This may be useful for computing
+        approximate error bars.
+
+    opt_unpenalized_f : numpy.ndarray, optional
+        the optimal objective function (f) value with any
+        penalty terms removed.
+
+    chi2_k_distributed_qty : float, optional
+        a value that is supposed to be chi2_k distributed.
+
+    optimizer_specific_qtys : dict, optional
+        a dictionary of additional optimization parameters.
+    """
     def __init__(self, objective_func, opt_x, opt_f=None, opt_jtj=None,
                  opt_unpenalized_f=None, chi2_k_distributed_qty=None,
                  optimizer_specific_qtys=None):
@@ -40,8 +72,28 @@ class OptimizerResult(object):
 
 
 class Optimizer(object):
+    """
+    An optimizer.  Optimizes an objective function.
+    """
+
     @classmethod
     def create_from(cls, obj):
+        """
+        Cast `obj` to a :class:`Optimizer`.
+
+        If `obj` is already an `Optimizer` it is just returned,
+        otherwise this function tries to create a new object
+        using `obj` as a dictionary of constructor arguments.
+
+        Parameters
+        ----------
+        obj : Optimizer or dict
+            The object to cast.
+
+        Returns
+        -------
+        Optimizer
+        """
         if isinstance(obj, cls):
             return obj
         else:
@@ -49,6 +101,87 @@ class Optimizer(object):
 
 
 class CustomLMOptimizer(Optimizer):
+    """
+    A Levenberg-Marquardt optimizer customized for GST-like problems.
+
+    Parameters
+    ----------
+    maxiter : int, optional
+        The maximum number of (outer) interations.
+
+    maxfev : int, optional
+        The maximum function evaluations.
+
+    tol : float or dict, optional
+        The tolerance, specified as a single float or as a dict
+        with keys `{'relx', 'relf', 'jac', 'maxdx'}`.  A single
+        float sets the `'relf'` and `'jac'` elemments and leaves
+        the others at their default values.
+
+    fditer : int optional
+        Internally compute the Jacobian using a finite-difference method
+        for the first `fditer` iterations.  This is useful when the initial
+        point lies at a special or singular point where the analytic Jacobian
+        is misleading.
+
+    first_fditer : int, optional
+        Number of finite-difference iterations applied to the first
+        stage of the optimization (only).  Unused.
+
+    damping_mode : {'identity', 'JTJ', 'invJTJ', 'adaptive'}
+        How damping is applied.  `'identity'` means that the damping parameter mu
+        multiplies the identity matrix.  `'JTJ'` means that mu multiplies the
+        diagonal or singular values (depending on `scaling_mode`) of the JTJ
+        (Fischer information and approx. hessaian) matrix, whereas `'invJTJ'`
+        means mu multiplies the reciprocals of these values instead.  The
+        `'adaptive'` mode adaptively chooses a damping strategy.
+
+    damping_basis : {'diagonal_values', 'singular_values'}
+        Whether the the diagonal or singular values of the JTJ matrix are used
+        during damping.  If `'singular_values'` is selected, then a SVD of the
+        Jacobian (J) matrix is performed and damping is performed in the basis
+        of (right) singular vectors.  If `'diagonal_values'` is selected, the
+        diagonal values of relevant matrices are used as a proxy for the the
+        singular values (saving the cost of performing a SVD).
+
+    damping_clip : tuple, optional
+        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
+        If `damping_mode == "identity"` then this argument is ignored, as mu always
+        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
+        clipping is applied.
+
+    use_acceleration : bool, optional
+        Whether to include a geodesic acceleration term as suggested in
+        arXiv:1201.5885.  This is supposed to increase the rate of
+        convergence with very little overhead.  In practice we've seen
+        mixed results.
+
+    uphill_step_threshold : float, optional
+        Allows uphill steps when taking two consecutive steps in nearly
+        the same direction.  The condition for accepting an uphill step
+        is that `(uphill_step_threshold-beta)*new_objective < old_objective`,
+        where `beta` is the cosine of the angle between successive steps.
+        If `uphill_step_threshold == 0` then no uphill steps are allowed,
+        otherwise it should take a value between 1.0 and 2.0, with 1.0 being
+        the most permissive to uphill steps.
+
+    init_munu : tuple, optional
+        If not None, a (mu, nu) tuple of 2 floats giving the initial values
+        for mu and nu.
+
+    oob_check_interval : int, optional
+        Every `oob_check_interval` outer iterations, the objective function
+        (`obj_fn`) is called with a second argument 'oob_check', set to True.
+        In this case, `obj_fn` can raise a ValueError exception to indicate
+        that it is Out Of Bounds.  If `oob_check_interval` is 0 then this
+        check is never performed; if 1 then it is always performed.
+
+    oob_action : {"reject","stop"}
+        What to do when the objective function indicates (by raising a ValueError
+        as described above).  `"reject"` means the step is rejected but the
+        optimization proceeds; `"stop"` means the optimization stops and returns
+        as converged at the last known-in-bounds point.
+    """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
                  damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0, oob_action="reject"):
@@ -70,6 +203,23 @@ class CustomLMOptimizer(Optimizer):
 
     def run(self, objective, comm, profiler, printer):
 
+        """
+        Perform the optimization.
+
+        Parameters
+        ----------
+        objective : ObjectiveFunction
+            The objective function to optimize.
+
+        comm : mpi4py.MPI.Comm
+            MPI communicator to divide optimization among multiple processors.
+
+        profiler : Profiler
+            A profiler to track resource usage.
+
+        printer : VerbosityPrinter
+            printer to use for sending output to stdout.
+        """
         objective_func = objective.lsvec
         jacobian = objective.dlsvec
         x0 = objective.mdl.to_vector()
@@ -118,10 +268,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    init_munu="auto", oob_check_interval=0, oob_action="reject", comm=None,
                    verbosity=0, profiler=None):
     """
-    An implementation of the Levenberg-Marquardt least-squares optimization
-    algorithm customized for use within pyGSTi.  This general purpose routine
-    mimic to a large extent the interface used by `scipy.optimize.leastsq`,
-    though it implements a newer (and more robust) version of the algorithm.
+    An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
+
+    This general purpose routine mimic to a large extent the interface used by
+    `scipy.optimize.leastsq`, though it implements a newer (and more robust) version
+    of the algorithm.
 
     Parameters
     ----------
@@ -175,12 +326,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         means mu multiplies the reciprocals of these values instead.  The
         `'adaptive'` mode adaptively chooses a damping strategy.
 
-    damping_clip : tuple, optional
-        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
-        If `damping_mode == "identity"` then this argument is ignored, as mu always
-        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
-        clipping is applied.
-
     damping_basis : {'diagonal_values', 'singular_values'}
         Whether the the diagonal or singular values of the JTJ matrix are used
         during damping.  If `'singular_values'` is selected, then a SVD of the
@@ -188,6 +333,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         of (right) singular vectors.  If `'diagonal_values'` is selected, the
         diagonal values of relevant matrices are used as a proxy for the the
         singular values (saving the cost of performing a SVD).
+
+    damping_clip : tuple, optional
+        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
+        If `damping_mode == "identity"` then this argument is ignored, as mu always
+        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
+        clipping is applied.
 
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
@@ -230,7 +381,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
-
 
     Returns
     -------

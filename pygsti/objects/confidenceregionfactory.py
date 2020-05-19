@@ -1,4 +1,6 @@
-""" Classes for constructing confidence regions """
+"""
+Classes for constructing confidence regions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,6 +15,7 @@ import scipy.stats as _stats
 import warnings as _warnings
 import itertools as _itertools
 import collections as _collections
+import copy as _copy
 from .. import optimize as _opt
 from .. import tools as _tools
 
@@ -54,6 +57,32 @@ class ConfidenceRegionFactory(object):
 
     Alternative (non-Hessian-based) means of computing confidence intervals
     are also available, such as by using so-called "linear reponse error bars".
+
+    Parameters
+    ----------
+    parent : Estimate
+        the parent estimate object, needed to resolve model and gate
+        string list labels.
+
+    model_lbl : str
+        The key into the parent `Estimate`'s `.models` dictionary that
+        gives the `Model` about which confidence regions will be
+        constructed.
+
+    circuit_list_lbl : str
+        The key into the parent `Results`'s `.circuit_lists` dictionary
+        that specifies which operation sequences should be or were included
+        when computing fit functions (the log-likelihood or chi2).
+
+    hessian : numpy array, optional
+        A pre-computed n_params x n_params Hessian matrix, where n_params is
+        the number of dimensions of model space, i.e. model.num_params().
+
+    non_mark_radius_sq : float, optional
+        The non-Markovian radius associated with the goodness of fit found
+        at the point where `hessian` was computed.  This must be specified
+        whenver `hessian` is, and should be left as `None` when `hessian`
+        is not specified.
     """
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
@@ -96,7 +125,7 @@ class ConfidenceRegionFactory(object):
 
         self.hessian_projection_parameters = _collections.OrderedDict()
         self.inv_hessian_projections = _collections.OrderedDict()
-        self.linresponse_mlgst_params = None
+        self.linresponse_gstfit_params = None
         self.nNonGaugeParams = self.nGaugeParams = None
 
         self.model_lbl = model_lbl
@@ -109,8 +138,9 @@ class ConfidenceRegionFactory(object):
         del to_pickle['parent']
 
         # *don't* pickle any Comm objects
-        if self.linresponse_mlgst_params and "comm" in self.linresponse_mlgst_params:
-            del self.linresponse_mlgst_params['comm']  # one *cannot* pickle Comm objects
+        if self.linresponse_gstfit_params and "resource_alloc" in self.linresponse_gstfit_params:
+            to_pickle['linresponse_gstfit_params'] = self.linresponse_gstfit_params.copy()
+            del to_pickle['linresponse_gstfit_params']['resource_alloc']  # one *cannot* pickle Comm objects
 
         return to_pickle
 
@@ -121,6 +151,19 @@ class ConfidenceRegionFactory(object):
     def set_parent(self, parent):
         """
         Sets the parent Estimate object of this ConfidenceRegionFactory.
+
+        This function is usually only needed internally to re-link a
+        ConfidenceRegionFactory with its parent after be un-serialized
+        from disk.
+
+        Parameters
+        ----------
+        parent : Estimate
+            The parent of this object.
+
+        Returns
+        -------
+        None
         """
         self.parent = parent
 
@@ -144,9 +187,10 @@ class ConfidenceRegionFactory(object):
 
     def can_construct_views(self):
         """
-        Checks whether this factory has enough information to construct
-        'views' of itself (`ConfidenceRegionFactoryView` objects via the
-        :method:`view` method), which can then be used to construct
+        Checks whether this factory has enough information to construct 'views' of itself.
+
+        `ConfidenceRegionFactoryView` view objects are created using the
+        :method:`view` method, which can in turn be used to construct
         confidence intervals.
 
         Returns
@@ -245,11 +289,10 @@ class ConfidenceRegionFactory(object):
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 
         elif obj == 'chi2':
-            chi2, hessian = _tools.chi2(model, dataset, circuit_list,
-                                        False, True, minProbClipForWeighting,
-                                        probClipInterval, mem_limit=mem_limit,
-                                        op_label_aliases=aliases,
-                                        approximate_hessian=approximate)
+            chi2, hessian = [f(model, dataset, circuit_list,
+                               minProbClipForWeighting,
+                               probClipInterval, mem_limit=mem_limit,
+                               op_label_aliases=aliases) for f in (_tools.chi2, _tools.chi2_hessian)]
 
             nonMarkRadiusSq = max(chi2 - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
         else:
@@ -351,16 +394,23 @@ class ConfidenceRegionFactory(object):
         }
         return inv_projected_hessian
 
-    def enable_linear_response_errorbars(self):
+    def enable_linear_response_errorbars(self, resource_alloc=None):
         """
-        Stores the parameters needed to run (on-demand) the ML-GST
-        optimizations needed to compute error bars on quantities.
+        Stores the parameters needed to compute (on-demand) linear response error bars.
+
+        In particular, this function sets up the parameters needed to perform the
+        model optimizations needed to compute error bars on quantities.
 
         'linear response' mode obtains elements of the Hessian via the
         linear response of a "forcing term".  This requres a likelihood
         optimization for *every* computed error bar, but avoids pre-
         computation of the entire Hessian matrix, which can be
         prohibitively costly on large parameter spaces.
+
+        Parameters
+        ----------
+        resoure_alloc : ResourceAllocation
+            Allocation for running linear-response GST fits.
 
         Returns
         -------
@@ -369,34 +419,21 @@ class ConfidenceRegionFactory(object):
         assert(self.parent is not None)  # Estimate
         assert(self.parent.parent is not None)  # Results
 
-        circuit_list = self.parent.parent.circuit_lists[self.circuit_list_lbl]
+        circuits = self.parent.parent.circuit_lists[self.circuit_list_lbl]
         dataset = self.parent.parent.dataset
 
         parameters = self.parent.parameters
-        minProbClip = parameters.get('minProbClip', 1e-4)
-        #minProbClipForWeighting = parameters.get('minProbClipForWeighting',1e-4)
-        probClipInterval = parameters.get('probClipInterval', (-1e6, 1e6))
-        radius = parameters.get('radius', 1e-4)
-        cptp_penalty_factor = parameters.get('cptpPenaltyFactor', 0)
-        spam_penalty_factor = parameters.get('spamPenaltyFactor', 0)
-        aliases = parameters.get('opLabelAliases', None)
-        distributeMethod = parameters.get('distributeMethod', 'deriv')
-        memLimit = parameters.get('memLimit', None)
-        comm = parameters.get('comm', None)
+        builder = parameters['final_objfn_builder']
+        cache = parameters.get('final_cache', None)
+        opt = {'maxiter': 100, 'tol': 1e-10}  # don't let this run for too long
 
-        self.linresponse_mlgst_params = {
+        self.linresponse_gstfit_params = {
             'dataset': dataset,
-            'circuitsToUse': circuit_list,
-            'maxiter': 10000, 'tol': 1e-10,
-            'cptp_penalty_factor': cptp_penalty_factor,
-            'spam_penalty_factor': spam_penalty_factor,
-            'minProbClip': minProbClip,
-            'probClipInterval': probClipInterval,
-            'radius': radius,
-            'poissonPicture': True, 'verbosity': 2,  # NOTE: HARDCODED
-            'memLimit': memLimit, 'comm': comm,
-            'distributeMethod': distributeMethod, 'profiler': None,
-            'opLabelAliases': aliases
+            'circuit_list': circuits,
+            'optimizer': opt,
+            'objective_function_builder': _copy.deepcopy(builder),
+            'resource_alloc': resource_alloc,
+            'cache': cache
         }
 
         #Count everything as non-gauge? TODO BETTER
@@ -406,9 +443,9 @@ class ConfidenceRegionFactory(object):
     def view(self, confidence_level, region_type='normal',
              hessian_projection_label=None):
         """
-        Constructs a "view" of this ConfidenceRegionFactory for a particular
-        type and confidence level.  The returned view object can then be used to
-        construct confidence intervals/regions.
+        Constructs a "view" of this ConfidenceRegionFactory for a particular type and confidence level.
+
+        The returned view object can then be used to construct confidence intervals/regions.
 
         Parameters
         ----------
@@ -433,7 +470,7 @@ class ConfidenceRegionFactory(object):
         ConfidenceRegionFactoryView
         """
         inv_hessian_projection = None
-        linresponse_mlgst_params = None
+        linresponse_gstfit_params = None
 
         assert(self.parent is not None)  # Estimate
         model = self.parent.models[self.model_lbl]
@@ -447,11 +484,11 @@ class ConfidenceRegionFactory(object):
                 "Hessian projection '%s' does not exist!" % hessian_projection_label
             inv_hessian_projection = self.inv_hessian_projections[hessian_projection_label]
         else:
-            assert(self.linresponse_mlgst_params is not None), \
+            assert(self.linresponse_gstfit_params is not None), \
                 "Must either compute & project a Hessian matrix or enable linear response parameters"
             assert(hessian_projection_label is None), \
                 "Must set `hessian_projection_label` to None when using linear-response error bars"
-            linresponse_mlgst_params = self.linresponse_mlgst_params
+            linresponse_gstfit_params = self.linresponse_gstfit_params
 
         #Compute the non-Markovian "radius" if required
         if region_type == "normal":
@@ -461,7 +498,7 @@ class ConfidenceRegionFactory(object):
         else:
             raise ValueError("Invalid confidence region type: %s" % region_type)
 
-        return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_mlgst_params,
+        return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_gstfit_params,
                                            confidence_level, nonMarkRadiusSq,
                                            self.nNonGaugeParams, self.nGaugeParams)
 
@@ -573,12 +610,48 @@ class ConfidenceRegionFactory(object):
 
 class ConfidenceRegionFactoryView(object):
     """
-    Encapsulates a lightweight "view" of a ConfidenceRegionFactory,
-    which is principally defined by it's having a fixed confidence-level.
+    Encapsulates a lightweight "view" of a ConfidenceRegionFactory.
+
+    A view object is principally defined by it's having a fixed confidence-level.
     Thus, a "view" is like a factory that generates confidence intervals for
     just a single confidence level.  As such, it is a useful object to pass
     around to routines which compute and display error bars, as these routines
     typically don't depend on what confidence-level is being used.
+
+    Parameters
+    ----------
+    model : Model
+        The model at the center of this confidence region.
+
+    inv_projected_hessian : numpy.ndarray
+        The computed inverse of the non-gauge-projected Hessian.
+
+    mlgst_params : dict
+        A dictionary of ML-GST parameters only used for linear-response
+        error bars.
+
+    confidence_level : float
+        the confidence level (between 0 and 100) used in
+        the computation of confidence regions/intervals.
+
+    non_mark_radius_sq : float, optional
+        When non-zero, "a non-Markovian error region" is constructed using
+        this value as the squared "non-markovian radius". This specifies the
+        portion of 2*(max-log-likelihood - model-log-likelihood) that we
+        attribute to non-Markovian errors (typically the previous
+        difference minus it's expected value, the difference in number of
+        parameters between the maximal and model models).  If set to
+        zero (the default), a standard and thereby statistically rigorous
+        conficence region is created.  Non-zero values should only be
+        supplied if you really know what you're doing.
+
+    n_non_gauge_params : int
+        The numbers of non-gauge parameters.  This could be computed from `model`
+        but can be passed in to save compuational time.
+
+    n_gauge_params : int
+        The numbers of gauge parameters.  This could be computed from `model`
+        but can be passed in to save compuational time.
     """
 
     def __init__(self, model, inv_projected_hessian, mlgst_params, confidence_level,
@@ -712,8 +785,7 @@ class ConfidenceRegionFactoryView(object):
 
     def get_errobar_type(self):
         """
-        Return the type of error bars this view will generate, either
-        "standard" or "non-markovian".
+        Return the type of error bars this view will generate, either "standard" or "non-markovian".
 
         Returns
         -------
@@ -726,8 +798,7 @@ class ConfidenceRegionFactoryView(object):
 
     def get_profile_likelihood_confidence_intervals(self, label=None):
         """
-        Retrieve the profile-likelihood confidence intervals for a specified
-        model object (or all such intervals).
+        Retrieve the profile-likelihood confidence intervals for a specified model object (or all such intervals).
 
         Parameters
         ----------
@@ -795,7 +866,6 @@ class ConfidenceRegionFactoryView(object):
             Half-widths of confidence intervals for each of the elements
             in the float or array returned by fnOfOp.  Thus, shape of
             df matches that returned by fnOfOp.
-
         f0 : float or numpy array
             Only returned when return_fn_val == True. Value of fnOfOp
             at the gate specified by op_label.
@@ -893,12 +963,13 @@ class ConfidenceRegionFactoryView(object):
         assert(len(grad_f.shape) == 2)
 
         mlgst_args = self.mlgst_params.copy()
-        mlgst_args['startModel'] = self.model
-        mlgst_args['forcefn_grad'] = grad_f
-        mlgst_args['shiftFctr'] = 100.0
-        mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
-        mlgst_args['maxiter'] = 100  # don't let this run for too long
-        _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
+        mlgst_args['start_model'] = self.model
+
+        penalties = mlgst_args['objective_function_builder'].penalties or {}
+        penalties.update({'forcefn_grad': grad_f, 'shift_fctr': 100.0})
+        mlgst_args['objective_function_builder'].penalties = penalties
+
+        _, bestGS = _alg.core.do_gst_fit(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
         delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())

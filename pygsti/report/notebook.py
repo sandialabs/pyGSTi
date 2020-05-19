@@ -1,4 +1,6 @@
-""" Defines the Notebook class """
+"""
+Defines the Notebook class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -19,9 +21,22 @@ from subprocess import call as _call
 
 
 class Notebook(object):
-    '''
+    """
     Python representation of an IPython notebook
-    '''
+
+    Parameters
+    ----------
+    cells : list, optional
+        List of :class:`NotebookCell` objects.
+
+    notebook_text_files : list, optional
+        List of filenames (text files with `'@@markdown'` or `'@@code'` designating cells).
+
+    Attributes
+    ----------
+    DefaultTemplate : str
+        The default template notebook to use (a .ipynb file).
+    """
     DefaultTemplate = 'Empty.ipynb'
 
     def __init__(self, cells=None, notebook_text_files=None):
@@ -43,14 +58,18 @@ class Notebook(object):
                 self.add_notebook_text_file(filename)
 
     def to_json_dict(self, template_filename=DefaultTemplate):
-        '''
+        """
         Using an existing (usually empty) notebook as a template, generate the json for a new notebook.
 
         Parameters
         ----------
         template_filename : str, optional
             Name of an existing notebook file to build from
-        '''
+
+        Returns
+        -------
+        dict
+        """
         template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                           'templates', template_filename)
         with open(str(template_filename), 'r') as infile:
@@ -59,7 +78,7 @@ class Notebook(object):
         return notebookDict
 
     def save_to(self, output_filename, template_filename=DefaultTemplate):
-        '''
+        """
         Save this class to a file as a jupyter notebook
 
         Parameters
@@ -69,97 +88,133 @@ class Notebook(object):
 
         template_filename : str, optional
             Name of an existing notebook file to build from
-        '''
+
+        Returns
+        -------
+        None
+        """
         jsonDict = self.to_json_dict(template_filename)
         with open(str(output_filename), 'w') as outfile:
             _json.dump(jsonDict, outfile)
 
     def add(self, cell):
-        '''
+        """
         Add a cell to the notebook
 
         Parameters
         ----------
         cell : NotebookCell object
-        '''
+            Cell to add.
+
+        Returns
+        -------
+        None
+        """
         self.cells.append(cell)
 
     def add_block(self, block, cell_type):
-        '''
+        """
         Add a block to the notebook
 
         Parameters
         ----------
         block : str
             block of either code or markdown
+
         cell_type : str
             tag for the cell. Either 'code' or 'markdown'
-        '''
+
+        Returns
+        -------
+        None
+        """
         lines = block.splitlines(True)
         self.add(NotebookCell(cell_type, lines))
 
     def add_file(self, filename, cell_type):
-        '''
+        """
         Read in a cell block from a file
 
         Parameters
         ----------
-        filename: str
+        filename : str
             filename containing either code or markdown
+
         cell_type : str
             tag for the cell. Either 'code' or 'markdown'
-        '''
+
+        Returns
+        -------
+        None
+        """
         with open(str(filename), 'r') as infile:
             block = infile.read()
         self.add_block(block, cell_type)
 
     def add_code(self, block):
-        '''
+        """
         Add code to notebook
 
         Parameters
         ----------
         block : str
             Block of python code
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.add_block(_textwrap.dedent(block), 'code')
 
     def add_markdown(self, block):
-        '''
+        """
         Add markdown to notebook
 
         Parameters
         ----------
         block : str
             Block of markdown (or HTML)
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.add_block(block, 'markdown')
 
     def add_code_file(self, filename):
-        '''
+        """
         Add a code file to the notebook
 
         Parameters
         ----------
         filename : str
             name of file containing python code
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.add_file(filename, 'code')
 
     def add_markdown_file(self, filename):
-        '''
+        """
         Add a markdown file to the notebook
 
         Parameters
         ----------
         filename : str
             name of file containing markdown
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.add_file(filename, 'markdown')
 
     def add_notebook_text(self, text):
-        '''
-        Add custom formatted text to the notebook
+        """
+        Add custom formatted text to the notebook.
+
         Text contains both python and markdown, with
         cells differentiated by @@code and @@markdown tags.
         At least one cell tag must be present for the file to be correctly parsed
@@ -168,7 +223,11 @@ class Notebook(object):
         ----------
         text : str
             notebook formatted text
-        '''
+
+        Returns
+        -------
+        None
+        """
         assert '@@' in text, 'At least one cell tag must be present for the file to be correctly parsed'
         for block in text.split('@@'):
             if block == '':
@@ -192,8 +251,9 @@ class Notebook(object):
                 raise ValueError('Invalid notebook text block heading:\n{}'.format(block))
 
     def add_notebook_text_file(self, filename):
-        '''
-        Add a custom formatted text file to the notebook
+        """
+        Add a custom formatted text file to the notebook.
+
         Text file contains both python and markdown, with
         cells differentiated by @@code and @@markdown tags.
         At least one cell tag must be present for the file to be correctly parsed
@@ -202,61 +262,83 @@ class Notebook(object):
         ----------
         filename : str
             name of file containing notebook formatted text
-        '''
+
+        Returns
+        -------
+        None
+        """
         with open(str(filename), 'r') as infile:
             self.add_notebook_text(infile.read())
 
     def add_notebook_text_files(self, filenames):
-        '''
+        """
         Add multiple notebook text files to the notebook, in order
 
         Parameters
         ----------
         filenames : list(str)
             names of file containing notebook formatted text
-        '''
+
+        Returns
+        -------
+        None
+        """
         for filename in filenames:
             self.add_notebook_text_file(filename)
 
     def add_notebook_file(self, filename):
-        '''
+        """
         Append an .ipynb file to this notebook
 
         Parameters
         ----------
         filename : str
             ipynb file to append
-        '''
+
+        Returns
+        -------
+        None
+        """
         with open(str(filename), 'r') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
             self.add(NotebookCell(cell['cell_type'], cell['source']))
 
     def add_notebook_files(self, filenames):
-        '''
+        """
         Add multiple notebook files to the notebook, in order
 
         Parameters
         ----------
         filenames : list(str)
             names of file containing ipynb json
-        '''
+
+        Returns
+        -------
+        None
+        """
         for filename in filenames:
             self.add_notebook_file(filename)
 
     def launch_new(self, output_filename, template_filename=DefaultTemplate):
-        '''
-        Save and then launch this notebook with a new jupyter server.  Note that
-        this function waits to return until the notebook server exists, and so
-        is difficult to work with.
+        """
+        Save and then launch this notebook with a new Jupyter server.
+
+        Note that this function waits to return until the notebook server
+        exists, and so is difficult to work with.
 
         Parameters
         ----------
         output_filename : str
             filename to save this notebook to
+
         template_filename : str, optional
             filename to build this notebook from (see save_to)
-        '''
+
+        Returns
+        -------
+        None
+        """
         self.save_to(output_filename, template_filename)
         _call('jupyter notebook {}'.format(output_filename), shell=True)  # this waits for notebook to complete
         #_os.system('jupyter notebook {}'.format(output_filename)) # same behavior as above
@@ -264,16 +346,24 @@ class Notebook(object):
         #print("DB: spawned notebook %d!" % processid)
 
     def launch(self, output_filename, template_filename=DefaultTemplate, port='auto'):
-        '''
+        """
         Save and then launch this notebook
 
         Parameters
         ----------
         output_filename : str
             filename to save this notebook to
+
         template_filename : str, optional
             filename to build this notebook from (see save_to)
-        '''
+
+        port : int, optional
+            Port to launch server on.
+
+        Returns
+        -------
+        None
+        """
         self.save_to(output_filename, template_filename)
         output_filename = _os.path.abspath(output_filename)  # for path manips below
 
@@ -282,7 +372,7 @@ class Notebook(object):
         for serverinfo in servers:
             rel = _os.path.relpath(output_filename, serverinfo['notebook_dir'])
             if ".." not in rel:  # notebook servers don't allow moving up directories
-                if port == 'auto'or int(serverinfo['port']) == port:
+                if port == 'auto' or int(serverinfo['port']) == port:
                     url = _os.path.join(serverinfo['url'], 'notebooks', rel)
                     _browser.open(url); break
         else:

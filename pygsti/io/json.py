@@ -1,4 +1,6 @@
-""" Defines json package interface capable of encoding pyGSTi objects"""
+"""
+Defines json package interface capable of encoding pyGSTi objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -15,33 +17,93 @@ from .jsoncodec import decode_obj
 
 
 class PygstiJSONEncoder(_json.JSONEncoder):
-    """ JSON Encoder capable of handling pyGSTi types """
+    """
+    JSON Encoder capable of handling pyGSTi types
+    """
 
     def encode(self, item):
-        """ Main encoding function """
+        """
+        Main encoding function
+
+        Parameters
+        ----------
+        item : various
+            item to encode
+
+        Returns
+        -------
+        various
+        """
         return super(PygstiJSONEncoder, self).encode(encode_obj(item, False))
 
 
 def dumps(obj, **kwargs):
-    """ An overload of json.dumps that works with pyGSTi types """
+    """
+    An overload of json.dumps that works with pyGSTi types
+
+    Parameters
+    ----------
+    obj : object
+        object to serialize.
+
+    Returns
+    -------
+    str
+    """
     kwargs['cls'] = PygstiJSONEncoder
     return _json.dumps(obj, **kwargs)
 
 
 def dump(obj, f, **kwargs):
-    """ An overload of json.dump that works with pyGSTi types """
+    """
+    An overload of json.dump that works with pyGSTi types
+
+    Parameters
+    ----------
+    obj : object
+        object to serialize
+
+    f : file
+        output file
+
+    Returns
+    -------
+    None
+    """
     kwargs['cls'] = PygstiJSONEncoder
     enc = encode_obj(obj, False)  # this shouldn't be needed... bug in json I think.
     return _json.dump(enc, f, **kwargs)
 
 
 def loads(s, **kwargs):
-    """ An overload of json.loads that works with pyGSTi types """
+    """
+    An overload of json.loads that works with pyGSTi types
+
+    Parameters
+    ----------
+    s : str
+        serialized object(s)
+
+    Returns
+    -------
+    object
+    """
     decoded_json = _json.loads(s, **kwargs)  # load normal JSON
     return decode_obj(decoded_json, False)  # makes pygsti objects
 
 
 def load(f, **kwargs):
-    """ An overload of json.load that works with pyGSTi types """
+    """
+    An overload of json.load that works with pyGSTi types
+
+    Parameters
+    ----------
+    f : file
+        open file to read from
+
+    Returns
+    -------
+    object
+    """
     decoded_json = _json.load(f, **kwargs)  # load normal JSON
     return decode_obj(decoded_json, False)  # makes pygsti objects

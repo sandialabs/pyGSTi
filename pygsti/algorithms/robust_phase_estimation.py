@@ -1,4 +1,6 @@
-""" Robust Phase Estimation platform agnostic portion """
+"""
+Robust Phase Estimation platform agnostic portion
+"""
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,6 +15,8 @@ import numpy
 
 class RobustPhaseEstimation(object):
     """
+    Runs the non-adaptive RPE algorithm.
+
     Runs the non-adaptive RPE algorithm using a dictionary of measurement results,
     `Q.raw_angles`, containing the angles calculated from the probabilities:
         P^{γ'γ}_{Nₖs} = |<γ' y| U^Nₖ |γ x>|² = |<γ' x| U^Nₖ |-γ y>|² = (1 ± sin(θ))/2
@@ -27,6 +31,11 @@ class RobustPhaseEstimation(object):
 
     Returns an result object. theta is the estimated angle, angle_estimates are
     the estimates from each generation.
+
+    Parameters
+    ----------
+    q : <TODO typ>
+        <TODO description>
     """
 
     def __init__(self, q):
@@ -64,8 +73,18 @@ class RobustPhaseEstimation(object):
 
     def theta_n(self, n):
         """
-        Returns the equivalence class of the measurement Θ, by definition
-        equivalent when any integer multiples of 2π/N is added.
+        Returns the equivalence class of the measurement Θ.
+
+        By definition, Θ is equivalent when any integer multiple of 2π/N is added to it.
+
+        Parameters
+        ----------
+        n : int
+            The RPE 'N' parameter, used to determine the equivalence class.
+
+        Returns
+        -------
+        float
         """
 
         # The measurement outcomes have probability:

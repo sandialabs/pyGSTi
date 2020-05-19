@@ -1,4 +1,6 @@
-""" Defines the Workspace class and supporting functionality."""
+"""
+Defines the Workspace class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -34,7 +36,13 @@ VALIDATE_PLOTLY = False  # False increases performance of report rendering; set 
 
 
 def in_ipython_notebook():
-    """Returns true if called from within an IPython/jupyter notebook"""
+    """
+    Returns true if called from within an IPython/jupyter notebook
+
+    Returns
+    -------
+    bool
+    """
     try:
         # 'ZMQInteractiveShell' in a notebook, 'TerminalInteractiveShell' in IPython REPL, and fails elsewhere.
         shell = get_ipython().__class__.__name__
@@ -44,17 +52,33 @@ def in_ipython_notebook():
 
 
 def display_ipynb(content):
-    """Render HTML content to an IPython notebook cell display"""
+    """
+    Render HTML content to an IPython notebook cell display
+
+    Parameters
+    ----------
+    content : str
+        HTML content to insert.
+
+    Returns
+    -------
+    None
+    """
     from IPython.core.display import display, HTML
     display(HTML(content))
 
 
 def enable_plotly_pickling():
     """
-    Hacks the plotly python library so that figures may be pickled and
-    un-pickled.  This hack should be used only temporarily - so all pickling
+    Hacks the plotly python library so that figures may be pickled and un-pickled.
+
+    This hack should be used only temporarily - so all pickling
     and un-pickling should be done between calls to
     :func:`enable_plotly_pickling` and :func:`disable_plotly_pickling`.
+
+    Returns
+    -------
+    None
     """
     import plotly
 
@@ -89,7 +113,13 @@ def enable_plotly_pickling():
 
 
 def disable_plotly_pickling():
-    """ Reverses the effect of :func:`enable_plotly_pickling` """
+    """
+    Reverses the effect of :func:`enable_plotly_pickling`
+
+    Returns
+    -------
+    None
+    """
     import plotly
 
     if int(plotly.__version__.split(".")[0]) >= 3:  # plotly version 3 or higher
@@ -112,7 +142,21 @@ def disable_plotly_pickling():
 
 
 def ws_custom_digest(md5, v):
-    """ A "digest" function for hashing several special types"""
+    """
+    A "digest" function for hashing several special types
+
+    Parameters
+    ----------
+    md5 : hashlib.HASH
+        The MD5 hash object.
+
+    v : object
+        the value to add to `md5` (using `md5.update(...)`).
+
+    Returns
+    -------
+    None
+    """
     if isinstance(v, NotApplicable):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
@@ -122,15 +166,22 @@ def ws_custom_digest(md5, v):
 
 
 def random_id():
-    """ Returns a random DOM ID """
+    """
+    Returns a random document-objet-model (DOM) ID
+
+    Returns
+    -------
+    str
+    """
     return str(int(1000000 * _random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
 
 class Workspace(object):
     """
-    Central to data analysis, Workspace objects facilitate the building
-    of reports and dashboards.  In particular, they serve as a:
+    Central to data analysis, Workspace objects facilitate the building of reports and dashboards.
+
+    In particular, they serve as a:
 
     - factory for tables, plots, and other types of output
     - cache manager to optimize the construction of such output
@@ -139,6 +190,11 @@ class Workspace(object):
     Workspace objects are typically used either 1) within an ipython
     notebook to interactively build a report/dashboard, or 2) within
     a script to build a hardcoded ("fixed") report/dashboard.
+
+    Parameters
+    ----------
+    cachefile : str, optional
+        filename with cached workspace results
     """
 
     def __init__(self, cachefile=None):
@@ -348,13 +404,13 @@ class Workspace(object):
 
         Parameters
         ----------
-        connected : bool (optional)
+        connected : bool , optional
             Whether to assume you are connected to the internet.  If you are,
             then setting this to `True` allows initialization to rely on web-
             hosted resources which will reduce the overall size of your
             notebook.
 
-        autodisplay : bool (optional)
+        autodisplay : bool , optional
             Whether to automatically display workspace objects after they are
             created.
 
@@ -533,8 +589,10 @@ class Workspace(object):
 
     def switched_compute(self, fn, *args):
         """
-        Computes a function, given its name and arguments, when some or all of
-        those arguments are SwitchedValue objects.
+        Calls a compute function with special handling of :class:`SwitchedValue` arguments.
+
+        This is similar to calling `fn`, given its name and arguments, when
+        some or all of those arguments are :class:`SwitchedValue` objects.
 
         Caching is employed to avoid duplicating function evaluations which have
         the same arguments.  Note that the function itself doesn't need to deal
@@ -552,9 +610,6 @@ class Workspace(object):
         ----------
         fn : function
             The function to evaluate
-
-        args : list
-            The function's arguments
 
         Returns
         -------
@@ -671,14 +726,61 @@ class Workspace(object):
 
 class Switchboard(_collections.OrderedDict):
     """
-    Encapsulates a render-able set of user-interactive switches
-    for controlling visualized output.
+    Encapsulates a render-able set of user-interactive switches for controlling visualized output.
 
     Outwardly a Switchboard looks like a dictionary of SwitchValue
     objects, which in turn look like appropriately sized numpy arrays
     of values for some quantity.  Different switch positions select
     different values and thereby what data is visualized in various
     outputs (e.g. tables and plots).
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    switches : list
+        A list of switch names.  The length of this list is
+        the number of switches.
+
+    positions : list
+        Elements are lists of position labels, one per switch.
+        Length must be equal to `len(switches)`.
+
+    types : list of {'buttons','dropdown','slider','numslider'}
+        A list of switch-type strings specifying what type of switch
+        each switch is.
+
+        - 'buttons': a set of toggle buttons
+        - 'dropdown': a drop-down (or combo-box)
+        - 'slider': a horizontal slider (equally spaced items)
+        - 'numslider': a horizontal slider (spaced by numeric value)
+
+    initial_pos : list or None (optional)
+        A list of 0-based integer indices giving the initial
+        position of each of the `len(switches)` switches.  None
+        defaults to the first (0-th) position for each switch.
+
+    descriptions : list (optional)
+        A string description for each of the `len(switches)` switches.
+
+    show : list (optional)
+        A list of boolean (one for each of the `len(switches)` switches)
+        indicating whether or not that switch should be rendered.  The
+        special values "all" and "none" show all or none of the switches,
+        respectively.
+
+    id : str (optional)
+        A DOM identifier to use when rendering this Switchboard to HTML.
+        Usually leaving this value as `None` is best, in which case a
+        random identifier is created.
+
+    use_loadable_items : bool, optional
+        Whether "loadable" items are being used.  When using loadable items,
+        elements of a web page are explicitly told when to initialize themselves
+        by a "load_loadable_item" signal instead of loading as soon as the DOM
+        is ready (a traditional on-ready handler).  Using this option increases
+        the performance of large/complex web pages.
     """
 
     def __init__(self, ws, switches, positions, types, initial_pos=None,
@@ -723,6 +825,13 @@ class Switchboard(_collections.OrderedDict):
             A DOM identifier to use when rendering this Switchboard to HTML.
             Usually leaving this value as `None` is best, in which case a
             random identifier is created.
+
+        use_loadable_items : bool, optional
+            Whether "loadable" items are being used.  When using loadable items,
+            elements of a web page are explicitly told when to initialize themselves
+            by a "load_loadable_item" signal instead of loading as soon as the DOM
+            is ready (a traditional on-ready handler).  Using this option increases
+            the performance of large/complex web pages.
         """
         # Note: intentionally leave off ws argument desc. in docstring
         assert(len(switches) == len(positions))
@@ -1045,8 +1154,7 @@ class Switchboard(_collections.OrderedDict):
 
     def get_switch_change_handlerjs(self, switch_index):
         """
-        Returns the Javascript needed to begin an on-change handler
-        for a particular switch.
+        Returns the Javascript needed to begin an on-change handler for a particular switch.
 
         Parameters
         ----------
@@ -1163,10 +1271,26 @@ class Switchboard(_collections.OrderedDict):
 
 class SwitchboardView(object):
     """
-    A duplicate or "view" of an existing switchboard which logically
-    represents the *same* set of switches.  Thus, when switches are
-    moved on the duplicate board, switches will move on the original
-    (and vice versa).
+    A duplicate or "view" of an existing switchboard.
+
+    This view is logically represents the *same* set of switches.
+    Thus, when switches are moved on the duplicate board, switches
+    will move on the original (and vice versa).
+
+    Parameters
+    ----------
+    switchboard : Switchboard
+        The base switch board.
+
+    idsuffix : str, optional
+        A suffix to append to the DOM ID of this switchboard
+        when rendering the view.  If "auto", a random suffix
+        is used.
+
+    show : list (optional)
+        A list of booleans indicating which switches should be rendered.
+        The special values "all" and "none" show all or none of the
+        switches, respectively.
     """
 
     def __init__(self, switchboard, idsuffix="auto", show="all"):
@@ -1249,9 +1373,10 @@ class SwitchboardView(object):
 
 class SwitchValue(object):
     """
-    Encapsulates a "switched value", which is essentially a value (i.e. some
-    quantity, usually one used as an argument to visualization functions) that
-    is controlled by the switches of a single Switchboard.
+    A value that is controlled by the switches of a single Switchboard.
+
+    "Value" here means an arbitrary quantity, and is usually an argument
+    to visualization functions.
 
     The paradigm is one of a Switchboard being a collection of switches along
     with a dictionary of SwitchValues, whereby each SwitchValue is a mapping
@@ -1262,6 +1387,20 @@ class SwitchValue(object):
 
     SwitchValue behaves much like a numpy array of values in terms of
     element access.
+
+    Parameters
+    ----------
+    parent_switchboard : Switchboard
+        The switch board this value is associated with.
+
+    name : str
+        The name of this value, which is also the key or member
+        name used to access this value from its parent `Switchboard`.
+
+    dependencies : iterable
+        The 0-based indices identifying which switches this value
+        depends upon, and correspondingly, which switch positions
+        the different axes of the new `SwitchValue` correspond to.
     """
 
     def __init__(self, parent_switchboard, name, dependencies):
@@ -1322,6 +1461,16 @@ class WorkspaceOutput(object):
     using a Workspace.  In particular, `render` is used to create embeddable
     output in various formats, and `display` is used to show the object within
     an iPython notebook.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    Attributes
+    ----------
+    default_render_options : dict
+        Class attribute giving default rendering options.
     """
     default_render_options = {
         #General
@@ -1390,8 +1539,6 @@ class WorkspaceOutput(object):
             same value is taken for all precision types.  If None, then
             `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
 
-
-
         switched_item_mode : {'inline','separate files'}, optional
             Whether switched items should be rendered inline within the 'html'
             and 'js' blocks of the return value of :func:`render`, or whether
@@ -1440,8 +1587,6 @@ class WorkspaceOutput(object):
         valign : {"top","bottom"}
             Whether the switched items should be vertically aligned by their
             tops or bottoms (when they're different heights).
-
-
 
         latex_cmd : str, optional
             The system command or executable used to compile LaTeX documents.
@@ -1492,8 +1637,7 @@ class WorkspaceOutput(object):
 
     def render(self, typ="html"):
         """
-        Renders this object into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this object into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -1514,6 +1658,10 @@ class WorkspaceOutput(object):
     def display(self):
         """
         Display this object within an iPython notebook.
+
+        Returns
+        -------
+        None
         """
         if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
@@ -1818,8 +1966,12 @@ class WorkspaceOutput(object):
 
 class NotApplicable(WorkspaceOutput):
     """
-    Class signifying that an given set of arguments is not applicable
-    to a function being evaluated.
+    Class signifying that an given set of arguments is not applicable to a function being evaluated.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
     """
 
     def __init__(self, ws):
@@ -1830,8 +1982,7 @@ class NotApplicable(WorkspaceOutput):
 
     def render(self, typ="html", id=None):
         """
-        Renders this object into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this object into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -1871,6 +2022,17 @@ class WorkspaceTable(WorkspaceOutput):
     A base class which provides the logic required to take a
     single table-generating function and make it into a legitimate
     `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A table-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -1896,8 +2058,7 @@ class WorkspaceTable(WorkspaceOutput):
 
     def render(self, typ):
         """
-        Renders this table into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this table into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -2277,6 +2438,17 @@ class WorkspacePlot(WorkspaceOutput):
     A base class which provides the logic required to take a
     single plot.ly figure-generating function and make it into a
     legitimate `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A table-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -2308,8 +2480,7 @@ class WorkspacePlot(WorkspaceOutput):
 
     def render(self, typ="html", id=None):
         """
-        Renders this plot into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this plot into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -2615,6 +2786,17 @@ class WorkspaceText(WorkspaceOutput):
     A base class which provides the logic required to take a
     single text-generating function and make it into a legitimate
     `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A text-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -2640,8 +2822,7 @@ class WorkspaceText(WorkspaceOutput):
 
     def render(self, typ):
         """
-        Renders this text block into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this text block into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------

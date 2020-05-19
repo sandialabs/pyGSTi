@@ -1,4 +1,6 @@
-""" Defines the MapForwardSimulator calculator class"""
+"""
+Defines the MapForwardSimulator calculator class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -34,46 +36,60 @@ CLIFFORD = 2
 
 class MapForwardSimulator(ForwardSimulator):
     """
-    Encapsulates a calculation tool used by model objects to perform product
-    and derivatives-of-product calculations.
+    A forward-simulation calculator that uses sparse matrix-vector products.
 
-    This is contained in a class separate from Model to allow for additional
-    model classes (e.g. ones which use entirely different -- non-gate-local
-    -- parameterizations of operation matrices and SPAM vectors) access to these
-    fundamental operations.
+    Parameters
+    ----------
+    dim : int
+        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
+
+    layer_op_server : LayerLizard
+        An object that can be queried for circuit-layer operations.
+
+    paramvec : numpy.ndarray
+        The current parameter vector of the Model.
+
+    max_cache_size : int, optional
+        The maximum cache size allowed.  Cache elements are "scratch space"
+        where state vectors can be stored to speed up the evaluation of
+        circuits having common prefixes.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec, max_cache_size=None):
+    def __init__(self, dim, layer_op_server, paramvec, max_cache_size=None):
         """
         Construct a new MapForwardSimulator object.
 
         Parameters
         ----------
         dim : int
-            The gate-dimension.  All operation matrices should be dim x dim, and all
-            SPAM vectors should be dim x 1.
+            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
 
-        gates, preps, effects : OrderedDict
-            Ordered dictionaries of LinearOperator, SPAMVec, and SPAMVec objects,
-            respectively.  Must be *ordered* dictionaries to specify a
-            well-defined column ordering when taking derivatives.
+        layer_op_server : LayerLizard
+            An object that can be queried for circuit-layer operations.
 
-        paramvec : ndarray
-            The parameter vector of the Model.
+        paramvec : numpy.ndarray
+            The current parameter vector of the Model.
 
-        autogator : AutoGator
-            An auto-gator object that may be used to construct virtual gates
-            for use in computations.
+        max_cache_size : int, optional
+            The maximum cache size allowed.  Cache elements are "scratch space"
+            where state vectors can be stored to speed up the evaluation of
+            circuits having common prefixes.
         """
         self.max_cache_size = max_cache_size
         super(MapForwardSimulator, self).__init__(
-            dim, simplified_op_server, paramvec)
+            dim, layer_op_server, paramvec)
         if self.evotype not in ("statevec", "densitymx", "stabilizer"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "map-based calculations" % self.evotype))
 
     def copy(self):
-        """ Return a shallow copy of this MatrixForwardSimulator """
+        """
+        Return a shallow copy of this MatrixForwardSimulator
+
+        Returns
+        -------
+        MapForwardSimulator
+        """
         return MapForwardSimulator(self.dim, self.sos, self.paramvec)
 
     def _rho_from_label(self, rholabel):
@@ -107,9 +123,10 @@ class MapForwardSimulator(ForwardSimulator):
 
     def prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
-        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
-        operation sequence.  The spam tuples may only vary in their effect-label (their
-        prep labels must be the same)
+        Compute probabilities of a multiple "outcomes" for a single circuit.
+
+        The outcomes correspond to `circuit` sandwiched between `rholabel` (a state preparation)
+        and the multiple effect labels in `elabels`.
 
         Parameters
         ----------
@@ -124,14 +141,14 @@ class MapForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         use_scaling : bool, optional
-          Unused.  Present to match function signature of other calculators.
+            Unused.  Present to match function signature of other calculators.
 
         time : float, optional
-          The *start* time at which `circuit` is evaluated.
+            The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
@@ -171,9 +188,7 @@ class MapForwardSimulator(ForwardSimulator):
 
     def dpr(self, spam_tuple, circuit, return_pr, clip_to):
         """
-        Compute the derivative of a probability generated by a operation sequence and
-        spam tuple as a 1 x M numpy array, where M is the number of model
-        parameters.
+        Compute the derivative of the probability corresponding to `circuit` and `spam_tuple`.
 
         Parameters
         ----------
@@ -185,18 +200,17 @@ class MapForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         return_pr : bool
-          when set to True, additionally return the probability itself.
+            when set to True, additionally return the probability itself.
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
         derivative : numpy array
             a 1 x M numpy array of derivatives of the probability w.r.t.
             each model parameter (M is the length of the vectorized model).
-
         probability : float
             only returned if return_pr == True.
         """
@@ -220,9 +234,7 @@ class MapForwardSimulator(ForwardSimulator):
 
     def hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
         """
-        Compute the Hessian of a probability generated by a operation sequence and
-        spam tuple as a 1 x M x M array, where M is the number of model
-        parameters.
+        Compute the Hessian of the probability given by `circuit` and `spam_tuple`.
 
         Parameters
         ----------
@@ -234,15 +246,15 @@ class MapForwardSimulator(ForwardSimulator):
             instrument elements like 'Imyinst_0')
 
         return_pr : bool
-          when set to True, additionally return the probability itself.
+            when set to True, additionally return the probability itself.
 
         return_deriv : bool
-          when set to True, additionally return the derivative of the
-          probability.
+            when set to True, additionally return the derivative of the
+            probability.
 
         clip_to : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when pr_mx_to_fill is not None.
+            (min,max) to clip returned probability to if not None.
+            Only relevant when pr_mx_to_fill is not None.
 
         Returns
         -------
@@ -250,11 +262,9 @@ class MapForwardSimulator(ForwardSimulator):
             a 1 x M x M array, where M is the number of model parameters.
             hessian[0,j,k] is the derivative of the probability w.r.t. the
             k-th then the j-th model parameter.
-
         derivative : numpy array
             only returned if return_deriv == True. A 1 x M numpy array of
             derivatives of the probability w.r.t. each model parameter.
-
         probability : float
             only returned if return_pr == True.
         """
@@ -287,13 +297,21 @@ class MapForwardSimulator(ForwardSimulator):
     def default_distribute_method(self):
         """
         Return the preferred MPI distribution mode for this calculator.
+
+        Returns
+        -------
+        str
         """
         return "circuits"
 
     def estimate_cache_size(self, n_circuits):
         """
-        Return an estimate of the ideal/desired cache size given a number of
-        operation sequences.
+        Return an estimate of the ideal/desired cache size given a number of circuits.
+
+        Parameters
+        ----------
+        n_circuits : int
+            number of circuits.
 
         Returns
         -------
@@ -406,9 +424,13 @@ class MapForwardSimulator(ForwardSimulator):
         return mem * FLOATSIZE
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
+    #PRIVATE
     def dm_mapfill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
                                 eval_tree, param_indices1, param_indices2, comm):
 
+        """
+        Helper function for populating hessian values by block.
+        """
         eps = 1e-4  # hardcoded?
 
         if param_indices1 is None:
@@ -473,26 +495,25 @@ class MapForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated 1D numpy array of length equal to the
-          total number of computed elements (i.e. eval_tree.num_final_elements())
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. eval_tree.num_final_elements())
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
-
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -527,8 +548,7 @@ class MapForwardSimulator(ForwardSimulator):
                          comm=None, wrt_filter=None, wrt_block_size=None,
                          profiler=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-derivatives for an entire tree of gate
-        strings.
+        Compute the outcome probability-derivatives for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 2D array with
         probability-derivatives for each "final element" of `eval_tree`.
@@ -536,54 +556,54 @@ class MapForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M is the
-          number of model parameters.
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            number of model parameters.
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
         wrt_filter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrt_block_size.
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
 
         wrt_block_size : int or float, optional
-          The maximum number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrt_block_size and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrt_filter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+            A profiler object used for to track timing and memory usage.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -681,8 +701,7 @@ class MapForwardSimulator(ForwardSimulator):
                          clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
                          wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
         """
-        Compute the outcome probability-Hessians for an entire tree of gate
-        strings.
+        Compute the outcome probability-Hessians for an entire tree of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
         probability-Hessians for each "final element" of `eval_tree`.
@@ -690,59 +709,74 @@ class MapForwardSimulator(ForwardSimulator):
         Parameters
         ----------
         mx_to_fill : numpy ndarray
-          an already-allocated ExMxM numpy array where E is the total number of
-          computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-          the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+            an already-allocated ExMxM numpy array where E is the total number of
+            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
+            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
 
         eval_tree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-           strings to compute the bulk operation on.
+            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
+            strings to compute the bulk operation on.
 
         pr_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
-          when not None, an already-allocated ExM numpy array that is filled
-          with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of model parameters selected for the 1st and 2nd
-          differentiation, respectively (i.e. by wrt_filter1 and wrt_filter2).
+        deriv1_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 1st
+            differentiation (i.e. by wrt_filter1).
+
+        deriv2_mx_to_fill : numpy array, optional
+            when not None, an already-allocated ExM numpy array that is filled
+            with probability derivatives, similar to bulk_fill_dprobs(...), but
+            where M is the number of model parameters selected for the 2nd
+            differentiation (i.e. by wrt_filter2).
 
         clip_to : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of eval_tree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrt_block_size).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is first performed over
+            subtrees of eval_tree (if it is split), and then over blocks (subsets)
+            of the parameters being differentiated with respect to (see
+            wrt_block_size).
 
-        wrt_filter1, wrt_filter2 : list of ints, optional
-          If not None, a list of integers specifying which model parameters
-          to differentiate with respect to in the first (row) and second (col)
-          derivative operations, respectively.
+        wrt_filter1 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the first (row) derivative operations.
 
-        wrt_block_size2, wrt_block_size2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrt_block_size and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
+        wrt_filter2 : list of ints, optional
+            If not None, a list of integers specifying which model parameters
+            to differentiate with respect to in the second (col) derivative operations.
 
-        profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+        wrt_block_size1: int or float, optional
+            The maximum number of 1st (row) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
+
+        wrt_block_size2 : int or float, optional
+            The maximum number of 2nd (col) derivatives to compute
+            *products* for simultaneously.  None means compute all requested
+            rows or columns at once.  The minimum of wrt_block_size and the size
+            that makes maximal use of available processors is used as the final
+            block size.  This argument must be None if the corresponding
+            wrt_filter is not None.  Set this to non-None to reduce amount of
+            intermediate memory required.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -870,9 +904,7 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
                              return_dprobs_12=False, comm=None):
         """
-        Constructs a generator that computes the 2nd derivatives of the
-        probabilities generated by a each gate sequence given by eval_tree
-        column-by-column.
+        An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
         This routine can be useful when memory constraints make constructing
         the entire Hessian at once impractical, and one is able to compute
@@ -881,14 +913,8 @@ class MapForwardSimulator(ForwardSimulator):
         can often be computed column-by-column from the using the columns of
         the operation sequences.
 
-
         Parameters
         ----------
-        spam_label_rows : dictionary
-            a dictionary with keys == spam labels and values which
-            are integer row indices into mx_to_fill, specifying the
-            correspondence between rows of mx_to_fill and spam labels.
-
         eval_tree : EvalTree
             given by a prior call to bulk_evaltree.  Specifies the operation sequences
             to compute the bulk operation on.  This tree *cannot* be split.
@@ -901,39 +927,18 @@ class MapForwardSimulator(ForwardSimulator):
             `slice` objects.
 
         return_dprobs_12 : boolean, optional
-           If true, the generator computes a 2-tuple: (hessian_col, d12_col),
-           where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
-           the probability generated by the sequence and spam label indexed
-           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
-           Hessian, and turns out to be useful when computing the Hessian
-           of functions of the probabilities.
+            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
+            where d12_col is a column of the matrix d12 defined by:
+            d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+            the probability generated by the sequence and spam label indexed
+            by iOpStr and iSpamLabel.  d12 has the same dimensions as the
+            Hessian, and turns out to be useful when computing the Hessian
+            of functions of the probabilities.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed as in
-           bulk_product, bulk_dproduct, and bulk_hproduct.
-
-
-        Returns
-        -------
-        block_generator
-          A generator which, when iterated, yields the 3-tuple
-          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
-          (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
-          are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
-          arrays of shape K x S x B x B', where:
-
-          - K is the length of spam_label_rows,
-          - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
-          - B is the number of parameter rows (the length of rowSlice)
-          - B' is the number of parameter columns (the length of colSlice)
-
-          If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
-          (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
-
-          - `hprobs == mx[:,:,rowSlice,colSlice]`
-          - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed as in
+            bulk_product, bulk_dproduct, and bulk_hproduct.
         """
         assert(not eval_tree.is_split()), "`eval_tree` cannot be split"
         nElements = eval_tree.num_final_elements()
@@ -969,8 +974,9 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_chi2(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
                                min_prob_clip_for_weighting, prob_clip_interval, comm=None):
         """
-        Compute the chi2 contributions for an entire tree of circuits, computing
-        and then summing together the contributions for each time the circuit is
+        Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
+
+        Computation is performed by summing together the contributions for each time the circuit is
         run, as given by the timestamps in `dataset`.
 
         Parameters
@@ -1003,13 +1009,13 @@ class MapForwardSimulator(ForwardSimulator):
             the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to.
-           If None, no clipping is performed.
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -1042,6 +1048,8 @@ class MapForwardSimulator(ForwardSimulator):
                                 comm=None, wrt_filter=None, wrt_block_size=None,
                                 profiler=None, gather_mem_limit=None):
         """
+        Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
+
         Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
         of the summed chi2 contributions for each circuit with respect to the
         model's parameters.
@@ -1077,18 +1085,40 @@ class MapForwardSimulator(ForwardSimulator):
             the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to.
-           If None, no clipping is performed.
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
 
         chi2_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with the per-circuit chi2 contributions, just like in
-          bulk_fill_timedep_chi2(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit chi2 contributions, just like in
+            bulk_fill_timedep_chi2(...).
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
+
+        wrt_block_size : int or float, optional
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+            A profiler object used for to track timing and memory usage.
+
+        gather_mem_limit : int, optional
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -1112,10 +1142,10 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_timedep_loglpp(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
                                  min_prob_clip, radius, prob_clip_interval, comm=None):
         """
-        Compute the log-likelihood contributions (within the "poisson picture")
-        for an entire tree of circuits, computing and then summing together
-        the contributions for each time the circuit is run, as given by the
-        timestamps in `dataset`.
+        Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
+
+        Computation is performed by summing together the contributions for each time the circuit is run,
+        as given by the timestamps in `dataset`.
 
         Parameters
         ----------
@@ -1153,13 +1183,13 @@ class MapForwardSimulator(ForwardSimulator):
             zero-frequency terms of the log-likelihood.
 
         prob_clip_interval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to.
-           If None, no clipping is performed.
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         Returns
         -------
@@ -1191,6 +1221,8 @@ class MapForwardSimulator(ForwardSimulator):
                                   comm=None, wrt_filter=None, wrt_block_size=None,
                                   profiler=None, gather_mem_limit=None):
         """
+        Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
+
         Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
         of the summed logl (in posison picture) contributions for each circuit
         with respect to the model's parameters.
@@ -1220,24 +1252,47 @@ class MapForwardSimulator(ForwardSimulator):
         dataset : DataSet
             the data set used to compute the logl contributions.
 
-        min_prob_clip_for_weighting : float, optional
-            Sets the minimum and maximum probability p allowed in the chi^2
-            weights: N/(p*(1-p)) by clipping probability p values to lie within
-            the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
+        min_prob_clip : float
+            a regularization parameter for the log-likelihood objective function.
+
+        radius : float
+            a regularization parameter for the log-likelihood objective function.
 
         prob_clip_interval : 2-tuple or None, optional
-           (min,max) values used to clip the predicted probabilities to.
-           If None, no clipping is performed.
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
 
         logl_mx_to_fill : numpy array, optional
-          when not None, an already-allocated length-E numpy array that is filled
-          with the per-circuit logl contributions, just like in
-          bulk_fill_timedep_loglpp(...).
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit logl contributions, just like in
+            bulk_fill_timedep_loglpp(...).
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
+
+        wrt_block_size : int or float, optional
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+            A profiler object used for to track timing and memory usage.
+
+        gather_mem_limit : int, optional
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -1263,12 +1318,13 @@ class MapForwardSimulator(ForwardSimulator):
                                 comm=None, wrt_filter=None, wrt_block_size=None,
                                 profiler=None, gather_mem_limit=None):
         """
-        A generic method providing the scaffolding used when computing (filling)
-        the derivative of a time-dependent quantity.  In particular, it
-        distributes the computation among the subtrees of `eval_tree` and
-        relies on the caller to supply "compute_cache" and "compute_dcache"
-        functions which just need to compute the quantitiy being filled and
-        its derivative given a sub-tree and a parameter-slice.
+        A helper method for computing (filling) the derivative of a time-dependent quantity.
+
+        A generic method providing the scaffolding used when computing (filling) the
+        derivative of a time-dependent quantity.  In particular, it distributes the
+        computation among the subtrees of `eval_tree` and relies on the caller to supply
+        "compute_cache" and "compute_dcache" functions which just need to compute the
+        quantitiy being filled and its derivative given a sub-tree and a parameter-slice.
 
         Parameters
         ----------
@@ -1295,56 +1351,42 @@ class MapForwardSimulator(ForwardSimulator):
             computed elements (i.e. eval_tree.num_final_elements()) and M is the
             number of model parameters.
 
-        deriv_fn : function
-            A function with the signature:
-            `deriv_fn(rholabel, elabels, num_outcomes, evalSubTree,
-                      dataset_rows, paramSlice, fill_comm)` which computes the
-            derivative of a quantity to be stored in `deriv_mx_to_fill`.  This
-            jacobian is computed for all the circuits in `evalSubTree` with respect
-            to the slice of model parameters given by `paramSlice`.  This function
-            must return an array of shape (E',M') where E' is the total number of
-            computed elements (i.e. eval_sub_tree.num_final_elements()) and M' is
-            the number of model parameters in paramSlice.
+        deriv_fill_fn : function
+            a function used to compute the objective funtion jacobian.
 
         mx_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit contributions computed using `fn` below.
 
-        fn : function
-            A function with the signature:
-            `fn(rholabel, elabels, num_outcomes, evalSubTree, dataset_rows,
-                fill_comm)` which computes the quantity to store in `mx_to_fill`
-            (usually the quantity `deriv_fn` gives the derivative of).  This
-            quantity is computed for all the circuits in `evalSubTree`, and `fn`
-            must return a 1D array of length E' where E' is the total number of
-            computed elements (i.e. eval_sub_tree.num_final_elements()).
+        fill_fn : function, optional
+            a function used to compute the objective function.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of eval_tree (if it is split).
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of eval_tree (if it is split).
 
         wrt_filter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrt_block_size.
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.  Cannot be specified
+            in conjuction with wrt_block_size.
 
         wrt_block_size : int or float, optional
-          The maximum number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrt_block_size and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrt_filter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+            The maximum number of derivative columns to compute *products*
+            for simultaneously.  None means compute all requested columns
+            at once.  The  minimum of wrt_block_size and the size that makes
+            maximal use of available processors is used as the final block size.
+            This argument must be None if wrt_filter is not None.  Set this to
+            non-None to reduce amount of intermediate memory required.
 
         profiler : Profiler, optional
-          A profiler object used for to track timing and memory usage.
+            A profiler object used for to track timing and memory usage.
 
         gather_mem_limit : int, optional
-          A memory limit in bytes to impose upon the "gather" operations
-          performed as a part of MPI processor syncronization.
+            A memory limit in bytes to impose upon the "gather" operations
+            performed as a part of MPI processor syncronization.
 
         Returns
         -------

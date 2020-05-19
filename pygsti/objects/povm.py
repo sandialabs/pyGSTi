@@ -1,4 +1,6 @@
-"""Defines the POVM class"""
+"""
+Defines the POVM class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -70,9 +72,9 @@ from ..tools import optools as _gt
 
 def convert(povm, to_type, basis, extra=None):
     """
-    TODO: update to_type options
-    Convert POVM to a new type of parameterization, potentially
-    creating a new object.  Raises ValueError for invalid conversions.
+    Convert a POVM to a new type of parameterization.
+
+    This potentially creates a new object.  Raises ValueError for invalid conversions.
 
     Parameters
     ----------
@@ -80,20 +82,24 @@ def convert(povm, to_type, basis, extra=None):
         POVM to convert
 
     to_type : {"full","TP","static","static unitary","H+S terms",
-              "H+S clifford terms","clifford"}
+        "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
+        TODO docstring: update the options here.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `povm`.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
 
+    extra : object, optional
+        Unused.
+
     Returns
     -------
     POVM
-       The converted POVM vector, usually a distinct
-       object from the object passed as input.
+        The converted POVM vector, usually a distinct
+        object from the object passed as input.
     """
     if to_type in ("full", "static", "static unitary"):
         converted_effects = [(lbl, _sv.convert(vec, to_type, basis))
@@ -167,10 +173,23 @@ def convert(povm, to_type, basis, extra=None):
 
 class POVM(_gm.ModelMember, _collections.OrderedDict):
     """
+    A generalized positive operator-valued measure (POVM).
+
     Meant to correspond to a  positive operator-valued measure,
     in theory, this class generalizes that notion slightly to
     include a collection of effect vectors that may or may not
     have all of the properties associated by a mathematical POVM.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the Hilbert-Schmidt space of the effect vectors.
+
+    evotype : str
+        The evolution type.
+
+    items : list or dict, optional
+        Initial values.  This should only be used internally in de-serialization.
     """
 
     def __init__(self, dim, evotype, items=[]):
@@ -194,7 +213,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return 0  # default == no parameters
 
@@ -219,13 +238,23 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
             The 1D vector of POVM parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this POVM's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this POVM should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
+
         Returns
         -------
         None
         """
         assert(len(v) == 0)  # should be no parameters
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
         Update each POVM effect E as s^T * E.
 
@@ -237,6 +266,10 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         raise ValueError("Cannot transform a %s object" % self.__class__.__name__)
         #self.dirty = True
@@ -264,6 +297,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
     def num_elements(self):
         """
         Return the number of total spam vector elements in this povm.
+
         This is in general different from the number of *parameters*,
         which are the number of free variables used to generate all of
         the vector *elements*.
@@ -276,8 +310,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
 
     def acton(self, state):
         """
-        Compute the outcome probabilities the result from
-        acting on `state` with this POVM.
+        Compute the outcome probabilities the result from acting on `state` with this POVM.
 
         Parameters
         ----------
@@ -427,6 +460,8 @@ class _BasePOVM(POVM):
 
     def simplify_effects(self, prefix=""):
         """
+        Creates a dictionary of simplified effect vectors.
+
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
@@ -494,6 +529,16 @@ class _BasePOVM(POVM):
         v : numpy array
             The 1D vector of POVM parameters.  Length
             must == num_params().
+
+        close : bool, optional
+            Whether `v` is close to this POVM's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this POVM should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
 
         Returns
         -------
@@ -568,8 +613,12 @@ class _BasePOVM(POVM):
 
 class UnconstrainedPOVM(_BasePOVM):
     """
-    An unconstrained POVM that just holds a set of effect vectors,
-    parameterized individually however you want.
+    A POVM that just holds a set of effect vectors, parameterized individually however you want.
+
+    Parameters
+    ----------
+    effects : dict of SPAMVecs or array-like
+        A dict (or list of key,value pairs) of the effect vectors.
     """
 
     def __init__(self, effects):
@@ -592,8 +641,17 @@ class UnconstrainedPOVM(_BasePOVM):
 
 class TPPOVM(_BasePOVM):
     """
-    An POVM whose sum-of-effects is constrained to what, by definition,
-    we call the "identity".
+    A POVM whose sum-of-effects is constrained to what, by definition, we call the "identity".
+
+    Parameters
+    ----------
+    effects : dict of SPAMVecs or array-like
+        A dict (or list of key,value pairs) of the effect vectors.  The
+        final effect vector will be stripped of any existing
+        parameterization and turned into a ComplementSPAMVec which has
+        no additional parameters and is always equal to
+        `identity - sum(other_effects`, where `identity` is the sum of
+        `effects` when this __init__ call is made.
     """
 
     def __init__(self, effects):
@@ -628,8 +686,12 @@ class TPPOVM(_BasePOVM):
 
 class TensorProdPOVM(POVM):
     """
-    A POVM that is effectively the tensor product of several other
-    POVMs (which can be TP).
+    A POVM that is effectively the tensor product of several other POVMs (which can be TP).
+
+    Parameters
+    ----------
+    factor_povms : list of POVMs
+        POVMs that will be tensor-producted together.
     """
 
     def __init__(self, factor_povms):
@@ -687,14 +749,23 @@ class TensorProdPOVM(POVM):
         return _np.product([len(fk) for fk in self._factor_keys])
 
     def keys(self):
+        """
+        An iterator over the effect (outcome) labels of this POVM.
+        """
         for k in _itertools.product(*self._factor_keys):
             yield "".join(k)
 
     def values(self):
+        """
+        An iterator over the effect SPAM vectors of this POVM.
+        """
         for k in self.keys():
             yield self[k]
 
     def items(self):
+        """
+        An iterator over the (effect_label, effect_vector) items in this POVM.
+        """
         for k in self.keys():
             yield k, self[k]
 
@@ -720,6 +791,8 @@ class TensorProdPOVM(POVM):
 
     def simplify_effects(self, prefix=""):
         """
+        Creates a dictionary of simplified effect vectors.
+
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
@@ -764,7 +837,7 @@ class TensorProdPOVM(POVM):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         return sum([povm.num_params() for povm in self.factorPOVMs])
 
@@ -791,6 +864,16 @@ class TensorProdPOVM(POVM):
         v : numpy array
             The 1D vector of POVM parameters.  Length
             must == num_params().
+
+        close : bool, optional
+            Whether `v` is close to this POVM's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this POVM should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
 
         Returns
         -------
@@ -841,6 +924,18 @@ class TensorProdPOVM(POVM):
 class ComputationalBasisPOVM(POVM):
     """
     A POVM that "measures" states in the computational "Z" basis.
+
+    Parameters
+    ----------
+    nqubits : int
+        The number of qubits
+
+    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+        The type of evolution being performed.
+
+    qubit_filter : list, optional
+        An optional list of integers specifying a subset
+        of the qubits to be measured.
     """
 
     def __init__(self, nqubits, evotype, qubit_filter=None):
@@ -887,15 +982,24 @@ class ComputationalBasisPOVM(POVM):
         return 2**self.nqubits
 
     def keys(self):
+        """
+        An iterator over the effect (outcome) labels of this POVM.
+        """
         iterover = [('0', '1')] * self.nqubits
         for k in _itertools.product(*iterover):
             yield "".join(k)
 
     def values(self):
+        """
+        An iterator over the effect SPAM vectors of this POVM.
+        """
         for k in self.keys():
             yield self[k]
 
     def items(self):
+        """
+        An iterator over the (effect_label, effect_vector) items in this POVM.
+        """
         for k in self.keys():
             yield k, self[k]
 
@@ -920,6 +1024,8 @@ class ComputationalBasisPOVM(POVM):
 
     def simplify_effects(self, prefix=""):
         """
+        Creates a dictionary of simplified effect vectors.
+
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
@@ -950,8 +1056,30 @@ class ComputationalBasisPOVM(POVM):
 
 class LindbladPOVM(POVM):
     """
-    A POVM that is effectively a *single* Lindblad-parameterized gate
-    followed by a computational-basis POVM.
+    A POVM that is effectively a *single* Lindblad-parameterized gate followed by a computational-basis POVM.
+
+    Parameters
+    ----------
+    errormap : MapOperator
+        The error generator action and parameterization, encapsulated in
+        a gate object.  Usually a :class:`LindbladOp`
+        or :class:`ComposedOp` object.  (This argument is *not* copied,
+        to allow LindbladSPAMVecs to share error generator
+        parameters with other gates and spam vectors.)
+
+    povm : POVM, optional
+        A sub-POVM which supplies the set of "reference" effect vectors
+        that `errormap` acts on to produce the final effect vectors of
+        this LindbladPOVM.  This POVM must be *static*
+        (have zero parameters) and its evolution type must match that of
+        `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is
+        used on the number of qubits appropriate to `errormap`'s dimension.
+
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for this spam vector. Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt) (or a custom
+        basis object).  If None, then this is extracted (if possible) from
+        `errormap`.
     """
 
     def __init__(self, errormap, povm=None, mx_basis=None):
@@ -1022,14 +1150,23 @@ class LindbladPOVM(POVM):
         return len(self.base_povm)
 
     def keys(self):
+        """
+        An iterator over the effect (outcome) labels of this POVM.
+        """
         for k in self.base_povm.keys():
             yield k
 
     def values(self):
+        """
+        An iterator over the effect SPAM vectors of this POVM.
+        """
         for k in self.keys():
             yield self[k]
 
     def items(self):
+        """
+        An iterator over the (effect_label, effect_vector) items in this POVM.
+        """
         for k in self.keys():
             yield k, self[k]
 
@@ -1054,12 +1191,11 @@ class LindbladPOVM(POVM):
 
     def allocate_gpindices(self, starting_index, parent, memo=None):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `starting_index`.
+        Sets gpindices array for this object or any objects it contains (i.e. depends upon).
+
+        Indices may be obtained from contained objects which have already been
+        initialized (e.g. if a contained object is shared with other top-level
+        objects), or given new indices starting with `starting_index`.
 
         Parameters
         ----------
@@ -1076,7 +1212,7 @@ class LindbladPOVM(POVM):
 
         Returns
         -------
-        num_new: int
+        num_new : int
             The number of *new* allocated parameters (so
             the parent should mark as allocated parameter
             indices `starting_index` to `starting_index + new_new`).
@@ -1110,14 +1246,22 @@ class LindbladPOVM(POVM):
         depends upon) - much like allocate_gpindices.  To ensure a valid
         parent is not overwritten, the existing parent *must be None*
         prior to this call.
+
+        Parameters
+        ----------
+        parent : Model or ModelMember
+            The parent of this POVM.
+
+        Returns
+        -------
+        None
         """
         self.error_map.relink_parent(parent)
         _gm.ModelMember.relink_parent(self, parent)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this ModelMember object.
+        Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
 
         Parameters
         ----------
@@ -1126,6 +1270,9 @@ class LindbladPOVM(POVM):
 
         parent : Model or ModelMember
             The parent whose parameter array gpindices references.
+
+        memo : dict, optional
+            A memo dict used to avoid circular references.
 
         Returns
         -------
@@ -1142,6 +1289,8 @@ class LindbladPOVM(POVM):
 
     def simplify_effects(self, prefix=""):
         """
+        Creates a dictionary of simplified effect vectors.
+
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
@@ -1171,7 +1320,7 @@ class LindbladPOVM(POVM):
         Returns
         -------
         int
-           the number of independent parameters.
+            the number of independent parameters.
         """
         # Recall self.base_povm.num_params() == 0
         return self.error_map.num_params()
@@ -1198,6 +1347,16 @@ class LindbladPOVM(POVM):
             The 1D vector of POVM parameters.  Length
             must == num_params().
 
+        close : bool, optional
+            Whether `v` is close to this POVM's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        nodirty : bool, optional
+            Whether this POVM should refrain from setting it's dirty
+            flag as a result of this call.  `False` is the safe option, as
+            this call potentially changes this POVM's parameters.
+
         Returns
         -------
         None
@@ -1205,7 +1364,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         self.error_map.from_vector(v, close, nodirty)
 
-    def transform(self, s):
+    def transform(self, s):  #INPLACE
         """
         Update each POVM effect E as s^T * E.
 
@@ -1217,6 +1376,10 @@ class LindbladPOVM(POVM):
         s : GaugeGroupElement
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
         """
         self.error_map.spam_transform(s, 'effect')  # only do this *once*
         for lbl, effect in self.items():
@@ -1232,14 +1395,45 @@ class LindbladPOVM(POVM):
 
 class MarginalizedPOVM(POVM):
     """
-    Create a marginalized POVM by adding together sets of effect vectors whose labels
-    have the same *character* at marginalized indices.  This assumes that the POVM
-    being marginalized has a particular (though common) effect-label structure whereby
-    each state-space sector corresponds to a single character, e.g. "0010" for a 4-qubt POVM.
+    A POVM whose effects are the sums of sets of effect vectors in a parent POVM.
+
+    Namely the effects of the parent POVN whose labels have the same *character*
+    at certain "marginalized" indices are summed together.
+
+    Parameters
+    ----------
+    povm_to_marginalize : POVM
+        The POVM to marginalize (the "parent" POVM).
+
+    all_sslbls : StateSpaceLabels or tuple
+        The state space labels of the parent POVM, which should have as many
+        labels (factors) as the parent POVM's outcome/effect labels have characters.
+
+    sslbls_after_marginalizing : tuple
+        The subset of `all_sslbls` that should be *kept* after marginalizing.
     """
 
     def __init__(self, povm_to_marginalize, all_sslbls, sslbls_after_marginalizing):
-        """ TODO: docstring """
+        """
+        Create a MarginalizedPOVM.
+
+        Create a marginalized POVM by adding together sets of effect vectors whose labels
+        have the same *character* at marginalized indices.  This assumes that the POVM
+        being marginalized has a particular (though common) effect-label structure whereby
+        each state-space sector corresponds to a single character, e.g. "0010" for a 4-qubt POVM.
+
+        Parameters
+        ----------
+        povm_to_marginalize : POVM
+            The POVM to marginalize (the "parent" POVM).
+
+        all_sslbls : StateSpaceLabels or tuple
+            The state space labels of the parent POVM, which should have as many
+            labels (factors) as the parent POVM's outcome/effect labels have characters.
+
+        sslbls_after_marginalizing : tuple
+            The subset of `all_sslbls` that should be *kept* after marginalizing.
+        """
         self.povm_to_marginalize = povm_to_marginalize
 
         if isinstance(all_sslbls, _ld.StateSpaceLabels):
@@ -1264,6 +1458,14 @@ class MarginalizedPOVM(POVM):
         super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.dim, self.povm_to_marginalize._evotype)
 
     def marginalize_effect_label(self, elbl):
+        """
+        Removes the "marginalized" characters from `elbl`, resulting in a marginalized POVM effect label.
+
+        Parameters
+        ----------
+        elbl : str
+            Effect label (typically of the parent POVM) to marginalize.
+        """
         assert(len(elbl) == len(self.sslbls_to_marginalize))
         for i in self.indices_to_marginalize:
             elbl = elbl[:i] + elbl[i + 1:]  # remove i-th character
@@ -1280,14 +1482,23 @@ class MarginalizedPOVM(POVM):
         return len(self._elements_to_sum)
 
     def keys(self):
+        """
+        An iterator over the effect (outcome) labels of this POVM.
+        """
         for k in self._elements_to_sum.keys():
             yield k
 
     def values(self):
+        """
+        An iterator over the effect SPAM vectors of this POVM.
+        """
         for k in self.keys():
             yield self[k]
 
     def items(self):
+        """
+        An iterator over the (effect_label, effect_vector) items in this POVM.
+        """
         for k in self.keys():
             yield k, self[k]
 
@@ -1410,6 +1621,8 @@ class MarginalizedPOVM(POVM):
 
     def simplify_effects(self, prefix=""):
         """
+        Creates a dictionary of simplified effect vectors.
+
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within

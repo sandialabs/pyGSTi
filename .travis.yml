@@ -17,6 +17,7 @@ env:
     - NOSE_WITH_COVERAGE=1
     - NOSE_COVER_PACKAGE="pygsti"
     - NOSE_PROCESSES=-1
+    - NOSE_NOPATH=1 # use installed package, not source tree under CWD
     - NOSE_PROCESS_TIMEOUT=2400 # timeout after 40 minutes (travis job timeout is 50 minutes)
   matrix:
     - NOSE_WHERE="test/unit/"
@@ -32,20 +33,17 @@ before_install:
   - gcc --version
 
 install:
-  # Install cython ahead of time b/c pip runs setup.py *before* installing dependencies (??)
+  # see https://github.com/cvxgrp/cvxpy/issues/968
+  - pip install "numpy>=1.16.0"
+  # Cython must be pre-installed to build native extensions on pyGSTi install
   - pip install cython
-  # Install base dependencies
-  - pip install .
-  # Install test dependencies
+
   - pip install .[testing]
-  # HACK - upgrade numpy manually b/c built into TravisCI build and doesn't install the latest version
-  - pip install numpy --upgrade 
-  # Show pip environment, for diagnostics
   - pip freeze
 
 # Default `test' stage script
 script:
-  - mv "pygsti" "do-not-import-this-pygsti"
+  - python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
   - echo "nosetests $NOSETESTS"
   - nosetests $NOSETESTS
 
@@ -98,7 +96,8 @@ jobs:
       env: NOSE_WHERE="test/test_packages/" NOSETESTS="drivers objects tools iotest optimize construction extras"
     - stage: test-extra
       python: 3.5
-      env: NOSE_WHERE="test/test_packages/" NOSETESTS="mpi"
+      # MPI nose utils needs sys.path
+      env: NOSE_WHERE="test/test_packages/" NOSE_NOPATH="" NOSETESTS="mpi"
 
     - stage: push
       env: PUSH_BRANCH="beta"

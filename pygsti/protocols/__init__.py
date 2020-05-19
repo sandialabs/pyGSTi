@@ -1,4 +1,6 @@
-""" Sub-package containing protocol objects and related inputs, data, and results """
+"""
+Sub-package containing protocol objects and related inputs, data, and results
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights

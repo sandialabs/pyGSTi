@@ -1,4 +1,6 @@
-""" Helper functions for standard model modules. """
+"""
+Helper functions for standard model modules.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights

@@ -213,7 +213,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         obj_builder = FreqWeightedChi2Function.builder(
             name='freq-weighted-chi2',
             description="Sum of chi^2",
-            regularization={'min_prob_clip_for_weighting': 1e-4}
+            regularization={'min_freq_clip_for_weighting': 1e-4}
         )
         mdl_lsgst = core.do_iterative_gst(
             self.ds, self.mdl_clgst, self.lsgstStrings,
@@ -351,7 +351,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         obj_builder = FreqWeightedChi2Function.builder(
             name='freq-weighted-chi2',
             description="Sum of chi^2",
-            regularization={'min_prob_clip_for_weighting': 1e-4}
+            regularization={'min_freq_clip_for_weighting': 1e-4}
         )
         model = core.do_iterative_gst(
             self.ds, self.mdl_clgst, self.lsgstStrings,

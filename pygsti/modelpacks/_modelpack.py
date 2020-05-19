@@ -1,4 +1,6 @@
-""" Base of the object-oriented model for modelpacks """
+"""
+Base of the object-oriented model for modelpacks
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -23,7 +25,20 @@ from ..protocols import gst as _gst
 
 
 class ModelPack(_ABC):
-    """ ABC of all derived modelpack types"""
+    """
+    ABC of all derived modelpack types
+
+    Attributes
+    ----------
+    description : str
+        a description of the model pack.
+
+    gates : list
+        a list of the gate labels of this model pack.
+
+    _sslbls : tuple
+        a tuple of the state space labels (usually *qubit* labels) of this model pack.
+    """
     description = None
     gates = None
     _sslbls = None
@@ -116,7 +131,45 @@ class ModelPack(_ABC):
 
 
 class GSTModelPack(ModelPack):
-    """ ABC for modelpacks with GST information"""
+    """
+    ABC for modelpacks with GST information
+
+    Attributes
+    ----------
+    _germs : list
+        a list of "full" germ circuits, found by randomizing around the target model.
+
+    _germs_lite : list
+        a list of "lite" germ circuits, found without randomizing around the target model.
+
+    _fiducials : list
+        a list of the fiducial circuits in cases when the preparation and measurement
+        fiducials are the same.
+
+    _prepfiducials : list
+        the preparation fiducials.
+
+    _measfiducials : list
+        the measurement fiducials.
+
+    global_fidpairs : list
+        a list of 2-tuples of integers indexing `_prepfiducials` and `_measfiducials` respectively,
+        giving a list of global fiducial-pair-reduction results for `_germs`.
+
+    global_fidpairs_lite : list
+        a list of 2-tuples of integers indexing `_prepfiducials` and `_measfiducials` respectively,
+        giving a list of global fiducial-pair-reduction results for `_germs_lite`.
+
+    _pergerm_fidpairsdict : dict
+        a dictionary with germ circuits (as tuples of labels) as keys and lists of 2-tuples as
+        values.  The 2-tuples contain integers indexing `_prepfiducials` and `_measfiducials` respectively,
+        and together this dictionary gives per-germ FPR results for `_germs`.
+
+    _pergerm_fidpairsdict_lite : dict
+        a dictionary with germ circuits (as tuples of labels) as keys and lists of 2-tuples as
+        values.  The 2-tuples contain integers indexing `_prepfiducials` and `_measfiducials` respectively,
+        and together this dictionary gives per-germ FPR results for `_germs_lite`.
+    """
     _germs = None
     _germs_lite = None
     _fiducials = None
@@ -144,28 +197,119 @@ class GSTModelPack(ModelPack):
             return {_Circuit(_transform_circuit_tup(k, index), line_labels=index): val for k, val in prototype.items()}
 
     def germs(self, qubit_labels=None, lite=True):
+        """
+        Returns the list of germ circuits for this model pack.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        lite : bool, optional
+            Whether to return the "lite" set of germs, which amplifies all the errors of
+            the target model to first order.  Setting `lite=False` will result in more
+            (significantly more in 2+ qubit cases) germs which are selected to amplify
+            all the errors of even small deviations from the target model.  Usually this
+            added sensitivity is not worth the additional effort required to obtain data
+            for the increased number of circuits, so the default is `lite=True`.
+
+        Returns
+        -------
+        list of Circuits
+        """
         if lite and self._germs_lite is not None:
             return self._indexed_circuits(self._germs_lite, qubit_labels)
         else:
             return self._indexed_circuits(self._germs, qubit_labels)
 
     def fiducials(self, qubit_labels=None):
+        """
+        Returns the list of fiducial circuits for this model pack.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        list of Circuits
+        """
         return self._indexed_circuits(self._fiducials, qubit_labels)
 
     def prep_fiducials(self, qubit_labels=None):
+        """
+        Returns the list of preparation fiducials for this model pack.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        list of Circuits
+        """
         return self._indexed_circuits(self._prepfiducials, qubit_labels)
 
     def meas_fiducials(self, qubit_labels=None):
+        """
+        Returns the list of measurement fiducials for this model pack.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        list of Circuits
+        """
         return self._indexed_circuits(self._measfiducials, qubit_labels)
 
     def pergerm_fidpair_dict(self, qubit_labels=None):
+        """
+        Returns the per-germ fiducial pair reduction (FPR) dictionary for this model pack.
+
+        Note that these fiducial pairs correspond to the full (`lite=False`) set of germs.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        dict
+        """
         return self._indexed_circuitdict(self._pergerm_fidpairsdict, qubit_labels)
 
     def pergerm_fidpair_dict_lite(self, qubit_labels=None):
+        """
+        Returns the per-germ fiducial pair reduction (FPR) dictionary for this model pack.
+
+        Note that these fiducial pairs correspond to the lite set of germs.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        dict
+        """
         return self._indexed_circuitdict(self._pergerm_fidpairsdict_lite, qubit_labels)
 
     def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
-        """ Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
+        """
+        Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
 
         Parameters
         ----------
@@ -187,12 +331,9 @@ class GSTModelPack(ModelPack):
             you have a need to use the more pessimistic "full" set of germs,
             leave this set to True.
 
-        **kwargs :
-            Additional arguments to pass to :class:`StandardGSTDesign`
-
         Returns
         -------
-        :class:`StandardGSTDesign`
+        StandardGSTDesign
         """
         for k in kwargs.keys():
             if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'sequence_rules',
@@ -232,8 +373,9 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits_list(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
-        """ Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
+    def get_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+        """
+        Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
 
         Parameters
         ----------
@@ -255,12 +397,9 @@ class GSTModelPack(ModelPack):
             you have a need to use the more pessimistic "full" set of germs,
             leave this set to True.
 
-        **kwargs :
-            Additional arguments to pass to :function:`make_lsgst_lists`
-
         Returns
         -------
-        :class:`pygsti.objects.BulkCircuitList`
+         : class:`pygsti.objects.BulkCircuitList`
         """
         if fpr:
             fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
@@ -274,20 +413,47 @@ class GSTModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        structs = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
-                                    self.prep_fiducials(qubit_labels),
-                                    self.meas_fiducials(qubit_labels),
-                                    self.germs(qubit_labels, lite),
-                                    list(_gen_max_length(max_max_length)),
-                                    fidpairs,
-                                    **kwargs)
-        return structs[-1]  # just return final struct (for longest sequences)
+        lists = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
+                                  self.prep_fiducials(qubit_labels),
+                                  self.meas_fiducials(qubit_labels),
+                                  self.germs(qubit_labels, lite),
+                                  list(_gen_max_length(max_max_length)),
+                                  fidpairs,
+                                  **kwargs)
+        return lists[-1]  # just return final list (for longest sequences)
 
 
 class RBModelPack(ModelPack):
+    """
+    Quantities related to performing Randomized Benchmarking (RB) on a given gate-set or model.
+
+    Attributes
+    ----------
+    _clifford_compilation : OrderedDict
+        A dictionary whose keys are all the n-qubit Clifford gates, `"GcX"`, where
+        `X` is an integer, and whose values are circuits (given as tuples of labels)
+        specifying how to compile that Clifford out of the native gates.
+    """
     _clifford_compilation = None
 
     def clifford_compilation(self, qubit_labels=None):
+        """
+        Return the Clifford-compilation dictionary for this model pack.
+
+        This is a dictionary whose keys are all the n-qubit Clifford gates, `"GcX"`, where
+        `X` is an integer, and whose values are circuits (given as tuples of labels)
+        specifying how to compile that Clifford out of the native gates.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            If not None, a tuple of the qubit labels to use in the returned circuits. If None,
+            then the default labels are used, which are often the integers beginning with 0.
+
+        Returns
+        -------
+        dict
+        """
         if qubit_labels is None: qubit_labels = self._sslbls
         assert(len(qubit_labels) == len(self._sslbls)), "Wrong number of labels in: %s" % str(qubit_labels)
         return {clifford_name: _Circuit(_transform_circuit_tup(circuittup_of_native_gates,

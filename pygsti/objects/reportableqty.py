@@ -1,4 +1,6 @@
-""" The ReportableQty class """
+"""
+The ReportableQty class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -15,7 +17,21 @@ from .label import Label as _Label
 
 
 def minimum(qty1, qty2):
-    """ Returns a ReportableQty that is the minimum of `qty1` and `qty2`."""
+    """
+    Returns a ReportableQty that is the minimum of `qty1` and `qty2`.
+
+    Parameters
+    ----------
+    qty1 : ReportableQty
+        First quantity.
+
+    qty2 : ReportableQty
+        Second quantity.
+
+    Returns
+    -------
+    ReportableQty
+    """
     if qty1.value <= qty2.value:
         return qty1
     else:
@@ -23,7 +39,21 @@ def minimum(qty1, qty2):
 
 
 def maximum(qty1, qty2):
-    """ Returns a ReportableQty that is the maximum of `qty1` and `qty2`."""
+    """
+    Returns a ReportableQty that is the maximum of `qty1` and `qty2`.
+
+    Parameters
+    ----------
+    qty1 : ReportableQty
+        First quantity.
+
+    qty2 : ReportableQty
+        Second quantity.
+
+    Returns
+    -------
+    ReportableQty
+    """
     if qty1.value >= qty2.value:
         return qty1
     else:
@@ -32,8 +62,27 @@ def maximum(qty1, qty2):
 
 class ReportableQty(object):
     """
-    Encapsulates a computed quantity and possibly its error bars,
-    primarily for use in reports.
+    A computed quantity and possibly its error bars, primarily for use in reports.
+
+    Parameters
+    ----------
+    value : object
+        The value, usually a float or numpy array.
+
+    errbar : object, optional
+        The (symmetric) error bar on `value`.  If `value` is an
+        array, `errbar` has the same shape.  `None` is used to
+        signify "no error bars".
+
+    non_markovian_ebs : bool, optional
+        Whether these error bars are "non-markovian"-type
+        error bars (it can be useful to keep track of this
+        for formatting).
+
+    Attributes
+    ----------
+    size : int
+        Returns the size of this ReportableQty's value.
     """
 
     def __init__(self, value, errbar=None, non_markovian_ebs=False):
@@ -100,7 +149,13 @@ class ReportableQty(object):
         #return getattr(self.value, attr)
 
     def log(self):
-        """ Returns a ReportableQty that is the logarithm of this one."""
+        """
+        Returns a ReportableQty that is the logarithm of this one.
+
+        Returns
+        -------
+        ReportableQty
+        """
         # log(1 + x) ~ x
         # x + dx
         # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
@@ -115,14 +170,26 @@ class ReportableQty(object):
             return ReportableQty(_np.log(v))
 
     def real(self):
-        """ Returns a ReportableQty that is the real part of this one."""
+        """
+        Returns a ReportableQty that is the real part of this one.
+
+        Returns
+        -------
+        ReportableQty
+        """
         if self.has_eb():
             return ReportableQty(_np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
         else:
             return ReportableQty(_np.real(self.value))
 
     def imag(self):
-        """ Returns a ReportableQty that is the imaginary part of this one."""
+        """
+        Returns a ReportableQty that is the imaginary part of this one.
+
+        Returns
+        -------
+        ReportableQty
+        """
         if self.has_eb():
             return ReportableQty(_np.imag(self.value), _np.imag(self.errbar), self.nonMarkovianEBs)
         else:
@@ -130,10 +197,28 @@ class ReportableQty(object):
 
     def absdiff(self, constant_value, separate_re_im=False):
         """
-        Returns a ReportableQty that is the (element-wise in the vector case)
-        difference between `constant_value` and this one given by:
+        Create a ReportableQty that is the difference between `constant_value` and this one.
+
+        The returned quantity's value is given by (element-wise in the vector case):
 
         `abs(self - constant_value)`.
+
+        Parameters
+        ----------
+        constant_value : float or numpy.ndarray
+            The constant value to use.
+
+        separate_re_im : bool, optional
+            When `True`, two separate real- and imaginary-part
+            :class:`ReportableQty` objects are returned (applicable
+            to complex-valued quantities).
+
+        Returns
+        -------
+        ReportableQty or tuple
+            The output `ReportableQty`(s).  If `separate_re_im=True` then
+            a 2-tuple of (real-part, imaginary-part) quantities is returned.
+            Otherwise a single quantity is returned.
         """
         if separate_re_im:
             re_v = _np.fabs(_np.real(self.value) - _np.real(constant_value))
@@ -153,10 +238,20 @@ class ReportableQty(object):
 
     def infidelity_diff(self, constant_value):
         """
-        Returns a ReportableQty that is the (element-wise in the vector case)
-        difference between `constant_value` and this one given by:
+        Creates a ReportableQty that is the difference between `constant_value` and this one.
+
+        The returned quantity's value is given by (element-wise in the vector case):
 
         `1.0 - Re(conjugate(constant_value) * self )`
+
+        Parameters
+        ----------
+        constant_value : float or numpy.ndarray
+            The constant value to use.
+
+        Returns
+        -------
+        ReportableQty
         """
         # let diff(x) = 1.0 - Re(const.C * x) = 1.0 - (const.re * x.re + const.im * x.im)
         # so d(diff)/dx.re = -const.re, d(diff)/dx.im = -const.im
@@ -172,8 +267,18 @@ class ReportableQty(object):
 
     def mod(self, x):
         """
-        Returns a ReportableQty that holds `this_qty mod x`, that is,
-        the value and error bar (if present are modulus-divided by `x`).
+        Creates a ReportableQty that holds `this_qty mod x`.
+
+        That is, the value and error bar (if present) are modulus-divided by `x`.
+
+        Parameters
+        ----------
+        x : int
+            Value to modulus-divide by.
+
+        Returns
+        -------
+        ReportableQty
         """
         v = self.value % x
         if self.has_eb():
@@ -184,13 +289,19 @@ class ReportableQty(object):
 
     def hermitian_to_real(self):
         """
-        Returns a ReportableQty that holds the real matrix
+        Creates a ReportableQty that holds a real "version" of a Hermitian matrix.
+
+        Specifically, the returned quantity's value is the real matrix
         whose upper/lower triangle contains the real/imaginary parts
         of the corresponding off-diagonal matrix elements of the
         *Hermitian* matrix stored in this ReportableQty.
 
         This is used for display purposes.  If this object doesn't
         contain a Hermitian matrix, `ValueError` is raised.
+
+        Returns
+        -------
+        ReportableQty
         """
         if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
@@ -212,7 +323,13 @@ class ReportableQty(object):
             return ReportableQty(v)
 
     def reshape(self, *args):
-        """ Returns a ReportableQty whose underlying values are reshaped."""
+        """
+        Returns a ReportableQty whose underlying values are reshaped.
+
+        Returns
+        -------
+        ReportableQty
+        """
         if self.has_eb():
             return ReportableQty(self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
         else:
@@ -220,21 +337,41 @@ class ReportableQty(object):
 
     @property
     def size(self):
-        """ Returns the size of this ReportableQty's value. """
+        """
+        Returns the size of this ReportableQty's value.
+
+        Returns
+        -------
+        int
+        """
         return self.value.size
 
     @staticmethod
     def from_val(value, non_markovian_ebs=False):
-        '''
-        Convert Table values into ReportableQtys or leave them be if they are well-formed types
+        """
+        Convert Table values into ReportableQtys or leave them be if they are well-formed types.
+
         Well-formed types include:
-            strings
-            figures
-            ReportableQtys
-        A tuple will be converted to a ReportableQty
-          holding the first field as a value and second field as an error bar
-        Anything else will be converted to a ReportableQty with no error bars
-        '''
+        - strings
+        - figures
+        - :class:`ReportableQty`s
+
+        A tuple will be converted to a :class:`ReportableQty`
+        holding the first field as a value and second field as an error bar.
+        Anything else will be converted to a ReportableQty with no error bars.
+
+        Parameters
+        ----------
+        value : object
+            The value to convert.
+
+        non_markovian_ebs : bool, optional
+            Whether the error bars are of the "non-markovian"-type.
+
+        Returns
+        -------
+        ReportableQty
+        """
         if isinstance(value, ReportableQty):
             return value
         if isinstance(value, _Label):  # distinguish b/c Label is also a *tuple*
@@ -250,12 +387,25 @@ class ReportableQty(object):
     def has_eb(self):
         """
         Return whether this quantity is storing an error bar (bool).
+
+        Returns
+        -------
+        bool
         """
         return self.errbar is not None
 
-    def scale(self, factor):
+    def scale(self, factor):  #INPLACE
         """
         Scale the value and error bar (if present) by `factor`.
+
+        Parameters
+        ----------
+        factor : float
+            The scaling factor.
+
+        Returns
+        -------
+        None
         """
         self.value *= factor
         if self.has_eb(): self.errbar *= factor
@@ -263,18 +413,36 @@ class ReportableQty(object):
     def get_value(self):
         """
         Returns the quantity's value
+
+        Returns
+        -------
+        object
+            Usually a float or numpy array.
         """
         return self.value
 
     def get_err_bar(self):
         """
         Returns the quantity's error bar(s)
+
+        Returns
+        -------
+        object
+            Usually a float or numpy array.
         """
         return self.errbar
 
     def get_value_and_err_bar(self):
         """
         Returns the quantity's value and error bar(s)
+
+        Returns
+        -------
+        value : object
+            This object's value (usually a float or numpy array).
+
+        error_bar : object
+            This object's value (usually a float or numpy array).
         """
         return self.value, self.errbar
 
@@ -285,21 +453,23 @@ class ReportableQty(object):
         Parameters
         ----------
         f : function
-           The `formatter` function which separately converts the stored value
-           and error bar (if present) to string quantities that are then
-           formatted using `ebstring`, `nmebstring` or just `"%s"` (if there's
-           no error bar).  This function must have the signature `f(val, specs)`
-           where `val` is either the value or error bar and `specs` is a
-           dictionary given by the next argument.
+            The `formatter` function which separately converts the stored value
+            and error bar (if present) to string quantities that are then
+            formatted using `ebstring`, `nmebstring` or just `"%s"` (if there's
+            no error bar).  This function must have the signature `f(val, specs)`
+            where `val` is either the value or error bar and `specs` is a
+            dictionary given by the next argument.
 
         specs : dict, optional
             Additional parameters to pass to the formatter function `f`.
 
-        ebstring, nmebstring : str, optional
-            The formatting strings used to format the values returned from `f`
-            for normal and non-Markovian error bars, respectively.  If
-            `nmebstring` is None then `ebstring` is used for both types of
-            error bars.
+        ebstring : str, optional
+            format string that describes how to display the value and error bar
+            after they are rendered as string (`ebstring` should have two `%s`s in it).
+
+        nmebstring : str, optional
+            format string, similar to `ebstring`, for displaying non-Markovian error
+            bars (if None then `ebstring` is used).
 
         Returns
         -------

@@ -27,44 +27,44 @@ class LogLTester(LikelihoodFunctionsBase):
     def test_logl(self):
         L1 = lfn.logl(self.model, self.ds, self.circuits,
                       prob_clip_interval=(-1e6, 1e6),
-                      poisson_picture=True, check=False)
+                      poisson_picture=True)
         # Non-poisson-picture
         L2 = lfn.logl(self.model, self.ds, self.circuits,
                       prob_clip_interval=(-1e6, 1e6),
-                      poisson_picture=False, check=False)
+                      poisson_picture=False)
         # TODO assert correctness
 
     def test_logl_jacobian(self):
         dL1 = lfn.logl_jacobian(self.model, self.ds, self.circuits,
                                 prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                                poisson_picture=True, check=False)
+                                poisson_picture=True)
         dL2 = lfn.logl_jacobian(self.model, self.ds, self.circuits,
                                 prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                                poisson_picture=False, check=False)
+                                poisson_picture=False)
         # test None as mdl list
         dL2b = lfn.logl_jacobian(self.model, self.ds, None,
                                  prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                                 poisson_picture=False, check=False)
+                                 poisson_picture=False)
         # TODO assert correctness
 
     def test_logl_hessian(self):
         # TODO optimize
         hL1 = lfn.logl_hessian(self.model, self.ds, self.circuits,
                                prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                               poisson_picture=True, check=False)
+                               poisson_picture=True)
 
         hL2 = lfn.logl_hessian(self.model, self.ds, self.circuits,
                                prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                               poisson_picture=False, check=False)
+                               poisson_picture=False)
         # test None as mdl list
         hL2b = lfn.logl_hessian(self.model, self.ds, None,
                                 prob_clip_interval=(-1e6, 1e6), radius=1e-4,
-                                poisson_picture=False, check=False)
+                                poisson_picture=False)
         # TODO assert correctness
 
     def test_logl_max(self):
-        maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=True, check=True)
-        maxL2 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=False, check=True)
+        maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=True)
+        maxL2 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=False)
         # TODO assert correctness
 
     def test_cptp_penalty(self):
@@ -81,7 +81,7 @@ class LogLTester(LikelihoodFunctionsBase):
         model = std.target_model()
         L1 = lfn.logl(model, self.ds,
                       prob_clip_interval=(-1e6, 1e6),
-                      poisson_picture=True, check=False)
+                      poisson_picture=True)
         self.assertAlmostEqual(L1, -21393568.52986, 2)
 
         L2 = lfn.logl_max(model, self.ds)

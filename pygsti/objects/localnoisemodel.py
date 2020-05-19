@@ -1,4 +1,6 @@
-""" Defines the LocalNoiseModel class and supporting functions """
+"""
+Defines the LocalNoiseModel class and supporting functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -36,8 +38,124 @@ from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 class LocalNoiseModel(_ImplicitOpModel):
     """
-    A n-qubit model by embedding the *same* gates from `gatedict`
-    as requested and creating a perfect 0-prep and z-basis POVM.
+    A n-qubit implicit model that allows for only local noise.
+
+    This model holds as building blocks individual noisy gates
+    which are trivially embedded into circuit layers as requested.
+
+    Parameters
+    ----------
+    n_qubits : int
+        The total number of qubits.
+
+    gatedict : dict
+        A dictionary (an `OrderedDict` if you care about insertion order) that
+        associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
+        `numpy.ndarray` objects. When the objects may act on fewer than the total
+        number of qubits (determined by their dimension/shape) then they are
+        repeatedly embedded into `n_qubits`-qubit gates as specified by `availability`.
+        While the keys of this dictionary are usually string-type gate *names*,
+        labels that include target qubits, e.g. `("Gx",0)`, may be used to
+        override the default behavior of embedding a reference or a copy of
+        the gate associated with the same label minus the target qubits
+        (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects may be used
+        in place of `LinearOperator` objects to allow the evaluation of labels
+        with arguments.
+
+    prep_layers : None or operator or dict or list
+        The state preparateion operations as n-qubit layer operations.  If
+        `None`, then no state preparations will be present in the created model.
+        If a dict, then the keys are labels and the values are layer operators.
+        If a list, then the elements are layer operators and the labels will be
+        assigned as "rhoX" where X is an integer starting at 0.  If a single
+        layer operation is given, then this is used as the sole prep and is
+        assigned the label "rho0".
+
+    povm_layers : None or operator or dict or list
+        The state preparateion operations as n-qubit layer operations.  If
+        `None`, then no POVMS will be present in the created model.  If a dict,
+        then the keys are labels and the values are layer operators.  If a list,
+        then the elements are layer operators and the labels will be assigned as
+        "MX" where X is an integer starting at 0.  If a single layer operation
+        is given, then this is used as the sole POVM and is assigned the label
+        "Mdefault".
+
+    availability : dict, optional
+        A dictionary whose keys are the same gate names as in
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values:
+
+        - `"all-permutations"` and `"all-combinations"` equate to all possible
+        permutations and combinations of the appropriate number of qubit labels
+        (deterined by the gate's dimension).
+        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+        edges, for 2Q gates of the geometry.
+        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+        memory but slower than `"all-permutations"`.
+
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-edges"`.
+
+    qubit_labels : tuple, optional
+        The circuit-line labels for each of the qubits, which can be integers
+        and/or strings.  Must be of length `n_qubits`.  If None, then the
+        integers from 0 to `n_qubits-1` are used.
+
+    geometry : {"line","ring","grid","torus"} or QubitGraph
+        The type of connectivity among the qubits, specifying a
+        graph used to define neighbor relationships.  Alternatively,
+        a :class:`QubitGraph` object with node labels equal to
+        `qubit_labels` may be passed directly.
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the conversion from a value in `gatedict` to a
+        :class:`LinearOperator` of the type given by `parameterization` fails.
+        Usually you'll want to `"raise"` the error.  In some cases,
+        for example when converting as many gates as you can into
+        `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+    independent_gates : bool, optional
+        Whether gates are allowed independent local noise or not.  If False,
+        then all gates with the same name (e.g. "Gx") will have the *same*
+        (local) noise (e.g. an overrotation by 1 degree), and the
+        `operation_bks['gates']` dictionary contains a single key per gate
+        name.  If True, then gates with the same name acting on different
+        qubits may have different local noise, and so the
+        `operation_bks['gates']` dictionary contains a key for each gate
+         available gate placement.
+
+    ensure_composed_gates : bool, optional
+        If True then the elements of the `operation_bks['gates']` will always
+        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        facilitate modifying the gate operations after the model is created.
+        If False, then the appropriately parameterized gate objects (often
+        dense gates) are used directly.
+
+    global_idle : LinearOperator, optional
+        A global idle operation, which is performed once at the beginning
+        of every circuit layer.  If `None`, no such operation is performed.
+        If a 1-qubit operator is given and `n_qubits > 1` the global idle
+        is the parallel application of this operator on each qubit line.
+        Otherwise the given operator must act on all `n_qubits` qubits.
     """
 
     @classmethod
@@ -48,8 +166,9 @@ class LocalNoiseModel(_ImplicitOpModel):
                                     independent_gates=False, ensure_composed_gates=False,
                                     global_idle=None):
         """
-        Creates a n-qubit model, usually of ideal gates, that is capable of
-        describing "local noise", that is, noise/error that only acts on the
+        Creates a n-qubit model, usually of ideal gates, that is capable of describing "local noise".
+
+        By "local noise" we mean noise/error that only acts on the
         *target qubits* of a given gate.  The created model typically embeds
         the *same* gates on many different target-qubit sets, according to
         their "availability".  It also creates a perfect 0-prep and z-basis POVM.
@@ -157,7 +276,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             is unspecified by `availability` or whose value there is `"all-edges"`).
 
         parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
-                            "H+S clifford terms", "clifford"}
+            "H+S clifford terms", "clifford"}
             The type of parameterizaton to convert each value in `gatedict` to. See
             :method:`ExplicitOpModel.set_all_parameterizations` for more details.
 
@@ -397,14 +516,23 @@ class LocalNoiseModel(_ImplicitOpModel):
             in place of `LinearOperator` objects to allow the evaluation of labels
             with arguments.
 
-        prep_layers, povm_layers : None or operator or dict or list
-            The SPAM operations as n-qubit layer operations.  If `None`, then
-            no preps (or POVMs) are created.  If a dict, then the keys are
-            labels and the values are layer operators.  If a list, then the
-            elements are layer operators and the labels will be assigned as
-            "rhoX" and "MX" where X is an integer starting at 0.  If a single
-            layer operation is given, then this is used as the sole prep or
-            POVM and is assigned the label "rho0" or "Mdefault" respectively.
+        prep_layers : None or operator or dict or list
+            The state preparateion operations as n-qubit layer operations.  If
+            `None`, then no state preparations will be present in the created model.
+            If a dict, then the keys are labels and the values are layer operators.
+            If a list, then the elements are layer operators and the labels will be
+            assigned as "rhoX" where X is an integer starting at 0.  If a single
+            layer operation is given, then this is used as the sole prep and is
+            assigned the label "rho0".
+
+        povm_layers : None or operator or dict or list
+            The state preparateion operations as n-qubit layer operations.  If
+            `None`, then no POVMS will be present in the created model.  If a dict,
+            then the keys are labels and the values are layer operators.  If a list,
+            then the elements are layer operators and the labels will be assigned as
+            "MX" where X is an integer starting at 0.  If a single layer operation
+            is given, then this is used as the sole POVM and is assigned the label
+            "Mdefault".
 
         availability : dict, optional
             A dictionary whose keys are the same gate names as in
@@ -429,6 +557,17 @@ class LocalNoiseModel(_ImplicitOpModel):
 
             If a gate name (a key of `gatedict`) is not present in `availability`,
             the default is `"all-edges"`.
+
+        qubit_labels : tuple, optional
+            The circuit-line labels for each of the qubits, which can be integers
+            and/or strings.  Must be of length `n_qubits`.  If None, then the
+            integers from 0 to `n_qubits-1` are used.
+
+        geometry : {"line","ring","grid","torus"} or QubitGraph
+            The type of connectivity among the qubits, specifying a
+            graph used to define neighbor relationships.  Alternatively,
+            a :class:`QubitGraph` object with node labels equal to
+            `qubit_labels` may be passed directly.
 
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.
@@ -719,8 +858,9 @@ class LocalNoiseModel(_ImplicitOpModel):
 
 class SimpleCompLayerLizard(_ImplicitLayerLizard):
     """
-    The layer lizard class for a :class:`LocalNoiseModel`, which
-    creates layers by composing perfect target gates, and local errors.
+    The layer lizard class for a :class:`LocalNoiseModel`.
+
+    This class creates layers by composing perfect target gates, and local errors.
 
     This is a simple process because gates in a layer will have disjoint sets
     of target qubits, and thus the local errors (and, as always, the gate
@@ -729,9 +869,33 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
     """
 
     def get_prep(self, layerlbl):
+        """
+        Return the (simplified) preparation layer operator given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            The preparation layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
     def get_effect(self, layerlbl):
+        """
+        Return the (simplified) POVM effect layer operator given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            The effect layer label
+
+        Returns
+        -------
+        LinearOperator
+        """
         if layerlbl in self.effect_blks['layers']:
             return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
         else:
@@ -751,6 +915,18 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
     def get_operation(self, layerlbl):
+        """
+        Return the (simplified) layer operation given by `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            The circuit (operation-) layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
@@ -772,7 +948,23 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
             self.model._init_virtual_obj(ret)  # so ret's gpindices get set
             return ret
 
+    #PRIVATE
     def get_layer_component_operation(self, complbl, dense):
+        """
+        Retrieves the operation corresponding to one component of a layer operation.
+
+        Parameters
+        ----------
+        complbl : Label
+            A component label of a larger layer label.
+
+        dense : bool
+            Whether to create dense operators or not.
+
+        Returns
+        -------
+        LinearOperator
+        """
         if isinstance(complbl, _CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
         elif complbl in self.simpleop_blks['layers']:

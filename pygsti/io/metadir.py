@@ -1,4 +1,6 @@
-""" Serialization routines to/from a meta.json based directory """
+"""
+Serialization routines to/from a meta.json based directory
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,6 +23,7 @@ QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
 
 
 #Class-name utils...
+#PRIVATE
 def full_class_name(x):
     """
     Returns the <module>.<classname> for `x`.
@@ -28,6 +31,7 @@ def full_class_name(x):
     Parameters
     ----------
     x : class
+        The class whose full name you want.
 
     Returns
     -------
@@ -36,6 +40,7 @@ def full_class_name(x):
     return x.__class__.__module__ + '.' + x.__class__.__name__
 
 
+#PRIVATE
 def class_for_name(module_and_class_name):
     """
     Return the class object given an name.
@@ -118,7 +123,6 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     loaded_qtys : dict
         A dictionary of the quantities in 'meta.json' plus any loaded
         from the auxiliary files.
-
     auxfile_types : dict
         Only returned as a separate value when `separate_auxfiletypes=True`.
         A dict describing how members of `loaded_qtys` that weren't loaded
@@ -213,8 +217,12 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
 
 def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None):
     """
-    Write a dictionary of quantities to a directory, using a 'meta.json' file
-    and "auxiliary" files in formats given by `auxfile_types` (which itself is
+    Write a dictionary of quantities to a directory.
+
+    Write the dictionary by placing everything in a 'meta.json' file except for
+    special key/value pairs ("special" usually because they lend themselves to
+    an non-JSON format or they simply cannot be rendered as JSON) which are placed
+    in "auxiliary" files formatted according to `auxfile_types` (which itself is
     saved in meta.json).
 
     Parameters
@@ -312,6 +320,7 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
         _json.dump(meta, f)
 
 
+#PRIVATE
 def cls_from_meta_json(dirname):
     """
     Get the object-type corresponding to the 'type' field in `dirname`/meta.json.
@@ -330,10 +339,10 @@ def cls_from_meta_json(dirname):
     return class_for_name(meta['type'])  # class of object to create
 
 
+#PRIVATE?
 def obj_to_meta_json(obj, dirname):
     """
-    Create a meta.json file within `dirname` that contains (only) the type
-    of `obj` in its 'type' field.
+    Create a meta.json file within `dirname` that contains (only) the type of `obj` in its 'type' field.
 
     This is used to save an object that contains essentially no other data
     to a directory, in lieu of :function:`write_obj_to_meta_based_dir`.
@@ -357,8 +366,11 @@ def obj_to_meta_json(obj, dirname):
 
 def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=()):
     """
-    Write the contents of `obj` to `dirname` using a 'meta.json' file and
-    an auxfile-types dictionary.
+    Write the contents of `obj` to `dirname` using a 'meta.json' file and an auxfile-types dictionary.
+
+    This is similar to :function:`write_meta_based_dir`, except it takes an object (`obj`)
+    whose `.__dict__`, minus omitted attributes, is used as the dictionary to write and whose
+    auxfile-types comes from another object attribute..
 
     Parameters
     ----------

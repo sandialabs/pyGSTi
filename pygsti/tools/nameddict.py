@@ -1,4 +1,6 @@
-""" The NamedDict class """
+"""
+The NamedDict class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,6 +15,36 @@ from . import typeddict as _typeddict
 
 
 class NamedDict(dict):
+    """
+    A dictionary that also holds category names and types.
+
+    This `dict`-derived class holds a catgory name applicable to
+    its keys, and key and value type names indicating the types
+    of its keys and values.
+
+    The main purpose of this class is to utilize its :method:`as_dataframe` method.
+
+    Parameters
+    ----------
+    keyname : str, optional
+        A category name for the keys of this dict.  For example, if the
+        dict contained the keys `"dog"` and `"cat"`, this might be `"animals"`.
+        This becomes a column header if this dict is converted to a data frame.
+
+    keytype : {"float", "int", "categor", None}, optional
+        The key-type, in correspondence with different pandas series types.
+
+    valname : str, optional
+        A category name for the keys of this dict. This becomse a column header
+        if this dict is converted to a data frame.
+        
+    valtype : {"float", "int", "categor", None}, optional
+        The value-type, in correspondence with different pandas series types.
+
+    items : list or dict, optional
+        Initial items, used in serialization.
+    """
+
     @classmethod
     def create_nested(cls, key_val_type_list, inner):
         """
@@ -48,6 +80,13 @@ class NamedDict(dict):
         return (NamedDict, (self.keyname, self.keytype, self.valname, self.valtype, list(self.items())), None)
 
     def as_dataframe(self):
+        """
+        Render this dict as a pandas data frame.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         columns = {}; seriestypes = {}
         self._add_to_columns(columns, seriestypes, {})
         return _typeddict._columndict_to_dataframe(columns, seriestypes)

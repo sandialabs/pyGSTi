@@ -1,4 +1,6 @@
-"""Functions for the construction of new models."""
+"""
+Functions for the construction of new models.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -33,6 +35,7 @@ from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..tools.legacytools import deprecated_fn as _deprecated_fn
 
 
 #############################################
@@ -101,12 +104,11 @@ def basis_build_vector(vec_expr, basis):
     return vec.reshape(-1, 1)
 
 
+@_deprecated_fn('basis_build_vector(...)')
 def build_vector(state_space_dims, state_space_labels, vec_expr, basis="gm"):
     """
     DEPRECATED: use :func:`basis_build_vector` instead.
     """
-    _warnings.warn(("This function is deprecated and will be removed in the"
-                    " future.  Please use `basis_build_vector` instead."))
     return basis_build_vector(vec_expr, _Basis.cast(basis, state_space_dims))
 
 
@@ -420,12 +422,11 @@ def basis_build_operation(state_space_labels, op_expr, basis="gm", parameterizat
                      % parameterization)
 
 
+@_deprecated_fn('basis_build_operation(...)')
 def build_operation(state_space_dims, state_space_labels, op_expr, basis="gm", parameterization="full"):
     """
     DEPRECATED: use :func:`basis_build_operation` instead.
     """
-    _warnings.warn(("This function is deprecated and will be removed in the"
-                    " future.  Please use `basis_build_operation` instead."))
     sslbls = _ld.StateSpaceLabels(state_space_labels, state_space_dims)
     return basis_build_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
                                  parameterization)
@@ -455,10 +456,10 @@ def basis_build_explicit_model(state_space_labels, basis,
         and Qutrit (qt) (or a custom basis object).
 
     op_labels : list of strings
-       A list of labels for each created gate in the final model.  To
-        conform with text file parsing conventions these names should begin
-        with a capital G and can be followed by any number of lowercase
-        characters, numbers, or the underscore character.
+        A list of labels for each created gate in the final model.  To
+         conform with text file parsing conventions these names should begin
+         with a capital G and can be followed by any number of lowercase
+         characters, numbers, or the underscore character.
 
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
@@ -590,10 +591,10 @@ def build_explicit_model(state_space_labels,
         product between qubit and single level systems.
 
     op_labels : list of strings
-       A list of labels for each created gate in the final model.  To
-        conform with text file parsing conventions these names should begin
-        with a capital G and can be followed by any number of lowercase
-        characters, numbers, or the underscore character.
+        A list of labels for each created gate in the final model.  To
+         conform with text file parsing conventions these names should begin
+         with a capital G and can be followed by any number of lowercase
+         characters, numbers, or the underscore character.
 
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
@@ -678,7 +679,9 @@ def build_explicit_model(state_space_labels,
 
 def build_explicit_alias_model(mdl_primitives, alias_dict):
     """
-    Creates a new model by composing the gates of an existing `Model`,
+    Creates a model by applying aliases to an existing model.
+
+    The new model is created by composing the gates of an existing `Model`,
     `mdl_primitives`, according to a dictionary of `Circuit`s, `alias_dict`.
     The keys of `alias_dict` are the operation labels of the returned `Model`.
     SPAM vectors are unaltered, and simply copied from `mdl_primitives`.
@@ -808,7 +811,7 @@ def build_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cus
         is unspecified by `availability` or whose value there is `"all-edges"`).
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
-                        "H+S clifford terms", "clifford"}
+        "H+S clifford terms", "clifford"}
         The type of parameterizaton to use for each gate value before it is
         embedded. See :method:`Model.set_all_parameterizations` for more
         details.
@@ -859,7 +862,6 @@ def build_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cus
         is the parallel application of this operator on each qubit line.
         Otherwise the given operator must act on all `n_qubits` qubits.
 
-
     Returns
     -------
     Model
@@ -880,8 +882,10 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
                                evotype="auto", sim_type="auto", on_construction_error='raise',
                                independent_gates=False, ensure_composed_gates=False):
     """
-    Create a n-qubit "crosstalk-free" model: one whose operations only act
-    nontrivially on their target qubits.
+    Create a n-qubit "crosstalk-free" model.
+
+    By virtue of being crosstalk-free, this model's operations only
+    act nontrivially on their target qubits.
 
     Parameters
     ----------
@@ -1071,11 +1075,11 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
             assert(len(errs) + 1 == gate_mx.shape[0]), \
                 "Invalid number of Pauli stochastic rates: got %d but expected %d" % (len(errs), gate_mx.shape[0] - 1)
             err = _op.StochasticNoiseOp(len(errs) + 1, "pp", evotype, initial_rates=errs)
-            gate = _op.ComposedOp([_op.StaticDenseOp(gateMx, evotype), err])
+            gate = _op.ComposedOp([_op.StaticDenseOp(gate_mx, evotype), err])
 
         elif isinstance(errs, float):
             #Make a depolarization operator:
-            gate = _op.LindbladOp.from_operation_matrix(gate_mx, ham_basis=None, nonham_basis="pp",
+            gate = _op.LindbladOp.from_operation_matrix(gate_mx, gate_mx, ham_basis=None, nonham_basis="pp",
                                                         param_mode="depol", nonham_mode="diagonal",
                                                         truncate=True, mx_basis="pp", evotype=evotype)
             perPauliRate = errs / len(gate.errorgen.other_basis.labels)

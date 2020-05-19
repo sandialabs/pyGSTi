@@ -1,4 +1,6 @@
-""" Plotly-to-Matplotlib conversion functions. """
+"""
+Plotly-to-Matplotlib conversion functions.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,7 +27,17 @@ except ImportError:
 
 
 class MplLinLogNorm(_matplotlib.colors.Normalize):
-    """ Matplotlib version of lin-log colormap normalization """
+    """
+    Matplotlib version of lin-log colormap normalization
+
+    Parameters
+    ----------
+    linlog_colormap : LinlogColormap
+        pyGSTi linear-logarithmic color map to base this colormap off of.
+
+    clip : bool, optional
+        Whether clipping should be performed. See :class:`matplotlib.colors.Normalize`.
+    """
 
     def __init__(self, linlog_colormap, clip=False):
         cm = linlog_colormap
@@ -34,7 +46,18 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
         self.cm = cm
 
     def inverse(self, value):
-        """ Inverse of __call__ as per matplotlib spec. """
+        """
+        Inverse of __call__ as per matplotlib spec.
+
+        Parameters
+        ----------
+        value : float or numpy.ndarray
+            Color-value to invert back.
+
+        Returns
+        -------
+        float or numpy.ndarray
+        """
         norm_trans = super(MplLinLogNorm, self).__call__(self.trans)
         deltav = self.vmax - self.vmin
         return_value = _np.where(_np.greater(0.5, value),
@@ -50,14 +73,30 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
 
 
 def mpl_make_linear_norm(vmin, vmax, clip=False):
-    """ Create a linear matplotlib normalization """
+    """
+    Create a linear matplotlib normalization
+
+    Parameters
+    ----------
+    vmin : float
+        Minimum mapped color value.
+
+    vmax : float
+        Maximum mapped color value.
+
+    clip : bool, optional
+        Whether clipping should be performed. See :class:`matplotlib.colors.Normalize`.
+
+    Returns
+    -------
+    matplotlib.colors.Normalize
+    """
     return _matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=clip)
 
 
 def mpl_make_linear_cmap(rgb_colors, name=None):
     """
-    Make a color map that simply linearly interpolates between a set of
-    colors in RGB space.
+    Make a color map that simply linearly interpolates between a set of colors in RGB space.
 
     Parameters
     ----------
@@ -94,8 +133,10 @@ def mpl_besttxtcolor(x, cmap, norm):
     ----------
     x : float
         Value of the cell in question
+
     cmap : matplotlib colormap
         Colormap assigning colors to the cells
+
     norm : matplotlib normalizer
         Function to map cell values to the interval [0, 1] for use by a
         colormap
@@ -112,7 +153,21 @@ def mpl_besttxtcolor(x, cmap, norm):
 
 
 def mpl_process_lbl(lbl, math=False):
-    """ Process a (plotly-compatible) text label `lbl` to matplotlb text."""
+    """
+    Process a (plotly-compatible) text label `lbl` to matplotlb text.
+
+    Parameters
+    ----------
+    lbl : str
+        A text label to process.
+
+    math : bool, optional
+        Whether math-formatting (latex) should be used.
+
+    Returns
+    -------
+    str
+    """
     if not isinstance(lbl, str):
         lbl = str(lbl)  # just force as a string
     math = math or ('<sup>' in lbl) or ('<sub>' in lbl) or \
@@ -138,12 +193,35 @@ def mpl_process_lbl(lbl, math=False):
 
 
 def mpl_process_lbls(lbl_list):
-    """ Process a list of plotly labels into matplotlib ones"""
+    """
+    Process a list of plotly labels into matplotlib ones
+
+    Parameters
+    ----------
+    lbl_list : list
+        A list of string-valued labels to process.
+
+    Returns
+    -------
+    list
+        the processed labels (strings).
+    """
     return [mpl_process_lbl(lbl) for lbl in lbl_list]
 
 
 def mpl_color(plotly_color):
-    """ Convert a plotly color name to a matplotlib compatible one. """
+    """
+    Convert a plotly color name to a matplotlib compatible one.
+
+    Parameters
+    ----------
+    plotly_color : str
+        A plotly color value, e.g. `"#FF0023"` or `"rgb(0,255,128)"`.
+
+    Returns
+    -------
+    str
+    """
     plotly_color = plotly_color.strip()  # remove any whitespace
     if plotly_color.startswith('#'):
         return plotly_color  # matplotlib understands "#FF0013"
@@ -524,8 +602,22 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 # automatically convert.
 def special_keyplot(pygsti_fig, save_to, fontsize):
     """
-    Create a plot showing the layout of a single sub-block of a goodness-of-fit
-    box plot.
+    Create a plot showing the layout of a single sub-block of a goodness-of-fit box plot.
+
+    Parameters
+    ----------
+    pygsti_fig : ReportFigure
+        The pyGSTi figure to process.
+
+    save_to : str
+        Filename to save to.
+
+    fontsize : int
+        Fone size to use
+
+    Returns
+    -------
+    matplotlib.Figure
     """
 
     #Hardcoded

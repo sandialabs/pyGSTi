@@ -1,4 +1,6 @@
-""" Defines the ReportTable class """
+"""
+Defines the ReportTable class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -14,10 +16,27 @@ from .row import Row
 
 
 class ReportFigure(object):
-    '''
-    A report figure, encapsulating a plotly figure and related metadata that
-    can be rendered in a variety of formats.
-    '''
+    """
+    A  plotly figure and related metadata that can be rendered in a variety of formats.
+
+    For use in pyGSTi reports.
+
+    Parameters
+    ----------
+    plotlyfig : plotly.Figure
+        The plotly figure to encapsulate
+
+    colormap : ColorMap, optional
+        A pygsti color map object used for this figure.
+
+    python_value : object, optional
+        A python object to be used as the Python-version of
+        this figure (usually the data being plotted in some
+        convenient format).
+
+    kwargs : dict
+        Additional meta-data relevant to this figure
+    """
 
     def __init__(self, plotlyfig, colormap=None, python_value=None, **kwargs):
         '''

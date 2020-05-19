@@ -1,4 +1,6 @@
-""" Internal model of a report during generation """
+"""
+Internal model of a report during generation
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,12 +27,41 @@ from .notebook import Notebook as _Notebook
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes
 class Report:
-    """ The internal model of a report.
+    """
+    The internal model of a report.
 
     This class should never be instantiated directly. Instead, users
     should use the appropriate factory method in
     `pygsti.report.factory`.
 
+    Parameters
+    ----------
+    templates : <TODO typ>
+        <TODO description>
+
+    results : <TODO typ>
+        <TODO description>
+
+    sections : <TODO typ>
+        <TODO description>
+
+    flags : <TODO typ>
+        <TODO description>
+
+    global_qtys : <TODO typ>
+        <TODO description>
+
+    report_params : <TODO typ>
+        <TODO description>
+
+    build_defaults : <TODO typ>, optional
+        <TODO description>
+
+    pdf_available : <TODO typ>, optional
+        <TODO description>
+
+    workspace : <TODO typ>, optional
+        <TODO description>
     """
     def __init__(self, templates, results, sections, flags,
                  global_qtys, report_params, build_defaults=None,
@@ -63,7 +94,8 @@ class Report:
                    connected=False, build_options=None, brevity=0,
                    precision=None, resizable=True, autosize='initial',
                    single_file=False, verbosity=0):
-        """ Write this report to the disk as a collection of HTML documents.
+        """
+        Write this report to the disk as a collection of HTML documents.
 
         Parameters
         ----------
@@ -88,8 +120,8 @@ class Report:
             them.
 
         build_options : dict
-           Dict of options for building plots. Expected values are
-           defined during construction of this report object.
+            Dict of options for building plots. Expected values are
+            defined during construction of this report object.
 
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
@@ -127,6 +159,10 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
+
+        Returns
+        -------
+        <TODO typ>
         """
 
         build_options = build_options or {}
@@ -165,7 +201,8 @@ class Report:
             )
 
     def write_notebook(self, path, auto_open=False, connected=False, verbosity=0):
-        """ Write this report to the disk as an IPython notebook
+        """
+        Write this report to the disk as an IPython notebook
 
         A notebook report allows the user to interact more flexibly with the data
         underlying the figures, and to easily generate customized variants on the
@@ -178,6 +215,7 @@ class Report:
         path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
+
         auto_open : bool, optional
             If True, automatically open the report in a web browser after it
             has been generated.
@@ -188,7 +226,11 @@ class Report:
             to web resources (e.g. CDN libraries) instead of embedding them.
 
         verbosity : int, optional
-           How much detail to send to stdout.
+            How much detail to send to stdout.
+
+        Returns
+        -------
+        <TODO typ>
         """
 
         # TODO this only applies to standard reports; rewrite generally
@@ -329,7 +371,8 @@ class Report:
                   build_options=None,
                   brevity=0, precision=None, auto_open=False,
                   comm=None, verbosity=0):
-        """ Write this report to the disk as a PDF document.
+        """
+        Write this report to the disk as a PDF document.
 
         Parameters
         ----------
@@ -345,8 +388,8 @@ class Report:
             List of flags to pass when calling `latex_cmd`.
 
         build_options : dict
-           Dict of options for building plots. Expected values are
-           defined during construction of this report object.
+            Dict of options for building plots. Expected values are
+            defined during construction of this report object.
 
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
@@ -375,6 +418,10 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
+
+        Returns
+        -------
+        <TODO typ>
         """
 
         if not self._pdf_available:

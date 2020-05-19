@@ -1,4 +1,6 @@
-""" Classes corresponding to tables within a Workspace context."""
+"""
+Classes corresponding to tables within a Workspace context.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -30,7 +32,14 @@ from . import plothelpers as _ph
 
 
 class BlankTable(WorkspaceTable):
-    """A completely blank placeholder table."""
+    """
+    A completely blank placeholder table.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+    """
 
     def __init__(self, ws):
         """A completely blank placeholder table."""
@@ -43,7 +52,35 @@ class BlankTable(WorkspaceTable):
 
 
 class SpamTable(WorkspaceTable):
-    """ A table of one or more model's SPAM elements. """
+    """
+    A table of one or more model's SPAM elements.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    models : Model or list of Models
+        The Model(s) whose SPAM elements should be displayed. If
+        multiple Models are given, they should have the same SPAM
+        elements..
+
+    titles : list of strs, optional
+        Titles correponding to elements of `models`, e.g. `"Target"`.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the SPAM matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored
+        boxes (space-conserving and better for large matrices).
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    include_hs_vec : boolean, optional
+        Whether or not to include Hilbert-Schmidt
+        vector representation columns in the table.
+    """
 
     def __init__(self, ws, models, titles=None,
                  display_as="boxes", confidence_region_info=None,
@@ -202,7 +239,25 @@ class SpamTable(WorkspaceTable):
 
 
 class SpamParametersTable(WorkspaceTable):
-    """ A table for "SPAM parameters" (dot products of SPAM vectors)"""
+    """
+    A table for "SPAM parameters" (dot products of SPAM vectors)
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    models : Model or list of Models
+        The Model(s) whose SPAM parameters should be displayed. If
+        multiple Models are given, they should have the same gates.
+
+    titles : list of strs, optional
+        Titles correponding to elements of `models`, e.g. `"Target"`.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, models, titles=None, confidence_region_info=None):
         """
@@ -273,7 +328,32 @@ class SpamParametersTable(WorkspaceTable):
 
 
 class GatesTable(WorkspaceTable):
-    """ Create a table showing a model's raw gates. """
+    """
+    Create a table showing a model's raw gates.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    models : Model or list of Models
+        The Model(s) whose gates should be displayed.  If multiple
+        Models are given, they should have the same operation labels.
+
+    titles : list of strings, optional
+        A list of titles corresponding to the models, used to
+        prefix the column(s) for that model. E.g. `"Target"`.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the operation matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored
+        boxes (space-conserving and better for large matrices).
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals for the *final*
+        element of `models`.
+    """
 
     def __init__(self, ws, models, titles=None, display_as="boxes",
                  confidence_region_info=None):
@@ -409,7 +489,32 @@ class GatesTable(WorkspaceTable):
 
 
 class ChoiTable(WorkspaceTable):
-    """A table of the Choi representations of a Model's gates"""
+    """
+    A table of the Choi representations of a Model's gates
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    models : Model or list of Models
+        The Model(s) whose Choi info should be displayed.  If multiple
+        Models are given, they should have the same operation labels.
+
+    titles : list of strings, optional
+        A list of titles corresponding to the models, used to
+        prefix the column(s) for that model. E.g. `"Target"`.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display eigenvalue error intervals for the
+        *final* Model in `models`.
+
+    display : tuple/list of {"matrices","eigenvalues","barplot","boxplot"}
+        Which columns to display: the Choi matrices (as numerical grids),
+        the Choi matrix eigenvalues (as a numerical list), the eigenvalues
+        on a bar plot, and/or the matrix as a plot of colored boxes.
+    """
 
     def __init__(self, ws, models, titles=None,
                  confidence_region_info=None,
@@ -437,7 +542,6 @@ class ChoiTable(WorkspaceTable):
             Which columns to display: the Choi matrices (as numerical grids),
             the Choi matrix eigenvalues (as a numerical list), the eigenvalues
             on a bar plot, and/or the matrix as a plot of colored boxes.
-
 
         Returns
         -------
@@ -541,7 +645,30 @@ class ChoiTable(WorkspaceTable):
 
 
 class GaugeRobustModelTable(WorkspaceTable):
-    """ Create a table showing a model in a gauge-robust representation. """
+    """
+    Create a table showing a model in a gauge-robust representation.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The Model to display.
+
+    target_model : Model
+        The (usually ideal) reference model to compute gauge-invariant
+        quantities with respect to.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the operation matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored
+        boxes (space-conserving and better for large matrices).
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, display_as="boxes",
                  confidence_region_info=None):
@@ -678,7 +805,42 @@ class GaugeRobustModelTable(WorkspaceTable):
 
 
 class GaugeRobustMetricTable(WorkspaceTable):
-    """ Create a table showing a standard metric in a gauge-robust way. """
+    """
+    Create a table showing a standard metric in a gauge-robust way.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The Model to display.
+
+    target_model : Model
+        The (usually ideal) reference model to compute gauge-invariant
+        quantities with respect to.
+
+    metric : str
+        The abbreviation for the metric to use.  Allowed values are:
+
+        - "inf" :     entanglement infidelity
+        - "agi" :     average gate infidelity
+        - "trace" :   1/2 trace distance
+        - "diamond" : 1/2 diamond norm distance
+        - "nuinf" :   non-unitary entanglement infidelity
+        - "nuagi" :   non-unitary entanglement infidelity
+        - "evinf" :     eigenvalue entanglement infidelity
+        - "evagi" :     eigenvalue average gate infidelity
+        - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+        - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+        - "evdiamond" : eigenvalue 1/2 diamond norm distance
+        - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+        - "frob" :    frobenius distance
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, metric,
                  confidence_region_info=None):
@@ -830,7 +992,29 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
 
 class ModelVsTargetTable(WorkspaceTable):
-    """ Table comparing a Model (as a whole) to a target """
+    """
+    Table comparing a Model (as a whole) to a target
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare with `target_model`.
+
+    target_model : Model
+        The target model to compare with.
+
+    clifford_compilation : dict
+        A dictionary of operation sequences, one for each Clifford operation
+        in the Clifford group relevant to the model Hilbert space.  If
+        None, then rows requiring a clifford compilation are omitted.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, clifford_compilation, confidence_region_info=None):
         """
@@ -892,7 +1076,52 @@ class ModelVsTargetTable(WorkspaceTable):
 
 
 class GatesVsTargetTable(WorkspaceTable):
-    """ Table comparing a Model's gates to those of a target model """
+    """
+    Table comparing a Model's gates to those of a target model
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare to `target_model`.
+
+    target_model : model
+        The model to compare with.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    display : tuple, optional
+        A tuple of one or more of the allowed options (see below) which
+        specify which columns are displayed in the table.
+
+        - "inf" :     entanglement infidelity
+        - "agi" :     average gate infidelity
+        - "trace" :   1/2 trace distance
+        - "diamond" : 1/2 diamond norm distance
+        - "nuinf" :   non-unitary entanglement infidelity
+        - "nuagi" :   non-unitary entanglement infidelity
+        - "evinf" :     eigenvalue entanglement infidelity
+        - "evagi" :     eigenvalue average gate infidelity
+        - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+        - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+        - "evdiamond" : eigenvalue 1/2 diamond norm distance
+        - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+        - "frob" :    frobenius distance
+        - "unmodeled" : unmodeled "wildcard" budget
+
+    virtual_ops : list, optional
+        If not None, a list of `Circuit` objects specifying additional "gates"
+        (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+        automatically discarded so they are not displayed twice.
+
+    wildcard: PrimitiveOpsWildcardBudget
+        A wildcard budget with a `get_op_budget` method that is used to
+        fill in the "unmodeled" error column when it is requested.
+    """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None,
                  display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi'),
@@ -1044,7 +1273,24 @@ class GatesVsTargetTable(WorkspaceTable):
 
 
 class SpamVsTargetTable(WorkspaceTable):
-    """ Table comparing a Model's SPAM vectors to those of a target """
+    """
+    Table comparing a Model's SPAM vectors to those of a target
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare to `target_model`.
+
+    target_model : model
+        The model to compare with.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None):
         """
@@ -1112,8 +1358,43 @@ class SpamVsTargetTable(WorkspaceTable):
 
 
 class ErrgenTable(WorkspaceTable):
-    """ Table displaying the error generators of a Model's gates as well
-        as their projections onto spaces of standard generators """
+    """
+    Table displaying the error generators of a Model's gates and their projections.
+
+    Projections are given onto spaces of standard generators.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare to `target_model`.
+
+    target_model : model
+        The model to compare with.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    display : tuple of {"errgen","H","S","A"}
+        Specifes which columns to include: the error generator itself
+        and the projections of the generator onto Hamiltoian-type error
+        (generators), Stochastic-type errors, and Affine-type errors.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the requested matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored boxes
+        (space-conserving and better for large matrices).
+
+    gen_type : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to compute.  Allowed values are:
+
+        - "logG-logT" : errgen = log(gate) - log(target_op)
+        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+        - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+    """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None,
                  display=("errgen", "H", "S", "A"), display_as="boxes",
@@ -1306,9 +1587,34 @@ class ErrgenTable(WorkspaceTable):
 
 
 class GaugeRobustErrgenTable(WorkspaceTable):
-    """ Table displaying the first-order gauge invariant ("gauge robust")
-        linear combinations of standard error generator coefficients for
-        the gates in a model.
+    """
+    Table of gauge-robust error generators.
+
+    A table displaying the first-order gauge invariant ("gauge robust")
+    linear combinations of standard error generator coefficients for
+    the gates in a model.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare to `target_model`.
+
+    target_model : model
+        The model to compare with.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    gen_type : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to compute.  Allowed values are:
+
+        - "logG-logT" : errgen = log(gate) - log(target_op)
+        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+        - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
     """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None,
@@ -1380,8 +1686,9 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
 class NQubitErrgenTable(WorkspaceTable):
     """
-    Table displaying the error rates (coefficients of error generators) of a
-    Model's gates.  The gates are assumed to have a particular structure.
+    Table displaying the error rates (coefficients of error generators) of a Model's gates.
+
+    The gates are assumed to have a particular structure.
 
     Specifically, gates must be :class:`LindbladOp` or
     :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp` and/or
@@ -1390,6 +1697,27 @@ class NQubitErrgenTable(WorkspaceTable):
     are read directly from the gate objects rather than being computed by
     projecting dense gate representations onto a "basis" of fixed error
     generators (e.g. H+S+A generators).
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to analyze.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    display : tuple of {"H","S","A"}
+        Specifes which columns to include: Hamiltoian-type,
+        Pauli-Stochastic-type, and Affine-type rates, respectively.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the requested matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored boxes
+        (space-conserving and better for large matrices).
     """
 
     def __init__(self, ws, model, confidence_region_info=None,
@@ -1603,7 +1931,24 @@ class NQubitErrgenTable(WorkspaceTable):
 
 
 class OldRotationAxisVsTargetTable(WorkspaceTable):
-    """ Old 1-qubit-only gate rotation axis table """
+    """
+    Old 1-qubit-only gate rotation axis table
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model to compare to `target_model`. Must be single qubit.
+
+    target_model : model
+        The model to compare with.  Must be single qubit.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None):
         """
@@ -1650,7 +1995,25 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
 
 
 class GateDecompTable(WorkspaceTable):
-    """ Table of angle & axis decompositions of a Model's gates """
+    """
+    Table of angle & axis decompositions of a Model's gates
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The estimated model.
+
+    target_model : Model
+        The target model, used to help disambiguate the matrix
+        logarithms that are used in the decomposition.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None):
         """
@@ -1728,7 +2091,21 @@ class GateDecompTable(WorkspaceTable):
 
 
 class OldGateDecompTable(WorkspaceTable):
-    """ 1-qubit-only table of gate decompositions """
+    """
+    1-qubit-only table of gate decompositions
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        A single-qubit `Model`.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, model, confidence_region_info=None):
         """
@@ -1784,7 +2161,26 @@ class OldGateDecompTable(WorkspaceTable):
 
 
 class OldRotationAxisTable(WorkspaceTable):
-    """ 1-qubit-only table of gate rotation angles and axes """
+    """
+    1-qubit-only table of gate rotation angles and axes
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        A single-qubit `Model`.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    show_axis_angle_err_bars : bool, optional
+        Whether or not table should include error bars on the angles
+        between rotation axes (doing so makes the table take up more
+        space).
+    """
 
     def __init__(self, ws, model, confidence_region_info=None, show_axis_angle_err_bars=True):
         """
@@ -1871,8 +2267,50 @@ class OldRotationAxisTable(WorkspaceTable):
 
 
 class GateEigenvalueTable(WorkspaceTable):
-    """ Table displaying, in a variety of ways, the eigenvalues of a
-        Model's gates """
+    """
+    Table displaying, in a variety of ways, the eigenvalues of a Model's gates.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The Model
+
+    target_model : Model, optional
+        The target model.  If given, the target's eigenvalue will
+        be plotted alongside `model`'s gate eigenvalue, the
+        "relative eigenvalues".
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    display : tuple
+        A tuple of one or more of the allowed options (see below) which
+        specify which columns are displayed in the table.  If
+        `target_model` is None, then `"target"`, `"rel"`, `"log-rel"`
+        `"relpolar"`, `"gidm"`, and `"giinf"` will be silently ignored.
+
+        - "evals" : the gate eigenvalues
+        - "target" : the target gate eigenvalues
+        - "rel" : the relative-gate eigenvalues
+        - "log-evals" : the (complex) logarithm of the eigenvalues
+        - "log-rel" : the (complex) logarithm of the relative eigenvalues
+        - "polar": a polar plot of the gate eigenvalues
+        - "relpolar" : a polar plot of the relative-gate eigenvalues
+        - "absdiff-evals" : absolute difference w/target eigenvalues
+        - "infdiff-evals" : 1-Re(z0.C*z) difference w/target eigenvalues
+        - "absdiff-log-evals" : Re & Im differences in eigenvalue logarithms
+        - "evdm" : the gauge-invariant "eigenvalue diamond norm" metric
+        - "evinf" : the gauge-invariant "eigenvalue infidelity" metric
+
+    virtual_ops : list, optional
+        If not None, a list of `Circuit` objects specifying additional "gates"
+        (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+        automatically discarded so they are not displayed twice.
+    """
 
     def __init__(self, ws, model, target_model=None,
                  confidence_region_info=None,
@@ -2239,7 +2677,20 @@ class GateEigenvalueTable(WorkspaceTable):
 
 
 class DataSetOverviewTable(WorkspaceTable):
-    """ Table giving a summary of the properties of `dataset`. """
+    """
+    Table giving a summary of the properties of `dataset`.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    dataset : DataSet
+        The DataSet
+
+    max_length_list : list of ints, optional
+        A list of the maximum lengths used, if available.
+    """
 
     def __init__(self, ws, dataset, max_length_list=None):
         """
@@ -2287,7 +2738,50 @@ class DataSetOverviewTable(WorkspaceTable):
 
 
 class FitComparisonTable(WorkspaceTable):
-    """ Table showing how the goodness-of-fit evolved over GST iterations """
+    """
+    Table showing how the goodness-of-fit evolved over GST iterations
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    xs : list of integers
+        List of X-values. Typically these are the maximum lengths or
+        exponents used to index the different iterations of GST.
+
+    circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+        Specifies the set of circuits used at each X.
+
+    model_by_x : list of Models
+        `Model`s corresponding to each X value.
+
+    dataset : DataSet
+        The data set to compare each model against.
+
+    objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
+        The objective function to use, or one of the given strings
+        to use a defaut log-likelihood or chi^2 function.
+
+    x_label : str, optional
+        A label for the 'X' variable which indexes the different models.
+        This string will be the header of the first table column.
+
+    np_by_x : list of ints, optional
+        A list of parameter counts to use for each X.  If None, then
+        the number of non-gauge parameters for each model is used.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to the objective function (`objective`),
+        which increases the goodness of fit by adjusting (by an amount
+        measured in TVD) the probabilities produced by a model before
+        comparing with the frequencies in `dataset`.  Currently, this
+        functionality is only supported for `objective == "logl"`.
+    """
 
     def __init__(self, ws, xs, circuits_by_x, model_by_x, dataset, objfn_builder='logl',
                  x_label='L', np_by_x=None, comm=None, wildcard=None):
@@ -2401,7 +2895,29 @@ class FitComparisonTable(WorkspaceTable):
 
 
 class CircuitTable(WorkspaceTable):
-    """ Table which simply displays list(s) of operation sequences """
+    """
+    Table which simply displays list(s) of operation sequences
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    circuit_lists : Circuit list or list of Circuit lists
+        List(s) of operation sequences to put in table.
+
+    titles : string or list of strings
+        The title(s) for the different string lists.  These are displayed in
+        the relevant table columns containing the strings.
+
+    n_cols : int, optional
+        The number of *data* columns, i.e. those containing
+        operation sequences, for each string list.
+
+    common_title : string, optional
+        A single title string to place in a cell spanning across
+        all the other column headers.
+    """
 
     def __init__(self, ws, circuit_lists, titles, n_cols=1, common_title=None):
         """
@@ -2485,9 +3001,73 @@ class CircuitTable(WorkspaceTable):
 
 
 class GatesSingleMetricTable(WorkspaceTable):
-    """ Table that compares the gates of many Models which share the same gate
-        labels to target Models using a single metric, so that the Model
-        titles can be used as the row and column headers."""
+    """
+    Table that compares the gates of many models to target models using a single metric (`metric`).
+
+    This allows the model titles to be used as the row and column headers. The models
+    must share the same gate labels.
+
+    If `models` and `target_models` are 1D lists, then `rowtitles` and
+    `op_label` should be left as their default values so that the
+    operation labels are used as row headers.
+
+    If `models` and `target_models` are 2D (nested) lists, then
+    `rowtitles` should specify the row-titles corresponding to the outer list
+    elements and `op_label` should specify a single operation label that names
+    the gate being compared throughout the entire table.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    metric : str
+        The abbreviation for the metric to use.  Allowed values are:
+
+        - "inf" :     entanglement infidelity
+        - "agi" :     average gate infidelity
+        - "trace" :   1/2 trace distance
+        - "diamond" : 1/2 diamond norm distance
+        - "nuinf" :   non-unitary entanglement infidelity
+        - "nuagi" :   non-unitary entanglement infidelity
+        - "evinf" :     eigenvalue entanglement infidelity
+        - "evagi" :     eigenvalue average gate infidelity
+        - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+        - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+        - "evdiamond" : eigenvalue 1/2 diamond norm distance
+        - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+        - "frob" :    frobenius distance
+
+    models : list
+        A list or nested list-of-lists of models to compare with
+        corresponding elements of `target_models`.
+
+    target_models : list
+        A list or nested list-of-lists of models to compare with
+        corresponding elements of `models`.
+
+    titles : list of strs
+        A list of column titles used to describe elements of the
+        innermost list(s) in `models`.
+
+    rowtitles : list of strs, optional
+        A list of row titles used to describe elements of the
+        outer list in `models`.  If None, then the operation labels
+        are used.
+
+    table_title : str, optional
+        If not None, text to place in a top header cell which spans all the
+        columns of the table.
+
+    op_label : str, optional
+        If not None, the single operation label to use for all comparisons
+        computed in this table.  This should be set when (and only when)
+        `models` and `target_models` are 2D (nested) lists.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+    """
 
     def __init__(self, ws, metric, models, target_models, titles,
                  rowtitles=None, table_title=None, op_label=None,
@@ -2633,8 +3213,30 @@ class GatesSingleMetricTable(WorkspaceTable):
 
 
 class StandardErrgenTable(WorkspaceTable):
-    """ A table showing what the standard error generators' superoperator
-        matrices look like."""
+    """
+    A table showing what the standard error generators' superoperator matrices look like.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model_dim : int
+        The dimension of the model, which equals the number of
+        rows (or columns) in a operation matrix (e.g., 4 for a single qubit).
+
+    projection_type : {"hamiltonian", "stochastic"}
+        The type of error generator projectors to create a table for.
+        If "hamiltonian", then use the Hamiltonian generators which take a
+        density matrix rho -> -i*[ H, rho ] for basis matrix H.
+        If "stochastic", then use the Stochastic error generators which take
+        rho -> P*rho*P for basis matrix P (recall P is self adjoint).
+
+    projection_basis : {'std', 'gm', 'pp', 'qt'}
+      Which basis is used to construct the error generators.  Allowed
+      values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+      and Qutrit (qt).
+    """
 
     def __init__(self, ws, model_dim, projection_type,
                  projection_basis):
@@ -2729,7 +3331,19 @@ class StandardErrgenTable(WorkspaceTable):
 
 
 class GaugeOptParamsTable(WorkspaceTable):
-    """ Table of gauge optimization parameters """
+    """
+    Table of gauge optimization parameters
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    gauge_opt_args : dict or list
+        A dictionary or list of dictionaries specifying values for
+        zero or more of the *arguments* of pyGSTi's
+        :func:`gaugeopt_to_target` function.
+    """
 
     def __init__(self, ws, gauge_opt_args):
         """
@@ -2787,7 +3401,21 @@ class GaugeOptParamsTable(WorkspaceTable):
 
 
 class MetadataTable(WorkspaceTable):
-    """ Table of raw parameters, often taken directly from a `Results` object"""
+    """
+    Table of raw parameters, often taken directly from a `Results` object
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    model : Model
+        The model (usually the final estimate of a GST computation) to
+        show information for (e.g. the types of its gates).
+
+    params: dict
+        A parameter dictionary to display
+    """
 
     def __init__(self, ws, model, params):
         """
@@ -2880,7 +3508,14 @@ class MetadataTable(WorkspaceTable):
 
 
 class SoftwareEnvTable(WorkspaceTable):
-    """ Table showing details about the current software environment """
+    """
+    Table showing details about the current software environment.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+    """
 
     def __init__(self, ws):
         """
@@ -2955,7 +3590,20 @@ class SoftwareEnvTable(WorkspaceTable):
 
 
 class ProfilerTable(WorkspaceTable):
-    """ Table of profiler timing information """
+    """
+    Table of profiler timing information
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    profiler : Profiler
+        The profiler object to extract timings from.
+
+    sort_by : {"time", "name"}
+        What the timer values should be sorted by.
+    """
 
     def __init__(self, ws, profiler, sort_by="time"):
         """
@@ -2999,7 +3647,17 @@ class ProfilerTable(WorkspaceTable):
 
 
 class WildcardBudgetTable(WorkspaceTable):
-    """ Table of wildcard budget information """
+    """
+    Table of wildcard budget information.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    budget : WildcardBudget
+        The wildcard budget object to extract timings from.
+    """
 
     def __init__(self, ws, budget):
         """
@@ -3029,8 +3687,14 @@ class WildcardBudgetTable(WorkspaceTable):
 
 
 class ExampleTable(WorkspaceTable):
-    """ Table used just as an example of what tables can do/look like for use
-        within the "Help" section of reports. """
+    """
+    Table used just as an example of what tables can do/look like for use within the "Help" section of reports.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+    """
 
     def __init__(self, ws):
         """A table showing how to use table features."""

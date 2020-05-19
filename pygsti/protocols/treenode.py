@@ -1,4 +1,6 @@
-""" The TreeNode class """
+"""
+The TreeNode class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -16,12 +18,37 @@ from .. import io as _io
 
 
 class TreeNode(object):
-    """ TODO: docstring
-    A base class for representing an object that lives "at" a filesystem directory
+    """
+    A base class for representing an object that lives "at" a filesystem directory.
+
+    Parameters
+    ----------
+    possible_child_name_dirs : dict
+        A dictionary with string keys and values that maps possible child names
+        (keys of this `TreeNode`) to directory names (where those keys are stored).
+
+    child_values : dict, optional
+        A dictionary of child values (may be other `TreeNode` objects).
     """
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None):
+        """
+        Load a :class:`TreeNode` from the data rooted at `dirname`.
+
+        Parameters
+        ----------
+        dirname : str or Path
+            The directory path to load from.
+
+        parent : TreeNode, optional
+            This node's parent node, if it's already loaded.
+
+        name : immutable, optional
+            The name of this node, usually a string or tuple.  Almost always the key
+            within `parent` that refers to the loaded node (this can be different
+            from the directory name).
+        """
         raise NotImplementedError("Derived classes should implement from_dir(...)!")
         # *** This is a template function, showing how derived classes should implement from_dir ***
         # ret = cls.__new__(cls)  # create the object to return
@@ -60,6 +87,9 @@ class TreeNode(object):
             #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
 
     def keys(self):
+        """
+        An iterator over the keys (child names) of this tree node.
+        """
         return self._dirs.keys()
 
     def __contains__(self, key):
@@ -69,6 +99,9 @@ class TreeNode(object):
         return len(self._dirs)
 
     def items(self):
+        """
+        An iterator over the `(child_name, child_node)` pairs of this node.
+        """
         for k in self._dirs:
             yield k, self[k]
 
@@ -83,13 +116,33 @@ class TreeNode(object):
         raise NotImplementedError("Derived class needs to implement _create_childval to create valid key: %s" % key)
 
     def get_tree_paths(self):
-        """Dictionary paths leading to data objects/nodes beneath this one"""
+        """
+        Dictionary paths leading to data objects/nodes beneath this one.
+
+        Returns
+        -------
+        list
+            A list of tuples, each specifying the tree traversal to a child node.
+            The first tuple is the empty tuple, referring to *this* (root) node.
+        """
         paths = [()]  # path to self
         for child_name, child_node in self.items():
             paths.extend([(child_name,) + pth for pth in child_node.get_tree_paths()])
         return paths
 
     def view(self, keys_to_keep):
+        """
+        Get a "view" of this tree node that only has a subset of this node's children.
+
+        Parameters
+        ----------
+        keys_to_keep : iterable
+            A sequence of key names to keep.
+
+        Returns
+        -------
+        TreeNode
+        """
         if len(keys_to_keep) == 0: return self
         view = _copy.deepcopy(self)  # is deep copy really needed here??
         view._dirs = {k: self._dirs[k] for k in keys_to_keep}
@@ -97,6 +150,23 @@ class TreeNode(object):
         return view
 
     def filter_paths(self, paths, paths_are_sorted=False):
+        """
+        Prune the tree rooted here to include only the given paths, discarding all other leaves & branches.
+
+        Parameters
+        ----------
+        paths : list
+            A list of tuples specifying the paths to keep.
+
+        paths_are_sorted : bool, optional
+            Whether `paths` is sorted (lexographically).  Setting this to `True` will save
+            a little time.
+
+        Returns
+        -------
+        TreeNode
+            A view of this node and its descendants where unwanted children have been removed.
+        """
         sorted_paths = paths if paths_are_sorted else sorted(paths)
         npaths = len(sorted_paths)
 
@@ -123,13 +193,51 @@ class TreeNode(object):
         return view
 
     def write(self, dirname, parent=None):
+        """
+        Write this tree node to a directory.
+
+        Parameters
+        ----------
+        dirname : str or Path
+            Directory to write to.
+
+        parent : TreeNode, optional
+            This node's parent.
+
+        Returns
+        -------
+        None
+        """
         raise NotImplementedError("Derived classes should implement write(...)!")
         # *** This is a template showing how derived classes should implement write(...) ***
         # # <write derived-class specific data to dirname>
         # #  write_subdir_json = True  # True only for the "master" type that defines the directory keys ('edesign')
         # self.write_children(dirname, write_subdir_json)
 
+    #PRIVATE
     def write_children(self, dirname, write_subdir_json=True):
+        """
+        Writes this node's children to directories beneath `dirname`.
+
+        Each child node is written to a sub-directory named according to the
+        sub-directory names associated with the child names (keys) of this node.
+
+        Parameters
+        ----------
+        dirname : str or Path
+            The root directory to write to.
+
+        write_subdir_json : bool, optional
+            If `True`, a `dirname/edesign/subdirs.json` file is written that
+            contains child name information, i.e. the map between directory names
+            and child names (it is useful to *not* requires these be the same,
+            and sometimes it's useful to name children with a tuple rather than
+            just a string).
+
+        Returns
+        -------
+        None
+        """
         dirname = _pathlib.Path(dirname)
 
         if write_subdir_json:

@@ -1,4 +1,6 @@
-"""Functions related to computation of the log-likelihood."""
+"""
+Functions related to computation of the log-likelihood.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -104,7 +106,10 @@ TOL = 1e-20
 # For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require
 # min at p == 0):
 #  Given a radius r << 1 (but r>0):
-#   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
+#   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }  y = p/r
+#     Note p < r portion:  F(p) = p/3 * (-p^2/r^2 + 3*p/r + r)  -- zero at p=0, p at p=r
+#                     1st deriv = -p^2/r^2 + 2*p/r = -p/r (p/r - 2)  -- matches slope=1 at p=r
+#                     2nd deriv = -2*p/r^2 + 2/r = -2/r * (p/r - 1) -- curvature=0 at p=r
 #  OLD: quadratic that doesn't match 2nd-deriv:
 #   F(p) = piecewise{ if( p>r ) then p; else (r-p)^2/(2*r) + p }
 
@@ -192,23 +197,73 @@ def logl_per_circuit(model, dataset, circuit_list=None,
 
     Parameters
     ----------
-    This function takes the same arguments as :func:`logl` except it
-    doesn't perform the final sum over circuits.
+    model : Model
+        Model of parameterized gates
+
+    dataset : DataSet
+        Probability data
+
+    circuit_list : list of (tuples or Circuits), optional
+        Each element specifies a operation sequence to include in the log-likelihood
+        sum.  Default value of None implies all the operation sequences in dataset
+        should be used.
+
+    min_prob_clip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    prob_clip_interval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by models during MLEGST's
+        search for an optimal model (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    poisson_picture : boolean, optional
+        Whether the log-likelihood-in-the-Poisson-picture terms should be included
+        in the returned logl value.
+
+    op_label_aliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
+
+    cache : ComputationCache, optional
+        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    mem_limit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
 
     Returns
     -------
     numpy.ndarray
         Array of length either `len(circuit_list)` or `len(dataset.keys())`.
-        Values are the log-likelihood contributions of the corresponding gate
-        string aggregated over outcomes.
+        Values are the log-likelihood contributions of the corresponding
+        circuit aggregated over outcomes.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
 
     if wildcard:
@@ -278,13 +333,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
     Returns
     -------
     numpy array
-      array of shape (M,), where M is the length of the vectorized model.
+        array of shape (M,), where M is the length of the vectorized model.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -350,13 +405,13 @@ def logl_hessian(model, dataset, circuit_list=None,
     Returns
     -------
     numpy array
-      array of shape (M,M), where M is the length of the vectorized model.
+        array of shape (M,M), where M is the length of the vectorized model.
     """
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+        else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
-                        {'min_prob_clip': min_prob_clip,
-                         'radius': radius},
-                        {'prob_clip_interval': prob_clip_interval},
+                        regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
@@ -434,7 +489,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     Returns
     -------
     numpy array
-      array of shape (M,M), where M is the length of the vectorized model.
+        array of shape (M,M), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
@@ -448,9 +503,10 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
 def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
              op_label_aliases=None, cache=None):
     """
-    The maximum log-likelihood possible for a DataSet.  That is, the
-    log-likelihood obtained by a maximal model that can fit perfectly
-    the probability of each operation sequence.
+    The maximum log-likelihood possible for a DataSet.
+
+    That is, the log-likelihood obtained by a maximal model that can
+    fit perfectly the probability of each operation sequence.
 
     Parameters
     ----------
@@ -489,13 +545,32 @@ def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
 def logl_max_per_circuit(model, dataset, circuit_list=None,
                          poisson_picture=True, op_label_aliases=None, cache=None):
     """
-    The vector of maximum log-likelihood contributions for each circuit,
-    aggregated over outcomes.
+    The vector of maximum log-likelihood contributions for each circuit, aggregated over outcomes.
 
     Parameters
     ----------
-    This function takes the same arguments as :func:`logl_max` except it
-    doesn't perform the final sum over operation sequences and SPAM labels.
+    model : Model
+        the model, used only for operation sequence compilation
+
+    dataset : DataSet
+        the data set to use.
+
+    circuit_list : list of (tuples or Circuits), optional
+        Each element specifies a operation sequence to include in the max-log-likelihood
+        sum.  Default value of None implies all the operation sequences in dataset should
+        be used.
+
+    poisson_picture : boolean, optional
+        Whether the Poisson-picture maximum log-likelihood should be returned.
+
+    op_label_aliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    cache : ComputationCache, optional
+        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
 
     Returns
     -------
@@ -513,7 +588,63 @@ def two_delta_logl_nsigma(model, dataset, circuit_list=None,
                           min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                           poisson_picture=True, op_label_aliases=None,
                           dof_calc_method='nongauge', wildcard=None):
-    """See docstring for :function:`pygsti.tools.two_delta_logl` """
+    """
+    See docstring for :function:`pygsti.tools.two_delta_logl`
+
+    Parameters
+    ----------
+    model : Model
+        Model of parameterized gates
+
+    dataset : DataSet
+        Probability data
+
+    circuit_list : list of (tuples or Circuits), optional
+        Each element specifies a operation sequence to include in the log-likelihood
+        sum.  Default value of None implies all the operation sequences in dataset
+        should be used.
+
+    min_prob_clip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    prob_clip_interval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by models during MLEGST's
+        search for an optimal model (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    poisson_picture : boolean, optional
+        Whether the log-likelihood-in-the-Poisson-picture terms should be included
+        in the returned logl value.
+
+    op_label_aliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    dof_calc_method : {"all", "nongauge"}
+        How `model`'s number of degrees of freedom (parameters) are obtained
+        when computing the number of standard deviations and p-value relative to
+        a chi2_k distribution, where `k` is additional degrees of freedom
+        possessed by the maximal model.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
+
+    Returns
+    -------
+    float
+    """
     assert(dof_calc_method is not None)
     return two_delta_logl(model, dataset, circuit_list,
                           min_prob_clip, prob_clip_interval, radius,
@@ -527,10 +658,11 @@ def two_delta_logl(model, dataset, circuit_list=None,
                    dof_calc_method=None, wildcard=None,
                    cache=None, comm=None):
     """
-    Twice the difference between the maximum and actual log-likelihood,
-    optionally along with Nsigma (# std deviations from mean) and p-value
-    relative to expected chi^2 distribution (when `dof_calc_method` is
-    not None).
+    Twice the difference between the maximum and actual log-likelihood.
+
+    Optionally also can return the Nsigma (# std deviations from mean) and
+    p-value relative to expected chi^2 distribution (when `dof_calc_method`
+    is not None).
 
     This function's arguments are supersets of :function:`logl`, and
     :function:`logl_max`. This is a convenience function, equivalent to
@@ -600,7 +732,6 @@ def two_delta_logl(model, dataset, circuit_list=None,
     -------
     twoDeltaLogL : float
         2*(loglikelihood(maximal_model,data) - loglikelihood(model,data))
-
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
@@ -648,8 +779,9 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
                                dof_calc_method=None, wildcard=None,
                                cache=None, comm=None):
     """
-    The vector of twice the difference between the maximum and actual
-    log-likelihood for each operation sequence, aggregated over outcomes.
+    Twice the per-circuit difference between the maximum and actual log-likelihood.
+
+    Contributions are aggregated over each circuit's outcomes, but no further.
 
     Optionally (when `dof_calc_method` is not None) returns parallel vectors
     containing the Nsigma (# std deviations from mean) and the p-value relative
@@ -657,8 +789,60 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
 
     Parameters
     ----------
-    This function takes the same arguments as :func:`two_delta_logl` except it
-    doesn't perform the final sum over operation sequences and SPAM labels.
+    model : Model
+        Model of parameterized gates
+
+    dataset : DataSet
+        Probability data
+
+    circuit_list : list of (tuples or Circuits), optional
+        Each element specifies a operation sequence to include in the log-likelihood
+        sum.  Default value of None implies all the operation sequences in dataset
+        should be used.
+
+    min_prob_clip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    prob_clip_interval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by models during MLEGST's
+        search for an optimal model (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    poisson_picture : boolean, optional
+        Whether the log-likelihood-in-the-Poisson-picture terms should be included
+        in the returned logl value.
+
+    op_label_aliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    dof_calc_method : {"all", "nongauge"}
+        How `model`'s number of degrees of freedom (parameters) are obtained
+        when computing the number of standard deviations and p-value relative to
+        a chi2_k distribution, where `k` is additional degrees of freedom
+        possessed by the maximal model.
+
+    wildcard : WildcardBudget
+        A wildcard budget to apply to this log-likelihood computation.
+        This increases the returned log-likelihood value by adjusting
+        (by a maximal amount measured in TVD, given by the budget) the
+        probabilities produced by `model` to optimially match the data
+        (within the bugetary constraints) evaluating the log-likelihood.
+
+    cache : ComputationCache, optional
+        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     Returns
     -------
@@ -701,10 +885,9 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
 #UNUSED (REMOVE?)
 def forbidden_prob(model, dataset):
     """
-    Compute the sum of the out-of-range probabilities
-    generated by model, using only those operation sequences
-    contained in dataset.  Non-zero value indicates
-    that model is not in XP for the supplied dataset.
+    Compute the sum of the out-of-range probabilities generated by model, using only circuits in `dataset`.
+
+    A non-zero value indicates that model is not in XP for the supplied dataset.
 
     Parameters
     ----------
@@ -740,10 +923,11 @@ def forbidden_prob(model, dataset):
 #UNUSED (REMOVE?)
 def prep_penalty(rho_vec, basis):
     """
-    Penalty assigned to a state preparation (rho) vector rho_vec.  State
-      preparation density matrices must be positive semidefinite
-      and trace == 1.  A positive return value indicates an
-      these criteria are not met and the rho-vector is invalid.
+    Penalty assigned to a state preparation (rho) vector rho_vec.
+
+    State preparation density matrices must be positive semidefinite
+    and trace == 1.  A positive return value indicates an these
+    criteria are not met and the rho-vector is invalid.
 
     Parameters
     ----------
@@ -773,15 +957,16 @@ def prep_penalty(rho_vec, basis):
 #UNUSED (REMOVE?)
 def effect_penalty(effect_vec, basis):
     """
-    Penalty assigned to a POVM effect vector effect_vec. Effects
-      must have eigenvalues between 0 and 1.  A positive return
-      value indicates this criterion is not met and the E-vector
-      is invalid.
+    Penalty assigned to a POVM effect vector effect_vec.
+
+    Effects must have eigenvalues between 0 and 1.  A positive return
+    value indicates this criterion is not met and the E-vector is
+    invalid.
 
     Parameters
     ----------
     effect_vec : numpy array
-         effect vector array of shape (N,1) for some N.
+        effect vector array of shape (N,1) for some N.
 
     basis : {"std", "gm", "pp", "qt"}
         The abbreviation for the basis used to interpret effect_vec
@@ -805,10 +990,11 @@ def effect_penalty(effect_vec, basis):
 #UNUSED (REMOVE?)
 def cptp_penalty(model, include_spam_penalty=True):
     """
-    The sum of all negative Choi matrix eigenvalues, and
-      if include_spam_penalty is True, the rho-vector and
-      E-vector penalties of model.  A non-zero value
-      indicates that the model is not CPTP.
+    The sum of all negative Choi matrix eigenvalues.
+
+    If `include_spam_penalty` is True, also add the rho-vector
+    and E-vector penalties of model.  A non-zero value indicates
+    that the model is not CPTP.
 
     Parameters
     ----------
@@ -837,8 +1023,7 @@ def cptp_penalty(model, include_spam_penalty=True):
 
 def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     """
-    Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
-     to a single operation sequence and spam label.
+    Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding to a single operation sequence and spam label.
 
     Parameters
     ----------
@@ -879,7 +1064,8 @@ def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
         rawfn = _objfns.RawDeltaLogLFunction({'min_prob_clip': min_prob_clip})
 
     ret = 2 * rawfn.terms(p, n * f, n, f)
-    ret[nan_indices] = _np.nan
+    if not _np.isscalar(f):
+        ret[nan_indices] = _np.nan
     return ret
 
 

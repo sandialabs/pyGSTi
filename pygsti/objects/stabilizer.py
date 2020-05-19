@@ -1,4 +1,6 @@
-""" Defines the StabilizerState and StabilizerFrame classes"""
+"""
+Defines the StabilizerState and StabilizerFrame classes
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -41,13 +43,42 @@ from . import replib
 
 class StabilizerFrame(object):
     """
-    Encapsulates a stabilizer frame (linear combo of
-    stabilizer states)
+    Encapsulates a stabilizer frame (linear combo of stabilizer states).
 
     Stores stabilizer elements in the first n, and
     antistabilizer elements in the latter n *columns* of
     the "state matrix" (to facilitate composition),
     and phase vectors & amplitudes in parallel arrays.
+
+    Parameters
+    ----------
+    state_s : numpy.ndarray
+        A 2n x 2n binary matrix, where n is the number of qubits. The
+        first n columns specify stabilizer elements and the latter n
+        colunns specify anti-stabilizer elements.  In each column, bits
+        (i,i+n) encode a Pauli on the i-th qubit: 00 = I, 10 = X, 01 = Z,
+        11 = -iY. (Note the -iY is different from some representations
+        in the literature which encode 11 = Y.)
+
+    state_ps : numpy.ndarray, optional
+        A mod-4 array of shape (k,2n) where n is the number of qubits
+        and k is the number of components in the stabilizer frame.  Each
+        row of `state_ps` is the  phase vector for the corresponding to
+        to an amplitude in `amps`.  A phase vector encodes the overall phase
+        of each of the stabilizer and anti-stabilizer elements (the columns
+        of `state_s`) by specyfing the number of 'i' factors (0 to 3).  If
+        None, then no phase vectors are stored.
+
+    amps : numpy.ndarray, optional
+        The (complex) amplitudes for each stabilizer-state component of the
+        frame.  The length of this 1D array must equal 'k', the first
+        dimension of `state_ps`.  `amps` should be None when and only when
+        `state_ps` is None, corresponding to the case of zero components.
+
+    Attributes
+    ----------
+    nqubits : int
+        The number of qubits in the state this frame represents
     """
 
     @classmethod
@@ -158,8 +189,9 @@ class StabilizerFrame(object):
 
     def copy(self):
         """
-        Copy this stabilizer frame.  Note that this also copies
-        "view filters" setup via `push_view` calls.
+        Copy this stabilizer frame.
+
+        Note that this also copies "view filters" setup via `push_view` calls.
 
         Returns
         -------
@@ -200,12 +232,23 @@ class StabilizerFrame(object):
     def pop_view(self):
         """
         Removes the last-applied (via :method:`push_view`) view filter.
+
+        Returns
+        -------
+        list
+            A list of qubit indices to view (a "view filter").
         """
         return self.view_filters.pop()
 
     @property
     def nqubits(self):
-        """ The number of qubits in the state this frame represents """
+        """
+        The number of qubits in the state this frame represents
+
+        Returns
+        -------
+        int
+        """
         return self.n  # == (self.s.shape[0] // 2)
 
     def _colsum(self, i, j):
@@ -553,8 +596,7 @@ class StabilizerFrame(object):
 
     def extract_all_amplitudes(self):
         """
-        Get a dictionary of the *full* amplitudes of each present
-        computational basis state.
+        Get a dictionary of the *full* amplitudes of each present computational basis state.
 
         This may take a while for many-qubit states, as it requires
         getting 2^(num_qubits) amplitudes.
@@ -578,8 +620,7 @@ class StabilizerFrame(object):
 
     def to_statevec(self):
         """
-        Convert this stabilizer frame to dense length-2^(num_qubits)
-        complex state vector of amplitudes.
+        Convert this stabilizer frame to dense length-2^(num_qubits) complex state vector of amplitudes.
 
         Returns
         -------
@@ -593,8 +634,7 @@ class StabilizerFrame(object):
 
     def extract_amplitude(self, zvals):
         """
-        Get the *full* (not just "canonical") amplitude of a given
-        computational basis state.
+        Get the *full* (not just "canonical") amplitude of a given computational basis state.
 
         Parameters
         ----------
@@ -612,19 +652,21 @@ class StabilizerFrame(object):
 
     def clifford_update(self, smatrix, svector, u_mx, qubit_filter=None):
         """
-        Update this stabilizer frame by the action of a Clifford operation,
-        given in the usual symplectic representation.
+        Update this stabilizer frame by the action of a Clifford operation.
 
+        The Clifford operation is given in the usual symplectic representation.
         If there are any active views (from calling :method:`push_view`) and/or
         if `qubit_filter` is not None, then `smatrix`, `svector`, and `u_mx`
         should be sized for just the number of qubits in the current view.
 
         Parameters
         ----------
-        smatrix, svector : numpy.ndarray
-            Symplectic matrix and phase vector arrays of shape (2n,2n) and (2n,)
-            respectively, where n is the number of qubits (in the current view
-            if applicable).
+        smatrix : numpy.ndarray
+            The symplectic matrix of shape (2n,2n), where n is the number of
+            qubits (in the current view if applicable), representing the Clifford operation.
+
+        svector : numpy.ndarray
+            The phase vector of shape (2n,) representing the Clifford operation.
 
         u_mx : numpy.ndarray
             The dense unitary representation of the Clifford action, which is
@@ -700,8 +742,7 @@ class StabilizerFrame(object):
 
     def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=False):
         """
-        Extract the probability of obtaining a given
-        computation-basis-measurement outcome.
+        Extract the probability of obtaining a given computation-basis-measurement outcome.
 
         Parameters
         ----------

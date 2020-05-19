@@ -1,4 +1,6 @@
-"""Defines OrderedDict-derived classes used to store specific pyGSTi objects"""
+"""
+Defines OrderedDict-derived classes used to store specific pyGSTi objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,8 +23,15 @@ from .label import Label as _Label
 
 class PrefixOrderedDict(_collections.OrderedDict):
     """
-    A base class for an ordered dictionary whose keys *must* be strings
-    which begin with a given prefix.
+    Base class ordered dictionaries whose keys *must* be strings which begin with a given prefix.
+
+    Parameters
+    ----------
+    prefix : str
+        The required prefix.
+
+    items : list or dict, optional
+        Initial values.  Should only be used as part of de-serialization.
     """
 
     def __init__(self, prefix, items=[]):
@@ -59,6 +68,39 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     This class also ensure that every value is an object of the appropriate Model
     member type (e.g. :class:`SPAMVec`- or :class:`LinearOperator`-derived object) by converting any
     values into that type upon assignment and raising an error if this is not possible.
+
+    Parameters
+    ----------
+    parent : Model
+        The parent model, needed to obtain the dimension and handle
+        updates to parameters.
+
+    default_param : {"TP","full",...}
+        The default parameterization used when creating an
+        object from a key assignment.
+
+    prefix : str
+        The required prefix of all keys (which must be strings).
+
+    flags : dict
+        A dictionary of flags adjusting the behavior of the created
+        object.  Allowed keys are:
+
+        - `'cast_to_type'`: {`"operation"`,`"spamvec"`,`None`} -- whether
+          (or not) to automatically convert assigned values to a particular
+          type of `ModelMember` object. (default is `None`)
+        - `'auto_embed'` : bool -- whether or not to automatically embed
+          objects with a lower dimension than this `OrderedMemberDict`'s
+          parent model. (default is `False`).
+        - `'match_parent_dim'` : bool -- whether or not to require that
+          all contained objects match the parent `Model`'s dimension
+          (perhaps after embedding).  (default is `False`)
+        - `'match_parent_evotype'` : bool -- whether or not to require that
+          all contained objects match the parent `Model`'s evolution type.
+          (default is `False`).
+
+    items : list, optional
+        Used by pickle and other serializations to initialize elements.
     """
 
     def __init__(self, parent, default_param, prefix, flags, items=[]):
@@ -184,12 +226,15 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
     def cast_to_obj(self, value):
         """
-        Creates an object from `value` with a type given by the the
-        default parameterization if it isn't a :class:`ModelMember`.
+        Cast `value` to an object with the default parameterization if it's not a :class:`ModelMember`.
+
+        Creates an object from `value` with a type given by the default
+        parameterization if `value` isn't a :class:`ModelMember`.
 
         Parameters
         ----------
         value : object
+            The object to act on.
 
         Returns
         -------
@@ -309,11 +354,22 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
 class OutcomeLabelDict(_collections.OrderedDict):
     """
-    An ordered dictionary of outcome labels, whose keys are tuple-valued
-    outcome labels.  This class extends an ordinary OrderedDict by
-    implements mapping string-values single-outcome labels to 1-tuples
-    containing that label (and vice versa), allowing the use of strings
-    as outcomes labels from the user's perspective.
+    An ordered dictionary of outcome labels, whose keys are tuple-valued outcome labels.
+
+    This class extends an ordinary OrderedDict by implements mapping
+    string-values single-outcome labels to 1-tuples containing that
+    label (and vice versa), allowing the use of strings as outcomes
+    labels from the user's perspective.
+
+    Parameters
+    ----------
+    items : list or dict, optional
+        Initial values.  Should only be used as part of de-serialization.
+
+    Attributes
+    ----------
+    _strict : bool
+        Whether mapping from strings to 1-tuples is performed.
     """
 
     #Whether mapping from strings to 1-tuples is performed
@@ -322,8 +378,18 @@ class OutcomeLabelDict(_collections.OrderedDict):
     @classmethod
     def to_outcome(cls, val):
         """
-        Converts string outcomes like "0" to proper outcome tuples, like ("0",)
+        Converts string outcomes like "0" to proper outcome tuples, like ("0",).
+
         (also converts non-tuples to tuples, e.g. `["0","1"]` to `("0","1")` )
+
+        Parameters
+        ----------
+        val : str or tuple
+            The value to convert into an outcome label (i.e. a tuple)
+
+        Returns
+        -------
+        tuple
         """
         return (val,) if isinstance(val, str) else tuple(val)
 
@@ -352,16 +418,42 @@ class OutcomeLabelDict(_collections.OrderedDict):
     def get_unsafe(self, key, defaultval):
         """
         Gets an item without checking that `key` is a properly formatted outcome tuple.
+
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
         just a string.
+
+        Parameters
+        ----------
+        key : object
+            The key to retrieve
+
+        defaultval : object
+            The default value to use (if the key is absent).
+
+        Returns
+        -------
+        object
         """
         return super(OutcomeLabelDict, self).get(key, defaultval)
 
     def set_unsafe(self, key, val):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
+
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
         just a string.
+
+        Parameters
+        ----------
+        key : object
+            The key to retrieve.
+
+        val : object
+            the value to set.
+
+        Returns
+        -------
+        None
         """
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
@@ -373,13 +465,29 @@ class OutcomeLabelDict(_collections.OrderedDict):
     def contains_unsafe(self, key):
         """
         Checks for `key` without ensuring that it is a properly formatted outcome tuple.
+
         Only use this method when you're sure `key` is an outcome tuple and not, e.g.,
         just a string.
+
+        Parameters
+        ----------
+        key : object
+            The key to retrieve.
+
+        Returns
+        -------
+        bool
         """
         return super(OutcomeLabelDict, self).__contains__(key)
 
     def copy(self):
-        """ Return a copy of this OutcomeLabelDict. """
+        """
+        Return a copy of this OutcomeLabelDict.
+
+        Returns
+        -------
+        OutcomeLabelDict
+        """
         return OutcomeLabelDict([(lbl, _copy.deepcopy(val))
                                  for lbl, val in self.items()])
 
@@ -400,6 +508,50 @@ class StateSpaceLabels(object):
     Hilbert state space is decomposed into the direct sum of terms which
     themselves are tensor products of smaller (typically qubit-sized) Hilber
     spaces.
+
+    Parameters
+    ----------
+    label_list : str or int or iterable
+        Most generally, this can be a list of tuples, where each tuple
+        contains the state-space labels (which can be strings or integers)
+        for a single "tensor product block" formed by taking the tensor
+        product of the spaces asociated with the labels.  The full state
+        space is the direct sum of all the tensor product blocks.
+        E.g. `[('Q0','Q1'), ('Q2',)]`.
+
+        If just an iterable of labels is given, e.g. `('Q0','Q1')`, it is
+        assumed to specify the first and only tensor product block.
+
+        If a single state space label is given, e.g. `'Q2'`, then it is
+        assumed to completely specify the first and only tensor product
+        block.
+
+    dims : int or iterable, optional
+        The dimension of each state space label as an integer, tuple of
+        integers, or list or tuples of integers to match the structure
+        of `label_list` (i.e., if `label_list=('Q0','Q1')` then `dims` should
+        be a tuple of 2 integers).  Values specify state-space dimensions: 2
+        for a qubit, 3 for a qutrit, etc.  If None, then the dimensions are
+        inferred, if possible, from the following naming rules:
+
+        - if the label starts with 'L', dim=1 (a single Level)
+        - if the label starts with 'Q' OR is an int, dim=2 (a Qubit)
+        - if the label starts with 'T', dim=3 (a quTrit)
+
+    types : str or iterable, optional
+        A list of label types, either `'Q'` or `'C'` for "quantum" and
+        "classical" respectively, indicating the type of state-space
+        associated with each label.  Like `dims`, `types` must match
+        the structure of `label_list`.  A quantum state space of dimension
+        `d` is a `d`-by-`d` density matrix, whereas a classical state space
+        of dimension d is a vector of `d` probabilities.  If `None`, then
+        all labels are assumed to be quantum.
+
+    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type that this state-space will be used with.  This
+        information is needed just to select the appropriate default
+        dimensions, e.g. whether a qubit has a 2- or 4-dimensional state
+        space.
     """
 
     def __init__(self, label_list, dims=None, types=None, evotype="densitymx"):
@@ -532,7 +684,14 @@ class StateSpaceLabels(object):
 
         self.dim = sum(self.tpb_dims)
 
-    def reduce_dims_densitymx_to_state(self):
+    def reduce_dims_densitymx_to_state(self):  #INPLACE
+        """
+        Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector representation.
+
+        Returns
+        -------
+        None
+        """
         for lbl in self.labeldims:
             if self.labeltypes[lbl] == 'Q':
                 self.labeldims[lbl] = int(_np.sqrt(self.labeldims[lbl]))
@@ -546,8 +705,7 @@ class StateSpaceLabels(object):
 
     def num_tensor_prod_blocks(self):  # only in modelconstruction.py
         """
-        Get the number of tensor-product blocks which are direct-summed
-        to get the final state space.
+        Get the number of tensor-product blocks which are direct-summed to get the final state space.
 
         Returns
         -------
@@ -561,9 +719,8 @@ class StateSpaceLabels(object):
 
         Parameters
         ----------
-        iTPD : int
-           The index of the tensor product block whose state-space
-           labels you wish to retrieve.
+        i_tpb : int
+            Tensor-product block index.
 
         Returns
         -------
@@ -573,15 +730,14 @@ class StateSpaceLabels(object):
 
     def tensor_product_block_dims(self, i_tpb):  # unused
         """
-        Get the dimension corresponding to each label in the
-        `iTBP`-th tensor-product block.  The dimension of the
-        entire block is the product of these.
+        Get the dimension corresponding to each label in the `iTBP`-th tensor-product block.
+
+        The dimension of the entire block is the product of these.
 
         Parameters
         ----------
-        iTPD : int
-           The index of the tensor product block whose state-space
-           dimensions you wish to retrieve.
+        i_tpb : int
+            Tensor-product block index.
 
         Returns
         -------
@@ -591,8 +747,7 @@ class StateSpaceLabels(object):
 
     def product_dim(self, labels):  # only in modelconstruction
         """
-        Computes the product of the state-space dimensions associated with each
-        label in `labels`.
+        Computes the product of the state-space dimensions associated with each label in `labels`.
 
         Parameters
         ----------
@@ -615,5 +770,11 @@ class StateSpaceLabels(object):
         return "StateSpaceLabels[" + str(self) + "]"
 
     def copy(self):
-        """ Return a copy of this StateSpaceLabels. """
+        """
+        Return a copy of this StateSpaceLabels.
+
+        Returns
+        -------
+        StateSpaceLabels
+        """
         return _copy.deepcopy(self)

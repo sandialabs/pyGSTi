@@ -1,4 +1,6 @@
-"""Helper functions for creating HTML documents by "merging" with a template"""
+"""
+Helper functions for creating HTML documents by "merging" with a template
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -34,6 +36,7 @@ def read_contents(filename):
     Parameters
     ----------
     filename : str
+        File to read.
 
     Returns
     -------
@@ -137,8 +140,18 @@ def insert_resource(connected, online_url, offline_filename,
 
 def rsync_offline_dir(output_dir):
     """
-    Copy the pyGSTi 'offline' directory into `output_dir` by creating or updating
-    any outdated files as needed.
+    Copy the pyGSTi 'offline' directory into `output_dir`.
+
+    This creates or updates any non-existent or outdated files as needed.
+
+    Parameters
+    ----------
+    output_dir : str
+        The output directory
+
+    Returns
+    -------
+    None
     """
     destDir = _os.path.join(str(output_dir), "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
@@ -161,8 +174,9 @@ def rsync_offline_dir(output_dir):
 
 def read_and_preprocess_template(template_filename, toggles):
     """
-    Load a HTML template from a file and perform an preprocessing,
-    indicated by "#iftoggle(name)", "#elsetoggle", and "#endtoggle".
+    Load a HTML template from a file and perform an preprocessing.
+
+    Preprocessing directives are "#iftoggle(name)", "#elsetoggle", and "#endtoggle".
 
     Parameters
     ----------
@@ -242,7 +256,18 @@ def read_and_preprocess_template(template_filename, toggles):
 
 
 def clear_dir(path):
-    """ If `path` is a directory, remove all the files within it """
+    """
+    If `path` is a directory, remove all the files within it
+
+    Parameters
+    ----------
+    path : str
+        The path to clear.
+
+    Returns
+    -------
+    None
+    """
     if not _os.path.isdir(path): return
     for fn in _os.listdir(path):
         full_fn = _os.path.join(str(path), fn)
@@ -254,7 +279,19 @@ def clear_dir(path):
 
 
 def make_empty_dir(dirname):
-    """ Ensure that `dirname` names an empty directory """
+    """
+    Ensure that `dirname` names an empty directory
+
+    Parameters
+    ----------
+    dirname : str
+        The directory path.
+
+    Returns
+    -------
+    str
+        The directory name.
+    """
     if not _os.path.exists(dirname):
         _os.makedirs(dirname)
     else:
@@ -297,8 +334,7 @@ def _render_as_html(value, render_options, link_to):
 
 def render_as_html(qtys, render_options, link_to, verbosity):
     """
-    Render the workspace quantities (outputs and switchboards) in the `qtys`
-    dictionary as HTML.
+    Render the workspace quantities (outputs and switchboards) in the `qtys` dictionary as HTML.
 
     Parameters
     ----------
@@ -337,8 +373,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
 
 def render_as_latex(qtys, render_options, verbosity):
     """
-    Render the workspace quantities (outputs; not switchboards) in the `qtys`
-    dictionary as LaTeX.
+    Render the workspace quantities (outputs; not switchboards) in the `qtys` dictionary as LaTeX.
 
     Parameters
     ----------
@@ -446,7 +481,61 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
                          render_math=True, resizable=True, autosize='none', verbosity=0):
     """
     Renders `qtys` and merges them into a single HTML file `output_filename`.
+
     This functions parameters are the same as those of :func:`merge_jinja_template_dir`.
+
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities (switchboards and outputs).
+
+    output_filename : str
+        The output filename.
+
+    template_dir : str, optional
+        The template filename, relative to pyGSTi's `templates` directory.
+
+    template_name : str, optional
+        The name of the template file within `template_dir`.
+
+    auto_open : bool, optional
+        Whether the output file should be automatically opened in a web browser.
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the
+        precision for complex angles, numbers in scientific notation, and
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        a default is used.
+
+    link_to : list, optional
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.
+
+    connected : bool, optional
+        Whether an internet connection should be assumed.  If False, then an
+        'offline' folder is assumed to be present in the output HTML's folder.
+
+    toggles : dict, optional
+        A dictionary of toggle_name:bool pairs specifying
+        how to preprocess the template.
+
+    render_math : bool, optional
+        Whether math should be rendered.
+
+    resizable : bool, optional
+        Whether figures should be resizable.
+
+    autosize : {'none', 'initial', 'continual'}
+        Whether tables and plots should be resized, either initially --
+        i.e. just upon first rendering (`"initial"`) -- or whenever
+        the browser window is resized (`"continual"`).
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
 
     Returns
     -------
@@ -487,6 +576,9 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
         }
     }
 
+    #Additional configuration needed in jinja templates
+    render_params['config']['embed_figures'] = True  # to know NOT to test for AJAX errors
+
     # Render main page template to output path
     template = env.get_template(template_name)
     with open(str(output_filename), 'w') as outfile:
@@ -501,8 +593,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
                              auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
                              render_math=True, resizable=True, autosize='none', embed_figures=True, verbosity=0):
     """
-    Renders `qtys` and merges them into the HTML files under `template_dir`,
-    saving the output under `output_dir`.
+    Renders `qtys` and merges them into the HTML files under `template_dir`, saving the output under `output_dir`.
 
     Parameters
     ----------
@@ -514,6 +605,9 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
 
     template_dir : str, optional
         The template filename, relative to pyGSTi's `templates` directory.
+
+    template_name : str, optional
+        The name of the template file within `template_dir`.
 
     auto_open : bool, optional
         Whether the output file should be automatically opened in a web browser.
@@ -648,7 +742,31 @@ def process_call(call):
 
 
 def evaluate_call(call, stdout, stderr, returncode, printer):
-    """ Run `call` and raise CalledProcessError if exit code > 0 """
+    """
+    Run `call` and raise CalledProcessError if exit code > 0
+
+    Parameters
+    ----------
+    call : list
+        List containing the command and flags in the form that
+        :function:`subprocess.check_call` uses.
+
+    stdout : file pointer
+        As in :function:`subprocess.check_call`.
+
+    stderr : file pointer
+        As in :function:`subprocess.check_call`.
+
+    returncode : int
+        Return/exit code.
+
+    printer : VerbosityPrinter
+        Printer object to write errors to.
+
+    Returns
+    -------
+    None
+    """
     if len(stderr) > 0:
         printer.error(stderr)
     if returncode > 0:
@@ -658,8 +776,7 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
 def merge_latex_template(qtys, template_filename, output_filename,
                          toggles=None, precision=None, verbosity=0):
     """
-    Renders `qtys` and merges them into the LaTeX file `template_filename`,
-    saving the output under `output_filename`.
+    Renders `qtys` and merges them into the LaTeX file `template_filename`, saving the output under `output_filename`.
 
     Parameters
     ----------
@@ -734,8 +851,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
 
 def compile_latex_report(report_filename, latex_call, printer, auto_open):
     """
-    Compile a PDF report from a TeX file. Will compile twice
-    automatically.
+    Compile a PDF report from a TeX file. Will compile twice automatically.
 
     Parameters
     ----------
@@ -750,12 +866,19 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
     printer : VerbosityPrinter
         Printer to handle logging.
 
+    auto_open : bool, optional
+        Whether the generated report file should be opened by the OS right
+        before this function exists.
+
+    Returns
+    -------
+    None
+
     Raises
     ------
     subprocess.CalledProcessException
         If the call to the process comiling the PDF returns non-zero exit
         status.
-
     """
     report_dir = _os.path.dirname(report_filename)
     report_base = _os.path.splitext(_os.path.basename(report_filename))[0]
@@ -795,9 +918,10 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
 
 def to_pdfinfo(list_of_keyval_tuples):
     """
-    Convert a list of (key,value) pairs to a string in the format expected
-    for a latex document's "pdfinfo" directive (for setting PDF file meta
-    information).
+    Convert a list of (key,value) pairs to a "pdfinfo" string.
+
+    The returned string is in the format expected for a latex document's
+    "pdfinfo" directive (for setting PDF file meta information).
 
     Parameters
     ----------

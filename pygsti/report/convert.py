@@ -1,8 +1,9 @@
-'''
-This module defines type-differentiation for low level formatting types
+"""
+This module defines type-differentiation for low level formatting types.
+
 Its main function, convert, takes any item x, a specs dictionary, and a format (ie 'html')
 and returns a formatted version of x using the format
-'''
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -22,9 +23,18 @@ from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 
 def functions_in(module):
-    '''
+    """
     Create a dictionary of the functions in a module
-    '''
+
+    Parameters
+    ----------
+    module : Module
+        module to run on.
+
+    Returns
+    -------
+    dict
+    """
     return {name: f for name, f in module.__dict__.items() if callable(f)}
 
 
@@ -35,9 +45,18 @@ convert_dict = {
 
 
 def calc_dim(x):
-    '''
+    """
     Calculate the dimension of some matrix-like type
-    '''
+
+    Parameters
+    ----------
+    x : matrix-like
+        The object to get the dimension of.
+
+    Returns
+    -------
+    int
+    """
     d = 0
     for l in x.shape:
         if l > 1: d += 1
@@ -52,6 +71,7 @@ def item_type(x):
     ----------
     x : anything
         Value to convert.
+
     Returns
     -------
     string
@@ -78,9 +98,25 @@ def item_type(x):
 
 
 def convert(x, specs, fmt):
-    '''
+    """
     Convert any item to a format
-    '''
+
+    Parameters
+    ----------
+    x : object
+        The object to convert.
+
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
+
+    fmt : str
+        The format to convert to, e.g. `"html"` or `"latex"`.
+
+    Returns
+    -------
+    str
+        `x` rendered as `fmt`.
+    """
 
     #Squeeze arrays before formatting
     if isinstance(x, _np.ndarray) or \
@@ -100,7 +136,16 @@ def convert(x, specs, fmt):
 
 
 def converter(fmt):
-    '''
+    """
     Create a converter function for some specific format
-    '''
+
+    Parameters
+    ----------
+    fmt : str
+        The format to convert to, e.g. `"html"` or `"latex"`.
+
+    Returns
+    -------
+    function
+    """
     return functools.partial(convert, fmt=fmt)
