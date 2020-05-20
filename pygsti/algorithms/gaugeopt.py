@@ -338,6 +338,17 @@ def _create_objective_fn(model, target_model, item_weights=None,
     if mxBasis.name == "unknown" and target_model is not None:
         mxBasis = target_model.basis
 
+    def _transform_with_oob_check(mdl, gauge_group_el, oob_check):
+        """ Helper function that sometimes checks if mdl.transform(gauge_group_el) fails. """
+        mdl = mdl.copy()
+        if oob_check:
+            try: mdl.transform(gauge_group_el)
+            except Exception as e:
+                raise ValueError("Out of bounds: %s" % str(e))  # signals OOB condition
+        else:
+            mdl.transform(gauge_group_el)
+        return mdl
+
     if method == "ls":
         # least-squares case where objective function returns an array of
         # the before-they're-squared difference terms and there's an analytic jacobian
@@ -352,16 +363,6 @@ def _create_objective_fn(model, target_model, item_weights=None,
             full_target_model.set_all_parameterizations("full")  # so we can gauge-transform the target model.
         else:
             full_target_model = None  # in case it get's referenced by mistake
-
-        def _transform_with_oob_check(mdl, gauge_group_el, oob_check):
-            mdl = mdl.copy()
-            if oob_check:
-                try: mdl.transform(gauge_group_el)
-                except Exception as e:
-                    raise ValueError("Out of bounds: %s" % str(e))  # signals OOB condition
-            else:
-                mdl.transform(gauge_group_el)
-            return mdl
 
         def _objective_fn(gauge_group_el, oob_check):
 

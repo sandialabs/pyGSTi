@@ -1165,7 +1165,7 @@ def gaugeopt_suite_to_dictionary(gaugeopt_suite, model, unreliable_ops=(), verbo
 
 
 def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_name, model, unreliable_ops, printer):
-    if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q"):
+    if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt"):
 
         stages = []  # multi-stage gauge opt
         gg = model.default_gauge_group
@@ -1178,11 +1178,13 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                 gaugeopt_suite_dict[root_lbl] = {'verbosity': printer}
 
         elif gg is not None:
+            metric = 'frobeniustt' if suite_name == 'stdgaugeopt-tt' else 'frobenius'
 
             #Stage 1: plain vanilla gauge opt to get into "right ballpark"
             if gg.name in ("Full", "TP"):
                 stages.append(
                     {
+                        'gates_metric': metric, 'spam_metric': metric,
                         'item_weights': {'gates': 1.0, 'spam': 1.0},
                         'verbosity': printer
                     })
@@ -1191,6 +1193,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
             #         expense of spam if needed)
             stages.append(
                 {
+                    'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 1.0, 'spam': 0.0},
                     'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
                     'verbosity': printer
@@ -1203,6 +1206,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                 _objs.TPSpamGaugeGroup
             stages.append(
                 {
+                    'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
                     'gauge_group': s3gg(model.dim),

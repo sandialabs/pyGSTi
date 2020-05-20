@@ -911,12 +911,14 @@ class GaugeRobustMetricTable(WorkspaceTable):
         orig_target = target_model.copy()
         orig_target.set_all_parameterizations("full")  # so we can freely gauge transform this
 
-        if metric in ("inf", "agi", "nuinf", "nuagi", "evinf", "evagi", "evnuinf", "evnuagi"):
-            gmetric = "fidelity"
-        elif metric in ("trace", "diamond", "evdiamond", "evnudiamond"):
-            gmetric = "tracedist"
-        else:
-            gmetric = "frobenius"
+        # ** A first attempt at fixing the gauge optimization issues. ** -- "frobeniustt" should replace this.
+        #if metric in ("inf", "agi", "nuinf", "nuagi", "evinf", "evagi", "evnuinf", "evnuagi"):
+        #    gmetric = "fidelity"
+        #elif metric in ("trace", "diamond", "evdiamond", "evnudiamond"):
+        #    gmetric = "tracedist"
+        #else:
+        #    gmetric = "frobenius"
+        gmetric = "frobeniustt"
 
         mdl_in_best_gauge = []
         target_mdl_in_best_gauge = []
@@ -934,13 +936,14 @@ class GaugeRobustMetricTable(WorkspaceTable):
             #print("PT1:\n",mdl.strdiff(target_model))
             #print("PT1b:\n",mdl.strdiff(target_model, 'inf'))
             try:
-                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric=gmetric,
+                _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric=gmetric, spam_metric=gmetric,
                                                             item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
                                                             return_all=True, tol=1e-5, maxiter=100)  # ADDITIONAL GOPT
             except Exception as e:
                 _warnings.warn(("GaugeRobustMetricTable gauge opt failed for %s label - "
                                 "falling back to frobenius metric! Error was:\n%s") % (lbl, str(e)))
                 _, Ugg_addl, mdl = _gopt.gaugeopt_to_target(mdl, orig_target, gates_metric="frobenius",
+                                                            spam_metric="frobenius",
                                                             item_weights={'spam': 0, 'gates': 1e-4, lbl: 1.0},
                                                             return_all=True, tol=1e-5, maxiter=100)  # ADDITIONAL GOPT
 
