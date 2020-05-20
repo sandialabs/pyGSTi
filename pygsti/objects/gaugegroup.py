@@ -164,6 +164,126 @@ class GaugeGroupElement(object):
         """
         return 0
 
+    def inverse(self):
+        """
+        Creates a gauge group element that performs the inverse of this element.
+
+        Returns
+        -------
+        InverseGaugeGroupElement
+        """
+        return InverseGaugeGroupElement(self)
+
+
+class InverseGaugeGroupElement(GaugeGroupElement):
+    """
+    A gauge group element that represents the inverse action of another element.
+
+    Parameters
+    ----------
+    gauge_group_el : GaugeGroupElement
+        The element to invert.
+    """
+
+    def __init__(self, gauge_group_el):
+        self.inverse_element = gauge_group_el
+
+    def get_transform_matrix(self):
+        """
+        The gauge-transform matrix.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self.inverse_element.get_transform_matrix_inverse()
+
+    def get_transform_matrix_inverse(self):
+        """
+        The inverse of the gauge-transform matrix.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self.inverse_element.get_transform_matrix()
+
+    def deriv_wrt_params(self, wrt_filter=None):
+        """
+        Computes the derivative of the gauge group at this element.
+
+        That is, the derivative of a general element with respect to the gauge
+        group's parameters, evaluated at this element.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray, optional
+            Indices of the gauge group parameters to differentiate with respect to.
+            If None, differentiation is performed with respect to all the group's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        #Derivative of inv(M): d(inv_M) = inv_M * dM * inv_M
+        Tinv = self.get_transform_matrix()  # inverse of *original* transform
+        dT = self.inverse_element.deriv_wrt_params(wrt_filter)  # shape (d*d, n)
+        d, n = int(round(_np.sqrt(dT.shape[0]))), dT.shape[1]
+
+        dT.shape = (d, d, n)  # call it (d1,d2,n)
+        dT = _np.rollaxis(dT, 2)  # shape (n, d1, d2)
+        deriv = -_np.dot(Tinv, _np.dot(dT, Tinv))  # d,d * (n,d,d * d,d) => d,d * n,d,d => d,n,d
+        deriv = _np.swapaxes(deriv, 1, 2) # d,n,d => d,d,n
+        deriv.shape = (d * d, n)
+        return deriv
+
+    def to_vector(self):
+        """
+        Get the parameter vector corresponding to this transform.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self.inverse_element.to_vector()
+
+    def from_vector(self, v):
+        """
+        Reinitialize this `GaugeGroupElement` using the the parameter vector `v`.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            A 1D array of length :method:`num_params`
+
+        Returns
+        -------
+        None
+        """
+        return self.inverse_element.from_vector()
+
+    def num_params(self):
+        """
+        Return the number of parameters of this gauge group element.
+
+        (This is equivalent to the number of parameters of the parent gauge group.)
+
+        Returns
+        -------
+        int
+        """
+        return self.inverse_element.num_params()
+
+    def inverse(self):
+        """
+        Creates a gauge group element that performs the inverse of this element.
+
+        Returns
+        -------
+        GaugeGroupElement
+        """
+        return self.inverse_element  # inverting an inverse => back to original
+
 
 class OpGaugeGroup(GaugeGroup):
     """
