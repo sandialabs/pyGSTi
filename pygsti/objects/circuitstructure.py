@@ -87,9 +87,8 @@ class CircuitPlaquette(object):
         #After compiling:
         self._elementIndicesByStr = None
         self._outcomesByStr = None
-        self.num_simplified_elements = None
 
-    def expand_aliases(self, ds_filter=None, circuit_simplifier=None):
+    def expand_aliases(self, ds_filter=None):
         """
         Returns a new CircuitPlaquette with any aliases expanded.
 
@@ -101,10 +100,6 @@ class CircuitPlaquette(object):
         ----------
         ds_filter : DataSet, optional
             If not None, keep only strings that are in this data set.
-
-        circuit_simplifier : Model, optional
-            Whether to call `simplify_circuits(circuit_simplifier)`
-            on the new CircuitPlaquette.
 
         Returns
         -------
@@ -128,11 +123,8 @@ class CircuitPlaquette(object):
                 new_elements.append((i, j, s2))
                 if new_fidpairs: new_fidpairs.append((prep2, effect2))
 
-        ret = CircuitPlaquette(self.base, self.rows, self.cols,
-                               new_elements, None, new_fidpairs)
-        if circuit_simplifier is not None:
-            ret.simplify_circuits(circuit_simplifier, ds_filter)
-        return ret
+        return CircuitPlaquette(self.base, self.rows, self.cols,
+                                new_elements, None, new_fidpairs)
 
     def get_all_strs(self):
         """
@@ -143,44 +135,6 @@ class CircuitPlaquette(object):
         list
         """
         return [s for i, j, s in self.elements]
-
-    def simplify_circuits(self, model, dataset=None):  #INPLACE
-        """
-        Simplify the circuits in this plaquette.
-
-        The result is a plaquette that has a `num_simplified_elements` property and
-        whose `iter_simplified()` and `elementvec_to_matrix` methods may be used.
-
-        Parameters
-        ----------
-        model : Model
-            The model used to perform the compiling.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        Returns
-        -------
-        None
-        """
-        all_strs = self.get_all_strs()
-        if len(all_strs) > 0:
-            rawmap, self._elementIndicesByStr, self._outcomesByStr, nEls = \
-                model.simplify_circuits(all_strs, dataset)
-        else:
-            nEls = 0  # nothing to simplify
-        self.num_simplified_elements = nEls
-
-    def iter_simplified(self):
-        """
-        Iterate over (row_index, col_index, simplified_circuit, element_index, outcome_index) tuples.
-        """
-        assert(self.num_simplified_elements is not None), \
-            "Plaquette must be simplified first!"
-        for k, (i, j, s) in enumerate(self.elements):
-            yield i, j, s, self._elementIndicesByStr[k], self._outcomesByStr[k]
 
     def __iter__(self):
         """
@@ -193,7 +147,7 @@ class CircuitPlaquette(object):
     def __len__(self):
         return len(self.elements)
 
-    def elementvec_to_matrix(self, elementvec, mergeop="sum"):
+    def elementvec_to_matrix(self, elementvec, elindices_lookup, outcomes_lookup, mergeop="sum"):
         """
         Form a matrix of values corresponding to this plaquette from an element vector.
 
@@ -203,8 +157,18 @@ class CircuitPlaquette(object):
         Parameters
         ----------
         elementvec : numpy array
-            An array of length `self.num_simplified_elements` containting the
-            values to use when constructing a matrix of values for this plaquette.
+            An array containting the values to use when constructing a
+            matrix of values for this plaquette.  This array may contain more
+            values than are needed by this plaquette.  Indices into this array
+            are given by `elindices_lookup`.
+
+        elindices_lookup : collections.OrderedDict
+            A dictionary whose keys are circuits and whose values are slices and/or
+            integer-arrays into `elementvec` giving the corresponding elements.
+
+        outcomes_lookup : collections.OrderedDict
+            A dictionary whose keys are circuits and whose values are lists
+            of outcome labels corresponding to the elements for that circuit.
 
         mergeop : "sum" or format string, optional
             Dictates how to combine the `elementvec` components corresponding to a single
@@ -219,14 +183,14 @@ class CircuitPlaquette(object):
         """
         if mergeop == "sum":
             ret = _np.nan * _np.ones((self.rows, self.cols), 'd')
-            for i, j, opstr, elIndices, _ in self.iter_simplified():
-                ret[i, j] = sum(elementvec[elIndices])
+            for i, j, opstr in self:
+                ret[i, j] = sum(elementvec[elindices_lookup[opstr]])
         elif '%' in mergeop:
             fmt = mergeop
             ret = _np.nan * _np.ones((self.rows, self.cols), dtype=_np.object)
-            for i, j, opstr, elIndices, _ in self.iter_simplified():
+            for i, j, opstr in self:
                 ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
-                                       (fmt % x) for x in elementvec[elIndices]])
+                                       (fmt % x) for x in elementvec[elindices_lookup[opstr]]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
         return ret
@@ -415,33 +379,6 @@ class CircuitStructure(object):
                 if p is not None and p.base is not None:
                     baseStrs.add(p.base)
         return list(baseStrs)
-
-    def simplify_plaquettes(self, model, dataset=None):
-        """
-        Simplifies all the plaquettes in this circuit structure.
-
-        This endows the plaquettes with a `num_simplified_elements` property
-        and allows their `iter_simplified()` methods to be used.
-
-        Parameters
-        ----------
-        model : Model
-            The model used to perform the compiling.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        Returns
-        -------
-        None
-        """
-        for x in self.xvals():
-            for y in self.yvals():
-                p = self.get_plaquette(x, y)
-                if p is not None:
-                    p.simplify_circuits(model, dataset)
 
 
 class LsGermsStructure(CircuitStructure):
@@ -704,17 +641,13 @@ class LsGermsStructure(CircuitStructure):
         CircuitPlaquette
         """
         if (max_length, germ) not in self._plaquettes:
-            p = self.create_plaquette(None, [])  # no elements
-            p.simplify_circuits(None)  # just marks as "simplified"
-            return p
+            return self.create_plaquette(None, [])  # no elements
 
         if not onlyfirst or (max_length, germ) in self._firsts:
             return self._plaquettes[(max_length, germ)]
         else:
             basestr = self._plaquettes[(max_length, germ)].base
-            p = self.create_plaquette(basestr, [])  # no elements
-            p.simplify_circuits(None)  # just marks as "simplified"
-            return p
+            return self.create_plaquette(basestr, [])  # no elements
 
     def truncate(self, max_lengths=None, germs=None, prep_fiducials=None, meas_fiducials=None, seqs=None):
         """
@@ -1148,17 +1081,13 @@ class LsGermsSerialStructure(CircuitStructure):
         CircuitPlaquette
         """
         if (max_length, germ) not in self._plaquettes:
-            p = self.create_plaquette(None, [])  # no elements
-            p.simplify_circuits(None)  # just marks as "simplified"
-            return p
+            return self.create_plaquette(None, [])  # no elements
 
         if not onlyfirst or (max_length, germ) in self._firsts:
             return self._plaquettes[(max_length, germ)]
         else:
             basestr = self._plaquettes[(max_length, germ)].base
-            p = self.create_plaquette(basestr, [])  # no elements
-            p.simplify_circuits(None)  # just marks as "simplified"
-            return p
+            return self.create_plaquette(basestr, [])  # no elements
 
     def truncate(self, max_lengths=None, germs=None, n_minor_rows=None, n_minor_cols=None):
         """
