@@ -804,7 +804,7 @@ class LinearOperator(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Inverse of `transform`.
 
         Returns
         -------
@@ -835,7 +835,7 @@ class LinearOperator(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Inverse of `transform`.
 
         Returns
         -------
@@ -859,7 +859,7 @@ class LinearOperator(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Inverse of `transform`.
 
         Returns
         -------
@@ -889,7 +889,7 @@ class LinearOperator(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Inverse of `transform`.
 
         Returns
         -------
@@ -918,7 +918,7 @@ class LinearOperator(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Inverse of `transform`.
 
         Returns
         -------
