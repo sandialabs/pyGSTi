@@ -549,11 +549,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
             if check_jac and (comm is None or comm.Get_rank() == 0):
                 def _mock_objective_fn(v):
-                    gauge_group_el.from_vector(v)
-                    mdl = mdl_pre.copy()
-                    mdl.transform(gauge_group_el)
-                    return _objective_fn(mdl)
-
+                    return _objective_fn(gauge_group_el, False)
                 vec = gauge_group_el.to_vector()
                 _opt.check_jac(_mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, err_type='abs',
                                verbosity=1)
