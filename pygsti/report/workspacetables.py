@@ -1007,7 +1007,7 @@ class ModelVsTargetTable(WorkspaceTable):
         The target model to compare with.
 
     clifford_compilation : dict
-        A dictionary of operation sequences, one for each Clifford operation
+        A dictionary of circuits, one for each Clifford operation
         in the Clifford group relevant to the model Hilbert space.  If
         None, then rows requiring a clifford compilation are omitted.
 
@@ -1027,7 +1027,7 @@ class ModelVsTargetTable(WorkspaceTable):
             The models to compare
 
         clifford_compilation : dict
-            A dictionary of operation sequences, one for each Clifford operation
+            A dictionary of circuits, one for each Clifford operation
             in the Clifford group relevant to the model Hilbert space.  If
             None, then rows requiring a clifford compilation are omitted.
 
@@ -1115,7 +1115,7 @@ class GatesVsTargetTable(WorkspaceTable):
 
     virtual_ops : list, optional
         If not None, a list of `Circuit` objects specifying additional "gates"
-        (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+        (i.e. processes) to compute eigenvalues of.  Length-1 circuits are
         automatically discarded so they are not displayed twice.
 
     wildcard: PrimitiveOpsWildcardBudget
@@ -1160,7 +1160,7 @@ class GatesVsTargetTable(WorkspaceTable):
 
         virtual_ops : list, optional
             If not None, a list of `Circuit` objects specifying additional "gates"
-            (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+            (i.e. processes) to compute eigenvalues of.  Length-1 circuits are
             automatically discarded so they are not displayed twice.
 
         wildcard: PrimitiveOpsWildcardBudget
@@ -2308,7 +2308,7 @@ class GateEigenvalueTable(WorkspaceTable):
 
     virtual_ops : list, optional
         If not None, a list of `Circuit` objects specifying additional "gates"
-        (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+        (i.e. processes) to compute eigenvalues of.  Length-1 circuits are
         automatically discarded so they are not displayed twice.
     """
 
@@ -2355,7 +2355,7 @@ class GateEigenvalueTable(WorkspaceTable):
 
         virtual_ops : list, optional
             If not None, a list of `Circuit` objects specifying additional "gates"
-            (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
+            (i.e. processes) to compute eigenvalues of.  Length-1 circuits are
             automatically discarded so they are not displayed twice.
 
         Returns
@@ -2896,7 +2896,7 @@ class FitComparisonTable(WorkspaceTable):
 
 class CircuitTable(WorkspaceTable):
     """
-    Table which simply displays list(s) of operation sequences
+    Table which simply displays list(s) of circuits
 
     Parameters
     ----------
@@ -2904,7 +2904,7 @@ class CircuitTable(WorkspaceTable):
         The containing (parent) workspace.
 
     circuit_lists : Circuit list or list of Circuit lists
-        List(s) of operation sequences to put in table.
+        List(s) of circuits to put in table.
 
     titles : string or list of strings
         The title(s) for the different string lists.  These are displayed in
@@ -2912,7 +2912,7 @@ class CircuitTable(WorkspaceTable):
 
     n_cols : int, optional
         The number of *data* columns, i.e. those containing
-        operation sequences, for each string list.
+        circuits, for each string list.
 
     common_title : string, optional
         A single title string to place in a cell spanning across
@@ -2921,12 +2921,12 @@ class CircuitTable(WorkspaceTable):
 
     def __init__(self, ws, circuit_lists, titles, n_cols=1, common_title=None):
         """
-        Creates a table of enumerating one or more sets of operation sequences.
+        Creates a table of enumerating one or more sets of circuits.
 
         Parameters
         ----------
         circuit_lists : Circuit list or list of Circuit lists
-            List(s) of operation sequences to put in table.
+            List(s) of circuits to put in table.
 
         titles : string or list of strings
             The title(s) for the different string lists.  These are displayed in
@@ -2934,7 +2934,7 @@ class CircuitTable(WorkspaceTable):
 
         n_cols : int, optional
             The number of *data* columns, i.e. those containing
-            operation sequences, for each string list.
+            circuits, for each string list.
 
         common_title : string, optional
             A single title string to place in a cell spanning across

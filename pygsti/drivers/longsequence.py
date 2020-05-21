@@ -75,21 +75,21 @@ def do_model_test(model_filename_or_object,
         model file (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial operation sequences, specified either directly
-        or by the filename of a operation sequence list file (text format).
+        The state preparation fiducial circuits, specified either directly
+        or by the filename of a circuit list file (text format).
 
     meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial operation sequences, specified either directly or by
-        the filename of a operation sequence list file (text format).  If ``None``,
+        The measurement fiducial circuits, specified either directly or by
+        the filename of a circuit list file (text format).  If ``None``,
         then use the same strings as specified by prep_fiducial_list_or_filename.
 
     germs_list_or_filename : (list of Circuits) or string
-        The germ operation sequences, specified either directly or by the filename of a
-        operation sequence list file (text format).
+        The germ circuits, specified either directly or by the filename of a
+        circuit list file (text format).
 
     max_lengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
-        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        for repeated germ strings.  The list of circuits for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
@@ -194,12 +194,12 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
         model file (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial operation sequences, specified either directly
-        or by the filename of a operation sequence list file (text format).
+        The state preparation fiducial circuits, specified either directly
+        or by the filename of a circuit list file (text format).
 
     meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial operation sequences, specified either directly or by
-        the filename of a operation sequence list file (text format).  If ``None``,
+        The measurement fiducial circuits, specified either directly or by
+        the filename of a circuit list file (text format).  If ``None``,
         then use the same strings as specified by prep_fiducial_list_or_filename.
 
     gauge_opt_params : dict, optional
@@ -311,21 +311,21 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         model file (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial operation sequences, specified either directly
-        or by the filename of a operation sequence list file (text format).
+        The state preparation fiducial circuits, specified either directly
+        or by the filename of a circuit list file (text format).
 
     meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial operation sequences, specified either directly or by
-        the filename of a operation sequence list file (text format).  If ``None``,
+        The measurement fiducial circuits, specified either directly or by
+        the filename of a circuit list file (text format).  If ``None``,
         then use the same strings as specified by prep_fiducial_list_or_filename.
 
     germs_list_or_filename : (list of Circuits) or string
-        The germ operation sequences, specified either directly or by the filename of a
-        operation sequence list file (text format).
+        The germ circuits, specified either directly or by the filename of a
+        circuit list file (text format).
 
     max_lengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
-        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        for repeated germ strings.  The list of circuits for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
@@ -449,7 +449,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`do_long_sequence_gst` except this function takes
-    `lsgst_lists`, a list of either raw operation sequence lists or of `LsGermsStruct`
+    `lsgst_lists`, a list of either raw circuit lists or of `LsGermsStruct`
     gate-string-structure objects to define which gate seqences are used on
     each GST iteration.
 
@@ -465,9 +465,9 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
         model file (text format).
 
     lsgst_lists : list of lists or LsGermsStruct(s)
-        An explicit list of either the raw operation sequence lists to be used in
+        An explicit list of either the raw circuit lists to be used in
         the analysis or of LsGermsStruct objects, which additionally contain
-        the max-L, germ, and fiducial pair structure of a set of operation sequences.
+        the max-L, germ, and fiducial pair structure of a set of circuits.
         A single LsGermsStruct object can also be given, which is equivalent
         to passing a list of successive L-value truncations of this object
         (e.g. if the object has `Ls = [1,2,4]` then this is like passing
@@ -576,21 +576,21 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
         model file (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial operation sequences, specified either directly
-        or by the filename of a operation sequence list file (text format).
+        The state preparation fiducial circuits, specified either directly
+        or by the filename of a circuit list file (text format).
 
     meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial operation sequences, specified either directly or by
-        the filename of a operation sequence list file (text format).  If ``None``,
+        The measurement fiducial circuits, specified either directly or by
+        the filename of a circuit list file (text format).  If ``None``,
         then use the same strings as specified by prep_fiducial_list_or_filename.
 
     germs_list_or_filename : (list of Circuits) or string
-        The germ operation sequences, specified either directly or by the filename of a
-        operation sequence list file (text format).
+        The germ circuits, specified either directly or by the filename of a
+        circuit list file (text format).
 
     max_lengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
-        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        for repeated germ strings.  The list of circuits for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 

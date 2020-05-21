@@ -90,7 +90,7 @@ class TermEvalTree(EvalTree):
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular operation sequence:
+        #  information about evaluating a particular circuit:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:]  # clear self (a list)
@@ -126,7 +126,7 @@ class TermEvalTree(EvalTree):
 
     def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final operation sequences this tree evaluates.
+        Generate a list of the final circuits this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -139,7 +139,7 @@ class TermEvalTree(EvalTree):
         permute : bool, optional
             Whether to permute the returned list of strings into the
             same order as the original list passed to initialize(...).
-            When False, the computed order of the operation sequences is
+            When False, the computed order of the circuits is
             given, which is matches the order of the results from calls
             to `Model` bulk operations.  Non-trivial permutation
             occurs only when the tree is split (in order to keep
@@ -149,7 +149,7 @@ class TermEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the operation sequences evaluated by this tree, each
+            A list of the circuits evaluated by this tree, each
             specified as a tuple of operation labels.
         """
         circuits = [None] * len(self)
@@ -322,7 +322,7 @@ class TermEvalTree(EvalTree):
         def permute_parent_element(perm, el):
             """Applies a permutation to an element of the tree """
             # perm[oldIndex] = newIndex
-            return el  # no need to permute operation sequence
+            return el  # no need to permute circuit
 
         def create_subtree(parent_indices, num_final, full_eval_order, slice_into_parents_final_array, parent_tree):
             """

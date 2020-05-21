@@ -953,7 +953,7 @@ class TermForwardSimulator(ForwardSimulator):
         ----------
         simplified_circuits : list
             A list of Circuits or tuples of operation labels which specify
-            the operation sequences to create an evaluation tree out of
+            the circuits to create an evaluation tree out of
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
@@ -1438,10 +1438,10 @@ class TermForwardSimulator(ForwardSimulator):
     def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False,
                         comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence

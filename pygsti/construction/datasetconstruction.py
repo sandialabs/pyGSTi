@@ -43,11 +43,11 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only has
+        The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
-        integer, all operation sequences have this number of total samples. If a list,
+        integer, all circuits have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        operation sequence.  If ``None``, then `model_or_dataset` must be a
+        circuit.  If ``None``, then `model_or_dataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
         (on a per-circuit basis).
 
@@ -62,7 +62,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution.  Distribution has parameters p = (clipped) probability
-          of the operation sequence and n = number of samples.  This can only be used
+          of the circuit and n = number of samples.  This can only be used
           when there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = (clipped) probability of the gate
@@ -80,12 +80,12 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
 
     alias_dict : dict, optional
         A dictionary mapping single operation labels into tuples of one or more
-        other operation labels which translate the given operation sequences before values
+        other operation labels which translate the given circuits before values
         are computed using `model_or_dataset`.  The resulting Dataset, however,
-        contains the *un-translated* operation sequences as keys.
+        contains the *un-translated* circuits as keys.
 
     collision_action : {"aggregate", "keepseparate"}
-        Determines how duplicate operation sequences are handled by the resulting
+        Determines how duplicate circuits are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     record_zero_counts : bool, optional
@@ -111,7 +111,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
     Returns
     -------
     DataSet
-        A static data set filled with counts for the specified operation sequences.
+        A static data set filled with counts for the specified circuits.
     """
     NTOL = 10
     TOL = 10**-NTOL
@@ -273,7 +273,7 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_dataset` which also updates the operation sequences.
+        to use :function:`filter_dataset` which also updates the circuits.
 
     record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
@@ -414,7 +414,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     `sectors_to_keep` (e.g. an idle gate acting on *all* sectors because it's
     `.sslbls` is None will *not* be removed).
 
-    Here "sectors" are state-space labels, present in the operation sequences of
+    Here "sectors" are state-space labels, present in the circuits of
     `dataset`.  Each sector also corresponds to a particular character position
     within the outcomes labels of `dataset`.  Thus, for this function to work,
     the outcome labels of `dataset` must all be 1-tuples whose sole element is
@@ -422,7 +422,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     a single sector.  If the state-space labels are integers, then they can
     serve as both a label and an outcome-string position.  The argument
     `new_sectors` may be given to rename the kept state-space labels in the
-    returned `DataSet`'s operation sequences.
+    returned `DataSet`'s circuits.
 
     A typical case is when the state-space is that of *n* qubits, and the
     state space labels the intergers 0 to *n-1*.  As stated above, in this
@@ -451,7 +451,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
 
     new_sectors : list or tuple, optional
         New sectors names to map the elements of `sectors_to_keep` onto in the
-        output DataSet's operation sequences.  None means the labels are not renamed.
+        output DataSet's circuits.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
         that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and
@@ -474,7 +474,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     Returns
     -------
     filtered_dataset : DataSet object
-        The DataSet with outcomes and operation sequences filtered as described above.
+        The DataSet with outcomes and circuits filtered as described above.
     """
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep

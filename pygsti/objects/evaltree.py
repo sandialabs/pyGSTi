@@ -63,7 +63,7 @@ class EvalTree(list):
 
         # ********* Only non-None for sub-trees ******************
 
-        # The mapping between this tree's final operation sequence indices and its parent's
+        # The mapping between this tree's final circuit indices and its parent's
         self.myFinalToParentFinalMap = None
 
         # The mapping between this tree's final element indices and its parent's
@@ -304,7 +304,7 @@ class EvalTree(list):
 
     def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final operation sequences this tree evaluates.
+        Generate a list of the final circuits this tree evaluates.
 
         This method essentially "runs" the tree and follows its
         prescription for sequentailly building up longer strings
@@ -317,7 +317,7 @@ class EvalTree(list):
         permute : bool, optional
             Whether to permute the returned list of strings into the
             same order as the original list passed to initialize(...).
-            When False, the computed order of the operation sequences is
+            When False, the computed order of the circuits is
             given, which is matches the order of the results from calls
             to `Model` bulk operations.  Non-trivial permutation
             occurs only when the tree is split (in order to keep
@@ -326,8 +326,8 @@ class EvalTree(list):
 
         Returns
         -------
-        list of gate-label-tuples
-            A list of the operation sequences evaluated by this tree, each
+        list of operation-label-tuples
+            A list of the circuits evaluated by this tree, each
             specified as a tuple of operation labels.
         """
         raise NotImplementedError("generate_circuit_list(...) not implemented!")
@@ -757,7 +757,7 @@ class EvalTree(list):
 
     #NOT NEEDED?
     #def _compute_finalStringToEls(self):
-    #    #Create a mapping from each final operation sequence (index) to
+    #    #Create a mapping from each final circuit (index) to
     #    # a slice of final element indices
     #    self.finalStringToElsMap = []; i=0
     #    for k,spamTuples in enumerate(self.simplified_circuit_spamTuples):

@@ -32,7 +32,7 @@ class Results(object):
     Encapsulates a set of related GST estimates.
 
     A Results object is a container which associates a single `DataSet` and a
-    structured set of operation sequences (usually the experiments contained in the
+    structured set of circuits (usually the experiments contained in the
     data set) with a set of estimates.  Each estimate (`Estimate` object) contains
     models as well as parameters used to generate those inputs.  Associated
     `ConfidenceRegion` objects, because they are associated with a set of gate
@@ -75,7 +75,7 @@ class Results(object):
 
     def init_circuits(self, structs_by_iter):
         """
-        Initialize the common set operation sequences used to form the estimates of this Results object.
+        Initialize the common set circuits used to form the estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
         GST method was used, this is treated as a single iteration).
@@ -83,10 +83,10 @@ class Results(object):
         Parameters
         ----------
         structs_by_iter : list
-            The operation sequences used at each iteration. Ideally, elements are
+            The circuits used at each iteration. Ideally, elements are
             `LsGermsStruct` objects, which contain the structure needed to
             create color box plots in reports.  Elements may also be
-            unstructured lists of operation sequences (but this may limit
+            unstructured lists of circuits (but this may limit
             the amount of data visualization one can perform later).
 
         Returns
@@ -94,7 +94,7 @@ class Results(object):
         None
         """
         if len(self.circuit_structs) > 0:
-            _warnings.warn(("Re-initializing the operation sequences of a Results"
+            _warnings.warn(("Re-initializing the circuits of a Results"
                             " object!  Usually you don't want to do this."))
 
         #Set circuit structures
@@ -107,7 +107,7 @@ class Results(object):
                 unindexed_gss.add_unindexed(gss)
                 self.circuit_structs['iteration'].append(unindexed_gss)
             else:
-                raise ValueError("Unknown type of operation sequence specifier: %s"
+                raise ValueError("Unknown type of circuit specifier: %s"
                                  % str(type(gss)))
 
         self.circuit_structs['final'] = \

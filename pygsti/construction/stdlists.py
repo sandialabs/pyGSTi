@@ -28,12 +28,12 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
                          keep_fraction=1, keep_seed=None, include_lgst=True,
                          germ_length_limits=None):
     """
-    Create a set of operation sequence lists for LSGST based on germs and max-lengths.
+    Create a set of circuit lists for LSGST based on germs and max-lengths.
 
-    Constructs a series (a list) of operation sequence lists used by long-sequence GST
+    Constructs a series (a list) of circuit lists used by long-sequence GST
     (LSGST) algorithms.  If `include_lgst == True` then the starting list is the
     list of LGST strings, otherwise the starting list is empty.  For each
-    nonzero element of max_length_list, call it L, a list of operation sequences is
+    nonzero element of max_length_list, call it L, a list of circuits is
     created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
@@ -46,7 +46,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
       prepStr + germ^L + effectStr
 
     If nest == True, the above list is iteratively *added* (w/duplicates
-    removed) to the current list of operation sequences to form a final list for the
+    removed) to the current list of circuits to form a final list for the
     given L.  This results in successively larger lists, each of which
     contains all the elements of previous-L lists.  If nest == False then
     the above list *is* the final list for the given L.
@@ -59,15 +59,15 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
         relevant when `include_lgst == True`.
 
     prep_strs : list of Circuits
-        List of the preparation fiducial operation sequences, which follow state
+        List of the preparation fiducial circuits, which follow state
         preparation.
 
     effect_strs : list of Circuits
-        List of the measurement fiducial operation sequences, which precede
+        List of the measurement fiducial circuits, which precede
         measurement.
 
     germ_list : list of Circuits
-        List of the germ operation sequences.
+        List of the germ circuits.
 
     max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
@@ -75,7 +75,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
 
     fid_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the operation sequence lists.  If a list, each element of
+        to be used in the circuit lists.  If a list, each element of
         fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
         indexing a string within prep_strs and effect_strs, respectively, so
         that prepStr = prep_strs[iPrepStr] and effectStr =
@@ -95,11 +95,11 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
           as the germ exponent (the number of germ repetitions).
 
     nest : boolean, optional
-        If True, the returned operation sequences lists are "nested", meaning
-        that each successive list of operation sequences contains all the gate
+        If True, the returned circuits lists are "nested", meaning
+        that each successive list of circuits contains all the gate
         strings found in previous lists (and usually some additional
         new ones).  If False, then the returned circuit list for maximum
-        length == L contains *only* those operation sequences specified in the
+        length == L contains *only* those circuits specified in the
         description above, and *not* those for previous values of L.
 
     keep_fraction : float, optional
@@ -132,7 +132,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
     Returns
     -------
     list of (lists of Circuits)
-        The i-th list corresponds to a operation sequence list containing repeated
+        The i-th list corresponds to a circuit list containing repeated
         germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
@@ -257,11 +257,11 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
     """
     Create a set of long-sequence GST circuit lists (including structure).
 
-    Constructs a series (a list) of operation sequence structures used by long-sequence
+    Constructs a series (a list) of circuit structures used by long-sequence
     GST (LSGST) algorithms.  If `include_lgst == True` then the starting
     structure contains the LGST strings, otherwise the starting structure is
     empty.  For each nonzero element of max_length_list, call it L, a set of
-    operation sequences is created with the form:
+    circuits is created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
       prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
@@ -273,7 +273,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
       prepStr + germ^L + effectStr
 
     If nest == True, the above set is iteratively *added* (w/duplicates
-    removed) to the current operation sequence structure to form a final structure for
+    removed) to the current circuit structure to form a final structure for
     the given L.  This results in successively larger structures, each of which
     contains all the elements of previous-L structures.  If nest == False then
     the above set *is* the final structure for the given L.
@@ -286,15 +286,15 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         relevant when `include_lgst == True`.
 
     prep_strs : list of Circuits
-        List of the preparation fiducial operation sequences, which follow state
+        List of the preparation fiducial circuits, which follow state
         preparation.
 
     effect_strs : list of Circuits
-        List of the measurement fiducial operation sequences, which precede
+        List of the measurement fiducial circuits, which precede
         measurement.
 
     germ_list : list of Circuits
-        List of the germ operation sequences.
+        List of the germ circuits.
 
     max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
@@ -302,7 +302,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
 
     fid_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the operation sequence lists.  If a list, each element of
+        to be used in the circuit lists.  If a list, each element of
         fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
         indexing a string within prep_strs and effect_strs, respectively, so
         that prepStr = prep_strs[iPrepStr] and effectStr =
@@ -322,11 +322,11 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
           as the germ exponent (the number of germ repetitions).
 
     nest : boolean, optional
-        If True, the returned operation sequence lists are "nested", meaning
-        that each successive list of operation sequences contains all the gate
+        If True, the returned circuit lists are "nested", meaning
+        that each successive list of circuits contains all the gate
         strings found in previous lists (and usually some additional
         new ones).  If False, then the returned string list for maximum
-        length == L contains *only* those operation sequences specified in the
+        length == L contains *only* those circuits specified in the
         description above, and *not* those for previous values of L.
 
     keep_fraction : float, optional
@@ -352,7 +352,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
     op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
-        the dataset.  This information is stored within the returned operation sequence
+        the dataset.  This information is stored within the returned circuit
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
@@ -362,7 +362,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         (or `Circuit` objects).
 
     dscheck : DataSet, optional
-        A data set which is checked for each of the generated operation sequences. When
+        A data set which is checked for each of the generated circuits. When
         a generated sequence is missing from this `DataSet`, action is taken
         according to `action_if_missing`.
 
@@ -385,7 +385,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
     Returns
     -------
     list of LsGermsStructure objects
-        The i-th object corresponds to a operation sequence list containing repeated
+        The i-th object corresponds to a circuit list containing repeated
         germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
@@ -445,7 +445,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         #Add *all* LGST sequences as unstructured if we don't add them below
         missing_lgst = running_cs.add_unindexed(lgst_list, dscheck)
 
-    lsgst_listOfStructs = []  # list of operation sequence structures to return
+    lsgst_listOfStructs = []  # list of circuit structures to return
     missing_list = []
     totStrs = len(running_cs.allstrs)
     #import time as _time; t0=_time.time() # DEBUG
@@ -532,7 +532,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         printer.log("The following sequences were missing from the dataset:", 4)
         printer.log("\n".join(missing_msgs), 4)
         if action_if_missing == "raise":
-            raise ValueError("Missing data! %d missing operation sequences" % len(missing_msgs))
+            raise ValueError("Missing data! %d missing circuits" % len(missing_msgs))
         elif action_if_missing == "drop":
             pass
         else:
@@ -561,7 +561,7 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
     max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run LSGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
-    data sets.  The breakdown of which operation sequences are used for which
+    data sets.  The breakdown of which circuits are used for which
     iteration(s) of LSGST is given by make_lsgst_lists(...).
 
     Parameters
@@ -572,22 +572,20 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
         relevant when `include_lgst == True`.
 
     prep_strs : list of Circuits
-        List of the preparation fiducial operation sequences, which follow state
-        preparation.
+        List of the preparation fiducial circuits, which follow state preparation.
 
     effect_strs : list of Circuits
-        List of the measurement fiducial operation sequences, which precede
-        measurement.
+        List of the measurement fiducial circuits, which precede  measurement.
 
     germ_list : list of Circuits
-        List of the germ operation sequences.
+        List of the germ circuits.
 
     max_length_list : list of ints
         List of maximum lengths.
 
     fid_pairs : list of 2-tuples, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the operation sequence lists.  If a list, each element of
+        to be used in the circuit lists.  If a list, each element of
         fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
         indexing a string within prep_strs and effect_strs, respectively, so
         that prepStr = prep_strs[iPrepStr] and effectStr =
@@ -639,12 +637,12 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
                      trunc_scheme="whole germ powers", nest=True,
                      include_lgst=True):
     """
-    Create a set of operation sequence lists for eLGST based on germs and max-lengths
+    Create a set of circuit lists for eLGST based on germs and max-lengths
 
-    Constructs a series (a list) of operation sequence lists used by the extended LGST
+    Constructs a series (a list) of circuit lists used by the extended LGST
     (eLGST) algorithm.  If `include_lgst == True` then the starting list is the
     list of length-1 operation label strings, otherwise the starting list is empty.
-    For each nonzero element of max_length_list, call it L, a list of operation sequences is
+    For each nonzero element of max_length_list, call it L, a list of circuits is
     created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
@@ -657,7 +655,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
       germ^L
 
     If nest == True, the above list is iteratively *added* (w/duplicates
-    removed) to the current list of operation sequences to form a final list for the
+    removed) to the current list of circuits to form a final list for the
     given L.  This results in successively larger lists, each of which
     contains all the elements of previous-L lists.  If nest == False then
     the above list *is* the final list for the given L.
@@ -670,7 +668,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
         relevant when `include_lgst == True`.
 
     germ_list : list of Circuits
-        List of the germ operation sequences.
+        List of the germ circuits.
 
     max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special
@@ -688,11 +686,11 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
           as the germ exponent (the number of germ repetitions).
 
     nest : boolean, optional
-        If True, the returned operation sequence lists are "nested", meaning
-        that each successive list of operation sequences contains all the gate
+        If True, the returned circuit lists are "nested", meaning
+        that each successive list of circuits contains all the gate
         strings found in previous lists (and usually some additional
         new ones).  If False, then the returned string list for maximum
-        length == L contains *only* those operation sequences specified in the
+        length == L contains *only* those circuits specified in the
         description above, and *not* those for previous values of L.
 
     include_lgst : boolean, optional
@@ -705,7 +703,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
     Returns
     -------
     list of (lists of Circuits)
-        The i-th list corresponds to a operation sequence list containing repeated
+        The i-th list corresponds to a circuit list containing repeated
         germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the gate
@@ -753,7 +751,7 @@ def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run eLGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
-    data sets.  The breakdown of which operation sequences are used for which
+    data sets.  The breakdown of which circuits are used for which
     iteration(s) of eLGST is given by make_elgst_lists(...).
 
     Parameters
@@ -764,7 +762,7 @@ def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
         relevant when `include_lgst == True`.
 
     germ_list : list of Circuits
-        List of the germ operation sequences.
+        List of the germ circuits.
 
     max_length_list : list of ints
         List of maximum lengths. A zero value in this list has special

@@ -40,7 +40,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
         written after loading from filename.
 
     collision_action : {"aggregate", "keepseparate"}
-        Specifies how duplicate operation sequences should be handled.  "aggregate"
+        Specifies how duplicate circuits should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
@@ -139,7 +139,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
         written after loading from filename.
 
     collision_action : {"aggregate", "keepseparate"}
-        Specifies how duplicate operation sequences should be handled.  "aggregate"
+        Specifies how duplicate circuits should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
@@ -258,8 +258,7 @@ def load_circuit_dict(filename):
 
     Returns
     -------
-    Dictionary with keys = operation sequence labels and
-        values = Circuit objects.
+    Dictionary with keys = circuit labels and values = :class:`Circuit` objects.
     """
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
@@ -275,8 +274,7 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
         The name of the file
 
     read_raw_strings : boolean
-        If True, operation sequences are not converted
-        to tuples of operation labels.
+        If True, circuits are not converted to :class:`Circuit` objects.
 
     line_labels : iterable, optional
         The (string valued) line labels used to initialize :class:`Circuit`

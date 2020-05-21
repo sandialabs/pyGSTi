@@ -78,7 +78,7 @@ class StdInputParser(object):
 
     def parse_circuit(self, s, lookup={}, create_subcircuits=True):
         """
-        Parse a operation sequence (string in grammar)
+        Parse a circuit (string in grammar)
 
         Parameters
         ----------
@@ -97,7 +97,7 @@ class StdInputParser(object):
         Returns
         -------
         tuple of operation labels
-            Representing the operation sequence.
+            Representing the circuit.
         """
         self._circuit_parser.lookup = lookup
         circuit_tuple, circuit_labels = self._circuit_parser.parse(s, create_subcircuits)
@@ -119,7 +119,7 @@ class StdInputParser(object):
             which can be used for substitutions using the S<reflbl> syntax.
 
         expected_counts : int, optional
-            The expected number of counts to accompany the operation sequence on this
+            The expected number of counts to accompany the circuit on this
             data line.  If < 0, no check is performed; otherwise raises ValueError
             if the number of counts does not equal expected_counts.
 
@@ -136,7 +136,7 @@ class StdInputParser(object):
         circuitLabels : tuple
             A tuple of the circuit's line labels (given after '@' symbol on line)
         counts : list
-            List of counts following the operation sequence.
+            List of counts following the circuit.
         """
 
         # get counts from end of s
@@ -185,11 +185,11 @@ class StdInputParser(object):
         Returns
         -------
         circuitLabel : string
-            The user-defined label to represent this operation sequence.
+            The user-defined label to represent this circuit.
         circuitTuple : tuple
-            The operation sequence as a tuple of operation labels.
+            The circuit as a tuple of operation labels.
         circuitStr : string
-            The operation sequence as represented as a string in the dictline.
+            The circuit as represented as a string in the dictline.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
@@ -253,7 +253,7 @@ class StdInputParser(object):
         Returns
         -------
         dict
-            Dictionary with keys == operation sequence labels and values == Circuits.
+            Dictionary with keys == circuit labels and values == Circuits.
         """
         lookupDict = {}
         with open(filename, 'r') as dictfile:
@@ -280,7 +280,7 @@ class StdInputParser(object):
             Whether or not progress should be displayed
 
         collision_action : {"aggregate", "keepseparate"}
-            Specifies how duplicate operation sequences should be handled.  "aggregate"
+            Specifies how duplicate circuits should be handled.  "aggregate"
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.
@@ -556,7 +556,7 @@ class StdInputParser(object):
             Whether or not progress should be displayed
 
         collision_action : {"aggregate", "keepseparate"}
-            Specifies how duplicate operation sequences should be handled.  "aggregate"
+            Specifies how duplicate circuits should be handled.  "aggregate"
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.

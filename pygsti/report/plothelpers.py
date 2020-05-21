@@ -28,7 +28,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -38,9 +38,9 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    -------
 #    numpy array of shape (M,N)
 #        total count values (sum of count values for each SPAM label)
-#        corresponding to operation sequences where circuit is sandwiched
+#        corresponding to circuits where circuit is sandwiched
 #        between the specified set of N prep-fiducial and M effect-fiducial
-#        operation sequences.
+#        circuits.
 #    """
 #    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
 #    for i, j, opstr, elIndices, outcomes in gsplaq.iter_simplified():
@@ -58,7 +58,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -70,7 +70,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    Returns
 #    -------
 #    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-#        count values corresponding to spamLabel and operation sequences
+#        count values corresponding to spamLabel and circuits
 #        where circuit is sandwiched between the each prep-fiducial and
 #        effect-fiducial pair.
 #    """
@@ -89,7 +89,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -102,7 +102,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    Returns
 #    -------
 #    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-#        frequency values corresponding to spamLabel and operation sequences
+#        frequency values corresponding to spamLabel and circuits
 #        where circuit is sandwiched between the each prep-fiducial,
 #        effect-fiducial pair.
 #    """
@@ -119,7 +119,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    model : Model
@@ -129,14 +129,14 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #        The spam labels to extract probabilities for, e.g. ['plus']
 #
 #    probs_precomp_dict : dict, optional
-#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        A dictionary of precomputed probabilities.  Keys are circuits
 #        and values are prob-dictionaries (as returned from Model.probs)
-#        corresponding to each operation sequence.
+#        corresponding to each circuit.
 #
 #    Returns
 #    -------
 #    numpy array of shape ( len(spamlabels), len(effect_strs), len(prep_strs) )
-#        probability values corresponding to spamLabel and operation sequences
+#        probability values corresponding to spamLabel and circuits
 #        where circuit is sandwiched between the each prep-fiducial,
 #        effect-fiducial pair.
 #    """
@@ -162,7 +162,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -175,14 +175,14 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #        defines the clipping interval for the statistical weight (see chi2fn).
 #
 #    probs_precomp_dict : dict, optional
-#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        A dictionary of precomputed probabilities.  Keys are circuits
 #        and values are prob-dictionaries (as returned from Model.probs)
-#        corresponding to each operation sequence.
+#        corresponding to each circuit.
 #
 #    Returns
 #    -------
 #    numpy array of shape ( len(effect_strs), len(prep_strs) )
-#        chi^2 values corresponding to operation sequences where
+#        chi^2 values corresponding to circuits where
 #        circuit is sandwiched between the each prep-fiducial,
 #        effect-fiducial pair.
 #    """
@@ -212,7 +212,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -225,15 +225,15 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #        defines the minimum probability "patch-point" of the log-likelihood function.
 #
 #    probs_precomp_dict : dict, optional
-#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        A dictionary of precomputed probabilities.  Keys are circuits
 #        and values are prob-dictionaries (as returned from Model.probs)
-#        corresponding to each operation sequence.
+#        corresponding to each circuit.
 #
 #
 #    Returns
 #    -------
 #    numpy array of shape ( len(effect_strs), len(prep_strs) )
-#        logl values corresponding to operation sequences where
+#        logl values corresponding to circuits where
 #        circuit is sandwiched between the each prep-fiducial,
 #        effect-fiducial pair.
 #    """
@@ -263,7 +263,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        they correspond to.
 #
 #    dataset : DataSet
@@ -273,15 +273,15 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #        The model used to specify the probabilities and SPAM labels
 #
 #    probs_precomp_dict : dict, optional
-#        A dictionary of precomputed probabilities.  Keys are operation sequences
+#        A dictionary of precomputed probabilities.  Keys are circuits
 #        and values are prob-dictionaries (as returned from Model.probs)
-#        corresponding to each operation sequence.
+#        corresponding to each circuit.
 #
 #
 #    Returns
 #    -------
 #    numpy array of shape ( len(effect_strs), len(prep_strs) )
-#        logl values corresponding to operation sequences where
+#        logl values corresponding to circuits where
 #        circuit is sandwiched between the each prep-fiducial,
 #        effect-fiducial pair.
 #    """
@@ -304,7 +304,7 @@ def small_eigval_err_rate(sigma, direct_gst_models):
     Compute per-gate error rate.
 
     The per-gate error rate, extrapolated from the smallest eigvalue
-    of the Direct GST estimate of the given operation sequence sigma.
+    of the Direct GST estimate of the given circuit sigma.
 
     Parameters
     ----------
@@ -312,7 +312,7 @@ def small_eigval_err_rate(sigma, direct_gst_models):
         The gate sequence that is used to estimate the error rate
 
     direct_gst_models : dictionary of Models
-        A dictionary with keys = operation sequences and
+        A dictionary with keys = circuits and
         values = Models.
 
     Returns
@@ -498,11 +498,11 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        (for accessing the dataset) they correspond to.
 #
 #    gss : CircuitStructure
-#        The operation sequence structure object containing `gsplaq`.  The structure is
+#        The circuit structure object containing `gsplaq`.  The structure is
 #        neede to create a special plaquette for computing probabilities from the
 #        direct model containing a "GsigmaLbl" gate.
 #
@@ -520,7 +520,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #    Returns
 #    -------
 #    numpy array of shape ( len(effect_strs), len(prep_strs) )
-#        Direct-X chi^2 values corresponding to operation sequences where
+#        Direct-X chi^2 values corresponding to circuits where
 #        circuit is sandwiched between the each (effectStr,prepStr) pair.
 #    """
 #    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
@@ -560,11 +560,11 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #    ----------
 #    gsplaq : CircuitPlaquette
 #        Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#        specifies which matrix indices should be computed and which operation sequences
+#        specifies which matrix indices should be computed and which circuits
 #        (for accessing the dataset) they correspond to.
 #
 #    gss : CircuitStructure
-#        The operation sequence structure object containing `gsplaq`.  The structure is
+#        The circuit structure object containing `gsplaq`.  The structure is
 #        neede to create a special plaquette for computing probabilities from the
 #        direct model containing a "GsigmaLbl" gate.
 #
@@ -581,7 +581,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #    Returns
 #    -------
 #    numpy array of shape ( len(effect_strs), len(prep_strs) )
-#        Direct-X logL values corresponding to operation sequences where
+#        Direct-X logL values corresponding to circuits where
 #        circuit is sandwiched between the each (effectStr,prepStr) pair.
 #    """
 #    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
@@ -613,7 +613,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     ----------
     gsplaq : CircuitPlaquette
         Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
+        specifies which matrix indices should be computed and which circuits
         they correspond to.
 
     dscomparator : DataComparator
@@ -622,7 +622,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     Returns
     -------
     numpy array of shape ( len(effect_strs), len(prep_strs) )
-        log-likelihood-ratio values corresponding to the operation sequences
+        log-likelihood-ratio values corresponding to the circuits
         where a base circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
@@ -643,7 +643,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     ----------
     gsplaq : CircuitPlaquette
         Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
+        specifies which matrix indices should be computed and which circuits
         they correspond to.
 
     drifttuple : 2-tuple
@@ -655,8 +655,8 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     -------
     numpy array of shape ( len(effect_strs), len(prep_strs) )
         -log10(pvalues) for testing the "no drift" null hypothesis, using the "max power in
-        spectra" test, on the relevant sequences. This operation sequences correspond to the
-        operation sequences where a base circuit is sandwiched between the each prep-fiducial
+        spectra" test, on the relevant sequences. This circuits correspond to the
+        circuits where a base circuit is sandwiched between the each prep-fiducial
         and effect-fiducial pair.
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
@@ -681,7 +681,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     ----------
     gsplaq : CircuitPlaquette
         Obtained via :method:`CircuitStructure.get_plaquette`, this object
-        specifies which matrix indices should be computed and which operation sequences
+        specifies which matrix indices should be computed and which circuits
         they correspond to.
 
     drifttuple : 2-tuple
@@ -694,7 +694,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     -------
     numpy array of shape ( len(effect_strs), len(prep_strs) )
         The max tvd for quantifying deviations from the data mean. This
-        operation sequences correspond to the operation sequences where a base circuit
+        circuits correspond to the circuits where a base circuit
         is sandwiched between the each prep-fiducial and effect-fiducial pair.
     """
     ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
@@ -722,7 +722,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 #     ----------
 #     gsplaq : CircuitPlaquette
 #         Obtained via :method:`CircuitStructure.get_plaquette`, this object
-#         specifies which matrix indices should be computed and which operation sequences
+#         specifies which matrix indices should be computed and which circuits
 #         they correspond to.
 
 #     driftresults : BasicDriftResults
@@ -731,7 +731,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 #     Returns
 #     -------
 #     numpy array of shape ( len(effect_strs), len(prep_strs) )
-#         Matrix of max powers in the time-series power spectra forthe operation sequences where a
+#         Matrix of max powers in the time-series power spectra forthe circuits where a
 #         base circuit is sandwiched between the each prep-fiducial and effect-fiducial pair.
 
 #     """

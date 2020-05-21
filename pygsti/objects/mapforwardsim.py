@@ -327,7 +327,7 @@ class MapForwardSimulator(ForwardSimulator):
         ----------
         simplified_circuits : list
             A list of Circuits or tuples of operation labels which specify
-            the operation sequences to create an evaluation tree out of
+            the circuits to create an evaluation tree out of
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
@@ -477,10 +477,10 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False,
                         comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -910,12 +910,12 @@ class MapForwardSimulator(ForwardSimulator):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the operation sequences.
+        the circuits.
 
         Parameters
         ----------
         eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            given by a prior call to bulk_evaltree.  Specifies the circuits
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list

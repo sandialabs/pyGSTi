@@ -640,7 +640,7 @@ if __name__ == "__main__":
         with printer.progress_logging(1):
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1,
-                      verbose_messages=['%s operation sequences' % i], prefix='-- IterativeGST (', suffix=') --')
+                      verbose_messages=['%s circuits' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')
                 demo(printer - 1)

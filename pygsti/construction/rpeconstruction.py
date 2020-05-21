@@ -102,7 +102,7 @@ def make_rpe_alpha_str_lists_gx_gz(k_list):
     """
     Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate alpha (Z rotation angle).
+    These circuits are used to estimate alpha (Z rotation angle).
 
     Parameters
     ----------
@@ -155,7 +155,7 @@ def make_rpe_epsilon_str_lists_gx_gz(k_list):
     """
     Make epsilon cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate epsilon (X rotation angle).
+    These circuits are used to estimate epsilon (X rotation angle).
 
     Parameters
     ----------
@@ -197,7 +197,7 @@ def make_rpe_theta_str_lists_gx_gz(k_list):
     """
     Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate theta (X-Z axes angle).
+    These circuits are used to estimate theta (X-Z axes angle).
 
     Parameters
     ----------
@@ -253,23 +253,23 @@ def make_rpe_string_list_d(log2k_max):
     Returns
     -------
     totalStrListD : dict
-        A dictionary containing all operation sequences for all sine and cosine
+        A dictionary containing all circuits for all sine and cosine
         experiments for alpha, epsilon, and theta.
         The keys of the returned dictionary are:
 
-        - 'alpha','cos' : List of operation sequences for cosine experiments used
+        - 'alpha','cos' : List of circuits for cosine experiments used
           to determine alpha.
-        - 'alpha','sin' : List of operation sequences for sine experiments used to
+        - 'alpha','sin' : List of circuits for sine experiments used to
           determine alpha.
-        - 'epsilon','cos' : List of operation sequences for cosine experiments used to
+        - 'epsilon','cos' : List of circuits for cosine experiments used to
            determine epsilon.
-        - 'epsilon','sin' : List of operation sequences for sine experiments used to
+        - 'epsilon','sin' : List of circuits for sine experiments used to
           determine epsilon.
-        - 'theta','cos' : List of operation sequences for cosine experiments used to
+        - 'theta','cos' : List of circuits for cosine experiments used to
           determine theta.
-        - 'theta','sin' : List of operation sequences for sine experiments used to
+        - 'theta','sin' : List of circuits for sine experiments used to
           determine theta.
-        - 'totalStrList' : All above operation sequences combined into one list;
+        - 'totalStrList' : All above circuits combined into one list;
           duplicates removed.
     """
     kList = [2**k for k in range(log2k_max + 1)]
@@ -297,7 +297,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     Generate a fake RPE DataSet using the probabilities obtained from a model.
 
     Is a thin wrapper for pygsti.construction.generate_fake_data, changing
-    default behavior of sample_error, and taking a dictionary of operation sequences
+    default behavior of sample_error, and taking a dictionary of circuits
     as input.
 
     Parameters
@@ -314,11 +314,11 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
         make_rpe_string_list_d.
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only
+        The simulated number of samples for each circuit.  This only
         has effect when  sample_error == "binomial" or "multinomial".  If
-        an integer, all operation sequences have this number of total samples. If
+        an integer, all circuits have this number of total samples. If
         a list, integer elements specify the number of samples for the
-        corresponding operation sequence.  If None, then model_or_dataset must be
+        corresponding circuit.  If None, then model_or_dataset must be
         a DataSet, and total counts are taken from it (on a per-circuit
         basis).
 
@@ -332,10 +332,10 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution. Distribution has parameters p = probability of the
-          operation sequence and n = number of samples.  This can only be used when
+          circuit and n = number of samples.  This can only be used when
           there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-          Distribution has parameters p_k = probability of the operation sequence
+          Distribution has parameters p_k = probability of the circuit
           using the k-th SPAM label and n = number of samples.  This should not
           be used for RPE.
 
@@ -346,7 +346,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     Returns
     -------
     DataSet
-        A static data set filled with counts for the specified operation sequences.
+        A static data set filled with counts for the specified circuits.
     """
     return _dsc.generate_fake_data(model_or_dataset,
                                    string_list_d['totalStrList'],

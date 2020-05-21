@@ -67,7 +67,7 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
     target_model : Model
         A model used to specify which operation labels should be estimated, a
         guess for which gauge these estimates should be returned in, and
-        used to simplify operation sequences.
+        used to simplify circuits.
 
     op_labels : list, optional
         A list of which operation labels (or aliases) should be estimated.
@@ -518,7 +518,7 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
         effective measurement.
 
     target_model : Model
-        A model used to make sense of operation sequence elements, and to compute the
+        A model used to make sense of circuit elements, and to compute the
         theoretical gram matrix eigenvalues (returned as `svalues_target`).
 
     Returns
@@ -564,7 +564,7 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
         optimization.
 
     circuit_list : list of (tuples or Circuits)
-        Each tuple contains operation labels and specifies a operation sequence whose
+        Each tuple contains operation labels and specifies a circuit whose
         probabilities are considered when trying to least-squares-fit the
         probabilities given in the dataset.
         e.g. [ (), ('Gx',), ('Gx','Gy') ]
@@ -653,7 +653,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
         optimization.
 
     circuit_lists : list of lists of (tuples or Circuits)
-        The i-th element is a list of the operation sequences to be used in the i-th iteration
+        The i-th element is a list of the circuits to be used in the i-th iteration
         of the optimization.  Each element of these lists is a circuit, specifed as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).

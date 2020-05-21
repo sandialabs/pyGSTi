@@ -56,7 +56,7 @@ class Model(object):
     probabilities of :class:`Circuit` objects based on the action of the
     model's ideal operations plus (potentially) noise which makes the
     outcome probabilities deviate from the perfect ones.
-
+v
     Parameters
     ----------
     state_space_labels : StateSpaceLabels or list or tuple
@@ -161,7 +161,7 @@ class Model(object):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         clip_to : 2-tuple, optional
             (min,max) to clip probabilities to if not None.
@@ -182,7 +182,7 @@ class Model(object):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -208,7 +208,7 @@ class Model(object):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -243,7 +243,7 @@ class Model(object):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing computations
@@ -301,7 +301,7 @@ class Model(object):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         raise NotImplementedError("Derived classes should implement this!")
@@ -310,7 +310,7 @@ class Model(object):
     def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
                       num_subtree_comms=1, dataset=None, verbosity=0):
         """
-        Create an evaluation tree for all the operation sequences in circuit_list.
+        Create an evaluation tree for all the circuits in `circuit_list`.
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
@@ -319,7 +319,7 @@ class Model(object):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         min_subtrees : int , optional
             The minimum number of subtrees the resulting EvalTree must have.
@@ -357,7 +357,7 @@ class Model(object):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         raise NotImplementedError("Derived classes should implement this!")
@@ -382,7 +382,7 @@ class Model(object):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
@@ -427,7 +427,7 @@ class Model(object):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -481,7 +481,7 @@ class Model(object):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -537,7 +537,7 @@ class Model(object):
         Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -1359,7 +1359,7 @@ class OpModel(Model):
 
     def split_circuit(self, circuit, erroron=('prep', 'povm')):
         """
-        Splits a operation sequence into prepLabel + opsOnlyString + povmLabel components.
+        Splits a circuit into prepLabel + opsOnlyString + povmLabel components.
 
         If `circuit` does not contain a prep label or a
         povm label a default label is returned if one exists.
@@ -1367,7 +1367,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit
-            A operation sequence, possibly beginning with a state preparation
+            A circuit, possibly beginning with a state preparation
             label and ending with a povm label.
 
         erroron : tuple of {'prep','povm'}
@@ -1414,7 +1414,7 @@ class OpModel(Model):
         Circuits must be "simplified" before probabilities can be computed for
         them. Each string corresponds to some number of "outcomes", indexed by an
         "outcome label" that is a tuple of POVM-effect or instrument-element
-        labels like "0".  Compiling creates maps between operation sequences and their
+        labels like "0".  Compiling creates maps between circuits and their
         outcomes and the structures used in probability computation (see return
         values below).
 
@@ -1448,7 +1448,7 @@ class OpModel(Model):
             A dictionary whose keys are integer indices into `circuits` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         nTotElements : int
             The total number of "final elements" - this is how big of an array
@@ -1462,7 +1462,7 @@ class OpModel(Model):
         circuits = list(map(_cir.Circuit.create_from, circuits))  # cast to Circuits
         ds_circuits = _lt.apply_aliases_to_circuit_list(circuits, aliases)
 
-        #Indexed by raw operation sequence
+        #Indexed by raw circuit
         raw_elabels_dict = _collections.OrderedDict()  # final
         raw_opOutcomes_dict = _collections.OrderedDict()
         raw_offsets = _collections.OrderedDict()
@@ -1565,7 +1565,7 @@ class OpModel(Model):
                                 op_outcomes + simplified_el_outcomes, i + 1)
                     break
 
-            else:  # no instruments -- add "raw" operation sequence s
+            else:  # no instruments -- add "raw" circuit s
                 if s in raw_elabels_dict:
                     assert(op_outcomes == raw_opOutcomes_dict[s])  # DEBUG
                     #if action == "add":
@@ -1674,7 +1674,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit
-            The operation sequence to simplify
+            The circuit to simplify
 
         dataset : DataSet, optional
             If not None, restrict what is simplified to only those
@@ -1708,7 +1708,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit
-            The operation sequence to simplify
+            The circuit to simplify
 
         Returns
         -------
@@ -1724,7 +1724,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         clip_to : 2-tuple, optional
             (min,max) to clip probabilities to if not None.
@@ -1748,7 +1748,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -1774,7 +1774,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -1810,7 +1810,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing computations
@@ -1868,15 +1868,15 @@ class OpModel(Model):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
-        # Let ng = # operation sequence groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of
+        # Let ng = # circuit groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of
         #          corresponding subtree
         # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned some
-        #  number of operation sequence groups, where their ~nprocs/Ng processors are used to partition the np param
+        #  number of circuit groups, where their ~nprocs/Ng processors are used to partition the np param
         #  groups. Note that 1 <= Ng <= min(ng,nprocs).
         # Notes:
         #  - making np or ng > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
@@ -1932,7 +1932,7 @@ class OpModel(Model):
                             circuit_list, min_subtrees=n_groups, num_subtree_comms=n_comms,
                             dataset=dataset, verbosity=printer)
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
-                        # operation sequences as input so don't have to re-simplify every time we hit this line.
+                        # circuits as input so don't have to re-simplify every time we hit this line.
                     cache_size = max([s.cache_size() for s in evt_cache[n_groups][0].get_sub_trees()])
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[n_groups][0].get_sub_trees()])
                 else:
@@ -2126,7 +2126,7 @@ class OpModel(Model):
     def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
                       num_subtree_comms=1, dataset=None, verbosity=0):
         """
-        Create an evaluation tree for all the operation sequences in circuit_list.
+        Create an evaluation tree for all the circuits in `circuit_list`.
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
@@ -2135,7 +2135,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         min_subtrees : int , optional
             The minimum number of subtrees the resulting EvalTree must have.
@@ -2171,7 +2171,7 @@ class OpModel(Model):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         tm = _time.time()
@@ -2289,7 +2289,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
@@ -2341,7 +2341,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -2400,7 +2400,7 @@ class OpModel(Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -2462,7 +2462,7 @@ class OpModel(Model):
         Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -2645,12 +2645,12 @@ class OpModel(Model):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the operation sequences.
+        the circuits.
 
         Parameters
         ----------
         eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            given by a prior call to bulk_evaltree.  Specifies the circuits
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list
@@ -2684,7 +2684,7 @@ class OpModel(Model):
             arrays of shape K x S x B x B', where:
 
             - K is the length of spam_label_rows,
-            - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
+            - S is the number of circuits (i.e. eval_tree.num_final_strings()),
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 

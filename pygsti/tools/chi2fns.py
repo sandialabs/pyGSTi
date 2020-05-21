@@ -24,7 +24,7 @@ def chi2(model, dataset, circuit_list=None,
     Computes the total (aggregate) chi^2 for a set of circuits.
 
     The chi^2 test statistic obtained by summing up the
-    contributions of a given set of operation sequences or all
+    contributions of a given set of circuits or all
     the circuits available in a dataset.  For the gradient or
     Hessian, see the :function:`chi2_jacobian` and
     :function:`chi2_hessian` functions.
@@ -38,7 +38,7 @@ def chi2(model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi^2 sum.
+        List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     min_prob_clip_for_weighting : float, optional
@@ -70,7 +70,7 @@ def chi2(model, dataset, circuit_list=None,
     Returns
     -------
     chi2 : float
-        chi^2 value, equal to the sum of chi^2 terms from all specified operation sequences
+        chi^2 value, equal to the sum of chi^2 terms from all specified circuits
     """
     return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
@@ -98,7 +98,7 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi^2 sum.
+        List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     min_prob_clip_for_weighting : float, optional
@@ -158,7 +158,7 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi^2 sum.
+        List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     min_prob_clip_for_weighting : float, optional
@@ -213,7 +213,7 @@ def chi2_hessian(model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi^2 sum.
+        List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     min_prob_clip_for_weighting : float, optional
@@ -275,7 +275,7 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi^2 sum.
+        List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     min_prob_clip_for_weighting : float, optional
@@ -336,7 +336,7 @@ def chialpha(alpha, model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi-alpha sum.
+        List of circuits whose terms will be included in chi-alpha sum.
         Default value (None) means "all strings in dataset".
 
     pfratio_stitchpt : float, optional
@@ -405,7 +405,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
         The data used to specify frequencies and counts
 
     circuit_list : list of Circuits or tuples, optional
-        List of operation sequences whose terms will be included in chi-alpha sum.
+        List of circuits whose terms will be included in chi-alpha sum.
         Default value (None) means "all strings in dataset".
 
     pfratio_stitchpt : float, optional

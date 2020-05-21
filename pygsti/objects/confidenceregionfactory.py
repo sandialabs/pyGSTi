@@ -71,7 +71,7 @@ class ConfidenceRegionFactory(object):
 
     circuit_list_lbl : str
         The key into the parent `Results`'s `.circuit_lists` dictionary
-        that specifies which operation sequences should be or were included
+        that specifies which circuits should be or were included
         when computing fit functions (the log-likelihood or chi2).
 
     hessian : numpy array, optional
@@ -103,7 +103,7 @@ class ConfidenceRegionFactory(object):
 
         circuit_list_lbl : str
             The key into the parent `Results`'s `.circuit_lists` dictionary
-            that specifies which operation sequences should be or were included
+            that specifies which circuits should be or were included
             when computing fit functions (the log-likelihood or chi2).
 
         hessian : numpy array, optional

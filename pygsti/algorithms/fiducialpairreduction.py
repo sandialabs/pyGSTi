@@ -46,7 +46,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     """
     Finds a (global) set of fiducial pairs that are amplificationally complete.
 
-    A "standard" set of GST operation sequences consists of all sequences of the form:
+    A "standard" set of GST circuits consists of all circuits of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
 
@@ -167,7 +167,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             target_model.bulk_fill_dprobs(dP, evTree, wrt_block_size=blkSz)  # num_els x num_params
             dPall.append(dP)
 
-            #Add this germ's element indices for each fiducial pair (final operation sequence of evTree)
+            #Add this germ's element indices for each fiducial pair (final circuit of evTree)
             nPrepPOVM = len(pre_povm_tuples)
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
@@ -293,7 +293,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
 
-    A "standard" set of GST operation sequences consists of all sequences of the form:
+    A "standard" set of GST circuits consists of all circuits of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
 
@@ -363,7 +363,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     Returns
     -------
     dict
-        A dictionary whose keys are the germ operation sequences and whose values are
+        A dictionary whose keys are the germ circuits and whose values are
         lists of (iRhoFid,iMeasFid) tuples of integers, each specifying the
         list of fiducial pairs for a particular germ (indices are into
         `prep_fiducials` and `meas_fiducials`).

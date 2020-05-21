@@ -589,7 +589,8 @@ def calc_twirled_ddd(model, germ, eps=1e-6):
         The model defining the parameters to differentiate with respect to.
 
     germ : Circuit
-        The (single) germ circuit to consider.
+        The (single) germ circuit to consider.  `J` above is the twirled
+        derivative of this circuit's action (process matrix).
 
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
@@ -905,7 +906,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
     Compute the "Twirled Derivative" of a circuit.
 
     The twirled derivative is obtained by acting on the standard derivative of
-    a operation sequence with the twirling superoperator.
+    a circuit with the twirling superoperator.
 
     Parameters
     ----------
@@ -913,7 +914,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
         The Model which associates operation labels with operators.
 
     circuit : Circuit object
-        The operation sequence to take a twirled derivative of.
+        A twirled derivative of this circuit's action (process matrix) is taken.
 
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
@@ -941,7 +942,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     Compute the "Twirled Derivative" of a set of circuits.
 
     The twirled derivative is obtained by acting on the standard derivative of
-    a operation sequence with the twirling superoperator.
+    a circuit with the twirling superoperator.
 
     Parameters
     ----------
@@ -949,7 +950,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         The Model which associates operation labels with operators.
 
     circuits : list of Circuit objects
-        The operation sequence to take a twirled derivative of.
+        A twirled derivative of this circuit's action (process matrix) is taken.
 
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
@@ -1017,7 +1018,7 @@ def test_germ_list_finitel(model, germs_to_test, length, weights=None,
         The Model (associates operation matrices with operation labels).
 
     germs_to_test : list of Circuits
-        List of germs operation sequences to test for completeness.
+        List of germ circuits to test for completeness.
 
     length : int
         The finite length to use in amplification testing.  Larger
@@ -1094,7 +1095,7 @@ def test_germ_list_infl(model, germs_to_test, score_func='all', weights=None,
         The Model (associates operation matrices with operation labels).
 
     germs_to_test : list of Circuit
-        List of germs operation sequences to test for completeness.
+        List of germ circuits to test for completeness.
 
     score_func : string
         Label to indicate how a germ set is scored. See
@@ -1657,7 +1658,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         randomized (set by the kwarg `randomize`).
 
     germs_list : list of Circuit
-        List of all germs operation sequences to consider.
+        List of all germ circuits to consider.
 
     randomize : Bool, optional
         Whether or not the input Model(s) are first subject to unitary
@@ -1736,7 +1737,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         be included.  Seting to None is the same as an empty list.
 
     force_score : float, optional (default is 1e100)
-        When `force` designates a non-empty set of operation sequences, the score to
+        When `force` designates a non-empty set of circuits, the score to
         assign any germ set that does not contain each and every required germ.
 
     threshold : float, optional (default is 1e6)
@@ -1993,7 +1994,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         randomized (set by the kwarg `randomize`).
 
     germs_list : list of Circuit
-        List of all germs operation sequences to consider.
+        List of all germ circuits to consider.
 
     alpha : float
         A number between 0 and 1 that roughly specifies a score theshold

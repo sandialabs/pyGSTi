@@ -104,14 +104,14 @@ class MapEvalTree(EvalTree):
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular operation sequence:
+        #  information about evaluating a particular circuit:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:]  # clear self (a list)
 
         #Final Indices
         # The first len(circuit_list) elements of the tree correspond
-        # to computing the operation sequences requested in circuit_list.  Doing
+        # to computing the circuits requested in circuit_list.  Doing
         # this make later extraction much easier (views can be used), but
         # requires a non-linear order of evaluation, held in the eval_order list.
         self.eval_order = []
@@ -120,7 +120,7 @@ class MapEvalTree(EvalTree):
         self.num_final_strs = len(circuit_list)
         self[:] = [None] * self.num_final_strs
 
-        #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
+        #Sort the circuits "alphabetically", so that it's trivial to find common prefixes
         sorted_strs = sorted(list(enumerate(circuit_list)), key=lambda x: x[1])
 
         #DEBUG
@@ -369,7 +369,7 @@ class MapEvalTree(EvalTree):
 
     def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final operation sequences this tree evaluates.
+        Generate a list of the final circuits this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -382,7 +382,7 @@ class MapEvalTree(EvalTree):
         permute : bool, optional
             Whether to permute the returned list of strings into the
             same order as the original list passed to initialize(...).
-            When False, the computed order of the operation sequences is
+            When False, the computed order of the circuits is
             given, which is matches the order of the results from calls
             to `Model` bulk operations.  Non-trivial permutation
             occurs only when the tree is split (in order to keep
@@ -392,7 +392,7 @@ class MapEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the operation sequences evaluated by this tree, each
+            A list of the circuits evaluated by this tree, each
             specified as a tuple of operation labels.
         """
         circuits = [None] * len(self)

@@ -209,7 +209,7 @@ class MatrixForwardSimulator(ForwardSimulator):
              gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params[op_label])
 
         if _slct.length(gpindices) > 0:  # works for arrays too
-            # Compute the derivative of the entire operation sequence with respect to the
+            # Compute the derivative of the entire circuit with respect to the
             # gate's parameters and fill appropriate columns of flattened_dprod.
             #gate = self.sos.get_operation[op_label] UNNEEDED (I think)
             _fas(flattened_dprod, [None, gpindices],
@@ -237,7 +237,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
-            # Compute the derivative of the entire operation sequence with respect to the
+            # Compute the derivative of the entire circuit with respect to the
             # gate's parameters and fill appropriate columns of flattened_dprod.
             _fas(flattened_hprod, [None, gpindices1, gpindices2],
                  gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
@@ -291,7 +291,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         # LEXICOGRAPHICAL VS MATRIX ORDER
         # we do matrix multiplication in this order (easier to think about)
         revOpLabelList = tuple(reversed(tuple(circuit)))
-        N = len(revOpLabelList)  # length of operation sequence
+        N = len(revOpLabelList)  # length of circuit
 
         #  prod = G1 * G2 * .... * GN , a matrix                                                                                                                # noqa
         #  dprod/d(opLabel)_ij   = sum_{L s.t. G(L) == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)                       # noqa
@@ -327,7 +327,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         num_deriv_cols = self.Np if (wrt_filter is None) else len(wrt_filter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
 
-        # For each operation label, compute the derivative of the entire operation sequence
+        # For each operation label, compute the derivative of the entire circuit
         #  with respect to only that gate's parameters and fill the appropriate
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
@@ -467,7 +467,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         # For each pair of gates in the string, compute the hessian of the entire
-        #  operation sequence with respect to only those two gates' parameters and fill
+        #  circuit with respect to only those two gates' parameters and fill
         #  add the result to the appropriate block of flattened_d2prod.
 
         #NOTE: if we needed to perform a hessian calculation (i.e. for l==m) then
@@ -875,7 +875,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
 
-        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
+        #evaluate circuits using tree (skip over the zero and single-gate-strings)
         #cnt = 0
         for i in eval_tree.get_evaluation_order():
             # combine iLeft + iRight => i
@@ -979,7 +979,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         #profiler.print_mem("DEBUGMEM: POINT1"); profiler.comm.barrier()
 
-        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
+        #evaluate circuits using tree (skip over the zero and single-gate-strings)
         for i in eval_tree.get_evaluation_order():
             tm = _time.time()
             # combine iLeft + iRight => i
@@ -1117,7 +1117,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 hProdCache[i] = _np.zeros(hessn_shape)
             elif not self.sos.get_operation(opLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
-                # all hessians for single- or zero-operation sequences are zero.
+                # all hessians for single- or zero-circuits are zero.
                 hProdCache[i] = _np.zeros(hessn_shape)
             else:
                 hoperation = self.hoperation(opLabel,
@@ -1125,7 +1125,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                                              wrt_filter2=wrtIndices2)
                 hProdCache[i] = hoperation / _np.exp(scale_cache[i])
 
-        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
+        #evaluate circuits using tree (skip over the zero and single-gate-strings)
         for i in eval_tree.get_evaluation_order():
 
             # combine iLeft + iRight => i
@@ -1190,7 +1190,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         ----------
         simplified_circuits : list
             A list of Circuits or tuples of operation labels which specify
-            the operation sequences to create an evaluation tree out of
+            the circuits to create an evaluation tree out of
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
@@ -1963,7 +1963,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
     def _check(self, eval_tree, pr_mx_to_fill=None, d_pr_mx_to_fill=None, h_pr_mx_to_fill=None, clip_to=None):
         # compare with older slower version that should do the same thing (for debugging)
-        master_circuit_list = eval_tree.generate_circuit_list(permute=False)  # raw operation sequences
+        master_circuit_list = eval_tree.generate_circuit_list(permute=False)  # raw circuits
 
         for spamTuple, (fInds, gInds) in eval_tree.spamtuple_indices.items():
             circuit_list = master_circuit_list[gInds]
@@ -2000,10 +2000,10 @@ class MatrixForwardSimulator(ForwardSimulator):
     def bulk_fill_probs(self, mx_to_fill, eval_tree,
                         clip_to=None, check=False, comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -2619,12 +2619,12 @@ class MatrixForwardSimulator(ForwardSimulator):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the operation sequences.
+        the circuits.
 
         Parameters
         ----------
         eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            given by a prior call to bulk_evaltree.  Specifies the circuits
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list
@@ -2758,7 +2758,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             # fInds = "final indices" = the "element" indices in the final
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw operation sequences which need to be computed
+            #          all of the raw circuits which need to be computed
             #          for the current spamTuple (this list has the SAME length as fInds).
             calc_and_fill_fn(spamTuple, fInds, gInds, pslc1, pslc2, False)  # TODO: remove SumInto == True cases
 

@@ -380,7 +380,7 @@ def generate_boxplot(sub_mxs,
                                     sum_up, False, scale, bgcolor)
 
     def val_filter(vals):
-        """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
+        """filter to latex-ify circuits.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
             if isinstance(val, _objs.Circuit):
@@ -532,7 +532,7 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -666,7 +666,7 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -839,7 +839,7 @@ def circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -1360,7 +1360,7 @@ class BoxKeyPlot(WorkspacePlot):
 
         #Copied from generate_boxplot
         def val_filter(vals):
-            """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
+            """filter to latex-ify circuits.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
                 if isinstance(val, _objs.Circuit):
@@ -1514,7 +1514,7 @@ class ColorBoxPlot(WorkspacePlot):
 
     direct_gst_models : dict, optional
         A dictionary of "direct" Models used when displaying certain plot
-        types.  Keys are operation sequences and values are corresponding gate
+        types.  Keys are circuits and values are corresponding gate
         sets (see `plottype` above).
 
     dscomparator : DataComparator, optional
@@ -1577,7 +1577,7 @@ class ColorBoxPlot(WorkspacePlot):
         Create a plot displaying the value of per-circuit quantities.
 
         Values are shown on a grid of colored boxes, organized according to
-        the structure of the operation sequences (e.g. by germ and "L").
+        the structure of the circuits (e.g. by germ and "L").
 
         Parameters
         ----------
@@ -1624,7 +1624,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         direct_gst_models : dict, optional
             A dictionary of "direct" Models used when displaying certain plot
-            types.  Keys are operation sequences and values are corresponding gate
+            types.  Keys are circuits and values are corresponding gate
             sets (see `plottype` above).
 
         dscomparator : DataComparator, optional
@@ -2868,7 +2868,7 @@ class GramMatrixBarPlot(WorkspacePlot):
         at least twice the maximum length fiducial sequence.
 
     fixed_lists : (prep_fiducials, meas_fiducials), optional
-        2-tuple of operation sequence lists, specifying the preparation and
+        2-tuple of circuit lists, specifying the preparation and
         measurement fiducials to use when constructing the Gram matrix,
         and thereby bypassing the search for such lists.
 
@@ -2897,7 +2897,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             at least twice the maximum length fiducial sequence.
 
         fixed_lists : (prep_fiducials, meas_fiducials), optional
-            2-tuple of operation sequence lists, specifying the preparation and
+            2-tuple of circuit lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.
 

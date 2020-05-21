@@ -125,7 +125,7 @@ def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=Fa
         rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
 
         if comm is not None and comm.Get_rank() == 0:
-            print("%d operation sequences divided among %d processors" % (len(listOfExperiments), comm.Get_size()))
+            print("%d circuits divided among %d processors" % (len(listOfExperiments), comm.Get_size()))
 
         t0 = _time.time()
         for i, opstr in enumerate(my_expList):

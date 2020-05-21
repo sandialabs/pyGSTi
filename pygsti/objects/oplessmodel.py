@@ -130,7 +130,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         clip_to : 2-tuple, optional
             (min,max) to clip probabilities to if not None.
@@ -152,7 +152,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -200,7 +200,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing computations
@@ -258,7 +258,7 @@ class OplessModel(_Model):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         #TODO: choose these based on resources, and enable split trees
@@ -272,7 +272,7 @@ class OplessModel(_Model):
     def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
                       num_subtree_comms=1, dataset=None, verbosity=0):
         """
-        Create an evaluation tree for all the operation sequences in circuit_list.
+        Create an evaluation tree for all the circuits in `circuit_list`.
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
@@ -281,7 +281,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         min_subtrees : int , optional
             The minimum number of subtrees the resulting EvalTree must have.
@@ -319,7 +319,7 @@ class OplessModel(_Model):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         raise NotImplementedError("Derived classes should implement this!")
@@ -332,7 +332,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
@@ -388,7 +388,7 @@ class OplessModel(_Model):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to compute quantities for.
+            Each element specifies a circuit to compute quantities for.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -461,7 +461,7 @@ class OplessModel(_Model):
         Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -662,7 +662,7 @@ class SuccessFailModel(OplessModel):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         clip_to : 2-tuple, optional
             (min,max) to clip probabilities to if not None.
@@ -686,7 +686,7 @@ class SuccessFailModel(OplessModel):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -723,7 +723,7 @@ class SuccessFailModel(OplessModel):
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
 
         Returns
         -------
@@ -767,7 +767,7 @@ class SuccessFailModel(OplessModel):
             A dictionary whose keys are integer indices into `circuits` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         nTotElements : int
             The total number of "final elements" - this is how big of an array
@@ -782,7 +782,7 @@ class SuccessFailModel(OplessModel):
     def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
                       num_subtree_comms=1, dataset=None, verbosity=0):
         """
-        Create an evaluation tree for all the operation sequences in circuit_list.
+        Create an evaluation tree for all the circuits in `circuit_list`.
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
@@ -791,7 +791,7 @@ class SuccessFailModel(OplessModel):
         Parameters
         ----------
         circuit_list : list of (tuples or Circuits)
-            Each element specifies a operation sequence to include in the evaluation tree.
+            Each element specifies a circuit to include in the evaluation tree.
 
         min_subtrees : int , optional
             The minimum number of subtrees the resulting EvalTree must have.
@@ -829,7 +829,7 @@ class SuccessFailModel(OplessModel):
             A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th operation sequences's final elements
+            what outcomes the i-th circuit's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuit_list))}

@@ -2447,7 +2447,7 @@ def one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=
     Returns
     -------
     Circuit
-        The random operation sequence of length:
+        The random circuit of length:
         m if inverse = False, interleaved = None
         m + 1 if inverse = True, interleaved = None
         2m if inverse = False, interleaved not None

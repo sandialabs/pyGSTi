@@ -388,7 +388,7 @@ def build_cloudnoise_model_from_hops_and_weights(
 
     return_clouds : bool, optional
         Whether to return a dictionary of "cloud" objects, used for constructing
-        the operation sequences necessary for probing the returned Model's
+        the circuits necessary for probing the returned Model's
         parameters.  Used primarily internally within pyGSTi.
 
     verbosity : int, optional
@@ -924,7 +924,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idle_str, model, single_q_f
         and noise/errors are localized around these.
 
     idle_str : Circuit
-        The operation sequence specifying the idle operation to consider.  This may
+        The circuit specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
 
@@ -1206,7 +1206,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None,
         :class:`Circuit` objects, specifying the fiducial pairs to test.
 
     idle_str : Circuit
-        The operation sequence specifying the idle operation to consider.  This may
+        The circuit specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
 
@@ -1323,7 +1323,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, true_
         a non-synthetic idle gate on max-weight qubits.
 
     idle_str : Circuit
-        The operation sequence specifying the idle operation to consider.  This may
+        The circuit specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
 
@@ -1990,7 +1990,7 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, max
                               _objs.Circuit(measStr, line_labels=qubit_labels)))
             # circuit, max_len, germ, prepFidIndex, measFidIndex??
 
-    # return a list of operation sequences (duplicates removed)
+    # return a list of circuits (duplicates removed)
     return _lt.remove_duplicates(sequences), _lt.remove_duplicates(germs)
 
 
@@ -2005,7 +2005,7 @@ def reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
         in `germ_str`.
 
     germ_str : Circuit
-        The germ operation sequence to repeat.
+        The germ circuit to repeat.
 
     nqubits : int
         The total number of qubits that `model` acts on.  This
@@ -2868,7 +2868,7 @@ def create_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
     if idle_only:  # Exit now when we just wanted idle-tomography sequences
         #OLD: return sequences, selected_germs
 
-        #Post processing: convert sequence tuples to a operation sequence structure
+        #Post processing: convert sequence tuples to a circuit structure
         Gi_fidpairs = _collections.defaultdict(list)  # lists of fidpairs for each L value
         for _, L, _, prepFid, measFid in sequences:
             Gi_fidpairs[L].append((prepFid, measFid))
@@ -3258,7 +3258,7 @@ def create_cloudnoise_sequences(n_qubits, max_lengths, single_q_fiducials,
     #    A list of Circuit objects specifying all the germs found in
     #    `sequences`.
 
-    #Post processing: convert sequence tuples to a operation sequence structure
+    #Post processing: convert sequence tuples to a circuit structure
     Ls = set()
     germs = _collections.OrderedDict()
 
@@ -3578,7 +3578,7 @@ def filter_nqubit_sequences(sequence_tuples, sectors_to_keep,
 
     new_sectors : list or tuple, optional
         New sectors names to map the elements of `sectors_to_keep` onto in the
-        output DataSet's operation sequences.  None means the labels are not renamed.
+        output DataSet's circuits.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
         that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and

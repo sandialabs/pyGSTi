@@ -30,14 +30,14 @@ def make_bootstrap_dataset(input_data_set, generation_method, input_model=None,
 
     generation_method : { 'nonparametric', 'parametric' }
         The type of dataset to generate.  'parametric' generates a DataSet
-        with the same operation sequences and sample counts as input_data_set but
+        with the same circuits and sample counts as input_data_set but
         using the probabilities in input_model (which must be provided).
-        'nonparametric' generates a DataSet with the same operation sequences
+        'nonparametric' generates a DataSet with the same circuits
         and sample counts as input_data_set using the count frequencies of
         input_data_set as probabilities.
 
     input_model : Model, optional
-        The model used to compute the probabilities for operation sequences when
+        The model used to compute the probabilities for circuits when
         generation_method is set to 'parametric'.  If 'nonparametric' is selected,
         this argument must be set to None (the default).
 
@@ -126,29 +126,29 @@ def make_bootstrap_models(num_models, input_data_set, generation_method,
 
     generation_method : { 'nonparametric', 'parametric' }
         The type of datasets to generate.  'parametric' generates DataSets
-        with the same operation sequences and sample counts as input_data_set but
+        with the same circuits and sample counts as input_data_set but
         using the probabilities in input_model (which must be provided).
-        'nonparametric' generates DataSets with the same operation sequences
+        'nonparametric' generates DataSets with the same circuits
         and sample counts as input_data_set using the count frequencies of
         input_data_set as probabilities.
 
     fiducial_prep : list of Circuits
-        The state preparation fiducial operation sequences used by MLGST.
+        The state preparation fiducial circuits used by MLGST.
 
     fiducial_measure : list of Circuits
-        The measurement fiducial operation sequences used by MLGST.
+        The measurement fiducial circuits used by MLGST.
 
     germs : list of Circuits
-        The germ operation sequences used by MLGST.
+        The germ circuits used by MLGST.
 
     max_lengths : list of ints
         List of integers, one per MLGST iteration, which set truncation lengths
-        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        for repeated germ strings.  The list of circuits for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
     input_model : Model, optional
-        The model used to compute the probabilities for operation sequences when
+        The model used to compute the probabilities for circuits when
         generation_method is set to 'parametric'.  If 'nonparametric' is selected,
         this argument must be set to None (the default).
 
@@ -166,10 +166,10 @@ def make_bootstrap_models(num_models, input_data_set, generation_method,
         The list of Outcome labels to include in the output dataset.  If None
         are specified, defaults to the effect labels of `input_data_set`.
 
-    lsgst_lists : list of operation sequence lists, optional
-        Provides explicit list of operation sequence lists to be used in analysis;
+    lsgst_lists : list of circuit lists, optional
+        Provides explicit list of circuit lists to be used in analysis;
         to be given if the dataset uses "incomplete" or "reduced" sets of
-        operation sequence.  Default is None.
+        circuit.  Default is None.
 
     return_data : bool
         Whether generated data sets should be returned in addition to

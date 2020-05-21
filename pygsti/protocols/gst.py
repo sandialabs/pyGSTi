@@ -123,7 +123,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     max_lengths : list
         List of integers, one per LSGST iteration, which set truncation lengths
-        for repeated germ strings.  The list of operation sequences for the i-th LSGST
+        for repeated germ strings.  The list of circuits for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
@@ -136,7 +136,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     fiducial_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the operation sequence lists.  If a list, each element of
+        to be used in the circuit lists.  If a list, each element of
         fid_pairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
         indexing a string within prep_strs and effect_strs, respectively, so
         that prepStr = prep_strs[iPrepStr] and effectStr =
@@ -166,7 +166,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     nest : boolean, optional
         If True, the GST circuit lists are "nested", meaning
-        that each successive list of operation sequences contains all the gate
+        that each successive list of circuits contains all the gate
         strings found in previous lists (and usually some additional
         new ones).  If False, then the returned circuit list for maximum
         length == L contains *only* those circuits specified in the
@@ -179,7 +179,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
     op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
         corresponding to what that operation label should be expanded into before querying
-        the dataset.  This information is stored within the returned operation sequence
+        the dataset.  This information is stored within the returned circuit
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 

@@ -42,7 +42,7 @@ def get_max_gram_basis(op_labels, dataset, max_length=0):
     Returns
     -------
     list of tuples
-        where each tuple contains operation labels and specifies a single operation sequence.
+        where each tuple contains operation labels and specifies a single circuit.
     """
 
     datasetStrings = list(dataset.keys())
@@ -80,15 +80,15 @@ def max_gram_rank_and_evals(dataset, target_model, max_basis_string_length=10,
         the dataset to use when constructing the Gram matrix
 
     target_model : Model
-        A model used to make sense of operation sequences and for the construction of
+        A model used to make sense of circuits and for the construction of
         a theoretical gram matrix and spectrum.
 
     max_basis_string_length : int, optional
         the maximum string length considered for Gram matrix basis
         elements.  Defaults to 10.
 
-    fixed_lists : (prep_strs, effect_strs), optional
-        2-tuple of operation sequence lists, specifying the preparation and
+    fixed_lists : (prep_fiducials, effect_fiducials), optional
+        2-tuple of :class:`Circuit` lists, specifying the preparation and
         measurement fiducials to use when constructing the Gram matrix,
         and thereby bypassing the search for such lists.
 

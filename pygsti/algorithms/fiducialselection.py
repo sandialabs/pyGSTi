@@ -80,9 +80,9 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     Returns
     -------
     prepFidList : list of Circuits
-        A list containing the operation sequences for the prep fiducials.
+        A list containing the circuits for the prep fiducials.
     measFidList : list of Circuits
-        A list containing the operation sequences for the measurement fiducials.
+        A list containing the circuits for the measurement fiducials.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     if ops_to_omit is None:
@@ -315,7 +315,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -402,7 +402,7 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -556,7 +556,7 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of all fiducials operation sequences to consider.
+        List of all fiducials circuits to consider.
 
     prep_or_meas : {'prep', 'meas'}
         Whether preparation or measturement fiducials are being selected.
@@ -602,11 +602,11 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         string as a fiducial.
 
         IMPORTANT:  This only works if the first element of fid_list is the
-        empty operation sequence.
+        empty circuit.
 
     force_empty_score : float, optional (default is 1e100)
         When force_empty is True, what score to assign any fiducial set that
-        does not contain the empty operation sequence as a fiducial.
+        does not contain the empty circuit as a fiducial.
 
     fixed_num : int, optional
         Require the output list of fiducials to contain exactly `fixed_num` elements.
@@ -872,7 +872,7 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
         The model (associates operation matrices with operation labels).
 
     fids_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?

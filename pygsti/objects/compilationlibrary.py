@@ -38,7 +38,7 @@ class CompilationLibrary(_collections.OrderedDict):
     An collection of compilations for gates.
 
     Essentially an ordered dictionary whose keys are operation labels
-    (:class:`Label` objects) and whose values are operation sequences
+    (:class:`Label` objects) and whose values are circuits
     (:class:`Circuit` objects).  A `CompilationLibrary` holds a :class:`Model`
     which specifies the "native" gates that all compilations are made up of.
     Currently, this model should only contain Clifford gates, so that its
@@ -349,7 +349,7 @@ class CompilationLibrary(_collections.OrderedDict):
         Returns
         -------
         tuple
-            A tuple of the operation labels (essentially a operation sequence) specifying
+            A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
         # The unitary is specifed, this takes priority and we use it to construct the

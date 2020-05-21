@@ -32,14 +32,14 @@ def write_empty_dataset(filename, circuit_list,
         The filename to write.
 
     circuit_list : list of Circuits
-        List of operation sequences to write, each to be followed by num_zero_cols zeros.
+        List of circuits to write, each to be followed by num_zero_cols zeros.
 
     header_string : string, optional
         Header string for the file; should start with a pound (#) or double-pound (##)
         so it is treated as a commend or directive, respectively.
 
     num_zero_cols : int, optional
-        The number of zero columns to place after each operation sequence.  If None,
+        The number of zero columns to place after each circuit.  If None,
         then header_string must begin with "## Columns = " and number of zero
         columns will be inferred.
 
@@ -87,8 +87,8 @@ def write_dataset(filename, dataset, circuit_list=None,
         The data set from which counts are obtained.
 
     circuit_list : list of Circuits, optional
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
     outcome_label_order : list, optional
         A list of the outcome labels in dataset which specifies
@@ -197,8 +197,8 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
         The multi data set from which counts are obtained.
 
     circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
     outcome_label_order : list, optional
         A list of the SPAM labels in multidataset which specifies
@@ -258,7 +258,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
 
 def write_circuit_list(filename, circuit_list, header=None):
     """
-    Write a text-formatted operation sequence list file.
+    Write a text-formatted circuit list file.
 
     Parameters
     ----------
@@ -266,7 +266,7 @@ def write_circuit_list(filename, circuit_list, header=None):
         The filename to write.
 
     circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
+        The list of circuits to include in the written dataset.
 
     header : string, optional
         Header line (first line of file).  Prepended with a pound sign (#), so no
@@ -539,11 +539,11 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
         the path to the text-formatted data set file.
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only has
+        The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
-        integer, all operation sequences have this number of total samples. If a list,
+        integer, all circuits have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        operation sequence.  If ``None``, then `model_or_dataset` must be a
+        circuit.  If ``None``, then `model_or_dataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
         (on a per-circuit basis).
 
@@ -558,7 +558,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution.  Distribution has parameters p = (clipped) probability
-          of the operation sequence and n = number of samples.  This can only be used
+          of the circuit and n = number of samples.  This can only be used
           when there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = (clipped) probability of the gate
@@ -576,12 +576,12 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
 
     alias_dict : dict, optional
         A dictionary mapping single operation labels into tuples of one or more
-        other operation labels which translate the given operation sequences before values
+        other operation labels which translate the given circuits before values
         are computed using `model_or_dataset`.  The resulting Dataset, however,
-        contains the *un-translated* operation sequences as keys.
+        contains the *un-translated* circuits as keys.
 
     collision_action : {"aggregate", "keepseparate"}
-        Determines how duplicate operation sequences are handled by the resulting
+        Determines how duplicate circuits are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     record_zero_counts : bool, optional

@@ -31,7 +31,7 @@ TOL = 1e-20
 #
 # L = prod_{i,sl} p_{i,sl}^N_{i,sl}
 #
-# Where i indexes the operation sequence, and sl indexes the spam label.  N[i] is the total counts
+# Where i indexes the circuit, and sl indexes the spam label.  N[i] is the total counts
 #  for the i-th circuit, and so sum_{sl} N_{i,sl} == N[i]. We can take the log:
 #
 # log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
@@ -57,7 +57,7 @@ TOL = 1e-20
 #Note: Poisson picture entered use when we allowed an EVec which was 1-{other EVecs} -- a
 # (0,-1) spam index -- instead of assuming all probabilities of a given gat string summed
 # to one -- a (-1,-1) spam index.  The poisson picture gives a correct log-likelihood
-# description when the probabilities (for a given operation sequence) may not sum to one, by
+# description when the probabilities (for a given circuit) may not sum to one, by
 # interpreting them each as rates.  In the standard picture, large circuit probabilities
 # are not penalized (each standard logL term increases monotonically with each probability,
 # and the reason this is ok when the probabilities sum to one is that for a probabilility
@@ -68,7 +68,7 @@ TOL = 1e-20
 #
 # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
 #
-# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,
+# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the circuit,
 #  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and
 #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
 #
@@ -130,8 +130,8 @@ def logl(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -204,8 +204,8 @@ def logl_per_circuit(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -289,8 +289,8 @@ def logl_jacobian(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -360,8 +360,8 @@ def logl_hessian(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -445,8 +445,8 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -506,19 +506,19 @@ def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
     The maximum log-likelihood possible for a DataSet.
 
     That is, the log-likelihood obtained by a maximal model that can
-    fit perfectly the probability of each operation sequence.
+    fit perfectly the probability of each circuit.
 
     Parameters
     ----------
     model : Model
-        the model, used only for operation sequence compilation
+        the model, used only for circuit compilation
 
     dataset : DataSet
         the data set to use.
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the max-log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset should
+        Each element specifies a circuit to include in the max-log-likelihood
+        sum.  Default value of None implies all the circuits in dataset should
         be used.
 
     poisson_picture : boolean, optional
@@ -550,14 +550,14 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
     Parameters
     ----------
     model : Model
-        the model, used only for operation sequence compilation
+        the model, used only for circuit compilation
 
     dataset : DataSet
         the data set to use.
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the max-log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset should
+        Each element specifies a circuit to include in the max-log-likelihood
+        sum.  Default value of None implies all the circuits in dataset should
         be used.
 
     poisson_picture : boolean, optional
@@ -577,7 +577,7 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
     numpy.ndarray
         Array of length either `len(circuit_list)` or `len(dataset.keys())`.
         Values are the maximum log-likelihood contributions of the corresponding
-        operation sequence aggregated over outcomes.
+        circuit aggregated over outcomes.
     """
     obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
@@ -600,8 +600,8 @@ def two_delta_logl_nsigma(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -679,8 +679,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -796,8 +796,8 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
         Probability data
 
     circuit_list : list of (tuples or Circuits), optional
-        Each element specifies a operation sequence to include in the log-likelihood
-        sum.  Default value of None implies all the operation sequences in dataset
+        Each element specifies a circuit to include in the log-likelihood
+        sum.  Default value of None implies all the circuits in dataset
         should be used.
 
     min_prob_clip : float, optional
@@ -895,7 +895,7 @@ def forbidden_prob(model, dataset):
         model to generate probabilities.
 
     dataset : DataSet
-        data set to obtain operation sequences.  Dataset counts are
+        data set to obtain circuits.  Dataset counts are
         used to check for zero or all counts being under a
         single spam label, in which case out-of-bounds probabilities
         are ignored because they contribute zero to the logl sum.
@@ -1023,7 +1023,7 @@ def cptp_penalty(model, include_spam_penalty=True):
 
 def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     """
-    Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding to a single operation sequence and spam label.
+    Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding to a single circuit and spam label.
 
     Parameters
     ----------

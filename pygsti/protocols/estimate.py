@@ -39,7 +39,7 @@ class Estimate(object):
     ----------
     parent : Results
         The parent Results object containing the dataset and
-        operation sequence structure used for this Estimate.
+        circuit structure used for this Estimate.
 
     models : dict, optional
         A dictionary of models to included in this estimate
@@ -59,7 +59,7 @@ class Estimate(object):
         ----------
         parent : Results
             The parent Results object containing the dataset and
-            operation sequence structure used for this Estimate.
+            circuit structure used for this Estimate.
 
         target_model : Model
             The target model used when optimizing the objective.
@@ -97,7 +97,7 @@ class Estimate(object):
         ----------
         parent : Results
             The parent Results object containing the dataset and
-            operation sequence structure used for this Estimate.
+            circuit structure used for this Estimate.
 
         models : dict, optional
             A dictionary of models to included in this estimate
@@ -278,7 +278,7 @@ class Estimate(object):
         confidence intervals and regions in reports and elsewhere.  This
         function creates such a factory, which is specific to a given
         `Model` (given by this object's `.models[model_label]` ) and
-        operation sequence list (given by the parent `Results`'s
+        circuit list (given by the parent `Results`'s
         `.circuit_lists[gastrings_label]` list).
 
         Parameters
@@ -287,7 +287,7 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         Returns
@@ -315,7 +315,7 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         Returns
@@ -337,7 +337,7 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         create_if_needed : bool, optional
@@ -385,8 +385,8 @@ class Estimate(object):
             that identifies the reference model.
 
         circuits_label : str, optional
-            The key of the operation sequence list (within the parent `Results`'s
-            `.circuit_lists` dictionary) that identifies the operation sequence
+            The key of the circuit list (within the parent `Results`'s
+            `.circuit_lists` dictionary) that identifies the circuit
             list used by the old (&new) confidence region factories.
 
         eps : float, optional
