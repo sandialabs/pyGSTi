@@ -17,7 +17,7 @@ print("Adding path:", myPackagePath)
 usp = Path(site.getusersitepackages())
 usp.mkdir(parents=True, exist_ok=True)
 uspfile = usp / 'GST.pth'
-with open(uspfile, 'w') as f:
+with uspfile.open('w') as f:
     f.write(pathspec)
     print('Wrote to {}'.format(uspfile))
 
