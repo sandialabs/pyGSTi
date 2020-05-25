@@ -36,32 +36,36 @@ class Report:
 
     Parameters
     ----------
-    templates : <TODO typ>
-        <TODO description>
+    templates : dict (str -> Path-like)
+        A map of the available report generation types (html, pdf, notebook) to template paths.
 
-    results : <TODO typ>
-        <TODO description>
+    results : Results or similar
+        The underlying Results-like object used to generate this report.
 
-    sections : <TODO typ>
-        <TODO description>
+    sections : iterable of Section
+        Collection of sections to be built into the generated report.
 
-    flags : <TODO typ>
-        <TODO description>
+    flags : set of str
+        Set of flags controlling aspects of report generation.
 
-    global_qtys : <TODO typ>
-        <TODO description>
+    global_qtys : dict (str -> any)
+        Key-value map of report quantities not tied to any specific section.
 
-    report_params : <TODO typ>
-        <TODO description>
+    report_params : dict (str -> any)
+        Key-value map of report quantities used when building sections.
 
-    build_defaults : <TODO typ>, optional
-        <TODO description>
+    build_defaults : dict (str -> any), optional
+        Default values for the `build_options` parameter of this
+        instance's build methods. Defaults to an empty dict.
 
-    pdf_available : <TODO typ>, optional
-        <TODO description>
+    pdf_available : bool, optional
+        ``True`` if the underlying results can be represented as a
+        static PDF. If this report cannot be represented statically,
+        ``write_pdf`` will raise. Defaults to ``True``.
 
-    workspace : <TODO typ>, optional
-        <TODO description>
+    workspace : Workspace, optional
+        A ``Workspace`` used for caching figure computation. By
+        default, a new workspace will be used.
     """
     def __init__(self, templates, results, sections, flags,
                  global_qtys, report_params, build_defaults=None,
@@ -159,10 +163,6 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         build_options = build_options or {}
@@ -227,10 +227,6 @@ class Report:
 
         verbosity : int, optional
             How much detail to send to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         # TODO this only applies to standard reports; rewrite generally
@@ -418,10 +414,6 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         if not self._pdf_available:

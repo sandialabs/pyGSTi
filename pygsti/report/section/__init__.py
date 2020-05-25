@@ -10,17 +10,35 @@
 
 
 class Section:
-    """ Abstract base class for report sections.
+    """
+    Abstract base class for report sections.
 
     Derived classes encapsulate the structure of data within the
     respective section of the report, and provide methods for
     rendering the section to various output formats.
+
+    Parameters
+    ----------
+    **kwargs
+        Computation of specific section elements can be configured at
+        runtime by passing the name of a figure as a keyword argument
+        set to ``False``.
     """
     _HTML_TEMPLATE = None
 
     @staticmethod
     def figure_factory(brevity_limit=None):
-        """ Decorator to designate a method as a figure factory """
+        """
+        Decorator to designate a method as a figure factory.
+
+        Parameters
+        ----------
+        brevity_limit : int or None, optional
+            Mark that this figure should only be rendered for reports
+            with brevity strictly less than this limit. Defaults to
+            ``None``, indicating that the figure should always be
+            rendered.
+        """
         def decorator(fn):
             fn.__figure_brevity_limit__ = brevity_limit
             return fn
@@ -35,54 +53,33 @@ class Section:
                 self._figure_factories[name] = member
 
     def render(self, workspace, brevity=0, **kwargs):
+        """
+        Render this section's figures.
+
+        Parameters
+        ----------
+        workspace : Workspace
+            A ``Workspace`` used for caching figure computation.
+
+        brevity : int, optional
+            Level of brevity used when generating this section. At
+            higher brevity levels, certain non-critical figures will
+            not be rendered. Defaults to 0 (most verbose).
+
+        **kwargs
+            All additional reportable quantities used when computing
+            the figures of this section.
+
+        Returns
+        -------
+        dict (str -> any)
+            Key-value map of report quantities used for this section.
+        """
         return {
             k: v(workspace, brevity=brevity, **kwargs)
             for k, v in self._figure_factories.items()
             if v.__figure_brevity_limit__ is None or brevity < v.__figure_brevity_limit__
         }
-
-    def render_html(self, global_qtys, bgcolor='white', workspace=None, comm=None):
-        """ Render this section to HTML
-
-        Parameters
-        ----------
-        global_qtys: {WorkspaceOutput}
-            A dictionary of reportable quantities global to the report
-        """
-
-        # TODO actually do rendering in this method
-        # as a quick stand-in we can just treat local quantities as global
-        global_qtys.update(self._quantities)
-
-    def render_latex(self, global_qtys, workspace=None, comm=None):
-        """ Render this section to LaTeX
-
-        Parameters
-        ----------
-        global_qtys: {WorkspaceOutput}
-            A dictionary of reportable quantities global to the report
-
-        Returns
-        -------
-        str : The generated LaTeX source for this section
-        """
-        # TODO actually do rendering in this method
-        # as a quick stand-in we can just treat local quantities as global
-        global_qtys.update(self._quantities)
-
-    def render_notebook(self, global_qtys, notebook, workspace=None, comm=None):
-        """ Render this section to an IPython notebook
-
-        Parameters
-        ----------
-        global_qtys: {WorkspaceOutput}
-            A dictionary of reportable quantities global to the report
-        notebook: :class:`Notebook`
-            The IPython notebook to extend with this section
-        """
-        # TODO actually do rendering in this method
-        # as a quick stand-in we can just treat local quantities as global
-        global_qtys.update(self._quantities)
 
 
 from .summary import SummarySection
