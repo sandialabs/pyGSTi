@@ -56,10 +56,6 @@ class MatrixToolsTester(BaseCase):
 
         mt.print_mx(a)
 
-    def test_helpers(self):
-        a = np.array([1, 2, 3], 'd')
-        self.assertTrue(mt.array_eq(a, a))
-
     def test_matrix_log(self):
         M = np.array([[-1, 0], [0, -1]], 'complex')  # degenerate negative evals
         mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
