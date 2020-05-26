@@ -96,11 +96,13 @@ class GaugeInvariantsGatesSection(_Section):
     @_Section.figure_factory(4)
     def final_gauge_inv_metric_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                      gr_switchboard=None, **kwargs):
-        #return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
-        return workspace.GaugeRobustMetricTable(
-            switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
-            _cri(1, switchboard, confidence_level, ci_brevity)
-        )
+        if len(switchboard.mdl_final.base) == 0 or switchboard.mdl_final.base.flat[0].dim > 4:
+            return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
+        else:
+            return workspace.GaugeRobustMetricTable(
+                switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
+                _cri(1, switchboard, confidence_level, ci_brevity)
+            )
 
     @_Section.figure_factory(4)
     def gram_bar_plot(workspace, switchboard=None, **kwargs):

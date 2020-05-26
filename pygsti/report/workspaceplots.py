@@ -1725,6 +1725,11 @@ class ColorBoxPlot(WorkspacePlot):
                 objfn_builder = ptyp
                 CACHE = None  # use self.ws.smartCache?
                 objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE)
+
+                lookup = {circuit: elindices for circuit, elindices in zip(circuit_list, objfn.lookup.values())}
+                outcomes_lookup = {circuit: outcomes for circuit, outcomes in zip(circuit_list,
+                                                                                  objfn.outcomes_lookup.values())}
+
                 if wildcard:
                     objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
@@ -1741,13 +1746,13 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
 
                 mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
-                extra_arg = (terms, "sum")
+                extra_arg = (terms, lookup, outcomes_lookup, "sum")
 
                 # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, None)
-                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, "%.5g"))
-                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, "%.5g"))
-                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, "%d"))
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, outcomes_lookup)
+                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, lookup, outcomes_lookup, "%.5g"))
+                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, lookup, outcomes_lookup, "%.5g"))
+                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, lookup, outcomes_lookup, "%d"))
 
             #TODO REMOVE
             #elif ptyp == "logl":
@@ -2000,7 +2005,7 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], mergeop=extra[1])
+    return plaq.elementvec_to_matrix(extra[0], extra[1], extra[2], mergeop=extra[3])
 
 
 #TODO REMOVE
@@ -2077,10 +2082,10 @@ def _outcome_to_str(x):  # same function as in writers.py
     else: return ":".join([str(i) for i in x])
 
 
-def _addl_mx_fn_outcomes(plaq, x, y, extra):
+def _addl_mx_fn_outcomes(plaq, x, y, outcomes_lookup):
     slmx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
-    for i, j, opstr, elIndices, outcomes in plaq.iter_simplified():
-        slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in outcomes])
+    for i, j, opstr in plaq:
+        slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in outcomes_lookup[opstr]])
     return slmx
 
 

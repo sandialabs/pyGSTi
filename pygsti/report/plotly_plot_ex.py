@@ -16,6 +16,14 @@ import os as _os
 #from pkg_resources import resource_string
 DEFAULT_PLOTLY_TEMPLATE = 'none'
 
+# Try to set the default plotly template.  This isn't essential, but makes the
+# figures look nicer.  It must be done at import time, before any plotly.Figure
+# objects are created, so this import must be place *here*, not within a function.
+try:
+    from plotly import io as _pio
+    _pio.templates.default = DEFAULT_PLOTLY_TEMPLATE
+except ImportError: pass
+
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, lock_aspect_ratio=False,
@@ -84,11 +92,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     """
     from plotly import __version__ as _plotly_version
     from plotly import tools as _plotlytools
-    from plotly import io as _pio
-
-    #Set default template only when necessary, as this triggers (slow) template validation
-    if _pio.templates.default != DEFAULT_PLOTLY_TEMPLATE:
-        _pio.templates.default = DEFAULT_PLOTLY_TEMPLATE
 
     #Processing to enable automatic-resizing & aspect ratio locking
     fig = _plotlytools.return_figure_from_figure_or_data(
