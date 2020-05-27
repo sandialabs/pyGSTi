@@ -11,6 +11,7 @@ Circuit list for bulk computation
 #***************************************************************************************************
 from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuit import Circuit as _Circuit
+from ..tools import listtools as _lt
 
 
 class BulkCircuitList(list):
@@ -77,3 +78,15 @@ class BulkCircuitList(list):
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
         self[:] = self.circuits_to_use  # maybe get rid of self.circuits_to_use in the future...
+
+    def apply_aliases(self):
+        """
+        Applies any operation-label aliases to this circuit list.
+
+        Returns
+        -------
+        list
+            A list of :class:`Circuit`s.
+        """
+        return _lt.apply_aliases_to_circuit_list(self[:], self.op_label_aliases)
+
