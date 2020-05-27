@@ -771,6 +771,144 @@ class RawObjectiveFunction(ObjectiveFunction):
         raise NotImplementedError("Derived classes must implement this!")
 
 
+class ModelDatasetCircuitsStore(object):
+    """
+    Contains all the information that we'd like to persist when performing
+    (multiple) evaluations of the same circuits using the same model and
+    data set.  For instance, the evaluation of mubltiple (different) objective
+    functions.
+
+    This class holds only quantities that do *not* depend on the contained
+    model's parameters.  See :class:`EvaluatedObjectiveFunction` for a class (TODO??)
+    that holds the values of an objective function at a certain parameter-space
+    point.
+    """
+    def __init__(self, model, dataset, circuits=None, resource_alloc=None):
+        self.dataset = dataset
+        self.model = model
+        #self.nparams = mdl.num_params()
+        #self.opBasis = mdl.basis
+        self.resource_alloc = _ResourceAllocation.create_from(resource_alloc)
+        # expand = ??? get from model based on fwdsim type?
+
+        circuit_list = circuits if (circuits is not None) else list(dataset.keys())
+        bulk_circuit_list = circuit_list if isinstance(
+            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+        self.circuits = CircuitProbabilityArrayLayout(bulk_circuit_list, model, dataset, expand)
+
+        #self.circuits_to_use = bulk_circuit_list[:]
+        #self.circuit_weights = bulk_circuit_list.circuit_weights
+        self.ds_circuits_to_use = self.circuits.apply_aliases()
+
+        #HERE - create evaltree as self.circuits?
+        if not self.cache.has_evaltree():
+            subcalls = self.get_evaltree_subcalls()
+            evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
+                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
+            self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
+                                    subcalls, self.raw_objfn.printer - 1)
+
+        self.eval_tree = self.cache.eval_tree
+        self.lookup = self.cache.lookup
+        self.outcomes_lookup = self.cache.outcomes_lookup
+        self.wrt_block_size = self.cache.wrt_block_size
+        self.wrt_block_size2 = self.cache.wrt_block_size2
+
+        self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
+
+    def get_num_data_params(self):
+        """
+        The number of degrees of freedom in the data used by this objective function.
+
+        Returns
+        -------
+        int
+        """
+        return self.dataset.get_degrees_of_freedom(self.ds_circuits_to_use,
+                                                   aggregate_times=not self.time_dependent)
+
+
+class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
+    """ Additionally holds quantities at a specific model-parameter-space point """
+
+    def __init__(self, mds_store, HERE):
+        self.enable_hessian = enable_hessian
+
+        # Memory check - see if there's enough memory to hold all the evaluated quantities
+        persistent_mem = self.get_persistent_memory_estimate()
+        in_gb = 1.0 / 1024.0**3  # in gigabytes
+        if self.raw_objfn.mem_limit is not None:
+            in_gb = 1.0 / 1024.0**3  # in gigabytes
+            cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
+            if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
+                raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
+                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
+                                                   persistent_mem * in_gb))
+
+            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
+            evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
+            self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
+            self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+                                       (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
+            assert(evt_mlim > 0), 'Not enough memory, exiting..'
+        else:
+            evt_mlim = None
+
+
+    #PRIVATE
+    def get_persistent_memory_estimate(self, num_elements=None):
+        #  Estimate & check persistent memory (from allocs within objective function)
+        """
+        Compute the amount of memory needed to perform evaluations of this objective function.
+
+        This number includes both intermediate and final results, and assumes
+        that the types of evauations given by :method:`get_evaltree_subcalls`
+        are required.
+
+        Parameters
+        ----------
+        num_elements : int, optional
+            The number of elements (circuit outcomes) that will be computed.
+
+        Returns
+        -------
+        int
+        """
+        if num_elements is None:
+            nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
+            nc = len(self.circuits_to_use)
+            ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
+        else:
+            ne = num_elements
+        np = self.mdl.num_params()
+
+        # "persistent" memory is that used to store the final results.
+        obj_fn_mem = FLOATSIZE * ne
+        jac_mem = FLOATSIZE * ne * np
+        hess_mem = FLOATSIZE * ne * np**2
+        persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
+        if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
+            persistent_mem += hess_mem  # we need room for the hessian too!
+        # TODO: what about "bulk_hprobs_by_block"?
+
+        return persistent_mem
+
+    #PRIVATE
+    def get_evaltree_subcalls(self):
+        """
+        The types of calls that will be made to an evaluation tree.
+
+        This information is used for memory estimation purposes.
+
+        Returns
+        -------
+        list
+        """
+        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+        if self.enable_hessian: calls.append("bulk_fill_hprobs")
+        return calls
+
+
 class MDSObjectiveFunction(ObjectiveFunction):
     """
     An objective function whose probabilities and counts are given by a Model and DataSet, respectively.
@@ -818,65 +956,70 @@ class MDSObjectiveFunction(ObjectiveFunction):
         A description of this objective function.
     """
 
-    def __init__(self, raw_objfn, mdl, dataset, circuit_list, cache=None, enable_hessian=False):
+    @clasmethod
+    def create_from(cls, raw_objfn, mdl, dataset, circuit_list, cache=None, enable_hessian=False):
+        pass
+
+    def __init__(self, mds_store):  # mds_store can be an evaluated or normal MDS store...
         """
         Create a new MDSObjectiveFunction.
         """
         self.raw_objfn = raw_objfn
-        self.dataset = dataset
-        self.mdl = mdl
-        self.nparams = mdl.num_params()
-        self.opBasis = mdl.basis
-        self.enable_hessian = enable_hessian
+        #self.dataset = dataset
+        #self.mdl = mdl
+        #self.nparams = mdl.num_params()
+        #self.opBasis = mdl.basis
+        #self.enable_hessian = enable_hessian
         self.gthrMem = None  # set below
 
         self.time_dependent = False
         self.check = CHECK
         self.check_jacobian = CHECK_JACOBIAN
 
-        circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
-        bulk_circuit_list = circuit_list if isinstance(
-            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
-        self.circuits_to_use = bulk_circuit_list[:]
-        self.circuit_weights = bulk_circuit_list.circuit_weights
-        self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
-                                                                       bulk_circuit_list.op_label_aliases)
-
-        # Memory check
-        persistent_mem = self.get_persistent_memory_estimate()
-        in_gb = 1.0 / 1024.0**3  # in gigabytes
-        if self.raw_objfn.mem_limit is not None:
-            in_gb = 1.0 / 1024.0**3  # in gigabytes
-            cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
-            if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
-                raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
-                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
-                                                   persistent_mem * in_gb))
-
-            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
-            evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
-            self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
-            self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
-                                       (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
-            assert(evt_mlim > 0), 'Not enough memory, exiting..'
-        else:
-            evt_mlim = None
-
-        self.cache = cache if (cache is not None) else _ComputationCache()
-        if not self.cache.has_evaltree():
-            subcalls = self.get_evaltree_subcalls()
-            evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
-                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-            self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
-                                    subcalls, self.raw_objfn.printer - 1)
-
-        self.eval_tree = self.cache.eval_tree
-        self.lookup = self.cache.lookup
-        self.outcomes_lookup = self.cache.outcomes_lookup
-        self.wrt_block_size = self.cache.wrt_block_size
-        self.wrt_block_size2 = self.cache.wrt_block_size2
-
-        self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        #circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
+        #bulk_circuit_list = circuit_list if isinstance(
+        #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+        #self.circuits_to_use = bulk_circuit_list[:]
+        #self.circuit_weights = bulk_circuit_list.circuit_weights
+        #self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
+        #                                                               bulk_circuit_list.op_label_aliases)
+        #
+        ## Memory check
+        #persistent_mem = self.get_persistent_memory_estimate()
+        #in_gb = 1.0 / 1024.0**3  # in gigabytes
+        #if self.raw_objfn.mem_limit is not None:
+        #    in_gb = 1.0 / 1024.0**3  # in gigabytes
+        #    cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
+        #    if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
+        #        raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
+        #                          "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
+        #                                           persistent_mem * in_gb))
+        #
+        #    self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
+        #    evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
+        #    self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
+        #    self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+        #                               (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
+        #    assert(evt_mlim > 0), 'Not enough memory, exiting..'
+        #else:
+        #    evt_mlim = None
+        #
+        #self.cache = cache if (cache is not None) else _ComputationCache()
+        #if not self.cache.has_evaltree():
+        #    subcalls = self.get_evaltree_subcalls()
+        #    evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
+        #                                             self.raw_objfn.profiler, self.raw_objfn.distribute_method)
+        #    self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
+        #                            subcalls, self.raw_objfn.printer - 1)
+        #
+        #self.eval_tree = self.cache.eval_tree
+        #self.lookup = self.cache.lookup
+        #self.outcomes_lookup = self.cache.outcomes_lookup
+        #self.wrt_block_size = self.cache.wrt_block_size
+        #self.wrt_block_size2 = self.cache.wrt_block_size2
+        #
+        #self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        
         self.firsts = None  # no omitted probs by default
 
     @property
@@ -1143,70 +1286,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
             of model parameters.
         """
         raise NotImplementedError("Derived classes should implement this!")
-
-    #PRIVATE
-    def get_persistent_memory_estimate(self, num_elements=None):
-        #  Estimate & check persistent memory (from allocs within objective function)
-        """
-        Compute the amount of memory needed to perform evaluations of this objective function.
-
-        This number includes both intermediate and final results, and assumes
-        that the types of evauations given by :method:`get_evaltree_subcalls`
-        are required.
-
-        Parameters
-        ----------
-        num_elements : int, optional
-            The number of elements (circuit outcomes) that will be computed.
-
-        Returns
-        -------
-        int
-        """
-        if num_elements is None:
-            nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-            nc = len(self.circuits_to_use)
-            ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-        else:
-            ne = num_elements
-        np = self.mdl.num_params()
-
-        # "persistent" memory is that used to store the final results.
-        obj_fn_mem = FLOATSIZE * ne
-        jac_mem = FLOATSIZE * ne * np
-        hess_mem = FLOATSIZE * ne * np**2
-        persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-        if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
-            persistent_mem += hess_mem  # we need room for the hessian too!
-        # TODO: what about "bulk_hprobs_by_block"?
-
-        return persistent_mem
-
-    #PRIVATE
-    def get_evaltree_subcalls(self):
-        """
-        The types of calls that will be made to an evaluation tree.
-
-        This information is used for memory estimation purposes.
-
-        Returns
-        -------
-        list
-        """
-        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-        if self.enable_hessian: calls.append("bulk_fill_hprobs")
-        return calls
-
-    def get_num_data_params(self):
-        """
-        The number of degrees of freedom in the data used by this objective function.
-
-        Returns
-        -------
-        int
-        """
-        return self.dataset.get_degrees_of_freedom(self.ds_circuits_to_use,
-                                                   aggregate_times=not self.time_dependent)
 
     #PRIVATE
     def precompute_omitted_freqs(self):
