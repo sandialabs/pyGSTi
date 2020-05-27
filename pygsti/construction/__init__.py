@@ -19,7 +19,7 @@ from .circuitconstruction import *
 from .datasetconstruction import *
 from .nqnoiseconstruction import *
 from .stdlists import *
-from .qutrit import make_qutrit_model
+from .qutrit import create_qutrit_model
 
 _modelpack_names = [
     "std1Q_Cliffords",

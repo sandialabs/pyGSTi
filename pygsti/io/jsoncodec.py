@@ -21,8 +21,7 @@ import collections as _collections
 import pygsti.objects
 
 
-#PRIVATE
-def class_hasattr(instance, attr):
+def _class_hasattr(instance, attr):
     """
     Helper function for checking if `instance.__class__` has an attribute
 
@@ -79,27 +78,27 @@ def encode_obj(py_obj, binary):
     # just needed for v3 plotly where figures aren't dicts...
 
     # Pygsti class encoding
-    if is_pygsti_class:  # or class_hasattr(py_obj, '__pygsti_getstate__')
+    if is_pygsti_class:  # or _class_hasattr(py_obj, '__pygsti_getstate__')
         return {'__pygsticlass__': (py_obj.__module__, py_obj.__name__)}
 
     # Pygsti object encoding
-    elif is_pygsti_obj:  # or class_hasattr(py_obj, '__pygsti_getstate__')
+    elif is_pygsti_obj:  # or _class_hasattr(py_obj, '__pygsti_getstate__')
 
         #Get State (and/or init args)
-        if class_hasattr(py_obj, '__pygsti_reduce__'):
+        if _class_hasattr(py_obj, '__pygsti_reduce__'):
             red = py_obj.__pygsti_reduce__()  # returns class, construtor_args, state
             assert(red[0] is py_obj.__class__), "No support for weird reducing!"
             init_args = red[1] if len(red) > 1 else []
             state = red[2] if len(red) > 2 else {}
             if state is None: state = {}
             state.update({'__init_args__': init_args})
-        elif class_hasattr(py_obj, '__pygsti_getstate__'):
+        elif _class_hasattr(py_obj, '__pygsti_getstate__'):
             state = py_obj.__pygsti_getstate__()  # must return a dict
-        elif class_hasattr(py_obj, '__getstate__'):
+        elif _class_hasattr(py_obj, '__getstate__'):
             state = py_obj.__getstate__()
         elif hasattr(py_obj, '__dict__'):
             state = py_obj.__dict__  # take __dict__ as state
-        elif class_hasattr(py_obj, '__reduce__'):
+        elif _class_hasattr(py_obj, '__reduce__'):
             red = py_obj.__reduce__()  # returns class, construtor_args, state
             if red[0] is not py_obj.__class__:
                 state = None  # weird reducing can happen, for instance, for namedtuples - just punt
@@ -142,7 +141,7 @@ def encode_obj(py_obj, binary):
         encode_std_base = bool('__init_args__' not in d)
 
         if encode_std_base:
-            std_encode = encode_std_obj(py_obj, binary)
+            std_encode = _encode_std_obj(py_obj, binary)
             if std_encode is not py_obj:  # if there's something to encode
                 # this pygsti object is also a standard-object instance
                 assert(isinstance(std_encode, dict))
@@ -158,14 +157,13 @@ def encode_obj(py_obj, binary):
 
     #Special case: a plotly Figure object - these need special help being serialized
     elif is_plotly_fig and hasattr(py_obj, 'to_dict'):
-        return {'__plotlyfig__': encode_std_obj(py_obj.to_dict(), binary)}
+        return {'__plotlyfig__': _encode_std_obj(py_obj.to_dict(), binary)}
 
     else:
-        return encode_std_obj(py_obj, binary)
+        return _encode_std_obj(py_obj, binary)
 
 
-#PRIVATE
-def encode_std_obj(py_obj, binary):
+def _encode_std_obj(py_obj, binary):
     """
     Helper to :func:`encode_obj` that encodes only "standard" (non-pyGSTi) types
 
@@ -208,12 +206,12 @@ def encode_std_obj(py_obj, binary):
         return {'__uuid__': str(py_obj.hex)}
     elif isinstance(py_obj, complex):
         rep = py_obj.__repr__()  # a string
-        data = tobin(rep) if binary else rep  # binary if need be
+        data = _tobin(rep) if binary else rep  # binary if need be
         return {'__complex__': data}
     elif not binary and isinstance(py_obj, bytes):
-        return {'__bytes__': tostr(_base64.b64encode(py_obj))}
+        return {'__bytes__': _tostr(_base64.b64encode(py_obj))}
     elif binary and isinstance(py_obj, str):
-        return {'__string__': tobin(py_obj)}
+        return {'__string__': _tobin(py_obj)}
 
     #Numpy encoding
     elif isinstance(py_obj, _np.ndarray):
@@ -221,11 +219,11 @@ def encode_std_obj(py_obj, binary):
         # otherwise, store the corresponding array protocol type string:
         if py_obj.dtype.kind == 'V':
             kind = 'V'
-            descr = tobin(py_obj.dtype.descr) if binary else tostr(py_obj.dtype.descr)
+            descr = _tobin(py_obj.dtype.descr) if binary else _tostr(py_obj.dtype.descr)
         else:
             kind = ''
-            descr = tobin(py_obj.dtype.str) if binary else tostr(py_obj.dtype.str)
-        data = py_obj.tobytes() if binary else tostr(_base64.b64encode(py_obj.tobytes()))
+            descr = _tobin(py_obj.dtype.str) if binary else _tostr(py_obj.dtype.str)
+        data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
         if(py_obj.dtype == _np.object): raise TypeError("Cannot serialize object ndarrays!")
         return {'__ndarray__': data,
                 'dtype': descr,
@@ -233,9 +231,9 @@ def encode_std_obj(py_obj, binary):
                 'shape': py_obj.shape}
 
     elif isinstance(py_obj, (_np.bool_, _np.number)):
-        data = py_obj.tobytes() if binary else tostr(_base64.b64encode(py_obj.tobytes()))
+        data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
         return {'__npgeneric__': data,
-                'dtype': tostr(py_obj.dtype.str)}
+                'dtype': _tostr(py_obj.dtype.str)}
 
     elif isinstance(py_obj, _types.FunctionType):  # functions
         # OLD: elif callable(py_obj): #incorrectly includes pygsti classes w/__call__ (e.g. AutoGator)
@@ -269,13 +267,13 @@ def decode_obj(json_obj, binary):
     object
         A Python object.
     """
-    B = tobin if binary else _ident
+    B = _tobin if binary else _ident
 
     if isinstance(json_obj, dict):
         if B('__pygsticlass__') in json_obj:
             modname, clsname = json_obj[B('__pygsticlass__')]
-            module = _importlib.import_module(tostr(modname))
-            class_ = getattr(module, tostr(clsname))
+            module = _importlib.import_module(_tostr(modname))
+            class_ = getattr(module, _tostr(clsname))
             return class_
 
         elif B('__pygstiobj__') in json_obj:
@@ -286,8 +284,8 @@ def decode_obj(json_obj, binary):
             #    print("%s (%s): %s (%s)" % (k,type(k),v,type(v)))
 
             modname, clsname = json_obj[B('__pygstiobj__')]
-            module = _importlib.import_module(tostr(modname))
-            class_ = getattr(module, tostr(clsname))
+            module = _importlib.import_module(_tostr(modname))
+            class_ = getattr(module, _tostr(clsname))
 
             if B('__init_args__') in json_obj:  # construct via __init__
                 args = decode_obj(json_obj[B('__init_args__')], binary)
@@ -300,12 +298,12 @@ def decode_obj(json_obj, binary):
             state_dict = {}
             for k, v in json_obj.items():
                 if k in (B('__pygstiobj__'), B('__init_args__'), B('__std_base__')): continue
-                state_dict[tostr(k)] = decode_obj(v, binary)
+                state_dict[_tostr(k)] = decode_obj(v, binary)
 
             #Set state
-            if class_hasattr(instance, '__pygsti_setstate__'):
+            if _class_hasattr(instance, '__pygsti_setstate__'):
                 instance.__pygsti_setstate__(state_dict)
-            elif class_hasattr(instance, '__setstate__'):
+            elif _class_hasattr(instance, '__setstate__'):
                 instance.__setstate__(state_dict)
             elif hasattr(instance, '__dict__'):  # just update __dict__
                 instance.__dict__.update(state_dict)
@@ -314,7 +312,7 @@ def decode_obj(json_obj, binary):
 
             #update instance with std-object info if needed (only if __init__ not called)
             if B('__std_base__') in json_obj:
-                decode_std_base(json_obj[B('__std_base__')], instance, binary)
+                _decode_std_base(json_obj[B('__std_base__')], instance, binary)
 
             return instance
 
@@ -323,13 +321,12 @@ def decode_obj(json_obj, binary):
             return go.Figure(decode_obj(json_obj[B('__plotlyfig__')], binary))
 
         else:
-            return decode_std_obj(json_obj, binary)
+            return _decode_std_obj(json_obj, binary)
     else:
         return json_obj
 
 
-#PRIVATE
-def decode_std_base(json_obj, start, binary):
+def _decode_std_base(json_obj, start, binary):
     """
     Helper to :func:`decode_obj` for decoding pyGSTi objects that are derived from a standard type.
 
@@ -349,7 +346,7 @@ def decode_std_base(json_obj, start, binary):
     -------
     object
     """
-    B = tobin if binary else _ident
+    B = _tobin if binary else _ident
 
     if B('__tuple__') in json_obj:
         #OK if __init_args since this means we knew how to construct it (e.g. namedtuples)
@@ -380,8 +377,7 @@ def decode_std_base(json_obj, start, binary):
         assert(False), "No support for sub-classing slice"
 
 
-#PRIVATE
-def decode_std_obj(json_obj, binary):
+def _decode_std_obj(json_obj, binary):
     """
     Helper to :func:`decode_obj` that decodes standard (non-pyGSTi) types.
 
@@ -397,7 +393,7 @@ def decode_std_obj(json_obj, binary):
     -------
     object
     """
-    B = tobin if binary else _ident
+    B = _tobin if binary else _ident
 
     if B('__tuple__') in json_obj:
         return tuple([decode_obj(v, binary) for v in json_obj[B('__tuple__')]])
@@ -422,12 +418,12 @@ def decode_std_obj(json_obj, binary):
         return _collections.Counter(
             {decode_obj(k, binary): decode_obj(v, binary) for k, v in json_obj[B('__counter__')]})
     elif B('__uuid__') in json_obj:
-        return _uuid.UUID(hex=tostr(json_obj[B('__uuid__')]))
+        return _uuid.UUID(hex=_tostr(json_obj[B('__uuid__')]))
     elif B('__bytes__') in json_obj:
         return json_obj[B('__bytes__')] if binary else \
             _base64.b64decode(json_obj[B('__bytes__')])
     elif B('__string__') in json_obj:
-        return tostr(json_obj[B('__string__')]) if binary else \
+        return _tostr(json_obj[B('__string__')]) if binary else \
             json_obj[B('__string__')]
 
     # check for numpy
@@ -435,7 +431,7 @@ def decode_std_obj(json_obj, binary):
         # Check if 'kind' is in json_obj to enable decoding of data
         # serialized with older versions:
         if json_obj[B('kind')] == 'V':
-            descr = [tuple(tostr(t) if isinstance(t, bytes) else t for t in d)
+            descr = [tuple(_tostr(t) if isinstance(t, bytes) else t for t in d)
                      for d in json_obj[B('dtype')]]
         else:
             descr = json_obj[B('dtype')]
@@ -449,15 +445,14 @@ def decode_std_obj(json_obj, binary):
             data, dtype=_np.dtype(json_obj[B('dtype')])
         )[0]
     elif B('__complex__') in json_obj:
-        return complex(tostr(json_obj[B('__complex__')]))
+        return complex(_tostr(json_obj[B('__complex__')]))
     elif B('__function__') in json_obj:
         modname, fnname = json_obj[B('__function__')]
-        module = _importlib.import_module(tostr(modname))
-        return getattr(module, tostr(fnname))
+        module = _importlib.import_module(_tostr(modname))
+        return getattr(module, _tostr(fnname))
 
 
-#PRIVATE
-def tostr(x):
+def _tostr(x):
     """
     Convert a value to the native string format.
 
@@ -476,8 +471,7 @@ def tostr(x):
         return str(x)
 
 
-#PRIVATE
-def tobin(x):
+def _tobin(x):
     """
     Serialize strings to UTF8
 

@@ -24,7 +24,7 @@ from ..objects import objectivefns as _objfns
 from ..tools import timed_block as _timed_block
 
 from ..tools.mpitools import distribute_indices as _distribute_indices
-from ..tools.legacytools import deprecated_fn as _deprecated_fn
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 from .. import tools as _tools
 from .. import objects as _objs
@@ -103,10 +103,10 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
 #    return True
 
 def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
 
     if est.has_confidence_region_factory(mdl_lbl, 'final'):
-        crf = est.get_confidence_region_factory(mdl_lbl, 'final')
+        crf = est.create_confidence_region_factory(mdl_lbl, 'final')
         if crf.can_construct_views():
             return crf
         else:
@@ -363,7 +363,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             #if this estimate uses robust scaling or wildcard budget
             NA = ws.NotApplicable()
             if est.parameters.get("weights", None):
-                effds, scale_subMxs = est.get_effective_dataset(True)
+                effds, scale_subMxs = est.create_effective_dataset(True)
                 switchBd.eff_ds[d, i] = effds
                 switchBd.scaled_submxs_dict[d, i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
                 switchBd.modvi_ds[d, i] = results.dataset if combine_robust else effds
@@ -492,7 +492,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             estimate0 = results.estimates[estLabels[0]]
             dim = estimate0.models['target'].dim
             nQubits = int(round(_np.log2(dim) // 2))
-            idStr = ('Gi',) if 'Gi' in estimate0.models['target'].get_primitive_op_labels() else ((),)
+            idStr = ('Gi',) if 'Gi' in estimate0.models['target'].primitive_op_labels() else ((),)
         except:
             printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
             continue  # skip if we can't get dimension
@@ -609,7 +609,7 @@ def create_standard_report(results, filename, title="auto",
     results : Results
         An object which represents the set of results from one *or more* GST
         estimation runs, typically obtained from running
-        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        :func:`run_long_sequence_gst` or :func:`run_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
         dictionary are used to label different data sets that are selectable
@@ -802,7 +802,7 @@ def create_nqnoise_report(results, filename, title="auto",
     results : Results
         An object which represents the set of results from one *or more* GST
         estimation runs, typically obtained from running
-        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        :func:`run_long_sequence_gst` or :func:`run_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
         dictionary are used to label different data sets that are selectable
@@ -979,7 +979,7 @@ def create_report_notebook(results, filename, title="auto",
     results : Results
         An object which represents the set of results from one *or more* GST
         estimation runs, typically obtained from running
-        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        :func:`run_long_sequence_gst` or :func:`run_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
         dictionary are used to label different data sets that are selectable
@@ -1035,7 +1035,7 @@ def find_std_clifford_compilation(model, verbosity=0):
     dict or None
         The Clifford compilation dictionary (if one can be found).
     """
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     if not isinstance(model, _objs.ExplicitOpModel):
         return None  # only match explicit models
 
@@ -1117,7 +1117,7 @@ def construct_standard_report(results, title="auto",
     results : Results
         An object which represents the set of results from one *or more* GST
         estimation runs, typically obtained from running
-        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        :func:`run_long_sequence_gst` or :func:`run_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
         dictionary are used to label different data sets that are selectable
@@ -1183,7 +1183,7 @@ def construct_standard_report(results, title="auto",
         The workspace object used to create the report
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
@@ -1235,7 +1235,7 @@ def construct_standard_report(results, title="auto",
         _section.GaugeVariantSection(),
         _section.GaugeVariantsRawSection(),
         _section.GaugeVariantsDecompSection(),
-        _section.GaugeVariantsErrGenSection(),
+        _section.GaugeVariantsErrorGenSection(),
         _section.InputSection(),
         _section.MetaSection(),
         _section.HelpSection()
@@ -1346,7 +1346,7 @@ def construct_nqnoise_report(results, title="auto",
     results : Results
         An object which represents the set of results from one *or more* GST
         estimation runs, typically obtained from running
-        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        :func:`run_long_sequence_gst` or :func:`run_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
         dictionary are used to label different data sets that are selectable
@@ -1408,7 +1408,7 @@ def construct_nqnoise_report(results, title="auto",
      : class:`Report` : A constructed report object
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
@@ -1455,7 +1455,7 @@ def construct_nqnoise_report(results, title="auto",
         _section.SummarySection(bestGatesVsTargetTable_sum=False),
         _section.GoodnessSection(),
         _section.GoodnessColorBoxPlotSection(),
-        _section.GaugeVariantsErrGenNQubitSection(),
+        _section.GaugeVariantsErrorGenNQubitSection(),
         _section.InputSection(fiducialListTable=False, targetGatesBoxTable=False, targetSpamBriefTable=False),
         _section.MetaSection(),
         _section.HelpSection()
@@ -1548,7 +1548,7 @@ def construct_nqnoise_report(results, title="auto",
                    workspace=ws)
 
 
-def construct_drift_report(results, title='auto', ws=None, verbosity=1):
+def create_drift_report(results, title='auto', ws=None, verbosity=1):
     """
     Creates a Drift report.
 
@@ -1582,7 +1582,7 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
     circuit_list = results.data.edesign.circuit_lists[-1]
     singleresults = results.stabilityanalyzer
 
-    printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity)  # , comm=comm)
 
     printer.log('*** Creating workspace ***')
     ws = ws or _ws.Workspace()
@@ -1669,12 +1669,12 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 #            targetOp = targetModel.operations[gl]
 #
 #            errgen = _tools.error_generator(gate, targetOp, genType)
-#            hamProj, hamGens = _tools.std_errgen_projections(
+#            hamProj, hamGens = _tools.std_errorgen_projections(
 #                errgen, "hamiltonian", basis.name, basis, True)
-#            stoProj, stoGens = _tools.std_errgen_projections(
+#            stoProj, stoGens = _tools.std_errorgen_projections(
 #                errgen, "stochastic", basis.name, basis, True)
 #            HProj, OProj, HGens, OGens = \
-#                _tools.lindblad_errgen_projections(
+#                _tools.lindblad_errorgen_projections(
 #                    errgen, basis, basis, basis, normalize=False,
 #                    return_generators=True)
 #                #Note: return values *can* be None if an empty/None basis is given
@@ -1715,12 +1715,12 @@ def construct_drift_report(results, title='auto', ws=None, verbosity=1):
 #            Np_LND += HProj.size + OProj.size
 #
 #        #DEBUG!!!
-#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(model))
-#        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
+#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(model))
+#        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(gsLNDCP))
 #
 #        #Check for CPTP where expected
-#        #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
-#        assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
+#        #assert(_tools.sum_of_negative_choi_eigenvalues(gsHSCP) < 1e-6)
+#        assert(_tools.sum_of_negative_choi_eigenvalues(gsLNDCP) < 1e-6)
 #
 #        # ...
 #        models = (model, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)

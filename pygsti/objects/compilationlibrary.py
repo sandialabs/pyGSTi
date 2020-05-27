@@ -38,11 +38,11 @@ class CompilationLibrary(_collections.OrderedDict):
     An collection of compilations for gates.
 
     Essentially an ordered dictionary whose keys are operation labels
-    (:class:`Label` objects) and whose values are operation sequences
+    (:class:`Label` objects) and whose values are circuits
     (:class:`Circuit` objects).  A `CompilationLibrary` holds a :class:`Model`
     which specifies the "native" gates that all compilations are made up of.
     Currently, this model should only contain Clifford gates, so that its
-    `get_clifford_symplectic_reps` method gives representations for all of its
+    `compute_clifford_symplectic_reps` method gives representations for all of its
     gates.
 
     Compilations can be either "local" or "non-local". A local compilation
@@ -108,7 +108,7 @@ class CompilationLibrary(_collections.OrderedDict):
         return (CompilationLibrary,
                 (self.model, self.ctype, list(self.items())), None)
 
-    def construct_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
+    def _create_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
         """
         Constructs a local compilation of `oplabel`.
 
@@ -180,7 +180,7 @@ class CompilationLibrary(_collections.OrderedDict):
         for template_compilation in self.templates.get(oplabel.name, []):
             #Check availability of gates in self.model to determine
             # whether template_compilation can be applied.
-            model_primitive_ops = self.model.get_primitive_op_labels()
+            model_primitive_ops = self.model.primitive_op_labels()
             if all([(gl in model_primitive_ops) for gl in map(to_real_label,
                                                               template_compilation)]):
                 template_to_use = template_compilation
@@ -192,10 +192,10 @@ class CompilationLibrary(_collections.OrderedDict):
             #construct a list of the available gates on the qubits of
             # `oplabel` (or a subset of them)
             available_glabels = list(filter(lambda gl: set(gl.qubits).issubset(oplabel.qubits),
-                                            self.model.get_primitive_op_labels()))
+                                            self.model.primitive_op_labels()))
             available_glabels.extend([_Label(IDENT, k) for k in oplabel.qubits])
             available_template_labels = set(map(to_template_label, available_glabels))
-            available_srep_dict = self.model.get_clifford_symplectic_reps(available_glabels)
+            available_srep_dict = self.model.compute_clifford_symplectic_reps(available_glabels)
             available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))
             #Manually add 1Q idle gate on each of the qubits, as this typically isn't stored in model.
 
@@ -255,7 +255,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if not force and oplabel in self:
             return self[oplabel]  # don't re-compute unless we're told to
 
-        circuit = self.construct_local_compilation_of(oplabel,
+        circuit = self._create_local_compilation_of(oplabel,
                                                       unitary=unitary,
                                                       srep=srep,
                                                       max_iterations=max_iterations,
@@ -349,7 +349,7 @@ class CompilationLibrary(_collections.OrderedDict):
         Returns
         -------
         tuple
-            A tuple of the operation labels (essentially a operation sequence) specifying
+            A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
         # The unitary is specifed, this takes priority and we use it to construct the
@@ -473,7 +473,7 @@ class CompilationLibrary(_collections.OrderedDict):
         return compilation
 
     #PRIVATE
-    def compute_connectivity_of(self, gate_name):
+    def _compute_connectivity_of(self, gate_name):
         """
         Compute the connectivity for `gate_name` using the (compiled) gates available this library.
 
@@ -522,7 +522,7 @@ class CompilationLibrary(_collections.OrderedDict):
         QubitGraph
         """
         if gate_name not in self.connectivity:  # need to recompute
-            self.compute_connectivity_of(gate_name)
+            self._compute_connectivity_of(gate_name)
 
         init_qgraph = self.connectivity[gate_name]  # unconstrained
 
@@ -530,8 +530,8 @@ class CompilationLibrary(_collections.OrderedDict):
             graph_constraint = allowed_filter.get(gate_name, None)
             if graph_constraint is not None:
                 directed = graph_constraint.directed or init_qgraph.directed
-                init_nodes = set(init_qgraph.get_node_names())
-                qlabels = [lbl for lbl in graph_constraint.get_node_names()
+                init_nodes = set(init_qgraph.node_names())
+                qlabels = [lbl for lbl in graph_constraint.node_names()
                            if lbl in init_nodes]  # labels common to both graphs
                 qlset = set(qlabels)  # for faster lookups
                 final_edges = []
@@ -550,7 +550,7 @@ class CompilationLibrary(_collections.OrderedDict):
                 # assume allowed_filter is iterable and contains qubit labels
                 return init_qgraph.subgraph(list(allowed_filter))
 
-    def construct_nonlocal_compilation_of(self, oplabel, allowed_filter=None, verbosity=1, check=True):
+    def _create_nonlocal_compilation_of(self, oplabel, allowed_filter=None, verbosity=1, check=True):
         """
         Constructs a potentially non-local compilation of `oplabel`.
 
@@ -652,7 +652,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if check:
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
             # is ok, below.
-            sreps = self.model.get_clifford_symplectic_reps()
+            sreps = self.model.compute_clifford_symplectic_reps()
             s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
 
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
@@ -725,7 +725,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if not force and key in self:
             return self[oplabel]  # don't re-compute unless we're told to
 
-        circuit = self.construct_nonlocal_compilation_of(
+        circuit = self._create_nonlocal_compilation_of(
             oplabel, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return circuit

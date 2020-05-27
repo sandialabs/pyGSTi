@@ -28,8 +28,7 @@ CHECK_JACOBIAN = False
 FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
-#PRIVATE
-def objfn(objfn_cls, model, dataset, circuits=None,
+def _objfn(objfn_cls, model, dataset, circuits=None,
           regularization=None, penalties=None, op_label_aliases=None,
           cache=None, comm=None, mem_limit=None, **addl_args):
     """
@@ -121,7 +120,7 @@ class ObjectiveFunctionBuilder(object):
     """
 
     @classmethod
-    def create_from(cls, obj):
+    def cast(cls, obj):
         """
         Cast `obj` to an `ObjectiveFunctionBuilder` instance.
 
@@ -194,7 +193,7 @@ class ObjectiveFunctionBuilder(object):
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
         self.name = name if (name is not None) else cls_to_build.__name__
-        self.description = description if (description is not None) else "objfn"  # "Sum of Chi^2"  OR "2*Delta(log(L))"
+        self.description = description if (description is not None) else "_objfn"  # "Sum of Chi^2"  OR "2*Delta(log(L))"
         self.cls_to_build = cls_to_build
         self.regularization = regularization
         self.penalties = penalties
@@ -245,7 +244,7 @@ class ObjectiveFunction(object):
     So far, this is just a base class for organizational purposes
     """
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -324,15 +323,15 @@ class RawObjectiveFunction(ObjectiveFunction):
         verbosity : int, optional
             Level of detail to print to stdout.
         """
-        resource_alloc = _ResourceAllocation.create_from(resource_alloc)
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         self.comm = resource_alloc.comm
         self.profiler = resource_alloc.profiler
         self.mem_limit = resource_alloc.mem_limit
         self.distribute_method = resource_alloc.distribute_method
 
-        self.printer = _VerbosityPrinter.build_printer(verbosity, self.comm)
+        self.printer = _VerbosityPrinter.create_printer(verbosity, self.comm)
         self.name = name if (name is not None) else self.__class__.__name__
-        self.description = description if (description is not None) else "objfn"
+        self.description = description if (description is not None) else "_objfn"
 
         if regularization is None: regularization = {}
         self.set_regularization(**regularization)
@@ -981,11 +980,11 @@ class MDSObjectiveFunction(ObjectiveFunction):
         #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
         #self.circuits_to_use = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
-        #self.ds_circuits_to_use = _tools.apply_aliases_to_circuit_list(self.circuits_to_use,
+        #self.ds_circuits_to_use = _tools.apply_aliases_to_circuits(self.circuits_to_use,
         #                                                               bulk_circuit_list.op_label_aliases)
         #
         ## Memory check
-        #persistent_mem = self.get_persistent_memory_estimate()
+        #persistent_mem = self._persistent_memory_estimate()
         #in_gb = 1.0 / 1024.0**3  # in gigabytes
         #if self.raw_objfn.mem_limit is not None:
         #    in_gb = 1.0 / 1024.0**3  # in gigabytes
@@ -1006,7 +1005,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         #
         #self.cache = cache if (cache is not None) else _ComputationCache()
         #if not self.cache.has_evaltree():
-        #    subcalls = self.get_evaltree_subcalls()
+        #    subcalls = self._evaltree_subcalls()
         #    evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
         #                                             self.raw_objfn.profiler, self.raw_objfn.distribute_method)
         #    self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
@@ -1019,7 +1018,6 @@ class MDSObjectiveFunction(ObjectiveFunction):
         #self.wrt_block_size2 = self.cache.wrt_block_size2
         #
         #self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
-        
         self.firsts = None  # no omitted probs by default
 
     @property
@@ -1036,7 +1034,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         """
         return self.raw_objfn.description
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -1053,7 +1051,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         -------
         float
         """
-        return self.raw_objfn.get_chi2k_distributed_qty(objective_function_value)
+        return self.raw_objfn.chi2k_distributed_qty(objective_function_value)
 
     def lsvec(self, paramvec=None, oob_check=False):
         """
@@ -1287,16 +1285,78 @@ class MDSObjectiveFunction(ObjectiveFunction):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    #PRIVATE
-    def precompute_omitted_freqs(self):
+    #MOVED - but these versions have updated names
+    #def _persistent_memory_estimate(self, num_elements=None):
+    #    #  Estimate & check persistent memory (from allocs within objective function)
+    #    """
+    #    Compute the amount of memory needed to perform evaluations of this objective function.
+    #
+    #    This number includes both intermediate and final results, and assumes
+    #    that the types of evauations given by :method:`_evaltree_subcalls`
+    #    are required.
+    #
+    #    Parameters
+    #    ----------
+    #    num_elements : int, optional
+    #        The number of elements (circuit outcomes) that will be computed.
+    #
+    #    Returns
+    #    -------
+    #    int
+    #    """
+    #    if num_elements is None:
+    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
+    #        nc = len(self.circuits_to_use)
+    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
+    #    else:
+    #        ne = num_elements
+    #    np = self.mdl.num_params()
+    #
+    #    # "persistent" memory is that used to store the final results.
+    #    obj_fn_mem = FLOATSIZE * ne
+    #    jac_mem = FLOATSIZE * ne * np
+    #    hess_mem = FLOATSIZE * ne * np**2
+    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
+    #    if any([nm == "bulk_fill_hprobs" for nm in self._evaltree_subcalls()]):
+    #        persistent_mem += hess_mem  # we need room for the hessian too!
+    #    # TODO: what about "bulk_hprobs_by_block"?
+    #
+    #    return persistent_mem
+    #
+    #def _evaltree_subcalls(self):
+    #    """
+    #    The types of calls that will be made to an evaluation tree.
+    #
+    #    This information is used for memory estimation purposes.
+    #
+    #    Returns
+    #    -------
+    #    list
+    #    """
+    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
+    #    return calls
+    #
+    #def num_data_params(self):
+    #    """
+    #    The number of degrees of freedom in the data used by this objective function.
+    #
+    #    Returns
+    #    -------
+    #    int
+    #    """
+    #    return self.dataset.degrees_of_freedom(self.ds_circuits_to_use,
+    #                                               aggregate_times=not self.time_dependent)
+
+    def _precompute_omitted_freqs(self):
         """
         Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
         """
         self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
         for i, c in enumerate(self.circuits_to_use):
             lklen = _slct.length(self.lookup[i])
-            if 0 < lklen < self.mdl.get_num_outcomes(c):
-                self.firsts.append(_slct.as_array(self.lookup[i])[0])
+            if 0 < lklen < self.mdl.compute_num_outcomes(c):
+                self.firsts.append(_slct.to_array(self.lookup[i])[0])
                 self.indicesOfCircuitsWithOmittedData.append(i)
         if len(self.firsts) > 0:
             self.firsts = _np.array(self.firsts, 'i')
@@ -1307,8 +1367,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         else:
             self.firsts = None  # no omitted probs
 
-    #PRIVATE
-    def compute_count_vectors(self):
+    def _compute_count_vectors(self):
         """
         Ensure self.cache contains count and total-count vectors.
         """
@@ -1331,7 +1390,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         # subtrees would just add unnecessary complication.
 
         #get distribution across subtrees (groups if needed)
-        subtrees = self.eval_tree.get_sub_trees()
+        subtrees = self.eval_tree.sub_trees()
         my_subtree_indices, subtree_owners, my_subcomm = self.eval_tree.distribute(self.raw_objfn.comm)
 
         nparams = self.mdl.num_params()
@@ -1359,7 +1418,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
                 # usually want but NOT here, where we fill arrays just big
                 # enough for each subtree separately - so re-init spamtuple_indices
                 eval_subtree = eval_subtree.copy()
-                eval_subtree.recompute_spamtuple_indices(local=True)
+                eval_subtree._recompute_spamtuple_indices(local=True)
 
             # Create views into pre-allocated memory
             probs = probs_mem[0:sub_nelements]
@@ -1464,7 +1523,7 @@ class RawChi2Function(RawObjectiveFunction):
     def __init__(self, regularization=None, resource_alloc=None, name="chi2", description="Sum of Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -1528,7 +1587,7 @@ class RawChi2Function(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        return (probs - freqs) * self.get_weights(probs, freqs, total_counts)  # Note: ok if this is negative
+        return (probs - freqs) * self._weights(probs, freqs, total_counts)  # Note: ok if this is negative
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -1562,8 +1621,8 @@ class RawChi2Function(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        weights = self.get_weights(probs, freqs, total_counts)
-        return weights + (probs - freqs) * self.get_dweights(probs, freqs, weights)
+        weights = self._weights(probs, freqs, total_counts)
+        return weights + (probs - freqs) * self._dweights(probs, freqs, weights)
 
     def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -1599,8 +1658,8 @@ class RawChi2Function(RawObjectiveFunction):
         # lsvec = (p-f)*sqrt(N/cp) = (p-f)*w
         # dlsvec/dp = w + (p-f)*dw/dp
         # d2lsvec/dp2 = dw/dp + (p-f)*d2w/dp2 + dw/dp = 2*dw/dp + (p-f)*d2w/dp2
-        weights = self.get_weights(probs, freqs, total_counts)
-        return 2 * self.get_dweights(probs, freqs, weights) + (probs - freqs) * self.get_hweights(probs, freqs, weights)
+        weights = self._weights(probs, freqs, total_counts)
+        return 2 * self._dweights(probs, freqs, weights) + (probs - freqs) * self._hweights(probs, freqs, weights)
 
     def hterms_alt(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -1719,8 +1778,7 @@ class RawChi2Function(RawObjectiveFunction):
         return _np.where(probs == clipped_probs, 0.0, 2 * total_counts / clipped_probs)
 
     #Support functions
-    #PRIVATE
-    def get_weights(self, p, f, total_counts):
+    def _weights(self, p, f, total_counts):
         """
         Get the chi2 weighting factor.
 
@@ -1742,8 +1800,7 @@ class RawChi2Function(RawObjectiveFunction):
         cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         return _np.sqrt(total_counts / cp)  # nSpamLabels x nCircuits array (K x M)
 
-    #PRIVATE
-    def get_dweights(self, p, f, wts):  # derivative of weights w.r.t. p
+    def _dweights(self, p, f, wts):  # derivative of weights w.r.t. p
         """
         Get the derivative of the chi2 weighting factor.
 
@@ -1756,7 +1813,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`get_weights`.
+            The weights, as computed by :method:`_weights`.
 
         Returns
         -------
@@ -1767,8 +1824,7 @@ class RawChi2Function(RawObjectiveFunction):
         dw[p < self.min_prob_clip_for_weighting] = 0.0
         return dw
 
-    #PRIVATE
-    def get_hweights(self, p, f, wts):  # 2nd derivative of weights w.r.t. p
+    def _hweights(self, p, f, wts):  # 2nd derivative of weights w.r.t. p
         # wts = sqrt(N/cp), dwts = (-1/2) sqrt(N) *cp^(-3/2), hwts = (3/4) sqrt(N) cp^(-5/2)
         """
         Get the 2nd derivative of the chi2 weighting factor.
@@ -1782,7 +1838,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`get_weights`.
+            The weights, as computed by :method:`_weights`.
 
         Returns
         -------
@@ -1826,7 +1882,7 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         self.alpha = alpha
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2124,7 +2180,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
                  description="Sum of freq-weighted Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2155,8 +2211,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         self.min_freq_clip_for_weighting = min_freq_clip_for_weighting
 
-    #PRIVATE
-    def get_weights(self, p, f, total_counts):
+    def _weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
         """
         Get the chi2 weighting factor.
@@ -2178,8 +2233,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         return _np.sqrt(total_counts / _np.clip(f, self.min_freq_clip_for_weighting, None))
 
-    #PRIVATE
-    def get_dweights(self, p, f, wts):
+    def _dweights(self, p, f, wts):
         """
         Get the derivative of the chi2 weighting factor.
 
@@ -2192,7 +2246,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`get_weights`.
+            The weights, as computed by :method:`_weights`.
 
         Returns
         -------
@@ -2200,8 +2254,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         return _np.zeros(len(p), 'd')
 
-    #PRIVATE
-    def get_hweights(self, p, f, wts):
+    def _hweights(self, p, f, wts):
         """
         Get the 2nd derivative of the chi2 weighting factor.
 
@@ -2214,7 +2267,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`get_weights`.
+            The weights, as computed by :method:`_weights`.
 
         Returns
         -------
@@ -2351,7 +2404,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
                  resource_alloc=None, name='dlogl', description="2*Delta(log(L))", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2791,7 +2844,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
                  resource_alloc=None, name='dlogl', description="2*Delta(log(L))", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -3864,10 +3917,10 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
         self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if self.enable_hessian else None
-        self.counts, self.N = self.compute_count_vectors()
+        self.counts, self.N = self._compute_count_vectors()
         self.freqs = self.counts / self.N
         self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
-        self.precompute_omitted_freqs()  # sets self.first
+        self._precompute_omitted_freqs()  # sets self.first
 
     #Model-based regularization and penalty support functions
 
@@ -3942,8 +3995,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         return ex
 
-    #PRIVATE
-    def lspenaltyvec(self, paramvec):
+    def _lspenaltyvec(self, paramvec):
         """
         The least-squares penalty vector, an array of the square roots of the penalty terms.
 
@@ -3976,8 +4028,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec))
 
-    #PRIVATE
-    def penaltyvec(self, paramvec):
+    def _penaltyvec(self, paramvec):
         """
         The penalty vector, an array of all the penalty terms.
 
@@ -3990,10 +4041,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         -------
         numpy.ndarray
         """
-        return self.lspenaltyvec(paramvec)**2
+        return self._lspenaltyvec(paramvec)**2
 
-    #PRIVATE
-    def fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
+    def _fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
         """
         Fill `lspenaltyvec_jac` with the jacobian of the least-squares (sqrt of the) penalty vector.
 
@@ -4032,8 +4082,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         assert(off == self.ex)
 
-    #PRIVATE
-    def fill_dterms_penalty(self, paramvec, terms_jac):
+    def _fill_dterms_penalty(self, paramvec, terms_jac):
         """
         Fill `terms_jac` with the jacobian of the penalty vector.
 
@@ -4051,13 +4100,12 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         """
         # terms_penalty = ls_penalty**2
         # terms_penalty_jac = 2 * ls_penalty * ls_penalty_jac
-        self.fill_lspenaltyvec_jac(paramvec, terms_jac)
-        terms_jac[:, :] *= 2 * self.lspenaltyvec(paramvec)[:, None]
+        self._fill_lspenaltyvec_jac(paramvec, terms_jac)
+        terms_jac[:, :] *= 2 * self._lspenaltyvec(paramvec)[:, None]
 
     #Omitted-probability support functions
 
-    #PRIVATE
-    def omitted_prob_first_terms(self, probs):
+    def _omitted_prob_first_terms(self, probs):
         """
         Extracts the value of the first term for each circuit that has omitted probabilities.
 
@@ -4094,8 +4142,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #          " <0=", _np.count_nonzero(omitted_probs < 0))
         #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
-    #PRIVATE
-    def update_lsvec_for_omitted_probs(self, lsvec, probs):
+    def _update_lsvec_for_omitted_probs(self, lsvec, probs):
         """
         Updates the least-squares vector `lsvec`, adding the omitted-probability contributions.
 
@@ -4114,9 +4161,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         None
         """
         # lsvec = sqrt(terms) => sqrt(terms + zerofreqfn(omitted))
-        lsvec[self.firsts] = _np.sqrt(lsvec[self.firsts]**2 + self.omitted_prob_first_terms(probs))
+        lsvec[self.firsts] = _np.sqrt(lsvec[self.firsts]**2 + self._omitted_prob_first_terms(probs))
 
-    def update_terms_for_omitted_probs(self, terms, probs):
+    def _update_terms_for_omitted_probs(self, terms, probs):
         """
         Updates the terms vector `terms`, adding the omitted-probability contributions.
 
@@ -4135,7 +4182,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         None
         """
         # terms => terms + zerofreqfn(omitted)
-        terms[self.firsts] += self.omitted_prob_first_terms(probs)
+        terms[self.firsts] += self._omitted_prob_first_terms(probs)
         #DEBUG TODO REMOVE
         #if debug and (self.comm is None or self.comm.Get_rank() == 0):
         #    print(" vrange2 = ",_np.min(v),_np.max(v))
@@ -4145,15 +4192,14 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #          " <0=", _np.count_nonzero(omitted_probs < 0))
         #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
-    #PRIVATE
-    def omitted_prob_first_dterms(self, probs):
+    def _omitted_prob_first_dterms(self, probs):
         """
-        Compute the derivative of the first-terms vector returned by :method:`omitted_prob_first_terms`.
+        Compute the derivative of the first-terms vector returned by :method:`_omitted_prob_first_terms`.
 
         This derivative is just with respect to the *probabilities*, not the
         model parameters, as it anticipates a final dot product with the jacobian
         of the computed probabilities with respect to the model parameters (see
-        :method:`update_dterms_for_omitted_probs`).
+        :method:`_update_dterms_for_omitted_probs`).
 
         Parameters
         ----------
@@ -4173,8 +4219,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_dterms(self.N[self.firsts], omitted_probs)
 
-    #PRIVATE
-    def update_dterms_for_omitted_probs(self, dterms, probs, dprobs_omitted_rowsum):
+    def _update_dterms_for_omitted_probs(self, dterms, probs, dprobs_omitted_rowsum):
         # terms => terms + zerofreqfn(omitted)
         # dterms => dterms + dzerofreqfn(omitted) * domitted  (and domitted = (-omitted_rowsum))
         """
@@ -4205,9 +4250,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         -------
         None
         """
-        dterms[self.firsts] -= self.omitted_prob_first_dterms(probs)[:, None] * dprobs_omitted_rowsum
+        dterms[self.firsts] -= self._omitted_prob_first_dterms(probs)[:, None] * dprobs_omitted_rowsum
 
-    def update_dlsvec_for_omitted_probs(self, dlsvec, lsvec, probs, dprobs_omitted_rowsum):
+    def _update_dlsvec_for_omitted_probs(self, dlsvec, lsvec, probs, dprobs_omitted_rowsum):
         """
         Updates least-squares vector's jacobian to account for omitted probabilities.
 
@@ -4247,12 +4292,12 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         #    new_dlsvec = 0.5 / sqrt(...) * (2 * lsvec * dlsvec + dzerofreqfn(omitted) * domitted)
 
         lsvec_firsts = lsvec[self.firsts]
-        updated_lsvec = _np.sqrt(lsvec_firsts**2 + self.omitted_prob_first_terms(probs))
+        updated_lsvec = _np.sqrt(lsvec_firsts**2 + self._omitted_prob_first_terms(probs))
         updated_lsvec = _np.where(updated_lsvec == 0, 1.0, updated_lsvec)  # avoid 0/0 where lsvec & deriv == 0
 
         # dlsvec => 0.5 / updated_lsvec * (2 * lsvec * dlsvec + dzerofreqfn(omitted) * domitted) memory efficient:
         dlsvec[self.firsts] *= (lsvec_firsts / updated_lsvec)[:, None]
-        dlsvec[self.firsts] -= ((0.5 / updated_lsvec) * self.omitted_prob_first_dterms(probs))[:, None] \
+        dlsvec[self.firsts] -= ((0.5 / updated_lsvec) * self._omitted_prob_first_dterms(probs))[:, None] \
             * dprobs_omitted_rowsum
         #TODO: REMOVE
         #if (self.comm is None or self.comm.Get_rank() == 0):
@@ -4307,10 +4352,10 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
         lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.N, self.freqs)
-        lsvec = _np.concatenate((lsvec, self.lspenaltyvec(paramvec)))
+        lsvec = _np.concatenate((lsvec, self._lspenaltyvec(paramvec)))
 
         if self.firsts is not None:
-            self.update_lsvec_for_omitted_probs(lsvec, self.probs)
+            self._update_lsvec_for_omitted_probs(lsvec, self.probs)
 
         self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
         assert(lsvec.shape == (self.nelements + self.ex,))
@@ -4343,10 +4388,10 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
                                  self.check, self.raw_objfn.comm)
 
         terms = self.raw_objfn.terms(self.probs, self.counts, self.N, self.freqs)
-        terms = _np.concatenate((terms, self.penaltyvec(paramvec)))
+        terms = _np.concatenate((terms, self._penaltyvec(paramvec)))
 
         if self.firsts is not None:
-            self.update_terms_for_omitted_probs(terms, self.probs)
+            self._update_terms_for_omitted_probs(terms, self.probs)
 
         self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
         assert(terms.shape == (self.nelements + self.ex,))
@@ -4414,9 +4459,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
 
         if self.firsts is not None:
             #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
-            self.update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
+            self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
 
-        self.fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
             v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
@@ -4469,9 +4514,9 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         # with a different shape (jac.shape == [nelements,nparams])
 
         if self.firsts is not None:
-            self.update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
+            self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
 
-        self.fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
             v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
@@ -5076,7 +5121,7 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
         self.v = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
         self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
-        self.num_total_outcomes = [mdl.get_num_outcomes(c) for c in self.circuits_to_use]  # for sparse data detection
+        self.num_total_outcomes = [mdl.compute_num_outcomes(c) for c in self.circuits_to_use]  # for sparse data detection
 
     def set_regularization(self):
         """
@@ -5349,7 +5394,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval
         return 0
 
-    def get_chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value):
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -5489,11 +5534,11 @@ def _spam_penalty(mdl, prefactor, op_basis):
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.todense(), op_basis)
+                _tools.vec_to_stdmx(prepvec.to_dense(), op_basis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].todense(), op_basis)
+                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
 
@@ -5680,7 +5725,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
         self.wildcard_budget = wildcard
-        self.wildcard_budget_precomp = wildcard.get_precomp_for_circuits(self.logl_objfn.circuits_to_use)
+        self.wildcard_budget_precomp = wildcard.precompute_for_same_circuits(self.logl_objfn.circuits_to_use)
 
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.probs = self.logl_objfn.probs.copy()

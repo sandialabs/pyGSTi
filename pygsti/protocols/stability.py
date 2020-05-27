@@ -77,7 +77,7 @@ class StabilityAnalysis(_proto.Protocol):
     mergeoutcomes : None or Dict, optional
         If not None, a dictionary of outcome-merging dictionaries. Each dictionary contained as a
         value of `mergeoutcomes` is used to create a new DataSet, where the values have been merged
-        according to that dictionary (see the merge_outcomes() function inside datasetconstructions.py).
+        according to that dictionary (see the aggregate_dataset_outcomes() function inside datasetconstructions.py).
         The corresponding key is used as the key for that DataSet, when it is stored in a MultiDataSet,
         and the instability analysis is implemented on each DataSet. This is a more general data
         coarse-grainin option than `marginalize`.
@@ -256,7 +256,7 @@ class StabilityAnalysis(_proto.Protocol):
         mergeoutcomes : None or Dict, optional
             If not None, a dictionary of outcome-merging dictionaries. Each dictionary contained as a
             value of `mergeoutcomes` is used to create a new DataSet, where the values have been merged
-            according to that dictionary (see the merge_outcomes() function inside datasetconstructions.py).
+            according to that dictionary (see the aggregate_dataset_outcomes() function inside datasetconstructions.py).
             The corresponding key is used as the key for that DataSet, when it is stored in a MultiDataSet,
             and the instability analysis is implemented on each DataSet. This is a more general data
             coarse-grainin option than `marginalize`.
@@ -433,13 +433,13 @@ class StabilityAnalysis(_proto.Protocol):
 
         # Calculate the power spectra.
         if self.verbosity > 0: print(" - Calculating power spectra...", end='')
-        results.generate_spectra(frequencies=self.frequencies, freqpointers=self.freqpointers)
+        results.compute_spectra(frequencies=self.frequencies, freqpointers=self.freqpointers)
         if self.verbosity > 0: print("done!")
 
         # Implement the drift detection with statistical hypothesis testing on the power spectra.
         if self.verbosity > 0: print(" - Running instability detection...", end='')
         if self.verbosity > 1: print('')
-        results.do_instability_detection(significance=self.significance, freqstest=self.freqstest, tests=self.tests,
+        results.run_instability_detection(significance=self.significance, freqstest=self.freqstest, tests=self.tests,
                                          inclass_correction=self.inclass_correction,
                                          betweenclass_weighting=self.betweenclass_weighting,
                                          saveas='default', default=True, overwrite=False, verbosity=self.verbosity - 1)
@@ -450,7 +450,7 @@ class StabilityAnalysis(_proto.Protocol):
 
         # The model selector something slightly more complicated for this method: this function only allows us to
         # set the second part of the modelselector tuple.
-        results.do_instability_characterization(estimator=self.estimator, modelselector=(None, self.modelselector),
+        results.run_instability_characterization(estimator=self.estimator, modelselector=(None, self.modelselector),
                                                 default=True, verbosity=self.verbosity - 1)
         if self.verbosity == 1: print("done!")
 

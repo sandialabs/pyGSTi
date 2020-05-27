@@ -36,32 +36,36 @@ class Report:
 
     Parameters
     ----------
-    templates : <TODO typ>
-        <TODO description>
+    templates : dict (str -> Path-like)
+        A map of the available report generation types (html, pdf, notebook) to template paths.
 
-    results : <TODO typ>
-        <TODO description>
+    results : Results or similar
+        The underlying Results-like object used to generate this report.
 
-    sections : <TODO typ>
-        <TODO description>
+    sections : iterable of Section
+        Collection of sections to be built into the generated report.
 
-    flags : <TODO typ>
-        <TODO description>
+    flags : set of str
+        Set of flags controlling aspects of report generation.
 
-    global_qtys : <TODO typ>
-        <TODO description>
+    global_qtys : dict (str -> any)
+        Key-value map of report quantities not tied to any specific section.
 
-    report_params : <TODO typ>
-        <TODO description>
+    report_params : dict (str -> any)
+        Key-value map of report quantities used when building sections.
 
-    build_defaults : <TODO typ>, optional
-        <TODO description>
+    build_defaults : dict (str -> any), optional
+        Default values for the `build_options` parameter of this
+        instance's build methods. Defaults to an empty dict.
 
-    pdf_available : <TODO typ>, optional
-        <TODO description>
+    pdf_available : bool, optional
+        ``True`` if the underlying results can be represented as a
+        static PDF. If this report cannot be represented statically,
+        ``write_pdf`` will raise. Defaults to ``True``.
 
-    workspace : <TODO typ>, optional
-        <TODO description>
+    workspace : Workspace, optional
+        A ``Workspace`` used for caching figure computation. By
+        default, a new workspace will be used.
     """
     def __init__(self, templates, results, sections, flags,
                  global_qtys, report_params, build_defaults=None,
@@ -159,10 +163,6 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         build_options = build_options or {}
@@ -227,10 +227,6 @@ class Report:
 
         verbosity : int, optional
             How much detail to send to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         # TODO this only applies to standard reports; rewrite generally
@@ -238,7 +234,7 @@ class Report:
         confidenceLevel = self._report_params['confidence_level']
 
         path = _Path(path)
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         templatePath = _Path(__file__).parent / 'templates' / self._templates['notebook']
         outputDir = path.parent
 
@@ -304,7 +300,7 @@ class Report:
             params = estimate.parameters
             objfn_builder = estimate.parameters.get('final_objfn_builder', 'logl')
             clifford_compilation = estimate.parameters.get('clifford_compilation',None)
-            effective_ds, scale_submxs = estimate.get_effective_dataset(True)
+            effective_ds, scale_submxs = estimate.create_effective_dataset(True)
 
             models        = estimate.models
             mdl           = models[gopt]  # final, gauge-optimized estimate
@@ -320,7 +316,7 @@ class Report:
             if confidenceLevel is None:
                 cri = None
             else:
-                crfactory = estimate.get_confidence_region_factory(gopt)
+                crfactory = estimate.create_confidence_region_factory(gopt)
                 region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
                 cri = crfactory.view(abs(confidenceLevel), region_type)\
         """.format(goLabel=goLabels[0], CL=confidenceLevel))
@@ -418,10 +414,6 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
-
-        Returns
-        -------
-        <TODO typ>
         """
 
         if not self._pdf_available:
@@ -435,7 +427,7 @@ class Report:
         for k in range(brevity, 4):
             toggles['BrevityLT' + str(k + 1)] = True
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
         path = _Path(path)
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 

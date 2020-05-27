@@ -48,7 +48,7 @@ else:
 #import time as _time  #DEBUG TIMER
 #from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
-def color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
+def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
                   prec=0, hover_label_fn=None, hover_labels=None):
     """
     Create a color box plot.
@@ -96,7 +96,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
 
     masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
     heatmapArgs = {'z': colormap.normalize(masked_data),
-                   'colorscale': colormap.get_colorscale(),
+                   'colorscale': colormap.create_plotly_colorscale(),
                    'showscale': colorbar, 'hoverinfo': 'none',
                    'zmin': colormap.hmin, 'zmax': colormap.hmax}
 
@@ -164,7 +164,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
 
 
-def nested_color_boxplot(plt_data_list_of_lists, colormap,
+def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                          colorbar=False, box_label_size=0, prec=0,
                          hover_label_fn=None):
     """
@@ -206,7 +206,7 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
     plotly.Figure
     """
 
-    #Assemble the single 2D grid to pass to color_boxplot
+    #Assemble the single 2D grid to pass to _color_boxplot
     # (assume a complete 2D rectangular list of lists, and that
     #  each element is a numpy array of the same size)
     if len(plt_data_list_of_lists) == 0 or len(plt_data_list_of_lists[0]) == 0: return
@@ -244,7 +244,7 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
     else:
         hoverLabels = None
 
-    fig = color_boxplot(data, colormap, colorbar, box_label_size,
+    fig = _color_boxplot(data, colormap, colorbar, box_label_size,
                         prec, None, hoverLabels)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
@@ -253,7 +253,7 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
     return fig
 
 
-def generate_boxplot(sub_mxs,
+def _summable_color_boxplot(sub_mxs,
                      xlabels, ylabels, inner_xlabels, inner_ylabels,
                      xlabel, ylabel, inner_xlabel, inner_ylabel,
                      colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
@@ -368,19 +368,19 @@ def generate_boxplot(sub_mxs,
                     invertedSubMxs[-1].append(mx)
 
             # flip the now-inverted mxs to counteract the flip that will occur upon
-            # entering generate_boxplot again (with invert=False this time), since we
+            # entering _summable_color_boxplot again (with invert=False this time), since we
             # *don't* want the now-inner dimension (the germs) actually flipped (FLIP)
             invertedSubMxs = [[_np.flipud(subMx) for subMx in row] for row in invertedSubMxs]
             ylabels = list(reversed(ylabels))
 
-            return generate_boxplot(invertedSubMxs,
+            return _summable_color_boxplot(invertedSubMxs,
                                     inner_xlabels, inner_ylabels,
                                     xlabels, ylabels, inner_xlabel, inner_ylabel, xlabel, ylabel,
                                     colormap, colorbar, box_labels, prec, hover_info,
                                     sum_up, False, scale, bgcolor)
 
     def val_filter(vals):
-        """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
+        """filter to latex-ify circuits.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
             if isinstance(val, _objs.Circuit):
@@ -420,9 +420,9 @@ def generate_boxplot(sub_mxs,
         else: hover_label_fn = None
 
         boxLabelSize = 8 * scale if box_labels else 0
-        fig = color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
+        fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
                             prec, hover_label_fn)
-        #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
+        #update tickvals b/c _color_boxplot doesn't do this (unlike _nested_color_boxplot)
         if fig is not None:
             fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
             fig.plotlyfig['layout']['yaxis'].update(tickvals=list(range(nYs)))
@@ -445,7 +445,7 @@ def generate_boxplot(sub_mxs,
         else: hover_label_fn = None
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
-        fig = nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
+        fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
                                    prec, hover_label_fn)
 
         xBoxes = nXs * (nIXs + 1) - 1
@@ -520,11 +520,11 @@ def generate_boxplot(sub_mxs,
     return fig
 
 
-def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
+def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                           colorbar=False, box_labels=True, prec='compact', hover_info=True,
                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
     """
-    A wrapper around :func:`generate_boxplot` for creating color box plots displaying circuits.
+    A wrapper around :func:`_summable_color_boxplot` for creating color box plots displaying circuits.
 
     Generates a plot from the structure of the circuits as contained in a
     `CircuitStructure` object.
@@ -532,7 +532,7 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -623,7 +623,7 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
             def hover_label_fn(val, iy, ix, iiy, iix):
                 """ Standard hover labels """
                 #Note: in this case, we need to "flip" the iiy index because
-                # the matrices being plotted are flipped within generate_boxplot(...)
+                # the matrices being plotted are flipped within _summable_color_boxplot(...)
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
@@ -647,9 +647,9 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N - 1 - iiy][iix]))
                 return txt
 
-        hover_info = hover_label_fn  # generate_boxplot can handle this
+        hover_info = hover_label_fn  # _summable_color_boxplot can handle this
 
-    return generate_boxplot(sub_mxs,
+    return _summable_color_boxplot(sub_mxs,
                             g.used_xvals(), g.used_yvals(),
                             g.minor_xvals(), g.minor_yvals(),
                             "L", "germ", "rho", "E<sub>i</sub>", colormap,
@@ -657,16 +657,16 @@ def circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                             sum_up, invert, scale, bgcolor)  # "$\\rho_i$","$\\E_i$"
 
 
-def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
+def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                               colorbar=False, hover_info=True, sum_up=False,
                               ylabel="", scale=1.0, addl_hover_submxs=None):
     """
-    Similar to :func:`circuit_color_boxplot` except a scatter plot is created.
+    Similar to :func:`_circuit_color_boxplot` except a scatter plot is created.
 
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -714,7 +714,7 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         addl_hover_submxs = {}
 
     #TODO: move hover-function creation routines to new function since duplicated in
-    # circuit_color_boxplot
+    # _circuit_color_boxplot
 
     if hover_info and isinstance(g, _objs.LsGermsStructure):
         if sum_up:
@@ -762,7 +762,7 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
                 return txt
 
-        hover_info = hover_label_fn  # generate_boxplot can handle this
+        hover_info = hover_label_fn  # _summable_color_boxplot can handle this
 
     xs = []; ys = []; texts = []
     gstrs = set()  # to eliminate duplicate strings
@@ -795,13 +795,13 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
     #                     marker=dict(size=8,
-    #                                 color=[colormap.get_color(y) for y in ys],
-    #                                 #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly in GL?
+    #                                 color=[colormap.interpolate_color(y) for y in ys],
+    #                                 #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
     #                                 line=dict(width=1)))
     trace = go.Scatter(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
-                                   color=[colormap.get_color(y) for y in ys],
-                                   colorscale=colormap.get_colorscale(),
+                                   color=[colormap.interpolate_color(y) for y in ys],
+                                   colorscale=colormap.create_plotly_colorscale(),
                                    line=dict(width=1)))
 
     if hover_info:
@@ -831,15 +831,15 @@ def circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                         {'x': xs, 'y': ys})
 
 
-def circuit_color_histogram(circuit_structure, sub_mxs, colormap,
+def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
                             ylabel="", scale=1.0):
     """
-    Similar to :func:`circuit_color_boxplot` except a histogram is created.
+    Similar to :func:`_circuit_color_boxplot` except a histogram is created.
 
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of operation sequences along with their outer and inner x,y
+        Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
     sub_mxs : list
@@ -896,7 +896,7 @@ def circuit_color_histogram(circuit_structure, sub_mxs, colormap,
         ),
         name="count",
         marker=dict(
-            color=[colormap.get_color(t) for t in bincenters],
+            color=[colormap.interpolate_color(t) for t in bincenters],
             line=dict(
                 color='black',
                 width=1.0,
@@ -952,7 +952,7 @@ def circuit_color_histogram(circuit_structure, sub_mxs, colormap,
                         colormap, pythonVal)
 
 
-def opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_basis_y=None,
+def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_basis_y=None,
                            xlabel=None, ylabel=None,
                            box_labels=False, colorbar=None, prec=0, scale=1.0,
                            eb_matrix=None, title=None):
@@ -1040,13 +1040,13 @@ def opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_ba
     colormap = _colormaps.DivergingColormap(vmin=color_min, vmax=color_max)
     thickLineInterval = 4 if (mx_basis is not None and mx_basis.name == "pp") \
         else None  # TODO: separate X and Y thick lines?
-    return matrix_color_boxplot(op_matrix, xlabels, ylabels,
+    return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
                                 xlabel, ylabel, box_labels, thickLineInterval,
                                 colorbar, colormap, prec, scale,
                                 eb_matrix, title)
 
 
-def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
+def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
                          xlabel=None, ylabel=None, box_labels=False,
                          thick_line_interval=None, colorbar=None, colormap=None,
                          prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
@@ -1146,12 +1146,12 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
                             for j in range(matrix.shape[1])])
 
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
-                       colorscale=colormap.get_colorscale(),
+                       colorscale=colormap.create_plotly_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
                        zmax=colormap.hmax, hoverinfo='text',
                        text=hoverLabels)
     #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
-    #             colorscale=colormap.get_colorscale(),
+    #             colorscale=colormap.create_plotly_colorscale(),
     #             showscale=colorbar, zmin=colormap.hmin,
     #             zmax=colormap.hmax, hoverinfo='text', text=hoverLabels) #hoverinfo='z')
 
@@ -1251,7 +1251,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     width = lmargin + boxSizeX * matrix.shape[1] + rmargin
     height = tmargin + boxSizeY * matrix.shape[0] + bmargin
-    #print("DB: matrix_color_boxplot dims: ",width,height) # to check auto-width/height
+    #print("DB: _matrix_color_boxplot dims: ",width,height) # to check auto-width/height
 
     width *= scale
     height *= scale
@@ -1358,9 +1358,9 @@ class BoxKeyPlot(WorkspacePlot):
 
     def _create(self, prep_fiducials, meas_fiducials, xlabel, ylabel, scale):
 
-        #Copied from generate_boxplot
+        #Copied from _summable_color_boxplot
         def val_filter(vals):
-            """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
+            """filter to latex-ify circuits.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
                 if isinstance(val, _objs.Circuit):
@@ -1514,7 +1514,7 @@ class ColorBoxPlot(WorkspacePlot):
 
     direct_gst_models : dict, optional
         A dictionary of "direct" Models used when displaying certain plot
-        types.  Keys are operation sequences and values are corresponding gate
+        types.  Keys are circuits and values are corresponding gate
         sets (see `plottype` above).
 
     dscomparator : DataComparator, optional
@@ -1577,7 +1577,7 @@ class ColorBoxPlot(WorkspacePlot):
         Create a plot displaying the value of per-circuit quantities.
 
         Values are shown on a grid of colored boxes, organized according to
-        the structure of the operation sequences (e.g. by germ and "L").
+        the structure of the circuits (e.g. by germ and "L").
 
         Parameters
         ----------
@@ -1624,7 +1624,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         direct_gst_models : dict, optional
             A dictionary of "direct" Models used when displaying certain plot
-            types.  Keys are operation sequences and values are corresponding gate
+            types.  Keys are circuits and values are corresponding gate
             sets (see `plottype` above).
 
         dscomparator : DataComparator, optional
@@ -1700,7 +1700,7 @@ class ColorBoxPlot(WorkspacePlot):
         #    probMxs = _ph.probability_matrices( plaq, model, spamlabels,
         #                                    probs_precomp_dict)
         #    freqMxs = _ph.frequency_matrices(   gsplaq_ds, dataset, spamlabels)
-        #    logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, 1e-4)
+        #    logLMxs = _tools.two_delta_logl_term( cntMxs, probMxs, freqMxs, 1e-4)
         #    return logLMxs.sum(axis=0) # sum over spam labels
 
         # End "Additional sub-matrix" functions
@@ -1798,7 +1798,7 @@ class ColorBoxPlot(WorkspacePlot):
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = dscomparator.get_llr_pseudothreshold()
+                linlog_trans = dscomparator.llr_pseudothreshold()
                 ytitle = "2 log(L ratio)"
                 mx_fn = _mx_fn_dscmp  # use a *global* function so cache can tell it's the same
                 extra_arg = dscomparator
@@ -1908,10 +1908,10 @@ class ColorBoxPlot(WorkspacePlot):
                     _warnings.warn("No dataset specified: using DOF-per-element == 1")
                     element_dof = 1
                 else:
-                    #element_dof = len(dataset.get_outcome_labels()) - 1
+                    #element_dof = len(dataset.outcome_labels()) - 1
                     #Instead of the above, which doesn't work well when there are circuits with different
                     # outcomes, the line below just takes the average degrees of freedom per circuit
-                    element_dof = dataset.get_degrees_of_freedom(circuit_list) / len(circuit_list)
+                    element_dof = dataset.degrees_of_freedom(circuit_list) / len(circuit_list)
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sum_up, element_dof)
                 # NOTE: currently dof_per_box is constant, and takes the total
@@ -1927,7 +1927,7 @@ class ColorBoxPlot(WorkspacePlot):
                 colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,
                                                      linlg_pcntle, dof_per_box, linlog_color)
             elif colormapType == "manuallinlog":
-                colormap = _colormaps.LinlogColormap.manual_transition_pt(
+                colormap = _colormaps.LinlogColormap.set_manual_transition_point(
                     0, dataMax, linlog_trans, linlog_color)
 
             elif colormapType == "trivial":
@@ -1949,17 +1949,17 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False), "Internal logic error"  # pragma: no cover
 
             if typ == "boxes":
-                newfig = circuit_color_boxplot(circuit_struct, subMxs, colormap,
+                newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                colorbar, box_labels, prec,
                                                hover_info, sum_up, invert,
                                                scale, bgcolor, addl_hover_info)
 
             elif typ == "scatter":
-                newfig = circuit_color_scatterplot(circuit_struct, subMxs, colormap,
+                newfig = _circuit_color_scatterplot(circuit_struct, subMxs, colormap,
                                                    colorbar, hover_info, sum_up, ytitle,
                                                    scale, addl_hover_info)
             elif typ == "histogram":
-                newfig = circuit_color_histogram(circuit_struct, subMxs, colormap,
+                newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
                                                  ytitle, scale)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
@@ -1996,7 +1996,7 @@ class ColorBoxPlot(WorkspacePlot):
                 ]))
 
         #colormap2 = _colormaps.LinlogColormap(0, dataMax, n_boxes, linlg_pcntle, dof_per_box, "blue")
-        #fig2 = circuit_color_boxplot(gss, subMxs, colormap2,
+        #fig2 = _circuit_color_boxplot(gss, subMxs, colormap2,
         #                                False, box_labels, prec, hover_info, sum_up, invert)
         #fig['data'].append(fig2['data'][0])
         #fig['layout'].update( )
@@ -2033,7 +2033,7 @@ def _mx_fn_blank(plaq, x, y, gss):
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
-    return _np.array([[_ph.small_eigval_err_rate(plaq.base, direct_gst_models)]])
+    return _np.array([[_ph.small_eigenvalue_err_rate(plaq.base, direct_gst_models)]])
 
 
 def _mx_fn_directchi2(plaq, x, y, extra):
@@ -2245,7 +2245,7 @@ class GateMatrixPlot(WorkspacePlot):
                 mx_basis, xlabel, ylabel,
                 box_labels, colorbar, prec, mx_basis_y, scale, eb_matrix):
 
-        return opmatrix_color_boxplot(
+        return _opmatrix_color_boxplot(
             op_matrix, color_min, color_max, mx_basis, mx_basis_y,
             xlabel, ylabel, box_labels, colorbar, prec, scale, eb_matrix)
 
@@ -2375,7 +2375,7 @@ class MatrixPlot(WorkspacePlot):
         if colormap is None:
             colormap = _colormaps.DivergingColormap(vmin=color_min, vmax=color_max)
 
-        ret = matrix_color_boxplot(
+        ret = _matrix_color_boxplot(
             matrix, xlabels, ylabels, xlabel, ylabel,
             box_labels, None, colorbar, colormap, prec, scale, grid=grid)
         return ret
@@ -2624,7 +2624,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         Creates a color box plot displaying projections.
 
         Typically `projections` is obtained by calling
-        :func:`std_errgen_projections`, and so holds the projections of a gate
+        :func:`std_errorgen_projections`, and so holds the projections of a gate
         error generator onto the generators corresponding to a set of standard
         errors constructed from the given basis.
 
@@ -2734,7 +2734,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             except:
                 basis_for_xlabels = basis_for_ylabels = None
 
-        return opmatrix_color_boxplot(
+        return _opmatrix_color_boxplot(
             projections, color_min, color_max,
             basis_for_xlabels,
             basis_for_ylabels,
@@ -2873,7 +2873,7 @@ class GramMatrixBarPlot(WorkspacePlot):
         at least twice the maximum length fiducial sequence.
 
     fixed_lists : (prep_fiducials, meas_fiducials), optional
-        2-tuple of operation sequence lists, specifying the preparation and
+        2-tuple of circuit lists, specifying the preparation and
         measurement fiducials to use when constructing the Gram matrix,
         and thereby bypassing the search for such lists.
 
@@ -2902,7 +2902,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             at least twice the maximum length fiducial sequence.
 
         fixed_lists : (prep_fiducials, meas_fiducials), optional
-            2-tuple of operation sequence lists, specifying the preparation and
+            2-tuple of circuit lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.
 
@@ -2919,7 +2919,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             #Empty fixed lists => create empty gram plot
             svals = target_svals = _np.array([], 'd')
         else:
-            _, svals, target_svals = _alg.max_gram_rank_and_evals(dataset, target, maxlen, fixed_lists)
+            _, svals, target_svals = _alg.max_gram_rank_and_eigenvalues(dataset, target, maxlen, fixed_lists)
             svals = _np.sort(_np.abs(svals)).reshape(-1, 1)
             target_svals = _np.sort(_np.abs(target_svals)).reshape(-1, 1)
 
@@ -3305,7 +3305,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
                     None, wildcard, return_all=True, comm=comm, cache=CACHE)  # self.ws.smartCache,
                 NsigMx[iY][iX] = Nsig
 
-        return matrix_color_boxplot(
+        return _matrix_color_boxplot(
             NsigMx, xlabels, ylabels, x_label, y_label,
             box_labels=True, colorbar=False, colormap=cmap,
             prec='compact', scale=scale, grid="white")
@@ -3399,12 +3399,12 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
 
         colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_nSigma)
-        nSigma_fig = matrix_color_boxplot(
+        nSigma_fig = _matrix_color_boxplot(
             nSigmaMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
             box_labels=True, prec=1, colormap=colormap, scale=scale)
 
         colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_2DeltaLogL)
-        logL_fig = matrix_color_boxplot(
+        logL_fig = _matrix_color_boxplot(
             logLMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
             box_labels=True, prec=1, colormap=colormap, scale=scale)
 

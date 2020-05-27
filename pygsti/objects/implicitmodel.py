@@ -185,7 +185,7 @@ class ImplicitOpModel(_mdl.OpModel):
                                               None, sim_type)
         self._shlp = simplifier_helper_class(self)
 
-    def get_primitive_prep_labels(self):
+    def primitive_prep_labels(self):
         """
         Return the primitive state preparation labels of this model
 
@@ -210,7 +210,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_prep_labels = tuple(lbls)
 
-    def get_primitive_povm_labels(self):
+    def primitive_povm_labels(self):
         """
         Return the primitive POVM labels of this model.
 
@@ -235,7 +235,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_povm_labels = tuple(lbls)
 
-    def get_primitive_op_labels(self):
+    def primitive_op_labels(self):
         """
         Return the primitive operation labels of this model.
 
@@ -260,7 +260,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_op_labels = tuple(lbls)
 
-    def get_primitive_instrument_labels(self):
+    def primitive_instrument_labels(self):
         """
         Return the primitive instrument labels of this model
 
@@ -354,7 +354,7 @@ class ImplicitOpModel(_mdl.OpModel):
             fdict.parent = self
             for o in fdict.values(): o.relink_parent(self)
 
-    def get_clifford_symplectic_reps(self, oplabel_filter=None):
+    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
 
@@ -379,7 +379,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         srep_dict = {}
 
-        for gl in self.get_primitive_op_labels():
+        for gl in self.primitive_op_labels():
             gate = self.operation_blks['layers'][gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 

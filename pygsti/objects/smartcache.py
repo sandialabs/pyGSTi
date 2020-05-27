@@ -24,7 +24,7 @@ from ..tools.opttools import timed_block as _timed_block
 DIGEST_TIMES = defaultdict(list)
 
 
-def csize(counter):
+def _csize(counter):
     """
     Computes the size of (number of elements in) a given Counter.
 
@@ -40,9 +40,9 @@ def csize(counter):
     return len(list(counter.elements()))
 
 
-def average(l):
+def _average(l):
     """
-    Computes the average of the items in a list
+    Computes the _average of the items in a list
 
     Parameters
     ----------
@@ -57,7 +57,7 @@ def average(l):
     return sum(l) / nCalls
 
 
-def show_cache_percents(hits, misses, printer):
+def _show_cache_percents(hits, misses, printer):
     """
     Shows effectiveness of a cache
 
@@ -76,8 +76,8 @@ def show_cache_percents(hits, misses, printer):
     -------
     None
     """
-    nHits = csize(hits)
-    nMisses = csize(misses)
+    nHits = _csize(hits)
+    nMisses = _csize(misses)
     nRequests = nHits + nMisses
     printer.log('    {:<10} requests'.format(nRequests))
     printer.log('    {:<10} hits'.format(nHits))
@@ -85,7 +85,7 @@ def show_cache_percents(hits, misses, printer):
     printer.log('    {}% effective\n'.format(round((nHits / max(1, nRequests)) * 100, 2)))
 
 
-def show_kvs(title, kvs, printer):
+def _show_kvs(title, kvs, printer):
     """
     Pretty-print key-value pairs w/ a title and printer object
 
@@ -244,14 +244,14 @@ class SmartCache(object):
         """
         if kwargs is None:
             kwargs = dict()
-        name_key = get_fn_name_key(fn)
+        name_key = _get_fn_name_key(fn)
         if name_key in self.ineffective:
             key = 'NA'
             result = fn(*arg_vals, **kwargs)
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
+                key = _call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
                 with _timed_block('call', times):
                     self.cache[key] = fn(*arg_vals, **kwargs)
@@ -289,7 +289,7 @@ class SmartCache(object):
                     special_kwargs[k] = v
             for k in special_kwargs: del kwargs[k]
 
-        name_key = get_fn_name_key(fn)
+        name_key = _get_fn_name_key(fn)
         self.requests[name_key] += 1
         if name_key in self.ineffective:
             key = 'INEFFECTIVE'
@@ -300,7 +300,7 @@ class SmartCache(object):
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
+                key = _call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
                 #DB: if "_compute_sub_mxs" in fn.__name__:
                 #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
@@ -378,17 +378,17 @@ class SmartCache(object):
                     cache.decoratingFn in cache.ineffective:
                 suggestRemove.add(fullname)
 
-            if csize(cache.hits) == 0:
+            if _csize(cache.hits) == 0:
                 warnNoHits.add(fullname)
 
-            if csize(cache.requests) == 0:
+            if _csize(cache.requests) == 0:
                 notCalled.add(fullname)
 
         with printer.verbosity_env(2):
             printer.log('Average hash times by object:')
             for k, v in sorted(DIGEST_TIMES.items(), key=lambda t: sum(t[1])):
                 total = sum(v)
-                avg = average(v)
+                avg = _average(v)
                 printer.log('    {:<65} avg | {}s'.format(k, avg))
                 printer.log('    {:<65} tot | {}s'.format('', total))
                 printer.log('-' * 100)
@@ -410,7 +410,7 @@ class SmartCache(object):
                 printer.log('    {}'.format(name))
 
         printer.log('\nGlobal cache overview:')
-        show_cache_percents(totalHits, totalMisses, printer)
+        _show_cache_percents(totalHits, totalMisses, printer)
         printer.log('    {} seconds saved total'.format(totalSaved))
 
     def avg_timedict(self, d):
@@ -431,7 +431,7 @@ class SmartCache(object):
             if k not in self.fhits:
                 time = 0
             else:
-                time = average(v) * len(v)
+                time = _average(v) * len(v)
             ret[k] = time
         return ret
 
@@ -450,16 +450,16 @@ class SmartCache(object):
         """
         printer.log('Status of smart cache decorating {}.{}:\n'.format(
             self.decoratingModule, self.decoratingFn))
-        show_cache_percents(self.hits, self.misses, printer)
+        _show_cache_percents(self.hits, self.misses, printer)
 
         with printer.verbosity_env(2):
-            show_kvs('Most common requests:\n', self.requests.most_common(), printer)
-            show_kvs('Ineffective requests:\n', self.ineffectiveRequests.most_common(), printer)
-            show_kvs('Hits:\n', self.fhits.most_common(), printer)
+            _show_kvs('Most common requests:\n', self.requests.most_common(), printer)
+            _show_kvs('Ineffective requests:\n', self.ineffectiveRequests.most_common(), printer)
+            _show_kvs('Hits:\n', self.fhits.most_common(), printer)
 
             printer.log('Type signatures of functions and their hash times:\n')
             for k, v in self.typesigs.items():
-                avg = average(self.hashTimes[k])
+                avg = _average(self.hashTimes[k])
                 printer.log('    {:<40} {}'.format(k, v))
                 printer.log('    {:<40} {}'.format(k, avg))
                 printer.log('')
@@ -467,13 +467,13 @@ class SmartCache(object):
 
             savedTimes = self.avg_timedict(self.effectiveTimes)
             saved = sum(savedTimes.values())
-            show_kvs('Effective total saved time:\n',
+            _show_kvs('Effective total saved time:\n',
                      sorted(savedTimes.items(), key=lambda t: t[1], reverse=True),
                      printer)
 
             overTimes = self.avg_timedict(self.ineffectiveTimes)
             overhead = sum(overTimes.values())
-            show_kvs('Ineffective differences:\n',
+            _show_kvs('Ineffective differences:\n',
                      sorted(overTimes.items(), key=lambda t: t[1]),
                      printer)
 
@@ -584,7 +584,7 @@ def digest(obj, custom_digests=None):
     return M.digest()  # return native hash of the MD5 digest
 
 
-def get_fn_name_key(fn):
+def _get_fn_name_key(fn):
     """
     Get the name (str) used to hash the function `fn`
 
@@ -603,7 +603,7 @@ def get_fn_name_key(fn):
     return name
 
 
-def call_key(fn, args, custom_digests):
+def _call_key(fn, args, custom_digests):
     """
     Returns a hashable key for caching the result of a function call.
 
@@ -625,7 +625,7 @@ def call_key(fn, args, custom_digests):
     -------
     tuple
     """
-    fnName = get_fn_name_key(fn)
+    fnName = _get_fn_name_key(fn)
     if fn.__name__ == "_create":
         pass  # special case: don't hash "self" in _create functions (b/c self doesn't matter - "self" is being created)
     elif hasattr(fn, '__self__'):  # add "self" to args when it's an instance's method call

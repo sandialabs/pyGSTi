@@ -55,7 +55,7 @@ class VerbosityPrinterMethodBase(object):
 class VerbosityPrinterStreamInstance(object):
     def setUp(self):
         super(VerbosityPrinterStreamInstance, self).setUp()
-        self.vbp = vbp.VerbosityPrinter.build_printer(self.verbosity)
+        self.vbp = vbp.VerbosityPrinter.create_printer(self.verbosity)
 
     @contextmanager
     def redirect_output(self):

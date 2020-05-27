@@ -102,7 +102,7 @@ class CircuitTester(BaseCase):
         c2 = circuit.Circuit(None, stringrep='GiGxGxGxGxGy', editable=True)
         self.assertEqual(c2, ('Gi', 'Gx', 'Gx', 'Gx', 'Gx', 'Gy'))
 
-        c2.factorize_repetitions()
+        c2._factorize_repetitions_inplace()
         self.assertEqual(c2, ('Gi', CircuitLabel('', ['Gx'], None, 4), 'Gy'))
 
     def test_circuitlabel_inclusion(self):
@@ -141,7 +141,7 @@ class CircuitTester(BaseCase):
 
             c = Gi + Gy**2048
             # more a label test? - but tests circuit exponentiation
-            self.assertEqual(c[1].tonative(), ('', None, 2048, 'Gy'))
+            self.assertEqual(c[1].to_native(), ('', None, 2048, 'Gy'))
         finally:
             circuit.Circuit.default_expand_subcircuits = True
 
@@ -152,7 +152,7 @@ class CircuitTester(BaseCase):
 
         #Insert the 2Q circuit c2 into the 4Q circuit c as an exponentiated block (so c2 is exponentiated as well)
         c = c1.copy()
-        c[1, 0:2] = c2.as_label(nreps=2)
+        c[1, 0:2] = c2.to_label(nreps=2)
 
         tup = ('Gi', ('', (0, 1), 2, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3)
         self.assertEqual(c, tup)
@@ -185,7 +185,7 @@ class CircuitTester(BaseCase):
         # Qubit 3 ---|Gi|-|  |-|  |---
 
         c = c1.copy()
-        c[(1, 2), 0:2] = c2.as_label().components  # same as above, but more roundabout
+        c[(1, 2), 0:2] = c2.to_label().components  # same as above, but more roundabout
         self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
         self.assertEqual(c.num_layers(), 3)
         self.assertEqual(c.depth(), 3)
@@ -196,7 +196,7 @@ class CircuitTester(BaseCase):
 
     def test_replace_with_idling_line(self):
         c = circuit.Circuit([('Gcnot', 0, 1)], editable=True)
-        c.replace_with_idling_line(0)
+        c.replace_with_idling_line_inplace(0)
         self.assertEqual(c, ((),) + ('@', 0, 1))
 
     def test_to_pythonstr(self):
@@ -250,11 +250,11 @@ class CircuitMethodTester(BaseCase):
         self.assertTrue(len(self.c[1, ('Q0', 'Q1')].components) == 0)
         self.assertTrue(len(self.c[1, 'Q0'].components) == 0)
         self.assertFalse(len(self.c[2, 'Q1'].components) == 0)
-        self.assertFalse(self.c.is_line_idling('Q1'))
-        self.c.append_idling_lines(['Q3'])
-        self.assertFalse(self.c.is_line_idling('Q0'))
-        self.assertFalse(self.c.is_line_idling('Q1'))
-        self.assertTrue(self.c.is_line_idling('Q3'))
+        self.assertFalse(self.c._is_line_idling('Q1'))
+        self.c._append_idling_lines(['Q3'])
+        self.assertFalse(self.c._is_line_idling('Q0'))
+        self.assertFalse(self.c._is_line_idling('Q1'))
+        self.assertTrue(self.c._is_line_idling('Q3'))
 
     def test_replace_layer_with_layer(self):
         # Test replacing a layer with a layer.
@@ -356,7 +356,7 @@ class CircuitMethodTester(BaseCase):
         comp = {}
         comp[Label('Gz', 'Q0')] = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0'])
         self.c.change_gate_library(comp, allow_unchanged_gates=True)
-        self.assertTrue(Label('Gx', 'Q0') in self.c[0].components)  # c.get_layer(0)
+        self.assertTrue(Label('Gx', 'Q0') in self.c[0].components)  # c.layer(0)
         self.assertTrue(Label('Gy', 'Q1') in self.c[0].components)
 
     def test_map_state_space_labels_inplace(self):
@@ -373,7 +373,7 @@ class CircuitMethodTester(BaseCase):
 
     def test_append_and_delete_idling_lines(self):
         # Test deleting and inserting idling wires.
-        self.c.append_idling_lines(['Q2'])
+        self.c._append_idling_lines(['Q2'])
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
         self.assertEqual(self.c.number_of_lines(), 3)
         self.c.delete_idling_lines()
@@ -383,7 +383,7 @@ class CircuitMethodTester(BaseCase):
     def test_circuit_reverse(self):
         # Test circuit reverse.
         op1 = self.c[0, 'Q0']
-        self.c.reverse()
+        self.c.reverse_inplace()
         op2 = self.c[-1, 'Q0']
         self.assertEqual(op1, op2)
 
@@ -394,10 +394,10 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(c.two_q_gate_count(), 2)
 
     def test_multiQgate_count(self):
-        self.assertEqual(self.c.multi_q_gate_count(), 0)
+        self.assertEqual(self.c.num_multiq_gates(), 0)
         labels = circuit.Circuit(None, stringrep="[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1")
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q2'])
-        self.assertEqual(c.multi_q_gate_count(), 3)
+        self.assertEqual(c.num_multiq_gates(), 3)
 
     def test_to_string(self):
         s = str(self.c)
@@ -409,11 +409,11 @@ class CircuitMethodTester(BaseCase):
         ls += [Label(()), Label(()), Label('CNOT', (1, 2))]
         labels = circuit.Circuit(ls)
         c = circuit.Circuit(layer_labels=labels, num_lines=4, editable=True)
-        c.compress_depth(verbosity=0)
+        c.compress_depth_inplace(verbosity=0)
         self.assertEqual(c.depth(), 7)
         # Get a dictionary that relates H, P gates etc.
         oneQrelations = symplectic.one_q_clifford_symplectic_group_relations()
-        c.compress_depth(one_q_gate_relations=oneQrelations)
+        c.compress_depth_inplace(one_q_gate_relations=oneQrelations)
         self.assertEqual(c.depth(), 3)
 
     @unittest.skip("unused (remove?)")

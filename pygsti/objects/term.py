@@ -74,7 +74,7 @@ def compose_terms(terms):
     return terms[0].compose(terms)
 
 
-def exp_terms(terms, order, postterm, cache=None, order_base=None):
+def exponentiate_terms(terms, order, postterm, cache=None, order_base=None):
     """
     Exponentiate a list of terms.
 
@@ -139,7 +139,7 @@ def exp_terms(terms, order, postterm, cache=None, order_base=None):
         return build_terms(order)
 
 
-def exp_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
+def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_mag=None):
     """
     Exponentiate a list of terms with magnitude above `min_term_mag`.
 
@@ -388,7 +388,7 @@ class RankOneTerm(object):
     #    return self.__class__(self._rep.conjugate())
 
 
-class HasMagnitude(object):
+class _HasMagnitude(object):
     """
     A base class that adds a `magnitude` property to a term class.
 
@@ -438,7 +438,7 @@ class HasMagnitude(object):
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
 
 
-class NoMagnitude(object):
+class _NoMagnitude(object):
     """
     A base class that adds a `magnitude` property to a term class.
     """
@@ -458,13 +458,13 @@ class NoMagnitude(object):
         return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
 
 
-class RankOnePrepTerm(RankOneTerm, NoMagnitude):
+class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
     """
     A state preparation term.
     """
 
     @classmethod
-    def simple_init(cls, coeff, pre_state, post_state, evotype):
+    def create_from(cls, coeff, pre_state, post_state, evotype):
         """
         Creates a :class:`RankOnePrepTerm`s using natural arguments.
 
@@ -530,13 +530,13 @@ class RankOnePrepTerm(RankOneTerm, NoMagnitude):
                                                   None, None, pre_ops, post_ops))
 
 
-class RankOneEffectTerm(RankOneTerm, NoMagnitude):
+class RankOneEffectTerm(RankOneTerm, _NoMagnitude):
     """
     A POVM effect term.
     """
 
     @classmethod
-    def simple_init(cls, coeff, pre_effect, post_effect, evotype):
+    def create_from(cls, coeff, pre_effect, post_effect, evotype):
         """
         Creates a :class:`RankOneEffectTerm`s using natural arguments.
 
@@ -604,13 +604,13 @@ class RankOneEffectTerm(RankOneTerm, NoMagnitude):
                                                   self._rep.pre_effect, self._rep.post_effect, pre_ops, post_ops))
 
 
-class RankOneOpTerm(RankOneTerm, NoMagnitude):
+class RankOneOpTerm(RankOneTerm, _NoMagnitude):
     """
     An operation term.
     """
 
     @classmethod
-    def simple_init(cls, coeff, pre_op, post_op, evotype):
+    def create_from(cls, coeff, pre_op, post_op, evotype):
         """
         Creates a :class:`RankOneOpTerm`s using natural arguments.
 
@@ -692,7 +692,7 @@ class RankOneOpTerm(RankOneTerm, NoMagnitude):
                                                   None, None, pre_ops, post_ops))
 
 
-class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
+class RankOnePrepTermWithMagnitude(RankOneTerm, _HasMagnitude):
     """
     A state preparation term with magnitude tracking.
     """
@@ -723,7 +723,7 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, HasMagnitude):
         ))
 
 
-class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
+class RankOneEffectTermWithMagnitude(RankOneTerm, _HasMagnitude):
     """
     A POVM effect term with magnitude tracking.
     """
@@ -754,7 +754,7 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, HasMagnitude):
         ))
 
 
-class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
+class RankOneOpTermWithMagnitude(RankOneTerm, _HasMagnitude):
     """
     An operation term with magnitude tracking.
     """
@@ -783,7 +783,7 @@ class RankOneOpTermWithMagnitude(RankOneTerm, HasMagnitude):
                                                   None, None, None, None, pre_ops, post_ops))
 
 
-class HasNumericalCoefficient(object):
+class _HasNumericalCoefficient(object):
     """
     A base class for terms that have numerical coefficients.
 
@@ -804,7 +804,7 @@ class HasNumericalCoefficient(object):
         return self._rep.coeff
 
 
-class HasPolyCoefficient(object):
+class _HasPolynomialCoefficient(object):
     """
     A base class for terms that have polynomial coefficients..
 
@@ -816,14 +816,14 @@ class HasPolyCoefficient(object):
 
     @classmethod
     def _coeff_rep(cls, coeff):
-        return coeff.torep()
+        return coeff.to_rep()
 
     @property
     def coeff(self):
         """
         The term's coefficient (a :class:`Polynomial`).
         """
-        return _Polynomial.fromrep(self._rep.coeff)
+        return _Polynomial.from_rep(self._rep.coeff)
 
     #def _coeff_copy(self):
     #    return self.coeff.copy()
@@ -879,7 +879,7 @@ class HasPolyCoefficient(object):
         self._rep.mapvec_indices_inplace(mapvec)
 
 
-class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
+class RankOnePolynomialPrepTerm(RankOnePrepTerm, _HasPolynomialCoefficient):
     """
     A state preparation term with polynomial coefficient.
     """
@@ -894,15 +894,15 @@ class RankOnePolyPrepTerm(RankOnePrepTerm, HasPolyCoefficient):
 
         Returns
         -------
-        RankOnePolyPrepTermWithMagnitude
+        RankOnePolynomialPrepTermWithMagnitude
         """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolyPrepTermWithMagnitude(rep)
+        return RankOnePolynomialPrepTermWithMagnitude(rep)
 
 
-class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
+class RankOnePolynomialEffectTerm(RankOneEffectTerm, _HasPolynomialCoefficient):
     """
     A POVM effect term with polynomial coefficient.
     """
@@ -917,15 +917,15 @@ class RankOnePolyEffectTerm(RankOneEffectTerm, HasPolyCoefficient):
 
         Returns
         -------
-        RankOnePolyEffectTermWithMagnitude
+        RankOnePolynomialEffectTermWithMagnitude
         """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolyEffectTermWithMagnitude(rep)
+        return RankOnePolynomialEffectTermWithMagnitude(rep)
 
 
-class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
+class RankOnePolynomialOpTerm(RankOneOpTerm, _HasPolynomialCoefficient):
     """
     An operation term with polynomial coefficient.
     """
@@ -940,50 +940,50 @@ class RankOnePolyOpTerm(RankOneOpTerm, HasPolyCoefficient):
 
         Returns
         -------
-        RankOnePolyOpTermWithMagnitude
+        RankOnePolynomialOpTermWithMagnitude
         """
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolyOpTermWithMagnitude(rep)
+        return RankOnePolynomialOpTermWithMagnitude(rep)
 
 
-class RankOnePolyPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, HasPolyCoefficient):
+class RankOnePolynomialPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, _HasPolynomialCoefficient):
     """
     A state preparation term with polynomial coefficient and magnitude tracking.
     """
     pass
 
 
-class RankOnePolyEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, HasPolyCoefficient):
+class RankOnePolynomialEffectTermWithMagnitude(RankOneEffectTermWithMagnitude, _HasPolynomialCoefficient):
     """
     A POVM effect term with polynomial coefficient and magnitude tracking.
     """
     pass
 
 
-class RankOnePolyOpTermWithMagnitude(RankOneOpTermWithMagnitude, HasPolyCoefficient):
+class RankOnePolynomialOpTermWithMagnitude(RankOneOpTermWithMagnitude, _HasPolynomialCoefficient):
     """
     An operation term with polynomial coefficient and magnitude tracking.
     """
     pass
 
 
-class RankOneDirectPrepTerm(RankOnePrepTerm, HasNumericalCoefficient):
+class RankOneDirectPrepTerm(RankOnePrepTerm, _HasNumericalCoefficient):
     """
     A state preparation term with numerical coefficient (and *no* magnitude tracking).
     """
     pass
 
 
-class RankOneDirectEffectTerm(RankOneEffectTerm, HasNumericalCoefficient):
+class RankOneDirectEffectTerm(RankOneEffectTerm, _HasNumericalCoefficient):
     """
     A POVM effect term with numerical coefficient (and *no* magnitude tracking).
     """
     pass
 
 
-class RankOneDirectOpTerm(RankOneOpTerm, HasNumericalCoefficient):
+class RankOneDirectOpTerm(RankOneOpTerm, _HasNumericalCoefficient):
     """
     An operation term with numerical coefficient (and *no* magnitude tracking).
     """

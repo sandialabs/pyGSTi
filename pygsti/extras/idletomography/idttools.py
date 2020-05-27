@@ -379,7 +379,7 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
     for i, factor in enumerate(idleop.factorops):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
         assert(isinstance(factor, _objs.EmbeddedOp)), "Expected global idle to be a composition of embedded gates!"
-        errgen_coeffs = factor.embedded_op.get_errgen_coeffs()
+        errgen_coeffs = factor.embedded_op.errorgen_coefficients()
         nTargetQubits = len(factor.targetLabels)
 
         #OLD - before get_errgen_coeffs

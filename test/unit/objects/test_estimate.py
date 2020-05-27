@@ -29,8 +29,8 @@ class EstimateBase(object):
 
     def test_get_effective_dataset(self):
         # Get effective estimate dataset
-        effds = self.est.get_effective_dataset()
-        effds, subMxs = self.est.get_effective_dataset(return_submxs=True)
+        effds = self.est.create_effective_dataset()
+        effds, subMxs = self.est.create_effective_dataset(return_submxs=True)
         # TODO assert correctness
 
     def test_view(self):
@@ -54,7 +54,7 @@ class ResultsEstimateTester(EstimateBase, BaseCase):
     def setUp(self):
         super(ResultsEstimateTester, self).setUp()
         self.res.add_estimate(
-            estimate.Estimate.gst_init(
+            estimate.Estimate.create_gst_estimate(
                 self.res, std.target_model(), std.target_model(),
                 [self.model] * len(self.maxLengthList),
                 parameters={'objective': 'logl'}),

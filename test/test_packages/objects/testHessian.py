@@ -90,7 +90,7 @@ class TestHessianMethods(BaseTestCase):
     def test_hessian_projection(self):
         chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
-        proj_non_gauge = self.model.get_nongauge_projector()
+        proj_non_gauge = self.model.compute_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
                                   np.dot(chi2Hessian, proj_non_gauge))
 
@@ -139,7 +139,7 @@ class TestHessianMethods(BaseTestCase):
         #Add estimate for hessian-based CI --------------------------------------------------
         builder = pygsti.obj.PoissonPicDeltaLogLFunction.builder()
         res.add_estimate(
-            proto.estimate.Estimate.gst_init(
+            proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
                 [self.model] * len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
             estimate_key="default"
@@ -150,7 +150,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertWarns(est.add_confidence_region_factory, 'final iteration estimate','final') #overwrites former
         self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
+        cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
@@ -183,7 +183,7 @@ class TestHessianMethods(BaseTestCase):
 
         #Add estimate for linresponse-based CI --------------------------------------------------
         res.add_estimate(
-            proto.estimate.Estimate.gst_init(
+            proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
             estimate_key="linresponse"
@@ -193,11 +193,11 @@ class TestHessianMethods(BaseTestCase):
 
         #estLR.add_confidence_region_factory('final iteration estimate', 'final') #Could do this, but use alt. method for more coverage
         with self.assertRaises(KeyError):
-            estLR.get_confidence_region_factory('final iteration estimate', 'final') #won't create by default
-        cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final', create_if_needed=True) #now it will
+            estLR.create_confidence_region_factory('final iteration estimate', 'final') #won't create by default
+        cfctryLR = estLR.create_confidence_region_factory('final iteration estimate', 'final', create_if_needed=True) #now it will
         self.assertTrue( estLR.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        #cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
+        #cfctryLR = estLR.create_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
         self.assertFalse( cfctryLR.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctryLR.enable_linear_response_errorbars() #parent results object is used to automatically populate params
 
@@ -211,7 +211,7 @@ class TestHessianMethods(BaseTestCase):
 
         #Add estimate for with bad objective ---------------------------------------------------------
         res.add_estimate(
-            proto.estimate.Estimate.gst_init(
+            proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'}),
             estimate_key="foo"
@@ -220,7 +220,7 @@ class TestHessianMethods(BaseTestCase):
         est = res.estimates['foo']
         est.add_confidence_region_factory('final iteration estimate', 'final')
         with self.assertRaises(ValueError): # bad objective
-            est.get_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
+            est.create_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
 
 
 
@@ -232,13 +232,13 @@ class TestHessianMethods(BaseTestCase):
 
             #linear response CI doesn't support profile likelihood intervals
             if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
-                ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals(L("Gx"))
-                ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals(L("rho0"))
-                ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals(L("Mdefault"))
-                ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
+                ar_of_intervals_Gx = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Gx"))
+                ar_of_intervals_rho0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("rho0"))
+                ar_of_intervals_M0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Mdefault"))
+                ar_of_intervals = ci_cur.retrieve_profile_likelihood_confidence_intervals()
 
                 with self.assertRaises(ValueError):
-                    ci_cur.get_profile_likelihood_confidence_intervals("foobar") #invalid label
+                    ci_cur.retrieve_profile_likelihood_confidence_intervals("foobar") #invalid label
 
             def fnOfGate_float(mx,b):
                 return float(mx[0,0])
@@ -265,10 +265,10 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model, 'Gx')
                 if fnOfOp is fnOfGate_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
             ##SHORT-CIRCUIT linear reponse here to reduce run time
@@ -290,10 +290,10 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model, 'rho0', 'prep')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
@@ -301,10 +301,10 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model, 'Mdefault:0', 'effect')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
 
@@ -328,10 +328,10 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model)
                 if fnOfSpam is fnOfSpam_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
 
@@ -351,10 +351,10 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model)
                 if fnOfGateSet is fnOfGateSet_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
         #TODO: assert values of df & f0 ??
@@ -366,7 +366,7 @@ class TestHessianMethods(BaseTestCase):
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
         res.add_estimate(
-            proto.estimate.Estimate.gst_init(
+            proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
@@ -376,7 +376,7 @@ class TestHessianMethods(BaseTestCase):
         est.add_confidence_region_factory('final iteration estimate', 'final')
         self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
+        cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         cfctry.compute_hessian()
         self.assertTrue( cfctry.has_hessian() )
 

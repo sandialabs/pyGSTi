@@ -153,7 +153,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
             The type of gate sequence / circuit simulation used to compute any
-            requested probabilities, e.g. from :method:`probs` or
+            requested probabilities, e.g. from :method:`probabilities` or
             :method:`bulk_probs`.  The default value of `"auto"` automatically
             selects the simulation type, and is usually what you want. Allowed
             values are:
@@ -194,7 +194,7 @@ class ExplicitOpModel(_mdl.OpModel):
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
         self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
 
-    def get_primitive_prep_labels(self):
+    def primitive_prep_labels(self):
         """
         Return the primitive state preparation labels of this model
 
@@ -220,7 +220,7 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
-    def get_primitive_povm_labels(self):
+    def primitive_povm_labels(self):
         """
         Return the primitive POVM labels of this model
 
@@ -246,7 +246,7 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.povms dict)."))
 
-    def get_primitive_op_labels(self):
+    def primitive_op_labels(self):
         """
         Return the primitive operation labels of this model.
 
@@ -272,7 +272,7 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
-    def get_primitive_instrument_labels(self):
+    def primitive_instrument_labels(self):
         """
         Return the primitive instrument labels of this model.
 
@@ -756,7 +756,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().deriv_wrt_params()
 
-    def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
+    def compute_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
         Construct a projector onto the non-gauge parameter space.
 
@@ -789,9 +789,9 @@ class ExplicitOpModel(_mdl.OpModel):
            parameter-space, and has rank equal to the number of non-gauge
            degrees of freedom.
         """
-        return self._excalc().get_nongauge_projector(item_weights, non_gauge_mix_mx)
+        return self._excalc().nongauge_projector(item_weights, non_gauge_mix_mx)
 
-    def transform(self, s):  #INPLACE
+    def transform_inplace(self, s):
         """
         Gauge transform this model.
 
@@ -809,16 +809,16 @@ class ExplicitOpModel(_mdl.OpModel):
         None
         """
         for rhoVec in self.preps.values():
-            rhoVec.transform(s, 'prep')
+            rhoVec.transform_inplace(s, 'prep')
 
         for povm in self.povms.values():
-            povm.transform(s)
+            povm.transform_inplace(s)
 
         for opObj in self.operations.values():
-            opObj.transform(s)
+            opObj.transform_inplace(s)
 
         for instrument in self.instruments.values():
-            instrument.transform(s)
+            instrument.transform_inplace(s)
 
         self._clean_paramvec()  # transform may leave dirty members
 
@@ -1240,7 +1240,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().diamonddist(other_model._excalc(), transform_mx, include_spam)
 
-    def tpdist(self):
+    def _tpdist(self):
         """
         Compute the "distance" between this model and the space of trace-preserving (TP) maps.
 
@@ -1301,19 +1301,19 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (str(lbl), vecdist(self.preps[lbl].todense(), other_model.preps[lbl].todense()))
+                (str(lbl), vecdist(self.preps[lbl].to_dense(), other_model.preps[lbl].to_dense()))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
             s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, vecdist(povm[lbl].todense(), other_model.povms[povm_lbl][lbl].todense()))
+                     (lbl, vecdist(povm[lbl].to_dense(), other_model.povms[povm_lbl][lbl].to_dense()))
 
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (str(lbl), dist(self.operations[lbl].todense(), other_model.operations[lbl].todense()))
+                (str(lbl), dist(self.operations[lbl].to_dense(), other_model.operations[lbl].to_dense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -1321,7 +1321,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
                     s += "    %s = %g\n" % (str(lbl), dist(
-                        inst[lbl].todense(), other_model.instruments[inst_lbl][lbl].todense()))
+                        inst[lbl].to_dense(), other_model.instruments[inst_lbl][lbl].to_dense()))
 
         return s
 
@@ -1360,7 +1360,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return s
 
-    def iter_objs(self):
+    def all_objects(self):
         """
         Iterate over all of the (label, operator object) entities in this model.
 
@@ -1668,7 +1668,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return new_model
 
-    def decrease_dimension(self, new_dimension):
+    def _decrease_dimension(self, new_dimension):
         """
         Decrease the dimension of this model.
 
@@ -1768,7 +1768,7 @@ class ExplicitOpModel(_mdl.OpModel):
         #Note: does not alter intruments!
         return kicked_gs
 
-    def get_clifford_symplectic_reps(self, oplabel_filter=None):
+    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
 
@@ -1837,4 +1837,4 @@ class ExplicitOpModel(_mdl.OpModel):
             print(("  --eigenvals = ", sorted(
                 [ev.real for ev in _np.linalg.eigvals(
                     _jt.jamiolkowski_iso(gate))]), "\n"))
-        print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
+        print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))

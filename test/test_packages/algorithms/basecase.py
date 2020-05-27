@@ -21,21 +21,21 @@ class AlgorithmsBase(BaseTestCase):
         #OLD self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.op_labels = list(self.model.operations.keys()) # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_circuits(self.fiducials, self.fiducials, self.op_labels)
+        self.lgstStrings = pygsti.construction.create_lgst_circuits(self.fiducials, self.fiducials, self.op_labels)
 
         self.maxLengthList = [0,1,2,4,8]
 
-        self.elgstStrings = pygsti.construction.make_elgst_lists(
+        self.elgstStrings = pygsti.construction.create_elgst_lists(
             self.op_labels, self.germs, self.maxLengthList )
 
-        self.lsgstStrings = pygsti.construction.make_lsgst_lists(
+        self.lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
             self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
         ## RUN BELOW LINES to create analysis dataset (SAVE)
         if regenerate_references():
-            expList = pygsti.construction.make_lsgst_experiment_list(
+            expList = pygsti.construction.create_lsgst_circuits(
                 self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
-            ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
+            ds = pygsti.construction.simulate_data(self.datagen_gateset, expList,
                                                         n_samples=10000, sample_error='binomial', seed=100)
             ds.save(compare_files + "/analysis.dataset")
 
@@ -43,7 +43,7 @@ class AlgorithmsBase(BaseTestCase):
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
         if regenerate_references():
-            ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+            ds_lgst = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
                                                              n_samples=10000,sample_error='binomial', seed=100)
             ds_lgst.save(compare_files + "/analysis_lgst.dataset")
 

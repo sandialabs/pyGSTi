@@ -1,5 +1,5 @@
 """
-Utility functions for creating and acting on lists of operation sequences.
+Utility functions for creating and acting on lists of circuits.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -25,7 +25,7 @@ def _run_expression(str_expression, my_locals):
     return my_locals.get("result", None)
 
 
-def create_circuit_list(*args, **kwargs):
+def create_circuits(*args, **kwargs):
     """
     Create a list of circuits using a nested loop.
 
@@ -50,19 +50,19 @@ def create_circuit_list(*args, **kwargs):
 
     Examples
     --------
-    >>> from pygsti.construction import create_circuit_list
+    >>> from pygsti.construction import create_circuits
     >>> As = [('a1',), ('a2',)]
     >>> Bs = [('b1',), ('b2',)]
-    >>> list1 = create_circuit_list('a', 'a+b', a=As, b=Bs)
+    >>> list1 = create_circuits('a', 'a+b', a=As, b=Bs)
     >>> print(list(map(str, list1)))
     ['a1', 'a2', 'a1b1', 'a1b2', 'a2b1', 'a2b2']
 
     You can change the order in which the different iterables are advanced.
 
-    >>> list2 = create_circuit_list('a+b', a=As, b=Bs, order=['a', 'b'])
+    >>> list2 = create_circuits('a+b', a=As, b=Bs, order=['a', 'b'])
     >>> print(list(map(str, list2)))
     ['a1b1', 'a1b2', 'a2b1', 'a2b2']
-    >>> list3 = create_circuit_list('a+b', a=As, b=Bs, order=['b', 'a'])
+    >>> list3 = create_circuits('a+b', a=As, b=Bs, order=['b', 'a'])
     >>> print(list(map(str, list3)))
     ['a1b1', 'a2b1', 'a1b2', 'a2b2']
     """
@@ -117,7 +117,7 @@ def repeat(x, n_times, assert_at_least_one_rep=False):
 
     assert_at_least_one_rep : bool, optional
         if True, assert that n_times > 0.  This can be useful when used
-        within a create_circuit_list inner loop to build a operation sequence
+        within a create_circuits inner loop to build a operation sequence
         lists where a string must be repeated at least once to be added
         to the list.
 
@@ -143,7 +143,7 @@ def repeat_count_with_max_length(x, max_length, assert_at_least_one_rep=False):
 
     assert_at_least_one_rep : bool, optional
         if True, assert that number of repetitions is > 0.
-        This can be useful when used within a create_circuit_list inner loop
+        This can be useful when used within a create_circuits inner loop
         to build a operation sequence lists where a string must be repeated at
         least once to be added to the list.
 
@@ -172,7 +172,7 @@ def repeat_with_max_length(x, max_length, assert_at_least_one_rep=False):
 
     assert_at_least_one_rep : bool, optional
         if True, assert that number of repetitions is > 0.
-        This can be useful when used within a create_circuit_list inner loop
+        This can be useful when used within a create_circuits inner loop
         to build a operation sequence lists where a string must be repeated at
         least once to be added to the list.
 
@@ -216,7 +216,7 @@ def repeat_and_truncate(x, n, assert_at_least_one_rep=False):
     return (x * reps)[0:n]
 
 
-def repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
+def _repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
     """
     Returns the portion truncated by :function:`repeat_and_truncate`.
 
@@ -246,9 +246,9 @@ def repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
     return x[0:(n - reps * len(x))]
 
 
-def simplify_str(circuit_str):
+def _simplify_circuit_string(circuit_str):
     """
-    Simplify a string representation of a operation sequence.
+    Simplify a string representation of a circuit.
 
     The simplified string should evaluate to the same operation label tuple
     as the original.
@@ -256,7 +256,7 @@ def simplify_str(circuit_str):
     Parameters
     ----------
     circuit_str : string
-        the string representation of a operation sequence to be simplified.
+        the string representation of a circuit to be simplified.
         (e.g. "Gx{}", "Gy^1Gx")
 
     Returns
@@ -276,18 +276,18 @@ def simplify_str(circuit_str):
 
 def list_all_circuits(op_labels, minlength, maxlength):
     """
-    List all the operation sequences in a given length range.
+    List all the circuits in a given length range.
 
     Parameters
     ----------
     op_labels : tuple
-        tuple of operation labels to include in operation sequences.
+        tuple of operation labels to include in circuits.
 
     minlength : int
-        the minimum operation sequence length to return
+        the minimum circuit length to return
 
     maxlength : int
-        the maximum operation sequence length to return
+        the maximum circuit length to return
 
     Returns
     -------
@@ -299,20 +299,20 @@ def list_all_circuits(op_labels, minlength, maxlength):
     return list(map(_cir.Circuit, opTuples))
 
 
-def gen_all_circuits(op_labels, minlength, maxlength):
+def iter_all_circuits(op_labels, minlength, maxlength):
     """
     Iterative version of :function:`list_all_circuits`
 
     Parameters
     ----------
     op_labels : tuple
-        tuple of operation labels to include in operation sequences.
+        tuple of operation labels to include in circuits.
 
     minlength : int
-        the minimum operation sequence length to return
+        the minimum circuit length to return
 
     maxlength : int
-        the maximum operation sequence length to return
+        the maximum circuit length to return
     """
     opTuples = _itertools.chain(*[_itertools.product(op_labels, repeat=N)
                                   for N in range(minlength, maxlength + 1)])
@@ -322,15 +322,15 @@ def gen_all_circuits(op_labels, minlength, maxlength):
 
 def list_all_circuits_onelen(op_labels, length):
     """
-    List all the operation sequences of a given length.
+    List all the circuits of a given length.
 
     Parameters
     ----------
     op_labels : tuple
-        tuple of operation labels to include in operation sequences.
+        tuple of operation labels to include in circuits.
 
     length : int
-        the operation sequence length
+        the circuit length
 
     Returns
     -------
@@ -341,17 +341,17 @@ def list_all_circuits_onelen(op_labels, length):
     return list(map(_cir.Circuit, opTuples))
 
 
-def gen_all_circuits_onelen(op_labels, length):
+def iter_all_circuits_onelen(op_labels, length):
     """
     Iterative version of :function:`list_all_circuits_onelen`
 
     Parameters
     ----------
     op_labels : tuple
-        tuple of operation labels to include in operation sequences.
+        tuple of operation labels to include in circuits.
 
     length : int
-        the operation sequence length
+        the circuit length
     """
     for opTuple in _itertools.product(op_labels, repeat=length):
         yield _cir.Circuit(opTuple)
@@ -359,7 +359,7 @@ def gen_all_circuits_onelen(op_labels, length):
 
 def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
     """
-    List all distinct aperiodic operation sequences up to a maximum length.
+    List all distinct aperiodic circuits up to a maximum length.
 
     That is, list all sequences that are not a shorter gate sequence raised to a
     power, and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and
@@ -369,7 +369,7 @@ def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
     Parameters
     ----------
     op_labels : list
-        A list of the operation (gate) labels to form operation sequences from.
+        A list of the operation (gate) labels to form circuits from.
 
     max_length : int
         The maximum length strings to return.  Circuits from length 1
@@ -399,7 +399,7 @@ def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
     for length in _np.arange(1, max_length + 1):
 
         permCheckedStrs = []
-        for s in gen_all_circuits_onelen(op_labels, length):
+        for s in iter_all_circuits_onelen(op_labels, length):
             pys = s.to_pythonstr(op_labels)
             if not _perm_check(pys, permCheckedStrs):  # Sequence is not a cycle of anything in permCheckedStrs
                 permCheckedStrs.append(pys)
@@ -418,15 +418,15 @@ def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
 
 def list_random_circuits_onelen(op_labels, length, count, seed=None):
     """
-    Create a list of random operation sequences of a given length.
+    Create a list of random circuits of a given length.
 
     Parameters
     ----------
     op_labels : tuple
-        tuple of operation labels to include in operation sequences.
+        tuple of operation labels to include in circuits.
 
     length : int
-        the operation sequence length.
+        the circuit length.
 
     count : int
         the number of random strings to create.
@@ -437,7 +437,7 @@ def list_random_circuits_onelen(op_labels, length, count, seed=None):
     Returns
     -------
     list of Circuits
-        A list of random operation sequences as Circuit objects.
+        A list of random circuits as Circuit objects.
     """
     ret = []
     rndm = _rndm.RandomState(seed)  # ok if seed is None
@@ -448,7 +448,7 @@ def list_random_circuits_onelen(op_labels, length, count, seed=None):
     return ret
 
 
-def list_partial_strings(circuit):
+def list_partial_circuits(circuit):
     """
     List the partial sub-circuits of `circuit`.
 
@@ -458,12 +458,12 @@ def list_partial_strings(circuit):
     Parameters
     ----------
     circuit : tuple of operation labels or Circuit
-        The operation sequence to act upon.
+        The circuit to act upon.
 
     Returns
     -------
     list of Circuit objects.
-        The parial operation sequences.
+        The parial circuits.
     """
     ret = []
     for l in range(len(circuit) + 1):
@@ -471,7 +471,7 @@ def list_partial_strings(circuit):
     return ret
 
 
-def list_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
+def create_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     """
     List the circuits required for running LGST.
 
@@ -492,7 +492,7 @@ def list_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     Returns
     -------
     list of Circuit objects
-        The list of required operation sequences, without duplicates.
+        The list of required circuits, without duplicates.
     """
     def tolabel(x): return x if isinstance(x, _Lbl) else _Lbl(x)
     if isinstance(op_label_src, _Model):
@@ -503,13 +503,13 @@ def list_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     line_labels = prep_fiducials[0].line_labels if len(prep_fiducials) > 0 else 'auto'
     if line_labels is None or len(line_labels) == 0: line_labels = ('*',)
     singleOps = [_cir.Circuit((gl,), line_labels=line_labels)**1 for gl in opLabels]  # **1 adds parens to stringrep
-    ret = create_circuit_list('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
+    ret = create_circuits('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
                               eStr=meas_fiducials, prepStr=prep_fiducials, g=singleOps,
                               order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
     return _lt.remove_duplicates(ret)
 
 
-def list_strings_lgst_can_estimate(dataset, prep_fiducials, meas_fiducials):
+def list_circuits_lgst_can_estimate(dataset, prep_fiducials, meas_fiducials):
     """
     Compute the circuits that LGST is able to estimate from `dataset` and sets of fiducials.
 
@@ -532,7 +532,7 @@ def list_strings_lgst_can_estimate(dataset, prep_fiducials, meas_fiducials):
     Returns
     -------
     list of lists of tuples
-        each list of tuples specifyies a operation sequence that LGST can estimate.
+        each list of tuples specifyies a circuit that LGST can estimate.
     """
 
     estimatable = []
@@ -555,10 +555,10 @@ def list_strings_lgst_can_estimate(dataset, prep_fiducials, meas_fiducials):
             if _root_is_ok(root):
                 estimatable.append(root)
 
-    return circuit_list(estimatable)
+    return to_circuits(estimatable)
 
 
-def circuit_list(list_of_op_label_tuples_or_strings, line_labels="auto"):
+def to_circuits(list_of_op_label_tuples_or_strings, line_labels="auto"):
     """
     Converts a list of operation label tuples or strings to a list of :class:`Circuit` objects.
 
@@ -603,7 +603,7 @@ def translate_circuit(circuit, alias_dict):
     Parameters
     ----------
     circuit : Circuit
-        The operation sequence to use as the base for find & replace
+        The circuit to use as the base for find & replace
         operations.
 
     alias_dict : dict
@@ -623,7 +623,7 @@ def translate_circuit(circuit, alias_dict):
             line_labels=circuit.line_labels)
 
 
-def translate_circuit_list(circuit_list, alias_dict):
+def translate_circuits(circuit_list, alias_dict):
     """
     Applies :function:`translate_circuit` to each element of `circuit_list`.
 
@@ -634,7 +634,7 @@ def translate_circuit_list(circuit_list, alias_dict):
     Parameters
     ----------
     circuit_list : list of Circuits
-        The list of operation sequences to use as the base for find & replace
+        The list of circuits to use as the base for find & replace
         operations.
 
     alias_dict : dict
@@ -656,7 +656,7 @@ def translate_circuit_list(circuit_list, alias_dict):
         return new_circuits
 
 
-def compose_alias_dicts(alias_dict_1, alias_dict_2):
+def _compose_alias_dicts(alias_dict_1, alias_dict_2):
     """
     Composes two alias dicts.
 
@@ -697,7 +697,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     Parameters
     ----------
     circuit : Circuit or tuple
-        The operation sequence to manipulate.
+        The circuit to manipulate.
 
     sequence_rules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
@@ -777,7 +777,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     return _cir.Circuit(circuit, line_labels)
 
 
-def manipulate_circuit_list(circuit_list, sequence_rules, line_labels="auto"):
+def manipulate_circuits(circuit_list, sequence_rules, line_labels="auto"):
     """
     Applies :function:`manipulate_circuit` to each element of `circuit_list`.
 
@@ -787,7 +787,7 @@ def manipulate_circuit_list(circuit_list, sequence_rules, line_labels="auto"):
     Parameters
     ----------
     circuit_list : list of Circuits
-        The list of operation sequences to use as the base for find & replace
+        The list of circuits to use as the base for find & replace
         operations.
 
     sequence_rules : list
@@ -827,7 +827,7 @@ def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=
     Parameters
     ----------
     circuits : list
-        A list of operation sequences to act on.
+        A list of circuits to act on.
 
     sslbls_to_keep : list
         A list of state space labels specifying which operation labels should
@@ -838,7 +838,7 @@ def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=
         a new set of state space labels to replace those in `sslbls_to_keep`.
 
     drop : bool, optional
-        If True, then non-empty operation sequences which become empty after
+        If True, then non-empty circuits which become empty after
         filtering are not included in (i.e. dropped from) the returned list.
         If False, then the returned list is always the same length as the
         input list.
@@ -878,7 +878,7 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=()):
     Parameters
     ----------
     circuit : Circuit
-        The operation sequence to act on.
+        The circuit to act on.
 
     sslbls_to_keep : list
         A list of state space labels specifying which operation labels should

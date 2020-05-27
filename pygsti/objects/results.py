@@ -32,7 +32,7 @@ class Results(object):
     Encapsulates a set of related GST estimates.
 
     A Results object is a container which associates a single `DataSet` and a
-    structured set of operation sequences (usually the experiments contained in the
+    structured set of circuits (usually the experiments contained in the
     data set) with a set of estimates.  Each estimate (`Estimate` object) contains
     models as well as parameters used to generate those inputs.  Associated
     `ConfidenceRegion` objects, because they are associated with a set of gate
@@ -40,7 +40,7 @@ class Results(object):
 
     Typically, each `Estimate` is related to the input & output of a single
     GST calculation performed by a high-level driver routine like
-    :func:`do_long_sequence_gst`.
+    :func:`run_long_sequence_gst`.
     """
 
     def __init__(self):
@@ -75,7 +75,7 @@ class Results(object):
 
     def init_circuits(self, structs_by_iter):
         """
-        Initialize the common set operation sequences used to form the estimates of this Results object.
+        Initialize the common set circuits used to form the estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
         GST method was used, this is treated as a single iteration).
@@ -83,10 +83,10 @@ class Results(object):
         Parameters
         ----------
         structs_by_iter : list
-            The operation sequences used at each iteration. Ideally, elements are
+            The circuits used at each iteration. Ideally, elements are
             `LsGermsStruct` objects, which contain the structure needed to
             create color box plots in reports.  Elements may also be
-            unstructured lists of operation sequences (but this may limit
+            unstructured lists of circuits (but this may limit
             the amount of data visualization one can perform later).
 
         Returns
@@ -94,7 +94,7 @@ class Results(object):
         None
         """
         if len(self.circuit_structs) > 0:
-            _warnings.warn(("Re-initializing the operation sequences of a Results"
+            _warnings.warn(("Re-initializing the circuits of a Results"
                             " object!  Usually you don't want to do this."))
 
         #Set circuit structures
@@ -107,7 +107,7 @@ class Results(object):
                 unindexed_gss.add_unindexed(gss)
                 self.circuit_structs['iteration'].append(unindexed_gss)
             else:
-                raise ValueError("Unknown type of operation sequence specifier: %s"
+                raise ValueError("Unknown type of circuit specifier: %s"
                                  % str(type(gss)))
 
         self.circuit_structs['final'] = \
@@ -248,7 +248,7 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.gst_init(self, target_model, seed_model,
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.create_gst_estimate(self, target_model, seed_model,
                                                                                    models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
@@ -294,7 +294,7 @@ class Results(object):
             for ky in defaults:
                 if ky in est.parameters: defaults[ky] = est.parameters[ky]
 
-        #Construct a parameters dict, similar to do_model_test(...)
+        #Construct a parameters dict, similar to run_model_test(...)
         parameters = _collections.OrderedDict()
         parameters['objective'] = defaults['objective']
         if parameters['objective'] == 'logl':
@@ -308,7 +308,7 @@ class Results(object):
         parameters['opLabelAliases'] = defaults['opLabelAliases']
         parameters['weights'] = None  # Hardcoded
 
-        #Set default gate group to trival group to mimic do_model_test (an to
+        #Set default gate group to trival group to mimic run_model_test (an to
         # be consistent with this function creating "gauge-optimized" models
         # by just copying the initial one).
         themodel = themodel.copy()

@@ -23,16 +23,16 @@ def model_with_lgst_circuit_estimates(
         guess_model_for_gauge=None, circuit_labels=None, svd_truncate_to=None,
         verbosity=0):
     """
-    Constructs a model that contains LGST estimates for circuits_to_estimate.
+    Constructs a model that contains LGST estimates for `circuits_to_estimate`.
 
-    For each operation sequence s in circuits_to_estimate, the constructed model
+    For each circuit in `circuits_to_estimate`, the constructed model
     contains the LGST estimate for s as separate gate, labeled either by
     the corresponding element of circuit_labels or by the tuple of s itself.
 
     Parameters
     ----------
     circuits_to_estimate : list of Circuits or tuples
-        The operation sequences to estimate using LGST
+        The circuits to estimate using LGST
 
     dataset : DataSet
         The data to use for LGST
@@ -48,7 +48,7 @@ def model_with_lgst_circuit_estimates(
     target_model : Model
         A model used by LGST to specify which operation labels should be estimated,
         a guess for which gauge these estimates should be returned in, and
-        used to simplify operation sequences.
+        used to simplify circuits.
 
     include_target_ops : bool, optional
         If True, the operation labels in target_model will be included in the
@@ -69,7 +69,7 @@ def model_with_lgst_circuit_estimates(
 
     circuit_labels : list of strings, optional
         A list of labels in one-to-one correspondence with the
-        operation sequence in circuits_to_estimate.  These labels are
+        circuit in `circuits_to_estimate`.  These labels are
         the keys to access the operation matrices in the returned
         Model, i.e. op_matrix = returned_model[op_label]
 
@@ -80,19 +80,19 @@ def model_with_lgst_circuit_estimates(
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
     Model
         A model containing LGST estimates for all the requested
-        operation sequences and possibly the gates in target_model.
+        circuits and possibly the gates in target_model.
     """
     opLabels = []  # list of operation labels for LGST to estimate
     if op_label_aliases is None: aliases = {}
     else: aliases = op_label_aliases.copy()
 
-    #Add operation sequences to estimate as aliases
+    #Add circuits to estimate as aliases
     if circuit_labels is not None:
         assert(len(circuit_labels) == len(circuits_to_estimate))
         for opLabel, opStr in zip(circuit_labels, circuits_to_estimate):
@@ -110,7 +110,7 @@ def model_with_lgst_circuit_estimates(
             if targetOpLabel not in opLabels:  # very unlikely that this is false
                 opLabels.append(targetOpLabel)
 
-    return _core.do_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
+    return _core.run_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
                          opLabels, aliases, guess_model_for_gauge,
                          svd_truncate_to, verbosity)
 
@@ -124,10 +124,10 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
     Parameters
     ----------
     circuit_to_estimate : Circuit or tuple
-        The single operation sequence to estimate using LGST
+        The single circuit to estimate using LGST
 
     circuit_label : string
-        The label for the estimate of circuit_to_estimate.
+        The label for the estimate of `circuit_to_estimate`.
         i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
@@ -157,13 +157,13 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
     Model
-        A model containing LGST estimates of circuit_to_estimate
-        and the gates of target_model.
+        A model containing LGST estimates of `circuit_to_estimate`
+        and the gates of `target_model`.
     """
     return model_with_lgst_circuit_estimates(
         [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
@@ -174,12 +174,12 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
 def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target_model,
                        op_label_aliases=None, svd_truncate_to=None, verbosity=0):
     """
-    Constructs a dictionary with keys == operation sequences and values == Direct-LGST Models.
+    Constructs a dictionary with keys == circuits and values == Direct-LGST Models.
 
     Parameters
     ----------
     circuits : list of Circuit or tuple objects
-        The operation sequences to estimate using LGST.  The elements of this list
+        The circuits to estimate using LGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
@@ -209,17 +209,17 @@ def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
     dict
-        A dictionary that relates each operation sequence of circuits to a
-        Model containing the LGST estimate of that operation sequence stored under
-        the operation label "GsigmaLbl", along with LGST estimates of the gates in
-        target_model.
+        A dictionary that relates each circuit to a Model containing the LGST
+        estimate of that circuit's action (as a SPAM-less operation sequence)
+        stored under the operation label "GsigmaLbl", along with LGST estimates
+        of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     directLGSTmodels = {}
     printer.log("--- Direct LGST precomputation ---")
@@ -255,10 +255,10 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     Parameters
     ----------
     circuit_to_estimate : Circuit
-        The single operation sequence to estimate using LSGST
+        The single circuit to estimate using LSGST
 
     circuit_label : string
-        The label for the estimate of circuit_to_estimate.
+        The label for the estimate of `circuit_to_estimate`.
         i.e. op_matrix = returned_mode[op_label]
 
     dataset : DataSet
@@ -296,13 +296,13 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mc2gst(...) calls.
 
     Returns
     -------
     Model
-        A model containing LSGST estimates of circuit_to_estimate
-        and the gates of target_model.
+        A model containing LSGST estimates of `circuit_to_estimate`
+        and the gates of `target_model`.
     """
     direct_lgst = model_with_lgst_circuit_estimates(
         [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
@@ -321,7 +321,7 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_lsgst = _core.do_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
+    _, direct_lsgst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                        objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                        verbosity=verbosity)
 
@@ -333,12 +333,12 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
                          svd_truncate_to=None, min_prob_clip_for_weighting=1e-4,
                          prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == operation sequences and values == Direct-LSGST Models.
+    Constructs a dictionary with keys == circuits and values == Direct-LSGST Models.
 
     Parameters
     ----------
     circuits : list of Circuit or tuple objects
-        The operation sequences to estimate using LSGST.  The elements of this list
+        The circuits to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
@@ -376,17 +376,17 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mc2gst(...) calls.
 
     Returns
     -------
     dict
-        A dictionary that relates each operation sequence of circuits to a
-        Model containing the LSGST estimate of that operation sequence stored under
-        the operation label "GsigmaLbl", along with LSGST estimates of the gates in
-        target_model.
+        A dictionary that relates each circuit to a Model containing the LGST
+        estimate of that circuit's action (as a SPAM-less operation sequence)
+        stored under the operation label "GsigmaLbl", along with LSGST estimates
+        of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     directLSGSTmodels = {}
     printer.log("--- Direct LSGST precomputation ---")
     with printer.progress_logging(1):
@@ -422,11 +422,11 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     Parameters
     ----------
     circuit_to_estimate : Circuit or tuple
-        The single operation sequence to estimate using LSGST
+        The single circuit to estimate using LSGST
 
     circuit_label : string
-        The label for the estimate of circuit_to_estimate.
-        i.e. op_matrix = returned_model[op_label]
+        The label for the estimate of `circuit_to_estimate`.
+        i.e. `op_matrix = returned_model[op_label]`
 
     dataset : DataSet
         The data to use for LGST
@@ -463,13 +463,13 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mlgst(...) calls.
 
     Returns
     -------
     Model
-        A model containing MLEGST estimates of circuit_to_estimate
-        and the gates of target_model.
+        A model containing MLEGST estimates of `circuit_to_estimate`
+        and the gates of `target_model`.
     """
     direct_lgst = model_with_lgst_circuit_estimates(
         [circuit_to_estimate], dataset, prep_fiducials, meas_fiducials, target_model,
@@ -488,7 +488,7 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.PoissonPicDeltaLogLFunction.builder(regularization={'min_prob_clip': min_prob_clip},
                                                          penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_mlegst = _core.do_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
+    _, direct_mlegst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                         objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                         verbosity=verbosity)
 
@@ -499,12 +499,12 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
                         op_label_aliases=None, svd_truncate_to=None, min_prob_clip=1e-6,
                         prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == operation sequences and values == Direct-MLEGST Models.
+    Constructs a dictionary with keys == circuits and values == Direct-MLEGST Models.
 
     Parameters
     ----------
     circuits : list of Circuit or tuple objects
-        The operation sequences to estimate using MLEGST.  The elements of this list
+        The circuits to estimate using MLEGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
@@ -542,17 +542,17 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mlgst(...) calls.
 
     Returns
     -------
     dict
-        A dictionary that relates each operation sequence of circuits to a
-        Model containing the MLEGST estimate of that operation sequence stored under
-        the operation label "GsigmaLbl", along with MLEGST estimates of the gates in
-        target_model.
+        A dictionary that relates each circuit to a Model containing the LGST
+        estimate of that circuit's action (as a SPAM-less operation sequence)
+        stored under the operation label "GsigmaLbl", along with MLEGST estimates
+        of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     directMLEGSTmodels = {}
     printer.log("--- Direct MLEGST precomputation ---")
     with printer.progress_logging(1):
@@ -571,21 +571,21 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
                          op_label_aliases=None, min_prob_clip_for_weighting=1e-4,
                          prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
-    Constructs a model containing a single LSGST estimate of circuit_to_estimate.
+    Constructs a model containing a single LSGST estimate of `circuit_to_estimate`.
 
-    Starting with start_model, run LSGST with the same operation sequences that LGST
-    would use to estimate circuit_to_estimate.  That is, LSGST is run with
+    Starting with `start_model`, run LSGST with the same circuits that LGST
+    would use to estimate `circuit_to_estimate`.  That is, LSGST is run with
     strings of the form:  prep_fiducial + circuit_to_estimate + meas_fiducial
     and return the resulting Model.
 
     Parameters
     ----------
     circuit_to_estimate : Circuit or tuple
-        The single operation sequence to estimate using LSGST
+        The single circuit to estimate using LSGST
 
     circuit_label : string
-        The label for the estimate of circuit_to_estimate.
-        i.e. op_matrix = returned_model[op_label]
+        The label for the estimate of `circuit_to_estimate`.
+        i.e. `op_matrix = returned_model[op_label]`
 
     dataset : DataSet
         The data to use for LGST
@@ -621,14 +621,14 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     Returns
     -------
     Model
-        A model containing LSGST estimate of circuit_to_estimate.
+        A model containing LSGST estimate of `circuit_to_estimate`.
     """
     circuits = [prepC + circuit_to_estimate + measC for prepC in prep_fiducials for measC in meas_fiducials]
 
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, op_label_aliases)
-    _, focused_lsgst = _core.do_gst_fit(dataset, start_model, bulk_circuits, optimizer=None,
+    _, focused_lsgst = _core.run_gst_fit(dataset, start_model, bulk_circuits, optimizer=None,
                                         objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                         verbosity=verbosity)
 
@@ -642,12 +642,12 @@ def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
                           min_prob_clip_for_weighting=1e-4,
                           prob_clip_interval=(-1e6, 1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == operation sequences and values == Focused-LSGST Models.
+    Constructs a dictionary with keys == circuits and values == Focused-LSGST Models.
 
     Parameters
     ----------
     circuits : list of Circuit or tuple objects
-        The operation sequences to estimate using LSGST.  The elements of this list
+        The circuits to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
@@ -684,12 +684,12 @@ def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
     Returns
     -------
     dict
-        A dictionary that relates each operation sequence of circuits to a
-        Model containing the LSGST estimate of that operation sequence stored under
-        the operation label "GsigmaLbl".
+        A dictionary that relates each circuit to a Model containing the
+        LSGST estimate of that circuit's action, stored under the
+        operation label "GsigmaLbl".
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     focusedLSGSTmodels = {}
     printer.log("--- Focused LSGST precomputation ---")
     with printer.progress_logging(1):

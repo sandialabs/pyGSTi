@@ -22,7 +22,7 @@ class NamedDict(dict):
     its keys, and key and value type names indicating the types
     of its keys and values.
 
-    The main purpose of this class is to utilize its :method:`as_dataframe` method.
+    The main purpose of this class is to utilize its :method:`to_dataframe` method.
 
     Parameters
     ----------
@@ -37,7 +37,7 @@ class NamedDict(dict):
     valname : str, optional
         A category name for the keys of this dict. This becomse a column header
         if this dict is converted to a data frame.
-        
+
     valtype : {"float", "int", "categor", None}, optional
         The value-type, in correspondence with different pandas series types.
 
@@ -79,7 +79,7 @@ class NamedDict(dict):
     def __reduce__(self):
         return (NamedDict, (self.keyname, self.keytype, self.valname, self.valtype, list(self.items())), None)
 
-    def as_dataframe(self):
+    def to_dataframe(self):
         """
         Render this dict as a pandas data frame.
 
@@ -107,7 +107,7 @@ class NamedDict(dict):
 
         #Add value column if needed
         valname = self.valname if (self.valname is not None) else 'Value'
-        add_value_col = not all([(isinstance(v, (NamedDict, _typeddict.TypedDict)) or hasattr(v, 'as_nameddict'))
+        add_value_col = not all([(isinstance(v, (NamedDict, _typeddict.TypedDict)) or hasattr(v, 'to_nameddict'))
                                  for v in self.values()])
         if add_value_col:
             if valname not in columns:  # then add a column
@@ -126,8 +126,8 @@ class NamedDict(dict):
             row[nm] = k
             if isinstance(v, (NamedDict, _typeddict.TypedDict)):
                 v._add_to_columns(columns, seriestypes, row)
-            elif hasattr(v, 'as_nameddict'):  # e.g., for other ProtocolResults
-                v.as_nameddict()._add_to_columns(columns, seriestypes, row)
+            elif hasattr(v, 'to_nameddict'):  # e.g., for other ProtocolResults
+                v.to_nameddict()._add_to_columns(columns, seriestypes, row)
             else:
                 #Add row
                 complete_row = row.copy()

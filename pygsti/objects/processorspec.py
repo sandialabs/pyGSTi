@@ -14,7 +14,6 @@ import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
-import itertools as _iter
 
 from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
@@ -192,7 +191,7 @@ class ProcessorSpec(object):
 
         # Stores the basic unitary matrices defining the gates, as it is convenient to have these easily accessable.
         self.root_gate_unitaries = _collections.OrderedDict()
-        std_gate_unitaries = _itgs.get_standard_gatename_unitaries()
+        std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
             if gname in nonstd_gate_unitaries:
                 self.root_gate_unitaries[gname] = nonstd_gate_unitaries[gname]
@@ -285,7 +284,7 @@ class ProcessorSpec(object):
             # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not
             # Clifford gates then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits, self.number_of_qubits), dtype=bool)
-            for oplabel in self.models['clifford'].get_primitive_op_labels():
+            for oplabel in self.models['clifford'].primitive_op_labels():
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
                 if oplabel.number_of_qubits is None: continue  # skip "global" gates in connectivity consideration?
@@ -299,7 +298,7 @@ class ProcessorSpec(object):
         if 'clifford' in self.models:
             # Compute the operation labels that act on an entire set of qubits
             self.clifford_ops_on_qubits = _collections.defaultdict(list)
-            for gl in self.models['clifford'].get_primitive_op_labels():
+            for gl in self.models['clifford'].primitive_op_labels():
                 if gl.qubits is None: continue  # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
                     self.clifford_ops_on_qubits[p].append(gl)
@@ -313,7 +312,7 @@ class ProcessorSpec(object):
 
         return  # done with __init__(...)
 
-    def get_edges(self, qubits):
+    def find_qubit_connections(self, qubits):
         """
         Construct the list of edges between qubits in `qubits`.
 
@@ -333,7 +332,7 @@ class ProcessorSpec(object):
         """
         edgelist = []
 
-        for oplabel in self.models['clifford'].get_primitive_op_labels():
+        for oplabel in self.models['clifford'].primitive_op_labels():
             # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
             # something we may need to do at some point.
             if oplabel.number_of_qubits == 2:
@@ -342,7 +341,7 @@ class ProcessorSpec(object):
 
         return edgelist
 
-    def get_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+    def create_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         """
         Creates a commonly-used model for this processor specification.
 
@@ -371,7 +370,7 @@ class ProcessorSpec(object):
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto', 'map')), "Clifford model must use 'map' simulation type"
-            model = _LocalNoiseModel.build_from_parameterization(
+            model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits,
                 self.root_gate_names,
                 self.nonstd_gate_unitaries, None,
@@ -388,7 +387,7 @@ class ProcessorSpec(object):
                 else parameterization
             if param in ('target', 'Target'): param = 'static'  # special case for 'target' model
 
-            model = _LocalNoiseModel.build_from_parameterization(
+            model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=param, sim_type=sim_type,
@@ -398,7 +397,7 @@ class ProcessorSpec(object):
             if parameterization == 'auto':
                 raise ValueError(
                     "Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            model = _LocalNoiseModel.build_from_parameterization(
+            model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, None, self.availability,
                 self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
@@ -429,7 +428,7 @@ class ProcessorSpec(object):
         -------
         None
         """
-        self.models[model_name] = self.get_std_model(model_name, parameterization, sim_type)
+        self.models[model_name] = self.create_std_model(model_name, parameterization, sim_type)
 
     def add_std_compilations(self, compile_type, one_q_gates, two_q_gates, add_nonlocal_two_q_gates=False, verbosity=0):
         """
@@ -527,7 +526,7 @@ class ProcessorSpec(object):
             if H_name is None and compile_type == 'paulieq':
                 for gn in self.root_gate_names:
                     if callable(self.root_gate_unitaries[gn]): continue  # can't pre-process factories
-                    if _symp.unitary_is_a_clifford(self.root_gate_unitaries[gn]):
+                    if _symp.unitary_is_clifford(self.root_gate_unitaries[gn]):
                         if _itgs.is_gate_pauli_equivalent_to_this_standard_unitary(self.root_gate_unitaries[gn], 'H'):
                             H_name = gn
 
@@ -670,92 +669,7 @@ class ProcessorSpec(object):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
 
-    def get_all_connected_sets(self, n):
-        """
-        Computes all connected sets of `n` qubits.
-
-        Note that for a large device with this will be often be an
-        unreasonably large number of sets of qubits, and so
-        the run-time of this method will be unreasonable.
-
-        Parameters
-        ----------
-        n : int
-            The number of qubits within each set.
-
-        Returns
-        -------
-        list
-            All sets of `n` connected qubits.
-        """
-        connectedqubits = []
-        for combo in _iter.combinations(self.qubit_labels, n):
-            if self.qubitgraph.subgraph(list(combo)).are_glob_connected(combo):
-                connectedqubits.append(combo)
-
-        return connectedqubits
-
-    #PRIVATE?  - MOVE to QubitGraph.
-    def get_all_connected_sets_new(self):
-        """
-        Finds all subgraphs (connected sets of vertices) up to the full graph size.
-
-        Graph edges are treated as undirected.
-
-        Returns
-        -------
-        dict
-            A dictionary with integer keys.  The value of key `k` is a
-            list of all the subgraphs of length `k`.  A subgraph is given
-            as a tuple of sorted vertex (qubit) labels.
-        """
-        def add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, visited_vertices, output_set):
-            """ x holds subgraph so far.  y holds vertices already processed. """
-            if len(subgraph_vertices) == max_subgraph_size: return output_set  # can't add any more vertices; exit now.
-
-            T = set()  # vertices to process - those connected to vertices in x
-            if len(subgraph_vertices) == 0:  # special starting case
-                T.update(neighbor_dict.keys())  # all vertices are connected to the "nothing"/empty set of vertices.
-            else:  # normal case
-                for v in subgraph_vertices:
-                    T.update(filter(lambda w: (w not in visited_vertices and w not in subgraph_vertices),
-                                    neighbor_dict[v]))  # add neighboring vertices we haven't already processed.
-            V = set(visited_vertices)
-            for v in T:
-                subgraph_vertices.add(v)
-                output_set.add(frozenset(subgraph_vertices))
-                add_neighbors(neighbor_dict, max_subgraph_size, subgraph_vertices, V, output_set)
-                subgraph_vertices.remove(v)
-                V.add(v)
-
-        def addedge(a, b, neighbor_dict):
-            neighbor_dict[a].append(b)
-            neighbor_dict[b].append(a)
-
-        def group_subgraphs(subgraph_list):
-            processed_subgraph_dict = _collections.defaultdict(list)
-            for subgraph in subgraph_list:
-                k = len(subgraph)
-                subgraph_as_list = list(subgraph)
-                subgraph_as_list.sort()
-                subgraph_as_tuple = tuple(subgraph_as_list)
-                processed_subgraph_dict[k].append(subgraph_as_tuple)
-            return processed_subgraph_dict
-
-        neighbor_dict = _collections.defaultdict(list)
-        directed_edge_list = self.qubitgraph.edges()
-        undirected_edge_list = list(set([frozenset(edge) for edge in directed_edge_list]))
-        undirected_edge_list = [list(edge) for edge in undirected_edge_list]
-
-        for edge in undirected_edge_list:
-            addedge(edge[0], edge[1], neighbor_dict)
-        k_max = self.number_of_qubits
-        output_set = set()
-        add_neighbors(neighbor_dict, k_max, set(), set(), output_set)
-        grouped_subgraphs = group_subgraphs(output_set)
-        return grouped_subgraphs
-
-    # Future : replace this with a way to specify how "costly" using different qubits/gates is estimated to be, so that
+    # Future : add a way to specify how "costly" using different qubits/gates is estimated to be, so that
     # Clifford compilers etc can take this into account by auto-generating a costfunction from this information.
     # def construct_compiler_costs(self, custom_connectivity=None):
     #     """

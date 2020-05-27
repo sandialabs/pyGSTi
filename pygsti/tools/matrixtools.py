@@ -29,28 +29,6 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
-#PRIVATE - or remove?
-def array_eq(a, b, tol=1e-8):
-    """
-    Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol`
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-
-    b : numpy.ndarray
-
-    tol : float, optional
-        tolerance.
-
-    Returns
-    -------
-    float
-    """
-    print(_np.linalg.norm(a - b))
-    return _np.linalg.norm(a - b) < tol
-
-
 def trace(m):  # memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
     """
     The trace of a matrix, sum_i m[i,i].
@@ -168,7 +146,7 @@ def frobeniusnorm(ar):
     return _np.sqrt(_np.sum(ar**2))
 
 
-def frobeniusnorm2(ar):
+def frobeniusnorm_squared(ar):
     """
     Compute the squared frobenius norm of an array (or matrix),
 
@@ -1197,7 +1175,7 @@ def _findx(a, inds, always_copy=False):
         return a_inds
 
 
-def safedot(a, b):
+def safe_dot(a, b):
     """
     Performs dot(a,b) correctly when neither, either, or both arguments are sparse matrices.
 
@@ -1223,7 +1201,7 @@ def safedot(a, b):
         return _np.dot(a, b)
 
 
-def safereal(a, inplace=False, check=False):
+def safe_real(a, inplace=False, check=False):
     """
     Get the real-part of `a`, where `a` can be either a dense array or a sparse matrix.
 
@@ -1243,7 +1221,7 @@ def safereal(a, inplace=False, check=False):
     numpy.ndarray or scipy.sparse matrix
     """
     if check:
-        assert(safenorm(a, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
+        assert(safe_norm(a, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
     if _sps.issparse(a):
         if _sps.isspmatrix_csr(a):
             if inplace:
@@ -1254,12 +1232,12 @@ def safereal(a, inplace=False, check=False):
             ret.eliminate_zeros()
             return ret
         else:
-            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(a)))
+            raise NotImplementedError("safe_real() doesn't work with %s matrices yet" % str(type(a)))
     else:
         return _np.real(a)
 
 
-def safeimag(a, inplace=False, check=False):
+def safe_imag(a, inplace=False, check=False):
     """
     Get the imaginary-part of `a`, where `a` can be either a dense array or a sparse matrix.
 
@@ -1279,7 +1257,7 @@ def safeimag(a, inplace=False, check=False):
     numpy.ndarray or scipy.sparse matrix
     """
     if check:
-        assert(safenorm(a, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
+        assert(safe_norm(a, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
     if _sps.issparse(a):
         if _sps.isspmatrix_csr(a):
             if inplace:
@@ -1290,12 +1268,12 @@ def safeimag(a, inplace=False, check=False):
             ret.eliminate_zeros()
             return ret
         else:
-            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(a)))
+            raise NotImplementedError("safe_real() doesn't work with %s matrices yet" % str(type(a)))
     else:
         return _np.imag(a)
 
 
-def safenorm(a, part=None):
+def safe_norm(a, part=None):
     """
     Get the frobenius norm of a matrix or vector, `a`, when it is either a dense array or a sparse matrix.
 
@@ -1342,7 +1320,7 @@ def safe_onenorm(a):
         return _np.linalg.norm(a, 1)
 
 
-def get_csr_sum_indices(csr_matrices):
+def csr_sum_indices(csr_matrices):
     """
     Precomputes the indices needed to sum a set of CSR sparse matrices.
 
@@ -1403,7 +1381,7 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
     """
     Accelerated summation of several CSR-format sparse matrices.
 
-    :method:`get_csr_sum_indices` precomputes the necessary indices for
+    :method:`csr_sum_indices` precomputes the necessary indices for
     summing directly into the data-array of a destination CSR sparse matrix.
     If `data` is the data-array of matrix `D` (for "destination"), then this
     method performs:
@@ -1427,7 +1405,7 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
 
     csr_sum_indices : list
         A list of precomputed index arrays as returned by
-        :method:`get_csr_sum_indices`.
+        :method:`csr_sum_indices`.
 
     Returns
     -------
@@ -1437,7 +1415,7 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
         data[inds] += coeff * mx.data
 
 
-def get_csr_sum_flat_indices(csr_matrices):
+def csr_sum_flat_indices(csr_matrices):
     """
     Precomputes quantities allowing fast computation of linear combinations of CSR sparse matrices.
 
@@ -1472,7 +1450,7 @@ def get_csr_sum_flat_indices(csr_matrices):
         The dimension of the destination matrix (and of each member of
         `csr_matrices`)
     """
-    csr_sum_array, indptr, indices, N = get_csr_sum_indices(csr_matrices)
+    csr_sum_array, indptr, indices, N = csr_sum_indices(csr_matrices)
     if len(csr_sum_array) == 0:
         return (_np.empty(0, int), _np.empty(0, 'd'), _np.zeros(1, int), indptr, indices, N)
 
@@ -1488,7 +1466,7 @@ if _fastcalc is None:
         """
         Computation of the summation of several CSR-format sparse matrices.
 
-        :method:`get_csr_sum_flat_indices` precomputes the necessary indices for
+        :method:`csr_sum_flat_indices` precomputes the necessary indices for
         summing directly into the data-array of a destination CSR sparse matrix.
         If `data` is the data-array of matrix `D` (for "destination"), then this
         method performs:
@@ -1507,14 +1485,14 @@ if _fastcalc is None:
             The weight coefficients which multiply each summed matrix.
 
         flat_dest_index_array : ndarray
-            The index array generated by :function:`get_csr_sum_flat_indices`.
+            The index array generated by :function:`csr_sum_flat_indices`.
 
         flat_csr_mx_data : ndarray
-            The data array generated by :function:`get_csr_sum_flat_indices`.
+            The data array generated by :function:`csr_sum_flat_indices`.
 
         mx_nnz_indptr : ndarray
             The number-of-nonzero-elements pointer array generated by
-            :function:`get_csr_sum_flat_indices`.
+            :function:`csr_sum_flat_indices`.
 
         Returns
         -------
@@ -1530,7 +1508,7 @@ else:
         """
         Computes the summation of several CSR-format sparse matrices.
 
-        :method:`get_csr_sum_flat_indices` precomputes the necessary indices for
+        :method:`csr_sum_flat_indices` precomputes the necessary indices for
         summing directly into the data-array of a destination CSR sparse matrix.
         If `data` is the data-array of matrix `D` (for "destination"), then this
         method performs:
@@ -1549,14 +1527,14 @@ else:
             The weight coefficients which multiply each summed matrix.
 
         flat_dest_index_array : ndarray
-            The index array generated by :function:`get_csr_sum_flat_indices`.
+            The index array generated by :function:`csr_sum_flat_indices`.
 
         flat_csr_mx_data : ndarray
-            The data array generated by :function:`get_csr_sum_flat_indices`.
+            The data array generated by :function:`csr_sum_flat_indices`.
 
         mx_nnz_indptr : ndarray
             The number-of-nonzero-elements pointer array generated by
-            :function:`get_csr_sum_flat_indices`.
+            :function:`csr_sum_flat_indices`.
         """
         coeffs_complex = _np.ascontiguousarray(coeffs, dtype=complex)
         return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
@@ -1898,7 +1876,7 @@ def sorted_eig(mx):
     return sorted_ev, sorted_U
 
 
-def get_kite(eigenvalues):
+def compute_kite(eigenvalues):
     """
     Computes the "kite" corresponding to a list of eigenvalues.
 

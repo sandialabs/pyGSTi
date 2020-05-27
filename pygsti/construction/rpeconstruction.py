@@ -57,14 +57,14 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
     """
 
     if with_id:
-        outputModel = _setc.build_explicit_model(
+        outputModel = _setc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gz'],
             ["I(Q0)", "X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
     else:
-        outputModel = _setc.build_explicit_model(
+        outputModel = _setc.create_explicit_model(
             [('Q0',)], ['Gx', 'Gz'],
             ["X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -72,7 +72,7 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     if y_rot != 0:
-        modelAux1 = _setc.build_explicit_model(
+        modelAux1 = _setc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gy', 'Gz'],
             ["I(Q0)", "Y(%s,Q0)" % y_rot, "Z(pi/2,Q0)"],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -102,7 +102,7 @@ def make_rpe_alpha_str_lists_gx_gz(k_list):
     """
     Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate alpha (Z rotation angle).
+    These circuits are used to estimate alpha (Z rotation angle).
 
     Parameters
     ----------
@@ -155,7 +155,7 @@ def make_rpe_epsilon_str_lists_gx_gz(k_list):
     """
     Make epsilon cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate epsilon (X rotation angle).
+    These circuits are used to estimate epsilon (X rotation angle).
 
     Parameters
     ----------
@@ -197,7 +197,7 @@ def make_rpe_theta_str_lists_gx_gz(k_list):
     """
     Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2 gates.
 
-    These operation sequences are used to estimate theta (X-Z axes angle).
+    These circuits are used to estimate theta (X-Z axes angle).
 
     Parameters
     ----------
@@ -253,23 +253,23 @@ def make_rpe_string_list_d(log2k_max):
     Returns
     -------
     totalStrListD : dict
-        A dictionary containing all operation sequences for all sine and cosine
+        A dictionary containing all circuits for all sine and cosine
         experiments for alpha, epsilon, and theta.
         The keys of the returned dictionary are:
 
-        - 'alpha','cos' : List of operation sequences for cosine experiments used
+        - 'alpha','cos' : List of circuits for cosine experiments used
           to determine alpha.
-        - 'alpha','sin' : List of operation sequences for sine experiments used to
+        - 'alpha','sin' : List of circuits for sine experiments used to
           determine alpha.
-        - 'epsilon','cos' : List of operation sequences for cosine experiments used to
+        - 'epsilon','cos' : List of circuits for cosine experiments used to
            determine epsilon.
-        - 'epsilon','sin' : List of operation sequences for sine experiments used to
+        - 'epsilon','sin' : List of circuits for sine experiments used to
           determine epsilon.
-        - 'theta','cos' : List of operation sequences for cosine experiments used to
+        - 'theta','cos' : List of circuits for cosine experiments used to
           determine theta.
-        - 'theta','sin' : List of operation sequences for sine experiments used to
+        - 'theta','sin' : List of circuits for sine experiments used to
           determine theta.
-        - 'totalStrList' : All above operation sequences combined into one list;
+        - 'totalStrList' : All above circuits combined into one list;
           duplicates removed.
     """
     kList = [2**k for k in range(log2k_max + 1)]
@@ -296,8 +296,8 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
 
-    Is a thin wrapper for pygsti.construction.generate_fake_data, changing
-    default behavior of sample_error, and taking a dictionary of operation sequences
+    Is a thin wrapper for pygsti.construction.simulate_data, changing
+    default behavior of sample_error, and taking a dictionary of circuits
     as input.
 
     Parameters
@@ -314,11 +314,11 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
         make_rpe_string_list_d.
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only
+        The simulated number of samples for each circuit.  This only
         has effect when  sample_error == "binomial" or "multinomial".  If
-        an integer, all operation sequences have this number of total samples. If
+        an integer, all circuits have this number of total samples. If
         a list, integer elements specify the number of samples for the
-        corresponding operation sequence.  If None, then model_or_dataset must be
+        corresponding circuit.  If None, then model_or_dataset must be
         a DataSet, and total counts are taken from it (on a per-circuit
         basis).
 
@@ -332,10 +332,10 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution. Distribution has parameters p = probability of the
-          operation sequence and n = number of samples.  This can only be used when
+          circuit and n = number of samples.  This can only be used when
           there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-          Distribution has parameters p_k = probability of the operation sequence
+          Distribution has parameters p_k = probability of the circuit
           using the k-th SPAM label and n = number of samples.  This should not
           be used for RPE.
 
@@ -346,17 +346,14 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     Returns
     -------
     DataSet
-        A static data set filled with counts for the specified operation sequences.
+        A static data set filled with counts for the specified circuits.
     """
-    return _dsc.generate_fake_data(model_or_dataset,
+    return _dsc.simulate_data(model_or_dataset,
                                    string_list_d['totalStrList'],
                                    n_samples, sample_error=sample_error, seed=seed)
 
 
-#TODO savePlot arg is never used?
-#PRIVATE
 def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n, runs):
-    #                  plot=False):
     """
     Experimental test function
     """
@@ -369,13 +366,13 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     #percentAlphaError = 100*_np.abs((_np.pi/2-alpha_true)/alpha_true)
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilon_true)/epsilon_true)
 
-    simModel = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
+    simModel = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
                                           ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)", "Z(" + str(alpha_true) + ",Q0)"],
                                           prep_labels=["rho0"], prep_expressions=["0"],
                                           effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                           spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    modelAux1 = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
+    modelAux1 = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
                                            ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
                                            prep_labels=["rho0"], prep_expressions=["0"],
                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
@@ -403,7 +400,7 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     PhiFunErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
 
     for j in range(jMax):
-        simDS = _dsc.generate_fake_data(
+        simDS = _dsc.simulate_data(
             simModel, alphaCosStrList + alphaSinStrList + epsilonCosStrList
             + epsilonSinStrList + thetaCosStrList + thetaSinStrList,
             n, sample_error='binomial', seed=j)
@@ -411,11 +408,11 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
         epsilonErrorList = []
         thetaErrorList = []
         PhiFunErrorList = []
-        alphaHatList = _tools.rpe.est_angle_list(simDS, alphaSinStrList,
+        alphaHatList = _tools.rpe.estimate_angles(simDS, alphaSinStrList,
                                                  alphaCosStrList, 'alpha')
-        epsilonHatList = _tools.rpe.est_angle_list(simDS, epsilonSinStrList,
+        epsilonHatList = _tools.rpe.estimate_angles(simDS, epsilonSinStrList,
                                                    epsilonCosStrList, 'epsilon')
-        thetaHatList, PhiFunList = _tools.rpe.est_theta_list(simDS, thetaSinStrList,
+        thetaHatList, PhiFunList = _tools.rpe.estimate_thetas(simDS, thetaSinStrList,
                                                              thetaCosStrList, epsilonHatList,
                                                              return_phi_fun_list=True)
         for alphaTemp1 in alphaHatList:

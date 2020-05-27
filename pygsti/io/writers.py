@@ -32,14 +32,14 @@ def write_empty_dataset(filename, circuit_list,
         The filename to write.
 
     circuit_list : list of Circuits
-        List of operation sequences to write, each to be followed by num_zero_cols zeros.
+        List of circuits to write, each to be followed by num_zero_cols zeros.
 
     header_string : string, optional
         Header string for the file; should start with a pound (#) or double-pound (##)
         so it is treated as a commend or directive, respectively.
 
     num_zero_cols : int, optional
-        The number of zero columns to place after each operation sequence.  If None,
+        The number of zero columns to place after each circuit.  If None,
         then header_string must begin with "## Columns = " and number of zero
         columns will be inferred.
 
@@ -87,8 +87,8 @@ def write_dataset(filename, dataset, circuit_list=None,
         The data set from which counts are obtained.
 
     circuit_list : list of Circuits, optional
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
     outcome_label_order : list, optional
         A list of the outcome labels in dataset which specifies
@@ -121,7 +121,7 @@ def write_dataset(filename, dataset, circuit_list=None,
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = dataset.get_outcome_labels()
+    outcomeLabels = dataset.outcome_labels()
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -197,8 +197,8 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
         The multi data set from which counts are obtained.
 
     circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
     outcome_label_order : list, optional
         A list of the SPAM labels in multidataset which specifies
@@ -219,7 +219,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = multidataset.get_outcome_labels()
+    outcomeLabels = multidataset.outcome_labels()
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -258,7 +258,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
 
 def write_circuit_list(filename, circuit_list, header=None):
     """
-    Write a text-formatted operation sequence list file.
+    Write a text-formatted circuit list file.
 
     Parameters
     ----------
@@ -266,7 +266,7 @@ def write_circuit_list(filename, circuit_list, header=None):
         The filename to write.
 
     circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
+        The list of circuits to include in the written dataset.
 
     header : string, optional
         Header line (first line of file).  Prepended with a pound sign (#), so no
@@ -335,8 +335,8 @@ def write_model(mdl, filename, title=None):
             elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
             elif isinstance(rhoVec, _objs.LindbladSPAMVec):
                 typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.todense()),
-                         ("ErrgenMx", rhoVec.error_map.todense())]
+                props = [("PureVec", rhoVec.state_vec.to_dense()),
+                         ("ErrgenMx", rhoVec.error_map.to_dense())]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -344,7 +344,7 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.todense())]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense())]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -355,7 +355,7 @@ def write_model(mdl, filename, title=None):
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
             elif isinstance(povm, _objs.LindbladPOVM):
                 povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.todense())]
+                props = [("ErrgenMx", povm.error_map.to_dense())]
                 povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
@@ -381,7 +381,7 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.todense())
+                writeprop(output, "LiouvilleVec", EVec.to_dense())
 
             output.write("END POVM\n\n")
 
@@ -392,9 +392,9 @@ def write_model(mdl, filename, title=None):
             elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
             elif isinstance(gate, _objs.LindbladDenseOp):
                 typ = "CPTP-GATE"
-                props = [("LiouvilleMx", gate.todense())]
+                props = [("LiouvilleMx", gate.to_dense())]
                 if gate.unitary_postfactor is not None:
-                    upost = gate.unitary_postfactor.todense() \
+                    upost = gate.unitary_postfactor.to_dense() \
                         if isinstance(gate.unitary_postfactor, _objs.LinearOperator) \
                         else gate.unitary_postfactor
                     props.append(("RefLiouvilleMx", upost))
@@ -405,7 +405,7 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.todense())]
+            if props is None: props = [("LiouvilleMx", gate.to_dense())]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -432,7 +432,7 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.todense())
+                writeprop(output, "LiouvilleMx", gate.to_dense())
             output.write("END Instrument\n\n")
 
         if mdl.state_space_labels is not None:
@@ -539,11 +539,11 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
         the path to the text-formatted data set file.
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only has
+        The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
-        integer, all operation sequences have this number of total samples. If a list,
+        integer, all circuits have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        operation sequence.  If ``None``, then `model_or_dataset` must be a
+        circuit.  If ``None``, then `model_or_dataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
         (on a per-circuit basis).
 
@@ -558,7 +558,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution.  Distribution has parameters p = (clipped) probability
-          of the operation sequence and n = number of samples.  This can only be used
+          of the circuit and n = number of samples.  This can only be used
           when there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = (clipped) probability of the gate
@@ -576,12 +576,12 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
 
     alias_dict : dict, optional
         A dictionary mapping single operation labels into tuples of one or more
-        other operation labels which translate the given operation sequences before values
+        other operation labels which translate the given circuits before values
         are computed using `model_or_dataset`.  The resulting Dataset, however,
-        contains the *un-translated* operation sequences as keys.
+        contains the *un-translated* circuits as keys.
 
     collision_action : {"aggregate", "keepseparate"}
-        Determines how duplicate operation sequences are handled by the resulting
+        Determines how duplicate circuits are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     record_zero_counts : bool, optional
@@ -612,13 +612,13 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     DataSet
         The generated data set (also written in place of the template file).
     """
-    from ..construction import generate_fake_data as _generate_fake_data
+    from ..construction import simulate_data as _generate_fake_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
     ds = _generate_fake_data(model, list(ds_template.keys()), n_samples,
                              sample_error, seed, rand_state, alias_dict,
                              collision_action, record_zero_counts, comm,
                              mem_limit, times)
     if fixed_column_mode == "auto":
-        fixed_column_mode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
+        fixed_column_mode = bool(len(ds_template.outcome_labels()) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds

@@ -162,19 +162,19 @@ def change_basis(mx, from_basis, to_basis):
         assert(from_basis.dim == to_basis.dim == dim), \
             "Dimension mismatch: %d,%d,%d" % (from_basis.dim, to_basis.dim, dim)
     else:
-        # If one is just a string, then use the .equivalent of the
+        # If one is just a string, then use the .create_equivalent of the
         # other basis, since there can be desired structure (in the
         # other basis) that we want to preserve and which would be
         # lost if we just created a new BuiltinBasis with the correct
         # overall dimension.
         if from_is_basis:
             assert(from_basis.dim == dim), "src-basis dimension mismatch: %d != %d" % (from_basis.dim, dim)
-            #to_basis = from_basis.equivalent(to_basis)
+            #to_basis = from_basis.create_equivalent(to_basis)
             # ^Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
             to_basis = BuiltinBasis(to_basis, dim, sparse=from_basis.sparse)
         else:
             assert(to_basis.dim == dim), "dest-basis dimension mismatch: %d != %d" % (to_basis.dim, dim)
-            #from_basis = to_basis.equivalent(from_basis)
+            #from_basis = to_basis.create_equivalent(from_basis)
             from_basis = BuiltinBasis(from_basis, dim, sparse=to_basis.sparse)
 
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
@@ -185,24 +185,24 @@ def change_basis(mx, from_basis, to_basis):
     if from_basis == to_basis:
         return mx.copy()
 
-    toMx = from_basis.transform_matrix(to_basis)
-    fromMx = to_basis.transform_matrix(from_basis)
+    toMx = from_basis.create_transform_matrix(to_basis)
+    fromMx = to_basis.create_transform_matrix(from_basis)
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
         # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
         # with some/all args being sparse:
-        ret = _mt.safedot(toMx, _mt.safedot(mx, fromMx))
+        ret = _mt.safe_dot(toMx, _mt.safe_dot(mx, fromMx))
     else:  # isVec
-        ret = _mt.safedot(toMx, mx)
+        ret = _mt.safe_dot(toMx, mx)
 
     if not to_basis.real:
         return ret
 
-    if _mt.safenorm(ret, 'imag') > 1e-8:
+    if _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
-                         (_mt.safenorm(ret, 'imag'), from_basis, to_basis, ret))
-    return _mt.safereal(ret)
+                         (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
+    return _mt.safe_real(ret)
 
 #def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
 #    '''
@@ -236,7 +236,7 @@ def change_basis(mx, from_basis, to_basis):
 #    return from_basis.transform_matrix(to_basis)
 
 
-def build_basis_pair(mx, from_basis, to_basis):
+def create_basis_pair(mx, from_basis, to_basis):
     """
     Constructs bases from transforming `mx` between two basis names.
 
@@ -274,9 +274,9 @@ def build_basis_pair(mx, from_basis, to_basis):
     if a and b:
         pass  # no Basis creation needed
     elif a and not b:  # only from_basis is a Basis
-        to_basis = from_basis.equivalent(to_basis)
+        to_basis = from_basis.create_equivalent(to_basis)
     elif b and not a:  # only to_basis is a Basis
-        from_basis = to_basis.equivalent(from_basis)
+        from_basis = to_basis.create_equivalent(from_basis)
     else:  # neither ar Basis objects (assume they're strings)
         to_basis = BuiltinBasis(to_basis, dim)
         from_basis = BuiltinBasis(from_basis, dim)
@@ -284,7 +284,7 @@ def build_basis_pair(mx, from_basis, to_basis):
     return from_basis, to_basis
 
 
-def build_basis_for_matrix(mx, basis):
+def create_basis_for_matrix(mx, basis):
     """
     Construct a Basis object with type given by `basis` and dimension approprate for transforming `mx`.
 
@@ -358,12 +358,12 @@ def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
     #print('Dims: ({} to {})'.format(std_basis_1.dim, std_basis_2.dim))
     if resize == 'expand':
         assert std_basis_1.dim < std_basis_2.dim
-        right = _np.dot(mx, std_basis_1.get_from_element_std())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
-        mid = _np.dot(std_basis_1.get_to_element_std(), right)  # want Ai st.   Ai * A = I(dim)
+        right = _np.dot(mx, std_basis_1.from_elementstd_transform_matrix())  # (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
+        mid = _np.dot(std_basis_1.to_elementstd_transform_matrix(), right)  # want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
         assert std_basis_1.dim > std_basis_2.dim
-        right = _np.dot(mx, std_basis_2.get_to_element_std())  # (dim,dim) (dim,expdim) => dim,expdim
-        mid = _np.dot(std_basis_2.get_from_element_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
+        right = _np.dot(mx, std_basis_2.to_elementstd_transform_matrix())  # (dim,dim) (dim,expdim) => dim,expdim
+        mid = _np.dot(std_basis_2.from_elementstd_transform_matrix(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
     return mid
 
 
@@ -394,8 +394,8 @@ def flexible_change_basis(mx, start_basis, end_basis):
         resize = 'expand'
     else:
         resize = 'contract'
-    stdBasis1 = start_basis.equivalent('std')
-    stdBasis2 = end_basis.equivalent('std')
+    stdBasis1 = start_basis.create_equivalent('std')
+    stdBasis2 = end_basis.create_equivalent('std')
     #start = change_basis(mx, start_basis, stdBasis1)
     mid = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
     end = change_basis(mid, stdBasis2, end_basis)

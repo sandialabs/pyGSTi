@@ -36,17 +36,17 @@ class CodecsTestCase(BaseTestCase):
         super(CodecsTestCase, self).setUp()
         self.model = std.target_model()
 
-        self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
+        self.germs = pygsti.construction.to_circuits( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
         self.op_labels = list(self.model.operations.keys())
 
-        self.lsgstStrings = pygsti.construction.make_lsgst_lists(
+        self.lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
             self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
-        self.ds = pygsti.construction.generate_fake_data(
+        self.ds = pygsti.construction.simulate_data(
             self.datagen_gateset, self.lsgstStrings[-1],
             n_samples=1000,sample_error='binomial', seed=100)
 
@@ -59,7 +59,7 @@ class CodecsTestCase(BaseTestCase):
         self.mdl_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.mdl_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
-        self.results = self.runSilent(pygsti.do_long_sequence_gst,
+        self.results = self.runSilent(pygsti.run_long_sequence_gst,
                                      self.ds, std.target_model(), self.fiducials, self.fiducials,
                                      self.germs, self.maxLens)
 
@@ -104,7 +104,7 @@ class TestCodecs(CodecsTestCase):
         s = json.dumps(self.ds)
         x = json.loads(s)
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
-        self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
+        self.assertEqual(x[('Gx',)].to_dict(), self.ds[('Gx',)].to_dict())
 
         # Model
         s = json.dumps(self.datagen_gateset)
@@ -170,7 +170,7 @@ class TestCodecs(CodecsTestCase):
         s = msgpack.dumps(self.ds)
         x = msgpack.loads(s)
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
-        self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
+        self.assertEqual(x[('Gx',)].to_dict(), self.ds[('Gx',)].to_dict())
 
         # Model
         s = msgpack.dumps(self.datagen_gateset)
@@ -225,7 +225,7 @@ class TestCodecs(CodecsTestCase):
         s = pickle.dumps(self.ds)
         x = pickle.loads(s)
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
-        self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
+        self.assertEqual(x[('Gx',)].to_dict(), self.ds[('Gx',)].to_dict())
 
         # Model
         s = pickle.dumps(self.datagen_gateset)
@@ -260,55 +260,55 @@ class TestCodecs(CodecsTestCase):
             x = pickle.loads(s)
 
     def test_std_decode(self):
-        # test decode_std_base function since it isn't easily reached/covered:
+        # test _decode_std_base function since it isn't easily reached/covered:
         binary = False
 
         mock_json_obj = {'__tuple__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__list__': ['a','b']}
-        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,[],binary)
+        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,[],binary)
 
         mock_json_obj = {'__set__': ['a','b']}
-        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,set(),binary)
+        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,set(),binary)
 
         mock_json_obj = {'__ndict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,{},binary)
+        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,{},binary)
 
         mock_json_obj = {'__odict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,collections.OrderedDict(),binary)
+        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,collections.OrderedDict(),binary)
 
         mock_json_obj = {'__uuid__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__ndarray__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__npgeneric__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__complex__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__counter__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
         mock_json_obj = {'__slice__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
 
 
     def test_helpers(self):
-        pygsti.io.jsoncodec.tostr("Hi")
-        pygsti.io.jsoncodec.tostr(b"Hi")
-        pygsti.io.jsoncodec.tobin("Hi")
-        pygsti.io.jsoncodec.tobin(b"Hi")
+        pygsti.io.jsoncodec._tostr("Hi")
+        pygsti.io.jsoncodec._tostr(b"Hi")
+        pygsti.io.jsoncodec._tobin("Hi")
+        pygsti.io.jsoncodec._tobin(b"Hi")
 
     def test_pickle_dataset_with_circuitlabels(self):
         #A later-added test checking whether Circuits containing CiruitLabels

@@ -172,7 +172,7 @@ class StabilizerFrame(object):
         # of clifford_update for this state
         self._rref()
 
-    def torep(self):
+    def to_rep(self):
         """
         Return a "representation" object for this StabilizerFrame
 
@@ -572,7 +572,7 @@ class StabilizerFrame(object):
 
         # Below we calculate the s and p for the output state using the formulas from
         # Hostens and De Moor PRA 71, 042315 (2005).
-        out_s = _mtx.dotmod2(s, self.s)
+        out_s = _mtx.dot_mod2(s, self.s)
 
         inner = _np.dot(_np.dot(_np.transpose(s), self.u), s)
         vec1 = _np.dot(_np.transpose(self.s), p - _mtx.diagonal_as_vec(inner))
@@ -583,7 +583,7 @@ class StabilizerFrame(object):
         for i in range(len(self.ps)):
             self.ps[i] = (self.ps[i] + vec1 + vec2) % 4
 
-    def get_state_str(self):
+    def format_state(self):
         """
         Get a string representing the full ip-th stabilizer state (w/global phase)
 

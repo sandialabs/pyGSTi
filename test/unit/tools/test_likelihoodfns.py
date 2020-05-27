@@ -22,7 +22,7 @@ class LikelihoodFunctionsTester(LikelihoodFunctionsBase):
 class LogLTester(LikelihoodFunctionsBase):
     def setUp(self):
         super(LogLTester, self).setUp()
-        self.circuits = construction.circuit_list([('Gx',), ('Gy',), ('Gx', 'Gx')])
+        self.circuits = construction.to_circuits([('Gx',), ('Gy',), ('Gx', 'Gx')])
 
     def test_logl(self):
         L1 = lfn.logl(self.model, self.ds, self.circuits,
@@ -72,8 +72,8 @@ class LogLTester(LikelihoodFunctionsBase):
         # TODO assert correctness
 
     def test_two_delta_logl(self):
-        twoDelta1 = lfn.two_delta_loglfn(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=True)
-        twoDelta2 = lfn.two_delta_loglfn(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=False)
+        twoDelta1 = lfn.two_delta_logl_term(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=True)
+        twoDelta2 = lfn.two_delta_logl_term(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=False)
         # TODO assert correctness
 
     def test_no_gatestrings(self):

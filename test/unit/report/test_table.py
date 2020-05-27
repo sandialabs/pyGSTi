@@ -16,7 +16,7 @@ class TableInstanceTester(BaseCase):
         self.table = ReportTable(self.custom_headings, ['Normal'] * 4)  # Four formats
 
     def test_element_accessors(self):
-        self.table.addrow(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
 
         self.assertTrue('1.0' in self.table)
 
@@ -35,19 +35,19 @@ class TableInstanceTester(BaseCase):
         # TODO assert correctness
 
     def test_render_HTML(self):
-        self.table.addrow(['1.0'], ['Normal'])
-        self.table.addrow(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
         render = self.table.render('html')
         # TODO assert correctness
 
     def test_render_LaTeX(self):
-        self.table.addrow(['1.0'], ['Normal'])
-        self.table.addrow(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
         render = self.table.render('latex')
         # TODO assert correctness
 
     def test_finish(self):
-        self.table.addrow(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
         self.table.finish()
         # TODO assert correctness
 
@@ -82,7 +82,7 @@ class CustomHeadingTableTester(TableInstanceTester):
         self.table = ReportTable([0.1], ['Normal'], self.custom_headings)
 
     def test_labels(self):
-        self.table.addrow(['1.0'], ['Normal'])
+        self.table.add_row(['1.0'], ['Normal'])
         self.assertTrue('1.0' in self.table)
 
         rowLabels = list(self.table.keys())

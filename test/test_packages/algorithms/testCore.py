@@ -21,8 +21,8 @@ class TestCoreMethods(AlgorithmsBase):
         ds = self.ds
 
         print("GG0 = ",self.model.default_gauge_group)
-        mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
-        mdl_lgst_verb = self.runSilent(pygsti.do_lgst, ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=10)
+        mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
+        mdl_lgst_verb = self.runSilent(pygsti.run_lgst, ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=10)
         self.assertAlmostEqual(mdl_lgst.frobeniusdist(mdl_lgst_verb),0)
 
         print("GG = ",mdl_lgst.default_gauge_group)
@@ -47,11 +47,11 @@ class TestCoreMethods(AlgorithmsBase):
         #change rep-count type so dataset can hold fractional counts for sampleError = 'none'
         oldType = pygsti.objects.dataset.Repcount_type
         pygsti.objects.dataset.Repcount_type = np.float64
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+        ds = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
                                                     n_samples=10000, sample_error='none')
         pygsti.objects.dataset.Repcount_type = oldType
 
-        mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
+        mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
         print("DATAGEN:")
         print(self.datagen_gateset)
         print("\nLGST RAW:")
@@ -69,9 +69,9 @@ class TestCoreMethods(AlgorithmsBase):
         nSamplesList = np.array([ 16, 128, 1024, 8192 ])
         diffs = []
         for nSamples in nSamplesList:
-            ds = pygsti.construction.generate_fake_data(my_datagen_gateset, self.lgstStrings, nSamples,
+            ds = pygsti.construction.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                         sample_error='binomial', seed=100)
-            mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
+            mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
             mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, check_jac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(mdl_lgst_go) )
 

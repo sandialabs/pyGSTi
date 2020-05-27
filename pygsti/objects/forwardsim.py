@@ -78,7 +78,7 @@ class ForwardSimulator(object):
 
         self.paramvec = paramvec
         self.Np = len(paramvec)
-        self.evotype = layer_op_server.get_evotype()
+        self.evotype = layer_op_server.evotype()
 
     def to_vector(self):
         """
@@ -145,7 +145,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         simplified_circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
             This is a "simplified" circuit in that it should not contain any
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
@@ -169,7 +169,7 @@ class ForwardSimulator(object):
 
         for raw_circuit, elabels in raw_dict.items():
             # evaluate spamTuples w/same rholabel together
-            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
+            for pval in self._prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
                 probs[outcomeLbls[iOut]] = pval; iOut += 1
         return probs
 
@@ -180,7 +180,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         simplified_circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
             This is a "simplified" circuit in that it should not contain any
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
@@ -204,7 +204,7 @@ class ForwardSimulator(object):
         iOut = 0  # outcome index
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
-                dprobs[outcomeLbls[iOut]] = self.dpr(
+                dprobs[outcomeLbls[iOut]] = self._dpr(
                     (raw_circuit[0], elabel), raw_circuit[1:], return_pr, clip_to)
                 iOut += 1
         return dprobs
@@ -216,7 +216,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         simplified_circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the operation sequence.
+            The sequence of operation labels specifying the circuit.
             This is a "simplified" circuit in that it should not contain any
             POVM or Instrument labels (but can have effect or Instrument-member
             labels).
@@ -244,7 +244,7 @@ class ForwardSimulator(object):
         iOut = 0  # outcome index
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
-                hprobs[outcomeLbls[iOut]] = self.hpr(
+                hprobs[outcomeLbls[iOut]] = self._hpr(
                     (raw_circuit[0], elabel), raw_circuit[1:], return_pr, return_deriv, clip_to)
                 iOut += 1
         return hprobs
@@ -257,17 +257,17 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original operation sequences.
+            The list of (non-simplified) original circuits.
 
         eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
         el_indices : dict
-            A dictionary of indices for each original operation sequence.
+            A dictionary of indices for each original circuit.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            operation sequence.
+            circuit.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
@@ -316,17 +316,17 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original operation sequences.
+            The list of (non-simplified) original circuits.
 
         eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
         el_indices : dict
-            A dictionary of indices for each original operation sequence.
+            A dictionary of indices for each original circuit.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            operation sequence.
+            circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -405,17 +405,17 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original operation sequences.
+            The list of (non-simplified) original circuits.
 
         eval_tree : EvalTree
             An evalution tree corresponding to `circuits`.
 
         el_indices : dict
-            A dictionary of indices for each original operation sequence.
+            A dictionary of indices for each original circuit.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            operation sequence.
+            circuit.
 
         return_pr : bool, optional
             when set to True, additionally return the probabilities.
@@ -523,7 +523,7 @@ class ForwardSimulator(object):
         ----------
         simplified_circuits : list
             A list of Circuits or tuples of operation labels which specify
-            the operation sequences to create an evaluation tree out of
+            the circuits to create an evaluation tree out of
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
@@ -538,7 +538,7 @@ class ForwardSimulator(object):
         -------
         EvalTree
         """
-        raise NotImplementedError("construct_evaltree(...) is not implemented!")
+        raise NotImplementedError("create_evaltree(...) is not implemented!")
 
     def _set_param_block_size(self, wrt_filter, wrt_block_size, comm):
         if wrt_filter is None:
@@ -585,7 +585,7 @@ class ForwardSimulator(object):
         Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -791,12 +791,12 @@ class ForwardSimulator(object):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the operation sequences.
+        the circuits.
 
         Parameters
         ----------
         eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            given by a prior call to bulk_evaltree.  Specifies the circuits
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list
@@ -830,7 +830,7 @@ class ForwardSimulator(object):
             arrays of shape K x S x B x B', where:
 
             - K is the length of spam_label_rows,
-            - S is the number of operation sequences (i.e. eval_tree.num_final_strings()),
+            - S is the number of circuits (i.e. eval_tree.num_final_circuits()),
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 

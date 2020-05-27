@@ -22,7 +22,7 @@ from .basistools import *
 from .optools import *
 from .slicetools import *
 from .legacytools import *
-from .mpitools import parallel_apply, get_comm
+from .mpitools import parallel_apply, mpi4py_comm
 from .symplectic import *
 from .matrixmod2 import *
 from .hypothesis import *

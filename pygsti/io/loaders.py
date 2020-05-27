@@ -40,7 +40,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
         written after loading from filename.
 
     collision_action : {"aggregate", "keepseparate"}
-        Specifies how duplicate operation sequences should be handled.  "aggregate"
+        Specifies how duplicate circuits should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
@@ -72,7 +72,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
     DataSet
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved Dataset object is ok
         ds = _objs.DataSet(file_to_load_from=filename)
@@ -139,7 +139,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
         written after loading from filename.
 
     collision_action : {"aggregate", "keepseparate"}
-        Specifies how duplicate operation sequences should be handled.  "aggregate"
+        Specifies how duplicate circuits should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
@@ -161,7 +161,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     MultiDataSet
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
         mds = _objs.MultiDataSet(file_to_load_from=filename)
@@ -204,7 +204,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     return mds
 
 
-def load_tddataset(filename, cache=False, record_zero_counts=True):
+def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
     """
     Load time-dependent (time-stamped) data as a DataSet.
 
@@ -244,7 +244,7 @@ def load_model(filename):
     -------
     Model
     """
-    return _stdinput.read_model(filename)
+    return _stdinput.parse_model(filename)
 
 
 def load_circuit_dict(filename):
@@ -258,8 +258,7 @@ def load_circuit_dict(filename):
 
     Returns
     -------
-    Dictionary with keys = operation sequence labels and
-        values = Circuit objects.
+    Dictionary with keys = circuit labels and values = :class:`Circuit` objects.
     """
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
@@ -275,8 +274,7 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
         The name of the file
 
     read_raw_strings : boolean
-        If True, operation sequences are not converted
-        to tuples of operation labels.
+        If True, circuits are not converted to :class:`Circuit` objects.
 
     line_labels : iterable, optional
         The (string valued) line labels used to initialize :class:`Circuit`
@@ -329,7 +327,7 @@ def load_protocol_from_dir(dirname, quick_load=False, comm=None):
     Protocol
     """
     dirname = _pathlib.Path(dirname)
-    return _metadir.cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
+    return _metadir._cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
 
 
 def load_edesign_from_dir(dirname, quick_load=False, comm=None):
@@ -354,7 +352,7 @@ def load_edesign_from_dir(dirname, quick_load=False, comm=None):
     ExperimentDesign
     """
     dirname = _pathlib.Path(dirname)
-    return _metadir.cls_from_meta_json(dirname / 'edesign').from_dir(dirname, quick_load=quick_load)
+    return _metadir._cls_from_meta_json(dirname / 'edesign').from_dir(dirname, quick_load=quick_load)
 
 
 def load_data_from_dir(dirname, quick_load=False, comm=None):
@@ -379,7 +377,7 @@ def load_data_from_dir(dirname, quick_load=False, comm=None):
     ProtocolData
     """
     dirname = _pathlib.Path(dirname)
-    return _metadir.cls_from_meta_json(dirname / 'data').from_dir(dirname, quick_load=quick_load)
+    return _metadir._cls_from_meta_json(dirname / 'data').from_dir(dirname, quick_load=quick_load)
 
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=False, comm=None):
@@ -423,8 +421,8 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=Fa
     dirname = _pathlib.Path(dirname)
     results_dir = dirname / 'results'
     if name is None:  # then it's a directory object
-        cls = _metadir.cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
+        cls = _metadir._cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
             else _ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
         return cls.from_dir(dirname, quick_load=quick_load)
     else:  # it's a ProtocolResults object
-        return _metadir.cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data, quick_load)
+        return _metadir._cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data, quick_load)

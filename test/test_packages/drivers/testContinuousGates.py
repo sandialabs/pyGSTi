@@ -96,7 +96,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         self.assertEqual(len(allStrs), 167)
 
         #Generate some data for these sequences (simulates an implicit model with factory)
-        mdl_datagen = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl_datagen = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
 
         mdl_datagen.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
@@ -106,16 +106,16 @@ class ContinuousGatesTestCase(BaseTestCase):
         np.random.seed(4567)
         datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params())
         mdl_datagen.from_vector(datagen_vec)
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, allStrs, 1000, seed=1234)
+        ds = pygsti.construction.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
 
         #Run GST
-        mdl = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
         mdl.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
         mdl.set_simtype('map')  # must use map calcs with factories (at least for now, since matrix eval trees don't know about all possible gates?)
         #mdl.from_vector( datagen_vec ) # DEBUG - used to see at where optimization should get us...
 
-        results = pygsti.do_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)
+        results = pygsti.run_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)
 
         _, nSigma, pval = pygsti.two_delta_logl(results.estimates[results.name].models['final iteration estimate'], results.dataset,
                             dof_calc_method="all")

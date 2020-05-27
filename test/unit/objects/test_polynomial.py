@@ -26,7 +26,7 @@ class CompactPolynomialTester(BaseCase):
         c = np.ascontiguousarray(c, complex)
 
         vout, cout = compact_deriv(v, c, np.array([1, 2, 3]))
-        compact_polys = poly.bulk_load_compact_polys(vout, cout, keep_compact=True)
+        compact_polys = poly.bulk_load_compact_polynomials(vout, cout, keep_compact=True)
 
         def assertCompactPolysEqual(vctups1, vctups2):
             for (v1, c1), (v2, c2) in zip(vctups1, vctups2):
@@ -41,7 +41,7 @@ class CompactPolynomialTester(BaseCase):
                                     (np.array([1, 2, 2, 3]), np.array([12. + 0.j])),
                                     (np.array([1, 2, 2, 2]), np.array([6. + 0.j]))))
 
-        polys = poly.bulk_load_compact_polys(vout, cout)
+        polys = poly.bulk_load_compact_polynomials(vout, cout)
         self.assertEqual(str(polys[0]), "6.000x1x2 + 2.000x2")
         self.assertEqual(str(polys[1]), "2.000x1 + 3.000x1^2")
         self.assertEqual(str(polys[2]), "0")

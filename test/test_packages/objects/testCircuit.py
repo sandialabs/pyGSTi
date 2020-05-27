@@ -27,8 +27,8 @@ class CircuitTestCase(BaseTestCase):
 
             tgt = std1Q_XYI.target_model()
             for N,zeroProb in zip((1,2,10,100,10000),(0.5, 0, 0, 1, 1)):
-                p1 = tgt.probs(('Gi',) + ('Gy',)*N)
-                p2 = tgt.probs( Gi + Gy*N )
+                p1 = tgt.probabilities(('Gi',) + ('Gy',)*N)
+                p2 = tgt.probabilities( Gi + Gy*N )
                 self.assertAlmostEqual(p1['0'], zeroProb)
                 self.assertAlmostEqual(p2['0'], zeroProb)
         finally:
@@ -36,7 +36,7 @@ class CircuitTestCase(BaseTestCase):
 
     def test_replace_with_idling_line(self):
         c = pygsti.obj.Circuit( [('Gcnot',0,1)], editable=True)
-        c.replace_with_idling_line(0)
+        c.replace_with_idling_line_inplace(0)
         self.assertEqual(c.layertup, ((),))
 
 if __name__ == "__main__":

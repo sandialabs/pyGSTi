@@ -24,7 +24,7 @@ from . import circuitconstruction as _gstrc
 from pprint import pprint
 
 
-def generate_fake_data(model_or_dataset, circuit_list, n_samples,
+def simulate_data(model_or_dataset, circuit_list, n_samples,
                        sample_error="multinomial", seed=None, rand_state=None,
                        alias_dict=None, collision_action="aggregate",
                        record_zero_counts=True, comm=None, mem_limit=None, times=None):
@@ -43,11 +43,11 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     n_samples : int or list of ints or None
-        The simulated number of samples for each operation sequence.  This only has
+        The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
-        integer, all operation sequences have this number of total samples. If a list,
+        integer, all circuits have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        operation sequence.  If ``None``, then `model_or_dataset` must be a
+        circuit.  If ``None``, then `model_or_dataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
         (on a per-circuit basis).
 
@@ -62,7 +62,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution.  Distribution has parameters p = (clipped) probability
-          of the operation sequence and n = number of samples.  This can only be used
+          of the circuit and n = number of samples.  This can only be used
           when there are exactly two SPAM labels in model_or_dataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = (clipped) probability of the gate
@@ -80,12 +80,12 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
 
     alias_dict : dict, optional
         A dictionary mapping single operation labels into tuples of one or more
-        other operation labels which translate the given operation sequences before values
+        other operation labels which translate the given circuits before values
         are computed using `model_or_dataset`.  The resulting Dataset, however,
-        contains the *un-translated* operation sequences as keys.
+        contains the *un-translated* circuits as keys.
 
     collision_action : {"aggregate", "keepseparate"}
-        Determines how duplicate operation sequences are handled by the resulting
+        Determines how duplicate circuits are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     record_zero_counts : bool, optional
@@ -111,7 +111,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
     Returns
     -------
     DataSet
-        A static data set filled with counts for the specified operation sequences.
+        A static data set filled with counts for the specified circuits.
     """
     NTOL = 10
     TOL = 10**-NTOL
@@ -159,7 +159,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
                     if times is None:
                         ps = all_probs[trans_s]
                     else:
-                        ps = gsGen.probs(trans_s, time=tm)
+                        ps = gsGen.probabilities(trans_s, time=tm)
 
                     if sample_error in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
@@ -254,7 +254,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
     return dataset
 
 
-def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
+def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     """
     Creates a DataSet which merges certain outcomes in input DataSet.
 
@@ -273,7 +273,7 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_dataset` which also updates the operation sequences.
+        to use :function:`filter_dataset` which also updates the circuits.
 
     record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
@@ -293,11 +293,11 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcome_labels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-    if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
+    if not set(dataset.outcome_labels()).issubset(merge_dict_old_outcomes):
         raise ValueError(
             "`label_merge_dict` must account for all the outcomes in original dataset."
             " It's missing directives for:\n%s" %
-            '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+            '\n'.join(set(map(str, dataset.outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
         )
 
     # New code that works for time-series data.
@@ -333,11 +333,11 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     return merged_dataset
 
 
-def create_qubit_merge_dict(n_qubits, qubits_to_keep):
+def _create_qubit_merge_dict(n_qubits, qubits_to_keep):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
+    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
 
-    The returned dictionary instructs `merge_outcomes` to aggregate all but
+    The returned dictionary instructs `aggregate_dataset_outcomes` to aggregate all but
     the specified `qubits_to_keep` when the outcome labels are those of
     `n_qubits` qubits (i.e. strings of 0's and 1's).
 
@@ -349,19 +349,19 @@ def create_qubit_merge_dict(n_qubits, qubits_to_keep):
     qubits_to_keep : list
         A list of integers specifying which qubits should be kept, that is,
         *not* aggregated, when the returned dictionary is passed to
-        `merge_outcomes`.
+        `aggregate_dataset_outcomes`.
 
     Returns
     -------
     dict
     """
     outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=n_qubits)]
-    return create_merge_dict(qubits_to_keep, outcome_labels)
+    return _create_merge_dict(qubits_to_keep, outcome_labels)
 
 
-def create_merge_dict(indices_to_keep, outcome_labels):
+def _create_merge_dict(indices_to_keep, outcome_labels):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
+    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
 
     Each element of `outcome_labels` should be a n-character string (or a
     1-tuple of such a string).  The returned dictionary's keys will be all the
@@ -381,7 +381,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     ----------
     indices_to_keep : list
         A list of integer indices specifying which character positions should be
-        kept (i.e. *not* aggregated together by `merge_outcomes`).
+        kept (i.e. *not* aggregated together by `aggregate_dataset_outcomes`).
 
     outcome_labels : list
         A list of the outcome labels to potentially merge.  This can be a list
@@ -414,7 +414,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     `sectors_to_keep` (e.g. an idle gate acting on *all* sectors because it's
     `.sslbls` is None will *not* be removed).
 
-    Here "sectors" are state-space labels, present in the operation sequences of
+    Here "sectors" are state-space labels, present in the circuits of
     `dataset`.  Each sector also corresponds to a particular character position
     within the outcomes labels of `dataset`.  Thus, for this function to work,
     the outcome labels of `dataset` must all be 1-tuples whose sole element is
@@ -422,7 +422,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     a single sector.  If the state-space labels are integers, then they can
     serve as both a label and an outcome-string position.  The argument
     `new_sectors` may be given to rename the kept state-space labels in the
-    returned `DataSet`'s operation sequences.
+    returned `DataSet`'s circuits.
 
     A typical case is when the state-space is that of *n* qubits, and the
     state space labels the intergers 0 to *n-1*.  As stated above, in this
@@ -451,7 +451,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
 
     new_sectors : list or tuple, optional
         New sectors names to map the elements of `sectors_to_keep` onto in the
-        output DataSet's operation sequences.  None means the labels are not renamed.
+        output DataSet's circuits.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
         that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and
@@ -474,15 +474,15 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     Returns
     -------
     filtered_dataset : DataSet object
-        The DataSet with outcomes and operation sequences filtered as described above.
+        The DataSet with outcomes and circuits filtered as described above.
     """
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep
 
-    #ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
-    #                                                     dataset.get_outcome_labels()),
+    #ds_merged = dataset.aggregate_outcomes(_create_merge_dict(sindices_to_keep,
+    #                                                     dataset.outcome_labels()),
     #                                   record_zero_counts=record_zero_counts)
-    ds_merged = dataset.merge_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
+    ds_merged = dataset.aggregate_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
 
     ds_merged = ds_merged.copy_nonstatic()
     if filtercircuits:
@@ -514,7 +514,7 @@ def trim_to_constant_numtimesteps(ds):
     trimmedds = ds.copy_nonstatic()
     numtimes = []
     for circuit in ds.keys():
-        numtimes.append(ds[circuit].get_number_of_times())
+        numtimes.append(ds[circuit].number_of_times())
     minnumtimes = min(numtimes)
 
     for circuit in ds.keys():
@@ -528,7 +528,7 @@ def trim_to_constant_numtimesteps(ds):
     return trimmedds
 
 
-def subsample_timeseries_data(ds, step):
+def _subsample_timeseries_data(ds, step):
     """
     Creates a :class:`DataSet` where each circuit's data is sub-sampled.
 
@@ -552,7 +552,7 @@ def subsample_timeseries_data(ds, step):
     """
     subsampled_ds = ds.copy_nonstatic()
     for circ in ds.keys():
-        times, odicts = ds[circ].get_timeseries_for_outcomes()
+        times, odicts = ds[circ].timeseries_for_outcomes()
         newtimes = []
         newseries = []
         for i in range(len(times)):

@@ -161,7 +161,7 @@ def find_replace_tuple_list(list_of_tuples, alias_dict):
     return [find_replace_tuple(t, alias_dict) for t in list_of_tuples]
 
 
-def apply_aliases_to_circuit_list(list_of_circuits, alias_dict):
+def apply_aliases_to_circuits(list_of_circuits, alias_dict):
     """
     Applies `alias_dict` to the circuits in `list_of_circuits`.
 

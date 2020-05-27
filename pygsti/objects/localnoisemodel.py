@@ -159,7 +159,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     """
 
     @classmethod
-    def build_from_parameterization(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
+    def from_parameterization(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
                                     custom_gates=None, availability=None, qubit_labels=None,
                                     geometry="line", parameterization='static', evotype="auto",
                                     sim_type="auto", on_construction_error='raise',
@@ -333,7 +333,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         """
         if custom_gates is None: custom_gates = {}
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-        std_unitaries = _itgs.get_standard_gatename_unitaries()
+        std_unitaries = _itgs.standard_gatename_unitaries()
 
         if evotype == "auto":  # same logic as in LocalNoiseModel
             if parameterization == "clifford": evotype = "stabilizer"
@@ -365,7 +365,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             if lbl not in gate_names: gatedict[lbl] = gate
 
         if evotype in ("densitymx", "svterm", "cterm"):
-            from ..construction import basis_build_vector as _basis_build_vector
+            from ..construction import _basis_create_spam_vector as _basis_build_vector
             basis1Q = _BuiltinBasis("pp", 4)
             v0 = _basis_build_vector("0", basis1Q)
             v1 = _basis_build_vector("1", basis1Q)
@@ -630,7 +630,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #REMOVE self.gatedict = _collections.OrderedDict()  # ops (unused) as numpy arrays (so copying is clean)
         for gn, gate in gatedict.items():
             if isinstance(gate, _op.LinearOperator):
-                #REMOVE self.gatedict[gn] = gate.todense()
+                #REMOVE self.gatedict[gn] = gate.to_dense()
                 mm_gatedict[gn] = gate
             elif isinstance(gate, _opfactory.OpFactory):
                 # don't store factories in self.gatedict for now (no good dense representation)
@@ -655,7 +655,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #    else: evotype = "densitymx"  # everything else
 
         if evotype in ("densitymx", "svterm", "cterm"):
-            from ..construction import basis_build_vector as _basis_build_vector
+            from ..construction import _basis_create_spam_vector as _basis_build_vector
             basis1Q = _BuiltinBasis("pp", 4)
         elif evotype == "statevec":
             basis1Q = _BuiltinBasis("sv", 2)
@@ -680,7 +680,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
             #Only extract qubit labels from the first tensor-product block...
 
-        super(LocalNoiseModel, self).__init__(qubit_sslbls, basis1Q.name, {}, SimpleCompLayerLizard, {},
+        super(LocalNoiseModel, self).__init__(qubit_sslbls, basis1Q.name, {}, _SimpleCompLayerLizard, {},
                                               sim_type=sim_type, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
@@ -856,7 +856,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #(no instruments)
 
 
-class SimpleCompLayerLizard(_ImplicitLayerLizard):
+class _SimpleCompLayerLizard(_ImplicitLayerLizard):
     """
     The layer lizard class for a :class:`LocalNoiseModel`.
 
@@ -868,7 +868,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
     for ordering.
     """
 
-    def get_prep(self, layerlbl):
+    def prep(self, layerlbl):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
@@ -883,7 +883,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         """
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def get_effect(self, layerlbl):
+    def effect(self, layerlbl):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
@@ -902,7 +902,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
             if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.e_label_to_povm(layerlbl)
+                povmName = _gt.effect_label_to_povm(layerlbl)
                 if povmName in self.povm_blks['layers']:
                     # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                     # are not present in the stored POVM's label.
@@ -914,7 +914,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
                     return self.effect_blks['layers'][layerlbl]
         raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
-    def get_operation(self, layerlbl):
+    def operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
 
@@ -938,18 +938,17 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
-            return self.get_layer_component_operation(components[0], dense)
+            return self._layer_component_operation(components[0], dense)
         else:
             gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            ret = Composed(gblIdle + [self.get_layer_component_operation(l, dense) for l in components],
+            ret = Composed(gblIdle + [self._layer_component_operation(l, dense) for l in components],
                            dim=self.model.dim,
                            evotype=self.model._evotype)
             self.model._init_virtual_obj(ret)  # so ret's gpindices get set
             return ret
 
-    #PRIVATE
-    def get_layer_component_operation(self, complbl, dense):
+    def _layer_component_operation(self, complbl, dense):
         """
         Retrieves the operation corresponding to one component of a layer operation.
 
@@ -966,7 +965,7 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         LinearOperator
         """
         if isinstance(complbl, _CircuitLabel):
-            return self.get_circuitlabel_op(complbl, dense)
+            return self._create_op_for_circuitlabel(complbl, dense)
         elif complbl in self.simpleop_blks['layers']:
             return self.simpleop_blks['layers'][complbl]
         else:

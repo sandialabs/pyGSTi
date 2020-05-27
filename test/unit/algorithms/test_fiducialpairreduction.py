@@ -52,9 +52,9 @@ class FiducialPairReductionStdData(object):
 class FiducialPairReductionSmallData(FiducialPairReductionStdData):
     def setUp(self):
         super(FiducialPairReductionSmallData, self).setUp()
-        self.preps = pc.circuit_list([('Gx',)])
+        self.preps = pc.to_circuits([('Gx',)])
         self.effects = self.preps
-        self.germs = pc.circuit_list([('Gx',), ('Gy',)])
+        self.germs = pc.to_circuits([('Gx',), ('Gy',)])
         self.fiducial_pairs = [(0, 0)]
 
 # TODO optimize!!!!
@@ -114,7 +114,7 @@ class SmallDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase
 
 class FindSufficientFiducialPairsExceptionTester(FiducialPairReductionStdData, BaseCase):
     def test_find_sufficient_fiducial_pairs_per_germ_raises_on_insufficient_fiducials(self):
-        insuff_fids = pc.circuit_list([('Gx',)])
+        insuff_fids = pc.to_circuits([('Gx',)])
         with self.assertRaises(ValueError):
             fpr.find_sufficient_fiducial_pairs_per_germ(
                 self.model, insuff_fids, insuff_fids, self.germs

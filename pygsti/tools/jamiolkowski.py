@@ -88,13 +88,13 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
     operation_mx = _np.asarray(operation_mx)
-    op_mx_basis = _bt.build_basis_for_matrix(operation_mx, op_mx_basis)
-    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.equivalent('std'))
+    op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.equivalent(
-        'std'), op_mx_basis.simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent(
+        'std'), op_mx_basis.create_simple_equivalent('std'))
 
     N = opMxInStdBasis.shape[0]  # dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
@@ -108,7 +108,7 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     if not isinstance(choi_mx_basis, _Basis):
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
-    BVec = choi_mx_basis.simple_equivalent().elements
+    BVec = choi_mx_basis.create_simple_equivalent().elements
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
@@ -162,7 +162,7 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _bt.basis_matrices(choi_mx_basis.simple_equivalent(), N)
+    BVec = _bt.basis_matrices(choi_mx_basis.create_simple_equivalent(), N)
     assert(len(BVec) == N)  # make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
@@ -179,10 +179,10 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       op_mx_basis.simple_equivalent('std'), op_mx_basis.equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'), op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, op_mx_basis.equivalent('std'), op_mx_basis)
+    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
 def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
@@ -212,12 +212,12 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
 
     #first, get operation matrix into std basis
     operation_mx = _np.asarray(operation_mx)
-    op_mx_basis = _bt.build_basis_for_matrix(operation_mx, op_mx_basis)
-    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.equivalent('std'))
+    op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.equivalent('std'),
-                                       op_mx_basis.simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent('std'),
+                                       op_mx_basis.create_simple_equivalent('std'))
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
@@ -261,17 +261,17 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
     opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
-    op_mx_basis = _bt.build_basis_for_matrix(opMxInStdBasis, op_mx_basis)
+    op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       op_mx_basis.simple_equivalent('std'), op_mx_basis.equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'), op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, op_mx_basis.equivalent('std'), op_mx_basis)
+    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
-def sum_of_negative_choi_evals(model, weights=None):
+def sum_of_negative_choi_eigenvalues(model, weights=None):
     """
     Compute the amount of non-CP-ness of a model.
 
@@ -295,20 +295,20 @@ def sum_of_negative_choi_evals(model, weights=None):
     """
     if weights is not None:
         default = weights.get('gates', 1.0)
-        sums = sums_of_negative_choi_evals(model)
+        sums = sums_of_negative_choi_eigenvalues(model)
         return sum([s * weights.get(gl, default)
                     for gl, s in zip(model.operations.keys(), sums)])
     else:
-        return sum(sums_of_negative_choi_evals(model))
+        return sum(sums_of_negative_choi_eigenvalues(model))
 
 
-def sums_of_negative_choi_evals(model):
+def sums_of_negative_choi_eigenvalues(model):
     """
     Compute the amount of non-CP-ness of a model.
 
     This is defined (somewhat arbitarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in model separately.
-    This function is different from :function:`sum_of_negative_choi_evals`
+    This function is different from :function:`sum_of_negative_choi_eigenvalues`
     in that it returns sums separately for each operation of `model`.
 
     Parameters
@@ -333,7 +333,7 @@ def sums_of_negative_choi_evals(model):
     return ret
 
 
-def mags_of_negative_choi_evals(model):
+def magnitudes_of_negative_choi_eigenvalues(model):
     """
     Compute the magnitudes of the negative eigenvalues of the Choi matricies for each gate in `model`.
 
@@ -351,7 +351,7 @@ def mags_of_negative_choi_evals(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.simple_equivalent('std'))
+        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append(-ev.real if ev.real < 0 else 0.0)

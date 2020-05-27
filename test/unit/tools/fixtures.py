@@ -20,14 +20,14 @@ def datagen_gateset(self):
 
 @ns.memo
 def expList(self):
-    return pygsti.construction.make_lsgst_experiment_list(
+    return pygsti.construction.create_lsgst_circuits(
         self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
 
 @ns.memo
 def dataset(self):
     # Was previously written to disk as 'analysis.dataset'
-    return pygsti.construction.generate_fake_data(
+    return pygsti.construction.simulate_data(
         self.datagen_gateset, self.expList, n_samples=10000,
         sample_error='binomial', seed=100
     )
@@ -35,7 +35,7 @@ def dataset(self):
 
 @ns.memo
 def mdl_lgst(self):
-    return pygsti.do_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
+    return pygsti.run_lgst(self.dataset, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
 
 
 @ns.memo
@@ -50,7 +50,7 @@ def mdl_clgst(self):
 
 @ns.memo
 def lsgstStrings(self):
-    return pygsti.construction.make_lsgst_lists(
+    return pygsti.construction.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )
@@ -61,7 +61,7 @@ def mdl_lsgst(self):
     chi2_builder = pygsti.obj.Chi2Function.builder(
         regularization={'min_prob_clip_for_weighting': 1e-6},
         penalties={'prob_clip_interval': (-1e6, 1e6)})
-    models, _, _ = pygsti.algorithms.core.do_iterative_gst(
+    models, _, _ = pygsti.algorithms.core.run_iterative_gst(
         self.dataset, self.mdl_clgst, self.lsgstStrings,
         optimizer=None,
         iteration_objfn_builders=[chi2_builder],

@@ -11,7 +11,7 @@ Utility functions related to Gram matrix construction.
 #***************************************************************************************************
 
 from .. import construction as _construction
-from .core import gram_rank_and_evals as _gram_rank_and_evals
+from .core import gram_rank_and_eigenvalues as _gram_rank_and_evals
 from ..objects import ComplementSPAMVec as _ComplementSPAMVec
 
 
@@ -19,7 +19,7 @@ from ..objects import ComplementSPAMVec as _ComplementSPAMVec
 ## Gram matrix stuff
 ########################################################
 
-def get_max_gram_basis(op_labels, dataset, max_length=0):
+def max_gram_basis(op_labels, dataset, max_length=0):
     """
     Compute a maximal set of basis circuits for a Gram matrix.
 
@@ -42,14 +42,14 @@ def get_max_gram_basis(op_labels, dataset, max_length=0):
     Returns
     -------
     list of tuples
-        where each tuple contains operation labels and specifies a single operation sequence.
+        where each tuple contains operation labels and specifies a single circuit.
     """
 
     datasetStrings = list(dataset.keys())
     minLength = min([len(s) for s in datasetStrings])
     if max_length <= 0:
         max_length = max([len(s) for s in datasetStrings])
-    possibleStrings = _construction.gen_all_circuits(op_labels, (minLength + 1) // 2, max_length // 2)
+    possibleStrings = _construction.iter_all_circuits(op_labels, (minLength + 1) // 2, max_length // 2)
 
     def _have_all_data(strings):
         for a in strings:
@@ -66,13 +66,13 @@ def get_max_gram_basis(op_labels, dataset, max_length=0):
     return max_string_set
 
 
-def max_gram_rank_and_evals(dataset, target_model, max_basis_string_length=10,
+def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length=10,
                             fixed_lists=None):
     """
     Compute the rank and singular values of a maximal Gram matrix.
 
     That is, compute the rank and singular values of the Gram matrix computed using the basis:
-    get_max_gram_basis(dataset.get_gate_labels(), dataset, max_basis_string_length).
+    max_gram_basis(dataset.gate_labels(), dataset, max_basis_string_length).
 
     Parameters
     ----------
@@ -80,15 +80,15 @@ def max_gram_rank_and_evals(dataset, target_model, max_basis_string_length=10,
         the dataset to use when constructing the Gram matrix
 
     target_model : Model
-        A model used to make sense of operation sequences and for the construction of
+        A model used to make sense of circuits and for the construction of
         a theoretical gram matrix and spectrum.
 
     max_basis_string_length : int, optional
         the maximum string length considered for Gram matrix basis
         elements.  Defaults to 10.
 
-    fixed_lists : (prep_strs, effect_strs), optional
-        2-tuple of operation sequence lists, specifying the preparation and
+    fixed_lists : (prep_fiducials, effect_fiducials), optional
+        2-tuple of :class:`Circuit` lists, specifying the preparation and
         measurement fiducials to use when constructing the Gram matrix,
         and thereby bypassing the search for such lists.
 
@@ -101,7 +101,7 @@ def max_gram_rank_and_evals(dataset, target_model, max_basis_string_length=10,
     if fixed_lists is not None:
         maxRhoStrs, maxEStrs = fixed_lists
     else:
-        maxRhoStrs = maxEStrs = get_max_gram_basis(dataset.get_gate_labels(),
+        maxRhoStrs = maxEStrs = max_gram_basis(dataset.gate_labels(),
                                                    dataset, max_basis_string_length)
 
     return _gram_rank_and_evals(dataset, maxRhoStrs, maxEStrs, target_model)

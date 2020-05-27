@@ -235,7 +235,7 @@ class MultiPassProtocol(Protocol):
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data, memlimit, comm)
             # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?
-            #  or call as_dict?
+            #  or call to_dict?
             results.passes[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
         return results
 
@@ -743,7 +743,7 @@ class ExperimentDesign(_TreeNode):
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
-        self.write_children(dirname)
+        self._write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
 
     def setup_nameddict(self, final_dict):
@@ -770,8 +770,7 @@ class ExperimentDesign(_TreeNode):
         keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
         return _NamedDict.create_nested(keys_vals_types, final_dict)
 
-    #PRIVATE
-    def create_subdata(self, subdata_name, dataset):
+    def _create_subdata(self, subdata_name, dataset):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
 
@@ -1009,8 +1008,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    #PRIVATE
-    def create_subdata(self, sub_name, dataset):
+    def _create_subdata(self, sub_name, dataset):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
 
@@ -1037,7 +1035,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             for tds in truncated_ds.values(): tds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         else:
             truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
-            #truncated_ds.add_outcome_labels(dataset.get_outcome_labels())  # make sure truncated ds has all outcomes
+            #truncated_ds.add_outcome_labels(dataset.outcome_labels())  # make sure truncated ds has all outcomes
             truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
@@ -1152,7 +1150,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
         super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    def create_subdata(self, qubit_labels, dataset):
+    def _create_subdata(self, qubit_labels, dataset):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
 
@@ -1298,7 +1296,7 @@ class ProtocolData(_TreeNode):
                 #dataset = _objs.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
-        cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
+        cache = _io._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
         ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
@@ -1360,7 +1358,7 @@ class ProtocolData(_TreeNode):
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
-        return self.edesign.create_subdata(key, self.dataset)
+        return self.edesign._create_subdata(key, self.dataset)
 
     @property
     def passes(self):
@@ -1386,10 +1384,10 @@ class ProtocolData(_TreeNode):
         """
         return isinstance(self.dataset, (_objs.MultiDataSet, dict))
 
-    #def get_tree_paths(self):
+    #def underlying_tree_paths(self):
     #    return self.edesign.get_tree_paths()
 
-    def filter_paths(self, paths, paths_are_sorted=False):
+    def prune_tree(self, paths, paths_are_sorted=False):
         """
         Prune the tree rooted here to include only the given paths, discarding all else.
 
@@ -1417,7 +1415,7 @@ class ProtocolData(_TreeNode):
                 if subname in src_data._vals:  # if we've actually created this sub-data...
                     ret._vals[subname] = build_data(subedesign, src_data._vals[subname])
             return ret
-        filtered_edesign = self.edesign.filter_paths(paths, paths_are_sorted)
+        filtered_edesign = self.edesign.prune_tree(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
     def write(self, dirname=None, parent=None):
@@ -1447,7 +1445,7 @@ class ProtocolData(_TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _io.obj_to_meta_json(self, data_dir)
+        _io._obj_to_meta_json(self, data_dir)
 
         if parent is None:
             self.edesign.write(dirname)  # otherwise assume parent has already written edesign
@@ -1466,7 +1464,7 @@ class ProtocolData(_TreeNode):
         if self.cache:
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
-        self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
+        self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
     def setup_nameddict(self, final_dict):
         """
@@ -1621,7 +1619,7 @@ class ProtocolResults(object):
         _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types',
                                         omit_attributes=() if write_protocol else ('protocol',))
 
-    def as_nameddict(self):
+    def to_nameddict(self):
         """
         Convert these results into nested :class:`NamedDict` objects.
 
@@ -1644,7 +1642,7 @@ class ProtocolResults(object):
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                vals[k] = v.as_nameddict()
+                vals[k] = v.to_nameddict()
             elif isinstance(v, _NamedDict):
                 vals[k] = v
             elif isinstance(v, dict):
@@ -1653,7 +1651,7 @@ class ProtocolResults(object):
                 vals[k] = v
         return vals
 
-    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
 
@@ -1680,13 +1678,13 @@ class ProtocolResults(object):
         -------
         DataFrame
         """
-        df = self.as_nameddict().as_dataframe()
+        df = self.to_nameddict().to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
         P = pprint.PrettyPrinter()
-        return P.pformat(self.as_nameddict())
+        return P.pformat(self.to_nameddict())
 
 
 class MultiPassResults(ProtocolResults):
@@ -1766,10 +1764,10 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = {}  # _NamedDict('Pass', 'category') - as_nameddict takes care of this
+        self.passes = {}  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
-    def as_nameddict(self):
+    def to_nameddict(self):
         """
         Create a :class:`NamedDict` of the results within this object.
 
@@ -1780,7 +1778,7 @@ class MultiPassResults(ProtocolResults):
         # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
         ret = _NamedDict('ProtocolName', 'category')
         for pass_name, r in self.passes.items():
-            sub = r.as_nameddict()  # should have outer-most 'ProtocolName' dict
+            sub = r.to_nameddict()  # should have outer-most 'ProtocolName' dict
             assert(sub.keyname == 'ProtocolName' and len(sub) == 1)
             pname = r.protocol.name  # also list(sub.keys())[0]
             if pname not in ret:
@@ -1863,7 +1861,7 @@ class ProtocolResultsDir(_TreeNode):
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
-                    results[pth.name] = _io.cls_from_meta_json(pth).from_dir(
+                    results[pth.name] = _io._cls_from_meta_json(pth).from_dir(
                         dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
@@ -1948,17 +1946,17 @@ class ProtocolResultsDir(_TreeNode):
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _io.obj_to_meta_json(self, results_dir)
+        _io._obj_to_meta_json(self, results_dir)
 
         #write the results
         for name, results in self.for_protocol.items():
             assert(results.name == name)
             results.write(dirname, data_already_written=True)
 
-        self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+        self._write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
     def _result_namedicts_on_this_node(self):
-        nds = [v.as_nameddict() for v in self.for_protocol.values()]
+        nds = [v.to_nameddict() for v in self.for_protocol.values()]
         if len(nds) > 0:
             assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
                 "All protocols on a given node must return a NamedDict with the *same* root name!"  # eg "ProtocolName"
@@ -1976,7 +1974,7 @@ class ProtocolResultsDir(_TreeNode):
         for k, v in self.items():
             v._addto_bypath_nameddict(dest, path + (k,))
 
-    def as_nameddict(self):
+    def to_nameddict(self):
         """
         Convert the results in this object into nested :class:`NamedDict` objects.
 
@@ -1988,7 +1986,7 @@ class ProtocolResultsDir(_TreeNode):
         self._addto_bypath_nameddict(nd, path=())
         return nd
 
-    def as_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
 
@@ -2015,13 +2013,13 @@ class ProtocolResultsDir(_TreeNode):
         -------
         DataFrame
         """
-        df = self.as_nameddict().as_dataframe()
+        df = self.to_nameddict().to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
         P = pprint.PrettyPrinter()
-        return P.pformat(self.as_nameddict())
+        return P.pformat(self.to_nameddict())
 
 
 def run_default_protocols(data, memlimit=None, comm=None):
@@ -2150,9 +2148,8 @@ class ProtocolPostProcessor(object):
 # the classes that utilize it above, so it would become a proper method.
 def _convert_nameddict_attributes(obj):
     """
-    A helper function that converts the elements of the 
-    "_nameddict_attributes" attribute of several classes to
-    the (key, value, type) array expected by 
+    A helper function that converts the elements of the "_nameddict_attributes"
+    attribute of several classes to the (key, value, type) array expected by
     :method:`NamedDict.create_nested`.
     """
     keys_vals_types = []
@@ -2181,9 +2178,9 @@ def _reset_index(df):
 
 
 def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
-    """ See as_dataframe docstrings for argument descriptions. """
+    """ See to_dataframe docstrings for argument descriptions. """
     if drop_columns:
-        if drop_columns is True:  drop_columns = (True,)
+        if drop_columns is True: drop_columns = (True,)
         for col in drop_columns:
             df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
 

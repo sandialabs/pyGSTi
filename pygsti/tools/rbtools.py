@@ -118,7 +118,7 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
 
     Parameters
     ----------
-    dsrow : DataSetRow
+    dsrow : _DataSetRow
         The circuit outcome data to marginalize.
 
     circ : Circuit
@@ -185,7 +185,7 @@ def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
 
     Parameters
     ----------
-    dsrow : DataSetRow
+    dsrow : _DataSetRow
         The circuit outcome data to marginalize.
 
     circ : Circuit

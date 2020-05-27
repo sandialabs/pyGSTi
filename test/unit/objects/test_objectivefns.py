@@ -28,19 +28,19 @@ class ObjectiveFunctionUtilTester(ObjectiveFunctionData, BaseCase):
     Tests for functions in the objectivefns module.
     """
     def test_objfn(self):
-        fn = _objfns.objfn(_objfns.Chi2Function, self.model, self.dataset, self.circuits)
+        fn = _objfns._objfn(_objfns.Chi2Function, self.model, self.dataset, self.circuits)
         self.assertTrue(isinstance(fn, _objfns.Chi2Function))
 
-        fn = _objfns.objfn(_objfns.PoissonPicDeltaLogLFunction, self.model, self.dataset, self.circuits,
+        fn = _objfns._objfn(_objfns.PoissonPicDeltaLogLFunction, self.model, self.dataset, self.circuits,
                            regularization={'min_prob_clip': 1e-3}, penalties={'regularize_factor': 1.0})
         self.assertTrue(isinstance(fn, _objfns.PoissonPicDeltaLogLFunction))
 
         #Test with circuits=None
-        fn = _objfns.objfn(_objfns.PoissonPicDeltaLogLFunction, self.model, self.dataset, None)
+        fn = _objfns._objfn(_objfns.PoissonPicDeltaLogLFunction, self.model, self.dataset, None)
         self.assertEqual(list(fn.circuits_to_use), list(self.dataset.keys()))
 
         #Test with aliases
-        fn = _objfns.objfn(_objfns.PoissonPicDeltaLogLFunction, self.alias_model, self.dataset,
+        fn = _objfns._objfn(_objfns.PoissonPicDeltaLogLFunction, self.alias_model, self.dataset,
                            self.alias_circuits, op_label_aliases=self.aliases)
         self.assertTrue(isinstance(fn, _objfns.PoissonPicDeltaLogLFunction))
 
@@ -52,12 +52,12 @@ class ObjectiveFunctionBuilderTester(ObjectiveFunctionData, BaseCase):
 
     def test_create_from(self):
         builder1 = _objfns.ObjectiveFunctionBuilder.simple('chi2')
-        builder2 = _objfns.ObjectiveFunctionBuilder.create_from(builder1)
+        builder2 = _objfns.ObjectiveFunctionBuilder.cast(builder1)
         self.assertTrue(builder1 is builder2)
 
-        builder3 = _objfns.ObjectiveFunctionBuilder.create_from('chi2')
-        builder4 = _objfns.ObjectiveFunctionBuilder.create_from({'objective': 'chi2', 'freq_weighted_chi2': True})
-        builder5 = _objfns.ObjectiveFunctionBuilder.create_from((_objfns.Chi2Function, 'name', 'description',
+        builder3 = _objfns.ObjectiveFunctionBuilder.cast('chi2')
+        builder4 = _objfns.ObjectiveFunctionBuilder.cast({'objective': 'chi2', 'freq_weighted_chi2': True})
+        builder5 = _objfns.ObjectiveFunctionBuilder.cast((_objfns.Chi2Function, 'name', 'description',
                                                                  {'min_prob_clip_for_weighting': 1e-4}))
 
         fn = builder3.build(self.model, self.dataset, self.circuits)
@@ -101,7 +101,7 @@ class ObjectiveFunctionBuilderTester(ObjectiveFunctionData, BaseCase):
 #        pass #TODO
 #
 #    def test_get_chi2k_distributed_qty(self):
-#        raise NotImplementedError() #TODO: test get_chi2k_distributed_qty
+#        raise NotImplementedError() #TODO: test chi2k_distributed_qty
 
 
 class RawObjectiveFunctionTester(object):
@@ -458,7 +458,7 @@ class LogLWildcardFunctionTester(ObjectiveFunctionData, BaseCase):
         logl_fn = _objfns.PoissonPicDeltaLogLFunction(self.model, self.dataset, self.circuits)
         logl_fn.fn()  # evaluate so internals are initialized
 
-        wcbudget = _PrimitiveOpsWildcardBudget(self.model.get_primitive_op_labels())
+        wcbudget = _PrimitiveOpsWildcardBudget(self.model.primitive_op_labels())
         self.pt = wcbudget.to_vector().copy()
         self.objfn = _objfns.LogLWildcardFunction(logl_fn, None, wcbudget)
 

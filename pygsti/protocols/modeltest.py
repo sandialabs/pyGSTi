@@ -81,7 +81,7 @@ class ModelTest(_proto.Protocol):
     """
 
     @classmethod
-    def create_builder(cls, obj):
+    def create_objective_builder(cls, obj):
         """
         Creates objective function builders from `obj` that are commonly used in model tests.
 
@@ -120,7 +120,7 @@ class ModelTest(_proto.Protocol):
         self.badfit_options = badfit_options
         self.verbosity = verbosity
 
-        self.objfn_builders = [self.create_builder(objfn_builder)]
+        self.objfn_builders = [self.create_objective_builder(objfn_builder)]
 
         self.auxfile_types['model_to_test'] = 'pickle'
         self.auxfile_types['target_model'] = 'pickle'
@@ -176,7 +176,7 @@ class ModelTest(_proto.Protocol):
         elif profile == 2: profiler = _objs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
         resource_alloc = _ResourceAllocation(comm, memlimit, profiler, distribute_method='default')
 
         try:  # take lists if available
@@ -200,7 +200,7 @@ class ModelTest(_proto.Protocol):
             objective = self.objfn_builders[0].build(the_model, ds, circuit_list, resource_alloc, cache, printer - 1)
             f = objective.fn(the_model.to_vector())
             objfn_vals.append(f)
-            chi2k_distributed_vals.append(objective.get_chi2k_distributed_qty(f))
+            chi2k_distributed_vals.append(objective.chi2k_distributed_qty(f))
 
         parameters = _collections.OrderedDict()
         parameters['raw_objective_values'] = objfn_vals

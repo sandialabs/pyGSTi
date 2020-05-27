@@ -28,7 +28,7 @@ class CircuitPlaquette(object):
     Parameters
     ----------
     base : Circuit
-        The "base" operation sequence of this plaquette.  Typically the sequence
+        The "base" circuit of this plaquette.  Typically the sequence
         that is sandwiched between fiducial pairs.
 
     rows : int
@@ -58,7 +58,7 @@ class CircuitPlaquette(object):
         Parameters
         ----------
         base : Circuit
-            The "base" operation sequence of this plaquette.  Typically the sequence
+            The "base" circuit of this plaquette.  Typically the sequence
             that is sandwiched between fiducial pairs.
 
         rows, cols : int
@@ -126,9 +126,9 @@ class CircuitPlaquette(object):
         return CircuitPlaquette(self.base, self.rows, self.cols,
                                 new_elements, None, new_fidpairs)
 
-    def get_all_strs(self):
+    def all_strs(self):
         """
-        Return a list of all the operation sequences contained in this plaquette
+        Return a list of all the circuits contained in this plaquette
 
         Returns
         -------
@@ -237,9 +237,9 @@ class CircuitPlaquette(object):
 
 class CircuitStructure(object):
     """
-    Encapsulates a set of operation sequences, along with an associated structure.
+    Encapsulates a set of circuits, along with an associated structure.
 
-    By "structure", we mean the ability to index the operation sequences by a
+    By "structure", we mean the ability to index the circuits by a
     4-tuple (x, y, minor_x, minor_y) for displaying in nested color box plots,
     along with any aliases.
     """
@@ -354,7 +354,7 @@ class CircuitStructure(object):
         return [y for y in self.yvals() if any([len(self.get_plaquette(x, y)) > 0
                                                 for x in self.xvals()])]
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this CircuitStructure.
 
@@ -411,7 +411,7 @@ class LsGermsStructure(CircuitStructure):
     def __init__(self, max_lengths, germs, prep_fiducials, meas_fiducials, aliases=None,
                  sequence_rules=None):
         """
-        Create an empty operation sequence structure.
+        Create an empty circuit structure.
 
         Parameters
         ----------
@@ -507,7 +507,7 @@ class LsGermsStructure(CircuitStructure):
         Parameters
         ----------
         basestr : Circuit
-            The base operation sequence of the new plaquette.
+            The base circuit of the new plaquette.
 
         max_length : int
             The maximum length (x) coordinate of the new plaquette.
@@ -522,7 +522,7 @@ class LsGermsStructure(CircuitStructure):
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            operation sequences being added.  If dscheck does not contain a gate
+            circuits being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -572,16 +572,16 @@ class LsGermsStructure(CircuitStructure):
 
     def add_unindexed(self, gs_list, dsfilter=None):
         """
-        Adds unstructured operation sequences (not in any plaquette).
+        Adds unstructured circuits (not in any plaquette).
 
         Parameters
         ----------
         gs_list : list of Circuits
-            The operation sequences to add.
+            The circuits to add.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            operation sequences being added.  If dscheck does not contain a gate
+            circuits being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -651,7 +651,7 @@ class LsGermsStructure(CircuitStructure):
 
     def truncate(self, max_lengths=None, germs=None, prep_fiducials=None, meas_fiducials=None, seqs=None):
         """
-        Truncate this operation sequence structure to a subset of its current strings.
+        Truncate this circuit structure to a subset of its current strings.
 
         Parameters
         ----------
@@ -732,7 +732,7 @@ class LsGermsStructure(CircuitStructure):
                                 len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this circuit structure.
 
@@ -858,8 +858,8 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         Create an empty LsGermsSerialStructure.
 
-        This type of operation sequence structure is useful for holding multi-qubit
-        operation sequences which have a germ and max-length structure but which have
+        This type of circuit structure is useful for holding multi-qubit
+        circuits which have a germ and max-length structure but which have
         widely varying fiducial sequences so that is it not useful to use the
         minor axes (rows/columns) to represent the *same* fiducials for all
         (L,germ) plaquettes.
@@ -947,7 +947,7 @@ class LsGermsSerialStructure(CircuitStructure):
         Parameters
         ----------
         basestr : Circuit
-            The base operation sequence of the new plaquette, typically `germ^power`
+            The base circuit of the new plaquette, typically `germ^power`
             such that `len(germ^power) <= max_length`.
 
         max_length : int
@@ -962,11 +962,11 @@ class LsGermsSerialStructure(CircuitStructure):
             is different from the corresponding one in
             :method:`LsGermsStructure.add_plaquette` which takes pairs of
             *integer* indices and can be None.  In the present case, this
-            argument is mandatory and contains tuples of operation sequences.
+            argument is mandatory and contains tuples of circuits.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            operation sequences being added.  If dscheck does not contain a gate
+            circuits being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -1013,16 +1013,16 @@ class LsGermsSerialStructure(CircuitStructure):
 
     def add_unindexed(self, gs_list, dsfilter=None):
         """
-        Adds unstructured operation sequences (not in any plaquette).
+        Adds unstructured circuits (not in any plaquette).
 
         Parameters
         ----------
         gs_list : list of Circuits
-            The operation sequences to add.
+            The circuits to add.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            operation sequences being added.  If dscheck does not contain a gate
+            circuits being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -1180,7 +1180,7 @@ class LsGermsSerialStructure(CircuitStructure):
                                 self.nMinorCols, elements,
                                 self.aliases, fidpairs[:])
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this LsGermsStructure.
 

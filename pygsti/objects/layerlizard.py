@@ -104,8 +104,7 @@ class LayerLizard(object):
             for _, obj in self.opcache.items():
                 obj.from_vector(v[obj.gpindices])  # , close, nodirty)
 
-    #PRIVATE - Helper functions for derived classes:
-    def get_circuitlabel_op(self, circuitlbl, dense):
+    def _create_op_for_circuitlabel(self, circuitlbl, dense):
         """
         A helper method for derived classes used for processing :class:`CircuitLabel` labels.
 
@@ -130,10 +129,10 @@ class LayerLizard(object):
         """
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         if len(circuitlbl.components) != 1:  # works for 0 components too
-            subCircuitOp = Composed([self.get_operation(l) for l in circuitlbl.components],
+            subCircuitOp = Composed([self.operation(l) for l in circuitlbl.components],
                                     dim=self.model.dim, evotype=self.model._evotype)
         else:
-            subCircuitOp = self.get_operation(circuitlbl.components[0])
+            subCircuitOp = self.operation(circuitlbl.components[0])
         if circuitlbl.reps != 1:
             #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
             #                   dim=self.model.dim, evotype=self.model._evotype)
@@ -203,7 +202,7 @@ class ExplicitLayerLizard(LayerLizard):
         self.effects = simplified_effects
         super(ExplicitLayerLizard, self).__init__(model)
 
-    def get_evotype(self):
+    def evotype(self):
         """
         Return the evolution type of the operations being served.
 
@@ -213,7 +212,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         return self.model._evotype
 
-    def get_prep(self, layerlbl):
+    def prep(self, layerlbl):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
@@ -228,7 +227,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         return self.preps[layerlbl]
 
-    def get_effect(self, layerlbl):
+    def effect(self, layerlbl):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
@@ -243,7 +242,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         return self.effects[layerlbl]
 
-    def get_operation(self, layerlbl):
+    def operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
 
@@ -258,7 +257,7 @@ class ExplicitLayerLizard(LayerLizard):
         """
         if isinstance(layerlbl, _CircuitLabel):
             dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
-            return self.get_circuitlabel_op(layerlbl, dense)
+            return self._create_op_for_circuitlabel(layerlbl, dense)
         else:
             return self.simpleops[layerlbl]
 
@@ -364,7 +363,7 @@ class ImplicitLayerLizard(LayerLizard):
         self.effect_blks = simplified_effect_blks
         super(ImplicitLayerLizard, self).__init__(model)
 
-    def get_prep(self, layerlbl):
+    def prep(self, layerlbl):
         """
         Return the (simplified) preparation layer operator given by `layerlbl`.
 
@@ -379,7 +378,7 @@ class ImplicitLayerLizard(LayerLizard):
         """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_preps`")
 
-    def get_effect(self, layerlbl):
+    def effect(self, layerlbl):
         """
         Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
@@ -392,9 +391,9 @@ class ImplicitLayerLizard(LayerLizard):
         -------
         LinearOperator
         """
-        raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_effect`")
+        raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `effect`")
 
-    def get_operation(self, layerlbl):
+    def operation(self, layerlbl):
         """
         Return the (simplified) layer operation given by `layerlbl`.
 
@@ -407,9 +406,9 @@ class ImplicitLayerLizard(LayerLizard):
         -------
         LinearOperator
         """
-        raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_operation`")
+        raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `operation`")
 
-    def get_evotype(self):
+    def evotype(self):
         """
         Return the evolution type of the operations being served.
 

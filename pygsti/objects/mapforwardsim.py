@@ -29,8 +29,8 @@ from . import replib
 _dummy_profiler = _DummyProfiler()
 
 # FUTURE: use enum
-SUPEROP = 0
-UNITARY = 1
+_SUPEROP = 0
+_UNITARY = 1
 CLIFFORD = 2
 
 
@@ -96,7 +96,7 @@ class MapForwardSimulator(ForwardSimulator):
         # Note: caching here is *essential* to the working of bulk_fill_dprobs,
         # which assumes that the op returned will be affected by self.from_vector() calls.
         if rholabel not in self.sos.opcache:
-            self.sos.opcache[rholabel] = self.sos.get_prep(rholabel)
+            self.sos.opcache[rholabel] = self.sos.prep(rholabel)
         return self.sos.opcache[rholabel]
 
     def _es_from_labels(self, elabels):
@@ -104,24 +104,24 @@ class MapForwardSimulator(ForwardSimulator):
         # which assumes that the ops returned will be affected by self.from_vector() calls.
         for elabel in elabels:
             if elabel not in self.sos.opcache:
-                self.sos.opcache[elabel] = self.sos.get_effect(elabel)
+                self.sos.opcache[elabel] = self.sos.effect(elabel)
         return [self.sos.opcache[elabel] for elabel in elabels]
 
     def _op_from_label(self, oplabel):
         # Note: caching here is *essential* to the working of bulk_fill_dprobs,
         # which assumes that the op returned will be affected by self.from_vector() calls.
         if oplabel not in self.sos.opcache:
-            self.sos.opcache[oplabel] = self.sos.get_operation(oplabel)
+            self.sos.opcache[oplabel] = self.sos.operation(oplabel)
         return self.sos.opcache[oplabel]
 
     def _rho_es_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.sos.get_prep(rholabel)
-        Es = [self.sos.get_effect(elabel) for elabel in elabels]
+        """ Returns SPAMVec *objects*, so must call .to_dense() later """
+        rho = self.sos.prep(rholabel)
+        Es = [self.sos.effect(elabel) for elabel in elabels]
         #No support for "custom" spamlabel stuff here
         return rho, Es
 
-    def prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
+    def _prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" for a single circuit.
 
@@ -157,21 +157,21 @@ class MapForwardSimulator(ForwardSimulator):
             the elements of `elabels`.
         """
         if time is None:  # time-independent state propagation
-            rhorep = self.sos.get_prep(rholabel)._rep
-            ereps = [self.sos.get_effect(elabel)._rep for elabel in elabels]
-            rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl)._rep for gl in circuit])
+            rhorep = self.sos.prep(rholabel)._rep
+            ereps = [self.sos.effect(elabel)._rep for elabel in elabels]
+            rhorep = replib.propagate_staterep(rhorep, [self.sos.operation(gl)._rep for gl in circuit])
             ps = _np.array([erep.probability(rhorep) for erep in ereps], 'd')
             #outcome probabilities
         else:
             t = time
-            op = self.sos.get_prep(rholabel); op.set_time(t); t += rholabel.time
+            op = self.sos.prep(rholabel); op.set_time(t); t += rholabel.time
             state = op._rep
             for gl in circuit:
-                op = self.sos.get_operation(gl); op.set_time(t); t += gl.time  # time in labels == duration
+                op = self.sos.operation(gl); op.set_time(t); t += gl.time  # time in labels == duration
                 state = op._rep.acton(state)
             ps = []
             for elabel in elabels:
-                op = self.sos.get_effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
+                op = self.sos.effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
                 ps.append(op._rep.probability(state))
             ps = _np.array(ps, 'd')
 
@@ -186,7 +186,7 @@ class MapForwardSimulator(ForwardSimulator):
             return _np.clip(ps, clip_to[0], clip_to[1])
         else: return ps
 
-    def dpr(self, spam_tuple, circuit, return_pr, clip_to):
+    def _dpr(self, spam_tuple, circuit, return_pr, clip_to):
         """
         Compute the derivative of the probability corresponding to `circuit` and `spam_tuple`.
 
@@ -217,14 +217,14 @@ class MapForwardSimulator(ForwardSimulator):
 
         #Finite difference derivative
         eps = 1e-7  # hardcoded?
-        p = self.prs(spam_tuple[0], [spam_tuple[1]], circuit, clip_to)[0]
+        p = self._prs(spam_tuple[0], [spam_tuple[1]], circuit, clip_to)[0]
         dp = _np.empty((1, self.Np), 'd')
 
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.from_vector(vec, close=True)
-            dp[0, i] = (self.prs(spam_tuple[0], [spam_tuple[1]], circuit, clip_to) - p)[0] / eps
+            dp[0, i] = (self._prs(spam_tuple[0], [spam_tuple[1]], circuit, clip_to) - p)[0] / eps
         self.from_vector(orig_vec, close=True)
 
         if return_pr:
@@ -232,7 +232,7 @@ class MapForwardSimulator(ForwardSimulator):
             return dp, p
         else: return dp
 
-    def hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
+    def _hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
         """
         Compute the Hessian of the probability given by `circuit` and `spam_tuple`.
 
@@ -272,16 +272,16 @@ class MapForwardSimulator(ForwardSimulator):
         #Finite difference hessian
         eps = 1e-4  # hardcoded?
         if return_pr:
-            dp, p = self.dpr(spam_tuple, circuit, return_pr, clip_to)
+            dp, p = self._dpr(spam_tuple, circuit, return_pr, clip_to)
         else:
-            dp = self.dpr(spam_tuple, circuit, return_pr, clip_to)
+            dp = self._dpr(spam_tuple, circuit, return_pr, clip_to)
         hp = _np.empty((1, self.Np, self.Np), 'd')
 
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.from_vector(vec, close=True)
-            hp[0, i, :] = (self.dpr(spam_tuple, circuit, False, clip_to) - dp) / eps
+            hp[0, i, :] = (self._dpr(spam_tuple, circuit, False, clip_to) - dp) / eps
         self.from_vector(orig_vec, close=True)
 
         if return_pr and clip_to is not None:
@@ -304,7 +304,7 @@ class MapForwardSimulator(ForwardSimulator):
         """
         return "circuits"
 
-    def estimate_cache_size(self, n_circuits):
+    def _estimate_cache_size(self, n_circuits):
         """
         Return an estimate of the ideal/desired cache size given a number of circuits.
 
@@ -319,7 +319,7 @@ class MapForwardSimulator(ForwardSimulator):
         """
         return int(0.7 * n_circuits)
 
-    def construct_evaltree(self, simplified_circuits, num_subtree_comms):
+    def create_evaltree(self, simplified_circuits, num_subtree_comms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -327,7 +327,7 @@ class MapForwardSimulator(ForwardSimulator):
         ----------
         simplified_circuits : list
             A list of Circuits or tuples of operation labels which specify
-            the operation sequences to create an evaluation tree out of
+            the circuits to create an evaluation tree out of
             (most likely because you want to computed their probabilites).
             These are a "simplified" circuits in that they should only contain
             "deterministic" elements (no POVM or Instrument labels).
@@ -346,7 +346,7 @@ class MapForwardSimulator(ForwardSimulator):
         evTree.initialize(simplified_circuits, num_subtree_comms, self.max_cache_size)
         return evTree
 
-    def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
+    def _estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
                            num_param2_groups, num_final_strs):
         """
@@ -424,8 +424,7 @@ class MapForwardSimulator(ForwardSimulator):
         return mem * FLOATSIZE
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
-    #PRIVATE
-    def dm_mapfill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
+    def _dm_mapfill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
                                 eval_tree, param_indices1, param_indices2, comm):
 
         """
@@ -442,9 +441,9 @@ class MapForwardSimulator(ForwardSimulator):
         if dest_param_indices2 is None:
             dest_param_indices2 = list(range(_slct.length(param_indices2)))
 
-        param_indices1 = _slct.as_array(param_indices1)
-        dest_param_indices1 = _slct.as_array(dest_param_indices1)
-        #dest_param_indices2 = _slct.as_array(dest_param_indices2)  # OK if a slice
+        param_indices1 = _slct.to_array(param_indices1)
+        dest_param_indices1 = _slct.to_array(dest_param_indices1)
+        #dest_param_indices2 = _slct.to_array(dest_param_indices2)  # OK if a slice
 
         all_slices, my_slice, owners, subComm = \
             _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
@@ -478,10 +477,10 @@ class MapForwardSimulator(ForwardSimulator):
     def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False,
                         comm=None):
         """
-        Compute the outcome probabilities for an entire tree of operation sequences.
+        Compute the outcome probabilities for an entire tree of circuits.
 
         This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* operation sequences found in an evaluation
+        corresponding to the *simplified* circuits found in an evaluation
         tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
         objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
@@ -521,7 +520,7 @@ class MapForwardSimulator(ForwardSimulator):
         """
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -619,11 +618,11 @@ class MapForwardSimulator(ForwardSimulator):
         else:
             wrtSlice = None
 
-        profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
+        profiler.memory_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
                            % (mx_to_fill.nbytes / (1024.0**3)))
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -640,7 +639,7 @@ class MapForwardSimulator(ForwardSimulator):
             if blkSize is None:  # wrt_filter gives entire computed parameter block
                 #Compute all requested derivative columns at once
                 replib.DM_mapfill_dprobs_block(self, mx_to_fill, felInds, None, evalSubTree, wrtSlice, mySubComm)
-                profiler.mem_check("bulk_fill_dprobs: post fill")
+                profiler.memory_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
@@ -660,7 +659,7 @@ class MapForwardSimulator(ForwardSimulator):
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
                     replib.DM_mapfill_dprobs_block(self, mx_to_fill, felInds, paramSlice,
                                                    evalSubTree, paramSlice, blkComm)
-                    profiler.mem_check("bulk_fill_dprobs: post fill blk")
+                    profiler.memory_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
                 tm = _time.time()
@@ -668,7 +667,7 @@ class MapForwardSimulator(ForwardSimulator):
                                     1, mySubComm, gather_mem_limit)
                 #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
-                profiler.mem_check("bulk_fill_dprobs: post gather blocks")
+                profiler.memory_check("bulk_fill_dprobs: post gather blocks")
 
         #collect/gather results
         tm = _time.time()
@@ -683,7 +682,7 @@ class MapForwardSimulator(ForwardSimulator):
             #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
 
         profiler.add_time("MPI IPC", tm)
-        profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
+        profiler.memory_check("bulk_fill_dprobs: post gather subtrees")
 
         if clip_to is not None and pr_mx_to_fill is not None:
             _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
@@ -694,7 +693,7 @@ class MapForwardSimulator(ForwardSimulator):
         #                clip_to=clip_to)
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
-        profiler.mem_check("bulk_fill_dprobs: end")
+        profiler.memory_check("bulk_fill_dprobs: end")
 
     def bulk_fill_hprobs(self, mx_to_fill, eval_tree,
                          pr_mx_to_fill=None, deriv1_mx_to_fill=None, deriv2_mx_to_fill=None,
@@ -798,7 +797,7 @@ class MapForwardSimulator(ForwardSimulator):
             wrtSlice2 = None
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -825,7 +824,7 @@ class MapForwardSimulator(ForwardSimulator):
                         replib.DM_mapfill_dprobs_block(self, deriv2_mx_to_fill, felInds,
                                                        None, evalSubTree, wrtSlice2, mySubComm)
 
-                self.dm_mapfill_hprobs_block(mx_to_fill, felInds, None, None, evalSubTree,
+                self._dm_mapfill_hprobs_block(mx_to_fill, felInds, None, None, evalSubTree,
                                              wrtSlice1, wrtSlice2, mySubComm)
 
             else:  # Divide columns into blocks of at most blkSize
@@ -860,7 +859,7 @@ class MapForwardSimulator(ForwardSimulator):
 
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]
-                        self.dm_mapfill_hprobs_block(mx_to_fill, felInds, paramSlice1, paramSlice2, evalSubTree,
+                        self._dm_mapfill_hprobs_block(mx_to_fill, felInds, paramSlice1, paramSlice2, evalSubTree,
                                                      paramSlice1, paramSlice2, blk2Comm)
 
                     #gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
@@ -911,12 +910,12 @@ class MapForwardSimulator(ForwardSimulator):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the operation sequences.
+        the circuits.
 
         Parameters
         ----------
         eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            given by a prior call to bulk_evaltree.  Specifies the circuits
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrt_slices_list : list
@@ -1023,7 +1022,7 @@ class MapForwardSimulator(ForwardSimulator):
         """
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1196,7 +1195,7 @@ class MapForwardSimulator(ForwardSimulator):
         None
         """
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1405,7 +1404,7 @@ class MapForwardSimulator(ForwardSimulator):
         #profiler.mem_check("bulk_fill_timedep_dchi2: begin")
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree

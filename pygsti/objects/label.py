@@ -15,7 +15,7 @@ import itertools as _itertools
 
 import os
 import inspect
-debug_record = {}
+_debug_record = {}
 
 
 class Label(object):
@@ -344,7 +344,7 @@ class LabelTup(Label, tuple):
         """
         #caller = inspect.getframeinfo(inspect.currentframe().f_back)
         #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
-        #debug_record[ky] = debug_record.get(ky, 0) + 1
+        #_debug_record[ky] = _debug_record.get(ky, 0) + 1
         s = str(self.name)
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))
@@ -388,7 +388,7 @@ class LabelTup(Label, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTup, (self[:], self.time), None)
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 
@@ -400,7 +400,7 @@ class LabelTup(Label, tuple):
         """
         return tuple(self)
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
@@ -418,7 +418,7 @@ class LabelTup(Label, tuple):
         """
         return LabelTup(newname, self.sslbls) if (self.name == oldname) else self
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 
@@ -570,7 +570,7 @@ class LabelStr(Label, str):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self), self.time), None)
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 
@@ -582,7 +582,7 @@ class LabelStr(Label, str):
         """
         return str(self)
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
@@ -600,7 +600,7 @@ class LabelStr(Label, str):
         """
         return LabelStr(newname) if (self.name == oldname) else self
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 
@@ -799,7 +799,7 @@ class LabelTupTup(Label, tuple):
         # "recursive" contains checks component containers
         return any([(x == layer or x in layer) for layer in self.components])
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 
@@ -809,9 +809,9 @@ class LabelTupTup(Label, tuple):
         -------
         tuple
         """
-        return tuple((x.tonative() for x in self))
+        return tuple((x.to_native() for x in self))
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
@@ -827,9 +827,9 @@ class LabelTupTup(Label, tuple):
         -------
         LabelTupTup
         """
-        return LabelTupTup(tuple((x.replacename(oldname, newname) for x in self)))
+        return LabelTupTup(tuple((x.replace_name(oldname, newname) for x in self)))
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 
@@ -1093,7 +1093,7 @@ class CircuitLabel(Label, tuple):
         # "recursive" contains checks component containers
         return any([(x == layer or x in layer) for layer in self.components])
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 
@@ -1103,9 +1103,9 @@ class CircuitLabel(Label, tuple):
         -------
         tuple
         """
-        return self[0:3] + tuple((x.tonative() for x in self.components))
+        return self[0:3] + tuple((x.to_native() for x in self.components))
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
@@ -1122,11 +1122,11 @@ class CircuitLabel(Label, tuple):
         CircuitLabel
         """
         return CircuitLabel(self.name,
-                            tuple((x.replacename(oldname, newname) for x in self.components)),
+                            tuple((x.replace_name(oldname, newname) for x in self.components)),
                             self.sslbls,
                             self[2])
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 
@@ -1341,7 +1341,7 @@ class LabelTupWithArgs(Label, tuple):
         """
         #caller = inspect.getframeinfo(inspect.currentframe().f_back)
         #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
-        #debug_record[ky] = debug_record.get(ky, 0) + 1
+        #_debug_record[ky] = _debug_record.get(ky, 0) + 1
         s = str(self.name)
         if self.args:  # test for None and len == 0
             s += ";" + ";".join(map(str, self.args))
@@ -1635,7 +1635,7 @@ class LabelTupTupWithArgs(Label, tuple):
         # "recursive" contains checks component containers
         return any([(x == layer or x in layer) for layer in self.components])
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 
@@ -1645,9 +1645,9 @@ class LabelTupTupWithArgs(Label, tuple):
         -------
         tuple
         """
-        return self[0:self[0]] + tuple((x.tonative() for x in self[self[0]:]))
+        return self[0:self[0]] + tuple((x.to_native() for x in self[self[0]:]))
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
@@ -1663,10 +1663,10 @@ class LabelTupTupWithArgs(Label, tuple):
         -------
         LabelTupTupWithArgs
         """
-        return LabelTupTupWithArgs(tuple((x.replacename(oldname, newname) for x in self.components)),
+        return LabelTupTupWithArgs(tuple((x.replace_name(oldname, newname) for x in self.components)),
                                    self.time, self.args)
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 

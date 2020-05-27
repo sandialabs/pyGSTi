@@ -58,7 +58,7 @@ class DMStateRep(object):
     def copy_from(self, other):
         self.base = other.base.copy()
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     @property
@@ -112,7 +112,7 @@ class DMEffectRepTensorProd(DMEffectRep):
         return (DMEffectRepTensorProd,
                 (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
-    def todense(self, outvec):
+    def to_dense(self, outvec):
         N = self.dim
         #Put last factor at end of outvec
         k = self.nfactors - 1  # last factor
@@ -147,7 +147,7 @@ class DMEffectRepTensorProd(DMEffectRep):
 
     def probability(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
-        Edense = self.todense(scratch)
+        Edense = self.to_dense(scratch)
         return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
@@ -185,7 +185,7 @@ class DMEffectRepComputational(DMEffectRep):
         x = (x & 0x0000000000000001) ^ (x >> 1)
         return x & 1  # return the last bit (0 or 1)
 
-    def todense(self, outvec, trust_outvec_sparsity=False):
+    def to_dense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
@@ -226,7 +226,7 @@ class DMEffectRepComputational(DMEffectRep):
 
     def probability(self, state):
         scratch = _np.empty(self.dim, 'd')
-        Edense = self.todense(scratch)
+        Edense = self.to_dense(scratch)
         return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
 
 
@@ -260,12 +260,12 @@ class DMOpRep(object):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = DMStateRep(_np.ascontiguousarray(v, 'd'))
-            return self.acton(in_state).todense()
+            return self.acton(in_state).to_dense()
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = DMStateRep(_np.ascontiguousarray(v, 'd'))
-            return self.adjoint_acton(in_state).todense()
+            return self.adjoint_acton(in_state).to_dense()
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
@@ -563,7 +563,7 @@ class SVStateRep(object):
     def dim(self):
         return len(self.base)
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     def __str__(self):
@@ -616,7 +616,7 @@ class SVEffectRepTensorProd(SVEffectRep):
         return (SVEffectRepTensorProd, (self.kron_array, self.factor_dims,
                                         self.nfactors, self.max_factor_dim, self.dim))
 
-    def todense(self, outvec):
+    def to_dense(self, outvec):
         N = self.dim
         #Put last factor at end of outvec
         k = self.nfactors - 1  # last factor
@@ -651,7 +651,7 @@ class SVEffectRepTensorProd(SVEffectRep):
 
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
-        Edense = self.todense(scratch)
+        Edense = self.to_dense(scratch)
         return _np.vdot(Edense, state.base)
 
 
@@ -682,7 +682,7 @@ class SVEffectRepComputational(SVEffectRep):
     def __reduce__(self):
         return (SVEffectRepComputational, (self.zvals, self.dim))
 
-    def todense(self, outvec, trust_outvec_sparsity=False):
+    def to_dense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
@@ -693,7 +693,7 @@ class SVEffectRepComputational(SVEffectRep):
 
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
-        Edense = self.todense(scratch)
+        Edense = self.to_dense(scratch)
         return _np.vdot(Edense, state.base)
 
 
@@ -1097,7 +1097,7 @@ class SBOpRepClifford(SBOpRep):
 
 
 # Other classes
-class PolyRep(dict):
+class PolynomialRep(dict):
     """
     Representation class for a polynomial.
 
@@ -1111,7 +1111,7 @@ class PolyRep(dict):
 
     def __init__(self, int_coeff_dict, max_num_vars, vindices_per_int):
         """
-        Create a new PolyRep object.
+        Create a new PolynomialRep object.
 
         Parameters
         ----------
@@ -1129,7 +1129,7 @@ class PolyRep(dict):
         self.max_num_vars = max_num_vars
         self.vindices_per_int = vindices_per_int
 
-        super(PolyRep, self).__init__()
+        super(PolynomialRep, self).__init__()
         if int_coeff_dict is not None:
             self.update(int_coeff_dict)
 
@@ -1152,20 +1152,20 @@ class PolyRep(dict):
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
-        return PolyRep(self, self.max_num_vars, self.vindices_per_int)  # construct expects "int" keys
+        return PolynomialRep(self, self.max_num_vars, self.vindices_per_int)  # construct expects "int" keys
 
     def abs(self):
         """
-        Return a polynomial whose coefficents are the absolute values of this PolyRep's coefficients.
+        Return a polynomial whose coefficents are the absolute values of this PolynomialRep's coefficients.
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         result = {k: abs(v) for k, v in self.items()}
-        return PolyRep(result, self.max_num_vars, self.vindices_per_int)
+        return PolynomialRep(result, self.max_num_vars, self.vindices_per_int)
 
     @property
     def int_coeffs(self):  # so we can convert back to python Polys
@@ -1175,7 +1175,7 @@ class PolyRep(dict):
     #UNUSED TODO REMOVE
         #def map_indices_inplace(self, mapfn):
     #    """
-    #    Map the variable indices in this `PolyRep`.
+    #    Map the variable indices in this `PolynomialRep`.
     #    This allows one to change the "labels" of the variables.
     #
     #    Parameters
@@ -1258,7 +1258,7 @@ class PolyRep(dict):
     #
     #    Returns
     #    -------
-    #    PolyRep
+    #    PolynomialRep
     #    """
     #    dcoeffs = {}
     #    for i, coeff in self.items():
@@ -1269,7 +1269,7 @@ class PolyRep(dict):
     #            del l[ivar.index(wrt_param)]
     #            dcoeffs[tuple(l)] = cnt * coeff
     #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
-    #    return PolyRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
+    #    return PolynomialRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
 
     #def evaluate(self, variable_values):
     #    """
@@ -1280,7 +1280,7 @@ class PolyRep(dict):
     #    variable_values : iterable
     #        The values each variable will be evaluated at.  Must have
     #        length at least equal to the number of variables present
-    #        in this `PolyRep`.
+    #        in this `PolynomialRep`.
     #
     #    Returns
     #    -------
@@ -1367,14 +1367,14 @@ class PolyRep(dict):
 
         Parameters
         ----------
-        x : PolyRep
+        x : PolynomialRep
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         assert(self.max_num_vars == x.max_num_vars)
-        newpoly = PolyRep(None, self.max_num_vars, self.vindices_per_int)
+        newpoly = PolynomialRep(None, self.max_num_vars, self.vindices_per_int)
         for k1, v1 in self.items():
             for k2, v2 in x.items():
                 inds = sorted(self._int_to_vinds(k1) + x._int_to_vinds(k2))
@@ -1402,15 +1402,15 @@ class PolyRep(dict):
 
     def add_inplace(self, other):
         """
-        Adds `other` into this PolyRep.
+        Adds `other` into this PolynomialRep.
 
         Parameters
         ----------
-        other : PolyRep
+        other : PolynomialRep
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         for k, v in other.items():
             try:
@@ -1421,7 +1421,7 @@ class PolyRep(dict):
 
     def add_scalar_to_all_coeffs_inplace(self, x):
         """
-        Adds `x` to all of the coefficients in this PolyRep.
+        Adds `x` to all of the coefficients in this PolynomialRep.
 
         Parameters
         ----------
@@ -1429,7 +1429,7 @@ class PolyRep(dict):
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         for k in self:
             self[k] += x
@@ -1446,7 +1446,7 @@ class PolyRep(dict):
     #
     #    Returns
     #    -------
-    #    PolyRep
+    #    PolynomialRep
     #    """
     #    # assume a scalar that can multiply values
     #    newpoly = self.copy()
@@ -1480,7 +1480,7 @@ class PolyRep(dict):
         else: return "0"
 
     def __repr__(self):
-        return "PolyRep[ " + str(self) + " ]"
+        return "PolynomialRep[ " + str(self) + " ]"
 
     def degree(self):
         """ Used for debugging in slowreplib routines only"""
@@ -1489,7 +1489,7 @@ class PolyRep(dict):
     #UNUSED TODO REMOVE
     #def __add__(self, x):
     #    newpoly = self.copy()
-    #    if isinstance(x, PolyRep):
+    #    if isinstance(x, PolynomialRep):
     #        assert(self.max_num_vars == x.max_num_vars)
     #        for k, v in x.items():
     #            if k in newpoly: newpoly[k] += v
@@ -1500,7 +1500,7 @@ class PolyRep(dict):
     #    return newpoly
     #
     #def __mul__(self, x):
-    #    if isinstance(x, PolyRep):
+    #    if isinstance(x, PolynomialRep):
     #        return self.mult_poly(x)
     #    else:  # assume a scalar that can multiply values
     #        return self.mult_scalar(x)
@@ -1509,7 +1509,7 @@ class PolyRep(dict):
     #    return self.__mul__(x)
     #
     #def __pow__(self, n):
-    #    ret = PolyRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
+    #    ret = PolynomialRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
     #    cur = self
     #    for i in range(int(_np.floor(_np.log2(n))) + 1):
     #        rem = n % 2  # gets least significant bit (i-th) of n
@@ -1523,7 +1523,7 @@ class PolyRep(dict):
     #
     #def debug_report(self):
     #    actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
-    #    return "PolyRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
+    #    return "PolynomialRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
     #        (self.max_num_vars, len(self), actual_max_order)
     #
 
@@ -1646,7 +1646,7 @@ def propagate_staterep(staterep, operationreps):
 
 def DM_mapfill_probs_block(calc, mx_to_fill, dest_indices, eval_tree, comm):
 
-    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = eval_tree.cache_size()
 
     #Create rhoCache
@@ -1654,12 +1654,12 @@ def DM_mapfill_probs_block(calc, mx_to_fill, dest_indices, eval_tree, comm):
 
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
     rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in eval_tree.rholabels}
-    operationreps = {gl: calc.sos.get_operation(gl)._rep for gl in eval_tree.opLabels}
+    operationreps = {gl: calc.sos.operation(gl)._rep for gl in eval_tree.opLabels}
     effectreps = {i: E._rep for i, E in enumerate(calc._es_from_labels(eval_tree.elabels))}  # cache these in future
 
     #comm is currently ignored
     #TODO: if eval_tree is split, distribute among processors
-    for i in eval_tree.get_evaluation_order():
+    for i in eval_tree.evaluation_order():
         iStart, remainder, iCache = eval_tree[i]
         if iStart is None:  # then first element of remainder is a state prep label
             rholabel = remainder[0]
@@ -1688,8 +1688,8 @@ def DM_mapfill_dprobs_block(calc, mx_to_fill, dest_indices, dest_param_indices, 
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
-    param_indices = _slct.as_array(param_indices)
-    dest_param_indices = _slct.as_array(dest_param_indices)
+    param_indices = _slct.to_array(param_indices)
+    dest_param_indices = _slct.to_array(dest_param_indices)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1780,11 +1780,11 @@ def DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval
 
 def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm):
 
-    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = eval_tree.cache_size()
 
     EVecs = calc._es_from_labels(eval_tree.elabels)
-    elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in eval_tree.elabels]
+    elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in eval_tree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
@@ -1795,7 +1795,7 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
 
     #comm is currently ignored
     #TODO: if eval_tree is split, distribute among processors
-    for i in eval_tree.get_evaluation_order():
+    for i in eval_tree.evaluation_order():
         iStart, remainder, iCache = eval_tree[i]
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
         rholabel = remainder[0]; remainder = remainder[1:]
@@ -1827,7 +1827,7 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
             t += rholabel.time
 
             for gl in remainder:
-                op = calc.sos.get_operation(gl)
+                op = calc.sos.operation(gl)
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
@@ -1915,14 +1915,14 @@ def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (calc.Np, calc.dim, cache_size, len(eval_tree), eval_tree.get_num_applies(), _time.time()-tStart)) #DEBUG
+    #      (calc.Np, calc.dim, cache_size, len(eval_tree), eval_tree.num_applies(), _time.time()-tStart)) #DEBUG
 
 
 def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
     return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
-def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SB_prs_as_polynomials(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
     return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
@@ -1961,13 +1961,13 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
     Returns
     -------
     list
-        A list of PolyRep objects, one per element of `elabels`.
+        A list of PolynomialRep objects, one per element of `elabels`.
     """
     #print("PRS_AS_POLY circuit = ",circuit)
     #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
 
     #NOTE for FUTURE: to adapt this to work with numerical rather than polynomial coeffs:
-    # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of get_taylor_order_terms??
+    # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of taylor_order_terms??
     # below: replace prps with: prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
     #  use *= or * instead of .mult( and .scale(
     #  e.g. res = _np.product([f.coeff for f in factors])
@@ -1980,12 +1980,12 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.torep() for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order, mpv)]
+                        [t.to_rep() for t in calc.sos.operation(glbl).taylor_order_terms(order, mpv)]
                         for order in range(calc.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.torep() for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [[t.to_rep() for t in calc.sos.prep(rholabel).taylor_order_terms(order, mpv)]
                      for order in range(calc.max_order + 1)]
 
     E_term_reps = []
@@ -1994,7 +1994,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order, mpv)]
+            term_reps = [t.to_rep() for t in calc.sos.effect(elbl).taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -2020,7 +2020,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
         #print("DB: pr_as_poly order=",order)
         # db_npartitions = 0
         for p in _lt.partition_into(order, len(circuit) + 2):  # +2 for SPAM bookends
-            #factor_lists = [ calc.sos.get_operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
+            #factor_lists = [ calc.sos.operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
             factor_lists = [rho_term_reps[p[0]]] + \
                            [op_term_reps[glbl][pi] for glbl, pi in zip(circuit, p[1:-1])] + \
                            [E_term_reps[p[-1]]]
@@ -2167,13 +2167,13 @@ def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repca
                                               threshold_guess)
 
 
-def SV_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+def SV_compute_pruned_path_polynomials_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
                                                  circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
     return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
 
 
-def SB_compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+def SB_compute_pruned_path_polynomials_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
                                                  circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
     return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
@@ -2188,25 +2188,25 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2223,10 +2223,10 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
     nPaths = _np.zeros(len(elabels), int)
@@ -2337,10 +2337,10 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
         [E_term_reps]
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2580,25 +2580,25 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2703,25 +2703,25 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
+            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
+        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2741,10 +2741,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.get_prep(rholabel)] + [calc.sos.get_operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.get_total_term_magnitude() for op in ops])
+    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(

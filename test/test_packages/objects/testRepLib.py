@@ -22,7 +22,7 @@ class RepLibTestCase(BaseTestCase):
         mdl.set_simtype("map")
 
 
-        probs = mdl.probs(('Gx','Gx'))
+        probs = mdl.probabilities(('Gx','Gx'))
         self.assertAlmostEqual(probs['0'], 0.0)
         self.assertAlmostEqual(probs['1'], 1.0)
 

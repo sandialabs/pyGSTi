@@ -104,7 +104,7 @@ class DriftTestCase(BaseTestCase):
     @unittest.skip("Need to update this test - do_stability_analysis no longer exists")
     def test_core_and_stabilityanalyzer(self):
 
-        ds = pygsti.io.load_tddataset("cmp_chk_files/timeseries_data_trunc.txt")
+        ds = pygsti.io.load_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
         fiducial_strs = ['{}', 'Gx', 'Gy', 'GxGx', 'GxGxGx', 'GyGyGy']
         germ_strs = ['Gi']
         fiducials = [pygsti.objects.Circuit(None, stringrep=fs) for fs in fiducial_strs]
@@ -119,21 +119,21 @@ class DriftTestCase(BaseTestCase):
         # Redo but testing direct access of the stability analyzer.
         results = drift.StabilityAnalyzer(ds, ids=True)
         print(results)
-        results.generate_spectra()
+        results.compute_spectra()
         print(results)
-        results.do_instability_detection(verbosity=0)
+        results.run_instability_detection(verbosity=0)
         print(results)
-        results.do_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
+        results.run_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
         print(results)
 
         # Test adding more detectors.
         inclass_correction={'dataset': 'Bonferroni', 'circuit': 'Bonferroni', 'spectrum': 'Benjamini-Hochberg'}
-        results.do_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-1', 
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-1', 
                                          default=False, verbosity=0)
         inclass_correction={'dataset': 'Bonferroni', 'circuit': 'Benjamini-Hochberg', 'spectrum': 'Benjamini-Hochberg',}
-        results.do_instability_detection(inclass_correction=inclass_correction, tests=((),('circuit',),), saveas='fdr-2',
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=((),('circuit',),), saveas='fdr-2',
                                          default=False)
-        results.do_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-3',
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-3',
                                          default=False)
 
         results.get_unstable_circuits(fromtests=[(), ('circuit',)])

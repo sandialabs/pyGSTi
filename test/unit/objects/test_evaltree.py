@@ -14,7 +14,7 @@ class EvalTreeBase(object):
     @classmethod
     def setUpClass(cls):
         opLabels = list(cls.target_model.operations.keys())
-        strs = pc.make_lsgst_experiment_list(
+        strs = pc.create_lsgst_circuits(
             opLabels, cls.prepStrs, cls.measStrs, cls.germs, cls.maxLens,
             include_lgst=False
         )
@@ -31,11 +31,11 @@ class EvalTreeBase(object):
         self.tree = self._tree.copy()
 
     def test_num_final_strings(self):
-        nStrs = self.tree.num_final_strings()
+        nStrs = self.tree.num_final_circuits()
         self.assertEqual(nStrs, len(self.compiled_gatestrings))
 
     def test_final_slice(self):
-        nStrs = self.tree.num_final_strings()
+        nStrs = self.tree.num_final_circuits()
         self.assertEqual(self.tree.final_slice(None), slice(0, nStrs))  # trivial since t is not split
 
     def test_num_final_elements(self):
@@ -43,41 +43,41 @@ class EvalTreeBase(object):
         # TODO assert correctness
 
     def test_evaluation_order(self):
-        order = self.tree.get_evaluation_order()
+        order = self.tree.evaluation_order()
         for k in order:
             assert(len(self.tree[k]) in (2, 3))
             # TODO does this assert correctness?
 
     def test_get_sub_trees(self):
-        subtrees = self.tree.get_sub_trees()
+        subtrees = self.tree.sub_trees()
         # TODO assert correctness
 
     def test_permute(self):
         # TODO no randomness
-        gsl = self.tree.generate_circuit_list()
+        gsl = self.tree.compute_circuits()
         dummy = np.random.rand(len(gsl))
         # TODO assert correctness of intermediate value
-        dummy_computational = self.tree.permute_original_to_computation(dummy)
+        dummy_computational = self.tree._permute_original_to_computation(dummy)
         dummy2 = self.tree.permute_computation_to_original(dummy_computational)
         self.assertArraysAlmostEqual(dummy, dummy2)
 
     def test_split_on_num_subtrees(self):
         # TODO can this be broken up?
         # Split using num_sub_trees
-        gsl1 = self.tree.generate_circuit_list()
+        gsl1 = self.tree.compute_circuits()
         lookup2 = self.tree.split(self.lookup, num_sub_trees=5)
         # TODO assert correctness
-        gsl2 = self.tree.generate_circuit_list()
+        gsl2 = self.tree.compute_circuits()
         self.assertEqual(gsl1, gsl2)
 
-        unpermuted_list = self.tree.generate_circuit_list(permute=False)
+        unpermuted_list = self.tree.compute_circuits(permute=False)
         self.assertTrue(self.tree.is_split())
 
-        subtrees = self.tree.get_sub_trees()
+        subtrees = self.tree.sub_trees()
         for i, st in enumerate(subtrees):
             fslc = st.final_slice(self.tree)
             # permute=False not necessary though, since subtree is not split it's elements are not permuted
-            sub_gsl = st.generate_circuit_list(permute=False)
+            sub_gsl = st.compute_circuits(permute=False)
             self.assertEqual(sub_gsl, unpermuted_list[fslc])
 
     def test_split_on_max_subtree_size(self):
@@ -86,21 +86,21 @@ class EvalTreeBase(object):
         # Split using max_sub_tree_size
         maxSize = 25
 
-        gsl1 = self.tree.generate_circuit_list()
+        gsl1 = self.tree.compute_circuits()
         lookup2 = self.tree.split(self.lookup, max_sub_tree_size=maxSize)
         # TODO assert correctness
-        gsl2 = self.tree.generate_circuit_list()
+        gsl2 = self.tree.compute_circuits()
         self.assertEqual(gsl1, gsl2)
 
-        unpermuted_list = self.tree.generate_circuit_list(permute=False)
+        unpermuted_list = self.tree.compute_circuits(permute=False)
 
         self.assertTrue(self.tree.is_split())
 
-        subtrees2 = self.tree.get_sub_trees()
+        subtrees2 = self.tree.sub_trees()
         for i, st in enumerate(subtrees2):
             fslc = st.final_slice(self.tree)
             # permute=False not necessary though, since subtree is not split it's elements are not permuted
-            sub_gsl = st.generate_circuit_list(permute=False)
+            sub_gsl = st.compute_circuits(permute=False)
             self.assertEqual(sub_gsl, unpermuted_list[fslc])
 
     def test_split_raises_on_conflicting_args(self):
@@ -157,7 +157,7 @@ class MapEvalTreeBase(object):
         ops = 0
         for iStart, remainder, iCache in self.tree:
             ops += len(remainder)
-        self.assertEqual(ops, self.tree.get_num_applies())
+        self.assertEqual(ops, self.tree.num_applies())
 
     def test_squeeze(self):
         # TODO optimize!!
@@ -170,7 +170,7 @@ class MatrixEvalTreeBase(object):
     constructor = MatrixEvalTree
 
     def test_get_min_tree_size(self):
-        self.tree.get_min_tree_size()
+        self.tree._min_tree_size()
         # TODO assert correctness
 
 

@@ -72,7 +72,7 @@ class BasisTester(BaseCase):
     def test_basis_object(self):
         # test a few aspects of a Basis object that other tests miss...
         b = basis.Basis.cast("pp", 4)
-        beq = b.simple_equivalent()
+        beq = b.create_simple_equivalent()
         longnm = bt.basis_longname(b)
         lbls = bt.basis_element_labels(b, None)
 
@@ -96,8 +96,8 @@ class BasisTester(BaseCase):
         block_mxs = sparseBlockPP.elements
         # TODO assert correctness
 
-        expeq = sparsePP.simple_equivalent()
-        block_expeq = sparseBlockPP.simple_equivalent()
+        expeq = sparsePP.create_simple_equivalent()
+        block_expeq = sparseBlockPP.create_simple_equivalent()
         # TODO assert correctness
 
         raw_mxs = bt.basis_matrices("pp", 4, sparse=True)
@@ -109,9 +109,9 @@ class BasisTester(BaseCase):
         self.assertNotEqual(sparsePP_2Q, sparseGM_2Q)
 
         #sparse transform matrix
-        trans = sparsePP.transform_matrix(sparsePP2)
+        trans = sparsePP.create_transform_matrix(sparsePP2)
         self.assertArraysAlmostEqual(trans, np.identity(4, 'd'))
-        trans2 = sparsePP.transform_matrix(denseGM)
+        trans2 = sparsePP.create_transform_matrix(denseGM)
         # TODO assert correctness
 
         #test equality for large bases

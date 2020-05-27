@@ -44,8 +44,8 @@ class SymplecticBase(object):
         # Check that the inversion function is working.
         s_S = symplectic.random_symplectic_matrix(self.n)
         sin = symplectic.inverse_symplectic(s_S)
-        self.assertArraysEqual(matrixmod2.dotmod2(sin, s_S), np.identity(2 * self.n, int))
-        self.assertArraysEqual(matrixmod2.dotmod2(s_S, sin), np.identity(2 * self.n, int))
+        self.assertArraysEqual(matrixmod2.dot_mod2(sin, s_S), np.identity(2 * self.n, int))
+        self.assertArraysEqual(matrixmod2.dot_mod2(s_S, sin), np.identity(2 * self.n, int))
 
     def test_random_clifford(self):
         # Check the Clifford sampler runs.
@@ -61,8 +61,8 @@ class SymplecticBase(object):
         self.assertTrue(symplectic.check_valid_clifford(sin, pin))
 
         # Check the symplectic matrix part of the inverse Clifford works
-        self.assertArraysEqual(matrixmod2.dotmod2(sin, s), np.identity(2 * self.n, int))
-        self.assertArraysEqual(matrixmod2.dotmod2(s, sin), np.identity(2 * self.n, int))
+        self.assertArraysEqual(matrixmod2.dot_mod2(sin, s), np.identity(2 * self.n, int))
+        self.assertArraysEqual(matrixmod2.dot_mod2(s, sin), np.identity(2 * self.n, int))
 
     def test_compose_cliffords(self):
         # Check that the composite Clifford function runs, and works correctly in the special case whereby
@@ -86,7 +86,7 @@ class SymplecticBase(object):
 
     def test_internal_gate_symplectic_representations(self):
         # Basic tests of the symp. rep. dictionary
-        srep_dict = symplectic.get_internal_gate_symplectic_representations()
+        srep_dict = symplectic.compute_internal_gate_symplectic_representations()
 
         H = (1 / np.sqrt(2)) * np.array([[1., 1.], [1., -1.]], complex)
         s, p = symplectic.unitary_to_symplectic(H)

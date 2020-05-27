@@ -66,7 +66,7 @@ class BulkCircuitList(list):
         """
         #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         if isinstance(circuit_list_or_structure, (list, tuple)):
-            circuit_list_or_structure = list(map(_Circuit.create_from, circuit_list_or_structure))
+            circuit_list_or_structure = list(map(_Circuit.cast, circuit_list_or_structure))
             self.circuits_to_use = circuit_list_or_structure
             self.circuit_structure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
             self.circuit_structure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"

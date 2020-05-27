@@ -2,7 +2,7 @@ import pickle
 
 from ..util import BaseCase
 
-from pygsti.construction.modelconstruction import build_explicit_model
+from pygsti.construction.modelconstruction import create_explicit_model
 from pygsti.objects import ExplicitOpModel
 import pygsti.objects.labeldicts as ld
 
@@ -18,7 +18,7 @@ class LabelDictTester(BaseCase):
             d['rho0'] = [0]  # bad default parameter type
 
     def test_iter_gatesets(self):
-        model = build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        model = create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         model2 = ExplicitOpModel(['Q0'])
         for label, gate in model.operations.items():
             model2[label] = gate

@@ -36,7 +36,7 @@ class TestReportables(BaseTestCase):
         gs2 = std.target_model()
         gl = "Gx" # operation label
         opstr = pygsti.obj.Circuit( ('Gx','Gx') )
-        syntheticIdles = pygsti.construction.circuit_list( [
+        syntheticIdles = pygsti.construction.to_circuits( [
              ('Gx',)*4, ('Gy',)*4 ] )
 
         gatesetfn_factories = (  # model, oplabel

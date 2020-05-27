@@ -39,7 +39,7 @@ class Estimate(object):
     ----------
     parent : Results
         The parent Results object containing the dataset and
-        operation sequence structure used for this Estimate.
+        circuit structure used for this Estimate.
 
     models : dict, optional
         A dictionary of models to included in this estimate
@@ -50,7 +50,7 @@ class Estimate(object):
     """
 
     @classmethod
-    def gst_init(cls, parent, target_model=None, seed_model=None,
+    def create_gst_estimate(cls, parent, target_model=None, seed_model=None,
                  models_by_iter=None, parameters=None):
         """
         Initialize an empty Estimate object.
@@ -59,7 +59,7 @@ class Estimate(object):
         ----------
         parent : Results
             The parent Results object containing the dataset and
-            operation sequence structure used for this Estimate.
+            circuit structure used for this Estimate.
 
         target_model : Model
             The target model used when optimizing the objective.
@@ -97,7 +97,7 @@ class Estimate(object):
         ----------
         parent : Results
             The parent Results object containing the dataset and
-            operation sequence structure used for this Estimate.
+            circuit structure used for this Estimate.
 
         models : dict, optional
             A dictionary of models to included in this estimate
@@ -215,7 +215,7 @@ class Estimate(object):
         else:
             verbosities = [gop.get('verbosity', 0) for gop in goparams_list]
             max_vb = max([v.verbosity if isinstance(v, _VerbosityPrinter) else v for v in verbosities])
-        printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
+        printer = _VerbosityPrinter.create_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
         for i, gop in enumerate(goparams_list):
@@ -278,7 +278,7 @@ class Estimate(object):
         confidence intervals and regions in reports and elsewhere.  This
         function creates such a factory, which is specific to a given
         `Model` (given by this object's `.models[model_label]` ) and
-        operation sequence list (given by the parent `Results`'s
+        circuit list (given by the parent `Results`'s
         `.circuit_lists[gastrings_label]` list).
 
         Parameters
@@ -287,14 +287,14 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         Returns
         -------
         ConfidenceRegionFactory
             The newly created factory (also cached internally) and accessible
-            via the :func:`get_confidence_region_factory` method.
+            via the :func:`create_confidence_region_factory` method.
         """
         ky = CRFkey(model_label, circuits_label)
         if ky in self.confidence_region_factories:
@@ -315,7 +315,7 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         Returns
@@ -324,7 +324,7 @@ class Estimate(object):
         """
         return bool(CRFkey(model_label, circuits_label) in self.confidence_region_factories)
 
-    def get_confidence_region_factory(self, model_label='final iteration estimate',
+    def create_confidence_region_factory(self, model_label='final iteration estimate',
                                       circuits_label='final', create_if_needed=False):
         """
         Retrieves a confidence region factory for the given model and circuit list labels.
@@ -337,7 +337,7 @@ class Estimate(object):
             The label of a `Model` held within this `Estimate`.
 
         circuits_label : str, optional
-            The label of a operation sequence list within this estimate's parent
+            The label of a circuit list within this estimate's parent
             `Results` object.
 
         create_if_needed : bool, optional
@@ -385,8 +385,8 @@ class Estimate(object):
             that identifies the reference model.
 
         circuits_label : str, optional
-            The key of the operation sequence list (within the parent `Results`'s
-            `.circuit_lists` dictionary) that identifies the operation sequence
+            The key of the circuit list (within the parent `Results`'s
+            `.circuit_lists` dictionary) that identifies the circuit
             list used by the old (&new) confidence region factories.
 
         eps : float, optional
@@ -403,7 +403,7 @@ class Estimate(object):
             Note: this region is also stored internally and as such the return
             value of this function can often be ignored.
         """
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         ref_model = self.models[from_model_label]
         goparams = self.goparameters[to_model_label]
@@ -439,7 +439,7 @@ class Estimate(object):
                 v = v0.copy(); v[icol] += eps  # dv is along iCol-th direction
                 mdl.from_vector(v)
                 for gauge_group_el in gauge_group_els:
-                    mdl.transform(gauge_group_el)
+                    mdl.transform_inplace(gauge_group_el)
                 w = mdl.to_vector()
                 dw = (w - w0) / eps
                 tmx[:, icol] = dw
@@ -462,7 +462,7 @@ class Estimate(object):
 
         return new_crf
 
-    def get_effective_dataset(self, return_submxs=False):
+    def create_effective_dataset(self, return_submxs=False):
         """
         Generate a `DataSet` containing the effective counts as dictated by the "weights" parameter.
 
@@ -496,7 +496,7 @@ class Estimate(object):
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-            nrows, ncols = gss.plaquette_rows_cols()
+            nrows, ncols = gss.num_plaquette_rows_cols()
 
             sub_mxs = []
             for y in gss.used_yvals():
@@ -508,7 +508,7 @@ class Estimate(object):
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = weights.get(opstr, 1.0)
                             if scaling_mx[i, j] != 1.0:
-                                scaled_dataset[opstr].scale(scaling_mx[i, j])
+                                scaled_dataset[opstr].scale_inplace(scaling_mx[i, j])
 
                     #build up a subMxs list-of-lists as a plotting
                     # function does, so we can easily plot the scaling
@@ -560,14 +560,14 @@ class Estimate(object):
         mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
         circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
         cache = self.parameters.get('final_cache', None)
-        ds = self.get_effective_dataset()
+        ds = self.create_effective_dataset()
         objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
         objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, cache)
-        fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+        fitqty = objfn.chi2k_distributed_qty(objfn.fn())
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
 
-        ds_allstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
-        ds_dof = ds.get_degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
+        ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
+        ds_dof = ds.degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         if hasattr(mdl, 'num_nongauge_params'):
             mdl_dof = mdl.num_nongauge_params() if use_accurate_np else mdl.num_params()
         else:

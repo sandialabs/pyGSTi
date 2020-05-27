@@ -5,7 +5,7 @@ from ..util import BaseCase
 from pygsti.algorithms import grasp
 
 
-# Helper functions to parameterize grasp.do_grasp
+# Helper functions to parameterize grasp.run_grasp
 def someScoreFn(elements_subset):
     num_t = sum([el.count('t') for el in elements_subset])
     num_els = len(elements_subset)
@@ -59,7 +59,7 @@ independent of their order in the source code
         """).split()
 
     def test_do_grasp(self):
-        result = grasp.do_grasp(
+        result = grasp.run_grasp(
             self.elements, greedy_score_fn=someScoreFn,
             rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
             get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
@@ -73,7 +73,7 @@ independent of their order in the source code
         initial_elements = np.zeros(len(self.elements))
         initial_elements[0] = initial_elements[2] = initial_elements[10] = 1.0 #some initial state
 
-        result = grasp.do_grasp(
+        result = grasp.run_grasp(
             self.elements, greedy_score_fn=someScoreFn,
             rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
             get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
@@ -85,7 +85,7 @@ independent of their order in the source code
 
     def test_do_grasp_raises_on_initial_element_size_mismatch(self):
         with self.assertRaises(ValueError):
-            grasp.do_grasp(
+            grasp.run_grasp(
                 self.elements, greedy_score_fn=someScoreFn,
                 rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
                 get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
@@ -96,7 +96,7 @@ independent of their order in the source code
 
     def test_do_grasp_raises_on_missing_feasible_function_and_threshold(self):
         with self.assertRaises(ValueError):
-            grasp.do_grasp(
+            grasp.run_grasp(
                 self.elements, greedy_score_fn=someScoreFn,
                 rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
                 get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,

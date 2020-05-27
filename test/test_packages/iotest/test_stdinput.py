@@ -365,9 +365,9 @@ LiouvilleMx
 BASIS: pp 4
 """)
     def test_read_model(self, tmp_path):
-        gs1 = stdin.read_model(tmp_path)
-        rotXPiOv2 = pc.build_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc.build_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        gs1 = stdin.parse_model(tmp_path)
+        rotXPiOv2 = pc._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pc._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'], rotYPiOv2)
@@ -416,10 +416,10 @@ BASIS: pp 4
 GAUGEGROUP: Full
 """)
     def test_read_model_non_liouville(self, tmp_path):
-        gs2 = stdin.read_model(tmp_path)
-        rotXPi = pc.build_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = pc.build_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc.build_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        gs2 = stdin.parse_model(tmp_path)
+        rotXPi = pc._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotXPiOv2 = pc._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pc._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
         self.assertArraysAlmostEqual(gs2.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G2'], rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G3'], rotXPi)
@@ -471,7 +471,7 @@ BASIS: pp 16
 GAUGEGROUP: Full
 """)
     def test_read_model_2q(self, tmp_path):
-        gs8 = stdin.read_model(tmp_path)
+        gs8 = stdin.parse_model(tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#My Model file with instrument and POVM at end
@@ -526,7 +526,7 @@ LiouvilleVec
 END POVM
 """)
     def test_read_model_with_instrument_and_povm(self, tmp_path):
-        gs10 = stdin.read_model(tmp_path)
+        gs10 = stdin.parse_model(tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#My Model file with bad StateVec size
@@ -538,7 +538,7 @@ StateVec
 """)
     def test_read_model_raises_on_bad_statevec(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad DensityMx size
 
@@ -552,7 +552,7 @@ BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_densitymx(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad UnitaryMx size
 
@@ -565,7 +565,7 @@ BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_unitarymx(self, tmp_path):
         with self.assertRaises(AssertionError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad UnitaryMxExp size
 
@@ -579,7 +579,7 @@ BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_unitarymxexp(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad format spec
 
@@ -592,7 +592,7 @@ BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_format_spec(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""# Invalid gauge group
 
@@ -605,7 +605,7 @@ BASIS: pp 4
 GAUGEGROUP: Foobar
 """)
     def test_read_model_warns_on_invalid_gauge_group(self, tmp_path):
-        self.assertWarns(stdin.read_model, tmp_path)
+        self.assertWarns(stdin.parse_model, tmp_path)
 
     @with_temp_file("""# Invalid item type
 
@@ -619,14 +619,14 @@ GAUGEGROUP: full
 """)
     def test_read_model_raises_on_bad_item_type(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_file("""# No basis dimension
 BASIS: pp
 """)
     def test_read_model_raises_on_no_basis_dimension(self, tmp_path):
         with self.assertRaises(ValueError):
-            stdin.read_model(tmp_path)
+            stdin.parse_model(tmp_path)
 
     @with_temp_path
     def _test_gateset_writeload(self, tmp_path, param):
@@ -634,7 +634,7 @@ BASIS: pp
         mdl.set_all_parameterizations(param)
         io.write_model(mdl, tmp_path)
 
-        gs2 = stdin.read_model(tmp_path)
+        gs2 = stdin.parse_model(tmp_path)
         self.assertAlmostEqual(mdl.frobeniusdist(gs2), 0.0)
         for lbl in mdl.operations:
             self.assertEqual(type(mdl.operations[lbl]), type(gs2.operations[lbl]))

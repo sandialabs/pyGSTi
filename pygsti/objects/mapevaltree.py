@@ -104,14 +104,14 @@ class MapEvalTree(EvalTree):
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular operation sequence:
+        #  information about evaluating a particular circuit:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:]  # clear self (a list)
 
         #Final Indices
         # The first len(circuit_list) elements of the tree correspond
-        # to computing the operation sequences requested in circuit_list.  Doing
+        # to computing the circuits requested in circuit_list.  Doing
         # this make later extraction much easier (views can be used), but
         # requires a non-linear order of evaluation, held in the eval_order list.
         self.eval_order = []
@@ -120,7 +120,7 @@ class MapEvalTree(EvalTree):
         self.num_final_strs = len(circuit_list)
         self[:] = [None] * self.num_final_strs
 
-        #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
+        #Sort the circuits "alphabetically", so that it's trivial to find common prefixes
         sorted_strs = sorted(list(enumerate(circuit_list)), key=lambda x: x[1])
 
         #DEBUG
@@ -200,7 +200,7 @@ class MapEvalTree(EvalTree):
         self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = []  # no subtrees yet
-        assert(self.generate_circuit_list() == circuit_list)
+        assert(self.compute_circuits() == circuit_list)
         assert(None not in circuit_list)
 
     def _remove_from_cache(self, indx):
@@ -273,7 +273,7 @@ class MapEvalTree(EvalTree):
         if max_cache_size == 0:  # special but common case
             curCacheSize = self.cache_size()
             cacheinds = [None] * curCacheSize
-            for i in self.get_evaluation_order():
+            for i in self.evaluation_order():
                 iStart, remainingStr, iCache = self[i]
                 if iStart is not None:
                     remainingStr = self[cacheinds[iStart]][1] + remainingStr
@@ -309,7 +309,7 @@ class MapEvalTree(EvalTree):
             #Remove references to iMin element
             self._remove_from_cache(iMinTree)
 
-    def trim_nonfinal_els(self):  #INPLACE
+    def trim_nonfinal_elements_inplace(self):
         """
         Removes from this tree all non-final elements (to facilitate computation sometimes).
 
@@ -317,7 +317,7 @@ class MapEvalTree(EvalTree):
         -------
         None
         """
-        nFinal = self.num_final_strings()
+        nFinal = self.num_final_circuits()
         self._delete_els(list(range(nFinal, len(self))))
 
         #remove any unreferenced cache elements
@@ -367,9 +367,9 @@ class MapEvalTree(EvalTree):
         """
         return self.cachesize
 
-    def generate_circuit_list(self, permute=True):
+    def compute_circuits(self, permute=True):
         """
-        Generate a list of the final operation sequences this tree evaluates.
+        Generate a list of the final circuits this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -382,7 +382,7 @@ class MapEvalTree(EvalTree):
         permute : bool, optional
             Whether to permute the returned list of strings into the
             same order as the original list passed to initialize(...).
-            When False, the computed order of the operation sequences is
+            When False, the computed order of the circuits is
             given, which is matches the order of the results from calls
             to `Model` bulk operations.  Non-trivial permutation
             occurs only when the tree is split (in order to keep
@@ -392,7 +392,7 @@ class MapEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the operation sequences evaluated by this tree, each
+            A list of the circuits evaluated by this tree, each
             specified as a tuple of operation labels.
         """
         circuits = [None] * len(self)
@@ -400,7 +400,7 @@ class MapEvalTree(EvalTree):
         cachedStrings = [None] * self.cache_size()
 
         #Build rest of strings
-        for i in self.get_evaluation_order():
+        for i in self.evaluation_order():
             iStart, remainingStr, iCache = self[i]
             if iStart is None:
                 circuits[i] = remainingStr
@@ -411,7 +411,7 @@ class MapEvalTree(EvalTree):
                 cachedStrings[iCache] = circuits[i]
 
         #Permute to get final list:
-        nFinal = self.num_final_strings()
+        nFinal = self.num_final_circuits()
         if self.original_index_lookup is not None and permute:
             finalCircuits = [None] * nFinal
             for iorig, icur in self.original_index_lookup.items():
@@ -422,7 +422,7 @@ class MapEvalTree(EvalTree):
             assert(None not in circuits[0:nFinal])
             return circuits[0:nFinal]
 
-    def get_num_applies(self):
+    def num_applies(self):
         """
         Gets the number of "apply" operations required to compute this tree.
 
@@ -471,9 +471,9 @@ class MapEvalTree(EvalTree):
         OrderedDict
             A updated version of el_indices_dict
         """
-        #dbList = self.generate_circuit_list()
+        #dbList = self.compute_circuits()
         tm = _time.time()
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         if (max_sub_tree_size is None and num_sub_trees is None) or \
            (max_sub_tree_size is not None and num_sub_trees is not None):
@@ -486,7 +486,7 @@ class MapEvalTree(EvalTree):
             if num_sub_trees is None or num_sub_trees == 1: return el_indices_dict
 
         self.subTrees = []
-        evalOrder = self.get_evaluation_order()
+        evalOrder = self.evaluation_order()
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
 
@@ -585,7 +585,7 @@ class MapEvalTree(EvalTree):
             # which is what we're often after for memory reasons)
             costMet = "size"  # cost metric
             if costMet == "applies":
-                maxCost = self.get_num_applies() / num_sub_trees
+                maxCost = self.num_applies() / num_sub_trees
             else: maxCost = len(self) / num_sub_trees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0
@@ -743,9 +743,9 @@ class MapEvalTree(EvalTree):
             #UNNEEDED? subTree.recompute_spamtuple_indices(local=False) # REMOVE
             #t6 = _time.time() #REMOVE
 
-            subTree.trim_nonfinal_els()
+            subTree.trim_nonfinal_elements_inplace()
             #t7 = _time.time() #REMOVE
-            circuits = subTree.generate_circuit_list(permute=False)
+            circuits = subTree.compute_circuits(permute=False)
             subTree.opLabels = self._get_op_labels(
                 {c: elbls for c, elbls in zip(circuits, subTree.simplified_circuit_elabels)})
 

@@ -395,7 +395,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             colormap = pygsti_fig.colormap
             assert(colormap is not None), 'Must separately specify a colormap...'
-            norm, cmap = colormap.get_matplotlib_norm_and_cmap()
+            norm, cmap = colormap.create_matplotlib_norm_and_cmap()
 
             masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
             heatmap = axes.pcolormesh(masked_data, cmap=cmap, norm=norm)
@@ -491,7 +491,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             colormap = pygsti_fig.colormap
             if colormap:
-                norm, cmap = colormap.get_matplotlib_norm_and_cmap()
+                norm, cmap = colormap.create_matplotlib_norm_and_cmap()
                 s = _plt.scatter(x, y, c=y, s=50, cmap=cmap, norm=norm)
             else:
                 s = _plt.scatter(x, y, c=y, s=50, cmap='gray')
@@ -638,8 +638,8 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
     if ylabel is not None:
         axes.set_ylabel(ylabel, fontsize=(fontsize + 4))
 
-    #Copied from generate_boxplot
-    def _val_filter(vals):  # filter to latex-ify operation sequences.  Later add filter as a possible parameter
+    #Copied from _summable_color_boxplot
+    def _val_filter(vals):  # filter to latex-ify circuits.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
             if type(val) in (tuple, _objs.Circuit) and all([type(el) == str for el in val]):

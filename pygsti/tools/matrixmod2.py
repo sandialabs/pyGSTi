@@ -15,7 +15,7 @@ General matrix utilities. Some, but not all, are specific to matrices over the i
 import numpy as _np
 
 
-def dotmod2(m1, m2):
+def dot_mod2(m1, m2):
     """
     Returns the product over the integers modulo 2 of two matrices.
 
@@ -34,7 +34,7 @@ def dotmod2(m1, m2):
     return _np.dot(m1, m2) % 2
 
 
-def multidotmod2(mlist):
+def multidot_mod2(mlist):
     """
     Returns the product over the integers modulo 2 of a list of matrices.
 
@@ -50,7 +50,7 @@ def multidotmod2(mlist):
     return _np.linalg.multi_dot(mlist) % 2
 
 
-def detmod2(m):
+def det_mod2(m):
     """
     Returns the determinant of a matrix over the integers modulo 2 (GL(n,2)).
 
@@ -262,10 +262,10 @@ def albert_factor(d, failcount=0):
     proper = False
     while not proper:
         N = onesify(d)
-        aa = multidotmod2([N, d, N.T])
+        aa = multidot_mod2([N, d, N.T])
         P = proper_permutation(aa)
-        A = multidotmod2([P, aa, P.T])
-        proper = check_proper_permutation(A)
+        A = multidot_mod2([P, aa, P.T])
+        proper = _check_proper_permutation(A)
 
     t = len(A)
 
@@ -281,8 +281,8 @@ def albert_factor(d, failcount=0):
         zer = _np.zeros([t - ind - 1, 1])
         L = _np.array(_np.bmat([[_np.eye(1), x], [zer, L]]), dtype='int')
 
-    Qinv = inv_mod2(dotmod2(P, N))
-    L = dotmod2(_np.array(Qinv), L)
+    Qinv = inv_mod2(dot_mod2(P, N))
+    L = dot_mod2(_np.array(Qinv), L)
 
     return L
 
@@ -330,7 +330,7 @@ def random_invertable_matrix(n, failcount=0):
     numpy.ndarray
     """
     M = _np.array([random_bitstring(n, _np.random.randint(0, 2)) for x in range(n)])
-    if detmod2(M) == 0:
+    if det_mod2(M) == 0:
         if failcount < 100:
             return random_invertable_matrix(n, failcount + 1)
     else:
@@ -351,7 +351,7 @@ def random_symmetric_invertable_matrix(n):
     numpy.ndarray
     """
     M = random_invertable_matrix(n)
-    return dotmod2(M, M.T)
+    return dot_mod2(M, M.T)
 
 
 def onesify(a, failcount=0, maxfailcount=100):
@@ -383,7 +383,7 @@ def onesify(a, failcount=0, maxfailcount=100):
     M = []
     while (len(M) < t) and (count < 40):
         bitstr = random_bitstring(t, _np.random.randint(0, 2))
-        if dotmod2(bitstr, test_string) == 1:
+        if dot_mod2(bitstr, test_string) == 1:
             if not _np.any([_np.array_equal(bitstr, m) for m in M]):
                 M += [bitstr]
             else:
@@ -394,7 +394,7 @@ def onesify(a, failcount=0, maxfailcount=100):
 
     M = _np.array(M, dtype='int')
 
-    if _np.array_equal(dotmod2(M, inv_mod2(M)), _np.identity(t, int)):
+    if _np.array_equal(dot_mod2(M, inv_mod2(M)), _np.identity(t, int)):
         return _np.array(M)
     else:
         return onesify(a, failcount + 1, maxfailcount=maxfailcount)
@@ -422,7 +422,7 @@ def permute_top(a, i):
     P[i, i] = 0
     P[0, i] = 1
     P[i, 0] = 1
-    return multidotmod2([P, a, P]), P
+    return multidot_mod2([P, a, P]), P
 
 
 def fix_top(a):
@@ -448,7 +448,7 @@ def fix_top(a):
         aa, P = permute_top(a, ind)
         B = _np.round_(aa[1:, 1:])
 
-        if detmod2(B) == 0:
+        if det_mod2(B) == 0:
             continue
         else:
             found_B = True
@@ -479,15 +479,14 @@ def proper_permutation(a):
         perm = fix_top(a[ind:, ind:])
         zer = _np.zeros([ind, t - ind])
         full_perm = _np.array(_np.bmat([[_np.eye(ind), zer], [zer.T, perm]]))
-        a = multidotmod2([full_perm, a, full_perm.T])
+        a = multidot_mod2([full_perm, a, full_perm.T])
         Ps += [full_perm]
 #     return Ps
-    return multidotmod2(list(reversed(Ps)))
+    return multidot_mod2(list(reversed(Ps)))
     #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 
-#PRIVATE
-def check_proper_permutation(a):
+def _check_proper_permutation(a):
     """
     Check to see if the matrix has been properly permuted.
 
@@ -505,6 +504,6 @@ def check_proper_permutation(a):
     t = len(a)
     for ind in range(0, t):
         b = a[ind:, ind:]
-        if detmod2(b) == 0:
+        if det_mod2(b) == 0:
             return False
     return True

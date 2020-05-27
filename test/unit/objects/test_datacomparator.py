@@ -16,11 +16,11 @@ class DataComparatorTester(BaseCase):
         germs = std1Q_XYI.germs
         fiducials = std1Q_XYI.fiducials
         max_lengths = [1, 2, 4, 8]
-        gate_sequences = pc.make_lsgst_experiment_list(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
+        gate_sequences = pc.create_lsgst_circuits(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
         #Generate the data for the two datasets, using the same model, with 100 repetitions of each sequence.
         N = 100
-        cls.DS_0 = pc.generate_fake_data(cls.mdl_exp_0, gate_sequences, N, 'binomial', seed=10)
-        cls.DS_1 = pc.generate_fake_data(cls.mdl_exp_1, gate_sequences, N, 'binomial', seed=20)
+        cls.DS_0 = pc.simulate_data(cls.mdl_exp_0, gate_sequences, N, 'binomial', seed=10)
+        cls.DS_1 = pc.simulate_data(cls.mdl_exp_1, gate_sequences, N, 'binomial', seed=20)
 
     def setUp(self):
         self.mdl_exp_0 = self.mdl_exp_0.copy()
@@ -30,40 +30,40 @@ class DataComparatorTester(BaseCase):
 
     def test_implement(self):
         comparator = dc.DataComparator([self.DS_0, self.DS_1])
-        comparator.implement(significance=0.05)
+        comparator.run(significance=0.05)
         # TODO assert correctness
 
     def test_getters(self):
         comparator = dc.DataComparator([self.DS_0, self.DS_1])
-        comparator.implement(significance=0.05)
+        comparator.run(significance=0.05)
         # XXX do these need unit tests?  EGN: maybe not - could ask Kenny
         mdl = self.DS_0.keys()[10]
-        comparator.get_jsd(mdl)
-        comparator.get_jsd_pseudothreshold()
-        comparator.get_llr(mdl)
-        comparator.get_llr_pseudothreshold()
-        comparator.get_ssjsd(mdl)
-        comparator.get_sstvd(mdl)
-        comparator.get_tvd(mdl)
-        comparator.get_aggregate_llr()
-        comparator.get_aggregate_llr_threshold()
-        comparator.get_aggregate_nsigma()
-        comparator.get_aggregate_pvalue()
-        comparator.get_aggregate_pvalue_threshold()
-        comparator.get_maximum_sstvd()
-        comparator.get_pvalue(mdl)
-        comparator.get_pvalue_pseudothreshold()
-        comparator.get_worst_circuits(10)
+        comparator.jsd(mdl)
+        comparator.jsd_pseudothreshold()
+        comparator.llr(mdl)
+        comparator.llr_pseudothreshold()
+        comparator.ssjsd(mdl)
+        comparator.sstvd(mdl)
+        comparator.tvd(mdl)
+        comparator.aggregate_llr()
+        comparator.aggregate_llr_threshold()
+        comparator.aggregate_nsigma()
+        comparator.aggregate_pvalue()
+        comparator.aggregate_pvalue_threshold()
+        comparator.maximum_sstvd()
+        comparator.pvalue(mdl)
+        comparator.pvalue_pseudothreshold()
+        comparator.worst_circuits(10)
         # TODO assert correctness for all of the above
 
     def test_implement_exclusive(self):
         comparator = dc.DataComparator([self.DS_0, self.DS_1], op_exclusions=['Gx'], ds_names=['D0', 'D1'])
-        comparator.implement(significance=0.05)
+        comparator.run(significance=0.05)
         # TODO assert correctness
 
     def test_implement_inclusive(self):
         comparator = dc.DataComparator([self.DS_0, self.DS_1], op_inclusions=['Gi'], ds_names=['D0', 'D1'])
-        comparator.implement(significance=0.05)
+        comparator.run(significance=0.05)
         # TODO assert correctness
 
     def test_implement_multidataset(self):
@@ -71,7 +71,7 @@ class DataComparatorTester(BaseCase):
         mds.add_dataset('D0', self.DS_0)
         mds.add_dataset('D1', self.DS_1)
         comparator = dc.DataComparator(mds)
-        comparator.implement(significance=0.05)
+        comparator.run(significance=0.05)
         # TODO assert correctness
 
 

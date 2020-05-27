@@ -8,7 +8,7 @@ import pygsti.construction.circuitconstruction as cc
 
 class CircuitConstructionTester(BaseCase):
     def test_simple_gatestrings(self):
-        #The workhorse function is cc.create_circuit_list, which executes its positional arguments within a nested
+        #The workhorse function is cc.create_circuits, which executes its positional arguments within a nested
         #loop given by iterable keyword arguments.  That's a mouthful, so let's look at a few examples:
         As = [('a1',), ('a2',)]
         Bs = [('b1',), ('b2',)]
@@ -25,38 +25,38 @@ class CircuitConstructionTester(BaseCase):
         def sametup(x):
             return "Gx"  # to test string processing
 
-        list0 = cc.create_circuit_list("")
-        self.assertEqual(list0, cc.circuit_list([()]))  # special case: get the empty operation sequence
+        list0 = cc.create_circuits("")
+        self.assertEqual(list0, cc.to_circuits([()]))  # special case: get the empty operation sequence
 
-        list1 = cc.create_circuit_list("a", a=As)
-        self.assertEqual(list1, cc.circuit_list(As))
+        list1 = cc.create_circuits("a", a=As)
+        self.assertEqual(list1, cc.to_circuits(As))
 
-        list2 = cc.create_circuit_list("a+b", a=As, b=Bs, order=['a', 'b'])
-        self.assertEqual(list2, cc.circuit_list([('a1', 'b1'), ('a1', 'b2'), ('a2', 'b1'), ('a2', 'b2')]))
+        list2 = cc.create_circuits("a+b", a=As, b=Bs, order=['a', 'b'])
+        self.assertEqual(list2, cc.to_circuits([('a1', 'b1'), ('a1', 'b2'), ('a2', 'b1'), ('a2', 'b2')]))
 
-        list3 = cc.create_circuit_list("a+b", a=As, b=Bs, order=['b', 'a'])
-        self.assertEqual(list3, cc.circuit_list([('a1', 'b1'), ('a2', 'b1'), ('a1', 'b2'), ('a2', 'b2')]))
+        list3 = cc.create_circuits("a+b", a=As, b=Bs, order=['b', 'a'])
+        self.assertEqual(list3, cc.to_circuits([('a1', 'b1'), ('a2', 'b1'), ('a1', 'b2'), ('a2', 'b2')]))
 
-        list4 = cc.create_circuit_list("R(a)+c", a=As, c=[('c',)], R=rep2, order=['a', 'c'])
-        self.assertEqual(list4, cc.circuit_list([('a1', 'a1', 'c'), ('a2', 'a2', 'c')]))
+        list4 = cc.create_circuits("R(a)+c", a=As, c=[('c',)], R=rep2, order=['a', 'c'])
+        self.assertEqual(list4, cc.to_circuits([('a1', 'a1', 'c'), ('a2', 'a2', 'c')]))
 
-        list5 = cc.create_circuit_list("Ast(a)", a=As, Ast=asserter)
+        list5 = cc.create_circuits("Ast(a)", a=As, Ast=asserter)
         self.assertEqual(list5, [])  # failed assertions cause item to be skipped
 
-        list6 = cc.create_circuit_list("SS(a)", a=As, SS=samestr)
-        self.assertEqual(list6, cc.circuit_list([('Gx',), ('Gx',)]))  # strs => parser => Circuits
+        list6 = cc.create_circuits("SS(a)", a=As, SS=samestr)
+        self.assertEqual(list6, cc.to_circuits([('Gx',), ('Gx',)]))  # strs => parser => Circuits
 
-        list7 = cc.circuit_list(list1)
+        list7 = cc.to_circuits(list1)
         self.assertEqual(list7, list1)
 
         with self.assertRaises(ValueError):
-            cc.circuit_list([{'foo': "Bar"}])  # cannot convert dicts to Circuits...
+            cc.to_circuits([{'foo': "Bar"}])  # cannot convert dicts to Circuits...
 
     def test_fiducials_germ_gatestrings(self):
-        fids = cc.circuit_list([('Gf0',), ('Gf1',)])
-        germs = cc.circuit_list([('G0',), ('G1a', 'G1b')])
+        fids = cc.to_circuits([('Gf0',), ('Gf1',)])
+        germs = cc.to_circuits([('G0',), ('G1a', 'G1b')])
 
-        gateStrings1 = cc.create_circuit_list("f0+germ*e+f1", f0=fids, f1=fids,
+        gateStrings1 = cc.create_circuits("f0+germ*e+f1", f0=fids, f1=fids,
                                               germ=germs, e=2, order=["germ", "f0", "f1"])
         expected1 = ["Gf0(G0)^2Gf0",
                      "Gf0(G0)^2Gf1",
@@ -68,7 +68,7 @@ class CircuitConstructionTester(BaseCase):
                      "Gf1(G1aG1b)^2Gf1"]
         self.assertEqual([x.str for x in gateStrings1], expected1)
 
-        gateStrings2 = cc.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
+        gateStrings2 = cc.create_circuits("f0+T(germ,N)+f1", f0=fids, f1=fids,
                                               germ=germs, N=3, T=cc.repeat_and_truncate,
                                               order=["germ", "f0", "f1"])
         expected2 = ["Gf0G0G0G0Gf0",
@@ -81,7 +81,7 @@ class CircuitConstructionTester(BaseCase):
                      "Gf1G1aG1bG1aGf1"]
         self.assertEqual([x.str for x in gateStrings2], expected2)
 
-        gateStrings3 = cc.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
+        gateStrings3 = cc.create_circuits("f0+T(germ,N)+f1", f0=fids, f1=fids,
                                               germ=germs, N=3,
                                               T=cc.repeat_with_max_length,
                                               order=["germ", "f0", "f1"])
@@ -112,29 +112,29 @@ class CircuitConstructionTester(BaseCase):
         gs4 = cc.repeat_and_truncate(mdl, 4)
         self.assertEqual(gs4, Circuit(('Gx', 'Gx', 'Gy', 'Gx')))
 
-        gs5 = cc.repeat_remainder_for_truncation(mdl, 4)
+        gs5 = cc._repeat_remainder_for_truncation(mdl, 4)
         self.assertEqual(gs5, Circuit(('Gx',)))
 
     def test_simplify(self):
         s = "{}Gx^1Gy{}Gz^1"
-        self.assertEqual(cc.simplify_str(s), "GxGyGz")
+        self.assertEqual(cc._simplify_circuit_string(s), "GxGyGz")
 
         s = "{}Gx^1(Gy)^2{}Gz^1"
-        self.assertEqual(cc.simplify_str(s), "Gx(Gy)^2Gz")
+        self.assertEqual(cc._simplify_circuit_string(s), "Gx(Gy)^2Gz")
 
         s = "{}{}^1{}"
-        self.assertEqual(cc.simplify_str(s), "{}")
+        self.assertEqual(cc._simplify_circuit_string(s), "{}")
 
     def test_circuit_list_accessors(self):
-        expected_allStrs = set(cc.circuit_list(
+        expected_allStrs = set(cc.to_circuits(
             [(), ('Gx',), ('Gy',), ('Gx', 'Gx'), ('Gx', 'Gy'), ('Gy', 'Gx'), ('Gy', 'Gy')]))
         allStrs = cc.list_all_circuits(('Gx', 'Gy'), 0, 2)
         self.assertEqual(set(allStrs), expected_allStrs)
 
-        allStrs = list(cc.gen_all_circuits(('Gx', 'Gy'), 0, 2))
+        allStrs = list(cc.iter_all_circuits(('Gx', 'Gy'), 0, 2))
         self.assertEqual(set(allStrs), expected_allStrs)
 
-        expected_onelenStrs = set(cc.circuit_list(
+        expected_onelenStrs = set(cc.to_circuits(
             [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gy', 'Gx'), ('Gy', 'Gy')]))
         onelenStrs = cc.list_all_circuits_onelen(('Gx', 'Gy'), 2)
         self.assertEqual(set(onelenStrs), expected_onelenStrs)
@@ -144,28 +144,28 @@ class CircuitConstructionTester(BaseCase):
         self.assertTrue(all([len(s) == 2 for s in randStrs]))
         # TODO should assert correctness beyond this
 
-        partialStrs = cc.list_partial_strings(('G1', 'G2', 'G3'))
+        partialStrs = cc.list_partial_circuits(('G1', 'G2', 'G3'))
         self.assertEqual(partialStrs, [(), ('G1',), ('G1', 'G2'), ('G1', 'G2', 'G3')])
 
     def test_translate_circuit_list(self):
-        orig_list = cc.circuit_list(
+        orig_list = cc.to_circuits(
             [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy'), ('Gi',)]
         )
 
-        list0 = cc.translate_circuit_list(orig_list, None)
+        list0 = cc.translate_circuits(orig_list, None)
         self.assertEqual(list0, orig_list)
 
-        list1 = cc.translate_circuit_list(orig_list, {Label('Gx'): (Label('Gx2'),), Label('Gy'): (Label('Gy'),)})
-        expected_list1 = cc.circuit_list(
+        list1 = cc.translate_circuits(orig_list, {Label('Gx'): (Label('Gx2'),), Label('Gy'): (Label('Gy'),)})
+        expected_list1 = cc.to_circuits(
             [('Gx2', 'Gx2'), ('Gx2', 'Gy'), ('Gx2', 'Gx2', 'Gx2'), ('Gy', 'Gy'), ('Gi',)]
         )
         self.assertEqual(list1, expected_list1)
 
-        list2 = cc.translate_circuit_list(
+        list2 = cc.translate_circuits(
             orig_list,
             {Label('Gi'): (Label('Gx'), Label('Gx'), Label('Gx'), Label('Gx'))}
         )
-        expected_list2 = cc.circuit_list(
+        expected_list2 = cc.to_circuits(
             [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy'), ('Gx', 'Gx', 'Gx', 'Gx')]
         )
         self.assertEqual(list2, expected_list2)
@@ -173,7 +173,7 @@ class CircuitConstructionTester(BaseCase):
     def test_compose_alias_dicts(self):
         aliasDict1 = {'A': ('B', 'B')}
         aliasDict2 = {'B': ('C', 'C')}
-        aliasDict3 = cc.compose_alias_dicts(aliasDict1, aliasDict2)
+        aliasDict3 = cc._compose_alias_dicts(aliasDict1, aliasDict2)
         self.assertEqual(aliasDict3, {'A': ('C', 'C', 'C', 'C')})
 
     def test_manipulate_circuit(self):
@@ -206,10 +206,10 @@ class CircuitConstructionTester(BaseCase):
         result = cc.manipulate_circuit(tuple('AAAA'), sequenceRules)
         self.assertEqual(result, ("A", "B", "C", "B", "C", "B", "C"))
 
-        results = cc.manipulate_circuit_list([tuple('ABC'), tuple('GHI')], sequenceRules)
-        results_trivial = cc.manipulate_circuit_list([tuple('ABC'), tuple('GHI')], None)  # special case
+        results = cc.manipulate_circuits([tuple('ABC'), tuple('GHI')], sequenceRules)
+        results_trivial = cc.manipulate_circuits([tuple('ABC'), tuple('GHI')], None)  # special case
         # TODO assert correctness
 
     def test_list_strings_lgst_can_estimate(self):
-        strs = cc.list_strings_lgst_can_estimate(fixtures.ds, fixtures.fiducials, fixtures.fiducials)
+        strs = cc.list_circuits_lgst_can_estimate(fixtures.ds, fixtures.fiducials, fixtures.fiducials)
         # TODO assert correctness

@@ -1,4 +1,6 @@
-""" Volumetric Benchmarking Protocol objects """
+"""
+Volumetric Benchmarking Protocol objects
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -33,7 +35,27 @@ from ..algorithms import randomcircuit as _rc
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
-    """ Experiment design that holds circuits organized by depth """
+    """
+    Experiment design that holds circuits organized by depth.
+
+    Parameters
+    ----------
+    depths : list or tuple
+        A sequence of integers specifying the circuit depth associated with each
+        element of `circuit_lists`.
+
+    circuit_lists : list or tuple
+        The circuits to include in this experiment design.  Each element is a
+        list of :class:`Circuits` specifying the circuits at the corresponding depth.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+
+    remove_duplicates : bool, optional
+        Whether to remove duplicates when automatically creating
+        all the circuits that need data.
+    """
 
     def __init__(self, depths, circuit_lists, qubit_labels=None, remove_duplicates=True):
         assert(len(depths) == len(circuit_lists)), \
@@ -44,8 +66,33 @@ class ByDepthDesign(_proto.CircuitListsDesign):
 
 class BenchmarkingDesign(ByDepthDesign):
     """
-    Experiment design that holds benchmarking data, i.e. definite-outcome
-    circuits organized by depth along with their corresponding ideal outcomes.
+    Experiment design that holds benchmarking data.
+
+    By "benchmarking data" we mean definite-outcome circuits organized
+    by depth along with their corresponding ideal outcomes.
+
+    Parameters
+    ----------
+    depths : list or tuple
+        A sequence of integers specifying the circuit depth associated with each
+        element of `circuit_lists`.
+
+    circuit_lists : list or tuple
+        The circuits to include in this experiment design.  Each element is a
+        list of :class:`Circuits` specifying the circuits at the corresponding depth.
+
+    ideal_outs : list or tuple
+        The ideal circuit outcomes corresponding to the circuits in `circuit_lists`.
+        Each element of `ideal_outs` is a list (with the same length as the corresponding
+        `circuits_lists` element) of outcome labels.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+
+    remove_duplicates : bool, optional
+        Whether to remove duplicates when automatically creating
+        all the circuits that need data.
     """
 
     def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
@@ -56,12 +103,149 @@ class BenchmarkingDesign(ByDepthDesign):
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
-    """ This Design is a temporary hack for a periodic mirror circuits experiment"""
+    """
+    Experiment design for periodic mirror-circuit benchmarking.
+
+    **THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
+    OF PYGSTI!**
+
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+       handed to the sampler, as the first argument of the sampler function.
+
+    depths : list of ints
+        The "mirror RB depths" of the circuits, which is closely related to the circuit depth. A MRB
+        length must be an even integer, and can be zero.
+
+        - If `localclifford` and `paulirandomize` are False, the depth of a sampled circuit = the MRB length.
+          The first length/2 layers are all sampled independently according to the sampler specified by
+          `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
+          by the first half.
+
+        - If `paulirandomize` is True and `localclifford` is False, the depth of a circuit is
+          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+          the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+
+        - If `paulirandomize` and `localclifford` are True, the depth of a circuit is
+          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+        - If `paulirandomize` is False and `localclifford` is True, the depth of a circuit is
+          length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+    circuits_per_depth : int
+        The number of (possibly) different MRB circuits sampled at each length.
+
+    qubit_labels : list, optional
+        If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        irrelevant.
+
+    sampler : str or function, optional
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+        a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+        forbidden by this function]. If `sampler` is a function, it should be a function that takes
+        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+        Label objects. Note that the default 'Qelimination' is not necessarily the most useful
+        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+        *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
+        for more information.
+
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+        remaining arguments handed to the sampler.
+
+    localclifford : bool, optional
+        Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
+        qubits (compiled into the native gates of the device).
+
+    paulirandomize : bool, optional
+        Whether to have uniformly random Pauli operators on all of the qubits before and
+        after all of the layers in the "out" and "back" random circuits. At length 0 there
+        is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
+        gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
+        are
+
+    fixed_versus_depth : bool, optional
+        <TODO description>
+
+    descriptor : str, optional
+        A string describing the generated experiment. Stored in the returned dictionary.
+    """
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
                                sampler='edgegrab', samplerargs=(1 / 4), localclifford=True,
                                paulirandomize=True, fixed_versus_depth=False,
                                descriptor='A random germ mirror circuit experiment'):
+        """
+        Create a :class:`PeriodicMirrorCircuitDesign` from an existing set of sampled RB circuits.
+
+        This function serves as an alternative to the usual method of creating a mirror
+        RB experiment design by sampling a number of circuits randomly.  This function
+        takes a list of previously-sampled random circuits and does not sampling internally.
+
+        Parameters
+        ----------
+        circuits_and_idealouts_by_depth : dict
+            A dictionary whose keys are integer depths and whose values are lists
+            of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
+            ideal (correct) outcome.
+
+        qubit_labels : list, optional
+            If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+            be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+            If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+            irrelevant.
+
+        sampler : str or function, optional
+            If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+            Except for 'local', this corresponds to sampling layers according to the sampling function
+            in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+            corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+            a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+            forbidden by this function]. If `sampler` is a function, it should be a function that takes
+            as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+            Label objects. Note that the default 'Qelimination' is not necessarily the most useful
+            in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+            *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
+            for more information.
+
+        samplerargs : list, optional
+            A list of arguments that are handed to the sampler function, specified by `sampler`.
+            The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+            remaining arguments handed to the sampler.
+
+        localclifford : bool, optional
+            Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
+            qubits (compiled into the native gates of the device).
+
+        paulirandomize : bool, optional
+            Whether to have uniformly random Pauli operators on all of the qubits before and
+            after all of the layers in the "out" and "back" random circuits. At length 0 there
+            is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
+            gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
+            are
+
+        fixed_versus_depth : bool, optional
+            <TODO description>
+
+        descriptor : str, optional
+            A string describing the generated experiment. Stored in the returned dictionary.
+
+        Returns
+        -------
+        PeriodicMirrorCircuitDesign
+        """
         depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
         circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
         ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
@@ -80,7 +264,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         ideal_outs = [[] for d in depths]
 
         for j in range(circuits_per_depth):
-            circtemp, outtemp, junk = _rc.random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
+            circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
                                                                            localclifford=localclifford,
                                                                            paulirandomize=paulirandomize,
                                                                            interactingQs_density=samplerargs[0],
@@ -106,19 +290,44 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
 class SummaryStatistics(_proto.Protocol):
     """
-    A protocol that can construct "summary" quantities from the raw data.
+    A protocol that can construct "summary" quantities from raw data.
 
+    Parameters
+    ----------
+    name : str
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
+
+    Attributes
+    ----------
+    summary_statistics : tuple
+        Static list of the categories of summary information this protocol can compute.
+
+    circuit_statistics : tuple
+        Static list of the categories of circuit information this protocol can compute.
     """
     summary_statistics = ('success_counts', 'total_counts', 'hamming_distance_counts',
-                         'success_probabilities', 'polarization', 'adjusted_success_probabilities')
+                          'success_probabilities', 'polarization', 'adjusted_success_probabilities')
     circuit_statistics = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
         super().__init__(name)
 
-    def compute_summary_data(self, data):
+    def _compute_summary_statistics(self, data):
+        """
+        Computes all summary statistics for the given data.
 
+        Parameters
+        ----------
+        data : ProtocolData
+            The data to operate on.
+
+        Returns
+        -------
+        NamedDict
+        """
         def success_counts(dsrow, circ, idealout):
             if dsrow.total == 0: return 0  # shortcut?
             return dsrow[idealout]
@@ -154,11 +363,22 @@ class SummaryStatistics(_proto.Protocol):
                    'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
 
-        return self.compute_dict(data, self.summary_statistics,
+        return self._compute_dict(data, self.summary_statistics,
                                  get_summary_values, for_passes='all')
 
-    def compute_circuit_data(self, data):
+    def _compute_circuit_statistics(self, data):
+        """
+        Computes all circuit statistics for the given data.
 
+        Parameters
+        ----------
+        data : ProtocolData
+            The data to operate on.
+
+        Returns
+        -------
+        NamedDict
+        """
         def get_circuit_values(icirc, circ, dsrow, idealout):
             ret = {'twoQgate_count': circ.two_q_gate_count(),
                    'circuit_depth': circ.depth(),
@@ -168,7 +388,7 @@ class SummaryStatistics(_proto.Protocol):
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self.compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
+        return self._compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
 
     # def compute_dscmp_data(self, data, dscomparator):
 
@@ -181,8 +401,22 @@ class SummaryStatistics(_proto.Protocol):
 
     #     return self.compute_dict(data, "dscmpdata", self.dsmp_statistics, get_dscmp_values, for_passes="none")
 
-    def compute_predicted_probs(self, data, model):
+    def _compute_predicted_probs(self, data, model):
+        """
+        Compute the predicted success probabilities of `model` given `data`.
 
+        Parameters
+        ----------
+        data : ProtocolData
+            The data.
+
+        model : SuccessFailModel
+            The model.
+
+        Returns
+        -------
+        NamedDict
+        """
         def get_success_prob(icirc, circ, dsrow, idealout):
             #if set(circ.line_labels) != set(qubits):
             #    trimmedcirc = circ.copy(editable=True)
@@ -191,20 +425,46 @@ class SummaryStatistics(_proto.Protocol):
             #            trimmedcirc.delete_lines(q)
             #else:
             #    trimmedcirc = circ
-            return {'success_probabilities': model.probs(circ)[('success',)]}
+            return {'success_probabilities': model.probabilities(circ)[('success',)]}
 
-        return self.compute_dict(data, ('success_probabilities',),
+        return self._compute_dict(data, ('success_probabilities',),
                                  get_success_prob, for_passes="none")
 
-    #def compute_results_qty(self, results, qtyname, component_names, compute_fn, force=False, for_passes="all"):
-    def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
+    def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
+        """
+        Executes a computation function row-by-row on the data in `data` and packages the results.
 
+        Parameters
+        ----------
+        data : ProtocolData
+            The data.
+
+        component_names : list or tuple
+            A sequence of string-valued component names which must be the keys of the dictionary
+            returned by `compute_fn`.
+
+        compute_fn : function
+            A function that computes values for each item in `component_names` for each row of data.
+            This function should have signature:
+            `compute_fn(icirc : int, circ : Circuit, dsrow : _DataSetRow, idealout : OutcomeLabel)`
+            and should return a dictionary whose keys are the same as `component_names`.
+
+        for_passes : {'all', 'none', 'first'}
+            UNUSED.  What passes within `data` values are computed for.
+
+        Returns
+        -------
+        NamedDict
+            A nested dictionary with indices: component-name, depth, circuit-index
+            (the last level is a *list*, not a dict).
+        """
         design = data.edesign
         ds = data.dataset
 
         depths = design.depths
         qty_data = _tools.NamedDict('Datatype', 'category', None, None,
-                                    {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
+                                    {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float',
+                                                            {depth: [] for depth in depths})
                                      for comp in component_names})
 
         #loop over all circuits
@@ -221,22 +481,54 @@ class SummaryStatistics(_proto.Protocol):
 
         return qty_data
 
-    def create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
+    def _create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
+        """
+        Create a nested :class:`NamedDict` with depht and width indices.
+
+        Parameters
+        ----------
+        depths : list or tuple
+            The (integer) depths to use.
+
+        widths : list or tuple
+            The (integer) widths to use.
+
+        fillfn : function
+            A function with no arguments that is called to return a default value
+            for each (depth, width).
+
+        seriestype : {"float", "int"}
+            The type of values held by this nested dict.
+
+        Returns
+        -------
+        NamedDict
+        """
         return _tools.NamedDict(
             'Depth', 'int', None, None, {depth: _tools.NamedDict(
                 'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
-    def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
+    def _add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
-        Adds bootstrapped "summary datasets". The bootstrap is over both the finite counts of each
-        circuit and over the circuits at each length.
+        Adds bootstrapped "summary datasets".
+
+        The bootstrap is over both the finite counts of each circuit and
+        over the circuits at each length.
 
         Note: only adds quantities if they're needed.
 
         Parameters
         ----------
+        data_cache : dict
+            A cache of already-existing bootstraps.
+
         num_qtys : int, optional
             The number of bootstrapped datasets to construct.
+
+        finitecounts : bool, optional
+            Whether finite counts should be used, i.e. whether the bootstrap samples
+            include finite sample error with the same number of counts as the sampled
+            data, or whether they have no finite sample error (just probabilities).
 
         Returns
         -------
@@ -296,14 +588,39 @@ class SummaryStatistics(_proto.Protocol):
 
 class ByDepthSummaryStatistics(SummaryStatistics):
     """
-    TODO
-    """
-    def __init__(self, depths='all', statistics_to_compute='polarization', names_to_compute=None,
-                 custom_data_src=None, name=None):
-        """
-        todo
+    A protocol that computes summary statistics for data organized into by-depth circuit lists.
 
-        """
+    Parameters
+    ----------
+    depths : list or "all", optional
+        A sequence of the depths to compute summary statistics for or the special `"all"`
+        value which means "all the depths in the data".  If data being processed does not
+        contain a given value in `depths`, it is just ignored.
+
+    statistics_to_compute : tuple, optional
+        A sequence of the statistic names to compute. Allowed names are:
+       'success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities', 'polarization',
+       'adjusted_success_probabilities', 'twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index',
+       and 'circuit_width'.
+
+    names_to_compute : tuple, optional
+        A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
+        the statistic names themselves are used.  These names are the column names produced by calling
+        `to_dataframe` on this protocol's results, so can be useful to name the computed statistics differently
+        from the statistic name itself to distinguish it from the same statistic run on other data, when you
+        want to combine data frames generated from multiple :class:`ProtocolData` objects.
+
+    custom_data_src : SuccessFailModel, optional
+        An alternate source of the data counts used to compute the desired summary statistics.  Currently
+        this can only be a :class:`SuccessFailModel`.
+
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
+    """
+    def __init__(self, depths='all', statistics_to_compute=('polarization',), names_to_compute=None,
+                 custom_data_src=None, name=None):
         super().__init__(name)
         self.depths = depths
         self.statistics_to_compute = statistics_to_compute
@@ -320,7 +637,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
             if statistic in self.summary_statistics:
                 if statistic not in data.cache:
-                    summary_data_dict = self.compute_summary_data(data)
+                    summary_data_dict = self._compute_summary_statistics(data)
                     data.cache.update(summary_data_dict)
             # Code currently doesn't work with a dscmp, so commented out.
             # elif statistic in self.dscmp_statistics:
@@ -329,7 +646,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             #         data.cache.update(dscmp_data)
             elif statistic in self.circuit_statistics:
                 if statistic not in data.cache:
-                    circuit_data = self.compute_circuit_data(data)
+                    circuit_data = self._compute_circuit_statistics(data)
                     data.cache.update(circuit_data)
             else:
                 raise ValueError("Invalid statistic: %s" % statistic)
@@ -346,7 +663,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
             for depth in depths:
                 for circ in circuit_lists_for_depths[depth]:
-                    predicted_success_prob = sfmodel.probs(circ)[('success',)]
+                    predicted_success_prob = sfmodel.probabilities(circ)[('success',)]
                     if statistic == 'success_probabilities':
                         statistic_per_depth[depth].append(predicted_success_prob)
                     elif statistic == 'polarization':
@@ -366,8 +683,27 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
     def run(self, data, memlimit=None, comm=None, dscomparator=None):
         """
-        TODO
+        Run this protocol on `data`.
 
+        Parameters
+        ----------
+        results : ProtocolResults or ProtocolResultsDir
+            The input results.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+
+        dscomparator : DataComparator
+            Special additional comparator object for
+            comparing data sets.
+
+        Returns
+        -------
+        SummaryStatisticsResults
         """
         design = data.edesign
         width = len(design.qubit_labels)
@@ -377,7 +713,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             statistic_per_depth = self._get_statistic_per_depth(statistic, data)
             depths = statistic_per_depth.keys() if self.depths == 'all' else \
                 filter(lambda d: d in statistic_per_depth, self.depths)
-            statistic_per_dwc = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
+            statistic_per_dwc = self._create_depthwidth_dict(depths, (width,), lambda: None, 'float')
             # a nested NamedDict with indices: depth, width, circuit_index (width only has single value though)
 
             for depth in depths:
@@ -403,13 +739,21 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
 class SummaryStatisticsResults(_proto.ProtocolResults):
     """
-    The results from running a volumetric benchmark protocol
+    Summary statistics computed for a set of data.
 
+    Usually the result of running a :class:`SummaryStatistics` (or derived) protocol.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The experimental data these results are generated from.
+
+    protocol_instance : Protocol
+        The protocol that generated these results.
     """
     def __init__(self, data, protocol_instance):
         """
-        Initialize an empty Results object.
-        TODO: docstring
+        Initialize an empty SummaryStatisticsResults object.
         """
         super().__init__(data, protocol_instance)
         self.statistics = {}

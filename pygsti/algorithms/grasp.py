@@ -66,13 +66,13 @@ def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
     return neighbors
 
 
-def grasp_greedy_construction(elements, score_fn, rcl_fn, feasible_threshold=None,
+def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_threshold=None,
                               feasible_fn=None, initial_elements=None):
     """
     Constructs a subset of `elements` that represents a feasible solution.
 
     This function performs the "greedy-construction" part of a grasp
-    iteration (see :func:`do_grasp_iteration`). The returned solution
+    iteration (see :func:`run_grasp_iteration`). The returned solution
     subset is built up by repeating the following step until a feasible
     solution (using `feasible_threshold` OR `feasible_fn`):
 
@@ -165,7 +165,7 @@ def grasp_greedy_construction(elements, score_fn, rcl_fn, feasible_threshold=Non
     return soln
 
 
-def grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
+def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
                        feasible_threshold=None, feasible_fn=None):
     """
     Perfom the local-search part of a grasp iteration.
@@ -264,7 +264,7 @@ def grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
     return currentSoln
 
 
-def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
+def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
                        get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
                        initial_elements=None, seed=None, verbosity=0):
     """
@@ -330,16 +330,16 @@ def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     localSoln : list
         The sublist of `elements` given by the local search.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
-    initialSoln = grasp_greedy_construction(elements, greedy_score_fn, rcl_fn,
+    initialSoln = _grasp_construct_feasible_solution(elements, greedy_score_fn, rcl_fn,
                                             feasible_threshold, feasible_fn,
                                             initial_elements)
     printer.log('Initial construction:', 1)
     def to_str(x): return x.str if isinstance(x, _objs.Circuit) else str(x)
     printer.log(str([to_str(element) for element in initialSoln]), 1)
 
-    localSoln = grasp_local_search(initialSoln, local_score_fn, elements,
+    localSoln = _grasp_local_search(initialSoln, local_score_fn, elements,
                                    get_neighbors_fn, feasible_threshold,
                                    feasible_fn)
     printer.log('Local optimum:', 1)
@@ -348,7 +348,7 @@ def do_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     return initialSoln, localSoln
 
 
-def do_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn,
+def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn,
              final_score_fn, iterations, feasible_threshold=None, feasible_fn=None,
              initial_elements=None, seed=None, verbosity=0):
     """
@@ -421,12 +421,12 @@ def do_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn
     list of Circuits
         The best germ set from all locally-optimal germ sets constructed.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     bestSoln = None
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
-        _, localSoln = do_grasp_iteration(elements, greedy_score_fn,
+        _, localSoln = run_grasp_iteration(elements, greedy_score_fn,
                                           rcl_fn, local_score_fn,
                                           get_neighbors_fn,
                                           feasible_threshold,

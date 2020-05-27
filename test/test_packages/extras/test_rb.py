@@ -64,18 +64,18 @@ class RBTestCase(BaseTestCase):
         from pygsti.modelpacks.legacy import std1Q_XY
         target_model = std1Q_XY.target_model()
         clifford_compilation = std1Q_XY.clifford_compilation
-        compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
+        compiled_cliffords = pygsti.construction.create_explicit_alias_model(target_model,clifford_compilation)
 
         for key in list(compiled_cliffords.operations.keys()):
-            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
+            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.matrix(key))), 10**(-10))
 
         from pygsti.modelpacks.legacy import std1Q_XYI
         target_model = std1Q_XYI.target_model()
         clifford_compilation = std1Q_XYI.clifford_compilation
-        compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
+        compiled_cliffords = pygsti.construction.create_explicit_alias_model(target_model,clifford_compilation)
 
         for key in list(compiled_cliffords.operations.keys()):
-            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
+            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.matrix(key))), 10**(-10))
 
         # Future : add the remaining Clifford compilations here.
 

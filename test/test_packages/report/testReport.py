@@ -135,7 +135,7 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
 
         self.results.estimates['default'].gauge_propagate_confidence_region_factory('go0') #instead of computing one
-        crfact = self.results.estimates['default'].get_confidence_region_factory('go0') #was created by propagation
+        crfact = self.results.estimates['default'].create_confidence_region_factory('go0') #was created by propagation
         crfact.project_hessian('optimal gate CIs')
 
         #Note: this report will have Robust estimates too
@@ -277,24 +277,24 @@ class TestReport(ReportBaseCase):
         os.remove(os.path.join(outputDir, "offline/README.txt")) # remove a single file
         mh.rsync_offline_dir(outputDir) #creates *only* the single file removed
 
-        # ---- read_and_preprocess_template ----
+        # ---- load_and_preprocess_template ----
         tmpl = "#iftoggle(tname)\nSomething\n#elsetoggle\nNO END TOGGLE!"
         with open(temp_files + "/test_toggles.txt","w") as f:
             f.write(tmpl)
         with self.assertRaises(AssertionError):
-            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #endtoggle
+            mh.load_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #endtoggle
 
         tmpl = "#iftoggle(tname)\nSomething\nNO ELSE OR END TOGGLE!"
         with open(temp_files + "/test_toggles.txt","w") as f:
             f.write(tmpl)
         with self.assertRaises(AssertionError):
-            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #elsetoggle or #endtoggle
+            mh.load_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #elsetoggle or #endtoggle
 
-        # ---- make_empty_dir ----
+        # ---- create_empty_dir ----
         dirname = temp_files + "/empty_testdir"
         if os.path.exists(dirname):
             shutil.rmtree(dirname) #make sure no directory exists
-        mh.make_empty_dir(dirname)
+        mh.create_empty_dir(dirname)
 
 
         # ---- fill_std_qtys ---- Not a function anymore

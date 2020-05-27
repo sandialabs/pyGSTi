@@ -44,19 +44,19 @@ def minimize(fn, x0, method='cg', callback=None,
 
     method : string, optional
         Which minimization method to use.  Allowed values are:
-        "simplex" : uses fmin_simplex
-        "supersimplex" : uses fmin_supersimplex
+        "simplex" : uses _fmin_simplex
+        "supersimplex" : uses _fmin_supersimplex
         "customcg" : uses fmax_cg (custom CG method)
         "brute" : uses scipy.optimize.brute
         "basinhopping" : uses scipy.optimize.basinhopping with L-BFGS-B
-        "swarm" : uses fmin_particle_swarm
-        "evolve" : uses fmin_evolutionary (which uses DEAP)
+        "swarm" : uses _fmin_particle_swarm
+        "evolve" : uses _fmin_evolutionary (which uses DEAP)
         < methods available from scipy.optimize.minimize >
 
     callback : function, optional
         A callback function to be called in order to track optimizer progress.
         Should have signature: myCallback(x, f=None, accepted=None).  Note that
-        create_obj_func_printer(...) function can be used to create a callback.
+        create_objfn_printer(...) function can be used to create a callback.
 
     tol : float, optional
         Tolerance value used for all types of tolerances available in a given method.
@@ -84,10 +84,10 @@ def minimize(fn, x0, method='cg', callback=None,
 
     #Run Minimization Algorithm
     if method == 'simplex':
-        solution = fmin_simplex(fn, x0, slide=1.0, tol=tol, maxiter=maxiter)
+        solution = _fmin_simplex(fn, x0, slide=1.0, tol=tol, maxiter=maxiter)
 
     elif method == 'supersimplex':
-        solution = fmin_supersimplex(fn, x0, outer_tol=1.0, inner_tol=tol,
+        solution = _fmin_supersimplex(fn, x0, outer_tol=1.0, inner_tol=tol,
                                      max_outer_iter=100, min_inner_maxiter=100, max_inner_maxiter=maxiter)
 
     elif method == 'customcg':
@@ -131,10 +131,10 @@ def minimize(fn, x0, method='cg', callback=None,
         solution.success = True  # basinhopping doesn't seem to set this...
 
     elif method == 'swarm':
-        solution = fmin_particle_swarm(fn, x0, tol, maxiter, popsize=1000)  # , callback = callback)
+        solution = _fmin_particle_swarm(fn, x0, tol, maxiter, popsize=1000)  # , callback = callback)
 
     elif method == 'evolve':
-        solution = fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500)
+        solution = _fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500)
 
 #    elif method == 'homebrew':
 #      solution = fmin_homebrew(fn, x0, maxiter)
@@ -154,7 +154,7 @@ def minimize(fn, x0, method='cg', callback=None,
     return solution
 
 
-def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_maxiter, max_inner_maxiter):
+def _fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_maxiter, max_inner_maxiter):
     """
     Minimize a function using repeated applications of the simplex algorithm.
 
@@ -205,19 +205,19 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
             inner_maxiter /= 10; cnt_at_same_maxiter = 1
         f_init = f_final
 
-        print(">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i, inner_maxiter))
+        print(">>> _fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i, inner_maxiter))
         i += 1; cnt_at_same_maxiter += 1
 
         opts = {'maxiter': inner_maxiter, 'maxfev': inner_maxiter, 'disp': False}
         inner_solution = _spo.minimize(fn, x_start, options=opts, method='Nelder-Mead', callback=None, tol=inner_tol)
 
         if not inner_solution.success:
-            print("WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s"
+            print("WARNING: _fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s"
                   % (inner_tol, inner_maxiter, inner_solution.message))
 
         f_final = inner_solution.fun
         x_start = inner_solution.x
-        print(">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i, f_final))
+        print(">>> _fmin_supersimplex: outer iteration %d gives min = %f" % (i, f_final))
 
     solution = _optResult()
     solution.x = inner_solution.x
@@ -230,7 +230,7 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
     return solution
 
 
-def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
+def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
     """
     Minimizes a function using a custom simplex implmentation.
 
@@ -335,7 +335,7 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
 
 
 #TODO err_crit is never used?
-def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
+def _fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     """
     A simple implementation of the Particle Swarm Optimization Algorithm.
 
@@ -511,7 +511,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     return solution
 
 
-def fmin_evolutionary(f, x0, num_generations, num_individuals):
+def _fmin_evolutionary(f, x0, num_generations, num_individuals):
     """
     Minimize a function using an evolutionary algorithm.
 
@@ -713,7 +713,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 #    return solution
 
 
-def create_obj_func_printer(obj_func, start_time=None):
+def create_objfn_printer(obj_func, start_time=None):
     """
     Create a callback function that prints the value of an objective function.
 

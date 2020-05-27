@@ -12,14 +12,14 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
-from ..tools import frobeniusdist2
+from ..tools import frobeniusdist_squared
 from .. import objects as _objs
 from .. import construction as _constr
 from . import grasp as _grasp
 from . import scoring as _scoring
 
 
-def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
+def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                        ops_to_omit=None, force_empty=True, max_fid_length=2,
                        algorithm='grasp', algorithm_kwargs=None, verbosity=1):
     """
@@ -62,10 +62,10 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         options are:
 
         'slack'
-            See :func:`optimize_integer_fiducials_slack` for more details.
+            See :func:`_find_fiducials_integer_slack` for more details.
         'grasp'
             Use GRASP to generate random greedy fiducial sets and then locally
-            optimize them. See :func:`grasp_fiducial_optimization` for more
+            optimize them. See :func:`_find_fiducials_grasp` for more
             details.
 
     algorithm_kwargs : dict
@@ -80,11 +80,11 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     Returns
     -------
     prepFidList : list of Circuits
-        A list containing the operation sequences for the prep fiducials.
+        A list containing the circuits for the prep fiducials.
     measFidList : list of Circuits
-        A list containing the operation sequences for the measurement fiducials.
+        A list containing the circuits for the measurement fiducials.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     if ops_to_omit is None:
         ops_to_omit = []
 
@@ -95,7 +95,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         Identity = _np.identity(target_model.get_dimension(), 'd')
 
         for gate in fidOps:
-            if frobeniusdist2(target_model.operations[gate], Identity) < eq_thresh:
+            if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
                 fidOps.remove(gate)
 
     availableFidList = _constr.list_all_circuits(fidOps, 0, max_fid_length)
@@ -120,7 +120,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
-        prepFidList = optimize_integer_fiducials_slack(model=target_model,
+        prepFidList = _find_fiducials_integer_slack(model=target_model,
                                                        prep_or_meas='prep',
                                                        **algorithm_kwargs)
         if prepFidList is not None:
@@ -131,7 +131,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
-        measFidList = optimize_integer_fiducials_slack(model=target_model,
+        measFidList = _find_fiducials_integer_slack(model=target_model,
                                                        prep_or_meas='meas',
                                                        **algorithm_kwargs)
         if measFidList is not None:
@@ -157,7 +157,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
-        prepFidList = grasp_fiducial_optimization(model=target_model,
+        prepFidList = _find_fiducials_grasp(model=target_model,
                                                   prep_or_meas='prep',
                                                   **algorithm_kwargs)
 
@@ -176,7 +176,7 @@ def generate_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
-        measFidList = grasp_fiducial_optimization(model=target_model,
+        measFidList = _find_fiducials_grasp(model=target_model,
                                                   prep_or_meas='meas',
                                                   **algorithm_kwargs)
 
@@ -230,7 +230,7 @@ def xor(*args):
     return output
 
 
-def make_prep_mxs(mdl, prep_fid_list):
+def create_prep_mxs(mdl, prep_fid_list):
     """
     Make a list of matrices for the model preparation operations.
 
@@ -266,7 +266,7 @@ def make_prep_mxs(mdl, prep_fid_list):
     return outputMatList
 
 
-def make_meas_mxs(mdl, meas_fid_list):
+def create_meas_mxs(mdl, meas_fid_list):
     """
     Make a list of matrices for the model measurement operations.
 
@@ -315,7 +315,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -359,9 +359,9 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     """
     # dimRho = model.get_dimension()
     if prep_or_meas == 'prep':
-        fidArrayList = make_prep_mxs(model, fid_list)
+        fidArrayList = create_prep_mxs(model, fid_list)
     elif prep_or_meas == 'meas':
-        fidArrayList = make_meas_mxs(model, fid_list)
+        fidArrayList = create_meas_mxs(model, fid_list)
     else:
         raise ValueError('Invalid value "{}" for prep_or_meas (must be "prep" '
                          'or "meas")!'.format(prep_or_meas))
@@ -402,7 +402,7 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -532,7 +532,7 @@ def build_bitvec_mx(n, k):
     return bitVecMx
 
 
-def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
+def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
                                      initial_weights=None, score_func='all',
                                      max_iter=100, fixed_slack=None,
                                      slack_frac=None, return_all=False,
@@ -556,7 +556,7 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         The model (associates operation matrices with operation labels).
 
     fid_list : list of Circuits
-        List of all fiducials operation sequences to consider.
+        List of all fiducials circuits to consider.
 
     prep_or_meas : {'prep', 'meas'}
         Whether preparation or measturement fiducials are being selected.
@@ -602,11 +602,11 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         string as a fiducial.
 
         IMPORTANT:  This only works if the first element of fid_list is the
-        empty operation sequence.
+        empty circuit.
 
     force_empty_score : float, optional (default is 1e100)
         When force_empty is True, what score to assign any fiducial set that
-        does not contain the empty operation sequence as a fiducial.
+        does not contain the empty circuit as a fiducial.
 
     fixed_num : int, optional
         Require the output list of fiducials to contain exactly `fixed_num` elements.
@@ -633,7 +633,7 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         Only returned if `return_all=True`.  The internal dictionary
         mapping weights (as a tuple) to scores.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if not xor(fixed_slack, slack_frac):
         raise ValueError("One and only one of fixed_slack or slack_frac should "
@@ -664,9 +664,9 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
 
     #fidLengths = _np.array( list(map(len,fid_list)), _np.int64)
     if prep_or_meas == 'prep':
-        fidArrayList = make_prep_mxs(model, fid_list)
+        fidArrayList = create_prep_mxs(model, fid_list)
     elif prep_or_meas == 'meas':
-        fidArrayList = make_meas_mxs(model, fid_list)
+        fidArrayList = create_meas_mxs(model, fid_list)
     else:
         raise ValueError('prep_or_meas must be specified!')  # pragma: no cover
         # unreachable given check within test_fiducial_list above
@@ -858,7 +858,7 @@ def optimize_integer_fiducials_slack(model, fid_list, prep_or_meas=None,
         return goodFidList
 
 
-def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
+def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                                 iterations=5, score_func='all', op_penalty=0.0,
                                 l1_penalty=0.0, return_all=False,
                                 force_empty=True, threshold=1e6, seed=None,
@@ -872,7 +872,7 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
         The model (associates operation matrices with operation labels).
 
     fids_list : list of Circuits
-        List of fiducial operation sequences to test.
+        List of fiducial circuits to test.
 
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -942,7 +942,7 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
         Only returned if `return_all=True`.  A list of the best solution
         (a solution is a list of fiducial circuits) for each grasp iteration.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if prep_or_meas not in ['prep', 'meas']:
         raise ValueError("'{}' is an invalid value for prep_or_meas (must be "
@@ -994,7 +994,7 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
     dimRho = model.get_dimension()
     feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
 
-    def rcl_fn(x): return _scoring.composite_rcl_fn(x, alpha)
+    def rcl_fn(x): return _scoring.filter_composite_rcl(x, alpha)
 
     initialSolns = []
     localSolns = []
@@ -1008,7 +1008,7 @@ def grasp_fiducial_optimization(model, fids_list, prep_or_meas, alpha,
         failCount = 0
         while not success and failCount < 10:
             try:
-                iterSolns = _grasp.do_grasp_iteration(
+                iterSolns = _grasp.run_grasp_iteration(
                     elements=fids_list, greedy_score_fn=score_fn, rcl_fn=rcl_fn,
                     local_score_fn=score_fn,
                     get_neighbors_fn=get_neighbors_fn,

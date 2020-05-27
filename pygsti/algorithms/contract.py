@@ -74,7 +74,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
         The contracted model
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if to_what == 'CPTP':
         if use_direct_cp:
@@ -111,7 +111,7 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
 
     CLIFF = 10000
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     #printer.log('', 2)
     printer.log("--- Contract to XP ---", 1)
@@ -124,7 +124,7 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
             + mdl.frobeniusdist(model)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(_objective_func)  # only ever prints to stdout!
+    print_obj_func = _opt.create_objfn_printer(_objective_func)  # only ever prints to stdout!
     if _objective_func(mdl.to_vector()) < 1e-8:
         printer.log('Already in XP - no contraction necessary', 1)
         return 0.0, mdl
@@ -148,7 +148,7 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
                     maxiter=100000, tol=1e-2):
 
     CLIFF = 10000
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
@@ -158,11 +158,11 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
     def _objective_func(vector_gs):
         mdl.from_vector(vector_gs)
         mdl.basis = mxBasis  # set basis for jamiolkowski iso
-        cpPenalty = _tools.sum_of_negative_choi_evals(mdl) * 1000
+        cpPenalty = _tools.sum_of_negative_choi_eigenvalues(mdl) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + mdl.frobeniusdist(model)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(_objective_func)  # only ever prints to stdout!
+    print_obj_func = _opt.create_objfn_printer(_objective_func)  # only ever prints to stdout!
     if _objective_func(mdl.to_vector()) < 1e-8:
         printer.log('Already in CP - no contraction necessary', 1)
         return 0.0, mdl
@@ -183,7 +183,7 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=1e-8):
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if tp_also else "CP")), 1)
@@ -298,7 +298,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
     printer.log(('The closest legal point found was distance: %s' % str(distance)), 1)
 
     if tp_also:  # TP also constrains prep vectors
-        op_dim = mdl.get_dimension()
+        op_dim = mdl.dimension()
         for rhoVec in list(mdl.preps.values()):
             rhoVec[0, 0] = 1.0 / op_dim**0.25
 
@@ -308,7 +308,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_tp(model, verbosity):
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
     mdl = model.copy()
@@ -316,7 +316,7 @@ def _contract_to_tp(model, verbosity):
         gate[0, 0] = 1.0
         for k in range(1, gate.shape[1]): gate[0, k] = 0.0
 
-    op_dim = mdl.get_dimension()
+    op_dim = mdl.dimension()
     for rhoVec in list(mdl.preps.values()):
         rhoVec[0, 0] = 1.0 / op_dim**0.25
 
@@ -348,13 +348,13 @@ def _contract_to_valid_spam(model, verbosity=0):
         The contracted model
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     TOL = 1e-9
     mdl = model.copy()
 
     # ** assumption: only the first vector element of pauli vectors has nonzero trace
-    dummyVec = _np.zeros((model.get_dimension(), 1), 'd'); dummyVec[0, 0] = 1.0
+    dummyVec = _np.zeros((model.dimension(), 1), 'd'); dummyVec[0, 0] = 1.0
     firstElTrace = _np.real(_tools.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
     diff = 0
 

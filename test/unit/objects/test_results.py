@@ -29,7 +29,7 @@ class ResultsTester(ResultsBase, BaseCase):
 
     def test_add_estimate(self):
         self.res.add_estimate(
-            estimate.Estimate.gst_init(
+            estimate.Estimate.create_gst_estimate(
                 self.res, std.target_model(), std.target_model(),
                 [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
@@ -44,7 +44,7 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
 
         # add an estimate
         self.res.add_estimate(
-            estimate.Estimate.gst_init(
+            estimate.Estimate.create_gst_estimate(
                 self.res, std.target_model(), std.target_model(),
                 [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
@@ -53,7 +53,7 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
     def test_add_estimate_warns_on_overwrite(self):
         with self.assertWarns(Warning):
             self.res.add_estimate(
-                estimate.Estimate.gst_init(
+                estimate.Estimate.create_gst_estimate(
                     self.res, std.target_model(), std.target_model(),
                     [self.model] * len(self.maxLengthList), parameters={'objective': 'logl'}),
                 estimate_key="default"

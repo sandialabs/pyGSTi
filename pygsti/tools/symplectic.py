@@ -132,7 +132,7 @@ def check_symplectic(m, convention='standard'):
     """
     n = _np.shape(m)[0] // 2
     s_form = symplectic_form(n, convention=convention)
-    conj = _mtx.dotmod2(_np.dot(m, s_form), _np.transpose(m))
+    conj = _mtx.dot_mod2(_np.dot(m, s_form), _np.transpose(m))
 
     return _np.array_equal(conj, s_form)
 
@@ -155,10 +155,10 @@ def inverse_symplectic(s):
 
     n = _np.shape(s)[0] // 2
     s_form = symplectic_form(n)
-    s_inverse = _mtx.dotmod2(_np.dot(s_form, _np.transpose(s)), s_form)
+    s_inverse = _mtx.dot_mod2(_np.dot(s_form, _np.transpose(s)), s_form)
 
     assert(check_symplectic(s_inverse)), "The inverse is not symplectic. Function has failed"
-    assert(_np.array_equal(_mtx.dotmod2(s_inverse, s), _np.identity(2 * n, int))
+    assert(_np.array_equal(_mtx.dot_mod2(s_inverse, s), _np.identity(2 * n, int))
            ), "The found matrix is not the inverse of the input. Function has failed"
 
     return s_inverse
@@ -344,7 +344,7 @@ def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
     n = _np.shape(s)[0] // 2
     s_form = symplectic_form(n)
-    vec = _mtx.dotmod2(s, _np.dot(s_form, (p_target - p_implemented) // 2))
+    vec = _mtx.dot_mod2(s, _np.dot(s_form, (p_target - p_implemented) // 2))
 
     if qubit_labels is None:
         qubit_labels = list(range(n))
@@ -401,7 +401,7 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
     n = _np.shape(s)[0] // 2
     s_form = symplectic_form(n)
-    vec = _mtx.dotmod2(s_form, (p_target - p_implemented) // 2)
+    vec = _mtx.dot_mod2(s_form, (p_target - p_implemented) // 2)
 
     if qubit_labels is None:
         qubit_labels = list(range(n))
@@ -458,7 +458,7 @@ def compose_cliffords(s1, p1, s2, p2):
 
     # Below we calculate the s and p for the composite Clifford using the formulas from
     # Hostens and De Moor PRA 71, 042315 (2005).
-    s = _mtx.dotmod2(s2, s1)
+    s = _mtx.dot_mod2(s2, s1)
 
     u = _np.zeros((2 * n, 2 * n), int)
     u[n:2 * n, 0:n] = _np.identity(n, int)
@@ -587,7 +587,7 @@ def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
 
     # Below we calculate the s and p for the output state using the formulas from
     # Hostens and De Moor PRA 71, 042315 (2005).
-    out_s = _mtx.dotmod2(s, state_s)
+    out_s = _mtx.dot_mod2(s, state_s)
 
     u = _np.zeros((2 * n, 2 * n), int)
     u[n:2 * n, 0:n] = _np.identity(n, int)
@@ -844,7 +844,7 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
         Only returned when `return_state=True`.  The post-measurement stabilizer
         state representation (an updated version of `state_sp_tuple`).
     """
-    state_s, state_p = state_sp_tuple  # should be a StabilizerState.todense() "object"
+    state_s, state_p = state_sp_tuple  # should be a StabilizerState.to_dense() "object"
 
     p = 1
     if qubit_filter is None:  # len(moutcomes) == nQubits
@@ -905,7 +905,7 @@ def embed_clifford(s, p, qubit_inds, n):
     return s_out, p_out
 
 
-def get_internal_gate_symplectic_representations(gllist=None):
+def compute_internal_gate_symplectic_representations(gllist=None):
     """
     Creates a dictionary of the symplectic representations of 'standard' Clifford gates.
 
@@ -1064,7 +1064,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     depth = circuit.depth()
 
     if pspec is not None:
-        srep_dict = pspec.models['clifford'].get_clifford_symplectic_reps()
+        srep_dict = pspec.models['clifford'].compute_clifford_symplectic_reps()
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)
@@ -1073,7 +1073,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     for i in range(0, depth):
         # This relies on the circuit having a valid self.identity identifier -- as those gates are
         # not returned in the layer. Note that the layer contains each gate only once.
-        layer = circuit.get_layer_label(i)
+        layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
@@ -1123,7 +1123,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         circuit layer
     """
     # This method uses a brute-force matrix construction. Future: perhaps this should be updated.
-    sreps = get_internal_gate_symplectic_representations()
+    sreps = compute_internal_gate_symplectic_representations()
     if srep_dict is not None: sreps.update(srep_dict)
 
     if q_labels is None:
@@ -1227,7 +1227,7 @@ def one_q_clifford_symplectic_group_relations():
     return group_relations
 
 
-def unitary_is_a_clifford(unitary):
+def unitary_is_clifford(unitary):
     """
     Returns True if the unitary is a Clifford gate (w.r.t the standard basis), and False otherwise.
 
@@ -1460,7 +1460,7 @@ def random_symplectic_matrix(n, convention='standard'):
         A uniformly sampled random symplectic matrix.
     """
     index = random_symplectic_index(n)
-    s = get_symplectic_matrix(index, n)
+    s = compute_symplectic_matrix(index, n)
 
     if convention == 'standard':
         s = change_symplectic_form_convention(s)
@@ -1647,7 +1647,7 @@ def apply_internal_gate_to_symplectic(s, gate_name, qindex_list, optype='row'):
 # from that code have been moved into the matrixtools file.
 
 
-def numberofcliffords(n):
+def compute_num_cliffords(n):
     """
     The number of Clifford gates in the n-qubit Clifford group.
 
@@ -1664,10 +1664,10 @@ def numberofcliffords(n):
     long integer
         The cardinality of the n-qubit Clifford group.
     """
-    return (4**int(n)) * numberofsymplectic(n)
+    return (4**int(n)) * compute_num_symplectics(n)
 
 
-def numberofsymplectic(n):
+def compute_num_symplectics(n):
     """
     The number of elements in the symplectic group S(n) over the 2-element finite field.
 
@@ -1685,12 +1685,12 @@ def numberofsymplectic(n):
     """
     x = 1
     for j in range(1, n + 1):
-        x = x * numberofcosets(j)
+        x = x * compute_num_cosets(j)
 
     return x
 
 
-def numberofcosets(n):
+def compute_num_cosets(n):
     """
     Returns the number of different cosets for the symplectic group S(n) over the 2-element finite field.
 
@@ -1892,7 +1892,7 @@ def find_symplectic_transvection(x, y):
     return output
 
 
-def get_symplectic_matrix(i, n):
+def compute_symplectic_matrix(i, n):
     """
     Returns the 2n x 2n symplectic matrix, over the finite field containing 0 and 1, with the "canonical" index `i`.
 
@@ -1960,7 +1960,7 @@ def get_symplectic_matrix(i, n):
     id2 = _np.identity(2, dtype='int8')
 
     if n != 1:
-        g = _mtx.matrix_directsum(id2, get_symplectic_matrix(i >> (nn - 1), n - 1))
+        g = _mtx.matrix_directsum(id2, compute_symplectic_matrix(i >> (nn - 1), n - 1))
     else:
         g = id2
 
@@ -1973,7 +1973,7 @@ def get_symplectic_matrix(i, n):
     return g
 
 
-def get_symplectic_label(gn, n=None):
+def compute_symplectic_label(gn, n=None):
     """
     Returns the "canonical" index of 2n x 2n symplectic matrix `gn` over the finite field containing 0 and 1.
 
@@ -2047,7 +2047,7 @@ def get_symplectic_label(gn, n=None):
 
     # step 7
     gnew = gprime[2:nn, 2:nn]  # take submatrix
-    gnidx = get_symplectic_label(gnew, n - 1) * numberofcosets(n) + cvw
+    gnidx = compute_symplectic_label(gnew, n - 1) * compute_num_cosets(n) + cvw
     return gnidx
 
 
@@ -2067,7 +2067,7 @@ def random_symplectic_index(n):
     -------
     numpy.ndarray
     """
-    cardinality = numberofsymplectic(n)
+    cardinality = compute_num_symplectics(n)
     max_integer = 9223372036854775808  # The maximum integer of int64 type
 
     def zeros_string(k):

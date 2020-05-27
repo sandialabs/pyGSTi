@@ -88,15 +88,15 @@ class VerbosityPrinter(object):
 
     would construct a printer that sends verbose output to a text file
 
-    The static function :meth:`build_printer` will construct a printer from
+    The static function :meth:`create_printer` will construct a printer from
     either an integer or an already existing printer.  it is a static method
     of the VerbosityPrinter class, so it is called like so:
 
-    >>> VerbosityPrinter.build_printer(2)
+    >>> VerbosityPrinter.create_printer(2)
 
     or
 
-    >>> VerbostityPrinter.build_printer(VerbosityPrinter(3, 'output.txt'))
+    >>> VerbostityPrinter.create_printer(VerbosityPrinter(3, 'output.txt'))
 
     ``printer.log('status')`` would log 'status' if the printers verbosity was
     one or higher. ``printer.log('status2', 2)`` would log 'status2' if the
@@ -236,7 +236,7 @@ class VerbosityPrinter(object):
     # Function for converting between interfaces:
     # Accepts either a verbosity level (integer) or a pre-constructed VerbosityPrinter
     @staticmethod
-    def build_printer(verbosity, comm=None):
+    def create_printer(verbosity, comm=None):
         """
         Function for converting between interfaces
 
@@ -625,7 +625,7 @@ if __name__ == "__main__":
 
     def demo(verbosity):
         # usage of the show_progress function
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.create_printer(verbosity)
         data    = range(10)
         with printer.progress_logging(2):
             for i, item in enumerate(data):
@@ -634,13 +634,13 @@ if __name__ == "__main__":
                 time.sleep(.05)
 
     def nested_demo(verbosity):
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.create_printer(verbosity)
         printer.warning('Beginning demonstration of the verbosityprinter class. This could go wrong..')
         data    = range(10)
         with printer.progress_logging(1):
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1,
-                      verbose_messages=['%s operation sequences' % i], prefix='-- IterativeGST (', suffix=') --')
+                      verbose_messages=['%s circuits' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')
                 demo(printer - 1)
