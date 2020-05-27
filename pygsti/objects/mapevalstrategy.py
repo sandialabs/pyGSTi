@@ -16,7 +16,9 @@ import copy as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
-from .evaltree import EvalTree
+from ..tools import listtools as _lt
+from .evalstrategy import COPAEvalStrategy as _COPAEvalStrategy
+from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 import time as _time  # DEBUG TIMERS
 
@@ -27,7 +29,7 @@ def _create_prefix_table(circuits_to_evaluate, max_cache_size):
 
     The table is list of tuples, where each element contains
     instructions for evaluating a particular operation sequence:
-    
+
     (iDest, iStart, tuple_of_following_items, iCache)
 
     Means that circuit[iDest] = cached_circuit[iStart] + tuple_of_following_items,
@@ -110,7 +112,7 @@ def _create_prefix_table(circuits_to_evaluate, max_cache_size):
     return table_contents, curCacheSize
 
 
-def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, verbosity=0):
+def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, cost_metric="size", verbosity=0):
     """
     Find a partition of the indices of `prefix_table` to define a set of sub-tables with the desire properties.
 
@@ -140,8 +142,6 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
     list
         A list of sets of elements to place in sub-tables.
     """
-    tm = _time.time()
-    printer = _VerbosityPrinter.build_printer(verbosity)
     table_contents, cachesize = prefix_table
 
     if (max_sub_table_size is None and num_sub_tables is None) or \
@@ -151,7 +151,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
         raise ValueError("Error: num_sub_tables must be > 0!")
 
     #Don't split at all if it's unnecessary
-    if max_sub_table_size is None or len(self) < max_sub_table_size:
+    if max_sub_table_size is None or len(table_contents) < max_sub_table_size:
         if num_sub_tables is None or num_sub_tables == 1:
             return [set(range(len(table_contents)))]
 
@@ -163,7 +163,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
         totalCost = N
         return subTables, totalCost
 
-    def create_subtables(max_cost, max_cost_rate=0, cost_metric="size"):
+    def create_subtables(max_cost, max_cost_rate=0):
         """
         Find a set of subtables by iterating through the table
         and placing "break" points when the cost of evaluating the
@@ -228,11 +228,20 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
         totalCost += curTableCost
         return subTables, totalCost
 
+    def get_num_applies(content):
+        """
+        Gets the number of "apply" operations required to compute this prefix tree (an int)
+        """
+        ops = 0
+        for _, _, remainder, _ in content:
+            ops += len(remainder)
+        return ops
+
     ##################################################################
     # Find a list of where the current table should be broken        #
     ##################################################################
 
-    if num_sub_tables is not None and self.cache_size() == 0:
+    if num_sub_tables is not None and cachesize == 0:
         subTableSetList, totalCost = nocache_create_equal_size_subtables()
 
     elif num_sub_tables is not None:
@@ -241,8 +250,8 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
         # (but this can yield tables with unequal lengths or cache sizes,
         # which is what we're often after for memory reasons)
         if cost_metric == "applies":
-            maxCost = self.get_num_applies() / num_sub_tables
-        else: maxCost = len(self) / num_sub_tables
+            maxCost = get_num_applies(table_contents) / num_sub_tables
+        else: maxCost = len(table_contents) / num_sub_tables
         maxCostLowerBound, maxCostUpperBound = maxCost, None
         maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0
         #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
@@ -252,7 +261,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
 
         #Iterate until the desired number of subtables have been found.
         while resultingSubtables != num_sub_tables:
-            subTableSetList, totalCost = create_subtables(maxCost, maxCostRate, costMet)
+            subTableSetList, totalCost = create_subtables(maxCost, maxCostRate)
             resultingSubtables = len(subTableSetList)
             #print("DEBUG: resulting numTables = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
             #     (resultingSubtables, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
@@ -355,6 +364,68 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
 #        assert(None not in circuits[0:nFinal])
 #        return circuits[0:nFinal]
 
+class _MapCOPAEvalStrategyAtom(object):
+    """
+    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    """
+
+    def __init__(self, unique_complete_circuits, ds_circuits, group, model_shlp, dataset,
+                 offset, elindex_outcome_tuples, max_cache_size):
+
+        expanded_circuit_outcomes_by_orig = _collections.OrderedDict()
+        expanded_circuit_outcomes = _collections.OrderedDict()
+        for i in group:
+            observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
+            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
+            expanded_circuit_outcomes_by_orig[i] = d
+            expanded_circuit_outcomes.update(d)
+
+        expanded_circuits = {i: cir for i, cir in enumerate(expanded_circuit_outcomes.keys())}
+        self.table = _create_prefix_table(expanded_circuits, max_cache_size)
+
+        #Create circuit element <=> integer index lookups for speed
+        all_rholabels = set()
+        all_oplabels = set()
+        all_elabels = set()
+        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
+            for sep_povm_c in expanded_circuit_outcomes:
+                if sep_povm_c.effect_labels == [None]:  # special case
+                    all_oplabels.update(sep_povm_c[:])
+                else:
+                    all_rholabels.add(sep_povm_c[0])
+                    all_oplabels.update(sep_povm_c[1:])
+                    all_elabels.update(sep_povm_c.effect_labels)
+
+        self.rho_labels = sorted(all_rholabels)
+        self.op_labels = sorted(all_oplabels)
+        self.elabel_lookup = {elbl: i for i, elbl in enumerate(all_elabels)}
+
+        #Lookup arrays for faster replib computation.
+        table_offset = 0
+        self.elbl_indices_by_expcircuit = {}
+        self.elindices_by_expcircuit = {}
+
+        #Assign element indices, starting at `offset`
+        initial_offset = offset
+        for orig_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.items():
+            for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
+                i = table_offset + table_relindex  # index of expanded circuit (table item)
+                elindices = list(range(offset, offset + len(outcomes)))
+                self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[elbl] for elbl in sep_povm_c.effect_labels]
+                self.elindices_by_expcircuit[i] = elindices
+                offset += len(outcomes)
+
+                # fill in running dict of per-circuit element indices and outcomes:
+                elindex_outcome_tuples[orig_i].extend(list(zip(elindices, outcomes)))
+            table_offset += len(expanded_circuit_outcomes)
+
+        self.element_slice = slice(initial_offset, offset)
+        self.num_elements = offset - initial_offset
+
+    @property
+    def cache_size(self):
+        return self.table[1]
+
 
 class MapCOPAEvalStrategy(_COPAEvalStrategy):
     """
@@ -392,61 +463,19 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
 
         circuit_table = _create_prefix_table(unique_complete_circuits, max_cache_size)
-        groups = self._find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)  # a list of tuples/sets?
+        groups = self._find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)
 
-        self.tables = []
+        self.atoms = []
         elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
 
         offset = 0
         for group in groups:
-
-            expanded_circuit_outcomes_by_orig = _collections.OrderedDict()
-            expanded_circuit_outcomes = _collections.OrderedDict()
-            for i in group:
-                observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-                d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
-                expanded_circuit_outcomes_by_orig[i] = d
-                expanded_circuit_outcomes.update(d)
-
-            expanded_circuits = {i: cir for i, cir in enumerate(expanded_circuit_outcomes.keys())}
-            self.tables.append(_create_prefix_table(expanded_circuits, max_cache_size))
-
-            #Create circuit element <=> integer index lookups for speed
-            all_rholabels = set()
-            all_oplabels = set()
-            all_elabels = set()
-            for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
-                for sep_povm_c in expanded_circuit_outcomes:
-                    if sep_povm_c.effect_labels == [None]:  # special case
-                        all_oplabels.update(sep_povm_c[:])
-                    else:
-                        all_rholabels.add(sep_povm_c[0])
-                        all_oplabels.update(sep_povm_c[1:])
-                        all_elabels.update(sep_povm_c.effect_labels)
-            rho_labels = sorted(all_rholabels)
-            op_labels = sorted(all_oplabels)
-            elabel_lookup = {elbl: i for i, elbl in enumerate(all_elabels)}
-
-            #Lookup arrays for faster replib computation.
-            table_offset = 0
-            elbl_indices_by_expcircuit = {}
-            elindices_by_expcircuit = {}
-
-            #Assign element indices, starting at `offset`
-            for orig_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.items():
-                for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
-                    i = table_offset + table_relindex
-                    elindices = list(range(offset, offset + len(outcomes)))
-                    elbl_indices_by_expcircuit[i] = [elabel_lookup[elbl] for elbl in sep_povm_c.effect_labels]
-                    elindices_by_expcircuit[i] = elindices
-                    offset += len(outcomes)
-
-                    elindex_outcome_tuples[orig_i].extend(list(zip(elindices, outcomes)))
-                table_offset += len(expanded_circuit_outcomes)
+            self.atoms.append(_MapCOPAEvalStrategyAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
+                                                       dataset, offset, elindex_outcome_tuples, max_cache_size))
+            offset += self.atoms[-1].size
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
                          num_sub_table_comms)
-        self.cachesize = None
 
         #self.cachesize = curCacheSize
         #self.myFinalToParentFinalMap = None  # this tree has no "children",
@@ -456,6 +485,26 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
         #self.subTrees = []  # no subtrees yet
         #assert(self.generate_circuit_list() == circuit_list)
         #assert(None not in circuit_list)
+
+    def copy(self):
+        """
+        Create a copy of this evaluation strategy.
+
+        Returns
+        -------
+        MapCOPAEvalStrategy
+        """
+        raise NotImplementedError("TODO! update this!")
+        #cpy = self._copy_base(MapEvalTree(self[:]))
+        #cpy.cachesize = self.cachesize  # member specific to MapEvalTree
+        #cpy.opLabels = self.opLabels[:]
+        #cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
+        #cpy.element_offsets_for_circuit = self.element_offsets_for_circuit.copy()
+        #cpy.elabels = self.elabels[:]
+        #cpy.eLbl_indices_per_circuit = _copy.deepcopy(self.eLbl_indices_per_circuit)
+        #cpy.final_indices_per_circuit = _copy.deepcopy(self.final_indices_per_circuit)
+        #cpy.rholabels = self.rholabels[:]
+        #return cpy
 
     #def _remove_from_cache(self, indx):
     #    """ Removes self[indx] from cache (if it's in it)"""
@@ -608,31 +657,18 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
     #        order = [((k - 1) if k > i else k) for k in order if k != i]
     #    self.eval_order = order
 
-    def cache_size(self):
-        """
-        Returns the size of the persistent "cache" of partial results.
-
-        This cache is used during the computation of all the strings in
-        this tree.
-
-        Returns
-        -------
-        int
-        """
-        return self.cachesize
-
-    def get_num_applies(self):
-        """
-        Gets the number of "apply" operations required to compute this tree.
-
-        Returns
-        -------
-        int
-        """
-        ops = 0
-        for _, remainder, _ in self:
-            ops += len(remainder)
-        return ops
+    #def cache_size(self):
+    #    """
+    #    Returns the size of the persistent "cache" of partial results.
+    #
+    #    This cache is used during the computation of all the strings in
+    #    this tree.
+    #
+    #    Returns
+    #    -------
+    #    int
+    #    """
+    #    return self.cachesize
 
     #def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
     #    """
@@ -653,22 +689,3 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
     #        self._build_elabels_lookups()
     #
     #    return updated_elIndices
-
-    def copy(self):
-        """
-        Create a copy of this evaluation tree.
-
-        Returns
-        -------
-        MapEvalTree
-        """
-        cpy = self._copy_base(MapEvalTree(self[:]))
-        cpy.cachesize = self.cachesize  # member specific to MapEvalTree
-        cpy.opLabels = self.opLabels[:]
-        cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
-        cpy.element_offsets_for_circuit = self.element_offsets_for_circuit.copy()
-        cpy.elabels = self.elabels[:]
-        cpy.eLbl_indices_per_circuit = _copy.deepcopy(self.eLbl_indices_per_circuit)
-        cpy.final_indices_per_circuit = _copy.deepcopy(self.final_indices_per_circuit)
-        cpy.rholabels = self.rholabels[:]
-        return cpy

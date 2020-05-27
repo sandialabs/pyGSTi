@@ -12,7 +12,9 @@ Defines the MatrixEvalTree class which implements an evaluation tree.
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
-from .evaltree import EvalTree
+from ..tools import listtools as _lt
+from .evalstrategy import COPAEvalStrategy as _COPAEvalStrategy
+from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 
 import numpy as _np
 import collections as _collections
@@ -432,6 +434,68 @@ def _find_splitting(eval_tree, num_elements, max_sub_tree_size, num_sub_trees, v
 #        assert(None not in circuits[0:nFinal])
 #        return circuits[0:nFinal]
 
+class _MatrixCOPAEvalStrategyAtom(object):
+    """
+    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    """
+
+    def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
+                 ds_circuits, group, model_shlp, dataset, offset, elindex_outcome_tuples):
+
+        expanded_nospam_circuit_outcomes = _collections.OrderedDict()
+        for i in group:
+            nospam_c = unique_nospam_circuits[i]
+            for orig_i in circuits_by_unique_nospam_circuits[nospam_c]:  # orig circuits that add SPAM to nospam_c
+                observed_outcomes = None if (dataset is None) else dataset[ds_circuits[orig_i]].outcomes
+                expc_outcomes = unique_complete_circuits[orig_i].expand_instruments_and_separate_povm(
+                    model_shlp, observed_outcomes)
+
+                for sep_povm_c, outcomes in expc_outcomes:
+                    prep_lbl = sep_povm_c.circuit_without_povm[0]
+                    exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
+                    spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.effect_labels]
+                    outcome_by_spamtuple = {st: (outcome, orig_i) for st, outcome in zip(spam_tuples, outcomes)}
+
+                    if exp_nospam_c not in expanded_nospam_circuit_outcomes:
+                        expanded_nospam_circuit_outcomes[exp_nospam_c] = outcome_by_spamtuple
+                    else:
+                        expanded_nospam_circuit_outcomes[exp_nospam_c].update(outcome_by_spamtuple)
+
+        expanded_nospam_circuits = {i: cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
+        self.tree = _create_tree(expanded_nospam_circuits)
+
+        # self.trees elements give instructions for evaluating ("caching") no-spam quantities (e.g. products).
+        # Now we assign final element indices to the circuit outcomes corresponding to a given no-spam ("tree")
+        # quantity plus a spam-tuple. We order the final indices so that all the outcomes corresponding to a
+        # given spam-tuple are contiguous.
+
+        tree_indices_by_spamtuple = _collections.defaultdict(list)  # "tree" indices index expanded_nospam_circuits
+        for i, c in expanded_nospam_circuits.items():
+            for spam_tuple in expanded_nospam_circuit_outcomes[c].keys():
+                tree_indices_by_spamtuple[spam_tuple].append(i)
+
+        #Assign element indices, starting at `offset`
+        # now that we know how many of each spamtuple there are, assign final element indices.
+        initial_offset = offset
+        self.indices_by_spamtuple = {}  # values are (element_indices, tree_indices) tuples.
+        for spam_tuple, tree_indices in tree_indices_by_spamtuple.items():
+            self.indices_by_spamtuple[spam_tuple] = (slice(offset, offset + len(tree_indices)), tree_indices)
+            offset += len(tree_indices)
+            #TODO: allow tree_indices to be None or a slice?
+
+        self.element_slice = slice(initial_offset, offset)
+        self.num_elements = offset - initial_offset
+
+        for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
+            for elindex, tree_index in zip(_slct.indices(element_indices), tree_indices):
+                outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
+                outcome, orig_i = outcome_by_spamtuple[spam_tuple]
+                elindex_outcome_tuples[orig_i].append((elindex, outcome))
+
+    @property
+    def cache_size(self):
+        return len(self.tree)
+
 
 class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
     """
@@ -476,86 +540,53 @@ class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
-        #nospam_circuits = [model_shlp.strip(c) for c in circuits]  # strips SPAM
-        #unique_nospam_circuits, to_unique = _compute_unique_circuits(nospam_circuits)
-
-        #nospam_circuits = []  # still retains same ordering as `circuits`
-        #for c in unique_complete_circuits:
-        #    prep_lbl, nospam_c, povm_lbl = model_shlp.split_circuit(c)
-
         circuit_tree = _create_tree(unique_nospam_circuits)
         groups = _find_splitting(circuit_tree, len(unique_nospam_circuits),
                                  max_sub_tree_size, num_sub_trees, verbosity)  # a list of tuples/sets?
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
-        self.trees = []
-        self.tree_indices_by_spamtuple = []
+        self.atoms = []
         elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
 
         offset = 0
         for group in groups:
-
-            expanded_nospam_circuit_outcomes = _collections.OrderedDict()
-            for i in group:
-                nospam_c = unique_nospam_circuits[i]
-                for orig_i in circuits_by_unique_nospam_circuits[nospam_c]:  # orig circuits that add SPAM to nospam_c
-                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[orig_i]].outcomes
-                    expc_outcomes = unique_complete_circuits[orig_i].expand_instruments_and_separate_povm(
-                        model_shlp, observed_outcomes)
-                    
-                    for sep_povm_c, outcomes in expc_outcomes:
-                        prep_lbl = sep_povm_c.circuit_without_povm[0]
-                        exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
-                        spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.effect_labels]
-                        outcome_by_spamtuple = {st: (outcome, orig_i) for st, outcome in zip(spam_tuples, outcomes)}
-
-                        if exp_nospam_c not in expanded_nospam_circuit_outcomes:
-                            expanded_nospam_circuit_outcomes[exp_nospam_c] = outcome_by_spamtuple
-                        else:
-                            expanded_nospam_circuit_outcomes[exp_nospam_c].update(outcome_by_spamtuple)
-
-            expanded_nospam_circuits = {i: cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
-            self.trees.append(_create_tree(expanded_nospam_circuits))
-
-            # self.trees elements give instructions for evaluating ("caching") no-spam quantities (e.g. products).
-            # Now we assign final element indices to the circuit outcomes corresponding to a given no-spam ("tree")
-            # quantity plus a spam-tuple. We order the final indices so that all the outcomes corresponding to a
-            # given spam-tuple are contiguous.
-
-            tree_indices_by_spamtuple = _collections.defaultdict(list)  # "tree" indices index expanded_nospam_circuits
-            for i, c in expanded_nospam_circuits.items():
-                for spam_tuple in expanded_nospam_circuit_outcomes[c].keys():
-                    tree_indices_by_spamtuple[spam_tuple].append(i)
-
-            #Assign element indices, starting at `offset`
-            # now that we know how many of each spamtuple there are, assign final element indices.
-            indices_by_spamtuple = {}  # values are (element_indices, tree_indices) tuples.
-            for spam_tuple, tree_indices in tree_indices_by_spamtuple.items():
-                indices_by_spamtuple[spam_tuple] = (slice(offset, offset + len(tree_indices)), tree_indices)
-                offset += len(tree_indices)
-                #TODO: allow tree_indices to be None or a slice?
-            self.tree_indices_by_spamtuple.append(indices_by_spamtuple)
-
-            for spam_tuple, (element_indices, tree_indices) in indices_by_spamtuple.items():
-                for elindex, tree_index in zip(_slct.indices(element_indices), tree_indices):
-                    outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
-                    outcome, orig_i = outcome_by_spamtuple[spam_tuple]
-                    elindex_outcome_tuples[orig_i].append((elindex, outcome))
+            self.atoms.append(_MatrixCOPAEvalStrategyAtom(unique_complete_circuits, unique_nospam_circuits,
+                                                          circuits_by_unique_nospam_circuits, ds_circuits, group,
+                                                          model_shlp, dataset, offset, elindex_outcome_tuples))
+            offset += self.atoms[-1].size
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits)
 
-    def cache_size(self):
+    def copy(self):
         """
-        Returns the size of the persistent "cache".
-
-        This cache holds partial results used during the computation of all
-        the strings in this tree.
+        Create a copy of this evaluation strategy.
 
         Returns
         -------
-        int
+        MatrixCOPAEvalStrategy
         """
-        return len(self.eval_tree)
+        raise NotImplementedError("TODO! update this!")
+        #newTree = self._copy_base(MatrixEvalTree(self[:]))
+        #newTree.opLabels = self.opLabels[:]
+        #newTree.init_indices = self.init_indices[:]
+        #newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
+        ##newTree.finalStringToElsMap = self.finalStringToElsMap[:]
+        #newTree.spamtuple_indices = self.spamtuple_indices.copy()
+        #return newTree
+
+
+    #def cache_size(self):
+    #    """
+    #    Returns the size of the persistent "cache".
+    #
+    #    This cache holds partial results used during the computation of all
+    #    the strings in this tree.
+    #
+    #    Returns
+    #    -------
+    #    int
+    #    """
+    #    return len(self.eval_tree)
 
     #def get_min_tree_size(self):
     #    """
@@ -619,22 +650,6 @@ class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
     #                                           'xlabel': "Index Interval", 'ylabel': 'Index'}
     #
     #    return analysis
-
-    def copy(self):
-        """
-        Create a copy of this evaluation tree.
-
-        Returns
-        -------
-        MatrixEvalTree
-        """
-        newTree = self._copy_base(MatrixEvalTree(self[:]))
-        newTree.opLabels = self.opLabels[:]
-        newTree.init_indices = self.init_indices[:]
-        newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
-        #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
-        newTree.spamtuple_indices = self.spamtuple_indices.copy()
-        return newTree
 
     #def recompute_spamtuple_indices(self, local=False):
     #    """
