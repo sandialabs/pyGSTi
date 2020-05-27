@@ -93,7 +93,7 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_factory = XRotationOpFactory()
 
         nQubits = 1
-        mdl = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_factory
 
@@ -101,9 +101,9 @@ class OpFactoryTestCase(BaseTestCase):
         c2 = pygsti.obj.Circuit([('Gxrot',';',1.57,0)])
         c3 = pygsti.obj.Circuit([('Gy',0),('Gy',0),('Gx',0), ('Gxrot',';',1.25,0),('Gx',0)] )
 
-        p1 = mdl.probs(c1)
-        p2 = mdl.probs(c2)
-        p3 = mdl.probs(c3)
+        p1 = mdl.probabilities(c1)
+        p2 = mdl.probabilities(c2)
+        p3 = mdl.probabilities(c3)
 
         self.assertAlmostEqual(p1['0'], 0.5003981633553666)
         self.assertAlmostEqual(p2['0'], 0.5003981633553666)
@@ -115,25 +115,25 @@ class OpFactoryTestCase(BaseTestCase):
     def test_embedded_opfactory_2Q(self):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
-        mdl = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers'][('Gxrot',0)] = pygsti.objects.EmbeddedOpFactory((0,1),(0,),Gxrot_factory,dense=True)
         mdl.factories['layers'][('Gxrot',1)] = pygsti.objects.EmbeddedOpFactory((0,1),(1,),Gxrot_factory,dense=True)
 
         c = pygsti.obj.Circuit( [('Gxrot',';3.14',0),('Gxrot',';1.5',1)] )
-        p = mdl.probs(c)
+        p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('11',)], 0.46463110452654444)
 
     def test_embedding_opfactory_2Q(self):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
-        mdl = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers']['Gxrot'] = pygsti.objects.EmbeddingOpFactory((0,1),Gxrot_factory,dense=True)
 
         c = pygsti.obj.Circuit( [('Gxrot',';3.14',0),[('Gxrot',';1.5',1),('Gx',0)]] )
 
-        p = mdl.probs(c)
+        p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('10',)], 0.2681106285986824)
 
     def test_parameterized_opfactory(self):
@@ -142,7 +142,7 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_param_factory = ParamXRotationOpFactory()
 
         nQubits = 1
-        mdl = pygsti.obj.LocalNoiseModel.build_from_parameterization(
+        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_param_factory
         self.assertEqual(mdl.num_params(), 2)
@@ -150,8 +150,8 @@ class OpFactoryTestCase(BaseTestCase):
         #see that parent and gpindices of ops created by factory are correctly set
         mdl.from_vector( np.array([0.1,0.02]) )
         liz = mdl._layer_lizard()
-        op = liz.get_operation( pygsti.obj.Label(('Gxrot',';1.57',0)) )
-        self.assertArraysAlmostEqual( op.todense(),
+        op = liz.operation( pygsti.obj.Label(('Gxrot',';1.57',0)) )
+        self.assertArraysAlmostEqual( op.to_dense(),
                                       np.array([[1,   0,    0,   0],
                                                 [0, 0.9,    0,   0],
                                                 [0,   0,   -0.01728224, -0.89983405],
@@ -167,12 +167,12 @@ class OpFactoryTestCase(BaseTestCase):
         #Test that probs change appropriately when the model parameters are
         # given new (different) values.
         mdl.from_vector( np.array([0.0,0.0]) )
-        p = mdl.probs(c1)
+        p = mdl.probabilities(c1)
         self.assertAlmostEqual(p['0'], 0.09942819222653321)
         self.assertAlmostEqual(p['1'], 0.9005718077734666)
 
         mdl.from_vector( np.array([0.5,0.02]) )
-        p = mdl.probs(c1)
+        p = mdl.probabilities(c1)
         self.assertAlmostEqual(p['0'], 0.2967619907250274)
         self.assertAlmostEqual(p['1'], 0.7032380092749724)
 

@@ -57,7 +57,7 @@ def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=Fa
         maxLengths.append(x)
         x *= 2
 
-    listOfExperiments = _stdlists.make_lsgst_experiment_list(
+    listOfExperiments = _stdlists.create_lsgst_circuits(
         target_model, prep_fiducials, effect_fiducials, germs, maxLengths)
 
     mdl_terms = target_model.copy()
@@ -107,7 +107,7 @@ def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=Fa
             while index_to_compute >= 0:
                 print("Worker %d computing prob %d of %d" % (rank, index_to_compute, N))
                 t0 = _time.time()
-                mdl_terms.probs(listOfExperiments[index_to_compute])
+                mdl_terms.probabilities(listOfExperiments[index_to_compute])
                 print("Worker %d finished computing prob %d in %.2fs" % (rank, index_to_compute, _time.time() - t0))
 
                 buf[0] = rank
@@ -130,7 +130,7 @@ def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=Fa
         t0 = _time.time()
         for i, opstr in enumerate(my_expList):
             print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time() - t0, i, len(my_expList)))
-            mdl_terms.probs(opstr)
+            mdl_terms.probabilities(opstr)
         #mdl_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
 
     py_version = 3 if (_sys.version_info > (3, 0)) else 2
@@ -194,7 +194,7 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
     keys = list(calc_cache.keys())
 
     def conv_key(ky):  # converts key to native python objects for faster serialization (but *same* hashing)
-        return (ky[0], ky[1].tonative(), ky[2].tonative(), tuple([x.tonative() for x in ky[3]]))
+        return (ky[0], ky[1].to_native(), ky[2].to_native(), tuple([x.to_native() for x in ky[3]]))
 
     ckeys = [conv_key(x) for x in keys]
 
@@ -291,7 +291,7 @@ def _load_calccache(key_fn, val_fn):
     with _gzip.open(key_fn, "rb") as f:
         keys = _pickle.load(f)
     npfile = _np.load(val_fn)
-    vals = _objs.polynomial.bulk_load_compact_polys(npfile['vtape'], npfile['ctape'], keep_compact=True)
+    vals = _objs.polynomial.bulk_load_compact_polynomials(npfile['vtape'], npfile['ctape'], keep_compact=True)
     calc_cache = {k: v for k, v in zip(keys, vals)}
     #print("Done in %.1fs" % (_time.time()-t0))
     return calc_cache

@@ -40,16 +40,16 @@ class GateSetTestCase(BaseTestCase):
         #Set Model objects to "strict" mode for testing
         pygsti.objects.ExplicitOpModel._strict = False
 
-        self.model = pygsti.construction.build_explicit_model(
+        self.model = pygsti.construction.create_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
-        self.tp_gateset = pygsti.construction.build_explicit_model(
+        self.tp_gateset = pygsti.construction.create_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="TP")
 
-        self.static_gateset = pygsti.construction.build_explicit_model(
+        self.static_gateset = pygsti.construction.create_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="static")
@@ -78,23 +78,23 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
-        PORIG = pygsti.objects.matrixforwardsim.PSMALL; pygsti.objects.matrixforwardsim.PSMALL = 10
+        PORIG = pygsti.objects.matrixforwardsim._PSMALL; pygsti.objects.matrixforwardsim._PSMALL = 10
         bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, scale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
-        pygsti.objects.matrixforwardsim.PSMALL = PORIG
+        pygsti.objects.matrixforwardsim._PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
         self.assertArraysAlmostEqual(bulk_prods3[1],p2)
 
 
         #tag on a few extra EvalTree tests
-        debug_stuff = evt.get_analysis_plot_infos()
+        debug_stuff = evt._compute_analysis_plot_infos()
 
     def test_hessians(self):
         gatestring0 = pygsti.obj.Circuit(('Gi','Gx'))
         gatestring1 = pygsti.obj.Circuit(('Gx','Gy'))
         gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
 
-        circuitList = pygsti.construction.circuit_list([gatestring0,gatestring1,gatestring2])
+        circuitList = pygsti.construction.to_circuits([gatestring0,gatestring1,gatestring2])
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
@@ -250,7 +250,7 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_tree_construction_mem_limit(self):
-        circuits = pygsti.construction.circuit_list(
+        circuits = pygsti.construction.to_circuits(
             [('Gx',),
              ('Gy',),
              ('Gx','Gy'),
@@ -267,7 +267,7 @@ class TestGateSetMethods(GateSetTestCase):
         mdl_few.preps['rho0'] = self.model.preps['rho0'].copy()
         self.assertEqual(mdl_few.num_params(),4)
 
-        #mdl_big = pygsti.construction.build_explicit_model(
+        #mdl_big = pygsti.construction.create_explicit_model(
         #    [('Q0','Q3','Q2')],['Gi'], [ "I(Q0)"])
         #mdl_big._calcClass = MapForwardSimulator
 
@@ -332,14 +332,14 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertFalse(evtA.is_split())
         self.assertTrue(evtB.is_split())
         self.assertTrue(evtC.is_split())
-        self.assertEqual(len(evtA.get_sub_trees()), 1)
-        self.assertEqual(len(evtB.get_sub_trees()), 5) #empirically
-        self.assertEqual(len(evtC.get_sub_trees()), 3)
+        self.assertEqual(len(evtA.sub_trees()), 1)
+        self.assertEqual(len(evtB.sub_trees()), 5) #empirically
+        self.assertEqual(len(evtC.sub_trees()), 3)
         self.assertLessEqual(max([len(subTree)
-                             for subTree in evtB.get_sub_trees()]), 4)
+                             for subTree in evtB.sub_trees()]), 4)
 
-        #print "Lenghts = ",len(evtA.get_sub_trees()),len(evtB.get_sub_trees()),len(evtC.get_sub_trees())
-        #print "SubTree sizes = ",[len(subTree) for subTree in evtC.get_sub_trees()]
+        #print "Lenghts = ",len(evtA.sub_trees()),len(evtB.sub_trees()),len(evtC.sub_trees())
+        #print "SubTree sizes = ",[len(subTree) for subTree in evtC.sub_trees()]
 
         bulk_probsA = np.empty( evtA.num_final_elements(), 'd')
         bulk_probsB = np.empty( evtB.num_final_elements(), 'd')
@@ -392,7 +392,7 @@ Gx^4  0:100
             f.write(dataset_txt)
 
         ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt", record_zero_counts=False)
-        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',), ('2',)])
+        self.assertEqual(ds.outcome_labels(), [('0',), ('1',), ('2',)])
         self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
 
@@ -431,7 +431,7 @@ Gx^4 100 0
             f.write(dataset_txt2)
 
         ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt", record_zero_counts=True)
-        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',)])
+        self.assertEqual(ds.outcome_labels(), [('0',), ('1',)])
         self.assertEqual(ds[()].outcomes, [('0',),('1',)]) # both outcomes even though only nonzero count is 1-count
         with self.assertRaises(KeyError):
             ds[()]['2'] # *can't* query '2' b/c it's NOT a valid outcome label here

@@ -74,7 +74,7 @@ from ..tools import rbtools as _rbt
 #     if datatype == 'raw':
 #         ASPs = RBSdataset.ASPs
 
-#     FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote,
+#     FF_results, FAF_results = std_least_squares_fit(lengths, ASPs, n, seed=seed, asymptote=asymptote,
 #                                                              ftype='full+FA', rtype=rtype)
 
 #     parameters = ['A', 'B', 'p', 'r']
@@ -98,7 +98,7 @@ from ..tools import rbtools as _rbt
 #             if datatype == 'raw':
 #                 BS_ASPs = RBSdataset.bootstraps[i].ASPs
 
-#             BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed,
+#             BS_FF_results, BS_FAF_results = std_least_squares_fit(lengths, BS_ASPs, n, seed=seed,
 #                                                                            asymptote=asymptote, ftype='full+FA',
 #                                                                            rtype=rtype)
 
@@ -141,7 +141,7 @@ from ..tools import rbtools as _rbt
 #     return results
 
 
-def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, ftype='full', rtype='EI'):
+def std_least_squares_fit(lengths, asps, n, seed=None, asymptote=None, ftype='full', rtype='EI'):
     """
     Implements a "standard" least-squares fit of RB data.
 
@@ -189,10 +189,10 @@ def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, 
     if asymptote is not None: A = asymptote
     else: A = 1 / 2**n
     # First perform a fit with a fixed asymptotic value
-    FAF_results = custom_least_squares_data_fitting(lengths, asps, n, a=A, seed=seed)
+    FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed)
     # Full fit is seeded by the fixed asymptote fit.
     seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
-    FF_results = custom_least_squares_data_fitting(lengths, asps, n, seed=seed_full)
+    FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full)
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
     elif ftype == 'FA': return FAF_results
@@ -200,7 +200,7 @@ def std_least_squares_data_fitting(lengths, asps, n, seed=None, asymptote=None, 
     else: raise ValueError("The `ftype` value is invalid!")
 
 
-def custom_least_squares_data_fitting(lengths, asps, n, a=None, b=None, seed=None, rtype='EI'):
+def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype='EI'):
     """
     Fits RB average success probabilities to the exponential decay a + Bp^m using least-squares fitting.
 

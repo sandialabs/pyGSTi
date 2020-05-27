@@ -15,16 +15,16 @@ class DirectXTester(BaseCase):
         cls._tgt = fixtures.model.copy()
         cls.prepStrs = fixtures.fiducials
         cls.effectStrs = fixtures.fiducials
-        cls.strs = pc.circuit_list([
+        cls.strs = pc.to_circuits([
             (),  # always need empty string
             ('Gx',), ('Gy',), ('Gi',),  # need these for include_target_ops=True
             ('Gx', 'Gx'), ('Gx', 'Gy', 'Gx')  # additional
         ])
-        expstrs = pc.create_circuit_list(
+        expstrs = pc.create_circuits(
             "f0+base+f1", order=['f0', 'f1', 'base'], f0=fixtures.fiducials,
             f1=fixtures.fiducials, base=cls.strs
         )
-        cls._ds = pc.generate_fake_data(fixtures.datagen_gateset.copy(), expstrs, 1000, 'multinomial', seed=_SEED)
+        cls._ds = pc.simulate_data(fixtures.datagen_gateset.copy(), expstrs, 1000, 'multinomial', seed=_SEED)
 
     def setUp(self):
         self.tgt = self._tgt.copy()

@@ -76,7 +76,7 @@ def stringy_ast(obj):
 
 
 def prototype_circuits(circuits):
-    """ Deconstruct a circuit structure into a raw data structure that can be used as an argument to `circuit_list` """
+    """ Deconstruct a circuit structure into a raw data structure that can be used as an argument to `to_circuits` """
     for c in circuits:
         if isinstance(c, Circuit):
             yield tuple(str(lbl) for lbl in c)

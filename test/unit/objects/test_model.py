@@ -15,18 +15,18 @@ import pygsti.objects.model as m
 @contextmanager
 def smallness_threshold(threshold=10):
     """Helper context for setting/resetting the matrix forward simulator smallness threshold"""
-    original_p = matrixforwardsim.PSMALL
-    original_d = matrixforwardsim.DSMALL
-    original_h = matrixforwardsim.HSMALL
+    original_p = matrixforwardsim._PSMALL
+    original_d = matrixforwardsim._DSMALL
+    original_h = matrixforwardsim._HSMALL
     try:
-        matrixforwardsim.PSMALL = threshold
-        matrixforwardsim.DSMALL = threshold
-        matrixforwardsim.HSMALL = threshold
+        matrixforwardsim._PSMALL = threshold
+        matrixforwardsim._DSMALL = threshold
+        matrixforwardsim._HSMALL = threshold
         yield  # yield to context
     finally:
-        matrixforwardsim.HSMALL = original_h
-        matrixforwardsim.DSMALL = original_d
-        matrixforwardsim.PSMALL = original_p
+        matrixforwardsim._HSMALL = original_h
+        matrixforwardsim._DSMALL = original_d
+        matrixforwardsim._PSMALL = original_p
 
 
 ##
@@ -38,7 +38,7 @@ class ModelBase(object):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         ExplicitOpModel._strict = False
-        cls._model = pc.build_explicit_model(
+        cls._model = pc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
@@ -144,7 +144,7 @@ class GeneralMethodBase(object):
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
     def test_strdiff(self):
-        other = pc.build_explicit_model(
+        other = pc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization='TP'
@@ -228,9 +228,9 @@ class GeneralMethodBase(object):
             self.model.effects  # can only use this property when there's a *single* POVM
 
         with self.assertRaises(ValueError):
-            prep, gates, povm = self.model.split_circuit(Circuit(('rho0', 'Gx')))
+            prep, gates, povm = self.model._split_circuit(Circuit(('rho0', 'Gx')))
         with self.assertRaises(ValueError):
-            prep, gates, povm = self.model.split_circuit(Circuit(('Gx', 'Mdefault')))
+            prep, gates, povm = self.model._split_circuit(Circuit(('Gx', 'Mdefault')))
 
     def test_set_gate_raises_on_bad_dimension(self):
         with self.assertRaises(ValueError):
@@ -325,13 +325,13 @@ class SimMethodBase(object):
         # TODO expected dprobs & hprobs
 
     def test_probs(self):
-        probs = self.model.probs(self.gatestring1)
+        probs = self.model.probabilities(self.gatestring1)
         expected = self._expected_probs[self.gatestring1]
         actual_p0, actual_p1 = probs[('0',)], probs[('1',)]
         self.assertAlmostEqual(expected, actual_p0)
         self.assertAlmostEqual(1.0 - expected, actual_p1)
 
-        probs = self.model.probs(self.gatestring2)
+        probs = self.model.probabilities(self.gatestring2)
         expected = self._expected_probs[self.gatestring2]
         actual_p0, actual_p1 = probs[('0',)], probs[('1',)]
         self.assertAlmostEqual(expected, actual_p0)
@@ -531,7 +531,7 @@ class SimMethodBase(object):
 
     def test_bulk_evaltree(self):
         # Test tree construction
-        circuits = pc.circuit_list(
+        circuits = pc.to_circuits(
             [('Gx',),
              ('Gy',),
              ('Gx', 'Gy'),
@@ -565,7 +565,7 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         Tinv = np.linalg.inv(T)
         elT = FullGaugeGroupElement(T)
         cp = self.model.copy()
-        cp.transform(elT)
+        cp.transform_inplace(elT)
 
         self.assertAlmostEqual(self.model.frobeniusdist(cp, T, normalize=False), 0)  # test out normalize=False
         self.assertAlmostEqual(self.model.jtracedist(cp, T), 0)
@@ -608,12 +608,12 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
     def test_probs_warns_on_nan_in_input(self):
         self.model['rho0'][:] = np.nan
         with self.assertWarns(Warning):
-            self.model.probs(self.gatestring1)
+            self.model.probabilities(self.gatestring1)
 
 
 class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
     def test_tp_dist(self):
-        self.assertAlmostEqual(self.model.tpdist(), 3.52633900335e-16, 5)
+        self.assertAlmostEqual(self.model._tpdist(), 3.52633900335e-16, 5)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -641,7 +641,7 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
 
     def test_bulk_evaltree(self):
         # Test tree construction
-        circuits = pc.circuit_list(
+        circuits = pc.to_circuits(
             [('Gx',),
              ('Gy',),
              ('Gx', 'Gy'),

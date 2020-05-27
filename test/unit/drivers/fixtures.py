@@ -18,7 +18,7 @@ def datagen_gateset(self):
 
 @ns.memo
 def lsgstStrings(self):
-    return pc.make_lsgst_lists(
+    return pc.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
@@ -26,7 +26,7 @@ def lsgstStrings(self):
 
 @ns.memo
 def dataset(self):
-    return pc.generate_fake_data(
+    return pc.simulate_data(
         self.datagen_gateset, self.lsgstStrings[-1],
         n_samples=1000, sample_error='binomial', seed=100
     )

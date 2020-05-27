@@ -766,37 +766,37 @@ BASIS: pp
         f = open(temp_files + "/sip_test.gateset13","w")
         f.write(gatesetfile_test13); f.close()
 
-        gs1 = pygsti.io.read_model(temp_files + "/sip_test.model1")
-        gs2 = pygsti.io.read_model(temp_files + "/sip_test.model2")
+        gs1 = pygsti.io.parse_model(temp_files + "/sip_test.model1")
+        gs2 = pygsti.io.parse_model(temp_files + "/sip_test.model2")
 
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset3")
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset3")
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset4")
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset4")
         with self.assertRaises(AssertionError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset5")
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset5")
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset6")
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset6")
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset7")
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset7")
 
-        gs8 = pygsti.io.read_model(temp_files + "/sip_test.gateset8")
-        #gs9 = pygsti.io.read_model(temp_files + "/sip_test.gateset9") # to test inferred basis dim, which isn't supported anymore (12/20/18)
-        gs10 = pygsti.io.read_model(temp_files + "/sip_test.gateset10")
+        gs8 = pygsti.io.parse_model(temp_files + "/sip_test.gateset8")
+        #gs9 = pygsti.io.parse_model(temp_files + "/sip_test.gateset9") # to test inferred basis dim, which isn't supported anymore (12/20/18)
+        gs10 = pygsti.io.parse_model(temp_files + "/sip_test.gateset10")
 
-        self.assertWarns(pygsti.io.read_model, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
+        self.assertWarns(pygsti.io.parse_model, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset12") # invalid item type
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset12") # invalid item type
         with self.assertRaises(ValueError):
-            pygsti.io.read_model(temp_files + "/sip_test.gateset13") # cannot infer basis dim
+            pygsti.io.parse_model(temp_files + "/sip_test.gateset13") # cannot infer basis dim
 
 
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction._create_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction._create_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction._create_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)

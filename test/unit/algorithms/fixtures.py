@@ -22,21 +22,21 @@ def datagen_gateset(self):
 
 @ns.memo
 def lgstStrings(self):
-    return pc.list_lgst_circuits(
+    return pc.create_lgst_circuits(
         self.fiducials, self.fiducials, self.opLabels
     )
 
 
 @ns.memo
 def elgstStrings(self):
-    return pc.make_elgst_lists(
+    return pc.create_elgst_lists(
         self.opLabels, self.germs, self.maxLengthList
     )
 
 
 @ns.memo
 def lsgstStrings(self):
-    return pc.make_lsgst_lists(
+    return pc.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
@@ -44,11 +44,11 @@ def lsgstStrings(self):
 
 @ns.memo
 def ds(self):
-    expList = pc.make_lsgst_experiment_list(
+    expList = pc.create_lsgst_circuits(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
-    return pc.generate_fake_data(
+    return pc.simulate_data(
         self.datagen_gateset, expList,
         n_samples=1000, sample_error='binomial', seed=_SEED
     )
@@ -56,7 +56,7 @@ def ds(self):
 
 @ns.memo
 def ds_lgst(self):
-    return pc.generate_fake_data(
+    return pc.simulate_data(
         self.datagen_gateset, self.lgstStrings,
         n_samples=10000, sample_error='binomial', seed=_SEED
     )
@@ -64,7 +64,7 @@ def ds_lgst(self):
 
 @ns.memo
 def mdl_lgst(self):
-    return alg.do_lgst(
+    return alg.run_lgst(
         self.ds, self.fiducials, self.fiducials, self.model,
         svd_truncate_to=4, verbosity=0
     )

@@ -3,7 +3,7 @@ import numpy as np
 from ..util import BaseCase
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.construction.modelconstruction import build_explicit_model, build_operation
+from pygsti.construction.modelconstruction import create_explicit_model, _create_operation
 import pygsti.objects.explicitmodel as mdl
 
 
@@ -37,10 +37,10 @@ class ExplicitOpModelToolTester(BaseCase):
     def setUp(self):
         mdl.ExplicitOpModel._strict = False
         # XXX can these be constructed directly?  EGN: yes, some model-construction tests should do it.
-        self.model = build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
+        self.model = create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-        self.gateset_2q = build_explicit_model(
+        self.gateset_2q = create_explicit_model(
             [('Q0', 'Q1')], ['GIX', 'GIY', 'GXI', 'GYI', 'GCNOT'],
             ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"])
 
@@ -50,9 +50,9 @@ class ExplicitOpModelToolTester(BaseCase):
         # TODO assert correctness
 
     def test_rotate_1q(self):
-        rotXPi = build_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = build_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = build_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi = _create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotXPiOv2 = _create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = _create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)

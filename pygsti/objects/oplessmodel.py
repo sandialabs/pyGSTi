@@ -98,7 +98,7 @@ class OplessModel(_Model):
         self.basis = None
         self.dim = 0
 
-    def get_dimension(self):
+    def dimension(self):
         """
         The dimension of this model.
 
@@ -108,7 +108,7 @@ class OplessModel(_Model):
         """
         return self.dim
 
-    def get_num_outcomes(self, circuit):  # needed for sparse data detection
+    def compute_num_outcomes(self, circuit):  # needed for sparse data detection
         """
         The number of outcomes of `circuit`.
 
@@ -123,7 +123,7 @@ class OplessModel(_Model):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def probs(self, circuit, clip_to=None, cache=None):
+    def probabilities(self, circuit, clip_to=None, cache=None):
         """
         Construct a dictionary of the outcome probabilities of `circuit`.
 
@@ -170,14 +170,14 @@ class OplessModel(_Model):
         eps = 1e-7
         orig_pvec = self.to_vector()
         Np = self.num_params()
-        probs0 = self.probs(circuit, clip_to, None)
+        probs0 = self.probabilities(circuit, clip_to, None)
 
         deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
         for i in range(Np):
             p_plus_dp = orig_pvec.copy()
             p_plus_dp[i] += eps
             self.from_vector(p_plus_dp)
-            probs1 = self.probs(circuit, clip_to, None)
+            probs1 = self.probabilities(circuit, clip_to, None)
             for k, p0 in probs0.items():
                 deriv[k][i] = (probs1[k] - p0) / eps
         self.from_vector(orig_pvec)
@@ -509,7 +509,7 @@ class OplessModel(_Model):
         else:
             for i, c in enumerate(eval_tree):
                 cache = eval_tree.cache[i] if eval_tree.cache else None
-                probs = self.probs(c, clip_to, cache)
+                probs = self.probabilities(c, clip_to, cache)
                 elInds = _slct.indices(eval_tree.element_indices[i]) \
                     if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
                 for k, outcome in zip(elInds, eval_tree.outcomes[i]):
@@ -591,7 +591,7 @@ class OplessModel(_Model):
             # eps = 1e-6
             for i, c in enumerate(eval_tree):
                 cache = eval_tree.cache[i] if eval_tree.cache else None
-                probs0 = self.probs(c, clip_to, cache)
+                probs0 = self.probabilities(c, clip_to, cache)
                 dprobs0 = self.dprobs(c, False, clip_to, cache)
                 elInds = _slct.indices(eval_tree.element_indices[i]) \
                     if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
@@ -633,7 +633,7 @@ class SuccessFailModel(OplessModel):
         OplessModel.__init__(self, state_space_labels)
         self.use_cache = use_cache
 
-    def get_num_outcomes(self, circuit):  # needed for sparse data detection
+    def compute_num_outcomes(self, circuit):  # needed for sparse data detection
         """
         The number of outcomes of `circuit`.  Always == 2.
 
@@ -716,7 +716,7 @@ class SuccessFailModel(OplessModel):
         else:
             return {('success',): dsp, ('fail',): -dsp}
 
-    def poly_probs(self, circuit):
+    def polynomial_probs(self, circuit):
         """
         Construct a dictionary of the outcome probabilities of `circuit` as *polynomials*.
 
@@ -840,10 +840,10 @@ class SuccessFailModel(OplessModel):
             polys = []
             for i, circuit in enumerate(circuit_list):
                 print("Generating probs for circuit %d of %d" % (i + 1, len(circuit_list)))
-                probs = self.poly_probs(circuit)
+                probs = self.polynomial_probs(circuit)
                 polys.append(probs['success'])
                 polys.append(probs['fail'])
-            compact_polys = compact_poly_list(polys)
+            compact_polys = compact_polynomial_list(polys)
             cache = compact_polys
         elif self.use_cache is True:
             cache = [self._circuit_cache(circuit) for circuit in circuit_list]
@@ -854,7 +854,7 @@ class SuccessFailModel(OplessModel):
 
 
 #TODO: move this to polynomial.py??
-def compact_poly_list(list_of_polys):
+def compact_polynomial_list(list_of_polys):
     """
     Create a single vtape,ctape pair from a list of normal Polynomals
 
@@ -952,7 +952,7 @@ class ErrorRatesModel(SuccessFailModel):
 
     def _circuit_cache(self, circuit):
         if not isinstance(circuit, _Circuit):
-            circuit = _Circuit.fromtup(circuit)
+            circuit = _Circuit.from_tuple(circuit)
 
         depth = circuit.depth()
         width = circuit.width()
@@ -979,7 +979,7 @@ class ErrorRatesModel(SuccessFailModel):
         #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
 
         # else:
-        layers_with_idles = [circuit.get_layer_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
+        layers_with_idles = [circuit.layer_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
         inds_to_mult_by_layer = [_np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
                                  for layer in layers_with_idles]
 
@@ -1375,7 +1375,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     #     todo
     #     """
     #     if not isinstance(circuit, _Circuit):
-    #         circuit = _Circuit.fromtup(circuit)
+    #         circuit = _Circuit.from_tuple(circuit)
 
     #     depth = circuit.depth()
     #     width = circuit.width()

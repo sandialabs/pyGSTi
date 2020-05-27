@@ -44,7 +44,7 @@ class GaugeInvariantsGatesSection(_Section):
         )
 
     @_Section.figure_factory(4)
-    def final_model_eval_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
+    def final_model_eigenvalue_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GateEigenvalueTable(
             switchboard.mdl_gaugeinv, switchboard.mdl_target, _cri_gauge_inv(1, switchboard,
                                                                              confidence_level, ci_brevity),
@@ -209,7 +209,7 @@ class GaugeVariantsDecompSection(_Section):
         )
 
 
-class GaugeVariantsErrGenSection(_Section):
+class GaugeVariantsErrorGenSection(_Section):
     _HTML_TEMPLATE = 'tabs/GaugeVariants_errgen.html'
 
     @_Section.figure_factory(4)
@@ -226,7 +226,7 @@ class GaugeVariantsErrGenSection(_Section):
         return errgen_type
 
 
-class GaugeVariantsErrGenNQubitSection(GaugeVariantsErrGenSection):
+class GaugeVariantsErrorGenNQubitSection(GaugeVariantsErrorGenSection):
     @_Section.figure_factory(4)
     def final_model_errorgen_box_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                        errgen_type='logGTi', **kwargs):

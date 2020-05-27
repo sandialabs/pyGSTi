@@ -35,7 +35,7 @@ class AbstractCircuitStructureTester(BaseCase):
 
     def test_plaquette_rows_cols(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.plaquette_rows_cols()
+            self.gss.num_plaquette_rows_cols()
 
 
 class LSGermsStructureTester(AbstractCircuitStructureTester):

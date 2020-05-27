@@ -25,7 +25,7 @@ def _vnorm(x, vmin, vmax):
 
 
 @smart_cached
-def as_rgb_array(color_str):
+def to_rgb_array(color_str):
     """
     Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"` to a numpy array of length 3.
 
@@ -81,15 +81,15 @@ def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
     for i, (val, color) in enumerate(plotly_colorscale[:-1]):
         next_val, next_color = plotly_colorscale[i + 1]
         if val <= normalized_value < next_val:
-            rgb = as_rgb_array(color)
-            next_rgb = as_rgb_array(next_color)
+            rgb = to_rgb_array(color)
+            next_rgb = to_rgb_array(next_color)
             v = (normalized_value - val) / (next_val - val)
             interp_rgb = (1.0 - v) * rgb + v * next_rgb
             break
     else:
         val, color = plotly_colorscale[-1]
         assert(val <= normalized_value)
-        interp_rgb = as_rgb_array(color)
+        interp_rgb = to_rgb_array(color)
     return 'rgb(%d,%d,%d)' % (int(round(interp_rgb[0])),
                               int(round(interp_rgb[1])),
                               int(round(interp_rgb[2])))
@@ -211,7 +211,7 @@ class Colormap(object):
         #print("DB: value = %f (%s), RGB = %f,%f,%f, P=%f (%s)" % (value,z,R,G,B,P,"black" if 0.5 <= P else "white"))
         return "black" if 0.5 <= P else "white"
 
-    def get_colorscale(self):
+    def create_plotly_colorscale(self):
         """
         Construct and return the plotly colorscale of this color map.
 
@@ -225,7 +225,7 @@ class Colormap(object):
                              for z, (r, g, b) in self.rgb_colors]
         return plotly_colorscale
 
-    def get_color(self, value):
+    def interpolate_color(self, value):
         """
         Retrieves the color at a particular colormap value.
 
@@ -266,7 +266,7 @@ class Colormap(object):
                                   int(round(interp_rgb[1] * 255)),
                                   int(round(interp_rgb[2] * 255)))
 
-    def get_matplotlib_norm_and_cmap(self):
+    def create_matplotlib_norm_and_cmap(self):
         """
         Creates and returns normalization and colormap classes for matplotlib heatmap plots.
 
@@ -388,7 +388,7 @@ class LinlogColormap(Colormap):
              [0.5, c], [1.0, mx]], hmin, hmax, invalid_color)
 
     @classmethod
-    def manual_transition_pt(cls, vmin, vmax, trans, color="red"):
+    def set_manual_transition_point(cls, vmin, vmax, trans, color="red"):
         """
         Create a new LinlogColormap with a manually-specified transition point.
 
@@ -483,7 +483,7 @@ class LinlogColormap(Colormap):
         else:
             return return_value
 
-    def get_matplotlib_norm_and_cmap(self):
+    def create_matplotlib_norm_and_cmap(self):
         """
         Creates and returns normalization and colormap classes for matplotlib heatmap plots.
 
@@ -492,7 +492,7 @@ class LinlogColormap(Colormap):
         norm, cmap
         """
         from .mpl_colormaps import MplLinLogNorm as _mpl_LinLogNorm
-        _, cmap = super(LinlogColormap, self).get_matplotlib_norm_and_cmap()
+        _, cmap = super(LinlogColormap, self).create_matplotlib_norm_and_cmap()
         norm = _mpl_LinLogNorm(self)
         cmap.set_bad('w', 1)
         return norm, cmap

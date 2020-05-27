@@ -34,7 +34,7 @@ ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
-def do_model_test(model_filename_or_object,
+def run_model_test(model_filename_or_object,
                   data_filename_or_set, target_model_filename_or_object,
                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                   germs_list_or_filename, max_lengths, gauge_opt_params=None,
@@ -127,7 +127,7 @@ def do_model_test(model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     ds = _load_dataset(data_filename_or_set, comm, printer)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
 
@@ -167,19 +167,19 @@ def do_model_test(model_filename_or_object,
     return results
 
 
-def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
+def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                   gauge_opt_params=None, advanced_options=None, comm=None,
                   mem_limit=None, output_pkl=None, verbosity=2):
     """
     Perform Linear Gate Set Tomography (LGST).
 
-    This function differs from the lower level :function:`do_lgst` function
+    This function differs from the lower level :function:`run_lgst` function
     in that it may perform a post-LGST gauge optimization and this routine
     returns a :class:`Results` object containing the LGST estimate.
 
     Overall, this is a high-level driver routine which can be used similarly
-    to :function:`do_long_sequence_gst`  whereas `do_lgst` is a low-level
+    to :function:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
     routine used when building your own algorithms.
 
     Parameters
@@ -215,7 +215,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  See
-        :function:`do_long_sequence_gst`.
+        :function:`run_long_sequence_gst`.
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -238,12 +238,12 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
-    germs = _construction.circuit_list([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    germs = _construction.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
     max_lengths = [1]  # we only need maxLength == 1 when doing LGST
 
     exp_design = _proto.StandardGSTDesign(target_model, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -272,7 +272,7 @@ def do_linear_gst(data_filename_or_set, target_model_filename_or_object,
     return results
 
 
-def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
+def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                          germs_list_or_filename, max_lengths, gauge_opt_params=None,
                          advanced_options=None, comm=None, mem_limit=None,
@@ -404,7 +404,7 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
@@ -441,14 +441,14 @@ def do_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     return results
 
 
-def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
+def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
                               lsgst_lists, gauge_opt_params=None,
                               advanced_options=None, comm=None, mem_limit=None,
                               output_pkl=None, verbosity=2):
     """
     A more fundamental interface for performing end-to-end GST.
 
-    Similar to :func:`do_long_sequence_gst` except this function takes
+    Similar to :func:`run_long_sequence_gst` except this function takes
     `lsgst_lists`, a list of either raw circuit lists or of `LsGermsStruct`
     gate-string-structure objects to define which gate seqences are used on
     each GST iteration.
@@ -487,7 +487,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     advanced_options : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  See
-        :func:`do_long_sequence_gst` for a list of the allowed keys, with the
+        :func:`run_long_sequence_gst` for a list of the allowed keys, with the
         exception  "nested_circuit_lists", "op_label_aliases",
         "include_lgst", and "truncScheme".
 
@@ -518,7 +518,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
     exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
@@ -548,7 +548,7 @@ def do_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_obj
     return results
 
 
-def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
+def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
                        prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                        germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
                        gauge_opt_suite='stdgaugeopt',
@@ -558,9 +558,9 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     Perform end-to-end GST analysis using standard practices.
 
     This routines is an even higher-level driver than
-    :func:`do_long_sequence_gst`.  It performs bottled, typically-useful,
+    :func:`run_long_sequence_gst`.  It performs bottled, typically-useful,
     runs of long sequence GST on a dataset.  This essentially boils down
-    to running :func:`do_long_sequence_gst` one or more times using different
+    to running :func:`run_long_sequence_gst` one or more times using different
     model parameterizations, and performing commonly-useful gauge
     optimizations, based only on the high-level `modes` argument.
 
@@ -613,7 +613,7 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
         string or list of strings (see below) specifies built-in sets of gauge
         optimizations, otherwise `gauge_opt_suite` should be a dictionary of
         gauge-optimization parameter dictionaries, as specified by the
-        `gauge_opt_params` argument of :func:`do_long_sequence_gst`.  The key
+        `gauge_opt_params` argument of :func:`run_long_sequence_gst`.  The key
         names of `gauge_opt_suite` then label the gauge optimizations within
         the resuling `Estimate` objects.  The built-in suites are:
 
@@ -649,7 +649,7 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
 
     advanced_options : dict, optional
         Specifies advanced options most of which deal with numerical details of the
-        objective function or expert-level functionality. See :func:`do_long_sequence_gst`
+        objective function or expert-level functionality. See :func:`run_long_sequence_gst`
         for a list of the allowed keys for each such dictionary.
 
     output_pkl : str or file, optional
@@ -664,7 +664,7 @@ def do_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     if advanced_options and 'all' in advanced_options and len(advanced_options) == 1:
         advanced_options = advanced_options['all']  # backward compatibility
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
@@ -705,7 +705,7 @@ def _load_model(model_filename_or_object):
 
 def _load_dataset(data_filename_or_set, comm, verbosity):
     """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     if isinstance(data_filename_or_set, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(data_filename_or_set)[1] == ".pkl":
@@ -773,7 +773,7 @@ def _get_gst_initial_model(advanced_options):
 
 def _get_gst_builders(advanced_options):
     advanced_options = advanced_options or {}
-    objfn_builders = _proto.GSTObjFnBuilders.init_simple(
+    objfn_builders = _proto.GSTObjFnBuilders.create_from(
         advanced_options.get('objective', 'logl'),
         advanced_options.get('use_freq_weighted_chi2', False),
         advanced_options.get('always_perform_mle', False),

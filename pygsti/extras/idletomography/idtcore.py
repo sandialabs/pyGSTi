@@ -573,8 +573,8 @@ def determine_paulidicts(model):
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
         nqubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _objs.ComputationalSPAMVec([0] * nqubits, model._evotype).todense()
-        if _np.linalg.norm(prep.todense() - cmp) > 1e-6: return None
+        cmp = _objs.ComputationalSPAMVec([0] * nqubits, model._evotype).to_dense()
+        if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):
         """ Note: assumes cur_sslbs is just a list of labels (of first "sector"
@@ -594,11 +594,11 @@ def determine_paulidicts(model):
 
         # StaticDenseOp, LindbladDenseOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
-            mx = g.todense()
+            mx = g.to_dense()
             assert(mx.shape == (4, 4))
             return mx
         else:
-            mx = g.todense()
+            mx = g.to_dense()
             if _np.linalg.norm(mx - _np.identity(g.dim, 'd')) < 1e-6:
                 # acts as identity on some other space - this is ok
                 return _np.identity(4, 'd')
@@ -607,12 +607,12 @@ def determine_paulidicts(model):
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _objs.BuiltinBasis('pp', 4)
-    Gx = _cnst.basis_build_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
-    Gy = _cnst.basis_build_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
+    Gx = _cnst._basis_create_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").to_dense()
+    Gy = _cnst._basis_create_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
-    for gl in model.get_primitive_op_labels():
+    for gl in model.primitive_op_labels():
         if isinstance(model, _objs.ExplicitOpModel):
             gate = model.operations[gl]
         else:
@@ -1094,7 +1094,7 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
     IdleTomographyResults
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
 
     if advanced_options is None:
         advanced_options = {}

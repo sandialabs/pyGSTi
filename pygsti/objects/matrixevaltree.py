@@ -109,7 +109,7 @@ class MatrixEvalTree(EvalTree):
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
         self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
         #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
-        self.recompute_spamtuple_indices(local=True)  # local shouldn't matter here
+        self._recompute_spamtuple_indices(local=True)  # local shouldn't matter here
 
         #Evaluation dictionary:
         # keys == operation sequences that have been evaluated so far
@@ -234,7 +234,7 @@ class MatrixEvalTree(EvalTree):
         self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = []  # no subtrees yet
-        assert(self.generate_circuit_list() == circuit_list)
+        assert(self.compute_circuits() == circuit_list)
         assert(None not in circuit_list)
 
     def cache_size(self):
@@ -250,7 +250,7 @@ class MatrixEvalTree(EvalTree):
         """
         return len(self)
 
-    def generate_circuit_list(self, permute=True):
+    def compute_circuits(self, permute=True):
         """
         Generate a list of the final operation sequences this tree evaluates.
 
@@ -281,17 +281,17 @@ class MatrixEvalTree(EvalTree):
         circuits = [None] * len(self)
 
         #Set "initial" (single- or zero- gate) strings
-        for i, opLabel in zip(self.get_init_indices(), self.get_init_labels()):
+        for i, opLabel in zip(self.init_indices(), self.init_labels()):
             if opLabel == "": circuits[i] = ()  # special case of empty label
             else: circuits[i] = (opLabel,)
 
         #Build rest of strings
-        for i in self.get_evaluation_order():
+        for i in self.evaluation_order():
             iLeft, iRight = self[i]
             circuits[i] = circuits[iLeft] + circuits[iRight]
 
         #Permute to get final list:
-        nFinal = self.num_final_strings()
+        nFinal = self.num_final_circuits()
         if self.original_index_lookup is not None and permute:
             finalCircuits = [None] * nFinal
             for iorig, icur in self.original_index_lookup.items():
@@ -302,7 +302,7 @@ class MatrixEvalTree(EvalTree):
             assert(None not in circuits[0:nFinal])
             return circuits[0:nFinal]
 
-    def get_min_tree_size(self):
+    def _min_tree_size(self):
         """
         Returns the minimum sub tree size required to compute each of the tree entries individually.
 
@@ -353,9 +353,9 @@ class MatrixEvalTree(EvalTree):
         OrderedDict
             A updated version of el_indices_dict
         """
-        #dbList = self.generate_circuit_list()
+        #dbList = self.compute_circuits()
         tm = _time.time()
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         if (max_sub_tree_size is None and num_sub_trees is None) or \
            (max_sub_tree_size is not None and num_sub_trees is not None):
@@ -540,7 +540,7 @@ class MatrixEvalTree(EvalTree):
             for singleItemTreeSet in singleItemTreeSetList:
                 if len(singleItemTreeSet) > max_sub_tree_size:
                     raise ValueError("Max. sub tree size (%d) is too low (<%d)!"
-                                     % (max_sub_tree_size, self.get_min_tree_size()))
+                                     % (max_sub_tree_size, self._min_tree_size()))
 
                 #See if we should merge this single-item-generated tree with
                 # another one or make it a new subtree.
@@ -579,7 +579,7 @@ class MatrixEvalTree(EvalTree):
         # raise ValueError("STOP")
 
         #bDebug = False
-        #if bDebug: print("Parent nFinal = ",self.num_final_strings(), " len=",len(self))
+        #if bDebug: print("Parent nFinal = ",self.num_final_circuits(), " len=",len(self))
         printer.log("EvalTree.split done first pass in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
 
@@ -647,7 +647,7 @@ class MatrixEvalTree(EvalTree):
                 subTree[ik] = (iLeft, iRight)
 
                 #if ik < subTreeNumFinal:
-                #    assert(k < self.num_final_strings()) # it should be a final element in parent too!
+                #    assert(k < self.num_final_circuits()) # it should be a final element in parent too!
                 #    subTree.myFinalToParentFinalMap[ik] = k
 
             subTree.parentIndexMap = parent_indices  # parent index of *each* subtree index
@@ -671,7 +671,7 @@ class MatrixEvalTree(EvalTree):
             #   (which are what is held in simplified_circuit_spamTuples)
 
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
-            subTree.recompute_spamtuple_indices(local=False)
+            subTree._recompute_spamtuple_indices(local=False)
 
             return subTree
 
@@ -693,11 +693,11 @@ class MatrixEvalTree(EvalTree):
     def _create_single_item_trees(self):
         #  Create disjoint set of subtrees generated by single items
         need_to_compute = _np.zeros(len(self), 'bool')
-        need_to_compute[0:self.num_final_strings()] = True
+        need_to_compute[0:self.num_final_circuits()] = True
 
         singleItemTreeSetList = []  # each element represents a subtree, and
         # is a set of the indices owned by that subtree
-        for i in reversed(range(self.num_final_strings())):
+        for i in reversed(range(self.num_final_circuits())):
             if not need_to_compute[i]: continue  # move to the last element
             #of eval_tree that needs to be computed (i.e. is not in a subTree)
 
@@ -713,7 +713,7 @@ class MatrixEvalTree(EvalTree):
             singleItemTreeSetList.append(newTreeSet)
         return singleItemTreeSetList
 
-    def get_analysis_plot_infos(self):
+    def _compute_analysis_plot_infos(self):
         """
         Returns debug plot information.
 
@@ -776,7 +776,7 @@ class MatrixEvalTree(EvalTree):
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
 
-    def recompute_spamtuple_indices(self, local=False):
+    def _recompute_spamtuple_indices(self, local=False):
         """
         Recompute this tree's `.spamtuple_indices` array.
 
@@ -815,7 +815,7 @@ class MatrixEvalTree(EvalTree):
             self._permute_simplified_circuit_xs(self.simplified_circuit_spamTuples,
                                                 element_indices_dict, old_indices_in_new_order)
         self.simplified_circuit_nEls = list(map(len, self.simplified_circuit_spamTuples))
-        self.recompute_spamtuple_indices(local=True)  # local shouldn't matter here - just for clarity
+        self._recompute_spamtuple_indices(local=True)  # local shouldn't matter here - just for clarity
 
         return updated_elIndices
 

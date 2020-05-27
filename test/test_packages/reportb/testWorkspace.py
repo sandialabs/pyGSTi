@@ -115,7 +115,7 @@ class TestWorkspace(ReportBaseCase):
             hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss,
                                                 min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
-            est = pygsti.protocols.estimate.Estimate.gst_init(None, mdl, None, []) #dummy w/out parent
+            est = pygsti.protocols.estimate.Estimate.create_gst_estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, non_mark_radius_sq=0.0)
@@ -218,7 +218,7 @@ class TestWorkspace(ReportBaseCase):
         params['gaugeOptParams'] = [goparams] # can also be a list (for GOpt stages)
         tbls.append( w.MetadataTable(gsTP, params) )
 
-        weirdGS = pygsti.construction.build_explicit_model(
+        weirdGS = pygsti.construction.create_explicit_model(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
         weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'],self.mdl.povms['Mdefault']])
@@ -289,17 +289,17 @@ class TestWorkspace(ReportBaseCase):
         mds.add_dataset("DS1",self.ds)
         dsc = pygsti.objects.DataComparator([self.ds,self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx','Gy','Gi'])
         dsc2 = pygsti.objects.DataComparator(mds)
-        dsc.implement()
-        dsc2.implement()
+        dsc.run()
+        dsc2.run()
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
-        tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
+        tds = pygsti.io.load_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
         results_gst = drift.StabilityAnalyzer(tds, ids=True)
-        results_gst.generate_spectra()
-        results_gst.do_instability_detection(0.05)
-        results_gst.do_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
+        results_gst.compute_spectra()
+        results_gst.run_instability_detection(0.05)
+        results_gst.run_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
         plts.append( w.ColorBoxPlot('driftsize', self.gss, self.ds, self.mdl, box_labels=False,
                                     hover_info=False, sum_up=True, invert=False, stabilityanalyzer=results_gst) )
 
@@ -545,7 +545,7 @@ class TestWorkspace(ReportBaseCase):
         printer.start_recording()
         printer.log("Hello World (with $\\alpha$ math latex)")
         lineinfo = printer.stop_recording()
-        strs = pygsti.construction.circuit_list([ (), ('Gx',), ('Gx','Gy')])
+        strs = pygsti.construction.to_circuits([ (), ('Gx',), ('Gx','Gy')])
 
         table = ws.BlankTable()
         plot = ws.BoxKeyPlot(strs, strs)
@@ -625,42 +625,42 @@ class TestWorkspace(ReportBaseCase):
         mx = np.identity(2,'d')
         mxs = [ [mx, mx],
                 [mx, mx] ]
-        gstrs = pygsti.construction.circuit_list([ (), ('Gx',) ])
+        gstrs = pygsti.construction.to_circuits([ (), ('Gx',) ])
 
-        # ---- nested_color_boxplot ----
-        pygsti.report.workspaceplots.nested_color_boxplot(mxs, colormap)
+        # ---- _nested_color_boxplot ----
+        pygsti.report.workspaceplots._nested_color_boxplot(mxs, colormap)
 
-        # ---- generate_boxplot ----
-        pygsti.report.workspaceplots.generate_boxplot(
+        # ---- _summable_color_boxplot ----
+        pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, gstrs, gstrs,
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap) #circuit labels
 
-        pygsti.report.workspaceplots.generate_boxplot(
+        pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
             sum_up=True, hover_info=True) #sumup test
 
-        pygsti.report.workspaceplots.generate_boxplot(
+        pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
             sum_up=True, hover_info=False) #no hover info
 
-        pygsti.report.workspaceplots.generate_boxplot(
+        pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
             sum_up=False, hover_info=False) # no hover info or sum_up
 
-        pygsti.report.workspaceplots.generate_boxplot(
+        pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
             sum_up=True, invert=True) #ignores invert
 
-        # ----- circuit_color_boxplot -----
+        # ----- _circuit_color_boxplot -----
         germs = preps = effects = gstrs
         gss = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
         for L in [1,2]:
@@ -675,49 +675,49 @@ class TestWorkspace(ReportBaseCase):
         gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)
         assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
 
-        pygsti.report.workspaceplots.circuit_color_boxplot(
+        pygsti.report.workspaceplots._circuit_color_boxplot(
             gss, mxs, colormap, sum_up=True)
-        pygsti.report.workspaceplots.circuit_color_boxplot(
+        pygsti.report.workspaceplots._circuit_color_boxplot(
             gss, mxs, colormap, sum_up=False)
-        pygsti.report.workspaceplots.circuit_color_boxplot(
+        pygsti.report.workspaceplots._circuit_color_boxplot(
             gss2, mxs, colormap, sum_up=True)
-        pygsti.report.workspaceplots.circuit_color_boxplot(
+        pygsti.report.workspaceplots._circuit_color_boxplot(
             gss2, mxs, colormap, sum_up=False)
 
 
-        # ----- circuit_color_scatterplot -----
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        # ----- _circuit_color_scatterplot -----
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, sum_up=True)
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, hover_info=False) # no hoverinfo
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss2, mxs, colormap, hover_info=True) # gss2 case
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss2, mxs, colormap, hover_info=True) # gss2 case
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, sum_up=True, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, sum_up=False, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss3, mxs, colormap, sum_up=True, hover_info=True) # gss3 case
-        pygsti.report.workspaceplots.circuit_color_scatterplot(
+        pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss3, mxs, colormap, sum_up=False, hover_info=True) # gss3 case
 
 
-        # ---- circuit_color_histogram ----
+        # ---- _circuit_color_histogram ----
         negmx = -1*np.ones((2,2),'d')
         mxs_allneg = [ [negmx, negmx],
                          [negmx, negmx] ]
-        pygsti.report.workspaceplots.circuit_color_histogram(
+        pygsti.report.workspaceplots._circuit_color_histogram(
             gss, mxs_allneg, colormap) # when there's no counts to plot
 
-        # ---- opmatrix_color_boxplot ----
-        pygsti.report.workspaceplots.opmatrix_color_boxplot(
+        # ---- _opmatrix_color_boxplot ----
+        pygsti.report.workspaceplots._opmatrix_color_boxplot(
             np.identity(4,'d'), -1.0, 1.0, mx_basis="pp", mx_basis_y="gm")
           # test weird case when there's different bases on diff axes
 
-        # ---- matrix_color_boxplot ----
-        pygsti.report.workspaceplots.matrix_color_boxplot(
+        # ---- _matrix_color_boxplot ----
+        pygsti.report.workspaceplots._matrix_color_boxplot(
             np.identity(16,'d'), colormap=colormap, grid="black:2") # test "gridcolor:linewidth" format of grid argument.
 
 

@@ -40,7 +40,7 @@ class ReportableQtyBase(object):
         # TODO assert correctness
 
     def test_scale(self):
-        self.q.scale(2.0)  # like *=
+        self.q.scale_inplace(2.0)  # like *=
         # TODO assert correctness
 
     def test_real_imag(self):
@@ -62,12 +62,12 @@ class ReportableQtyBase(object):
         # TODO assert correctness
 
     def test_has_eb(self):
-        self.assertFalse(self.q.has_eb())
+        self.assertFalse(self.q.has_errorbar())
 
     def test_accessors(self):
-        self.q.get_value()
-        self.q.get_err_bar()
-        self.q.get_value_and_err_bar()
+        self.q.value()
+        self.q.errorbar()
+        self.q.value_and_errorbar()
         # TODO assert correctness
 
 
@@ -76,7 +76,7 @@ class ReportableQtyErrorbarBase(ReportableQtyBase):
         self.q = rq.ReportableQty(self.val, self.eb)
 
     def test_has_eb(self):
-        self.assertTrue(self.q.has_eb())
+        self.assertTrue(self.q.has_errorbar())
 
 
 class BasicReportableQtyData(object):

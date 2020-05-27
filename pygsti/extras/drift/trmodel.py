@@ -120,7 +120,7 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     """
     negll = 0.
     for circuit in ds.keys():
-        times, clickstreams = ds[circuit].get_timeseries_for_outcomes()
+        times, clickstreams = ds[circuit].timeseries_for_outcomes()
         probs = trmodel.get_probabilities(circuit, times)
         negll += _ptraj.probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 

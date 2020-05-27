@@ -236,9 +236,9 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_fraction = keep_fraction
         self.fpr_keep_seed = keep_seed
 
-        #TODO: add a line_labels arg to make_lsgst_lists and pass qubit_labels in?
+        #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
         target_model = _load_model(target_model_filename_or_obj)
-        lists = _construction.make_lsgst_lists(
+        lists = _construction.create_lsgst_circuit_lists(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
@@ -285,7 +285,7 @@ class GSTInitialModel(object):
     """
 
     @classmethod
-    def create_from(cls, obj):
+    def cast(cls, obj):
         """
         Cast `obj` to a :class:`GSTInitialModel` object.
 
@@ -432,7 +432,7 @@ class GSTBadFitOptions(object):
     """
 
     @classmethod
-    def create_from(cls, obj):
+    def cast(cls, obj):
         """
         Cast `obj` to a :class:`GSTBadFitOptions` object.
 
@@ -475,7 +475,7 @@ class GSTObjFnBuilders(object):
     """
 
     @classmethod
-    def create_from(cls, obj):
+    def cast(cls, obj):
         """
         Cast `obj` to a :class:`GSTObjFnBuilders` object.
 
@@ -483,7 +483,7 @@ class GSTObjFnBuilders(object):
         ----------
         obj : object
             Object to cast.  Can be a `GSTObjFnBuilders` (naturally), a
-            dictionary of :method:`init_simple` arguments (or None), or a
+            dictionary of :method:`create_from` arguments (or None), or a
             list or tuple of the `(iteration_builders, final_builders)` constructor arguments.
 
         Returns
@@ -491,13 +491,13 @@ class GSTObjFnBuilders(object):
         GSTObjFnBuilders
         """
         if isinstance(obj, cls): return obj
-        elif obj is None: return cls.init_simple()
-        elif isinstance(obj, dict): return cls.init_simple(**obj)
+        elif obj is None: return cls.create_from()
+        elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod
-    def init_simple(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    def create_from(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
@@ -603,10 +603,10 @@ class GateSetTomography(_proto.Protocol):
                  gaugeopt_target=None, objfn_builders=None, optimizer=None,
                  badfit_options=None, verbosity=2, name=None):
         super().__init__(name)
-        self.initial_model = GSTInitialModel.create_from(initial_model)
+        self.initial_model = GSTInitialModel.cast(initial_model)
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
+        self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         if isinstance(optimizer, _opt.Optimizer):
@@ -616,9 +616,9 @@ class GateSetTomography(_proto.Protocol):
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 mdl = self.initial_model.model
                 optimizer['first_fditer'] = 0 if mdl and mdl.simtype in ("termorder", "termgap") else 1
-            self.optimizer = _opt.CustomLMOptimizer.create_from(optimizer)
+            self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
 
-        objfn_builders = GSTObjFnBuilders.create_from(objfn_builders)
+        objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
         self.iteration_builders = objfn_builders.iteration_builders
         self.final_builders = objfn_builders.final_builders
 
@@ -682,7 +682,7 @@ class GateSetTomography(_proto.Protocol):
         elif profile == 2: profiler = _objs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
@@ -708,7 +708,7 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
         #Run Long-sequence GST on data
-        mdl_lsgst_list, optimums_list, final_cache = _alg.do_iterative_gst(
+        mdl_lsgst_list, optimums_list, final_cache = _alg.run_iterative_gst(
             ds, mdl_start, bulk_circuit_lists, self.optimizer,
             self.iteration_builders, self.final_builders,
             resource_alloc, printer)
@@ -728,7 +728,7 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys abot fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        estimate = _Estimate.gst_init(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
+        estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
         return _add_gaugeopt_and_badfit(ret, self.name, mdl_lsgst_list[-1], data.edesign.target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
@@ -789,7 +789,7 @@ class LinearGateSetTomography(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = GSTBadFitOptions.create_from(badfit_options)
+        self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         #Advanced options that could be changed by users who know what they're doing
@@ -875,7 +875,7 @@ class LinearGateSetTomography(_proto.Protocol):
         elif profile == 2: profiler = _objs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
@@ -888,8 +888,8 @@ class LinearGateSetTomography(_proto.Protocol):
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
-        mdl_lgst = _alg.do_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
-                                op_labels, svd_truncate_to=target_model.get_dimension(),
+        mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
+                                op_labels, svd_truncate_to=target_model.dimension(),
                                 op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
@@ -1037,7 +1037,7 @@ class StandardGST(_proto.Protocol):
         -------
         ProtocolResults
         """
-        printer = _objs.VerbosityPrinter.build_printer(self.verbosity, comm)
+        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
 
         modes = self.modes
         models_to_test = self.models_to_test
@@ -1086,10 +1086,10 @@ def gaugeopt_suite_to_dictionary(gaugeopt_suite, model, unreliable_ops=(), verbo
     Constructs a dictionary of gauge-optimization parameter dictionaries based
     on "gauge optimization suite" name(s).
 
-    This is primarily a helper function for :func:`do_stdpractice_gst`, but can
+    This is primarily a helper function for :func:`run_stdpractice_gst`, but can
     be useful in its own right for constructing the would-be gauge optimization
-    dictionary used in :func:`do_stdpractice_gst` and modifying it slightly before
-    before passing it in (`do_stdpractice_gst` will accept a raw dictionary too).
+    dictionary used in :func:`run_stdpractice_gst` and modifying it slightly before
+    before passing it in (`run_stdpractice_gst` will accept a raw dictionary too).
 
     Parameters
     ----------
@@ -1131,7 +1131,7 @@ def gaugeopt_suite_to_dictionary(gaugeopt_suite, model, unreliable_ops=(), verbo
         dictionaries of arguments to :func:`gaugeopt_to_target` (or lists
         of such dictionaries for a multi-stage gauge optimization).
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if gaugeopt_suite is None:
         gaugeopt_suite = {}
@@ -1307,7 +1307,7 @@ def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
 
 def _load_dataset(data_filename_or_set, comm, verbosity):
     """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     if isinstance(data_filename_or_set, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(data_filename_or_set)[1] == ".pkl":
@@ -1333,11 +1333,11 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
     #Do final gauge optimization to *final* iteration result only
     if gaugeopt_suite:
         gaugeopt_target = gaugeopt_target if gaugeopt_target else target_model
-        add_gauge_opt(results, estlbl, gaugeopt_suite, gaugeopt_target,
+        _add_gauge_opt(results, estlbl, gaugeopt_suite, gaugeopt_target,
                       model_to_gaugeopt, unreliable_ops, comm, printer - 1)
     profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
 
-    add_badfit_estimates(results, estlbl, badfit_options, objfn_builder, optimizer, resource_alloc, printer)
+    _add_badfit_estimates(results, estlbl, badfit_options, objfn_builder, optimizer, resource_alloc, printer)
     profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
@@ -1356,15 +1356,15 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
 #    # advanced_options, opt_args,
 #    """
 #    Performs all of the post-optimization processing common to
-#    do_long_sequence_gst and do_model_evaluation.
+#    run_long_sequence_gst and do_model_evaluation.
 #
-#    Creates a Results object to be returned from do_long_sequence_gst
+#    Creates a Results object to be returned from run_long_sequence_gst
 #    and do_model_evaluation (passed in as 'callerName').  Performs
 #    gauge optimization, and robust data scaling (with re-optimization
 #    if needed and opt_args is not None - i.e. only for
-#    do_long_sequence_gst).
+#    run_long_sequence_gst).
 #    """
-#    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+#    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 #    tref = _time.time()
 #    callerName = callerProtocol.name
 #
@@ -1382,7 +1382,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
 #    #Do final gauge optimization to *final* iteration result only
 #    if gaugeopt_suite:
 #        if gaugeopt_target is None: gaugeopt_target = target_model
-#        add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
+#        _add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
 #                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
 #        profiler.add_time('%s: gauge optimization' % callerName, tref)
 #
@@ -1391,7 +1391,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
 #    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
 #    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
 #                                                        'wildcard_smart_init': True})
-#    add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
+#    _add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
 #                         comm, memLimit, printer)
 #    profiler.add_time('%s: add badfit estimates' % callerName, tref); tref = _time.time()
 #
@@ -1411,10 +1411,10 @@ def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, g
 #    return ret
 
 
-#def add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
+#def _add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
 #                  comm=None, verbosity=0):
 
-def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
+def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                   unreliable_ops, comm=None, verbosity=0):
     """
     Add a gauge optimization to an estimate.
@@ -1456,7 +1456,7 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
     -------
     None
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     #Get gauge optimization dictionary
     gaugeopt_suite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
@@ -1500,7 +1500,7 @@ def add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, startin
                     results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
-def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
+def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
                          resource_alloc=None, verbosity=0):
     """
     Add any and all "bad fit" estimates to `results`.
@@ -1541,7 +1541,7 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
 
     comm = resource_alloc.comm if resource_alloc else None
     mem_limit = resource_alloc.mem_limit if resource_alloc else None
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     base_estimate = results.estimates[base_estimate_label]
 
     if badfit_options.threshold is not None and \
@@ -1569,10 +1569,10 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
         new_final_model = None
 
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
-            new_params['weights'] = get_robust_scaling(badfit_typ, mdl, ds, circuit_list,
+            new_params['weights'] = _compute_robust_scaling(badfit_typ, mdl, ds, circuit_list,
                                                        parameters, cache, comm, mem_limit)
             if badfit_typ in ("Robust", "Robust+") and (optimizer is not None):
-                mdl_reopt = reoptimize_with_weights(mdl, ds, circuit_list, new_params['weights'],
+                mdl_reopt = _reoptimize_with_weights(mdl, ds, circuit_list, new_params['weights'],
                                                     objfn_builder, optimizer, resource_alloc, cache, printer - 1)
                 new_final_model = mdl_reopt
 
@@ -1580,7 +1580,7 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
             try:
                 badfit_options = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
                                   'wildcard_smart_init': badfit_options.wildcard_smart_init}
-                unmodeled = get_wildcard_budget(mdl, ds, circuit_list, parameters, badfit_options,
+                unmodeled = _compute_wildcard_budget(mdl, ds, circuit_list, parameters, badfit_options,
                                                 cache, comm, mem_limit, printer - 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
@@ -1607,14 +1607,14 @@ def add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bui
         models_by_iter = mdl_lsgst_list[:] if (new_final_model is None) \
             else mdl_lsgst_list[0:-1] + [new_final_model]
 
-        results.add_estimate(_Estimate.gst_init(results, target_model, mdl_start, models_by_iter, new_params),
+        results.add_estimate(_Estimate.create_gst_estimate(results, target_model, mdl_start, models_by_iter, new_params),
                              base_estimate_label + "." + badfit_typ)
 
         #Add gauge optimizations to the new estimate
         for gokey, gauge_opt_params in base_estimate.goparameters.items():
             if new_final_model is not None:
                 unreliable_ops = ()  # pass this in?
-                add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gauge_opt_params},
+                _add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gauge_opt_params},
                               target_model, new_final_model, unreliable_ops, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
@@ -1627,11 +1627,11 @@ def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
     # Get by-sequence goodness of fit
     objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
     objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
-    fitqty = objfn.get_chi2k_distributed_qty(objfn.percircuit())
+    fitqty = objfn.chi2k_distributed_qty(objfn.percircuit())
     return fitqty
 
 
-def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, comm, mem_limit):
+def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, comm, mem_limit):
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
 
@@ -1679,7 +1679,7 @@ def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, co
     fitqty = _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
-    expected = (len(ds.get_outcome_labels()) - 1)  # == "k"
+    expected = (len(ds.outcome_labels()) - 1)  # == "k"
     dof_per_box = expected; nboxes = len(circuit_list)
     pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
 
@@ -1712,7 +1712,7 @@ def get_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, co
     return circuit_weights
 
 
-def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, cache, comm, mem_limit, verbosity):
+def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, cache, comm, mem_limit, verbosity):
     """
     Create a wildcard budget for a model estimate.
 
@@ -1751,7 +1751,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, 
     -------
     PrimitiveOpsWildcardBudget
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     fitqty = _get_fit_qty(model, ds, circuits_to_use, parameters, cache, comm, mem_limit)
     badfit_options = badfit_options or {}
 
@@ -1764,7 +1764,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, 
     if cache is None:
         cache = _ComputationCache()  # ensure we have a cache since we need its lookup dict below
 
-    ds_dof = ds.get_degrees_of_freedom(circuits_to_use)  # number of independent parameters
+    ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
     nparams = model.num_params()  # just use total number of params
     percentile = 0.05; nboxes = len(circuits_to_use)
@@ -1778,7 +1778,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, 
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.get_primitive_op_labels() + model.get_primitive_instrument_labels(),
+    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels() + model.primitive_instrument_labels(),
                                               add_spam=badfit_options.get('wildcard_budget_includes_spam', True),
                                               start_budget=0.0)
 
@@ -1882,7 +1882,7 @@ def get_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, 
     return budget
 
 
-def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
+def _reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
                             resource_alloc, cache, verbosity):
     """
     Re-optimize a model after data counts have been scaled by circuit weights.
@@ -1900,7 +1900,7 @@ def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn
 
     circuit_weights_dict : dict
         A dictionary of circuit weights, such as that returned by
-        :function:`get_robust_scaling`, giving the data-count scaling factors.
+        :function:`_compute_robust_scaling`, giving the data-count scaling factors.
 
     objfn_builder : ObjectiveFunctionBuilder
         The objective function (builder) that represents the final stage of
@@ -1924,11 +1924,11 @@ def reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn
     Model
         The re-optimized model, potentially the *same* object as `model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
     circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
     bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
-    opt_result, mdl_reopt = _alg.do_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
+    opt_result, mdl_reopt = _alg.run_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
                                             resource_alloc, cache, printer - 1)
     return mdl_reopt
 
@@ -2049,7 +2049,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         """
         return self.data.dataset
 
-    def as_nameddict(self):
+    def to_nameddict(self):
         """
         Convert these results into nested :class:`NamedDict` objects.
 

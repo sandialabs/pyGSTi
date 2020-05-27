@@ -258,7 +258,7 @@ class TermForwardSimulator(ForwardSimulator):
         self.min_term_mag = min_term_mag  # minimum abs(term coeff) to consider
         self.max_paths_per_outcome = max_paths_per_outcome
 
-        self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
+        self.poly_vindices_per_int = _Polynomial._vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
             dim, layer_op_server, paramvec)
 
@@ -292,8 +292,8 @@ class TermForwardSimulator(ForwardSimulator):
         assert(len(spam_tuple) == 2)
         if isinstance(spam_tuple[0], _Label):
             rholabel, elabel = spam_tuple
-            rho = self.sos.get_prep(rholabel)
-            E = self.sos.get_effect(elabel)
+            rho = self.sos.prep(rholabel)
+            E = self.sos.effect(elabel)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -301,9 +301,9 @@ class TermForwardSimulator(ForwardSimulator):
         return rho, E
 
     def _rho_es_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.sos.get_prep(rholabel)
-        Es = [self.sos.get_effect(elabel) for elabel in elabels]
+        """ Returns SPAMVec *objects*, so must call .to_dense() later """
+        rho = self.sos.prep(rholabel)
+        Es = [self.sos.effect(elabel) for elabel in elabels]
         #No support for "custom" spamlabel stuff here
         return rho, Es
 
@@ -338,7 +338,7 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho)  # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def prs_directly(self, eval_tree, comm=None, mem_limit=None, reset_wts=True, repcache=None):
+    def _prs_directly(self, eval_tree, comm=None, mem_limit=None, reset_wts=True, repcache=None):
         """
         Compute probabilities of `eval_tree`'s circuits using "direct" mode.
 
@@ -366,7 +366,7 @@ class TermForwardSimulator(ForwardSimulator):
         #print("Computing prs directly for %d circuits" % len(circuit_list))
         if repcache is None: repcache = {}  # new repcache...
         k = 0   # *linear* evaluation order so we know final indices are just running
-        for i in eval_tree.get_evaluation_order():
+        for i in eval_tree.evaluation_order():
             circuit = eval_tree[i]
             #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
             assert(self.evotype == "svterm")  # for now, just do SV case
@@ -382,7 +382,7 @@ class TermForwardSimulator(ForwardSimulator):
         #print("PRS = ",prs)
         return prs
 
-    def dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
+    def _dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
         """
         Compute probability derivatives of `eval_tree`'s circuits using "direct" mode.
 
@@ -418,7 +418,7 @@ class TermForwardSimulator(ForwardSimulator):
             wrt_indices = wrt_slice
 
         eps = 1e-6  # HARDCODED
-        probs = self.prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
+        probs = self._prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
         dprobs = _np.empty((eval_tree.num_final_elements(), len(wrt_indices)), 'd')
         orig_vec = self.to_vector().copy()
         iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
@@ -428,7 +428,7 @@ class TermForwardSimulator(ForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.from_vector(vec, close=True)
-                dprobs[:, iFinal] = (self.prs_directly(eval_tree,
+                dprobs[:, iFinal] = (self._prs_directly(eval_tree,
                                                        comm=None,
                                                        mem_limit=None,
                                                        reset_wts=False,
@@ -436,7 +436,7 @@ class TermForwardSimulator(ForwardSimulator):
         self.from_vector(orig_vec, close=True)
         return dprobs
 
-    def prs_as_pruned_polyreps(self,
+    def _prs_as_pruned_polynomial_reps(self,
                                threshold,
                                rholabel,
                                elabels,
@@ -453,7 +453,7 @@ class TermForwardSimulator(ForwardSimulator):
         In particular, the circuit-outcomes under consideration share the same state
         preparation and differ only in their POVM effects.  Employs a truncated or pruned
         path-integral approach, as opposed to just including everything up to some Taylor
-        order as in :method:`prs_as_polys`.
+        order as in :method:`_prs_as_polynomials`.
 
         Parameters
         ----------
@@ -499,11 +499,11 @@ class TermForwardSimulator(ForwardSimulator):
         Returns
         -------
         list
-           A list of :class:`PolyRep` objects.  These polynomial represetations are essentially
+           A list of :class:`PolynomialRep` objects.  These polynomial represetations are essentially
            bare-bones polynomials stored efficiently for performance.  (To get a full
-           :class:`Polynomial` object, use :classmethod:`Polynomial.fromrep`.)
+           :class:`Polynomial` object, use :classmethod:`Polynomial.from_rep`.)
         """
-        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
@@ -519,7 +519,7 @@ class TermForwardSimulator(ForwardSimulator):
         circuitsetup_cache = {}
 
         if self.evotype == "svterm":
-            poly_reps = replib.SV_compute_pruned_path_polys_given_threshold(
+            poly_reps = replib.SV_compute_pruned_path_polynomials_given_threshold(
                 threshold, self, rholabel, elabels, circuit, repcache,
                 opcache, circuitsetup_cache, comm, mem_limit, fastmode)
             # sopm = "sum of path magnitudes"
@@ -595,7 +595,7 @@ class TermForwardSimulator(ForwardSimulator):
         achieved_sopm : float
             The achieved sum-of-path-magnitudes. (summed over all circuit outcomes)
         """
-        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
@@ -659,7 +659,7 @@ class TermForwardSimulator(ForwardSimulator):
             raise NotImplementedError("TODO mimic SV case")
 
     # LATER? , reset_wts=True, repcache=None):
-    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
+    def _prs_as_polynomials(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
         Computes polynomial-representations of circuit-outcome probabilities.
 
@@ -690,7 +690,7 @@ class TermForwardSimulator(ForwardSimulator):
         list
             A list of Polynomial objects.
         """
-        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
         #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
@@ -699,16 +699,16 @@ class TermForwardSimulator(ForwardSimulator):
         if self.evotype == "svterm":
             poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
         else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
-        prps = [_Polynomial.fromrep(rep) for rep in poly_reps]
+            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+        prps = [_Polynomial.from_rep(rep) for rep in poly_reps]
 
-        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
         #if self.cache is not None:
         #    for ck,poly in zip(cache_keys,prps):
         #        self.cache[ck] = poly
         return prps
 
-    def pr_as_poly(self, spam_tuple, circuit, comm=None, mem_limit=None):
+    def _pr_as_polynomial(self, spam_tuple, circuit, comm=None, mem_limit=None):
         """
         Compute probability of a single "outcome" (spam-tuple) for a single circuit.
 
@@ -732,10 +732,10 @@ class TermForwardSimulator(ForwardSimulator):
         -------
         Polynomial
         """
-        return self.prs_as_polys(spam_tuple[0], [spam_tuple[1]], circuit,
+        return self._prs_as_polynomials(spam_tuple[0], [spam_tuple[1]], circuit,
                                  comm, mem_limit)[0]
 
-    def prs_as_compact_polys(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
+    def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
         """
         Compute compact-form polynomials of the outcome probabilities for `circuit`.
 
@@ -770,7 +770,7 @@ class TermForwardSimulator(ForwardSimulator):
         if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
             return [self.cache[ck] for ck in cache_keys]
 
-        raw_prps = self.prs_as_polys(rholabel, elabels, circuit, comm, mem_limit)
+        raw_prps = self._prs_as_polynomials(rholabel, elabels, circuit, comm, mem_limit)
         prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
         # create compact polys w/*complex* coeffs always since we're likely
         # going to concatenate a bunch of them.
@@ -780,7 +780,7 @@ class TermForwardSimulator(ForwardSimulator):
                 self.cache[ck] = poly
         return prps
 
-    def prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
+    def _prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
         Compute the outcome probabilities for `circuit`.
 
@@ -816,14 +816,14 @@ class TermForwardSimulator(ForwardSimulator):
             the elements of `elabels`.
         """
         assert(time is None), "TermForwardSimulator currently doesn't support time-dependent circuits"
-        cpolys = self.prs_as_compact_polys(rholabel, elabels, circuit)
+        cpolys = self._prs_as_compact_polynomials(rholabel, elabels, circuit)
         vals = [_safe_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
                 for cpoly in cpolys]
         ps = _np.array([_np.real_if_close(val) for val in vals])
         if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
         return ps
 
-    def dpr(self, spam_tuple, circuit, return_pr, clip_to):
+    def _dpr(self, spam_tuple, circuit, return_pr, clip_to):
         """
         Compute the outcome probability derivatives for `circuit`.
 
@@ -858,7 +858,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         dp = _np.empty((1, self.Np), 'd')
 
-        poly = self.pr_as_poly(spam_tuple, circuit, comm=None, mem_limit=None)
+        poly = self._pr_as_polynomial(spam_tuple, circuit, comm=None, mem_limit=None)
         for i in range(self.Np):
             dpoly_di = poly.deriv(i)
             dp[0, i] = dpoly_di.evaluate(self.paramvec)
@@ -869,7 +869,7 @@ class TermForwardSimulator(ForwardSimulator):
             return dp, p
         else: return dp
 
-    def hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
+    def _hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
         """
         Compute the outcome probability second derivatives for `circuit`.
 
@@ -915,7 +915,7 @@ class TermForwardSimulator(ForwardSimulator):
         if return_deriv:
             dp = _np.empty((1, self.Np), 'd')
 
-        poly = self.pr_as_poly(spam_tuple, circuit, comm=None, mem_limit=None)
+        poly = self._pr_as_polynomial(spam_tuple, circuit, comm=None, mem_limit=None)
         for j in range(self.Np):
             dpoly_dj = poly.deriv(j)
             if return_deriv:
@@ -972,7 +972,7 @@ class TermForwardSimulator(ForwardSimulator):
         evTree.initialize(simplified_circuits, num_subtree_comms)
         return evTree
 
-    def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
+    def estimate_memory_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
                            num_param2_groups, num_final_strs):
         """
@@ -1038,7 +1038,7 @@ class TermForwardSimulator(ForwardSimulator):
     def _fill_probs_block(self, mx_to_fill, dest_indices, eval_tree, comm=None, mem_limit=None):
         nEls = eval_tree.num_final_elements()
         if self.mode == "direct":
-            probs = self.prs_directly(eval_tree, comm, mem_limit)  # could make into a fill_routine?
+            probs = self._prs_directly(eval_tree, comm, mem_limit)  # could make into a fill_routine?
         else:  # "pruned" or "taylor order"
             polys = eval_tree.merged_compact_polys
             probs = _safe_bulk_eval_compact_polys(
@@ -1051,7 +1051,7 @@ class TermForwardSimulator(ForwardSimulator):
         if dest_param_indices is None: dest_param_indices = slice(0, _slct.length(param_slice))
 
         if self.mode == "direct":
-            dprobs = self.dprs_directly(eval_tree, param_slice, comm, mem_limit)
+            dprobs = self._dprs_directly(eval_tree, param_slice, comm, mem_limit)
         else:  # "pruned" or "taylor order"
             # evaluate derivative of polys
             nEls = eval_tree.num_final_elements()
@@ -1117,9 +1117,9 @@ class TermForwardSimulator(ForwardSimulator):
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
-        # # done in bulk_get_achieved_and_max_sopm
+        # # done in bulk_achieved_and_max_sopm
         # replib.SV_refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
-        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(eval_tree, comm, mem_limit)
+        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(eval_tree, comm, mem_limit)
         # a strict bound on the error in each outcome probability, but often pessimistic
         gaps = max_sopm - achieved_sopm
         assert(_np.all(gaps >= 0))
@@ -1149,7 +1149,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         return True
 
-    def bulk_get_achieved_and_max_sopm(self, eval_tree, comm=None, mem_limit=None):
+    def bulk_achieved_and_max_sopm(self, eval_tree, comm=None, mem_limit=None):
         """
         Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
 
@@ -1180,7 +1180,7 @@ class TermForwardSimulator(ForwardSimulator):
         max_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
         achieved_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
 
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1189,7 +1189,7 @@ class TermForwardSimulator(ForwardSimulator):
             felInds = evalSubTree.final_element_indices(eval_tree)
 
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
-            maxx, achieved = evalSubTree.get_achieved_and_max_sopm(self)
+            maxx, achieved = evalSubTree.achieved_and_max_sopm(self)
 
             _fas(max_sopm, [felInds], maxx)
             _fas(achieved_sopm, [felInds], achieved)
@@ -1203,7 +1203,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         return max_sopm, achieved_sopm
 
-    def bulk_get_sopm_gaps(self, eval_tree, comm=None, mem_limit=None):
+    def bulk_sopm_gaps(self, eval_tree, comm=None, mem_limit=None):
         """
         Compute an element array sum-of-path-magnitude gaps (the difference between maximum and achieved).
 
@@ -1226,7 +1226,7 @@ class TermForwardSimulator(ForwardSimulator):
         numpy.ndarray
             An array containing the per-circuit-outcome sum-of-path-magnitude gaps.
         """
-        achieved_sopm, max_sopm = self.bulk_get_achieved_and_max_sopm(eval_tree, comm, mem_limit)
+        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(eval_tree, comm, mem_limit)
         gaps = max_sopm - achieved_sopm
         # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
         assert(_np.all(gaps >= -1e-6))
@@ -1234,9 +1234,9 @@ class TermForwardSimulator(ForwardSimulator):
 
         return gaps
 
-    def bulk_get_sopm_gaps_jacobian(self, eval_tree, comm=None, mem_limit=None):
+    def bulk_sopm_gaps_jacobian(self, eval_tree, comm=None, mem_limit=None):
         """
-        Compute the jacobian of the the output of :method:`bulk_get_sopm_gaps`.
+        Compute the jacobian of the the output of :method:`bulk_sopm_gaps`.
 
         Parameters
         ----------
@@ -1258,7 +1258,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         assert(self.mode == "pruned")
         termgap_penalty_jac = _np.empty((eval_tree.num_final_elements(), self.Np), 'd')
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1268,7 +1268,7 @@ class TermForwardSimulator(ForwardSimulator):
 
             replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
             #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
-            gap_jacs = evalSubTree.get_sopm_gaps_jacobian(self)
+            gap_jacs = evalSubTree.sopm_gaps_jacobian(self)
             # # set deriv to zero where gap would be clipped to 0
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0
             _fas(termgap_penalty_jac, [felInds], gap_jacs)
@@ -1305,7 +1305,7 @@ class TermForwardSimulator(ForwardSimulator):
         -------
         SplitTreeTermPathSet
         """
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
         local_subtree_pathsets = []  # call this list of TermPathSets for each subtree a "pathset" too
 
@@ -1341,7 +1341,7 @@ class TermForwardSimulator(ForwardSimulator):
         None
         """
         evalTree = path_set.tree
-        subtrees = evalTree.get_sub_trees()
+        subtrees = evalTree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
         for iSubTree, subtree_pathset in zip(mySubTreeIndices, path_set.local_subtree_pathsets):
@@ -1351,7 +1351,7 @@ class TermForwardSimulator(ForwardSimulator):
                 evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, mem_limit)
                 #This computes (&caches) polys for this path set as well
             else:
-                evalSubTree.cache_p_polys(self, mySubComm)
+                evalSubTree.cache_p_polynomials(self, mySubComm)
 
     def get_current_pathset(self, eval_tree, comm):
         """
@@ -1374,9 +1374,9 @@ class TermForwardSimulator(ForwardSimulator):
         SplitTreeTermPathSet or None
         """
         if self.mode == "pruned":
-            subtrees = eval_tree.get_sub_trees()
+            subtrees = eval_tree.sub_trees()
             mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-            local_subtree_pathsets = [subtrees[iSubTree].get_paths_set() for iSubTree in mySubTreeIndices]
+            local_subtree_pathsets = [subtrees[iSubTree].pathset() for iSubTree in mySubTreeIndices]
             return _SplitTreeTermPathSet(eval_tree, local_subtree_pathsets, comm)
         else:
             return None
@@ -1407,7 +1407,7 @@ class TermForwardSimulator(ForwardSimulator):
         -------
         None
         """
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1424,7 +1424,7 @@ class TermForwardSimulator(ForwardSimulator):
                 # this sets these as internal cached qtys
                 evalSubTree.select_paths_set(self, pathset, mySubComm, mem_limit)
             else:
-                evalSubTree.cache_p_polys(self, mySubComm)
+                evalSubTree.cache_p_polynomials(self, mySubComm)
                 pathset = _TermPathSet(evalSubTree, 0, 0, 0)
 
             nTotFailed += pathset.num_failures
@@ -1481,7 +1481,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1581,11 +1581,11 @@ class TermForwardSimulator(ForwardSimulator):
         else:
             wrtSlice = None
 
-        profiler.mem_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
+        profiler.memory_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
                            % (mx_to_fill.nbytes / (1024.0**3)))
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         #eval on each local subtree
@@ -1602,7 +1602,7 @@ class TermForwardSimulator(ForwardSimulator):
 
             if blkSize is None:
                 self._fill_dprobs_block(mx_to_fill, felInds, None, evalSubTree, wrtSlice, mySubComm, mem_limit=None)
-                profiler.mem_check("bulk_fill_dprobs: post fill")
+                profiler.memory_check("bulk_fill_dprobs: post fill")
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
@@ -1622,7 +1622,7 @@ class TermForwardSimulator(ForwardSimulator):
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
                     self._fill_dprobs_block(mx_to_fill, felInds, paramSlice, evalSubTree, paramSlice,
                                             blkComm, mem_limit=None)
-                    profiler.mem_check("bulk_fill_dprobs: post fill blk")
+                    profiler.memory_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
                 tm = _time.time()
@@ -1630,7 +1630,7 @@ class TermForwardSimulator(ForwardSimulator):
                                     1, mySubComm, gather_mem_limit)
                 #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
-                profiler.mem_check("bulk_fill_dprobs: post gather blocks")
+                profiler.memory_check("bulk_fill_dprobs: post gather blocks")
 
         #collect/gather results
         tm = _time.time()
@@ -1645,7 +1645,7 @@ class TermForwardSimulator(ForwardSimulator):
             #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
 
         profiler.add_time("MPI IPC", tm)
-        profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
+        profiler.memory_check("bulk_fill_dprobs: post gather subtrees")
 
         if clip_to is not None and pr_mx_to_fill is not None:
             _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
@@ -1656,7 +1656,7 @@ class TermForwardSimulator(ForwardSimulator):
         #                clip_to=clip_to)
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
-        profiler.mem_check("bulk_fill_dprobs: end")
+        profiler.memory_check("bulk_fill_dprobs: end")
         #print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
         #self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
         #                     't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
@@ -1764,7 +1764,7 @@ class TermForwardSimulator(ForwardSimulator):
             wrtSlice2 = None
 
         #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.get_sub_trees()
+        subtrees = eval_tree.sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
 
         if self.mode == "direct":

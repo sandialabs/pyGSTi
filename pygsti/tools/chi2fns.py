@@ -14,7 +14,7 @@ import numpy as _np
 from . import listtools as _lt
 from . import slicetools as _slct
 from ..objects import objectivefns as _objfns
-from ..tools.legacytools import deprecated_fn as _deprecated_fn
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 
 def chi2(model, dataset, circuit_list=None,
@@ -72,7 +72,7 @@ def chi2(model, dataset, circuit_list=None,
     chi2 : float
         chi^2 value, equal to the sum of chi^2 terms from all specified circuits
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, cache, comm, mem_limit).fn()
@@ -134,7 +134,7 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         Values are the chi2 contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, cache, comm, mem_limit).percircuit()
@@ -192,7 +192,7 @@ def chi2_jacobian(model, dataset, circuit_list=None,
     numpy array
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
-    return _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, cache, comm, mem_limit).jacobian()
@@ -248,7 +248,7 @@ def chi2_hessian(model, dataset, circuit_list=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params()`.
     """
-    obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                         {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit, enable_hessian=True)
@@ -310,7 +310,7 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params()`.
     """
-    obj = _objfns.objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                         {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
@@ -378,7 +378,7 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     -------
     float
     """
-    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'radius': radius},
@@ -450,7 +450,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
         Values are the chi-alpha contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns.objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
                           'radius': radius},

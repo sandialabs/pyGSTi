@@ -702,7 +702,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].get_primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels())
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):
@@ -768,7 +768,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
                 for q in range(0,n):
                     idle = bool(_np.random.binomial(1,idle_prob))
                     if idle:
-                        circuit.replace_with_idling_line(q)
+                        circuit.replace_with_idling_line_inplace(q)
                         # Update the setting on that qubit to the idling setting (denoted by the length index)
                         experiment_dict['settings'][l,j][(q,)] = lnum*(circuit_population_sz+1)
                         if verbosity > 0: print('Idled {}'.format(q))
@@ -822,7 +822,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].get_primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels())
     gates_by_qubit = [[] for _ in range(0, n)]
     for i in range(0, len(gates_available)):
         for q in range(0, n):
@@ -900,7 +900,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
                             if q1 != q:
                                 idle = bool(_np.random.binomial(1, idle_prob))
                                 if idle:
-                                    circuit.replace_with_idling_line(q1)
+                                    circuit.replace_with_idling_line_inplace(q1)
                                     # Update the setting on that qubit to the idling setting
                                     #  (denoted by the length index)
                                     experiment_dict['settings'][l, cnt][(q1,)] = lnum * (circuit_population_sz + 1)
@@ -979,7 +979,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].get_primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels())
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):
@@ -1026,7 +1026,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
                 # if the idle should be included, replace the expt_idx==0 circuit with the idle
                 if include_idle:
                     if expt_idx[exp,q]==0:
-                        singleQcircuit.replace_with_idling_line(q)
+                        singleQcircuit.replace_with_idling_line_inplace(q)
 
                 singleQcircuit.done_editing()
 

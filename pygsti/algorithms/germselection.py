@@ -25,7 +25,7 @@ from . import scoring as _scoring
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
 
-def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
+def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                    num_gs_copies=5, seed=None, candidate_germ_counts=None,
                    candidate_seed=None, force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, mem_limit=None, comm=None,
@@ -94,17 +94,17 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
         'greedy'
             Add germs one-at-a-time until the set is AC, picking the germ that
             improves the germ-set score by the largest amount at each step. See
-            :func:`build_up_breadth` for more details.
+            :func:`find_germs_breadthfirst` for more details.
         'grasp'
             Use GRASP to generate random greedy germ sets and then locally
-            optimize them. See :func:`grasp_germ_set_optimization` for more
+            optimize them. See :func:`find_germs_grasp` for more
             details.
         'slack'
             From a initial set of germs, add or remove a germ at each step in
             an attempt to improve the germ-set score. Will allow moves that
             degrade the score in an attempt to escape local optima as long as
             the degredation is within some specified amount of "slack". See
-            :func:`optimize_integer_germs_slack` for more details.
+            :func:`find_germs_integer_slack` for more details.
 
     algorithm_kwargs : dict
         Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
@@ -132,8 +132,8 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
     list of Circuit
         A list containing the germs making up the germ set.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
-    modelList = setup_model_list(target_model, randomize,
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    modelList = _setup_model_list(target_model, randomize,
                                  randomization_strength, num_gs_copies, seed)
     gates = list(target_model.operations.keys())
     availableGermsList = []
@@ -169,10 +169,10 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = build_up_breadth(model_list=modelList,
+        germList = find_germs_breadthfirst(model_list=modelList,
                                     **algorithm_kwargs)
         if germList is not None:
-            germsetScore = calculate_germset_score(
+            germsetScore = compute_germ_set_score(
                 germList, neighborhood=modelList,
                 score_func=algorithm_kwargs['score_func'])
             printer.log('Constructed germ set:', 1)
@@ -195,18 +195,18 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = grasp_germ_set_optimization(model_list=modelList,
+        germList = find_germs_grasp(model_list=modelList,
                                                **algorithm_kwargs)
         printer.log('Constructed germ set:', 1)
 
         if algorithm_kwargs['return_all'] and germList[0] is not None:
-            germsetScore = calculate_germset_score(
+            germsetScore = compute_germ_set_score(
                 germList[0], neighborhood=modelList,
                 score_func=algorithm_kwargs['score_func'])
             printer.log(str([germ.str for germ in germList[0]]), 1)
             printer.log('Score: {}'.format(germsetScore))
         elif not algorithm_kwargs['return_all'] and germList is not None:
-            germsetScore = calculate_germset_score(germList,
+            germsetScore = compute_germ_set_score(germList,
                                                    neighborhood=modelList)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log('Score: {}'.format(germsetScore), 1)
@@ -228,10 +228,10 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = optimize_integer_germs_slack(modelList,
+        germList = find_germs_integer_slack(modelList,
                                                 **algorithm_kwargs)
         if germList is not None:
-            germsetScore = calculate_germset_score(
+            germsetScore = compute_germ_set_score(
                 germList, neighborhood=modelList,
                 score_func=algorithm_kwargs['score_func'])
             printer.log('Constructed germ set:', 1)
@@ -244,7 +244,7 @@ def generate_germs(target_model, randomize=True, randomization_strength=1e-2,
     return germList
 
 
-def calculate_germset_score(germs, target_model=None, neighborhood=None,
+def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                             neighborhood_size=5,
                             randomization_strength=1e-2, score_func='all',
                             op_penalty=0.0, l1_penalty=0.0):
@@ -294,7 +294,7 @@ def calculate_germset_score(germs, target_model=None, neighborhood=None,
     if neighborhood is None:
         neighborhood = [target_model.randomize_with_unitary(randomization_strength)
                         for n in range(neighborhood_size)]
-    scores = [compute_composite_germ_score(score_fn, model=model,
+    scores = [compute_composite_germ_set_score(score_fn, model=model,
                                            partial_germs_list=germs,
                                            op_penalty=op_penalty,
                                            l1_penalty=l1_penalty)
@@ -303,7 +303,7 @@ def calculate_germset_score(germs, target_model=None, neighborhood=None,
     return max(scores)
 
 
-def get_model_params(model_list):
+def _get_model_params(model_list):
     """
     Get the number of gates and gauge parameters of the models in a list.
 
@@ -331,7 +331,7 @@ def get_model_params(model_list):
         If the number of gauge parameters or gates varies among the models.
     """
     # We don't care about SPAM, since it can't be amplified.
-    reducedModelList = [remove_spam_vectors(model)
+    reducedModelList = [_remove_spam_vectors(model)
                         for model in model_list]
 
     # All the models should have the same number of parameters and gates, but
@@ -362,7 +362,7 @@ def get_model_params(model_list):
     return reducedModelList, numGaugeParams, numNonGaugeParams, numOps
 
 
-def setup_model_list(model_list, randomize, randomization_strength,
+def _setup_model_list(model_list, randomize, randomization_strength,
                      num_copies, seed):
     """
     Sets up a list of randomize models (helper function).
@@ -380,7 +380,7 @@ def setup_model_list(model_list, randomize, randomization_strength,
     return model_list
 
 
-def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
+def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                  partial_deriv_dagger_deriv=None, model=None,
                                  partial_germs_list=None, eps=None, num_gauge_params=None,
                                  op_penalty=0.0, germ_lengths=None, l1_penalty=0.0):
@@ -434,7 +434,7 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
 
     eps : float, optional
         Used when calculating `partial_deriv_dagger_deriv` to determine if two
-        eigenvalues are equal (see :func:`bulk_twirled_deriv` for details). Not
+        eigenvalues are equal (see :func:`_bulk_twirled_deriv` for details). Not
         used if `partial_deriv_dagger_deriv` is provided.
 
     num_gauge_params : int
@@ -467,13 +467,13 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
                 pDDD_kwargs['eps'] = eps
             if germ_lengths is not None:
                 pDDD_kwargs['germ_lengths'] = germ_lengths
-            partial_deriv_dagger_deriv = calc_bulk_twirled_ddd(**pDDD_kwargs)
+            partial_deriv_dagger_deriv = _compute_bulk_twirled_ddd(**pDDD_kwargs)
 
     if num_gauge_params is None:
         if model is None:
             raise ValueError("Must provide either num_gauge_params or model!")
         else:
-            num_gauge_params = remove_spam_vectors(model).num_gauge_params()
+            num_gauge_params = _remove_spam_vectors(model).num_gauge_params()
 
     # Calculate penalty scores
     numGerms = partial_deriv_dagger_deriv.shape[0]
@@ -517,7 +517,7 @@ def compute_composite_germ_score(score_fn, threshold_ac=1e6, init_n=1,
     return ret
 
 
-def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
+def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
                           germ_lengths=None, comm=None):
     """
     Calculate the positive squares of the germ Jacobians.
@@ -557,7 +557,7 @@ def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     if germ_lengths is None:
         germ_lengths = _np.array([len(germ) for germ in germs_list])
 
-    twirledDeriv = bulk_twirled_deriv(model, germs_list, eps, check, comm) / germ_lengths[:, None, None]
+    twirledDeriv = _bulk_twirled_deriv(model, germs_list, eps, check, comm) / germ_lengths[:, None, None]
 
     #OLD: slow, I think because conjugate *copies* a large tensor, causing a memory bottleneck
     #twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
@@ -575,7 +575,7 @@ def calc_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     return twirledDerivDaggerDeriv
 
 
-def calc_twirled_ddd(model, germ, eps=1e-6):
+def _compute_twirled_ddd(model, germ, eps=1e-6):
     """
     Calculate the positive squares of the germ Jacobian.
 
@@ -600,7 +600,7 @@ def calc_twirled_ddd(model, germ, eps=1e-6):
     -------
     numpy.ndarray
     """
-    twirledDeriv = twirled_deriv(model, germ, eps) / len(germ)
+    twirledDeriv = _twirled_deriv(model, germ, eps) / len(germ)
     #twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
     #                                     _np.conjugate(twirledDeriv),
     #                                     twirledDeriv)
@@ -610,7 +610,7 @@ def calc_twirled_ddd(model, germ, eps=1e-6):
     return twirledDerivDaggerDeriv
 
 
-def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
+def _germ_set_score_slack(weights, model_num, score_func, deriv_dagger_deriv_list,
                   force_indices, force_score,
                   n_gauge_params, op_penalty, germ_lengths, l1_penalty=1e-2,
                   score_dict=None):
@@ -619,9 +619,9 @@ def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
 
     Also returns intentionally bad score (`force_score`) if `weights` is zero on any of
     the "forced" germs (i.e. at any index in `forcedIndices`).
-    This function is included for use by :func:`optimize_integer_germs_slack`,
+    This function is included for use by :func:`find_germs_integer_slack`,
     but is not convenient for just computing the score of a germ set. For that,
-    use :func:`calculate_germset_score`.
+    use :func:`compute_germ_set_score`.
 
     Parameters
     ----------
@@ -685,7 +685,7 @@ def compute_score(weights, model_num, score_func, deriv_dagger_deriv_list,
                  + l1_penalty * _np.sum(weights)
                  + op_penalty * _np.dot(germ_lengths, weights))
     if score_dict is not None:
-        # Side effect: calling compute_score caches result in score_dict
+        # Side effect: calling _germ_set_score_slack caches result in score_dict
         score_dict[model_num, tuple(weights)] = score
     return score
 
@@ -740,7 +740,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def check_germs_list_completeness(model_list, germs_list, score_func, threshold):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -773,7 +773,7 @@ def check_germs_list_completeness(model_list, germs_list, score_func, threshold)
         completeness test.
     """
     for modelNum, model in enumerate(model_list):
-        initial_test = test_germ_list_infl(model, germs_list,
+        initial_test = test_germ_set_infl(model, germs_list,
                                            score_func=score_func,
                                            threshold=threshold)
         if not initial_test:
@@ -783,7 +783,7 @@ def check_germs_list_completeness(model_list, germs_list, score_func, threshold)
     return -1
 
 
-def remove_spam_vectors(model):
+def _remove_spam_vectors(model):
     """
     Returns a copy of `model` with state preparations and effects removed.
 
@@ -804,11 +804,11 @@ def remove_spam_vectors(model):
     return reducedModel
 
 
-def num_non_spam_gauge_params(model):
+def _num_non_spam_gauge_params(model):
     """
     Return the number of non-gauge, non-SPAM parameters in `model`.
 
-    Equivalent to `remove_spam_vectors(model).num_gauge_params()`.
+    Equivalent to `_remove_spam_vectors(model).num_gauge_params()`.
 
     Parameters
     ---------
@@ -823,7 +823,7 @@ def num_non_spam_gauge_params(model):
     -------
     int
     """
-    return remove_spam_vectors(model).num_gauge_params()
+    return _remove_spam_vectors(model).num_gauge_params()
 
 
 # wrt is op_dim x op_dim, so is M, Minv, Proj
@@ -865,7 +865,7 @@ def _super_op_for_perfect_twirl(wrt, eps):
     return SuperOp  # a op_dim^2 x op_dim^2 matrix
 
 
-def sq_sing_vals_from_deriv(deriv, weights=None):
+def _sq_sing_vals_from_deriv(deriv, weights=None):
     """
     Calculate the squared singular values of the Jacobian of the germ set.
 
@@ -901,7 +901,7 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
     return sortedEigenvals
 
 
-def twirled_deriv(model, circuit, eps=1e-6):
+def _twirled_deriv(model, circuit, eps=1e-6):
     """
     Compute the "Twirled Derivative" of a circuit.
 
@@ -937,7 +937,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
     return _np.dot(twirler, dProd)
 
 
-def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
+def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     """
     Compute the "Twirled Derivative" of a set of circuits.
 
@@ -970,20 +970,20 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
     if len(model.preps) > 0 or len(model.povms) > 0:
-        model = remove_spam_vectors(model)
+        model = _remove_spam_vectors(model)
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
     evalTree, lookup, _ = model.bulk_evaltree(circuits)
     dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
-    op_dim = model.get_dimension()
+    op_dim = model.dimension()
     fd = op_dim**2  # flattened gate dimension
 
     nOrigStrs = len(circuits)
 
     ret = _np.empty((nOrigStrs, fd, dProds.shape[1]), 'complex')
     for iOrig in range(nOrigStrs):
-        iArray = _slct.as_array(lookup[iOrig])
+        iArray = _slct.to_array(lookup[iOrig])
         assert(iArray.size == 1), ("Simplified lookup table should have length-1"
                                    " element slices!  Maybe you're using a"
                                    " Model without SPAM elements removed?")
@@ -997,7 +997,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
     if check:
         for i, circuit in enumerate(circuits):
-            chk_ret = twirled_deriv(model, circuit, eps)
+            chk_ret = _twirled_deriv(model, circuit, eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn("bulk twirled derivative norm mismatch = "
                                "%g - %g = %g"
@@ -1007,7 +1007,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     return ret  # nSimplifiedCircuits x flattened_op_dim x vec_model_dim
 
 
-def test_germ_list_finitel(model, germs_to_test, length, weights=None,
+def test_germ_set_finitel(model, germs_to_test, length, weights=None,
                            return_spectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
@@ -1050,18 +1050,18 @@ def test_germ_list_finitel(model, germs_to_test, length, weights=None,
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    model = remove_spam_vectors(model)
+    model = _remove_spam_vectors(model)
 
     nGerms = len(germs_to_test)
     germToPowL = [germ * length for germ in germs_to_test]
 
-    op_dim = model.get_dimension()
+    op_dim = model.dimension()
     evt, lookup, _ = model.bulk_evaltree(germToPowL)
 
     # shape (nGerms*flattened_op_dim, vec_model_dim)
     dprods = model.bulk_dproduct(evt, flat=True)
-    dprods.shape = (evt.num_final_strings(), op_dim**2, dprods.shape[1])
-    prod_inds = [_slct.as_array(lookup[i]) for i in range(nGerms)]
+    dprods.shape = (evt.num_final_circuits(), op_dim**2, dprods.shape[1])
+    prod_inds = [_slct.to_array(lookup[i]) for i in range(nGerms)]
     assert(all([len(x) == 1 for x in prod_inds])), \
         ("Simplified lookup table should have length-1"
          " element slices!  Maybe you're using a"
@@ -1073,7 +1073,7 @@ def test_germ_list_finitel(model, germs_to_test, length, weights=None,
 
     normalizedDeriv = dprods / (length * germLengths[:, None, None])
 
-    sortedEigenvals = sq_sing_vals_from_deriv(normalizedDeriv, weights)
+    sortedEigenvals = _sq_sing_vals_from_deriv(normalizedDeriv, weights)
 
     nGaugeParams = model.num_gauge_params()
 
@@ -1084,7 +1084,7 @@ def test_germ_list_finitel(model, germs_to_test, length, weights=None,
     return (bSuccess, sortedEigenvals) if return_spectrum else bSuccess
 
 
-def test_germ_list_infl(model, germs_to_test, score_func='all', weights=None,
+def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                         return_spectrum=False, threshold=1e6, check=False):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
@@ -1132,10 +1132,10 @@ def test_germ_list_infl(model, germs_to_test, score_func='all', weights=None,
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    model = remove_spam_vectors(model)
+    model = _remove_spam_vectors(model)
 
     germLengths = _np.array([len(germ) for germ in germs_to_test], _np.int64)
-    twirledDerivDaggerDeriv = calc_bulk_twirled_ddd(model, germs_to_test,
+    twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
                                                     1. / threshold, check,
                                                     germLengths)
     # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
@@ -1161,7 +1161,7 @@ def test_germ_list_infl(model, germs_to_test, score_func='all', weights=None,
     return (bSuccess, sortedEigenvals) if return_spectrum else bSuccess
 
 
-def build_up(model_list, germs_list, randomize=True,
+def find_germs_depthfirst(model_list, germs_list, randomize=True,
              randomization_strength=1e-3, num_copies=None, seed=0, op_penalty=0,
              score_func='all', tol=1e-6, threshold=1e6, check=False,
              force="singletons", verbosity=0):
@@ -1210,7 +1210,7 @@ def build_up(model_list, germs_list, randomize=True,
         ``1/min(eiganvalues)``.
 
     tol : float, optional
-        Tolerance (`eps` arg) for :func:`calc_bulk_twirled_ddd`, which sets
+        Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
         the differece between eigenvalues below which they're treated as
         degenerate.
 
@@ -1235,13 +1235,13 @@ def build_up(model_list, germs_list, randomize=True,
     list
         A list of the built-up germ set (a list of :class:`Circuit` objects).
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
-    model_list = setup_model_list(model_list, randomize,
+    model_list = _setup_model_list(model_list, randomize,
                                   randomization_strength, num_copies, seed)
 
     (reducedModelList,
-     numGaugeParams, _, _) = get_model_params(model_list)
+     numGaugeParams, _, _) = _get_model_params(model_list)
 
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
     numGerms = len(germs_list)
@@ -1258,7 +1258,7 @@ def build_up(model_list, germs_list, randomize=True,
                 weights[germs_list.index(opstr)] = 1
             goodGerms = force[:]
 
-    undercompleteModelNum = check_germs_list_completeness(model_list,
+    undercompleteModelNum = test_germs_list_completeness(model_list,
                                                           germs_list,
                                                           score_func,
                                                           threshold)
@@ -1271,7 +1271,7 @@ def build_up(model_list, germs_list, randomize=True,
     printer.log("Now searching for best germ set.", 1)
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
-    twirledDerivDaggerDerivList = [calc_bulk_twirled_ddd(model, germs_list, tol,
+    twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                                          check, germLengths)
                                    for model in model_list]
 
@@ -1296,7 +1296,7 @@ def build_up(model_list, germs_list, randomize=True,
 
             # As long as there are some unused germs, see if you need to add
             # another one.
-            if test_germ_list_infl(reducedModel, goodGerms,
+            if test_germ_set_infl(reducedModel, goodGerms,
                                    score_func=score_func, threshold=threshold):
                 # The germs are sufficient for the current model
                 break
@@ -1308,7 +1308,7 @@ def build_up(model_list, germs_list, randomize=True,
                 candidateWeights[candidateGermIdx] = 1
                 partialDDD = derivDaggerDeriv[
                     _np.where(candidateWeights == 1)[0], :, :]
-                candidateGermScore = compute_composite_germ_score(
+                candidateGermScore = compute_composite_germ_set_score(
                     partial_deriv_dagger_deriv=partialDDD, **nonAC_kwargs)
                 candidateGermScores.append(candidateGermScore)
             # Add the germ that give the best score
@@ -1320,7 +1320,7 @@ def build_up(model_list, germs_list, randomize=True,
     return goodGerms
 
 
-def build_up_breadth(model_list, germs_list, randomize=True,
+def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                      randomization_strength=1e-3, num_copies=None, seed=0,
                      op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                      check=False, force="singletons", pretest=True, mem_limit=None,
@@ -1333,7 +1333,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
     score used to check for AC by the largest amount (for the model that
     currently has the lowest score) at each step, stopping when the threshold
     for AC is achieved. This strategy is something of a "breadth-first"
-    approach, in contrast to :func:`build_up`, which only looks at the
+    approach, in contrast to :func:`find_germs_depthfirst`, which only looks at the
     scores for one model at a time until that model achieves AC, then
     turning it's attention to the remaining models.
 
@@ -1374,7 +1374,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
         ``1/min(eiganvalues)``.
 
     tol : float, optional
-        Tolerance (`eps` arg) for :func:`calc_bulk_twirled_ddd`, which sets
+        Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
         the differece between eigenvalues below which they're treated as
         degenerate.
 
@@ -1416,9 +1416,9 @@ def build_up_breadth(model_list, germs_list, randomize=True,
     if comm is not None and comm.Get_size() > 1:
         from mpi4py import MPI  # not at top so pygsti doesn't require mpi4py
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
-    model_list = setup_model_list(model_list, randomize,
+    model_list = _setup_model_list(model_list, randomize,
                                   randomization_strength, num_copies, seed)
 
     dim = model_list[0].dim
@@ -1431,7 +1431,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
     #    "All models must have the same number of parameters!"
 
     (_, numGaugeParams,
-     numNonGaugeParams, _) = get_model_params(model_list)
+     numNonGaugeParams, _) = _get_model_params(model_list)
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)
@@ -1449,7 +1449,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
             goodGerms = force[:]
 
     if pretest:
-        undercompleteModelNum = check_germs_list_completeness(model_list,
+        undercompleteModelNum = test_germs_list_completeness(model_list,
                                                               germs_list,
                                                               score_func,
                                                               threshold)
@@ -1469,9 +1469,9 @@ def build_up_breadth(model_list, germs_list, randomize=True,
 
     if mem_limit is not None:
         memEstimate = FLOATSIZE * len(model_list) * len(germs_list) * Np**2
-        # for calc_bulk_twirled_ddd
+        # for _compute_bulk_twirled_ddd
         memEstimate += FLOATSIZE * len(model_list) * len(germs_list) * dim**2 * Np
-        # for bulk_twirled_deriv sub-call
+        # for _bulk_twirled_deriv sub-call
         printer.log("Memory estimate of %.1f GB (%.1f GB limit) for all-Jac mode." %
                     (memEstimate / 1024.0**3, mem_limit / 1024.0**3), 1)
 
@@ -1491,7 +1491,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
 
     if mode == "all-Jac":
         twirledDerivDaggerDerivList = \
-            [calc_bulk_twirled_ddd(model, germs_list, tol,
+            [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                    check, germLengths, comm)
              for model in model_list]
 
@@ -1513,7 +1513,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
                 #print("DB: Rank%d computing initial index %d" % (comm.Get_rank(),goodGermIdx))
 
                 for k, model in enumerate(model_list):
-                    currentDDDList[k] += calc_twirled_ddd(
+                    currentDDDList[k] += _compute_twirled_ddd(
                         model, germs_list[goodGermIdx], tol)
 
         #aggregate each currendDDDList across all procs
@@ -1576,14 +1576,14 @@ def build_up_breadth(model_list, germs_list, randomize=True,
                     elif mode == "single-Jac":
                         #compute value of deriv-dagger-deriv
                         model = model_list[k]
-                        testDDD += calc_twirled_ddd(
+                        testDDD += _compute_twirled_ddd(
                             model, germs_list[candidateGermIdx], tol)
                     # (else already checked above)
 
                     nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
-                    worstScore = max(worstScore, compute_composite_germ_score(
+                    worstScore = max(worstScore, compute_composite_germ_set_score(
                         partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                         **nonAC_kwargs))
                     testDDDs.append(testDDD)  # save in case this is a keeper
@@ -1628,7 +1628,7 @@ def build_up_breadth(model_list, germs_list, randomize=True,
 
 
 #@profile
-def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
+def find_germs_integer_slack(model_list, germs_list, randomize=True,
                                  randomization_strength=1e-3, num_copies=None,
                                  seed=0, l1_penalty=1e-2, op_penalty=0,
                                  initial_weights=None, score_func='all',
@@ -1752,9 +1752,9 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
     :class:`~pygsti.objects.Model`
     :class:`~pygsti.objects.Circuit`
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
-    model_list = setup_model_list(model_list, randomize,
+    model_list = _setup_model_list(model_list, randomize,
                                   randomization_strength, num_copies, seed)
 
     if (fixed_slack and slack_frac) or (not fixed_slack and not slack_frac):
@@ -1772,7 +1772,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         weights = _np.ones(len(germs_list), _np.int64)  # default: start with all germs
 #        lessWeightOnly = True # we're starting at the max-weight vector
 
-    undercompleteModelNum = check_germs_list_completeness(model_list,
+    undercompleteModelNum = test_germs_list_completeness(model_list,
                                                           germs_list, score_func,
                                                           threshold)
     if undercompleteModelNum > -1:
@@ -1789,7 +1789,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    model0 = remove_spam_vectors(model_list[0])
+    model0 = _remove_spam_vectors(model_list[0])
 
     # Initially allow adding to weight. -- maybe make this an argument??
     lessWeightOnly = False
@@ -1810,10 +1810,10 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
     else:
         forceIndices = None
 
-    twirledDerivDaggerDerivList = [calc_bulk_twirled_ddd(model, germs_list, tol)
+    twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol)
                                    for model in model_list]
 
-    # Dict of keyword arguments passed to compute_score that don't change from
+    # Dict of keyword arguments passed to _germ_set_score_slack that don't change from
     # call to call
     cs_kwargs = {
         'score_func': score_func,
@@ -1827,7 +1827,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         'score_dict': scoreD,
     }
 
-    scoreList = [compute_score(weights, model_num, **cs_kwargs)
+    scoreList = [_germ_set_score_slack(weights, model_num, **cs_kwargs)
                  for model_num in range(num_models)]
     score = _np.max(scoreList)
     L1 = sum(weights)  # ~ L1 norm of weights
@@ -1852,7 +1852,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
                 for model_num in range(len(model_list)):
                     if (model_num, tuple(neighbor)) not in scoreD:
                         neighborL1 = sum(neighbor)
-                        neighborScoreList.append(compute_score(neighbor,
+                        neighborScoreList.append(_germ_set_score_slack(neighbor,
                                                                model_num,
                                                                **cs_kwargs))
                     else:
@@ -1922,7 +1922,7 @@ def optimize_integer_germs_slack(model_list, germs_list, randomize=True,
         return goodGerms
 
 
-def germ_breadth_score_fn(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
+def _germ_set_score_grasp(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
                           non_ac_kwargs, init_n=1):
     """
     Score a germ set against a collection of models.
@@ -1945,13 +1945,13 @@ def germ_breadth_score_fn(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
 
     non_ac_kwargs : dict
         Dictionary containing further arguments to pass to
-        :func:`compute_composite_germ_score` for the scoring of the germ set against
+        :func:`compute_composite_germ_set_score` for the scoring of the germ set against
         individual models.
 
     init_n : int
         The number of eigenvalues to begin checking for amplificational
         completeness with respect to. Passed as an argument to
-        :func:`compute_composite_germ_score`.
+        :func:`compute_composite_germ_set_score`.
 
     Returns
     -------
@@ -1965,14 +1965,14 @@ def germ_breadth_score_fn(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
     for derivDaggerDeriv in twirled_deriv_dagger_deriv_list:
         # Loop over all models
         partialDDD = derivDaggerDeriv[_np.where(weights == 1)[0], :, :]
-        germsVsModelScores.append(compute_composite_germ_score(
+        germsVsModelScores.append(compute_composite_germ_set_score(
             partial_deriv_dagger_deriv=partialDDD, init_n=init_n, **non_ac_kwargs))
     # Take the score for the current germ set to be its worst score over all
     # models.
     return max(germsVsModelScores)
 
 
-def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
+def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                                 randomization_strength=1e-3, num_copies=None,
                                 seed=None, l1_penalty=1e-2, op_penalty=0.0,
                                 score_func='all', tol=1e-6, threshold=1e6,
@@ -2003,7 +2003,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         to a purely greedy algorithm (only the best-scoring germ set is
         included in the RCL), while a value of 1 for `alpha` will include all
         germs in the RCL.
-        See :func:`pygsti.algorithms.scoring.composite_rcl_fn` for more details.
+        See :func:`pygsti.algorithms.scoring.filter_composite_rcl` for more details.
 
     randomize : Bool, optional
         Whether or not the input Model(s) are first subject to unitary
@@ -2084,13 +2084,13 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
     finalGermList : list of Circuit
         Sublist of `germs_list` specifying the final, optimal set of germs.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
-    model_list = setup_model_list(model_list, randomize,
+    model_list = _setup_model_list(model_list, randomize,
                                   randomization_strength, num_copies, seed)
 
     (_, numGaugeParams,
-     numNonGaugeParams, _) = get_model_params(model_list)
+     numNonGaugeParams, _) = _get_model_params(model_list)
 
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
@@ -2107,7 +2107,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
     def get_neighbors_fn(weights): return _grasp.get_swap_neighbors(
         weights, forced_weights=initialWeights, shuffle=shuffle)
 
-    undercompleteModelNum = check_germs_list_completeness(model_list,
+    undercompleteModelNum = test_germs_list_completeness(model_list,
                                                           germs_list,
                                                           score_func,
                                                           threshold)
@@ -2122,7 +2122,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
-    twirledDerivDaggerDerivList = [calc_bulk_twirled_ddd(model, germs_list, tol,
+    twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                                          check, germLengths)
                                    for model in model_list]
 
@@ -2140,22 +2140,22 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
     final_nonAC_kwargs['l1_penalty'] = l1_penalty
 
     scoreFn = (lambda germSet:
-               germ_breadth_score_fn(germSet, germs_list,
+               _germ_set_score_grasp(germSet, germs_list,
                                      twirledDerivDaggerDerivList, nonAC_kwargs,
                                      init_n=1))
     finalScoreFn = (lambda germSet:
-                    germ_breadth_score_fn(germSet, germs_list,
+                    _germ_set_score_grasp(germSet, germs_list,
                                           twirledDerivDaggerDerivList,
                                           final_nonAC_kwargs, init_n=1))
 
     #OLD: feasibleThreshold = _scoring.CompositeScore(-numNonGaugeParams,threshold,numNonGaugeParams))
     def _feasible_fn(germ_set):  # now that scoring is not ordered entirely by N
-        s = germ_breadth_score_fn(germ_set, germs_list,
+        s = _germ_set_score_grasp(germ_set, germs_list,
                                   twirledDerivDaggerDerivList, nonAC_kwargs,
                                   init_n=1)
         return (s.N >= numNonGaugeParams and s.minor < threshold)
 
-    def rcl_fn(x): return _scoring.composite_rcl_fn(x, alpha)
+    def rcl_fn(x): return _scoring.filter_composite_rcl(x, alpha)
 
     initialSolns = []
     localSolns = []
@@ -2169,7 +2169,7 @@ def grasp_germ_set_optimization(model_list, germs_list, alpha, randomize=True,
         failCount = 0
         while not success and failCount < 10:
             try:
-                iterSolns = _grasp.do_grasp_iteration(
+                iterSolns = _grasp.run_grasp_iteration(
                     elements=germs_list, greedy_score_fn=scoreFn, rcl_fn=rcl_fn,
                     local_score_fn=scoreFn,
                     get_neighbors_fn=get_neighbors_fn,

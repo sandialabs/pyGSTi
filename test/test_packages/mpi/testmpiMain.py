@@ -27,7 +27,7 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
 
     #Run LGST to get starting model
     assertGatesetsInSync(gsTarget, comm)
-    mdl_lgst = pygsti.do_lgst(ds, prepStrs, effectStrs, gsTarget,
+    mdl_lgst = pygsti.run_lgst(ds, prepStrs, effectStrs, gsTarget,
                              svd_truncate_to=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(mdl_lgst, comm)
@@ -41,7 +41,7 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
         comm=comm, mem_limit=3*(1024)**3, distribute_method=distribute_method
     )
 
-    all_gs_lsgst, *_ = pygsti.do_iterative_gst(
+    all_gs_lsgst, *_ = pygsti.run_iterative_gst(
         ds, mdl_lgst_go, lsgstStringsToUse,
         optimizer={'tol': 1e-5},
         iteration_objfn_builders=[obj],
@@ -74,9 +74,9 @@ def create_fake_dataset(comm):
     #rhoStrs, EStrs = pygsti.construction.get_spam_strs(specs)
 
     rhoStrs = EStrs = std.fiducials
-    lgstStrings = pygsti.construction.list_lgst_circuits(
+    lgstStrings = pygsti.construction.create_lgst_circuits(
         rhoStrs, EStrs, list(std.target_model().operations.keys()))
-    lsgstStrings = pygsti.construction.make_lsgst_lists(
+    lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
             list(std.target_model().operations.keys()), rhoStrs, EStrs,
             std.germs, maxLengths, fidPairList )
 
@@ -85,7 +85,7 @@ def create_fake_dataset(comm):
 
     if comm is None or comm.Get_rank() == 0:
         mdl_dataGen = std.target_model().depolarize(op_noise=0.1)
-        dsFake = pygsti.construction.generate_fake_data(
+        dsFake = pygsti.construction.simulate_data(
             mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
             seed=1234)
         dsFake = comm.bcast(dsFake, root=0)
@@ -112,7 +112,7 @@ def test_MPI_products(comm):
 
     #Get some operation sequences
     maxLengths = [1,2,4,8]
-    gstrs = pygsti.construction.make_lsgst_experiment_list(
+    gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
@@ -206,7 +206,7 @@ def test_MPI_products(comm):
 #
 #    #Get some operation sequences
 #    maxLengths = g_maxLengths
-#    gstrs = pygsti.construction.make_lsgst_experiment_list(
+#    gstrs = pygsti.construction.create_lsgst_circuits(
 #        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
 #    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 #    split_tree = tree.copy()
@@ -279,7 +279,7 @@ def test_MPI_probs(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.make_lsgst_experiment_list(
+    gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     #tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
@@ -361,7 +361,7 @@ def test_MPI_fills(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.make_lsgst_experiment_list(
+    gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
@@ -510,7 +510,7 @@ def test_MPI_compute_cache(comm):
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
-    gstrs = pygsti.construction.circuit_list([('Gx',), ('Gy')])
+    gstrs = pygsti.construction.to_circuits([('Gx',), ('Gy')])
     tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 
     #Check fill probabilities
@@ -552,7 +552,7 @@ def test_MPI_by_block(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.make_lsgst_experiment_list(
+    gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookkup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
@@ -751,23 +751,23 @@ def test_MPI_gatestrings_logl(comm):
 def test_MPI_mlgst_forcefn(comm):
     fiducials = std.fiducials
     target_model = std.target_model()
-    lgstStrings = pygsti.construction.list_lgst_circuits(fiducials, fiducials,
+    lgstStrings = pygsti.construction.create_lgst_circuits(fiducials, fiducials,
                                                              list(target_model.operations.keys()))
     #Create dataset on root proc
     if comm is None or comm.Get_rank() == 0:
         datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
-        ds = pygsti.construction.generate_fake_data(datagen_gateset, lgstStrings,
+        ds = pygsti.construction.simulate_data(datagen_gateset, lgstStrings,
                                                     n_samples=10000, sample_error='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
     else:
         ds = comm.bcast(None, root=0)
 
 
-    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
+    mdl_lgst = pygsti.run_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
-    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.do_gst_fit(
+    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.run_gst_fit(
         ds, mdl_lgst_go, lgstStrings, optimizer=None,
         objective_function_builder=pygsti.objects.PoissonPicDeltaLogLFunction.builder(
             name='logl',
@@ -810,9 +810,9 @@ def test_run1Q_end2end(comm):
     maxLengths = [1,2,4]
 
     mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
-    listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+    listOfExperiments = pygsti.construction.create_lsgst_circuits(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments,
+    ds = pygsti.construction.simulate_data(mdl_datagen, listOfExperiments,
                                                 n_samples=1000,
                                                 sample_error="binomial",
                                                 seed=1234, comm=comm)
@@ -821,11 +821,11 @@ def test_run1Q_end2end(comm):
     comm.barrier() #to make sure dataset file is written
 
     #test with pkl file - should only read in on rank0 then broadcast
-    results = pygsti.do_long_sequence_gst("mpi_dataset.pkl", target_model, fiducials, fiducials,
+    results = pygsti.run_long_sequence_gst("mpi_dataset.pkl", target_model, fiducials, fiducials,
                                           germs, [1], comm=comm)
 
     #test with dataset object
-    results = pygsti.do_long_sequence_gst(ds, target_model, fiducials, fiducials,
+    results = pygsti.run_long_sequence_gst(ds, target_model, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
 
     #Use dummy duplicate of results to trigger MPI data-comparison processing:
@@ -848,12 +848,12 @@ def test_MPI_germsel(comm):
     gates        = std.target_model().operations.keys()
     superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
-    #germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+    #germs = pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
     #                                    randomize=False, seed=2018, score_func='all',
     #                                    threshold=1e6, verbosity=1, opPenalty=1.0,
     #                                    mem_limit=3*(1024**3), comm=comm)
 
-    germs_lowmem = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+    germs_lowmem = pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
                                                randomize=False, seed=2018, score_func='all',
                                                threshold=1e6, verbosity=1, op_penalty=1.0,
                                                mem_limit=3*(1024**2), comm=comm) # force "single-Jac" mode
@@ -868,25 +868,25 @@ def test_MPI_profiler(comm):
     p.add_time("My Name", start_time, prefix=1)
     p.add_count("My Count", inc=1, prefix=1)
     p.add_count("My Count", inc=2, prefix=1)
-    p.mem_check("My Memcheck", prefix=1)
-    p.mem_check("My Memcheck", prefix=1)
-    p.print_mem("My Memcheck just to print")
-    p.print_mem("My Memcheck just to print", show_minmax=True)
-    p.print_msg("My Message")
-    p.print_msg("My Message", all_ranks=True)
+    p.memory_check("My Memcheck", prefix=1)
+    p.memory_check("My Memcheck", prefix=1)
+    p.print_memory("My Memcheck just to print")
+    p.print_memory("My Memcheck just to print", show_minmax=True)
+    p.print_message("My Message")
+    p.print_message("My Message", all_ranks=True)
 
-    s = p.format_times(sort_by="name")
-    s = p.format_times(sort_by="time")
+    s = p._format_times(sort_by="name")
+    s = p._format_times(sort_by="time")
     #with self.assertRaises(ValueError):
-    #    p.format_times(sort_by="foobar")
+    #    p._format_times(sort_by="foobar")
 
-    s = p.format_counts(sort_by="name")
-    s = p.format_counts(sort_by="count")
+    s = p._format_counts(sort_by="name")
+    s = p._format_counts(sort_by="count")
     #with self.assertRaises(ValueError):
-    #    p.format_counts(sort_by="foobar")
+    #    p._format_counts(sort_by="foobar")
 
-    s = p.format_memory(sort_by="name")
-    s = p.format_memory(sort_by="usage")
+    s = p._format_memory(sort_by="name")
+    s = p._format_memory(sort_by="usage")
     #with self.assertRaises(ValueError):
     #    p.format_memory(sort_by="foobar")
     #with self.assertRaises(NotImplementedError):
@@ -978,8 +978,8 @@ def test_MPI_tools(comm):
                                     axes=0, comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array2[slc] - master[slc]) < 1e-6)
 
-        indices = [ pygsti.tools.slicetools.as_array(s) for s in slices ]
-        loc_indices = pygsti.tools.slicetools.as_array(loc_slice)
+        indices = [ pygsti.tools.slicetools.to_array(s) for s in slices ]
+        loc_indices = pygsti.tools.slicetools.to_array(loc_slice)
         my_array3 = np.zeros(100,'d')
         my_array3[loc_indices] = master[loc_indices] # ~ computation (just copy from "master")
         mpit.gather_indices(indices, owners, my_array3, ar_to_fill_inds=[], axes=0,
@@ -1040,7 +1040,7 @@ def test_MPI_tools(comm):
     assert(results == [11,12])
 
     # convenience method to avoid importing mpi4py at the top level
-    c = mpit.get_comm()
+    c = mpit.mpi4py_comm()
 
 
 @mpitest(4)

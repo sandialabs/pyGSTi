@@ -88,7 +88,7 @@ class LGSTGaugeOptInstance(GaugeOptWithGaugeGroupInstance):
     @classmethod
     def setUpClass(cls):
         super(LGSTGaugeOptInstance, cls).setUpClass()
-        # cls._model = alg.do_lgst(
+        # cls._model = alg.run_lgst(
         #     fixtures.ds, fixtures.fiducials, fixtures.fiducials, fixtures.model,
         #     svd_truncate_to=4, verbosity=0
         # )

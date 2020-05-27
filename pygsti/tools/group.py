@@ -109,7 +109,7 @@ class MatrixGroup(object):
                     self.inverse_table[i] = j; break
         assert (-1 not in self.inverse_table), "Cannot construct inv table"
 
-    def get_matrix(self, i):
+    def matrix(self, i):
         """
         Returns the matrix corresponding to index or label `i`
 
@@ -125,7 +125,7 @@ class MatrixGroup(object):
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
 
-    def get_matrix_inv(self, i):
+    def inverse_matrix(self, i):
         """
         Returns the inverse of the matrix corresponding to index or label `i`
 
@@ -141,7 +141,7 @@ class MatrixGroup(object):
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
-    def get_inv(self, i):
+    def inverse_index(self, i):
         """
         Returns the index/label corresponding to the inverse of index/label `i`
 

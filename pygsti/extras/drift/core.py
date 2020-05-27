@@ -66,7 +66,7 @@
 #     mergeoutcomes : None or Dict, optional
 #         If not None, a dictionary of outcome-merging dictionaries. Each dictionary contained as a
 #         value of `mergeoutcomes` is used to create a new DataSet, where the values have been merged
-#         according to that dictionary (see the merge_outcomes() function inside datasetconstructions.py).
+#         according to that dictionary (see the aggregate_dataset_outcomes() function inside datasetconstructions.py).
 #         The corresponding key is used as the key for that DataSet, when it is stored in a MultiDataSet,
 #         and the instability analysis is implemented on each DataSet. This is a more general data
 #         coarse-grainin option than `marginalize`.
@@ -222,7 +222,7 @@
 
 #     # The model selector something slightly more complicated for this method: this function only allows us to
 #     # set the second part of the modelselector tuple.
-#     results.do_instability_characterization(estimator=estimator, modelselector=(None, modelselector), default=True,
+#     results.run_instability_characterization(estimator=estimator, modelselector=(None, modelselector), default=True,
 #                                             verbosity=verbosity - 1)
 #     if verbosity == 1: print("done!")
 

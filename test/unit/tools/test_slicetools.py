@@ -40,5 +40,5 @@ class SliceToolsTester(BaseCase):
             list_to_slice([0, 1, 2, 3, 10])  # doesn't correspond to a slice
 
     def test_asarray(self):
-        self.assertArraysAlmostEqual(as_array(slice(0, 10)), np.arange(10))
-        self.assertArraysAlmostEqual(as_array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), np.arange(10))
+        self.assertArraysAlmostEqual(to_array(slice(0, 10)), np.arange(10))
+        self.assertArraysAlmostEqual(to_array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), np.arange(10))

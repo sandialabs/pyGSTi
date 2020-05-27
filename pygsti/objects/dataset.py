@@ -37,13 +37,13 @@ from . import labeldicts as _ld
 Oindex_type = _np.uint32
 Time_type = _np.float64
 Repcount_type = _np.float32
-DATAROW_AUTOCACHECOUNT_THRESHOLD = 256
+_DATAROW_AUTOCACHECOUNT_THRESHOLD = 256
 # thought: _np.uint16 but doesn't play well with rescaling
 
 
-class DataSetKVIterator(object):
+class _DataSetKVIterator(object):
     """
-    Iterator class for op_string,DataSetRow pairs of a DataSet
+    Iterator class for op_string,_DataSetRow pairs of a DataSet
 
     Parameters
     ----------
@@ -82,14 +82,14 @@ class DataSetKVIterator(object):
         return self
 
     def __next__(self):
-        return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)))
+        return next(self.gsIter), _DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
 
 
-class DataSetValueIterator(object):
+class _DataSetValueIterator(object):
     """
-    Iterator class for DataSetRow values of a DataSet
+    Iterator class for _DataSetRow values of a DataSet
 
     Parameters
     ----------
@@ -120,12 +120,12 @@ class DataSetValueIterator(object):
         return self
 
     def __next__(self):
-        return DataSetRow(self.dataset, *(next(self.tupIter)))
+        return _DataSetRow(self.dataset, *(next(self.tupIter)))
 
     next = __next__
 
 
-class DataSetRow(object):
+class _DataSetRow(object):
     """
     Encapsulates DataSet time series data for a single circuit.
 
@@ -196,7 +196,7 @@ class DataSetRow(object):
         """
         raise ValueError("outcomes property is read-only")
 
-    def get_expanded_ol(self):
+    def expanded_ol(self):
         """
         This row's sequence of outcome labels, with repetition counts expanded.
 
@@ -214,7 +214,7 @@ class DataSetRow(object):
             return ol
         else: return self.outcomes
 
-    def get_expanded_oli(self):
+    def expanded_oli(self):
         """
         This row's sequence of outcome label indices, with repetition counts expanded.
 
@@ -232,7 +232,7 @@ class DataSetRow(object):
             return _np.array(inds, dtype=self.dataset.oliType)
         else: return self.oli.copy()
 
-    def get_expanded_times(self):
+    def expanded_times(self):
         """
         This row's sequence of time stamps, with repetition counts expanded.
 
@@ -250,7 +250,7 @@ class DataSetRow(object):
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
 
-    def get_times(self):
+    def times(self):
         """
         A list containing the unique data collection times at which there is at least one measurement result.
 
@@ -267,7 +267,7 @@ class DataSetRow(object):
 
         return times
 
-    def get_timeseries_for_outcomes(self):
+    def timeseries_for_outcomes(self):
         """
         Row data in a time-series format.
 
@@ -286,7 +286,7 @@ class DataSetRow(object):
         """
         times = []
         last_time = None
-        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.get_outcome_labels()}
+        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.outcome_labels()}
 
         #REMOVED: (though this gives slightly different behavior)
         #for outcome_label in self.outcomes:
@@ -308,7 +308,7 @@ class DataSetRow(object):
         #time_bins_borders.append(len(self.time))
         #nTimes = len(time_bins_borders) - 1
         #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.get_outcome_labels()}
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.outcome_labels()}
         #
         #for i in range(nTimes):
         #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
@@ -365,7 +365,7 @@ class DataSetRow(object):
 
         return times, series
 
-    def get_reps_timeseries(self):
+    def reps_timeseries(self):
         """
         The number of measurement results at each data collection time.
 
@@ -395,7 +395,7 @@ class DataSetRow(object):
 
             return times, reps
 
-    def get_number_of_times(self):
+    def number_of_times(self):
         """
         Returns the number of data collection times.
 
@@ -403,7 +403,7 @@ class DataSetRow(object):
         -------
         int
         """
-        return len(self.get_times())
+        return len(self.times())
 
     def has_constant_totalcounts(self):
         """
@@ -413,13 +413,13 @@ class DataSetRow(object):
         -------
         bool
         """
-        times, reps = self.get_reps_timeseries()
+        times, reps = self.reps_timeseries()
         firstrep = reps[0]
         fixedtotalcounts = all([firstrep == i for i in reps])
 
         return fixedtotalcounts
 
-    def get_totalcounts_per_timestep(self):
+    def totalcounts_per_timestep(self):
         """
         The number of total counts per time-step, when this is constant.
 
@@ -430,12 +430,12 @@ class DataSetRow(object):
         -------
         int
         """
-        times, reps = self.get_reps_timeseries()
+        times, reps = self.reps_timeseries()
         firstrep = reps[0]
         assert(all([firstrep == i for i in reps])), "The total counts is not the same at all time steps!"
         return firstrep
 
-    def get_meantimestep(self):
+    def meantimestep(self):
         """
         The mean time-step.
 
@@ -445,7 +445,7 @@ class DataSetRow(object):
         -------
         float
         """
-        times = _np.array(self.get_times())
+        times = _np.array(self.times())
         assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
 
         return _np.mean(_np.diff(times))
@@ -470,7 +470,7 @@ class DataSetRow(object):
         elif isinstance(index_or_outcome_label, _numbers.Real):  # timestamp
             return self.counts_at_time(index_or_outcome_label)
         else:
-            if len(self.dataset.olIndex) > DATAROW_AUTOCACHECOUNT_THRESHOLD:
+            if len(self.dataset.olIndex) > _DATAROW_AUTOCACHECOUNT_THRESHOLD:
                 #There are a lot of outcomes in this dataset - it's not worth computing
                 # and caching *all* of the counts just to extract the one being asked for now.
                 outcome_label = _ld.OutcomeLabelDict.to_outcome(index_or_outcome_label)
@@ -487,7 +487,7 @@ class DataSetRow(object):
                     # if outcome label isn't in counts but *is* in the dataset's
                     # outcome labels then return 0 (~= return self.allcounts[...])
                     key = _ld.OutcomeLabelDict.to_outcome(index_or_outcome_label)
-                    if key in self.dataset.get_outcome_labels(): return 0
+                    if key in self.dataset.outcome_labels(): return 0
                     raise KeyError("%s is not an index, timestamp, or outcome label!"
                                    % str(index_or_outcome_label))
 
@@ -556,21 +556,21 @@ class DataSetRow(object):
                 for ol, i in self.dataset.olIndex.items():
                     cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
                     if all_outcomes or cnt > 0:
-                        cntDict.set_unsafe(ol, cnt)
+                        cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
                     inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
                     if all_outcomes or len(inds) > 0:
-                        cntDict.set_unsafe(ol, float(sum(self.reps[tslc][inds])))
+                        cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
                 for ol_index in self.oli[tslc]:
                     ol = self.dataset.ol[ol_index]
-                    cntDict.set_unsafe(ol, 1.0 + cntDict.get_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
             else:
                 for ol_index, reps in zip(self.oli[tslc], self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
-                    cntDict.set_unsafe(ol, reps + cntDict.get_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
 
         return cntDict
 
@@ -704,7 +704,7 @@ class DataSetRow(object):
         return _np.array(times, self.dataset.timeType), \
             _np.array(counts, self.dataset.repType)
 
-    def scale(self, factor):
+    def scale_inplace(self, factor):
         """
         Scales all the counts of this row by the given factor
 
@@ -720,12 +720,12 @@ class DataSetRow(object):
         if self.dataset.bStatic: raise ValueError("Cannot scale rows of a *static* DataSet.")
         if self.reps is None:
             raise ValueError(("Cannot scale a DataSet without repetition "
-                              "counts. Call DataSet.build_repetition_counts()"
+                              "counts. Call DataSet._add_explicit_repetition_counts()"
                               " and try this again."))
         for i, cnt in enumerate(self.reps):
             self.reps[i] = cnt * factor
 
-    def as_dict(self):
+    def to_dict(self):
         """
         Returns the (outcomeLabel,count) pairs as a dictionary.
 
@@ -737,7 +737,7 @@ class DataSetRow(object):
 
     def to_str(self, mode="auto"):
         """
-        Render this DataSetRow as a string.
+        Render this _DataSetRow as a string.
 
         Parameters
         ----------
@@ -746,7 +746,7 @@ class DataSetRow(object):
             (`"time-dependent"`) or to report per-outcome counts aggregated over
             time (`"time-independent"`).  If `"auto"` is specified, then the
             time-independent mode is used only if all time stamps in the
-            DataSetRow are equal (trivial time dependence).
+            _DataSetRow are equal (trivial time dependence).
 
         Returns
         -------
@@ -768,7 +768,7 @@ class DataSetRow(object):
                 s += "( no repetitions )\n"
             return s
         else:  # time-independent
-            return str(self.as_dict())
+            return str(self.to_dict())
 
     def __str__(self):
         return self.to_str()
@@ -862,7 +862,7 @@ class DataSet(object):
         next integer timestamp.  "overwrite" only keeps the latest given
         data for a circuit.  "keepseparate" tags duplicate-sequences by
         appending a final "#<number>" operation label to the duplicated gate
-        sequence, which can then be accessed via the `get_row` and `set_row`
+        sequence, which can then be accessed via the `_get_row` and `_set_row`
         functions.
 
     comment : string, optional
@@ -953,7 +953,7 @@ class DataSet(object):
             next integer timestamp.  "overwrite" only keeps the latest given
             data for a circuit.  "keepseparate" tags duplicate-sequences by
             appending a final "#<number>" operation label to the duplicated gate
-            sequence, which can then be accessed via the `get_row` and `set_row`
+            sequence, which can then be accessed via the `_get_row` and `_set_row`
             functions.
 
         comment : string, optional
@@ -1136,13 +1136,13 @@ class DataSet(object):
             raise TypeError('Use digest hash')
 
     def __getitem__(self, circuit):
-        return self.get_row(circuit)
+        return self._get_row(circuit)
 
     def __setitem__(self, circuit, outcome_dict_or_series):
         ca = self.collisionAction
         self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems mose natural)
         try:
-            ret = self.set_row(circuit, outcome_dict_or_series)
+            ret = self._set_row(circuit, outcome_dict_or_series)
         finally:
             self.collisionAction = ca
         return ret
@@ -1152,7 +1152,7 @@ class DataSet(object):
             circuit = _cir.Circuit(circuit)
         self._remove([self.cirIndex[circuit]])
 
-    def get_row(self, circuit, occurrence=0):
+    def _get_row(self, circuit, occurrence=0):
         """
         Get a row of data from this DataSet.
 
@@ -1170,14 +1170,14 @@ class DataSet(object):
 
         Returns
         -------
-        DataSetRow
+        _DataSetRow
         """
 
         #Convert to circuit - needed for occurrence > 0 case and
         # because name-only Labels still don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit.fromtup(circuit)
+            circuit = _cir.Circuit.from_tuple(circuit)
 
         if occurrence > 0:
             circuit = circuit + _cir.Circuit(("#%d" % occurrence,))
@@ -1185,12 +1185,12 @@ class DataSet(object):
         #Note: cirIndex value is either an int (non-static) or a slice (static)
         repData = self.repData[self.cirIndex[circuit]] \
             if (self.repData is not None) else None
-        return DataSetRow(self, self.oliData[self.cirIndex[circuit]],
+        return _DataSetRow(self, self.oliData[self.cirIndex[circuit]],
                           self.timeData[self.cirIndex[circuit]], repData,
                           self.cnt_cache[circuit] if self.bStatic else None,
                           self.auxInfo[circuit])
 
-    def set_row(self, circuit, outcome_dict_or_series, occurrence=0):
+    def _set_row(self, circuit, outcome_dict_or_series, occurrence=0):
         """
         Set the counts for a row of this DataSet.
 
@@ -1260,7 +1260,7 @@ class DataSet(object):
         Iterator over `(circuit, timeSeries)` pairs.
 
         Here `circuit` is a tuple of operation labels and `timeSeries` is a
-        :class:`DataSetRow` instance, which behaves similarly to a list of spam
+        :class:`_DataSetRow` instance, which behaves similarly to a list of spam
         labels whose index corresponds to the time step.
 
         Parameters
@@ -1274,21 +1274,21 @@ class DataSet(object):
 
         Returns
         -------
-        DataSetKVIterator
+        _DataSetKVIterator
         """
-        return DataSetKVIterator(self, strip_occurrence_tags)
+        return _DataSetKVIterator(self, strip_occurrence_tags)
 
     def values(self):
         """
-        Iterator over DataSetRow instances corresponding to the time series data for each circuit.
+        Iterator over _DataSetRow instances corresponding to the time series data for each circuit.
 
         Returns
         -------
-        DataSetValueIterator
+        _DataSetValueIterator
         """
-        return DataSetValueIterator(self)
+        return _DataSetValueIterator(self)
 
-    def get_outcome_labels(self):
+    def outcome_labels(self):
         """
         Get a list of *all* the outcome labels contained in this DataSet.
 
@@ -1300,7 +1300,7 @@ class DataSet(object):
         """
         return list(self.olIndex.keys())
 
-    def get_gate_labels(self, prefix='G'):
+    def gate_labels(self, prefix='G'):
         """
         Get a list of all the distinct operation labels used in the circuits of this dataset.
 
@@ -1322,7 +1322,7 @@ class DataSet(object):
                     if opLabel not in opLabels: opLabels.append(opLabel)
         return opLabels
 
-    def get_degrees_of_freedom(self, circuit_list=None, method="present_outcomes-1",
+    def degrees_of_freedom(self, circuit_list=None, method="present_outcomes-1",
                                aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for the circuits in `circuit_list`.
@@ -1336,7 +1336,7 @@ class DataSet(object):
         method : {'all_outcomes-1', 'present_outcomes-1'}
             How the degrees of freedom should be computed. 'all_outcomes-1' takes
             the number of circuits and multiplies this by the *total* number of outcomes
-            (the length of what is returned by `get_outcome_labels()`) minus one.
+            (the length of what is returned by `outcome_labels()`) minus one.
             'present_outcomes-1' counts on a per-circuit basis the number of
             present (usually = non-zero) outcomes recorded minus one.  For timestamped
             data, see `aggreate_times` below.
@@ -1391,7 +1391,7 @@ class DataSet(object):
 
         return circuit
 
-    def build_repetition_counts(self):
+    def _add_explicit_repetition_counts(self):
         """
         Build internal repetition counts if they don't exist already.
 
@@ -1551,7 +1551,7 @@ class DataSet(object):
             if self.repData is None:
                 #rep count data was given, but we're not currently holding repdata,
                 # so we need to build this up for all existings sequences:
-                self.build_repetition_counts()
+                self._add_explicit_repetition_counts()
             repArray = _np.array(rep_count_list, self.repType)
 
         if not record_zero_counts:
@@ -1651,7 +1651,7 @@ class DataSet(object):
                                         expanded_timeList, expanded_repList,
                                         overwrite_existing, record_zero_counts, aux)
 
-    def merge_outcomes(self, label_merge_dict, record_zero_counts=True):
+    def aggregate_outcomes(self, label_merge_dict, record_zero_counts=True):
         """
         Creates a DataSet which merges certain outcomes in this DataSet.
 
@@ -1688,11 +1688,11 @@ class DataSet(object):
                             for key, val in label_merge_dict.items()}
 
         merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-        if not set(self.get_outcome_labels()).issubset(merge_dict_old_outcomes):
+        if not set(self.outcome_labels()).issubset(merge_dict_old_outcomes):
             raise ValueError(
                 "`label_merge_dict` must account for all the outcomes in original dataset."
                 " It's missing directives for:\n%s" %
-                '\n'.join(set(map(str, self.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+                '\n'.join(set(map(str, self.outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
             )
 
         new_outcomes = sorted(list(label_merge_dict.keys()))
@@ -1777,7 +1777,7 @@ class DataSet(object):
                                  outcome_label_indices=new_outcome_indices, static=True)
         return merged_dataset
 
-    def merge_std_nqubit_outcomes(self, qubit_indices_to_keep, record_zero_counts=True):
+    def aggregate_std_nqubit_outcomes(self, qubit_indices_to_keep, record_zero_counts=True):
         """
         Creates a DataSet which merges certain outcomes in this DataSet.
 
@@ -1945,7 +1945,7 @@ class DataSet(object):
         for circuit, dsRow in other_data_set.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
-    def get_meantimestep(self):
+    def meantimestep(self):
         """
         The mean time-step, averaged over the time-step for each circuit and over circuits.
 
@@ -1955,7 +1955,7 @@ class DataSet(object):
         """
         timesteps = []
         for key in self.keys():
-            timesteps.append(self[key].get_meantimestep())
+            timesteps.append(self[key].meantimestep())
 
         return _np.mean(timesteps)
 
@@ -1978,9 +1978,9 @@ class DataSet(object):
             if not dsrow.has_constant_totalcounts():
                 return False
             if numtotalcountspertime is None:
-                numtotalcountspertime = dsrow.get_totalcounts_per_timestep()
+                numtotalcountspertime = dsrow.totalcounts_per_timestep()
             else:
-                if numtotalcountspertime != dsrow.get_totalcounts_per_timestep():
+                if numtotalcountspertime != dsrow.totalcounts_per_timestep():
                     return False
 
         return True
@@ -1997,7 +1997,7 @@ class DataSet(object):
         """
         self.has_constant_totalcounts_pertime()
         key = list(self.keys())[0]
-        totalcountspertime = self[key].get_totalcounts_per_timestep()
+        totalcountspertime = self[key].totalcounts_per_timestep()
 
         return totalcountspertime
 
@@ -2361,7 +2361,7 @@ class DataSet(object):
         if self.bStatic:
             return self  # doesn't need to be copied since data can't change
         else:
-            copyOfMe = DataSet(outcome_labels=self.get_outcome_labels(),
+            copyOfMe = DataSet(outcome_labels=self.outcome_labels(),
                                collision_action=self.collisionAction)
             copyOfMe.cirIndex = _copy.deepcopy(self.cirIndex)
             copyOfMe.oliData = [el.copy() for el in self.oliData]
@@ -2386,7 +2386,7 @@ class DataSet(object):
         DataSet
         """
         if self.bStatic:
-            copyOfMe = DataSet(outcome_labels=self.get_outcome_labels(),
+            copyOfMe = DataSet(outcome_labels=self.outcome_labels(),
                                collision_action=self.collisionAction)
             copyOfMe.cirIndex = _OrderedDict([(opstr, i) for i, opstr in enumerate(self.cirIndex.keys())])
             copyOfMe.oliData = []

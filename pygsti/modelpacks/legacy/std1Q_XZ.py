@@ -18,21 +18,21 @@ from ...construction import stdtarget as _stdtarget
 description = "X(pi/2) and Z(pi/2) gates"
 
 gates = ['Gx', 'Gz']
-prepStrs = _strc.circuit_list([(),
+prepStrs = _strc.to_circuits([(),
                                ('Gx',),
                                ('Gx', 'Gz'),
                                ('Gx', 'Gx'),
                                ('Gx', 'Gx', 'Gx'),
                                ('Gx', 'Gz', 'Gx', 'Gx')], line_labels=('*',))  # for 1Q MUB
 
-effectStrs = _strc.circuit_list([(),
+effectStrs = _strc.to_circuits([(),
                                  ('Gx',),
                                  ('Gz', 'Gx'),
                                  ('Gx', 'Gx'),
                                  ('Gx', 'Gx', 'Gx'),
                                  ('Gx', 'Gx', 'Gz', 'Gx')], line_labels=('*',))
 
-germs = _strc.circuit_list(
+germs = _strc.to_circuits(
     [('Gx',),
      ('Gz',),
      ('Gx', 'Gz',),
@@ -42,10 +42,10 @@ germs = _strc.circuit_list(
 germs_lite = germs[0:4]
 
 
-germs = _strc.circuit_list([('Gx',), ('Gz',), ('Gz', 'Gx', 'Gx'), ('Gz', 'Gz', 'Gx')], line_labels=('*',))
+germs = _strc.to_circuits([('Gx',), ('Gz',), ('Gz', 'Gx', 'Gx'), ('Gz', 'Gz', 'Gx')], line_labels=('*',))
 
 #Construct a target model:  X(pi/2), Z(pi/2)
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gx', 'Gz'],
+_target_model = _setc.create_explicit_model([('Q0',)], ['Gx', 'Gz'],
                                            ["X(pi/2,Q0)", "Z(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}

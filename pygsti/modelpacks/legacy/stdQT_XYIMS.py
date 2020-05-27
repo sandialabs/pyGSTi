@@ -20,16 +20,16 @@ from numpy import pi as _pi
 description = "Idle, symmetric X(pi/2), symmetric Y(pi/2), and Molmer-Sorenson gates"
 
 gates = ['Gi', 'Gx', 'Gy', 'Gm']
-prepStrs = _strc.circuit_list([
+prepStrs = _strc.to_circuits([
     (), ('Gx',), ('Gy',), ('Gm',),
     ('Gx', 'Gx'), ('Gm', 'Gx'), ('Gm', 'Gy'),
     ('Gy', 'Gy', 'Gy'), ('Gx', 'Gx', 'Gx')], line_labels=('*',))
 
-effectStrs = _strc.circuit_list([
+effectStrs = _strc.to_circuits([
     (), ('Gx',), ('Gy',), ('Gm',),
     ('Gx', 'Gx'), ('Gy', 'Gm'), ('Gx', 'Gm')], line_labels=('*',))
 
-germs = _strc.circuit_list([
+germs = _strc.to_circuits([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -101,7 +101,7 @@ germs = _strc.circuit_list([
     ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy')], line_labels=('*',))
 
 
-germs_lite = _strc.circuit_list([
+germs_lite = _strc.to_circuits([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -135,7 +135,7 @@ germs_lite = _strc.circuit_list([
     ('Gx', 'Gm', 'Gm')], line_labels=('*',))
 
 
-legacy_germs = _strc.circuit_list([
+legacy_germs = _strc.to_circuits([
     ('Gi',),
     ('Gx',),
     ('Gy',),
@@ -201,7 +201,7 @@ legacy_germs = _strc.circuit_list([
 
 #Missing GxGxGy (compared to non-legacy), which is needed to contain
 # all of the std1Q_XYI `germs_lite` germs.
-legacy_germs_lite = _strc.circuit_list([
+legacy_germs_lite = _strc.to_circuits([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -235,7 +235,7 @@ legacy_germs_lite = _strc.circuit_list([
 
 
 #Construct a target model: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
-_target_model = _qutrit.make_qutrit_model(error_scale=0, x_angle=_pi / 2, y_angle=_pi / 2,
+_target_model = _qutrit.create_qutrit_model(error_scale=0, x_angle=_pi / 2, y_angle=_pi / 2,
                                           ms_global=_pi / 2, ms_local=0, basis="qt")
 
 _gscache = {("full", "auto"): _target_model}
@@ -263,7 +263,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
                                    sim_type, _gscache)
 
 
-legacy_gs_target = _qutrit.make_qutrit_model(error_scale=0, x_angle=-_pi / 2, y_angle=_pi / 2,
+legacy_gs_target = _qutrit.create_qutrit_model(error_scale=0, x_angle=-_pi / 2, y_angle=_pi / 2,
                                              ms_global=-_pi / 2, ms_local=0, basis="qt")
 #Note: negative signs from weird/incorrect conventions
 

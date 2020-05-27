@@ -30,13 +30,13 @@ class CalcMethods2QTestCase(BaseTestCase):
         #Note: std is a 2Q model
         cls.maxLengths = [1]
         #cls.germs = std.germs_lite
-        cls.germs = pygsti.construction.circuit_list([ (gl,) for gl in std.target_model().operations ])
+        cls.germs = pygsti.construction.to_circuits([ (gl,) for gl in std.target_model().operations ])
         cls.mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.001)
-        cls.listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        cls.listOfExperiments = pygsti.construction.create_lsgst_circuits(
             std.target_model(), std.prepStrs, std.effectStrs, cls.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
+        #ds = pygsti.construction.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
         #                                            n_samples=1000, sample_error="multinomial", seed=1234)
         #ds.save(compare_files + "/calcMethods2Q.dataset")
 
@@ -54,18 +54,18 @@ class CalcMethods2QTestCase(BaseTestCase):
         fids1Q = std1Q_XY.fiducials[0:2] # for speed
         cls.redmod_fiducials = []
         for i in range(cls.nQubits):
-            cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuit_list(
+            cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuits(
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in op_labels ])
+        cls.redmod_germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ])
         cls.redmod_maxLs = [1]
-        expList = pygsti.construction.make_lsgst_experiment_list(
+        expList = pygsti.construction.create_lsgst_circuits(
             cls.mdl_redmod_datagen, cls.redmod_fiducials, cls.redmod_fiducials,
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
+        #redmod_ds = pygsti.construction.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
         #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset")
 
         cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q_redmod.dataset")
@@ -90,7 +90,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model = std.target_model().copy()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
@@ -110,7 +110,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model = std.target_model().copy()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               self.germs, self.maxLengths, advanced_options=self.advOpts,
                                               verbosity=4)
 
@@ -127,7 +127,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model = std.target_model().copy()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder:1') # this is the default set by set_all_parameterizations above
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               self.germs, self.maxLengths, verbosity=4)
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
@@ -152,7 +152,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="matrix", verbosity=1)
         target_model.from_vector(self.rand_start206)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -172,7 +172,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              extra_weight_1_hops=0, extra_gate_weight=1, sparse=False,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -191,7 +191,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              extra_weight_1_hops=0, extra_gate_weight=1, sparse=True,
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -211,7 +211,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                       extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                       sim_type="termorder:1", parameterization="H+S terms")
         target_model.from_vector(self.rand_start228)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -232,7 +232,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              extra_weight_1_hops=0, extra_gate_weight=1, sparse=False, verbosity=1,
                                              sim_type="termorder:1", parameterization="H+S clifford terms")
         target_model.from_vector(self.rand_start228)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -248,10 +248,10 @@ class CalcMethods2QTestCase(BaseTestCase):
         from pygsti.modelpacks.legacy import std2Q_XYICPHASE as stdChk
 
         maxLengths = [1,2,4]
-        listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        listOfExperiments = pygsti.construction.create_lsgst_circuits(
             stdChk.target_model(), stdChk.prepStrs, stdChk.effectStrs, stdChk.germs, maxLengths)
-        #listOfExperiments = pygsti.construction.circuit_list([ ('Gcnot','Gxi') ])
-        #listOfExperiments = pygsti.construction.circuit_list([ ('Gxi','Gcphase','Gxi','Gix') ])
+        #listOfExperiments = pygsti.construction.to_circuits([ ('Gcnot','Gxi') ])
+        #listOfExperiments = pygsti.construction.to_circuits([ ('Gxi','Gcphase','Gxi','Gix') ])
 
         mdl_normal = stdChk.target_model().copy()
         mdl_clifford = stdChk.target_model().copy()
@@ -264,8 +264,8 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         for opstr in listOfExperiments:
             #print(str(opstr))
-            p_normal = mdl_normal.probs(opstr)
-            p_clifford = mdl_clifford.probs(opstr)
+            p_normal = mdl_normal.probabilities(opstr)
+            p_clifford = mdl_clifford.probabilities(opstr)
             #p_clifford = bprobs[opstr]
             for outcm in p_normal.keys():
                 if abs(p_normal[outcm]-p_clifford[outcm]) > 1e-8:

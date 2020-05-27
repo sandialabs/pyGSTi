@@ -118,24 +118,24 @@ Gx^4 0.2 100
 
     def test_generate_fake_data(self):
 
-        model = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy','Gz'],
+        model = pygsti.construction.create_explicit_model([('Q0',)],['Gi','Gx','Gy','Gz'],
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 
-        fids  = pygsti.construction.circuit_list( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
-        germs = pygsti.construction.circuit_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
-        circuits = pygsti.construction.create_circuit_list(
+        fids  = pygsti.construction.to_circuits( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
+        germs = pygsti.construction.to_circuits( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
+        circuits = pygsti.construction.create_circuits(
             "f0+T(germ,N)+f1", f0=fids, f1=fids, germ=germs, N=3,
             T=pygsti.construction.repeat_with_max_length,
             order=["germ","f0","f1"])
         pygsti.remove_duplicates_in_place(circuits)
 
-        ds_none = pygsti.construction.generate_fake_data(depol_gateset, circuits,
+        ds_none = pygsti.construction.simulate_data(depol_gateset, circuits,
                                                         n_samples=1000, sample_error='none')
-        ds_round = pygsti.construction.generate_fake_data(depol_gateset, circuits,
+        ds_round = pygsti.construction.simulate_data(depol_gateset, circuits,
                                                           n_samples=1000, sample_error='round')
-        ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
+        ds_otherds = pygsti.construction.simulate_data(ds_none, circuits,
                                                              n_samples=None, sample_error='none')
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
@@ -257,7 +257,7 @@ Gx^4 20 80 0.2 100
 
     def test_tddataset_construction(self):
         #Create a non-static already initialized dataset
-        circuits = pygsti.construction.circuit_list([('Gx',), ('Gy','Gx')])
+        circuits = pygsti.construction.to_circuits([('Gx',), ('Gy','Gx')])
         gatestringIndices = collections.OrderedDict([ (mdl,i) for i,mdl in enumerate(circuits)])
         oliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
         timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
@@ -306,9 +306,9 @@ Gx^4 20 80 0.2 100
             print( ds[opstr].time )
             print( ds[opstr].reps )
             print( ds[opstr].outcomes )
-            print( ds[opstr].get_expanded_ol() )
-            print( ds[opstr].get_expanded_oli() )
-            print( ds[opstr].get_expanded_times() )
+            print( ds[opstr].expanded_ol() )
+            print( ds[opstr].expanded_oli() )
+            print( ds[opstr].expanded_times() )
             print( ds[opstr].counts )
             print( ds[opstr].fractions )
             print( ds[opstr].total )
@@ -417,7 +417,7 @@ Gy 11001100
 """
         with open(temp_files + "/TDDataset.txt","w") as output:
             output.write(dataset_txt)
-        ds = pygsti.io.load_tddataset(temp_files + "/TDDataset.txt")
+        ds = pygsti.io.load_time_dependent_dataset(temp_files + "/TDDataset.txt")
         self.assertEqual(ds[()].fraction('1'), 0.5)
         self.assertEqual(ds[('Gy',)].fraction('1'), 0.5)
         self.assertEqual(ds[('Gx',)].total, 9)
@@ -432,7 +432,7 @@ Gy 11001100
         with open(temp_files + "/BadTDDataset.txt","w") as output:
             output.write(bad_dataset_txt)
         with self.assertRaises(ValueError):
-            pygsti.io.load_tddataset(temp_files + "/BadTDDataset.txt")
+            pygsti.io.load_time_dependent_dataset(temp_files + "/BadTDDataset.txt")
 
 
     def test_load_old_dataset(self):

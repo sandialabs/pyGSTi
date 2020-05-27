@@ -9,7 +9,7 @@ from pygsti.objects.label import Label as L
 
 def test_label_methods():
     def test_to_native(label):
-        native = label.tonative()
+        native = label.to_native()
         # TODO assert correctness
         from_native = L(native)
         assert label == from_native

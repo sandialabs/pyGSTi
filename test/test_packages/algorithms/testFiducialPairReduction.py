@@ -95,7 +95,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                                                     verbosity=3, mem_limit=None)
 
         #Note: can't amplify SPAM params, so don't count them
-        nTotal = pygsti.alg.remove_spam_vectors(target_model).num_nongauge_params()
+        nTotal = pygsti.alg._remove_spam_vectors(target_model).num_nongauge_params()
         self.assertEqual(nTotal, 34)
 
         print("GFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))

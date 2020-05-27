@@ -286,7 +286,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             gate.from_vector(v[gate.gpindices], close, nodirty)
         self._paramvec = v
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
@@ -303,7 +303,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
-            gate.transform(s)
+            gate.transform_inplace(s)
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
@@ -388,7 +388,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         outcome_probs_and_states = _collections.OrderedDict()
         for lbl, element in self.items():
             output_rep = element._rep.acton(staterep)
-            output_unnormalized_state = output_rep.todense()
+            output_unnormalized_state = output_rep.to_dense()
             prob = output_unnormalized_state[0] * state.dim**0.25
             output_normalized_state = output_unnormalized_state / prob  # so [0]th == 1/state_dim**0.25
             outcome_probs_and_states[lbl] = (prob, _sv.StaticSPAMVec(output_normalized_state, self._evotype, 'prep'))
@@ -622,7 +622,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
@@ -639,7 +639,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.param_ops:
-            gate.transform(s)
+            gate.transform_inplace(s)
 
         for element in self.values():
             element._construct_matrix()  # construct from param gates

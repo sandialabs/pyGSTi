@@ -81,7 +81,7 @@ def optimize_operation(op_to_optimize, target_op):
     if isinstance(op_to_optimize, FullDenseOp):
         if(target_op.dim != op_to_optimize.dim):  # special case: operations can have different overall dimension
             op_to_optimize.dim = target_op.dim  # this is a HACK to allow model selection code to work correctly
-        op_to_optimize.set_value(target_op)  # just copy entire overall matrix since fully parameterized
+        op_to_optimize.set_dense(target_op)  # just copy entire overall matrix since fully parameterized
         return
 
     assert(target_op.dim == op_to_optimize.dim)  # operations must have the same overall dimension
@@ -201,13 +201,13 @@ def convert(operation, to_type, basis, extra=None):
         if isinstance(operation, FullDenseOp):
             return operation  # no conversion necessary
         else:
-            return FullDenseOp(operation.todense())
+            return FullDenseOp(operation.to_dense())
 
     elif to_type == "TP":
         if isinstance(operation, TPDenseOp):
             return operation  # no conversion necessary
         else:
-            return TPDenseOp(operation.todense())
+            return TPDenseOp(operation.to_dense())
             # above will raise ValueError if conversion cannot be done
 
     elif to_type == "linear":
@@ -215,7 +215,7 @@ def convert(operation, to_type, basis, extra=None):
             return operation  # no conversion necessary
         elif isinstance(operation, StaticDenseOp):
             real = _np.isclose(_np.linalg.norm(operation.imag), 0)
-            return LinearlyParamDenseOp(operation.todense(), _np.array([]), {}, real)
+            return LinearlyParamDenseOp(operation.to_dense(), _np.array([]), {}, real)
         else:
             raise ValueError("Cannot convert type %s to LinearlyParamDenseOp"
                              % type(operation))
@@ -224,7 +224,7 @@ def convert(operation, to_type, basis, extra=None):
         if isinstance(operation, StaticDenseOp):
             return operation  # no conversion necessary
         else:
-            return StaticDenseOp(operation.todense())
+            return StaticDenseOp(operation.to_dense())
 
     elif to_type == "static unitary":
         op_std = _bt.change_basis(operation, basis, 'std')
@@ -247,8 +247,8 @@ def convert(operation, to_type, basis, extra=None):
         #  (this commented code doesn't seem to work quite right).  Such intelligence should
         #  help scenarios where the assertion below fails.
         #if isinstance(operation, DenseOperator):
-        #    J = _jt.jamiolkowski_iso(operation.todense(), opMxBasis=basis, choiMxBasis="std")
-        #    ev, U = _np.linalg.eig(operation.todense())
+        #    J = _jt.jamiolkowski_iso(operation.to_dense(), opMxBasis=basis, choiMxBasis="std")
+        #    ev, U = _np.linalg.eig(operation.to_dense())
         #    imax = _np.argmax(ev)
         #    J_unitary = _np.kron(U[:,imax:imax+1], U[:,imax:imax+1].T)
         #    postfactor = _jt.jamiolkowski_iso_inv(J_unitary, choiMxBasis="std", opMxBasis=basis)
@@ -258,8 +258,8 @@ def convert(operation, to_type, basis, extra=None):
 
         ret = LindbladOpType.from_operation_obj(operation, to_type, postfactor, proj_basis,
                                                 basis, truncate=True, lazy=True)
-        if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise todense is too expensive
-            assert(_np.linalg.norm(operation.todense() - ret.todense()) < 1e-6), \
+        if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
+            assert(_np.linalg.norm(operation.to_dense() - ret.to_dense()) < 1e-6), \
                 "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
         return ret
 
@@ -302,7 +302,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         An M by N matrix where M is the number of operation elements and
         N is the number of operation parameters.
     """
-    dim = operation.get_dimension()
+    dim = operation.dimension()
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params()), operation.dtype)
@@ -443,7 +443,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         return (self.dim)**2
 
-    def set_value(self, m):
+    def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
 
@@ -479,7 +479,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         pass
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -487,7 +487,7 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         numpy.ndarray
         """
-        raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
+        raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
 
     def acton(self, state):
         """
@@ -514,7 +514,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         #Build a SPAMVec around output_rep
         if self._evotype in ("densitymx", "statevec"):
-            return _sv.StaticSPAMVec(output_rep.todense(), self._evotype, 'prep')
+            return _sv.StaticSPAMVec(output_rep.to_dense(), self._evotype, 'prep')
         else:  # self._evotype == "stabilizer"
             return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
                 output_rep.smatrix, output_rep.pvectors, output_rep.amps))
@@ -576,7 +576,7 @@ class LinearOperator(_modelmember.ModelMember):
         self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
         return _modelmember.ModelMember.copy(self, parent)
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return this operation as a sparse matrix.
 
@@ -584,9 +584,9 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         scipy.sparse.csr_matrix
         """
-        raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
+        raise NotImplementedError("to_sparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -624,10 +624,10 @@ class LinearOperator(_modelmember.ModelMember):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" %
+        raise NotImplementedError("taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
-    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
+    def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
         """
         Get terms with magnitude above `min_term_mag`.
 
@@ -682,7 +682,7 @@ class LinearOperator(_modelmember.ModelMember):
 
             MAX_CACHED_TERM_ORDER = 1
             if taylor_order <= MAX_CACHED_TERM_ORDER:
-                terms_at_order, cpolys = self.get_taylor_order_terms(taylor_order, max_poly_vars, True)
+                terms_at_order, cpolys = self.taylor_order_terms(taylor_order, max_poly_vars, True)
                 coeffs = _bulk_eval_compact_polys_complex(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
@@ -706,7 +706,7 @@ class LinearOperator(_modelmember.ModelMember):
             else:
                 terms.extend(
                     [(taylor_order, t)
-                     for t in self.get_taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)]
+                     for t in self.taylor_order_terms_above_mag(taylor_order, max_poly_vars, min_term_mag)]
                 )
 
             #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",
@@ -722,7 +722,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         #DEBUG TODO REMOVE
         #chk1 = sum([t[1].magnitude for t in sorted_terms])
-        #chk2 = self.get_total_term_magnitude()
+        #chk2 = self.total_term_magnitude()
         #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order,
         #      " minmag=",min_term_mag)
         #print("  sum of magnitudes =",chk1, " <?= ", chk2)
@@ -740,13 +740,13 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t[1] for t in sorted_terms], first_order_indices
 
-    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -771,7 +771,7 @@ class LinearOperator(_modelmember.ModelMember):
             A list of :class:`Rank1Term` objects.
         """
         v = self.to_vector()
-        terms_at_order, cpolys = self.get_taylor_order_terms(order, max_poly_vars, True)
+        terms_at_order, cpolys = self.taylor_order_terms(order, max_poly_vars, True)
         coeffs = _bulk_eval_compact_polys_complex(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
@@ -786,7 +786,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist2(self, other_op, transform=None, inv_transform=None):
+    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None):
         """
         Return the squared frobenius difference between this operation and `other_op`
 
@@ -811,11 +811,11 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.frobeniusdist2(self.todense(), other_op.todense())
+            return _gt.frobeniusdist_squared(self.to_dense(), other_op.to_dense())
         else:
-            return _gt.frobeniusdist2(_np.dot(
-                inv_transform, _np.dot(self.todense(), transform)),
-                other_op.todense())
+            return _gt.frobeniusdist_squared(_np.dot(
+                inv_transform, _np.dot(self.to_dense(), transform)),
+                other_op.to_dense())
 
     def frobeniusdist(self, other_op, transform=None, inv_transform=None):
         """
@@ -841,7 +841,7 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         float
         """
-        return _np.sqrt(self.frobeniusdist2(other_op, transform, inv_transform))
+        return _np.sqrt(self.frobeniusdist_squared(other_op, transform, inv_transform))
 
     def residuals(self, other_op, transform=None, inv_transform=None):
         """
@@ -867,11 +867,11 @@ class LinearOperator(_modelmember.ModelMember):
             A 1D-array of size equal to that of the flattened operation matrix.
         """
         if transform is None and inv_transform is None:
-            return _gt.residuals(self.todense(), other_op.todense())
+            return _gt.residuals(self.to_dense(), other_op.to_dense())
         else:
             return _gt.residuals(_np.dot(
-                inv_transform, _np.dot(self.todense(), transform)),
-                other_op.todense())
+                inv_transform, _np.dot(self.to_dense(), transform)),
+                other_op.to_dense())
 
     def jtracedist(self, other_op, transform=None, inv_transform=None):
         """
@@ -896,11 +896,11 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.jtracedist(self.todense(), other_op.todense())
+            return _gt.jtracedist(self.to_dense(), other_op.to_dense())
         else:
             return _gt.jtracedist(_np.dot(
-                inv_transform, _np.dot(self.todense(), transform)),
-                other_op.todense())
+                inv_transform, _np.dot(self.to_dense(), transform)),
+                other_op.to_dense())
 
     def diamonddist(self, other_op, transform=None, inv_transform=None):
         """
@@ -925,13 +925,13 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.diamonddist(self.todense(), other_op.todense())
+            return _gt.diamonddist(self.to_dense(), other_op.to_dense())
         else:
             return _gt.diamonddist(_np.dot(
-                inv_transform, _np.dot(self.todense(), transform)),
-                other_op.todense())
+                inv_transform, _np.dot(self.to_dense(), transform)),
+                other_op.to_dense())
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -953,9 +953,9 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        Smx = s.get_transform_matrix()
-        Si = s.get_transform_matrix_inverse()
-        self.set_value(_np.dot(Si, _np.dot(self.todense(), Smx)))
+        Smx = s.transform_matrix()
+        Si = s.transform_matrix_inverse()
+        self.set_dense(_np.dot(Si, _np.dot(self.to_dense(), Smx)))
 
     def depolarize(self, amount):
         """
@@ -987,7 +987,7 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_value(_np.dot(D, self.todense()))
+        self.set_dense(_np.dot(D, self.to_dense()))
 
     def rotate(self, amount, mx_basis="gm"):
         """
@@ -1018,7 +1018,7 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         rotnMx = _gt.rotation_gate_mx(amount, mx_basis)
-        self.set_value(_np.dot(rotnMx, self.todense()))
+        self.set_dense(_np.dot(rotnMx, self.to_dense()))
 
     def compose(self, other_op):
         """
@@ -1039,7 +1039,7 @@ class LinearOperator(_modelmember.ModelMember):
         DenseOperator
         """
         cpy = self.copy()
-        cpy.set_value(_np.dot(self.todense(), other_op.todense()))
+        cpy.set_dense(_np.dot(self.to_dense(), other_op.to_dense()))
         return cpy
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -1223,7 +1223,7 @@ class DenseOperatorInterface(object):
         """
         return finite_difference_deriv_wrt_params(self, wrt_filter, eps=1e-7)
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -1237,7 +1237,7 @@ class DenseOperatorInterface(object):
         return _np.asarray(self._ptr)
         # *must* be a numpy array for Cython arg conversion
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the operation as a sparse matrix.
 
@@ -1245,7 +1245,7 @@ class DenseOperatorInterface(object):
         -------
         scipy.sparse.csr_matrix
         """
-        return _sps.csr_matrix(self.todense())
+        return _sps.csr_matrix(self.to_dense())
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -1653,7 +1653,7 @@ class TPDenseOp(DenseOperator):
         """
         return _ProtectedArray(self._rep.base, indices_to_protect=(0, slice(None, None, None)))
 
-    def set_value(self, m):
+    def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
 
@@ -1838,12 +1838,12 @@ class LinearlyParamDenseOp(DenseOperator):
     left_transform : numpy array or None, optional
         A 2D array of the same shape as basematrix which left-multiplies
         the base matrix after parameters have been evaluated.  Defaults to
-        no transform.
+        no transform_inplace.
 
     right_transform : numpy array or None, optional
         A 2D array of the same shape as basematrix which right-multiplies
         the base matrix after parameters have been evaluated.  Defaults to
-        no transform.
+        no transform_inplace.
 
     real : bool, optional
         Whether or not the resulting operation matrix, after all
@@ -2670,7 +2670,7 @@ class StochasticNoiseOp(LinearOperator):
         return self._copy_gpindices(copyOfMe, parent)
 
     #to_dense / to_sparse?
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -2697,7 +2697,7 @@ class StochasticNoiseOp(LinearOperator):
     #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
     #                         (self._evotype, self.__class__.__name__))
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -2749,10 +2749,10 @@ class StochasticNoiseOp(LinearOperator):
             polydict = {(): 1.0}
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
-            loc_terms = [_term.RankOnePolyOpTerm.simple_init(_Polynomial(polydict, mpv), IDENT, IDENT, self._evotype)]
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(polydict, mpv), IDENT, IDENT, self._evotype)]
 
         elif order == 1:
-            loc_terms = [_term.RankOnePolyOpTerm.simple_init(_Polynomial(pd, mpv), bel, bel, self._evotype)
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(pd, mpv), bel, bel, self._evotype)
                          for i, (pd, bel) in enumerate(zip(self._get_rate_poly_dicts(), self.basis.elements[1:]))]
         else:
             loc_terms = []  # only first order "taylor terms"
@@ -2775,7 +2775,7 @@ class StochasticNoiseOp(LinearOperator):
         else:
             return global_param_terms
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -2793,7 +2793,7 @@ class StochasticNoiseOp(LinearOperator):
         rates = self._params_to_rates(self.to_vector())
         return _np.sum(_np.abs(rates))
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -3117,7 +3117,7 @@ class LindbladOp(LinearOperator):
             if isinstance(operation, LindbladDenseOp):
                 unitary_postfactor = operation.unitary_postfactor
             elif isinstance(operation, LinearOperator) and operation._evotype == "densitymx":
-                J = _jt.fast_jamiolkowski_iso_std(operation.todense(), mx_basis)  # Choi mx basis doesn't matter
+                J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), mx_basis)  # Choi mx basis doesn't matter
                 if _np.linalg.matrix_rank(J, RANK_TOL) == 1:
                     unitary_postfactor = operation  # when 'operation' is unitary
             # FUTURE: support other operation._evotypes?
@@ -3139,7 +3139,7 @@ class LindbladOp(LinearOperator):
         def normeq(a, b):
             if a is None and b is None: return True
             if a is None or b is None: return False
-            return _mt.safenorm(a - b) < 1e-6  # what about possibility of Clifford operations?
+            return _mt.safe_norm(a - b) < 1e-6  # what about possibility of Clifford operations?
 
         if lazy and isinstance(operation, LindbladOp) and \
            normeq(operation.unitary_postfactor, unitary_postfactor) and \
@@ -3252,7 +3252,7 @@ class LindbladOp(LinearOperator):
             #Instead of making error_generator(...) compatible with sparse matrices
             # we require sparse matrices to have trivial initial error generators
             # or we convert to dense:
-            if(_mt.safenorm(op_matrix - upost) < 1e-8):
+            if(_mt.safe_norm(op_matrix - upost) < 1e-8):
                 errgenMx = _sps.csr_matrix(op_matrix.shape, dtype='d')  # all zeros
             else:
                 errgenMx = _sps.csr_matrix(
@@ -3380,7 +3380,7 @@ class LindbladOp(LinearOperator):
 
         #Cache values
         self.terms = {}
-        self.exp_terms_cache = {}  # used for repeated calls to the exp_terms function
+        self.exp_terms_cache = {}  # used for repeated calls to the exponentiate_terms function
         self.local_term_poly_coeffs = {}
         self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
         self.base_deriv = None
@@ -3444,7 +3444,7 @@ class LindbladOp(LinearOperator):
         """
         if self._evotype == "densitymx":
             if self.dense_rep:  # "sparse mode" => don't ever compute matrix-exponential explicitly
-                self.exp_err_gen = _spl.expm(self.errorgen.todense())  # used in deriv_wrt_params
+                self.exp_err_gen = _spl.expm(self.errorgen.to_dense())  # used in deriv_wrt_params
                 if self.unitary_postfactor is not None:
                     dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
                 else: dense = self.exp_err_gen
@@ -3486,7 +3486,7 @@ class LindbladOp(LinearOperator):
         #TODO REMOVE self.direct_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -3500,7 +3500,7 @@ class LindbladOp(LinearOperator):
 
         else:
             # Construct a dense version from scratch (more time consuming)
-            exp_errgen = _spl.expm(self.errorgen.todense())
+            exp_errgen = _spl.expm(self.errorgen.to_dense())
 
             if self.unitary_postfactor is not None:
                 if self._evotype in ("svterm", "cterm"):
@@ -3513,13 +3513,13 @@ class LindbladOp(LinearOperator):
                 else:
                     upost = self.unitary_postfactor
 
-                dense = _mt.safedot(exp_errgen, upost)
+                dense = _mt.safe_dot(exp_errgen, upost)
             else:
                 dense = exp_errgen
             return dense
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the operation as a sparse matrix.
 
@@ -3531,9 +3531,9 @@ class LindbladOp(LinearOperator):
                         "  Usually this is *NOT* acutally sparse (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.dense_rep:
-            return _sps.csr_matrix(self.todense())
+            return _sps.csr_matrix(self.to_dense())
         else:
-            exp_err_gen = _spsl.expm(self.errorgen.tosparse().tocsc()).tocsr()
+            exp_err_gen = _spsl.expm(self.errorgen.to_sparse().tocsc()).tocsr()
             if self.unitary_postfactor is not None:
                 return exp_err_gen.dot(self.unitary_postfactor)
             else:
@@ -3607,7 +3607,7 @@ class LindbladOp(LinearOperator):
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
-            dexpL = _d_exp_x(self.errorgen.todense(), derrgen, self.exp_err_gen,
+            dexpL = _d_exp_x(self.errorgen.to_dense(), derrgen, self.exp_err_gen,
                              self.unitary_postfactor)
             derivMx = dexpL.reshape(d2**2, self.num_params())  # [iFlattenedOp,iParam]
 
@@ -3683,7 +3683,7 @@ class LindbladOp(LinearOperator):
             dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
             d2Edp2.shape = (d2, d2, nP, nP)  # ditto
 
-            series, series2 = _d2_exp_series(self.errorgen.todense(), dEdp, d2Edp2)
+            series, series2 = _d2_exp_series(self.errorgen.to_dense(), dEdp, d2Edp2)
             term1 = series2
             term2 = _np.einsum("ija,jkq->ikaq", series, series)
             if self.unitary_postfactor is None:
@@ -3715,7 +3715,7 @@ class LindbladOp(LinearOperator):
                 return _np.take(_np.take(self.base_hessian, wrt_filter1, axis=1),
                                 wrt_filter2, axis=2)
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -3780,13 +3780,13 @@ class LindbladOp(LinearOperator):
                ), "Unitary post-factor needs to be dense for term-based evotypes"
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
-        postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
                                                        self.unitary_postfactor, self._evotype)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
-        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
-        loc_terms = _term.exp_terms(self.errorgen.get_taylor_order_terms(0, max_poly_vars),
+        loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_poly_vars),
                                     order, postTerm, self.exp_terms_cache)
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
@@ -3804,13 +3804,13 @@ class LindbladOp(LinearOperator):
         # only cache terms with *global* indices to avoid confusion...
         self.terms[order] = _compose_poly_indices(loc_terms)
 
-    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -3843,14 +3843,14 @@ class LindbladOp(LinearOperator):
                ), "Unitary post-factor needs to be dense for term-based evotypes"
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_poly_vars
-        postTerm = _term.RankOnePolyOpTerm.simple_init(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
                                                        self.unitary_postfactor, self._evotype)
         postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
-        # so the below call to get_taylor_order_terms just gets all of them.  In the FUTURE
+        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
-        errgen_terms = self.errorgen.get_taylor_order_terms(0, max_poly_vars)
+        errgen_terms = self.errorgen.taylor_order_terms(0, max_poly_vars)
 
         #DEBUG: CHECK MAGS OF ERRGEN COEFFS
         #poly_coeffs = [t.coeff for t in errgen_terms]
@@ -3877,8 +3877,8 @@ class LindbladOp(LinearOperator):
 
         #DEBUG!!!
         #import bpdb; bpdb.set_trace()
-        #loc_terms = _term.exp_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
-        #loc_terms_chk = _term.exp_terms(errgen_terms, order, postTerm)
+        #loc_terms = _term.exponentiate_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
+        #loc_terms_chk = _term.exponentiate_terms(errgen_terms, order, postTerm)
         #assert(len(loc_terms) == len(loc_terms2))
         #poly_coeffs = [t.coeff for t in loc_terms_chk]
         #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
@@ -3910,7 +3910,7 @@ class LindbladOp(LinearOperator):
         #    t.set_magnitude(abs(coeff))
 
         terms = []
-        for term in _term.exp_terms_above_mag(errgen_terms, order,
+        for term in _term.exponentiate_terms_above_mag(errgen_terms, order,
                                               postTerm, min_term_mag=min_term_mag):
             #poly_coeff = term.coeff
             #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
@@ -3924,12 +3924,12 @@ class LindbladOp(LinearOperator):
             # if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
             #     print(coeff_array[0], "vs.", t._rep.magnitude)
             #     import bpdb; bpdb.set_trace()
-            #     c1 = _Polynomial.fromrep(t._rep.coeff)
+            #     c1 = _Polynomial.from_rep(t._rep.coeff)
 
             terms.append(term)
         return terms
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -3946,12 +3946,12 @@ class LindbladOp(LinearOperator):
         # (unitary postfactor has weight == 1.0 so doesn't enter)
         #TODO REMOVE:
         #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
-        #egttm = self.errorgen.get_total_term_magnitude()
+        #egttm = self.errorgen.total_term_magnitude()
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.get_total_term_magnitude())
+        return _np.exp(self.errorgen.total_term_magnitude())
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -3963,7 +3963,7 @@ class LindbladOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        return _np.exp(self.errorgen.get_total_term_magnitude()) * self.errorgen.get_total_term_magnitude_deriv()
+        return _np.exp(self.errorgen.total_term_magnitude()) * self.errorgen.total_term_magnitude_deriv()
 
     def num_params(self):
         """
@@ -4015,7 +4015,7 @@ class LindbladOp(LinearOperator):
         self._update_rep(close)
         if not nodirty: self.dirty = True
 
-    def get_errgen_coeffs(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -4036,7 +4036,7 @@ class LindbladOp(LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`get_error_rates`.
+            This is the value returned by :method:`error_rates`.
 
         Returns
         -------
@@ -4053,9 +4053,9 @@ class LindbladOp(LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        return self.errorgen.get_coeffs(return_basis, logscale_nonham)
+        return self.errorgen.coefficients(return_basis, logscale_nonham)
 
-    def get_error_rates(self):
+    def error_rates(self):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -4090,9 +4090,9 @@ class LindbladOp(LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.get_errgen_coeffs(return_basis=False, logscale_nonham=True)
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errgen_coeffs(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in the error generator of this :class:`LindbladOp`.
 
@@ -4118,7 +4118,7 @@ class LindbladOp(LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
@@ -4128,7 +4128,7 @@ class LindbladOp(LinearOperator):
         -------
         None
         """
-        self.errorgen.set_coeffs(lindblad_term_dict, action, logscale_nonham)
+        self.errorgen.set_coefficients(lindblad_term_dict, action, logscale_nonham)
         self._update_rep()
         self.dirty = True
 
@@ -4138,7 +4138,7 @@ class LindbladOp(LinearOperator):
 
         Values are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`get_error_rates` for more details.
+        :method:`error_rates` for more details.
 
         Parameters
         ----------
@@ -4160,9 +4160,9 @@ class LindbladOp(LinearOperator):
         -------
         None
         """
-        self.set_errgen_coeffs(lindblad_term_dict, action, logscale_nonham=True)
+        self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
-    def set_value(self, m):
+    def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
 
@@ -4196,7 +4196,7 @@ class LindbladOp(LinearOperator):
         self._update_rep()
         self.dirty = True
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -4217,14 +4217,14 @@ class LindbladOp(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.get_transform_matrix()
-            Uinv = s.get_transform_matrix_inverse()
+            U = s.transform_matrix()
+            Uinv = s.transform_matrix_inverse()
             #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
             if self.unitary_postfactor is not None:
-                self.unitary_postfactor = _mt.safedot(Uinv, _mt.safedot(self.unitary_postfactor, U))
-            self.errorgen.transform(s)
+                self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
+            self.errorgen.transform_inplace(s)
             self._update_rep()  # needed to rebuild exponentiated error gen
             self.dirty = True
 
@@ -4239,11 +4239,11 @@ class LindbladOp(LinearOperator):
             raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(s)))
 
-    def spam_transform(self, s, typ):
+    def spam_transform_inplace(self, s, typ):
         """
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 
-        This functions as `transform(...)` but is used when this
+        This functions as `transform_inplace(...)` but is used when this
         Lindblad-parameterized operation is used as a part of a SPAM
         vector.  When `typ == "prep"`, the spam vector is assumed
         to be `rho = dot(self, <spamvec>)`, which transforms as
@@ -4269,14 +4269,14 @@ class LindbladOp(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.get_transform_matrix()
-            Uinv = s.get_transform_matrix_inverse()
+            U = s.transform_matrix()
+            Uinv = s.transform_matrix_inverse()
 
             #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
-                tMx = _mt.safedot(Uinv, self.todense())
+                tMx = _mt.safe_dot(Uinv, self.to_dense())
             else:
-                tMx = _mt.safedot(self.todense(), U)
+                tMx = _mt.safe_dot(self.to_dense(), U)
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
             tOp = LindbladOp.from_operation_matrix(tMx, self.unitary_postfactor,
                                                    self.errorgen.ham_basis, self.errorgen.other_basis,
@@ -4294,10 +4294,10 @@ class LindbladOp(LinearOperator):
             ##just act on postfactor and Lindbladian exponent:
             #if typ == "prep":
             #    if self.unitary_postfactor is not None:
-            #        self.unitary_postfactor = _mt.safedot(Uinv, self.unitary_postfactor)
+            #        self.unitary_postfactor = _mt.safe_dot(Uinv, self.unitary_postfactor)
             #else:
             #    if self.unitary_postfactor is not None:
-            #        self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
+            #        self.unitary_postfactor = _mt.safe_dot(self.unitary_postfactor, U)
             #
             #self.errorgen.spam_transform(s, typ)
             #self._update_rep()  # needed to rebuild exponentiated error gen
@@ -4823,9 +4823,9 @@ class ComposedOp(LinearOperator):
         if len(self.factorops) == 0:
             mx = _np.identity(self.dim, 'd')
         else:
-            mx = self.factorops[0].todense()
+            mx = self.factorops[0].to_dense()
             for op in self.factorops[1:]:
-                mx = _np.dot(op.todense(), mx)
+                mx = _np.dot(op.to_dense(), mx)
 
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
@@ -4928,7 +4928,7 @@ class ComposedOp(LinearOperator):
         copyOfMe = cls([g.copy(parent) for g in self.factorops], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the operation as a sparse matrix
 
@@ -4936,12 +4936,12 @@ class ComposedOp(LinearOperator):
         -------
         scipy.sparse.csr_matrix
         """
-        mx = self.factorops[0].tosparse()
+        mx = self.factorops[0].to_sparse()
         for op in self.factorops[1:]:
-            mx = op.tosparse().dot(mx)
+            mx = op.to_sparse().dot(mx)
         return mx
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -4955,9 +4955,9 @@ class ComposedOp(LinearOperator):
         elif len(self.factorops) == 0:
             return _np.identity(self.dim, 'd')
         else:
-            mx = self.factorops[0].todense()
+            mx = self.factorops[0].to_dense()
             for op in self.factorops[1:]:
-                mx = _np.dot(op.todense(), mx)
+                mx = _np.dot(op.to_dense(), mx)
             return mx
 
     #def torep(self):
@@ -4984,7 +4984,7 @@ class ComposedOp(LinearOperator):
     #
     #    assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -5039,11 +5039,11 @@ class ComposedOp(LinearOperator):
         #print("Composed op getting order",order,"terms:")
         #for i,fop in enumerate(self.factorops):
         #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
-        #    hmdebug,_ = fop.get_highmagnitude_terms(0.00001, True, order)
+        #    hmdebug,_ = fop.highmagnitude_terms(0.00001, True, order)
         #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
 
         for p in _lt.partition_into(order, len(self.factorops)):
-            factor_lists = [self.factorops[i].get_taylor_order_terms(pi, max_poly_vars) for i, pi in enumerate(p)]
+            factor_lists = [self.factorops[i].taylor_order_terms(pi, max_poly_vars) for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):
                 terms.append(_term.compose_terms(factors))
         self.terms[order] = terms
@@ -5068,13 +5068,13 @@ class ComposedOp(LinearOperator):
         coeffs_as_compact_polys = (vtape, ctape)
         self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
-    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -5100,7 +5100,7 @@ class ComposedOp(LinearOperator):
         """
         terms = []
         factor_lists_cache = [
-            [ops.get_taylor_order_terms_above_mag(i, max_poly_vars, min_term_mag) for i in range(order + 1)]
+            [ops.taylor_order_terms_above_mag(i, max_poly_vars, min_term_mag) for i in range(order + 1)]
             for ops in self.factorops
         ]
         for p in _lt.partition_into(order, len(self.factorops)):
@@ -5132,7 +5132,7 @@ class ComposedOp(LinearOperator):
         #coeffs_as_compact_polys = (vtape, ctape)
         #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -5149,9 +5149,9 @@ class ComposedOp(LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
-        return _np.product([f.get_total_term_magnitude() for f in self.factorops])
+        return _np.product([f.total_term_magnitude() for f in self.factorops])
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -5163,13 +5163,13 @@ class ComposedOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        opmags = [f.get_total_term_magnitude() for f in self.factorops]
+        opmags = [f.total_term_magnitude() for f in self.factorops]
         product = _np.product(opmags)
         ret = _np.zeros(self.num_params(), 'd')
         for opmag, f in zip(opmags, self.factorops):
             f_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, f.gpindices)
-            local_deriv = product / opmag * f.get_total_term_magnitude_deriv()
+            local_deriv = product / opmag * f.total_term_magnitude_deriv()
             ret[f_local_inds] += local_deriv
         return ret
 
@@ -5253,7 +5253,7 @@ class ComposedOp(LinearOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        typ = complex if any([_np.iscomplexobj(op.todense()) for op in self.factorops]) else 'd'
+        typ = complex if any([_np.iscomplexobj(op.to_dense()) for op in self.factorops]) else 'd'
         derivMx = _np.zeros((self.dim, self.dim, self.num_params()), typ)
 
         #Product rule to compute jacobian
@@ -5263,16 +5263,16 @@ class ComposedOp(LinearOperator):
             deriv.shape = (self.dim, self.dim, op.num_params())
 
             if i > 0:  # factors before ith
-                pre = self.factorops[0].todense()
+                pre = self.factorops[0].to_dense()
                 for opA in self.factorops[1:i]:
-                    pre = _np.dot(opA.todense(), pre)
+                    pre = _np.dot(opA.to_dense(), pre)
                 #deriv = _np.einsum("ija,jk->ika", deriv, pre )
                 deriv = _np.transpose(_np.tensordot(deriv, pre, (1, 0)), (0, 2, 1))
 
             if i + 1 < len(self.factorops):  # factors after ith
-                post = self.factorops[i + 1].todense()
+                post = self.factorops[i + 1].to_dense()
                 for opA in self.factorops[i + 2:]:
-                    post = _np.dot(opA.todense(), post)
+                    post = _np.dot(opA.to_dense(), post)
                 #deriv = _np.einsum("ij,jka->ika", post, deriv )
                 deriv = _np.tensordot(post, deriv, (1, 0))
 
@@ -5298,7 +5298,7 @@ class ComposedOp(LinearOperator):
         """
         return any([op.has_nonzero_hessian() for op in self.factorops])
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -5322,7 +5322,7 @@ class ComposedOp(LinearOperator):
         None
         """
         for operation in self.factorops:
-            operation.transform(s)
+            operation.transform_inplace(s)
 
     def __str__(self):
         """ Return string representation """
@@ -5470,7 +5470,7 @@ class ExponentiatedOp(LinearOperator):
         copyOfMe = cls(self.exponentiated_op.copy(parent), self.power, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the operation as a sparse matrix
 
@@ -5481,13 +5481,13 @@ class ExponentiatedOp(LinearOperator):
         if self.power == 0:
             return _sps.identity(self.dim, dtype=_np.dtype('d'), format='csr')
 
-        op = self.exponentiated_op.tosparse()
+        op = self.exponentiated_op.to_sparse()
         mx = op.copy()
         for i in range(self.power - 1):
             mx = mx.dot(op)
         return mx
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this operation as a dense matrix.
 
@@ -5495,7 +5495,7 @@ class ExponentiatedOp(LinearOperator):
         -------
         numpy.ndarray
         """
-        op = self.exponentiated_op.todense()
+        op = self.exponentiated_op.to_dense()
         return _np.linalg.matrix_power(op, self.power)
 
     #def torep(self):
@@ -5731,7 +5731,7 @@ class EmbeddedOp(LinearOperator):
 
     def _update_denserep(self):
         self._rep.base.flags.writeable = True
-        self._rep.base[:, :] = self.todense()
+        self._rep.base[:, :] = self.to_dense()
         self._rep.base.flags.writeable = False
 
     def __getstate__(self):
@@ -5904,7 +5904,7 @@ class EmbeddedOp(LinearOperator):
     #                                       embeddedDim, nComponents, iActiveBlock, nBlocks,
     #                                       self.dim)
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the operation as a sparse matrix
 
@@ -5912,7 +5912,7 @@ class EmbeddedOp(LinearOperator):
         -------
         scipy.sparse.csr_matrix
         """
-        embedded_sparse = self.embedded_op.tosparse().tolil()
+        embedded_sparse = self.embedded_op.to_sparse().tolil()
         finalOp = _sps.identity(self.dim, embedded_sparse.dtype, format='lil')
 
         #fill in embedded_op contributions (always overwrites the diagonal
@@ -5921,7 +5921,7 @@ class EmbeddedOp(LinearOperator):
             finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def todense(self):
+    def to_dense(self):
         """
         Return the operation as a dense matrix
 
@@ -5941,7 +5941,7 @@ class EmbeddedOp(LinearOperator):
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))
 
-        embedded_dense = self.embedded_op.todense()
+        embedded_dense = self.embedded_op.to_dense()
         # operates on entire state space (direct sum of tensor prod. blocks)
         finalOp = _np.identity(self.dim, embedded_dense.dtype)
 
@@ -5951,7 +5951,7 @@ class EmbeddedOp(LinearOperator):
             finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -5991,22 +5991,22 @@ class EmbeddedOp(LinearOperator):
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space_labels.copy()
-        sslbls.reduce_dims_densitymx_to_state()
+        sslbls.reduce_dims_densitymx_to_state_inplace()
         if return_coeff_polys:
-            terms, coeffs = self.embedded_op.get_taylor_order_terms(order, max_poly_vars, True)
+            terms, coeffs = self.embedded_op.taylor_order_terms(order, max_poly_vars, True)
             embedded_terms = [t.embed(sslbls, self.targetLabels) for t in terms]
             return embedded_terms, coeffs
         else:
             return [t.embed(sslbls, self.targetLabels)
-                    for t in self.embedded_op.get_taylor_order_terms(order, max_poly_vars, False)]
+                    for t in self.embedded_op.taylor_order_terms(order, max_poly_vars, False)]
 
-    def get_taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`get_taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -6031,11 +6031,11 @@ class EmbeddedOp(LinearOperator):
             A list of :class:`Rank1Term` objects.
         """
         sslbls = self.state_space_labels.copy()
-        sslbls.reduce_dims_densitymx_to_state()
+        sslbls.reduce_dims_densitymx_to_state_inplace()
         return [t.embed(sslbls, self.targetLabels)
-                for t in self.embedded_op.get_taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
+                for t in self.embedded_op.taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -6057,14 +6057,14 @@ class EmbeddedOp(LinearOperator):
         #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
         #   self.embedded_op.__class__.__name__)
         #ret = self.embedded_op.get_total_term_magnitude()
-        #egterms = self.get_taylor_order_terms(0)
+        #egterms = self.taylor_order_terms(0)
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
         #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return self.embedded_op.get_total_term_magnitude()
+        return self.embedded_op.total_term_magnitude()
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -6076,7 +6076,7 @@ class EmbeddedOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        return self.embedded_op.get_total_term_magnitude_deriv()
+        return self.embedded_op.total_term_magnitude_deriv()
 
     def num_params(self):
         """
@@ -6160,7 +6160,7 @@ class EmbeddedOp(LinearOperator):
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
         return derivMx  # Note: wrt_filter has already been applied above
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -6403,7 +6403,7 @@ class CliffordOp(LinearOperator):
         #dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
 
         #Update members so they reference the same (contiguous) memory as the rep
-        U = self.unitary.todense() if isinstance(self.unitary, LinearOperator) else self.unitary
+        U = self.unitary.to_dense() if isinstance(self.unitary, LinearOperator) else self.unitary
         self._dense_unitary = _np.ascontiguousarray(U, complex)
         self.smatrix = _np.ascontiguousarray(self.smatrix, _np.int64)
         self.svector = _np.ascontiguousarray(self.svector, _np.int64)
@@ -6451,7 +6451,7 @@ class CliffordOp(LinearOperator):
 
 
 # STRATEGY:
-# - maybe create an abstract base TermOperation class w/get_taylor_order_terms(...) function?
+# - maybe create an abstract base TermOperation class w/taylor_order_terms(...) function?
 # - Note: if/when terms return a *polynomial* coefficient the poly's 'variables' should
 #    reference the *global* Model-level parameters, not just the local gate ones.
 # - create an EmbeddedTermGate class to handle embeddings, which holds a
@@ -6546,7 +6546,7 @@ class ComposedErrorgen(LinearOperator):
 
         LinearOperator.__init__(self, rep, evotype)
 
-    def get_coeffs(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 
@@ -6567,7 +6567,7 @@ class ComposedErrorgen(LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`get_error_rates`.
+            This is the value returned by :method:`error_rates`.
 
         Returns
         -------
@@ -6590,7 +6590,7 @@ class ComposedErrorgen(LinearOperator):
         constant_basis = None  # the single same Basis used for every factor with a nonempty basis
 
         for eg in self.factors:
-            factor_coeffs = eg.get_coeffs(return_basis, logscale_nonham)
+            factor_coeffs = eg.coefficients(return_basis, logscale_nonham)
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs
@@ -6608,7 +6608,7 @@ class ComposedErrorgen(LinearOperator):
                 #  (maybe do a pass to check for a constant_basis without any .elements refs?)
                 for lbl, basisEl in zip(factor_basis.labels, factor_basis.elements):
                     if lbl in basisdict:
-                        assert(_mt.safenorm(basisEl - basisdict[lbl]) < 1e-6), "Ambiguous basis label %s" % lbl
+                        assert(_mt.safe_norm(basisEl - basisdict[lbl]) < 1e-6), "Ambiguous basis label %s" % lbl
                     else:
                         basisdict[lbl] = basisEl
             else:
@@ -6635,7 +6635,7 @@ class ComposedErrorgen(LinearOperator):
         else:
             return Ltermdict
 
-    def get_error_rates(self):
+    def error_rates(self):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -6672,9 +6672,9 @@ class ComposedErrorgen(LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coeffs(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -6700,7 +6700,7 @@ class ComposedErrorgen(LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
@@ -6710,7 +6710,7 @@ class ComposedErrorgen(LinearOperator):
         -------
         None
         """
-        factor_coeffs_list = [eg.get_coeffs(False, logscale_nonham) for eg in self.factors]
+        factor_coeffs_list = [eg.coefficients(False, logscale_nonham) for eg in self.factors]
         perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
         unused_Lterm_keys = set(lindblad_term_dict.keys())
 
@@ -6728,7 +6728,7 @@ class ComposedErrorgen(LinearOperator):
 
         #Set the L-term coefficients of each factor separately
         for d, eg in zip(perfactor_Ltermdicts, self.factors):
-            eg.set_coeffs(d, action, logscale_nonham)
+            eg.set_coefficients(d, action, logscale_nonham)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
@@ -6736,7 +6736,7 @@ class ComposedErrorgen(LinearOperator):
 
         Cofficients are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`get_error_rates` for more details.
+        :method:`error_rates` for more details.
 
         Parameters
         ----------
@@ -6758,7 +6758,7 @@ class ComposedErrorgen(LinearOperator):
         -------
         None
         """
-        self.set_coeffs(lindblad_term_dict, action, logscale_nonham=True)
+        self.set_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -6917,7 +6917,7 @@ class ComposedErrorgen(LinearOperator):
         copyOfMe = cls([f.copy(parent) for f in self.factors], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return this error generator as a sparse matrix
 
@@ -6927,12 +6927,12 @@ class ComposedErrorgen(LinearOperator):
         """
         if len(self.factors) == 0:
             return _sps.csr_matrix((self.dim, self.dim), dtype='d')
-        mx = self.factors[0].tosparse()
+        mx = self.factors[0].to_sparse()
         for eg in self.factors[1:]:
-            mx += eg.tosparse()
+            mx += eg.to_sparse()
         return mx
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this error generator as a dense matrix
 
@@ -6942,12 +6942,12 @@ class ComposedErrorgen(LinearOperator):
         """
         if len(self.factors) == 0:
             return _np.zeros((self.dim, self.dim), 'd')
-        mx = self.factors[0].todense()
+        mx = self.factors[0].to_dense()
         for eg in self.factors[1:]:
-            mx += eg.todense()
+            mx += eg.to_dense()
         return mx
 
-    #OLD: UNUSED - now use tosparse/todense
+    #OLD: UNUSED - now use to_sparse/to_dense
     #def _construct_errgen_matrix(self):
     #    self.factors[0]._construct_errgen_matrix()
     #    mx = self.factors[0].err_gen_mx
@@ -6977,7 +6977,7 @@ class ComposedErrorgen(LinearOperator):
     #        return replib.SBOpRepSum(factor_reps, nQubits)
     #    assert(False), "Invalid internal _evotype: %s" % self._evotype
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this error generator..
 
@@ -7022,7 +7022,7 @@ class ComposedErrorgen(LinearOperator):
         #Need to adjust indices b/c in error generators we (currently) expect terms to have local indices
         ret = []
         for eg in self.factors:
-            eg_terms = [t.copy() for t in eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys)]
+            eg_terms = [t.copy() for t in eg.taylor_order_terms(order, max_poly_vars, return_coeff_polys)]
             mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
                 self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params()))))
             for t in eg_terms:
@@ -7036,7 +7036,7 @@ class ComposedErrorgen(LinearOperator):
         #     *[eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys) for eg in self.factors]
         # ))
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -7065,16 +7065,16 @@ class ComposedErrorgen(LinearOperator):
         #    print("     gpindices = ",eg.gpindices)
         #
         #ret = sum(factor_ttms)
-        #egterms = self.get_taylor_order_terms(0)
+        #egterms = self.taylor_order_terms(0)
         #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
         #print("ComposedErrgen term mags (should concat above) ",len(egterms),":\n",mags)
         #print("gpindices = ",self.gpindices)
         #print("ComposedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return sum([eg.get_total_term_magnitude() for eg in self.factors])
+        return sum([eg.total_term_magnitude() for eg in self.factors])
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -7090,7 +7090,7 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             eg_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            ret[eg_local_inds] += eg.get_total_term_magnitude_deriv()
+            ret[eg_local_inds] += eg.total_term_magnitude_deriv()
         return ret
 
     def num_params(self):
@@ -7152,7 +7152,7 @@ class ComposedErrorgen(LinearOperator):
             eg.from_vector(v[factor_local_inds], close, nodirty)
         if not nodirty: self.dirty = True
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
 
@@ -7176,7 +7176,7 @@ class ComposedErrorgen(LinearOperator):
         None
         """
         for eg in self.factors:
-            eg.transform(s)
+            eg.transform_inplace(s)
 
     def onenorm_upperbound(self):
         """
@@ -7294,8 +7294,8 @@ class EmbeddedErrorgen(EmbeddedOp):
     #TODO REMOVE (UNUSED)
     #def _construct_errgen_matrix(self):
     #    #Always construct a sparse errgen matrix, so just use
-    #    # base class's .tosparse() (which calls embedded errorgen's
-    #    # .tosparse(), which will convert a dense->sparse embedded
+    #    # base class's .to_sparse() (which calls embedded errorgen's
+    #    # .to_sparse(), which will convert a dense->sparse embedded
     #    # error generator, but this is fine).
     #    self.err_gen_mx = self.tosparse()
 
@@ -7334,7 +7334,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         EmbeddedOp.from_vector(self, v, close, nodirty)
         if not nodirty: self.dirty = True
 
-    def get_coeffs(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -7355,7 +7355,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`get_error_rates`.
+            This is the value returned by :method:`error_rates`.
 
         Returns
         -------
@@ -7372,7 +7372,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        embedded_coeffs = self.embedded_op.get_coeffs(return_basis, logscale_nonham)
+        embedded_coeffs = self.embedded_op.coefficients(return_basis, logscale_nonham)
         embedded_Ltermdict = _collections.OrderedDict()
 
         if return_basis:
@@ -7394,7 +7394,7 @@ class EmbeddedErrorgen(EmbeddedOp):
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
 
-    def get_error_rates(self):
+    def error_rates(self):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -7431,9 +7431,9 @@ class EmbeddedErrorgen(EmbeddedOp):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coeffs(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -7459,7 +7459,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
@@ -7473,7 +7473,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         for k, val in lindblad_term_dict.items():
             unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
             unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_coeffs(unembedded_Ltermdict, action, logscale_nonham)
+        self.embedded_op.set_coefficients(unembedded_Ltermdict, action, logscale_nonham)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
@@ -7481,7 +7481,7 @@ class EmbeddedErrorgen(EmbeddedOp):
 
         Coefficients are set so that the contributions of the resulting
         channel's error rate are given by the values in `lindblad_term_dict`.
-        See :method:`get_error_rates` for more details.
+        See :method:`error_rates` for more details.
 
         Parameters
         ----------
@@ -7503,7 +7503,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         -------
         None
         """
-        self.set_coeffs(lindblad_term_dict, action, logscale_nonham=True)
+        self.set_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -7732,7 +7732,7 @@ class LindbladErrorgen(LinearOperator):
 
         # errgen + bases => coeffs
         hamC, otherC = \
-            _gt.lindblad_errgen_projections(
+            _gt.lindblad_errorgen_projections(
                 errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
                 return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
@@ -7891,12 +7891,12 @@ class LindbladErrorgen(LinearOperator):
 
                 #OLD REMOVE
                 # csr_sum_array, indptr, indices, N = \
-                #     _mt.get_csr_sum_indices(all_csr_matrices)
+                #     _mt.csr_sum_indices(all_csr_matrices)
                 #self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
                 #self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
 
                 flat_dest_indices, flat_src_data, flat_nnzptr, indptr, indices, N = \
-                    _mt.get_csr_sum_flat_indices(all_csr_matrices)
+                    _mt.csr_sum_flat_indices(all_csr_matrices)
                 self._CSRSumIndices = flat_dest_indices
                 self._CSRSumData = flat_src_data
                 self._CSRSumPtr = flat_nnzptr
@@ -7931,7 +7931,7 @@ class LindbladErrorgen(LinearOperator):
         assert(d * d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
+        mxBasisToStd = self.matrix_basis.create_transform_matrix(_BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
         # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
             else _np.linalg.inv(mxBasisToStd)
@@ -7953,7 +7953,7 @@ class LindbladErrorgen(LinearOperator):
 
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
-                hamGens = [_mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                         inplace=True, check=True) for mx in hamGens]
                 for mx in hamGens: mx.sort_indices()
                 # for faster addition ops in _construct_errgen_matrix
@@ -7973,7 +7973,7 @@ class LindbladErrorgen(LinearOperator):
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [_mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                    otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                               inplace=True, check=True) for mx in otherGens]
                     for mx in hamGens: mx.sort_indices()
                     # for faster addition ops in _construct_errgen_matrix
@@ -7989,7 +7989,7 @@ class LindbladErrorgen(LinearOperator):
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [[_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                    otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
 
                     for mxRow in otherGens:
@@ -8007,7 +8007,7 @@ class LindbladErrorgen(LinearOperator):
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    otherGens = [[_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                    otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
                     #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
                     # terms) need to be real
@@ -8057,9 +8057,9 @@ class LindbladErrorgen(LinearOperator):
                 # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
                 scale, U = _mt.to_unitary(basis[termLbl[1]])
                 scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, evotype))
-                Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): +1j * scale}, mpv),
+                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
                                                                   IDENT, U.conjugate().T, evotype))
 
             elif termType == "S":  # Stochastic
@@ -8077,13 +8077,13 @@ class LindbladErrorgen(LinearOperator):
                     Lm_dag = Lm.conjugate().T
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         _Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, evotype
                     ))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm), evotype
                     ))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT, evotype
                     ))
 
@@ -8123,12 +8123,12 @@ class LindbladErrorgen(LinearOperator):
 
                     base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(1.0 * base_poly * scale, Ln, Lm, evotype))
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(1.0 * base_poly * scale, Ln, Lm, evotype))
                     # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         -0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm), evotype
                     ))
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         -0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT, evotype
                     ))
 
@@ -8152,7 +8152,7 @@ class LindbladErrorgen(LinearOperator):
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
                     UB = Bscale * B  # UB is unitary
-                    Lterms.append(_term.RankOnePolyOpTerm.simple_init(_Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
                                                                       _np.dot(L, UB), UB, evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
@@ -8167,7 +8167,7 @@ class LindbladErrorgen(LinearOperator):
         #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
 
         #Make compact polys that are ready to (repeatedly) evaluate (useful
-        # for term-based calcs which call get_total_term_magnitude() a lot)
+        # for term-based calcs which call total_term_magnitude() a lot)
         poly_coeffs = [t.coeff for t in Lterms]
         tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         if len(tapes) > 0:
@@ -8199,7 +8199,7 @@ class LindbladErrorgen(LinearOperator):
     def _set_params_from_matrix(self, errgen, truncate):
         """ Sets self.paramvals based on `errgen` """
         hamC, otherC = \
-            _gt.lindblad_errgen_projections(
+            _gt.lindblad_errorgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
                 return_generators=False, other_mode=self.nonham_mode,
                 sparse=self.sparse)  # in std basis
@@ -8298,7 +8298,7 @@ class LindbladErrorgen(LinearOperator):
             self._rep.base[:, :] = lnd_error_gen.real
         self._onenorm_upbound = onenorm
 
-    def todense(self):
+    def to_dense(self):
         """
         Return this error generator as a dense matrix.
 
@@ -8307,7 +8307,7 @@ class LindbladErrorgen(LinearOperator):
         numpy.ndarray
         """
         if self.sparse:
-            return self.tosparse().toarray()
+            return self.to_sparse().toarray()
         else:
             if self._evotype in ("svterm", "cterm"):
                 #Need to do similar things to __init__ - maybe consolidate?
@@ -8335,7 +8335,7 @@ class LindbladErrorgen(LinearOperator):
             else:  # dense rep
                 return self._rep.base
 
-    def tosparse(self):
+    def to_sparse(self):
         """
         Return the error generator as a sparse matrix.
 
@@ -8373,7 +8373,7 @@ class LindbladErrorgen(LinearOperator):
                                        shape=(self.dim, self.dim))
 
         else:
-            return _sps.csr_matrix(self.todense())
+            return _sps.csr_matrix(self.to_dense())
 
     #def torep(self):
     #    """
@@ -8399,7 +8399,7 @@ class LindbladErrorgen(LinearOperator):
     #        raise NotImplementedError("torep(%s) not implemented for %s objects!" %
     #                                  (self._evotype, self.__class__.__name__))
 
-    def get_taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -8450,7 +8450,7 @@ class LindbladErrorgen(LinearOperator):
     #    poly_terms = self.get_taylor_order_terms(order)
     #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
-    def get_total_term_magnitude(self):
+    def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
 
@@ -8464,11 +8464,11 @@ class LindbladErrorgen(LinearOperator):
         float
         """
         # return (sum of absvals of term coeffs)
-        assert(self.Lterms is not None), "Must call `get_taylor_order_terms` before calling get_total_term_magnitude!"
+        assert(self.Lterms is not None), "Must call `taylor_order_terms` before calling total_term_magnitude!"
         vtape, ctape = self.Lterm_coeffs
         return _abs_sum_bulk_eval_compact_polys_complex(vtape, ctape, self.to_vector(), len(self.Lterms))
 
-    def get_total_term_magnitude_deriv(self):
+    def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
 
@@ -8566,7 +8566,7 @@ class LindbladErrorgen(LinearOperator):
             self._update_rep()
         if not nodirty: self.dirty = True
 
-    def get_coeffs(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 
@@ -8587,7 +8587,7 @@ class LindbladErrorgen(LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`get_error_rates`.
+            This is the value returned by :method:`error_rates`.
 
         Returns
         -------
@@ -8620,7 +8620,7 @@ class LindbladErrorgen(LinearOperator):
 
         return Ltermdict_and_maybe_basis
 
-    def get_error_rates(self):
+    def error_rates(self):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -8657,9 +8657,9 @@ class LindbladErrorgen(LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.get_coeffs(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coeffs(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -8685,7 +8685,7 @@ class LindbladErrorgen(LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`get_errgen_coeffs`)
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
@@ -8695,7 +8695,7 @@ class LindbladErrorgen(LinearOperator):
         -------
         None
         """
-        existing_Ltermdict, basis = self.get_coeffs(return_basis=True, logscale_nonham=False)
+        existing_Ltermdict, basis = self.coefficients(return_basis=True, logscale_nonham=False)
 
         if action == "reset":
             for k in existing_Ltermdict:
@@ -8731,7 +8731,7 @@ class LindbladErrorgen(LinearOperator):
 
         Coefficients are set so that the contributions of the resulting
         channel's error rate are given by the values in `lindblad_term_dict`.
-        See :method:`get_error_rates` for more details.
+        See :method:`error_rates` for more details.
 
         Parameters
         ----------
@@ -8753,9 +8753,9 @@ class LindbladErrorgen(LinearOperator):
         -------
         None
         """
-        self.set_coeffs(lindblad_term_dict, action, logscale_nonham=True)
+        self.set_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update error generator E with inv(s) * E * s,
 
@@ -8776,12 +8776,12 @@ class LindbladErrorgen(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.get_transform_matrix()
-            Uinv = s.get_transform_matrix_inverse()
+            U = s.transform_matrix()
+            Uinv = s.transform_matrix_inverse()
 
             #conjugate Lindbladian exponent by U:
-            err_gen_mx = self.tosparse() if self.sparse else self.todense()
-            err_gen_mx = _mt.safedot(Uinv, _mt.safedot(err_gen_mx, U))
+            err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
+            err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
@@ -8795,11 +8795,11 @@ class LindbladErrorgen(LinearOperator):
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
                              % str(type(s)))
 
-    def spam_transform(self, s, typ):
+    def spam_transform_inplace(self, s, typ):
         """
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 
-        This functions as `transform(...)` but is used when this
+        This functions as `transform_inplace(...)` but is used when this
         Lindblad-parameterized operation is used as a part of a SPAM
         vector.  When `typ == "prep"`, the spam vector is assumed
         to be `rho = dot(self, <spamvec>)`, which transforms as
@@ -8825,15 +8825,15 @@ class LindbladErrorgen(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.get_transform_matrix()
-            Uinv = s.get_transform_matrix_inverse()
-            err_gen_mx = self.tosparse() if self.sparse else self.todense()
+            U = s.transform_matrix()
+            Uinv = s.transform_matrix_inverse()
+            err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
-                err_gen_mx = _mt.safedot(Uinv, err_gen_mx)
+                err_gen_mx = _mt.safe_dot(Uinv, err_gen_mx)
             else:
-                err_gen_mx = _mt.safedot(err_gen_mx, U)
+                err_gen_mx = _mt.safe_dot(err_gen_mx, U)
 
             self._set_params_from_matrix(err_gen_mx, truncate=True)
             self.dirty = True

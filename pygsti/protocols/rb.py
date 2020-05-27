@@ -299,7 +299,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rc.clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
+                c, iout = _rc.create_clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
                                                   citerations=citerations, compilerargs=compilerargs)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
@@ -708,7 +708,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rc.direct_rb_circuit(
+                c, iout = _rc.create_direct_rb_circuit(
                     pspec, l, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                     addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                     cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
@@ -1012,7 +1012,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             circuits_at_depth = []
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
-                c, iout = _rc.mirror_rb_circuit(pspec, l, qubit_labels=qubit_labels, sampler=sampler,
+                c, iout = _rc.create_mirror_rb_circuit(pspec, l, qubit_labels=qubit_labels, sampler=sampler,
                                                 samplerargs=samplerargs, localclifford=localclifford,
                                                 paulirandomize=paulirandomize)
                 circuits_at_depth.append(c)
@@ -1176,7 +1176,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         design = data.edesign
 
         if self.datatype not in data.cache:
-            summary_data_dict = self.compute_summary_data(data)
+            summary_data_dict = self._compute_summary_statistics(data)
             data.cache.update(summary_data_dict)
         src_data = data.cache[self.datatype]
         data_per_depth = src_data
@@ -1203,7 +1203,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
                 percircuitdata = circuitdata_per_depth[depth]
                 adj_sps.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
 
-            full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_data_fitting(
+            full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_fit(
                 depths, adj_sps, nqubits, seed=self.seed, asymptote=asymptote,
                 ftype='full+FA', rtype=self.rtype)
 
@@ -1223,7 +1223,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
             if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
                 # TIM - finite counts always True here?
-                self.add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)
+                self._add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:

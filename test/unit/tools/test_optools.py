@@ -169,23 +169,23 @@ class ErrorGenTester(BaseCase):
         basis = Basis.cast('gm', 16)
         mxBasis = Basis.cast('gm', 16)
         errgen = np.identity(16, 'd')
-        ot.lindblad_errgen_projections(errgen, basis, basis, mxBasis,
+        ot.lindblad_errorgen_projections(errgen, basis, basis, mxBasis,
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)
 
-        ot.lindblad_errgen_projections(errgen, None, 'gm', mxBasis,
+        ot.lindblad_errorgen_projections(errgen, None, 'gm', mxBasis,
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)
-        ot.lindblad_errgen_projections(errgen, 'gm', None, mxBasis,
+        ot.lindblad_errorgen_projections(errgen, 'gm', None, mxBasis,
                                        normalize=True, return_generators=True,
                                        other_mode="diagonal", sparse=False)
 
         basisMxs = bt.basis_matrices('gm', 16, sparse=False)
-        ot.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis,
+        ot.lindblad_errorgen_projections(errgen, basisMxs, basisMxs, mxBasis,
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)
 
-        ot.lindblad_errgen_projections(errgen, None, None, mxBasis,
+        ot.lindblad_errorgen_projections(errgen, None, None, mxBasis,
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)
 
@@ -205,7 +205,7 @@ class ErrorGenTester(BaseCase):
 
             for projectionType in projectionTypes:
                 for basisName in basisNames:
-                    ot.std_errgen_projections(errgen, projectionType, basisName)
+                    ot.std_errorgen_projections(errgen, projectionType, basisName)
 
             originalGate = ot.operation_from_error_generator(errgen, gateTarget, 'logG-logT')
             altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, 'logTiG')
@@ -261,8 +261,8 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
         self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), (0.430116263352+0j))
 
-        self.assertAlmostEqual(ot.frobeniusdist2(self.A, self.A), 0.0)
-        self.assertAlmostEqual(ot.frobeniusdist2(self.A, self.B), (0.185+0j))
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), (0.185+0j))
 
     def test_jtrace_distance(self):
         self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mx_basis="std"), 0.0)
@@ -276,7 +276,7 @@ class GateOpsTester(BaseCase):
     def test_frobenius_norm_equiv(self):
         from pygsti.tools import matrixtools as mt
         self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), mt.frobeniusnorm(self.A - self.B))
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), np.sqrt(mt.frobeniusnorm2(self.A - self.B)))
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), np.sqrt(mt.frobeniusnorm_squared(self.A - self.B)))
 
     def test_entanglement_fidelity(self):
         fidelity = ot.entanglement_fidelity(self.A, self.B)

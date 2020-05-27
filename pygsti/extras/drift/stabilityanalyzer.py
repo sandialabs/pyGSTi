@@ -20,7 +20,7 @@ import itertools as _itertools
 import warnings as _warnings
 
 
-def get_auto_tests(shape, ids=False):
+def compute_auto_tests(shape, ids=False):
     """
     Returns the tests we'll automatically perform on time-series data, when a specific
     sets of tests is not given. Each test is specified by a tuple of length <= 3 containing
@@ -118,7 +118,7 @@ def condense_tests(shape, tests, weightings=None):
     return condtests, condweightings
 
 
-def get_valid_tests():
+def compute_valid_tests():
     """
     Returns the set of all valid tests (specified by tuples), in the form of a
     list.
@@ -140,14 +140,14 @@ def check_valid_tests(tests):
     """
     Checks whether all the tuples in `tests` constitute valid tests, as specified.
     """
-    valid_tests = get_valid_tests()
+    valid_tests = compute_valid_tests()
 
     for test in tests: assert(test in valid_tests), "This is an invalid set of tests for drift detection!"
 
 
-def get_valid_inclass_corrections():
+def compute_valid_inclass_corrections():
     """
-    Returns the set of all valid `inclass_correction` dicts -- an input to the .do_instability_detection() of
+    Returns the set of all valid `inclass_correction` dicts -- an input to the .run_instability_detection() of
     a StabilityAnalyzer. See the doctring of that method for more information on that input.
     """
     valid_inclass_corrections = []
@@ -166,7 +166,7 @@ def get_valid_inclass_corrections():
 def populate_inclass_correction(inclass_correction={}):
     """
     Populates empty parts of an `inclass_correction` dictionary with auto values. This dictionary is an
-    input to the .do_instability_detection() a StabilityAnalyzer. See the doctring of that method for
+    input to the .run_instability_detection() a StabilityAnalyzer. See the doctring of that method for
     more information on that input.
 
     The auto inclass_correction is to default to a Bonferroni correction at all levels above the lowest
@@ -180,13 +180,13 @@ def populate_inclass_correction(inclass_correction={}):
             # As soon as the correction changes from Bonferroni, we switch to that correction.
             autocorrection = inclass_correction[key]
 
-    valid_inclass_corrections = get_valid_inclass_corrections()
+    valid_inclass_corrections = compute_valid_inclass_corrections()
     assert(inclass_correction in valid_inclass_corrections), "This is an invalid inclass correction!"
 
     return inclass_correction
 
 
-def get_auto_betweenclass_weighting(tests, betweenclass_weighting=True):
+def compute_auto_betweenclass_weighting(tests, betweenclass_weighting=True):
     """
     Finds the automatic weighting used between classes of test, e.g., a
     "top level" Bonferroni correction, or no correction, etc.
@@ -200,7 +200,7 @@ def get_auto_betweenclass_weighting(tests, betweenclass_weighting=True):
     return betweenclass_weighting
 
 
-def get_auto_estimator(transform):
+def compute_auto_estimator(transform):
     """
     The default method for estimating the parameters of a parameterized probability trajectory (i.e., this is not
     the method used for the model selection, only the method used to estimate the amplitudes in the parameterized
@@ -286,7 +286,7 @@ class StabilityAnalyzer(object):
         mergeoutcomes : None or Dict, optional
             If not None, a dictionary of outcome-merging dictionaries. Each dictionary contained as a
             value of `mergeoutcomes` is used to create a new DataSet, where the values have been merged
-            according to that dictionary (see the merge_outcomes() function inside datasetconstructions.py).
+            according to that dictionary (see the aggregate_dataset_outcomes() function inside datasetconstructions.py).
             The corresponding key is used as the key for that DataSet, when it is stored in a MultiDataSet,
             and the instability analysis is implemented on each DataSet. This is a more general data
             coarse-grainin option than `marginalize`.
@@ -369,14 +369,14 @@ class StabilityAnalyzer(object):
         if mergeoutcomes is not None:
 
             for dskey, mergeoutcomesdict in mergeoutcomes.items():
-                mergds = _dsconst.merge_outcomes(tempds, mergeoutcomesdict)
+                mergds = _dsconst.aggregate_dataset_outcomes(tempds, mergeoutcomesdict)
                 mergds.done_adding_data()
                 multids.add_dataset(dskey, mergds)
 
         # Do any marginalization, labelling qubits as integers.
         if marginalize:
 
-            n = len(ds.get_outcome_labels()[0][0])
+            n = len(ds.outcome_labels()[0][0])
             if n > 1:
                 for i in range(n):
                     margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
@@ -469,7 +469,7 @@ class StabilityAnalyzer(object):
         s += " from tests at a global significance of {}%" .format(100 * self._significance[detectorkey])
         return s
 
-    def generate_spectra(self, frequencies='auto', freqpointers={}):
+    def compute_spectra(self, frequencies='auto', freqpointers={}):
         """"
         Generates and records power spectra. This is the first stage in instability detection
         and characterization with a StabilityAnalyzer.
@@ -523,7 +523,7 @@ class StabilityAnalyzer(object):
         """
         if isinstance(frequencies, str):
             assert(frequencies == 'auto')
-            frequencies, freqpointers = _sig.get_auto_frequencies(self.data, self.transform)
+            frequencies, freqpointers = _sig.compute_auto_frequencies(self.data, self.transform)
         self._frequencies = frequencies
         self._freqpointers = freqpointers
 
@@ -535,7 +535,7 @@ class StabilityAnalyzer(object):
 
         dskeys = tuple(self.data.keys())
         circuits = tuple(self.data[dskeys[0]].keys())
-        outcomes = tuple(self.data.get_outcome_labels())
+        outcomes = tuple(self.data.outcome_labels())
         arrayshape = []
         arrayshape = (len(dskeys), len(circuits), len(outcomes), numfrequencies)
         self._shape = arrayshape
@@ -568,7 +568,7 @@ class StabilityAnalyzer(object):
             ds = self.data[dskey]
             for j, circuit in enumerate(circuits):
                 # The time-series data to generate power spectra for.
-                times, outcomedict = ds[circuit].get_timeseries_for_outcomes()
+                times, outcomedict = ds[circuit].timeseries_for_outcomes()
                 # Go through the outcomes and generate a power spectrum for the clickstream of each outcome
                 for k, outcome in enumerate(outcomes):
 
@@ -770,7 +770,7 @@ class StabilityAnalyzer(object):
         elif axislabel == 'circuit':
             return list(self.data[self.data.keys()[0]].keys()).index(key)
         elif axislabel == 'outcome':
-            return self.data.get_outcome_labels().index(key)
+            return self.data.outcome_labels().index(key)
         else:
             raise ValueError("axislabel must be one of `dataset`, `circuit` and `outcome`!")
 
@@ -943,13 +943,13 @@ class StabilityAnalyzer(object):
 
         return pvalue
 
-    def do_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction={},
+    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction={},
                                  betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
                                  verbosity=1):
         """
         Runs instability detection, by performing statistical hypothesis tests on the power spectra generated
         from the time-series data. Before running this method it is necessary to generate power spectra using
-        the generate_spectra() method.
+        the compute_spectra() method.
 
         Parameters
         ----------
@@ -1023,7 +1023,7 @@ class StabilityAnalyzer(object):
         self._significance[saveas] = significance
 
         assert(self._basespectra is not None), "Spectra must be generated before drift detection can be implemented! \
-            First run .generate_spectra()!"
+            First run .compute_spectra()!"
 
         # If there is no default detection results saved yet, these are automatically set to the default results.
         if default or (self._def_detection is None):
@@ -1036,7 +1036,7 @@ class StabilityAnalyzer(object):
         # Check the input `tests` is valid, and then record them.
         if not isinstance(tests, tuple):
             assert(tests == 'auto'), "If not a tuple, must be 'auto'!"
-            tests = get_auto_tests(self._shape, ids=self._ids)
+            tests = compute_auto_tests(self._shape, ids=self._ids)
 
         check_valid_tests(tests)
         self._tests[saveas] = tests
@@ -1046,10 +1046,10 @@ class StabilityAnalyzer(object):
 
         if isinstance(betweenclass_weighting, str):
             assert(betweenclass_weighting == 'auto'), "If a string, betweenclass_weighting must be a string!"
-            betweenclass_weighting = get_auto_betweenclass_weighting(tests)
+            betweenclass_weighting = compute_auto_betweenclass_weighting(tests)
 
-        if isinstance(get_auto_betweenclass_weighting, bool):
-            betweenclass_weighting = get_auto_betweenclass_weighting(betweenclass_weighting)
+        if isinstance(compute_auto_betweenclass_weighting, bool):
+            betweenclass_weighting = compute_auto_betweenclass_weighting(betweenclass_weighting)
 
         # future: some sort of warning if FWER, or FDR, is not being controlled?
 
@@ -1306,7 +1306,7 @@ class StabilityAnalyzer(object):
         ----------
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         Returns
@@ -1351,7 +1351,7 @@ class StabilityAnalyzer(object):
 
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         fromtests : str or tuple, optional
@@ -1384,7 +1384,7 @@ class StabilityAnalyzer(object):
 
         if isinstance(fromtests, str):
             assert(fromtests == 'auto')
-            validtests = get_valid_tests()
+            validtests = compute_valid_tests()
             fromtests = []
             for test in validtests:
                 if 'circuit' in test:
@@ -1483,7 +1483,7 @@ class StabilityAnalyzer(object):
 
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         Returns
@@ -1526,7 +1526,7 @@ class StabilityAnalyzer(object):
 
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         Returns
@@ -1563,7 +1563,7 @@ class StabilityAnalyzer(object):
 
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         Returns
@@ -1619,7 +1619,7 @@ class StabilityAnalyzer(object):
 
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         Returns
@@ -1654,7 +1654,7 @@ class StabilityAnalyzer(object):
         ----------
         detectorkey : None or string, optional
             Only relevant if more than one set of instability detection was run. The "saveas" key that
-            was used when running do_instability_detection() for the detection results that you wish
+            was used when running run_instability_detection() for the detection results that you wish
             to access.
 
         test : None or tuple, optional
@@ -1677,11 +1677,11 @@ class StabilityAnalyzer(object):
         else:
             return self._driftdetected_class[detectorkey][test]
 
-    def do_instability_characterization(self, estimator='auto', modelselector=(None, None), default=True, verbosity=1):
+    def run_instability_characterization(self, estimator='auto', modelselector=(None, None), default=True, verbosity=1):
         """
         Run instability characterization: estimates probability trajectories for every circuit. The estimation methods
         are based on model selection from the results of hypothesis testing, so it is is necessary to first perform this
-        hypothesis testing by running the do_instability_detection method.
+        hypothesis testing by running the run_instability_detection method.
 
         Parameters
         ----------
@@ -1707,7 +1707,7 @@ class StabilityAnalyzer(object):
         modelselection : tuple, optional
             The model selection method. If not None, the first element of the tuple is a string that is a "detectorkey",
             i.e., the `saveas` string for a set of instability detection results. If None then the default instability
-            detection results are used. If do_instability_detection() has only been called once then there is only one
+            detection results are used. If run_instability_detection() has only been called once then there is only one
             set of results and there is no reason to set this to anything over than None. This is the instability
             detection resutls that will be used to select the models for the probability trajectories. If not None,
             the second element of the tuple is a "test class" tuple, specifying which test results to use to decide
@@ -1728,7 +1728,7 @@ class StabilityAnalyzer(object):
 
         """
         if estimator == 'auto':
-            estimator = get_auto_estimator(self.transform)
+            estimator = compute_auto_estimator(self.transform)
 
         if self.transform == 'dct':
             assert(estimator in ('filter', 'mle')
@@ -1741,7 +1741,7 @@ class StabilityAnalyzer(object):
         if detectorkey is None:
             detectorkey = self._def_detection
         assert(detectorkey is not None), "There has been no instability detection performed, so cannot yet " \
-            + "implement characterization! First run .do_instability_detection()"
+            + "implement characterization! First run .run_instability_detection()"
         assert(detectorkey in self._driftdetectors), "There is no instability detection results with this key!"
 
         # Finds the default tests, if there is an acceptabe default tests.
@@ -1759,7 +1759,7 @@ class StabilityAnalyzer(object):
 
         dskeys = list(self.data.keys())
         circuits = self.data[dskeys[0]].keys()
-        outcomes = self.data.get_outcome_labels()
+        outcomes = self.data.outcome_labels()
 
         for i, dskey in enumerate(dskeys):
             for j, circuit in enumerate(circuits):
@@ -1790,7 +1790,7 @@ class StabilityAnalyzer(object):
                     # If there is more than just the DC mode there is something non-trivial to do.
                     if len(freqs) > 0:
 
-                        times, clickstreams = self.data[dskey][circuit].get_timeseries_for_outcomes()
+                        times, clickstreams = self.data[dskey][circuit].timeseries_for_outcomes()
                         parameters = _sig.amplitudes_at_frequencies(freqs, clickstreams, transform=self.transform)
                         del parameters[outcomes[-1]]
                         # Divide by the counts
@@ -1836,12 +1836,12 @@ class StabilityAnalyzer(object):
 
         estimatekey : None or tuple, optional
             The estimate to return (typically, multiple estimates have been generated). If None, then the
-            default estimate is returned. If do_instability_characterization() has been called only
+            default estimate is returned. If run_instability_characterization() has been called only
             once then it is the estimate obtained by the method specified in that single call (but
             multiple estimates may have been recorded, and so are accessable, as a side-product of
             creating that estimate). If not None, a tuple where the first element is the `modelselector`
             and the second element is the `estimator`, as specified as arguments to the
-            do_instability_characterization() method.
+            run_instability_characterization() method.
 
         estimator : None or string, optional
             Override for the second element of estimatekey', to easily extract the 'filter' and
@@ -1860,7 +1860,7 @@ class StabilityAnalyzer(object):
             dskey = list(self.data.keys())[0]
 
         # Find the index for this dataset, circuit, and an arbitrary outcome.
-        tup = self._tupletoindex[(dskey, circuit, self.data.get_outcome_labels()[0])]
+        tup = self._tupletoindex[(dskey, circuit, self.data.outcome_labels()[0])]
         dsind = tup[0]
         circind = tup[1]
 
@@ -1868,7 +1868,7 @@ class StabilityAnalyzer(object):
         if estimatekey is None:
             estimatekey = self._def_probtrajectories
         assert(estimatekey is not None), "There are no probability trajector estimates to get! " \
-            "First must run .do_instability_characterization()."
+            "First must run .run_instability_characterization()."
 
         # If we're given an estimator name, we override that part of the `estimatekey`.
         if estimator is not None:
@@ -1897,12 +1897,12 @@ class StabilityAnalyzer(object):
 
         estimatekey : None or tuple, optional
             The estimate to return (typically, multiple estimates have been generated). If None, then the
-            default estimate is returned. If do_instability_characterization() has been called only
+            default estimate is returned. If run_instability_characterization() has been called only
             once then it is the estimate obtained by the method specified in that single call (but
             multiple estimates may have been recorded, and so are accessable, as a side-product of
             creating that estimate). If not None, a tuple where the first element is the `modelselector`
             and the second element is the `estimator`, as specified as arguments to the
-            do_instability_characterization() method.
+            run_instability_characterization() method.
 
         estimator : None or string, optional
             Override for the second element of `estimatekey`, to easily extract the 'filter' and

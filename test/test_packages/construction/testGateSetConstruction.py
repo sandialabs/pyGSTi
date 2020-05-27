@@ -51,13 +51,13 @@ class TestGateSetConstructionMethods(BaseTestCase):
         spaceLabels = [('Q0',)]  # interpret the 2x2 density matrix as a single qubit named 'Q0'
 
         with self.assertRaises(AssertionError):
-            pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
+            pygsti.construction._create_identity_vec(stateSpace, basis="foobar")
 
 
         gateset_povm_first = pygsti.objects.ExplicitOpModel(['Q0']) #set effect vector first
         gateset_povm_first['Mdefault'] = pygsti.obj.TPPOVM(
-            [ ('0', pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
-              ('1', pygsti.construction.build_vector(stateSpace,spaceLabels,"1")) ] )
+            [ ('0', pygsti.construction._create_spam_vector(stateSpace,spaceLabels,"0")),
+              ('1', pygsti.construction._create_spam_vector(stateSpace,spaceLabels,"1")) ] )
 
         with self.assertRaises(ValueError):
             gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension

@@ -37,7 +37,7 @@
 
 <figure id="bestGatesetEigenvalueTable" class='tbl'>
 	<figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> This table lists the spectrum of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, <em>and</em> it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.  To do these comparisons, each estimated eigenvalue needs to be matched up with a target eigenvalue, and pyGSTi does this independently for each metric by computing a minimum-weight matching based on that metric.  Hovering over a column header will pop up a mathematical description of the corresponding metric.</span></figcaption>
-    {{ final_model_eval_table|render }}
+    {{ final_model_eigenvalue_table|render }}
 </figure>
 
 
@@ -45,4 +45,3 @@
   <figcaption><span class="captiontitle">Gauge-robust gate set.</span> <span class="captiondetail"> This table gives a first-order gauge-invariant description of a gate set by decomposing each gate <span class="math">G</span> as <span class="math">G = F^{-1} M G_0 F</span> where <span class="math">M</span> commutes with <span class="math">G_0</span> and <span class="math">F = exp(r)</span> where <span class="math">r</span> is zero on the diagonal blocks corresponding to the degenerate eigenvalues of <span class="math">G_0</span>.</span></figcaption>
   {{ final_gauge_inv_model_table|render }}
 </figure>
-

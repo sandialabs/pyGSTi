@@ -74,7 +74,7 @@ class FASTPolynomial(object):
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):
+    def _vindices_per_int(cls, max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -96,7 +96,7 @@ class FASTPolynomial(object):
         return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
     @classmethod
-    def fromrep(cls, rep):
+    def from_rep(cls, rep):
         """
         Creates a Polynomial from a "representation" (essentially a lite-version) of a Polynomial.
 
@@ -107,7 +107,7 @@ class FASTPolynomial(object):
 
         Parameters
         ----------
-        rep : PolyRep
+        rep : PolynomialRep
             A polynomial representation.
 
         Returns
@@ -135,7 +135,7 @@ class FASTPolynomial(object):
         rep = list_of_polys[0]._rep
         for p in list_of_polys[1:]:
             rep = rep.mult(p._rep)
-        return FASTPolynomial.fromrep(rep)
+        return FASTPolynomial.from_rep(rep)
 
     def __init__(self, coeffs=None, max_num_vars=100):
         """
@@ -160,10 +160,10 @@ class FASTPolynomial(object):
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
             variable index within this polynomial.
         """
-        vindices_per_int = FASTPolynomial.get_vindices_per_int(max_num_vars)
+        vindices_per_int = FASTPolynomial._vindices_per_int(max_num_vars)
 
         int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
-        self._rep = replib.PolyRep(int_coeffs, max_num_vars, vindices_per_int)
+        self._rep = replib.PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
 
     @property
     def coeffs(self):
@@ -246,7 +246,7 @@ class FASTPolynomial(object):
 
         return FASTPolynomial(dcoeffs, self.max_num_vars)
 
-    def get_degree(self):
+    def degree(self):
         """
         The largest sum-of-exponents for any term (monomial) within this polynomial.
 
@@ -312,7 +312,7 @@ class FASTPolynomial(object):
         -------
         Polynomial
         """
-        return FASTPolynomial.fromrep(self._rep.copy())
+        return FASTPolynomial.from_rep(self._rep.copy())
 
     def map_indices(self, mapfn):
         """
@@ -419,7 +419,7 @@ class FASTPolynomial(object):
         Polynomial
             The polynomial representing self * x.
         """
-        return FASTPolynomial.fromrep(self._rep.mult(x._rep))
+        return FASTPolynomial.from_rep(self._rep.mult(x._rep))
 
     def scale(self, x):
         """
@@ -537,7 +537,7 @@ class FASTPolynomial(object):
     def __copy__(self):
         return self.copy()
 
-    def torep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
+    def to_rep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """
         Construct a representation of this polynomial.
 
@@ -548,7 +548,7 @@ class FASTPolynomial(object):
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         return self._rep
 
@@ -581,7 +581,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
     """
 
     @classmethod
-    def get_vindices_per_int(cls, max_num_vars):
+    def _vindices_per_int(cls, max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -600,7 +600,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
 
     @classmethod
-    def fromrep(cls, rep):
+    def from_rep(cls, rep):
         """
         Creates a Polynomial from a "representation" (essentially a lite-version) of a Polynomial.
 
@@ -611,7 +611,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
         Parameters
         ----------
-        rep : PolyRep
+        rep : PolynomialRep
             A polynomial representation.
 
         Returns
@@ -634,8 +634,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
         tup_coeff_dict = {int_to_vinds(k): val for k, val in rep.coeffs.items()}
         ret = cls(tup_coeff_dict)
-        ret.fastpoly = FASTPolynomial.fromrep(rep)
-        ret.check_fastpoly()
+        ret.fastpoly = FASTPolynomial.from_rep(rep)
+        ret._check_fast_polynomial()
         return ret
 
     def __init__(self, coeffs=None, max_num_vars=100):
@@ -666,9 +666,9 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             self.update(coeffs)
         self.max_num_vars = max_num_vars
         self.fastpoly = FASTPolynomial(coeffs, max_num_vars)
-        self.check_fastpoly()
+        self._check_fast_polynomial()
 
-    def check_fastpoly(self, raise_err=True):
+    def _check_fast_polynomial(self, raise_err=True):
         """
         Check that included FASTPolynomial has remained in-sync with this one.
 
@@ -730,10 +730,10 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
         ret = Polynomial(dcoeffs, self.max_num_vars)
         ret.fastpoly = self.fastpoly.deriv(wrt_param)
-        ret.check_fastpoly()
+        ret._check_fast_polynomial()
         return ret
 
-    def get_degree(self):
+    def degree(self):
         """
         The largest sum-of-exponents for any term (monomial) within this polynomial.
 
@@ -744,8 +744,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         int
         """
         ret = 0 if len(self) == 0 else max([len(k) for k in self.keys()])
-        assert(self.fastpoly.get_degree() == ret)
-        self.check_fastpoly()
+        assert(self.fastpoly.degree() == ret)
+        self._check_fast_polynomial()
         return ret
 
     def evaluate(self, variable_values):
@@ -768,7 +768,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         for ivar, coeff in self.items():
             ret += coeff * _np.product([variable_values[i] for i in ivar])
         assert(_np.isclose(ret, self.fastpoly.evaluate(variable_values)))
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         return ret
 
     def compact(self, complex_coeff_tape=True):
@@ -812,7 +812,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         assert(i == len(vtape)), "Logic Error!"
         fast_vtape, fast_ctape = self.fastpoly.compact(iscomplex)
         assert(_np.allclose(fast_vtape, vtape) and _np.allclose(fast_ctape, ctape))
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         return vtape, ctape
 
     def copy(self):
@@ -826,7 +826,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         fast_cpy = self.fastpoly.copy()
         ret = Polynomial(self, self.max_num_vars)
         ret.fastpoly = fast_cpy
-        ret.check_fastpoly()
+        ret._check_fast_polynomial()
         return ret
 
     def map_indices(self, mapfn):
@@ -850,8 +850,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         """
         ret = Polynomial({mapfn(k): v for k, v in self.items()}, self.max_num_vars)
         ret.fastpoly = self.fastpoly.map_indices(mapfn)
-        self.check_fastpoly()
-        ret.check_fastpoly()
+        self._check_fast_polynomial()
+        ret._check_fast_polynomial()
         return ret
 
     def map_indices_inplace(self, mapfn):
@@ -873,12 +873,12 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         -------
         None
         """
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         new_items = {mapfn(k): v for k, v in self.items()}
         self.clear()
         self.update(new_items)
         self.fastpoly.map_indices_inplace(mapfn)
-        self.check_fastpoly()
+        self._check_fast_polynomial()
 
     def mult(self, x):
         """
@@ -902,8 +902,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
                 else: newpoly[k] = v1 * v2
 
         newpoly.fastpoly = self.fastpoly.mult(x.fastpoly)
-        self.check_fastpoly()
-        newpoly.check_fastpoly()
+        self._check_fast_polynomial()
+        newpoly._check_fast_polynomial()
         return newpoly
 
     def scale(self, x):
@@ -923,7 +923,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         for k in tuple(self.keys()):  # I think the tuple() might speed things up (why?)
             self[k] *= x
         self.fastpoly.scale(x)
-        self.check_fastpoly()
+        self._check_fast_polynomial()
 
     def scalar_mult(self, x):
         """
@@ -940,8 +940,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         """
         newpoly = self.copy()
         newpoly.scale(x)
-        self.check_fastpoly()
-        newpoly.check_fastpoly()
+        self._check_fast_polynomial()
+        newpoly._check_fast_polynomial()
         return newpoly
 
     def __str__(self):
@@ -967,7 +967,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             if abs(self[k]) > 1e-4:
                 termstrs.append("%s%s" % (fmt(self[k]), varstr))
 
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         if len(termstrs) > 0:
             return " + ".join(termstrs)
         else: return "0"
@@ -986,8 +986,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             for k in newpoly:
                 newpoly[k] += x
             newpoly.fastpoly = self.fastpoly + x
-        self.check_fastpoly()
-        newpoly.check_fastpoly()
+        self._check_fast_polynomial()
+        newpoly._check_fast_polynomial()
         return newpoly
 
     def __iadd__(self, x):
@@ -1003,7 +1003,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             for k in self:
                 self[k] += x
             self.fastpoly += x
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         return self
 
     def __mul__(self, x):
@@ -1024,17 +1024,17 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             ret = self.mult(x)
         else:  # assume a scalar that can multiply values
             ret = self.scalar_mult(x)
-        self.check_fastpoly()
-        ret.check_fastpoly()
+        self._check_fast_polynomial()
+        ret._check_fast_polynomial()
         return ret
 
     def __rmul__(self, x):
         return self.__mul__(x)
 
     def __imul__(self, x):
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         if isinstance(x, Polynomial):
-            x.check_fastpoly()
+            x._check_fast_polynomial()
             newcoeffs = {}
             for k1, v1 in self.items():
                 for k2, v2 in x.items():
@@ -1044,10 +1044,10 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             self.clear()
             self.update(newcoeffs)
             self.fastpoly *= x.fastpoly
-            self.check_fastpoly()
+            self._check_fast_polynomial()
         else:
             self.scale(x)
-        self.check_fastpoly()
+        self._check_fast_polynomial()
         return self
 
     def __pow__(self, n):
@@ -1059,17 +1059,17 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
             cur = cur * cur  # current power *= 2
             n //= 2  # shift bits of n right
         ret.fastpoly = self.fastpoly ** n
-        ret.check_fastpoly()
-        self.check_fastpoly()
+        ret._check_fast_polynomial()
+        self._check_fast_polynomial()
         return ret
 
     def __copy__(self):
         ret = self.copy()
-        ret.check_fastpoly()
-        self.check_fastpoly()
+        ret._check_fast_polynomial()
+        self._check_fast_polynomial()
         return ret
 
-    def torep(self):
+    def to_rep(self):
         """
         Construct a representation of this polynomial.
 
@@ -1087,7 +1087,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
 
         Returns
         -------
-        PolyRep
+        PolynomialRep
         """
         # Set max_num_vars (determines based on coeffs if necessary)
         max_num_vars = self.max_num_vars
@@ -1098,7 +1098,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         else:
             assert(default_max_vars <= max_num_vars)
 
-        vindices_per_int = Polynomial.get_vindices_per_int(max_num_vars)
+        vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
         def vinds_to_int(vinds):
             """ Convert tuple index of ints to single int given max_numvars """
@@ -1119,12 +1119,12 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
         # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
         vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars + 1)))
-        self.check_fastpoly()
+        self._check_fast_polynomial()
 
-        return replib.PolyRep(int_coeffs, max_num_vars, vindices_per_int)
+        return replib.PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
 
 
-def bulk_load_compact_polys(vtape, ctape, keep_compact=False, max_num_vars=100):
+def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars=100):
     """
     Create a list of Polynomial objects from a "tape" of their compact versions.
 

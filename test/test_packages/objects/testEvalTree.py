@@ -19,7 +19,7 @@ class EvalTreeTestCase(BaseTestCase):
         with self.assertRaises(NotImplementedError):
             raw_tree.initialize(None)
         with self.assertRaises(NotImplementedError):
-            raw_tree.generate_circuit_list()
+            raw_tree.compute_circuits()
         with self.assertRaises(NotImplementedError):
             raw_tree.split(None)
 
@@ -29,7 +29,7 @@ class EvalTreeTestCase(BaseTestCase):
 
     def test_mapevaltree(self):
         # An additional specific test added from debugging mapevaltree splitting
-        mgateset = pygsti.construction.build_explicit_model(
+        mgateset = pygsti.construction.create_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         mgateset._calcClass = MapForwardSimulator
@@ -51,15 +51,15 @@ class EvalTreeTestCase(BaseTestCase):
                                    (None, ('rho0', 'Gx',), 0),
                                    (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt.cache_size(),2)
-        self.assertEqual(mevt.get_evaluation_order(),[2, 0, 1, 3])
-        self.assertEqual(mevt.num_final_strings(),4)
+        self.assertEqual(mevt.evaluation_order(),[2, 0, 1, 3])
+        self.assertEqual(mevt.num_final_circuits(),4)
 
          ## COPY
         mevt_copy = mevt.copy()
         print("Tree copy = ",mevt_copy)
         print("Cache size = ",mevt_copy.cache_size())
-        print("Eval order = ",mevt_copy.get_evaluation_order())
-        print("Num final = ",mevt_copy.num_final_strings())
+        print("Eval order = ",mevt_copy.evaluation_order())
+        print("Num final = ",mevt_copy.num_final_circuits())
         print()
 
         self.assertEqual(mevt_copy[:], [(0, ('Gy',), 1),
@@ -67,8 +67,8 @@ class EvalTreeTestCase(BaseTestCase):
                                    (None, ('rho0', 'Gx',), 0),
                                    (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt_copy.cache_size(),2)
-        self.assertEqual(mevt_copy.get_evaluation_order(),[2, 0, 1, 3])
-        self.assertEqual(mevt_copy.num_final_strings(),4)
+        self.assertEqual(mevt_copy.evaluation_order(),[2, 0, 1, 3])
+        self.assertEqual(mevt_copy.num_final_circuits(),4)
 
           ## SQUEEZE
         maxCacheSize = 1
@@ -76,8 +76,8 @@ class EvalTreeTestCase(BaseTestCase):
         mevt_squeeze.squeeze(maxCacheSize)
         print("Squeezed Tree = ",mevt_squeeze)
         print("Cache size = ",mevt_squeeze.cache_size())
-        print("Eval order = ",mevt_squeeze.get_evaluation_order())
-        print("Num final = ",mevt_squeeze.num_final_strings())
+        print("Eval order = ",mevt_squeeze.evaluation_order())
+        print("Num final = ",mevt_squeeze.num_final_circuits())
         print()
 
         self.assertEqual(mevt_squeeze[:], [(0, ('Gy',), None),
@@ -86,8 +86,8 @@ class EvalTreeTestCase(BaseTestCase):
                                            (None, ('rho0', 'Gy', 'Gy'), None)])
 
         self.assertEqual(mevt_squeeze.cache_size(),maxCacheSize)
-        self.assertEqual(mevt_squeeze.get_evaluation_order(),[2, 0, 1, 3])
-        self.assertEqual(mevt_squeeze.num_final_strings(),4)
+        self.assertEqual(mevt_squeeze.evaluation_order(),[2, 0, 1, 3])
+        self.assertEqual(mevt_squeeze.num_final_circuits(),4)
 
           #SPLIT
         mevt_split = mevt.copy()
@@ -101,21 +101,21 @@ class EvalTreeTestCase(BaseTestCase):
                                          (1, ('Gy',), None),
                                          (None, ('rho0', 'Gy', 'Gy'), None)])
         self.assertEqual(mevt_split.cache_size(),2)
-        self.assertEqual(mevt_split.get_evaluation_order(),[0, 1, 2, 3])
-        self.assertEqual(mevt_split.num_final_strings(),4)
+        self.assertEqual(mevt_split.evaluation_order(),[0, 1, 2, 3])
+        self.assertEqual(mevt_split.num_final_circuits(),4)
 
 
-        subtrees = mevt_split.get_sub_trees()
+        subtrees = mevt_split.sub_trees()
         print("%d subtrees" % len(subtrees))
         self.assertEqual(len(subtrees),4)
         for i,subtree in enumerate(subtrees):
             print("Sub tree %d = " % i,subtree,
                   " csize = ",subtree.cache_size(),
-                  " eval = ",subtree.get_evaluation_order(),
-                  " nfinal = ",subtree.num_final_strings())
+                  " eval = ",subtree.evaluation_order(),
+                  " nfinal = ",subtree.num_final_circuits())
             self.assertEqual(subtree.cache_size(),0)
-            self.assertEqual(subtree.get_evaluation_order(),[0])
-            self.assertEqual(subtree.num_final_strings(),1)
+            self.assertEqual(subtree.evaluation_order(),[0])
+            self.assertEqual(subtree.num_final_circuits(),1)
 
         probs = np.zeros( mevt.num_final_elements(), 'd')
         mgateset.bulk_fill_probs(probs, mevt)

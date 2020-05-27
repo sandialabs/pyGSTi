@@ -220,7 +220,7 @@ class OpFactory(_gm.ModelMember):
         else:
             return op
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update OpFactory so that created ops `O` are additionally transformed as `inv(s) * O * s`.
 
@@ -235,7 +235,7 @@ class OpFactory(_gm.ModelMember):
         None
         """
         raise NotImplementedError("Cannot currently transform factories!")
-        # It think we'd need to keep track of all the transform calls
+        # It think we'd need to keep track of all the transform_inplace calls
         # that have been made, storing the "current S" element, and then
         # apply obj.transorm(S) within create_op(...) after creating the
         # object to return.

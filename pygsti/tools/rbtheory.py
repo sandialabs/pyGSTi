@@ -275,7 +275,7 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
                  eigenvector_weighting=eigenvector_weighting)
     mdl_in_RB_gauge = mdl.copy()
     S = _objs.FullGaugeGroupElement(_np.linalg.inv(l))
-    mdl_in_RB_gauge.transform(S)
+    mdl_in_RB_gauge.transform_inplace(S)
     return mdl_in_RB_gauge
 
 
@@ -325,7 +325,7 @@ def L_matrix(mdl, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
-            mdl.operations[key].todense().T, _np.linalg.inv(target_model.operations[key].todense())
+            mdl.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
         ) for key in target_model.operations.keys())
 
     return L_matrix
@@ -443,7 +443,7 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
 
     for i in range(0, group_dim):
         for j in range(0, group_dim):
-            label_itoj = group.labels[group.product([group.get_inv(i), j])]
+            label_itoj = group.labels[group.product([group.inverse_index(i), j])]
             if group_to_model is not None:
                 if label_itoj in group_to_model:
                     gslabel = group_to_model[label_itoj]
@@ -550,7 +550,7 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
         if group_twirled is True:
             extended_rho = _np.dot(R, extended_rho)
     else:
-        full_model = _cnst.build_explicit_alias_model(mdl, compilation)
+        full_model = _cnst.create_explicit_alias_model(mdl, compilation)
         R_fullgroup = R_matrix(full_model, group)
         extended_E = group_dim * _np.dot(extended_E, R_fullgroup)
         if group_twirled is True:
@@ -661,8 +661,8 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     identity_vec = _mtls.vec(_np.identity(d**2, float))
 
     if compilation is not None:
-        mdl_group = _cnst.build_explicit_alias_model(mdl_go, compilation)
-        mdl_target_group = _cnst.build_explicit_alias_model(target_model, compilation)
+        mdl_group = _cnst.create_explicit_alias_model(mdl_go, compilation)
+        mdl_target_group = _cnst.create_explicit_alias_model(target_model, compilation)
         delta = gate_dependence_of_errormaps(mdl_group, mdl_target_group, norm=norm)
         emaps = errormaps(mdl_group, mdl_target_group)
         E_eff = _np.dot(mdl_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
@@ -818,13 +818,13 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
 #    error_gs.operations['GR'] = _np.mean(_np.array([ i for i in R_list]),axis=0)
 #    error_gs.operations['GQ'] = _np.mean(_np.array([ i for i in Q_list]),axis=0)
 #    error_gs.operations['GQ2'] = _np.dot(error_gs.operations['GQ'],error_gs.operations['Gavg'])
-#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.basis_build_identity_vec(error_gs.basis)#
+#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst._basis_create_identity_vec(error_gs.basis)#
 #
 #    #Assumes standard POVM labels
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),
 #                                     ('1_cm', target_model.povms['Mdefault']['1'])] )
-#    ave_error_gsl = _cnst.circuit_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
-#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, n_samples=1, sample_error="none")#
+#    ave_error_gsl = _cnst.to_circuits([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
+#    data = _cnst.simulate_data(error_gs, ave_error_gsl, n_samples=1, sample_error="none")#
 
 #    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
 #    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]

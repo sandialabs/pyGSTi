@@ -1,6 +1,6 @@
 from ..util import BaseCase
 
-from pygsti.construction.circuitconstruction import circuit_list
+from pygsti.construction.circuitconstruction import to_circuits
 from pygsti.modelpacks import smq1Q_XYZI, smq2Q_XYICPHASE
 
 
@@ -15,11 +15,11 @@ class ModelpackBase:
 
 class Modelpack1QTester(ModelpackBase, BaseCase):
     modelpack = smq1Q_XYZI
-    expected_fiducials_default = circuit_list(
+    expected_fiducials_default = to_circuits(
         [(), (('Gxpi2', 0), ), (('Gypi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)),
          (('Gypi2', 0), ('Gypi2', 0), ('Gypi2', 0))], line_labels=[0]
     )
-    expected_fiducials_new_idx = circuit_list(
+    expected_fiducials_new_idx = to_circuits(
         [(), (('Gxpi2', 10), ), (('Gypi2', 10), ), (('Gxpi2', 10), ('Gxpi2', 10)), (('Gxpi2', 10), ('Gxpi2', 10), ('Gxpi2', 10)),
          (('Gypi2', 10), ('Gypi2', 10), ('Gypi2', 10))], line_labels=[10]
     )
@@ -27,14 +27,14 @@ class Modelpack1QTester(ModelpackBase, BaseCase):
 
 class Modelpack2QTester(ModelpackBase, BaseCase):
     modelpack = smq2Q_XYICPHASE
-    expected_fiducials_default = circuit_list(
+    expected_fiducials_default = to_circuits(
         [(), (('Gxpi2', 1), ), (('Gypi2', 1), ), (('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ), (('Gxpi2', 0), ('Gxpi2', 1)),
          (('Gxpi2', 0), ('Gypi2', 1)), (('Gxpi2', 0), ('Gxpi2', 1), ('Gxpi2', 1)), (('Gypi2', 0), ), (('Gypi2', 0), ('Gxpi2', 1)),
          (('Gypi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gxpi2', 0)),
          (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 1)),
          (('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 1), ('Gxpi2', 1))], line_labels=[0, 1]
     )
-    expected_fiducials_new_idx = circuit_list(
+    expected_fiducials_new_idx = to_circuits(
         [(), (('Gxpi2', 11), ), (('Gypi2', 11), ), (('Gxpi2', 11), ('Gxpi2', 11)), (('Gxpi2', 10), ), (('Gxpi2', 10), ('Gxpi2', 11)),
          (('Gxpi2', 10), ('Gypi2', 11)), (('Gxpi2', 10), ('Gxpi2', 11), ('Gxpi2', 11)), (('Gypi2', 10), ), (('Gypi2', 10), ('Gxpi2', 11)),
          (('Gypi2', 10), ('Gypi2', 11)), (('Gypi2', 10), ('Gxpi2', 11), ('Gxpi2', 11)), (('Gxpi2', 10), ('Gxpi2', 10)),

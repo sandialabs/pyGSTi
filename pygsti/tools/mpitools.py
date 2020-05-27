@@ -788,7 +788,7 @@ def parallel_apply(f, l, comm):
     return results
 
 
-def get_comm():
+def mpi4py_comm():
     """
     Get a comm object
 

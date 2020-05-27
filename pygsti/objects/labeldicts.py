@@ -21,7 +21,7 @@ from . import modelmember as _gm
 from .label import Label as _Label
 
 
-class PrefixOrderedDict(_collections.OrderedDict):
+class _PrefixOrderedDict(_collections.OrderedDict):
     """
     Base class ordered dictionaries whose keys *must* be strings which begin with a given prefix.
 
@@ -35,23 +35,23 @@ class PrefixOrderedDict(_collections.OrderedDict):
     """
 
     def __init__(self, prefix, items=[]):
-        """ Creates a new PrefixOrderedDict whose keys must begin
+        """ Creates a new _PrefixOrderedDict whose keys must begin
             with the string `prefix`."""
         #** Note: if change __init__ signature, update __reduce__ below
         self._prefix = prefix
-        super(PrefixOrderedDict, self).__init__(items)
+        super(_PrefixOrderedDict, self).__init__(items)
 
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
         if not (self._prefix is None or key.has_prefix(self._prefix)):
             raise KeyError("All keys must be strings, "
                            "beginning with the prefix '%s'" % self._prefix)
-        super(PrefixOrderedDict, self).__setitem__(key, val)
+        super(_PrefixOrderedDict, self).__setitem__(key, val)
 
     #Handled by derived classes
     #def __reduce__(self):
     #    items = [(k,v) for k,v in self.iteritems()]
-    #    return (PrefixOrderedDict, (self._prefix, items), None)
+    #    return (_PrefixOrderedDict, (self._prefix, items), None)
 
     """
     An ordered dictionary whose keys must begin with a given prefix,
@@ -61,7 +61,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
     """
 
 
-class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
+class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
     """
     An ordered dictionary whose keys must begin with a given prefix.
 
@@ -155,7 +155,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
                       'match_parent_evotype': flags.get('match_parent_evotype', False),
                       'cast_to_type': flags.get('cast_to_type', None)
                       }
-        PrefixOrderedDict.__init__(self, prefix, items)
+        _PrefixOrderedDict.__init__(self, prefix, items)
         _gm.ModelChild.__init__(self, parent)  # set's self.parent
 
         #Set parent our elements, now that the list has been initialized
@@ -217,14 +217,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             if parent_sslbls == key_label.sslbls: return value  # no need to embed, as key_label uses *all* sslbls
 
             if self.flags['cast_to_type'] == "operation":
-                return self.parent._embed_operation(key_label.sslbls, self.cast_to_obj(value))
+                return self.parent._embed_operation(key_label.sslbls, self.cast_to_model_member(value))
             else:
                 raise NotImplementedError("Cannot auto-embed objects other than opeations yet (not %s)."
                                           % self.flags['cast_to_type'])
         else:
             return value
 
-    def cast_to_obj(self, value):
+    def cast_to_model_member(self, value):
         """
         Cast `value` to an object with the default parameterization if it's not a :class:`ModelMember`.
 
@@ -296,12 +296,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
         elif key in self:  # if a object already exists...
             #try to set its value
-            super(OrderedMemberDict, self).__getitem__(key).set_value(value)
+            super(OrderedMemberDict, self).__getitem__(key).set_dense(value)
 
         else:
             #otherwise, we've been given a non-ModelMember-object that doesn't
             # exist yet, so use default creation flags to make one:
-            obj = self.cast_to_obj(value)
+            obj = self.cast_to_model_member(value)
 
             if obj is None:
                 raise ValueError("Cannot set a value of type: ", type(value))
@@ -415,7 +415,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
             key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
-    def get_unsafe(self, key, defaultval):
+    def getitem_unsafe(self, key, defaultval):
         """
         Gets an item without checking that `key` is a properly formatted outcome tuple.
 
@@ -436,7 +436,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         return super(OutcomeLabelDict, self).get(key, defaultval)
 
-    def set_unsafe(self, key, val):
+    def setitem_unsafe(self, key, val):
         """
         Sets item without checking that the key is a properly formatted outcome tuple.
 
@@ -684,7 +684,7 @@ class StateSpaceLabels(object):
 
         self.dim = sum(self.tpb_dims)
 
-    def reduce_dims_densitymx_to_state(self):
+    def reduce_dims_densitymx_to_state_inplace(self):
         """
         Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector representation.
 

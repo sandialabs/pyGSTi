@@ -130,7 +130,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         A list of (prepfid_index,measfid_index) tuples of integers, specifying a list
         of fiducial pairs (indices are into `prep_fiducials` and `meas_fiducials`).
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing
     #like)
 
@@ -154,7 +154,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 
         for iGerm, germ in enumerate(germs):
             expGerm = _gsc.repeat_with_max_length(germ, length)  # could pass exponent and set to germ**exp here
-            lst = _gsc.create_circuit_list(
+            lst = _gsc.create_circuits(
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 expGerm=expGerm, pp=pre_povm_tuples, order=('f0', 'f1', 'pp'))
 
@@ -172,7 +172,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
                     # "original" indices into lst for k-th fiducial pair
-                    elArray = _slct.as_array(lookup[o]) + st
+                    elArray = _slct.to_array(lookup[o]) + st
                     elIndicesForPair[k].extend(list(elArray))
             st += evTree.num_final_elements()  # b/c we'll concatenate tree's elements later
 
@@ -183,7 +183,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 
     def get_number_amplified(m0, m1, len0, len1, verb):
         """ Return the number of amplified parameters """
-        printer = _objs.VerbosityPrinter.build_printer(verb)
+        printer = _objs.VerbosityPrinter.create_printer(verb)
         L_ratio = float(len1) / float(len0)
         try:
             s0 = _np.linalg.svd(m0, compute_uv=False)
@@ -369,7 +369,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
         `prep_fiducials` and `meas_fiducials`).
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if pre_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
@@ -404,7 +404,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
             #   j is similar, and derivs are wrt the "eigenvalues" of the germ
             #  (i.e. the parameters of the gsGerm model).
-            lst = _gsc.create_circuit_list(
+            lst = _gsc.create_circuits(
                 "pp[0]+f0+germ+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 germ=_objs.Circuit(("Ggerm",)), pp=pre_povm_tuples,
                 order=('f0', 'f1', 'pp'))
@@ -564,7 +564,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     -------
     numAmplified : int
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     if pre_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
@@ -583,7 +583,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         for germ in germs:
             expGerm = _gsc.repeat_with_max_length(germ, length)  # could pass exponent and set to germ**exp here
             pairList = fid_pairs[germ] if isinstance(fid_pairs, dict) else fid_pairs
-            circuits += _gsc.create_circuit_list("pp[0]+p[0]+expGerm+p[1]+pp[1]",
+            circuits += _gsc.create_circuits("pp[0]+p[0]+expGerm+p[1]+pp[1]",
                                                  p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
                                                  pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)

@@ -22,13 +22,13 @@ description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
 
 gates = ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot']
 
-fiducials16 = _strc.circuit_list(
+fiducials16 = _strc.to_circuits(
     [(), ('Gix',), ('Giy',), ('Gix', 'Gix'),
      ('Gxi',), ('Gxi', 'Gix'), ('Gxi', 'Giy'), ('Gxi', 'Gix', 'Gix'),
      ('Gyi',), ('Gyi', 'Gix'), ('Gyi', 'Giy'), ('Gyi', 'Gix', 'Gix'),
      ('Gxi', 'Gxi'), ('Gxi', 'Gxi', 'Gix'), ('Gxi', 'Gxi', 'Giy'), ('Gxi', 'Gxi', 'Gix', 'Gix')], line_labels=('*',))
 
-fiducials36 = _strc.circuit_list(
+fiducials36 = _strc.to_circuits(
     [(),
      ('Gix',),
      ('Giy',),
@@ -69,7 +69,7 @@ fiducials36 = _strc.circuit_list(
 fiducials = fiducials16
 prepStrs = fiducials16
 
-effectStrs = _strc.circuit_list(
+effectStrs = _strc.to_circuits(
     [(), ('Gix',), ('Giy',),
      ('Gix', 'Gix'), ('Gxi',),
      ('Gyi',), ('Gxi', 'Gxi'),
@@ -77,7 +77,7 @@ effectStrs = _strc.circuit_list(
      ('Gyi', 'Gix'), ('Gyi', 'Giy')], line_labels=('*',))
 
 
-germs = _strc.circuit_list(
+germs = _strc.to_circuits(
     [('Gii',),
      ('Gxi',),
      ('Gyi',),
@@ -168,7 +168,7 @@ germs = _strc.circuit_list(
      ('Gix', 'Gix', 'Gyi', 'Gxi', 'Giy', 'Gxi', 'Giy', 'Gyi')
      ])
 
-germs_lite = _strc.circuit_list(
+germs_lite = _strc.to_circuits(
     [('Gii',),
      ('Gxi',),
      ('Gyi',),
@@ -187,12 +187,12 @@ germs_lite = _strc.circuit_list(
      ], line_labels=('*',))
 
 
-legacy_effectStrs = _strc.circuit_list(
+legacy_effectStrs = _strc.to_circuits(
     [(), ('Gix',), ('Giy',), ('Gxi',), ('Gyi',),
      ('Gix', 'Gxi'), ('Gxi', 'Giy'), ('Gyi', 'Gix'),
      ('Gyi', 'Giy'), ('Gxi', 'Gxi')], line_labels=('*',))
 
-legacy_germs = _strc.circuit_list(
+legacy_germs = _strc.to_circuits(
     [('Gii',),
      ('Gxi',),
      ('Gyi',),
@@ -282,7 +282,7 @@ legacy_germs = _strc.circuit_list(
 
 
 #Construct the target model
-_target_model = _setc.build_explicit_model(
+_target_model = _setc.create_explicit_model(
     [('Q0', 'Q1')], ['Gii', 'Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
@@ -313,7 +313,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
 
 
 #Wrong CNOT (bad 1Q phase factor)
-legacy_gs_target = _setc.build_explicit_model(
+legacy_gs_target = _setc.create_explicit_model(
     [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])

@@ -23,9 +23,9 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
                       min_prob_clip_for_weighting=1e-4, fidPairList=None,
                       comm=None):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
-    lgstStrings = pygsti.construction.list_lgst_circuits(
+    lgstStrings = pygsti.construction.create_lgst_circuits(
         myspecs, list(gsTarget.operations.keys()))
-    lsgstStrings = pygsti.construction.make_lsgst_lists(
+    lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
             list(gsTarget.operations.keys()), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
 
     print(len(myspecs[0]), " rho specifiers")
@@ -39,12 +39,12 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
 
     mdl_dataGen = gsTarget.depolarize(op_noise=0.1)
-    dsFake = pygsti.construction.generate_fake_data(
+    dsFake = pygsti.construction.simulate_data(
         mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
         seed=seed)
 
     #Run LGST to get starting model
-    mdl_lgst = pygsti.do_lgst(dsFake, myspecs, gsTarget,
+    mdl_lgst = pygsti.run_lgst(dsFake, myspecs, gsTarget,
                              svd_truncate_to=gsTarget.dim, verbosity=3)
     mdl_lgst_go = pygsti.optimize_gauge(mdl_lgst,"target",
                                        target_model=mdl_dataGen)

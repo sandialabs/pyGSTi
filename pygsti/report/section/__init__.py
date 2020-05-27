@@ -89,7 +89,7 @@ from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScal
 from .gauge import (
     GaugeInvariantsGatesSection, GaugeInvariantsGermsSection,
     GaugeVariantSection, GaugeVariantsDecompSection,
-    GaugeVariantsErrGenSection, GaugeVariantsErrGenNQubitSection,
+    GaugeVariantsErrorGenSection, GaugeVariantsErrorGenNQubitSection,
     GaugeVariantsRawSection
 )
 from .idle import IdleTomographySection

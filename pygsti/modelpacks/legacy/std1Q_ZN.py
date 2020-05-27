@@ -16,25 +16,25 @@ from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget
 
 
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gz', 'Gn'],
+_target_model = _setc.create_explicit_model([('Q0',)], ['Gz', 'Gn'],
                                            ["Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
 
 
-prepStrs = _strc.circuit_list([(),
+prepStrs = _strc.to_circuits([(),
                                ('Gn',),
                                ('Gn', 'Gn'),
                                ('Gn', 'Gz', 'Gn'),
                                ('Gn', 'Gn', 'Gn',),
                                ('Gn', 'Gz', 'Gn', 'Gn', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
-effectStrs = _strc.circuit_list([(),
+effectStrs = _strc.to_circuits([(),
                                  ('Gn',),
                                  ('Gn', 'Gn'),
                                  ('Gn', 'Gz', 'Gn'),
                                  ('Gn', 'Gn', 'Gn',),
                                  ('Gn', 'Gn', 'Gn', 'Gz', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
-germs = _strc.circuit_list([('Gz',),
+germs = _strc.to_circuits([('Gz',),
                             ('Gn',),
                             ('Gz', 'Gn'),
                             ('Gz', 'Gz', 'Gn'),

@@ -24,7 +24,7 @@ from . import circuitconstruction as _gstrc
 from pprint import pprint
 
 
-def generate_fake_data(model_or_dataset, circuit_list, n_samples,
+def simulate_data(model_or_dataset, circuit_list, n_samples,
                        sample_error="multinomial", seed=None, rand_state=None,
                        alias_dict=None, collision_action="aggregate",
                        record_zero_counts=True, comm=None, mem_limit=None, times=None):
@@ -159,7 +159,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
                     if times is None:
                         ps = all_probs[trans_s]
                     else:
-                        ps = gsGen.probs(trans_s, time=tm)
+                        ps = gsGen.probabilities(trans_s, time=tm)
 
                     if sample_error in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
@@ -254,7 +254,7 @@ def generate_fake_data(model_or_dataset, circuit_list, n_samples,
     return dataset
 
 
-def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
+def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     """
     Creates a DataSet which merges certain outcomes in input DataSet.
 
@@ -293,11 +293,11 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcome_labels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-    if not set(dataset.get_outcome_labels()).issubset(merge_dict_old_outcomes):
+    if not set(dataset.outcome_labels()).issubset(merge_dict_old_outcomes):
         raise ValueError(
             "`label_merge_dict` must account for all the outcomes in original dataset."
             " It's missing directives for:\n%s" %
-            '\n'.join(set(map(str, dataset.get_outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+            '\n'.join(set(map(str, dataset.outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
         )
 
     # New code that works for time-series data.
@@ -333,11 +333,11 @@ def merge_outcomes(dataset, label_merge_dict, record_zero_counts=True):
     return merged_dataset
 
 
-def create_qubit_merge_dict(n_qubits, qubits_to_keep):
+def _create_qubit_merge_dict(n_qubits, qubits_to_keep):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
+    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
 
-    The returned dictionary instructs `merge_outcomes` to aggregate all but
+    The returned dictionary instructs `aggregate_dataset_outcomes` to aggregate all but
     the specified `qubits_to_keep` when the outcome labels are those of
     `n_qubits` qubits (i.e. strings of 0's and 1's).
 
@@ -349,19 +349,19 @@ def create_qubit_merge_dict(n_qubits, qubits_to_keep):
     qubits_to_keep : list
         A list of integers specifying which qubits should be kept, that is,
         *not* aggregated, when the returned dictionary is passed to
-        `merge_outcomes`.
+        `aggregate_dataset_outcomes`.
 
     Returns
     -------
     dict
     """
     outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=n_qubits)]
-    return create_merge_dict(qubits_to_keep, outcome_labels)
+    return _create_merge_dict(qubits_to_keep, outcome_labels)
 
 
-def create_merge_dict(indices_to_keep, outcome_labels):
+def _create_merge_dict(indices_to_keep, outcome_labels):
     """
-    Creates a dictionary appropriate for use with :function:`merge_outcomes`.
+    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
 
     Each element of `outcome_labels` should be a n-character string (or a
     1-tuple of such a string).  The returned dictionary's keys will be all the
@@ -381,7 +381,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     ----------
     indices_to_keep : list
         A list of integer indices specifying which character positions should be
-        kept (i.e. *not* aggregated together by `merge_outcomes`).
+        kept (i.e. *not* aggregated together by `aggregate_dataset_outcomes`).
 
     outcome_labels : list
         A list of the outcome labels to potentially merge.  This can be a list
@@ -479,10 +479,10 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep
 
-    #ds_merged = dataset.merge_outcomes(create_merge_dict(sindices_to_keep,
-    #                                                     dataset.get_outcome_labels()),
+    #ds_merged = dataset.aggregate_outcomes(_create_merge_dict(sindices_to_keep,
+    #                                                     dataset.outcome_labels()),
     #                                   record_zero_counts=record_zero_counts)
-    ds_merged = dataset.merge_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
+    ds_merged = dataset.aggregate_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
 
     ds_merged = ds_merged.copy_nonstatic()
     if filtercircuits:
@@ -514,7 +514,7 @@ def trim_to_constant_numtimesteps(ds):
     trimmedds = ds.copy_nonstatic()
     numtimes = []
     for circuit in ds.keys():
-        numtimes.append(ds[circuit].get_number_of_times())
+        numtimes.append(ds[circuit].number_of_times())
     minnumtimes = min(numtimes)
 
     for circuit in ds.keys():
@@ -528,7 +528,7 @@ def trim_to_constant_numtimesteps(ds):
     return trimmedds
 
 
-def subsample_timeseries_data(ds, step):
+def _subsample_timeseries_data(ds, step):
     """
     Creates a :class:`DataSet` where each circuit's data is sub-sampled.
 
@@ -552,7 +552,7 @@ def subsample_timeseries_data(ds, step):
     """
     subsampled_ds = ds.copy_nonstatic()
     for circ in ds.keys():
-        times, odicts = ds[circ].get_timeseries_for_outcomes()
+        times, odicts = ds[circ].timeseries_for_outcomes()
         newtimes = []
         newseries = []
         for i in range(len(times)):

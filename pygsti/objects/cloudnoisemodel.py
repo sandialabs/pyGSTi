@@ -196,7 +196,7 @@ class CloudNoiseModel(_ImplicitOpModel):
     """
 
     @classmethod
-    def build_from_hops_and_weights(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
+    def from_hops_and_weights(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
                                     custom_gates=None, availability=None,
                                     qubit_labels=None, geometry="line",
                                     max_idle_weight=1, max_spam_weight=1, maxhops=0,
@@ -369,11 +369,11 @@ class CloudNoiseModel(_ImplicitOpModel):
         -------
         CloudNoiseModel
         """
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         if custom_gates is None: custom_gates = {}
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-        std_unitaries = _itgs.get_standard_gatename_unitaries()
+        std_unitaries = _itgs.standard_gatename_unitaries()
 
         #Get evotype
         _, evotype = _gt.split_lindblad_paramtype(parameterization)
@@ -440,10 +440,10 @@ class CloudNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("pp", 4)
             prep_factors = []; povm_factors = []
 
-            from ..construction import basis_build_vector
+            from ..construction import _basis_create_spam_vector
 
-            v0 = basis_build_vector("0", basis1Q)
-            v1 = basis_build_vector("1", basis1Q)
+            v0 = _basis_create_spam_vector("0", basis1Q)
+            v1 = _basis_create_spam_vector("1", basis1Q)
 
             # Historical use of TP for non-term-based cases?
             #  - seems we could remove this. FUTURE REMOVE?
@@ -662,7 +662,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         for gn, gate in gatedict.items():
             if isinstance(gate, _op.LinearOperator):
                 assert(gate.num_params() == 0), "Only *static* ideal operators are allowed in `gatedict`!"
-                #REMOVE self.gatedict[gn] = gate.todense()
+                #REMOVE self.gatedict[gn] = gate.to_dense()
                 if gate._evotype != evotype and isinstance(gate, _op.StaticDenseOp):
                     # special case: we'll convert static ops to the right evotype (convenient)
                     mm_gatedict[gn] = StaticDenseOp(gate, "pp")
@@ -731,7 +731,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.factories['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.factories['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
 
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
         printer.log("Creating a %d-qubit local-noise %s model" % (n_qubits, geometry_name))
 
@@ -1083,11 +1083,11 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
     Lindblad = _get_lindblad_factory(sim_type, parameterization, errcomp_type)
     #constructs a gate or errorgen based on value of errcomp_type
 
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating global idle ***")
 
     termops = []  # gates or error generators to compose
-    qubit_labels = qubit_graph.get_node_names()
+    qubit_labels = qubit_graph.node_names()
     qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
     ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
@@ -1213,14 +1213,14 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     Lindblad = _get_lindblad_factory(sim_type, parameterization, errcomp_type)
     #constructs a gate or errorgen based on value of errcomp_type
 
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     printer.log("Creating local-noise error factor (%s)" % errcomp_type)
 
     # make a composed-gate of embedded single-basis-element Lindblad-gates or -errorgens,
     #  one for each specified error term
 
     loc_noise_termops = []  # list of gates to compose
-    qubit_labels = qubit_graph.get_node_names()
+    qubit_labels = qubit_graph.node_names()
     qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
     ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
@@ -1293,7 +1293,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
     this case).
     """
 
-    def get_prep(self, layerlbl):
+    def prep(self, layerlbl):
         """
         Retrieve or create the state preparation operation given by `layerlbl`.
 
@@ -1308,7 +1308,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         """
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layers'] are full prep ops
 
-    def get_effect(self, layerlbl):
+    def effect(self, layerlbl):
         """
         Retrieve or create the POVM effect operation given by `layerlbl`.
 
@@ -1327,7 +1327,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
             if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.e_label_to_povm(layerlbl)
+                povmName = _gt.effect_label_to_povm(layerlbl)
                 if povmName in self.povm_blks['layers']:
                     # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                     # are not present in the stored POVM's label.
@@ -1339,7 +1339,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
                     return self.effect_blks['layers'][layerlbl]
         raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
 
-    def get_operation(self, layerlbl):
+    def operation(self, layerlbl):
         """
         Retrieve or create the circuit layer operation given by `layerlbl`.
 
@@ -1355,7 +1355,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
-            return self.get_circuitlabel_op(layerlbl, dense)
+            return self._create_op_for_circuitlabel(layerlbl, dense)
 
         add_idle_noise = self.model._lizardArgs['add_idle_noise']
         errcomp_type = self.model._lizardArgs['errcomp_type']
@@ -1375,14 +1375,14 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self.get_layer_component_targetop(l) for l in components], dim=self.model.dim,
+            targetOp = Composed([self._layer_component_targetop(l) for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
-        else: targetOp = self.get_layer_component_targetop(components[0])
+        else: targetOp = self._layer_component_targetop(components[0])
         ops_to_compose = [targetOp]
 
         if errcomp_type == "gates":
             if add_idle_noise: ops_to_compose.append(self.simpleop_blks['layers']['globalIdle'])
-            component_cloudnoise_ops = self.get_layer_component_cloudnoises(components)
+            component_cloudnoise_ops = self._layer_component_cloudnoises(components)
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
@@ -1396,7 +1396,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [self.simpleop_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
-            errorGens.extend(self.get_layer_component_cloudnoises(components))
+            errorGens.extend(self._layer_component_cloudnoises(components))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
                     error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
@@ -1413,7 +1413,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         self.model._init_virtual_obj(ret)  # so ret's gpindices get set
         return ret
 
-    def get_layer_component_targetop(self, complbl):
+    def _layer_component_targetop(self, complbl):
         """
         Retrieves the target- or ideal-operation portion of one component of a layer operation.
 
@@ -1436,7 +1436,7 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         else:
             return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
 
-    def get_layer_component_cloudnoises(self, complbl_list):
+    def _layer_component_cloudnoises(self, complbl_list):
         """
         Retrieves cloud-noise portion of the components of a layer operation.
 

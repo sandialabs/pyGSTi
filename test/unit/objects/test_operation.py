@@ -25,7 +25,7 @@ class OpBase(object):
         self.assertEqual(type(gate_copy), type(self.gate))
 
     def test_get_dimension(self):
-        self.assertEqual(self.gate.get_dimension(), 4)
+        self.assertEqual(self.gate.dimension(), 4)
 
     def test_vector_conversion(self):
         v = self.gate.to_vector()
@@ -52,7 +52,7 @@ class OpBase(object):
         self.assertEqual(type(gate_pickle), type(self.gate))
 
     def test_tosparse(self):
-        sparseMx = self.gate.tosparse()
+        sparseMx = self.gate.to_sparse()
         # TODO assert correctness
 
 
@@ -66,13 +66,13 @@ class LinearOpTester(OpBase):
     def test_raise_on_invalid_method(self):
         T = FullGaugeGroupElement(np.array([[0, 1], [1, 0]], 'd'))
         with self.assertRaises(NotImplementedError):
-            self.gate.transform(T)
+            self.gate.transform_inplace(T)
         with self.assertRaises(NotImplementedError):
             self.gate.depolarize(0.05)
         with self.assertRaises(NotImplementedError):
             self.gate.rotate((0.01, 0, 0), 'gm')
         with self.assertRaises(NotImplementedError):
-            self.gate.frobeniusdist2(self.gate)
+            self.gate.frobeniusdist_squared(self.gate)
         with self.assertRaises(NotImplementedError):
             self.gate.frobeniusdist(self.gate)
         with self.assertRaises(NotImplementedError):
@@ -88,7 +88,7 @@ class DenseOpBase(OpBase):
 
     def test_set_value_raises_on_bad_size(self):
         with self.assertRaises((ValueError, AssertionError)):
-            self.gate.set_value(np.zeros((1, 1), 'd'))  # bad size
+            self.gate.set_dense(np.zeros((1, 1), 'd'))  # bad size
 
     def test_arithmetic(self):
         result = self.gate + self.gate
@@ -127,7 +127,7 @@ class DenseOpBase(OpBase):
 
     def test_frobeniusdist(self):
         self.assertAlmostEqual(self.gate.frobeniusdist(self.gate), 0.0)
-        self.assertAlmostEqual(self.gate.frobeniusdist2(self.gate), 0.0)
+        self.assertAlmostEqual(self.gate.frobeniusdist_squared(self.gate), 0.0)
         # TODO test non-trivial case
 
     def test_jtracedist(self):
@@ -153,13 +153,13 @@ class DenseOpBase(OpBase):
 class MutableDenseOpBase(DenseOpBase):
     def test_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
-        self.gate.set_value(M)
+        self.gate.set_dense(M)
         # TODO assert correctness
 
     def test_transform(self):
         gate_copy = self.gate.copy()
         T = FullGaugeGroupElement(np.identity(4, 'd'))
-        gate_copy.transform(T)
+        gate_copy.transform_inplace(T)
         self.assertArraysAlmostEqual(gate_copy, self.gate)
         # TODO test a non-trivial case
 
@@ -203,12 +203,12 @@ class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
         with self.assertRaises(ValueError):
-            self.gate.set_value(M)
+            self.gate.set_dense(M)
 
     def test_raises_on_transform(self):
         T = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises((ValueError, NotImplementedError)):
-            self.gate.transform(T)
+            self.gate.transform_inplace(T)
 
     def test_element_accessors(self):
         e1 = self.gate[1, 1]
@@ -257,7 +257,7 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc.build_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
+        return pc._create_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
 
     def test_composition(self):
         gate_linear = LinearlyParamOpTester.build_gate()
@@ -313,7 +313,7 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         # 'I' was 'D', 'full' was 'linear'
-        return pc.build_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
+        return pc._create_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
 
     def test_constructor_raises_on_real_param_constraint_violation(self):
         baseMx = np.zeros((2, 2))
@@ -363,7 +363,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc.build_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="TP")
+        return pc._create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="TP")
 
     def test_composition(self):
         gate_full = FullOpTester.build_gate()
@@ -412,7 +412,7 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc.build_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
+        return pc._create_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
 
     def test_compose(self):
         gate_full = FullOpTester.build_gate()
@@ -535,7 +535,7 @@ class LindbladDenseOpBase(LindbladOpBase, MutableDenseOpBase):
     def test_transform(self):
         gate_copy = self.gate.copy()
         T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
-        gate_copy.transform(T)
+        gate_copy.transform_inplace(T)
         self.assertArraysAlmostEqual(gate_copy, self.gate)
         # TODO test a non-trivial case
 
@@ -564,7 +564,7 @@ class LindbladDenseOpBase(LindbladOpBase, MutableDenseOpBase):
 class LindbladSparseOpBase(LindbladOpBase, OpBase):
     def assertArraysEqual(self, a, b):
         # Sparse LindbladOp does not support equality natively, so compare errorgen matrices
-        self.assertEqual((a.errorgen.tosparse() != b.errorgen.tosparse()).nnz, 0)
+        self.assertEqual((a.errorgen.to_sparse() != b.errorgen.to_sparse()).nnz, 0)
 
 
 class CPTPLindbladDenseOpTester(LindbladDenseOpBase, BaseCase):
@@ -750,10 +750,10 @@ class StochasticNoiseOpTester(BaseCase):
         self.assertArraysAlmostEqual(sop.to_vector(), np.array([0.1, 0., 0.]))
 
         expected_mx = np.identity(4); expected_mx[2, 2] = expected_mx[3, 3] = 0.98  # = 2*(0.1^2)
-        self.assertArraysAlmostEqual(sop.todense(), expected_mx)
+        self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
-        rho = pc.build_vector([4], ['Q0'], "0", 'pp')
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.todense(), rho))),
+        rho = pc._create_spam_vector([4], ['Q0'], "0", 'pp')
+        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
                                0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
 
@@ -765,8 +765,8 @@ class DepolarizeOpTester(BaseCase):
         self.assertArraysAlmostEqual(dop.to_vector(), np.array([0.1]))
 
         expected_mx = np.identity(4); expected_mx[1, 1] = expected_mx[2, 2] = expected_mx[3, 3] = 0.96  # = 4*(0.1^2)
-        self.assertArraysAlmostEqual(dop.todense(), expected_mx)
+        self.assertArraysAlmostEqual(dop.to_dense(), expected_mx)
 
-        rho = pc.build_vector([4], ['Q0'], "0", 'pp')
+        rho = pc._create_spam_vector([4], ['Q0'], "0", 'pp')
         # b/c both X and Y dephasing rates => 0.01 reduction
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.todense(), rho))), 0.98)
+        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)

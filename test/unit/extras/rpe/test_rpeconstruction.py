@@ -28,18 +28,18 @@ class RPEConstructionFuncBase(object):
     # I'm assuming these angles are in radians, based on documentation.
     def test_make_parameterized_rpe_gateset(self):
         # These numbers have no significance
-        A = rc.make_parameterized_rpe_gate_set(
+        A = rc.create_parameterized_rpe_model(
             1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
-        B = rc.make_parameterized_rpe_gate_set(
+        B = rc.create_parameterized_rpe_model(
             1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
         self.assertEqual(A.frobeniusdist(B), 0.0)
 
         # Again, no significance in these numbers
-        C = rc.make_parameterized_rpe_gate_set(
+        C = rc.create_parameterized_rpe_model(
             1.56079632679, 1.56079632679, .78539816339, 0.001, 0.001,
             True, rpeconfig_inst=self.config
         )
@@ -47,34 +47,34 @@ class RPEConstructionFuncBase(object):
 
     # At least we can be sure about what this function is doing
     def test_make_rpe_alpha_str_lists_gx_gz(self):
-        lists = rc.make_rpe_angle_str_lists(self.lengths, "alpha", self.config)
+        lists = rc.create_rpe_angle_circuit_lists(self.lengths, "alpha", self.config)
         expected = self.build_lists('GiGxGxGz%sGzGzGxGx', 'GxGxGzGz%sGzGzGzGxGx', 'Gz^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
     def test_rpe_epsilon_str_lists_gx_gz(self):
-        lists = rc.make_rpe_angle_str_lists(self.lengths, "epsilon", self.config)
+        lists = rc.create_rpe_angle_circuit_lists(self.lengths, "epsilon", self.config)
         expected = self.build_lists('%sGxGxGxGx', 'GxGxGzGz%sGxGxGxGx', 'Gx^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
     def test_make_rpe_theta_str_lists_gx_gz(self):
-        lists = rc.make_rpe_angle_str_lists(self.lengths, "theta", self.config)
+        lists = rc.create_rpe_angle_circuit_lists(self.lengths, "theta", self.config)
         expected = self.build_lists('%sGxGxGxGx', '(GxGxGzGz)%sGxGxGxGx', '(GzGxGxGxGxGzGzGxGxGxGxGz)^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
     def test_make_rpe_string_list_dict(self):
-        stringListD = rc.make_rpe_angle_string_list_dict(2, self.config)
+        stringListD = rc.create_rpe_angle_circuits_dict(2, self.config)
         # TODO assert correctness
 
     def test_make_rpe_data_set(self):
-        A = rc.make_parameterized_rpe_gate_set(
+        A = rc.create_parameterized_rpe_model(
             1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
-        d = rc.make_rpe_angle_string_list_dict(3, self.config)
-        rpreDS = rc.make_rpe_data_set(A, d, 1000)
+        d = rc.create_rpe_angle_circuits_dict(3, self.config)
+        rpreDS = rc.create_rpe_dataset(A, d, 1000)
         # TODO assert correctness
 
 

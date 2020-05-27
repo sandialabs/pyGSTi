@@ -74,13 +74,13 @@ class InstrumentTestCase(BaseTestCase):
     def testChangeDimension(self):
         mdl = self.target_model.copy()
         new_gs = mdl.increase_dimension(6)
-        new_gs = mdl.decrease_dimension(3)
+        new_gs = mdl._decrease_dimension(3)
 
         #TP
         mdl = self.target_model.copy()
         mdl.set_all_parameterizations("TP")
         new_gs = mdl.increase_dimension(6)
-        new_gs = mdl.decrease_dimension(3)
+        new_gs = mdl._decrease_dimension(3)
 
 
     def testIntermediateMeas(self):
@@ -107,16 +107,16 @@ class InstrumentTestCase(BaseTestCase):
         fiducials = std.fiducials
         max_lengths = [1] #,2,4,8]
         glbls = list(mdl.operations.keys()) + list(mdl.instruments.keys())
-        lsgst_list = pygsti.construction.make_lsgst_experiment_list(
+        lsgst_list = pygsti.construction.create_lsgst_circuits(
             glbls,fiducials,fiducials,germs,max_lengths)
-        lsgst_list2 = pygsti.construction.make_lsgst_experiment_list(
+        lsgst_list2 = pygsti.construction.create_lsgst_circuits(
             mdl,fiducials,fiducials,germs,max_lengths) #use mdl as source
         self.assertEqual(lsgst_list, lsgst_list2)
 
 
 
         mdl_datagen = mdl
-        ds = pygsti.construction.generate_fake_data(mdl,lsgst_list,1000,'none') #'multinomial')
+        ds = pygsti.construction.simulate_data(mdl,lsgst_list,1000,'none') #'multinomial')
         pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt",ds)
         ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
@@ -125,7 +125,7 @@ class InstrumentTestCase(BaseTestCase):
         #print(ds)
 
         #LGST
-        mdl_lgst = pygsti.do_lgst(ds, fiducials,fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
+        mdl_lgst = pygsti.run_lgst(ds, fiducials,fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
         self.assertTrue("Iz" in mdl_lgst.instruments)
         mdl_opt = pygsti.gaugeopt_to_target(mdl_lgst,mdl_datagen) #, method="BFGS")
         print(mdl_datagen.strdiff(mdl_opt))
@@ -136,13 +136,13 @@ class InstrumentTestCase(BaseTestCase):
         #print(mdl_datagen)
 
         #DEBUG compiling w/dataset
-        #dbList = pygsti.construction.make_lsgst_experiment_list(self.target_model,fiducials,fiducials,germs,max_lengths)
+        #dbList = pygsti.construction.create_lsgst_circuits(self.target_model,fiducials,fiducials,germs,max_lengths)
         ##self.target_model.simplify_circuits(dbList, ds)
         #self.target_model.simplify_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
         #assert(False),"STOP"
 
         #LSGST
-        results = pygsti.do_long_sequence_gst(ds,self.target_model,fiducials,fiducials,germs,max_lengths)
+        results = pygsti.run_long_sequence_gst(ds,self.target_model,fiducials,fiducials,germs,max_lengths)
         #print(results.estimates[results.name].models['go0'])
         mdl_est = results.estimates[results.name].models['go0']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
@@ -155,7 +155,7 @@ class InstrumentTestCase(BaseTestCase):
         mdl_targetTP.set_all_parameterizations("TP")
         self.assertEqual(mdl_targetTP.num_params(),71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
-        resultsTP = pygsti.do_long_sequence_gst(ds,mdl_targetTP,fiducials,fiducials,germs,max_lengths)
+        resultsTP = pygsti.run_long_sequence_gst(ds,mdl_targetTP,fiducials,fiducials,germs,max_lengths)
         mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
@@ -164,14 +164,14 @@ class InstrumentTestCase(BaseTestCase):
 
     def testBasicGatesetOps(self):
         # This test was made from a debug script used to get the code working
-        model = pygsti.construction.build_explicit_model(
+        model = pygsti.construction.create_explicit_model(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis.cast("pp",4))
-        v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis.cast("pp",4))
+        v0 = pygsti.construction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp",4))
+        v1 = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4))
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)
@@ -264,10 +264,10 @@ class InstrumentTestCase(BaseTestCase):
 
         evt, lookup, outcome_lookup = model.bulk_evaltree( [gatestring1,gatestring2] )
 
-        p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].todense()),
+        p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].to_dense()),
                      np.dot( model.operations['Gy'],
                              np.dot(model.operations['Gx'],
-                                    model.preps['rho0'].todense())))
+                                    model.preps['rho0'].to_dense())))
         probs = model.probs(gatestring1)
         print(probs)
         p20,p21 = probs[('0',)],probs[('1',)]
@@ -306,10 +306,10 @@ class InstrumentTestCase(BaseTestCase):
 
         #Now compute probabilities for these:
         model = self.target_model.copy()
-        probs_normal = model.probs(mdl_normal)
-        probs_wprep = model.probs(mdl_wprep)
-        probs_wpovm = model.probs(mdl_wpovm)
-        probs_wboth = model.probs(mdl_wboth)
+        probs_normal = model.probabilities(mdl_normal)
+        probs_wprep = model.probabilities(mdl_wprep)
+        probs_wpovm = model.probabilities(mdl_wpovm)
+        probs_wboth = model.probabilities(mdl_wboth)
 
         print(probs_normal)
         print(probs_wprep)
@@ -333,7 +333,7 @@ class InstrumentTestCase(BaseTestCase):
             mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param
             pygsti.io.write_model(mdl, filename)
-            gs2 = pygsti.io.read_model(filename)
+            gs2 = pygsti.io.parse_model(filename)
 
             self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
             for lbl in mdl.operations:

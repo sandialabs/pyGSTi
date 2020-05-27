@@ -26,7 +26,7 @@ class TestRPEMethods(BaseTestCase):
         target_model.set_all_parameterizations('TP')
         maxLengths_1024 = [1,2,4,8,16,32,64,128,256,512,1024]
         
-        stringListsRPE = RPEConstr.make_rpe_angle_string_list_dict(10,rpeconfig_inst)
+        stringListsRPE = RPEConstr.create_rpe_angle_circuits_dict(10,rpeconfig_inst)
         
         angleList = ['alpha','epsilon','theta']
         
@@ -43,7 +43,7 @@ class TestRPEMethods(BaseTestCase):
         
         #Load pre-simulated dataset
 #        N=100
-#        DS = gst.construction.generate_fake_data(mdl_real,stringListsRPE['totalStrList'],N,sample_error='binomial',seed=1)
+#        DS = gst.construction.simulate_data(mdl_real,stringListsRPE['totalStrList'],N,sample_error='binomial',seed=1)
         DS = gst.io.load_dataset(compare_files + '/rpe_test_ds.txt')
         
         #Analyze dataset

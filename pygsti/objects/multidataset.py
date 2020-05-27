@@ -21,7 +21,7 @@ from . import circuit as _cir
 from . import labeldicts as _ld
 
 
-class MultiDataSetKVIterator(object):
+class _MultiDataSetKVIterator(object):
     """
     Iterator class for dataset_name,DataSet pairs of a MultiDataSet
 
@@ -58,7 +58,7 @@ class MultiDataSetKVIterator(object):
     next = __next__
 
 
-class MultiDataSetValueIterator(object):
+class _MultiDataSetValueIterator(object):
     """
     Iterator class for DataSets of a MultiDataSet
 
@@ -314,7 +314,7 @@ class MultiDataSet(object):
         self.repType = _np.float32
         # thought: _np.uint16 but doesn't play well with rescaling
 
-    def get_outcome_labels(self):
+    def outcome_labels(self):
         """
         Get a list of *all* the outcome labels contained in this MultiDataSet.
 
@@ -365,15 +365,15 @@ class MultiDataSet(object):
         """
         Iterator over (dataset name, DataSet) pairs.
         """
-        return MultiDataSetKVIterator(self)
+        return _MultiDataSetKVIterator(self)
 
     def values(self):
         """
         Iterator over DataSets corresponding to each dataset name.
         """
-        return MultiDataSetValueIterator(self)
+        return _MultiDataSetValueIterator(self)
 
-    def get_datasets_aggregate(self, *dataset_names):
+    def datasets_aggregate(self, *dataset_names):
         """
         Generate a new DataSet by combining the outcome counts of multiple member Datasets.
 

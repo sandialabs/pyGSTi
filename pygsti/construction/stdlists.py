@@ -14,7 +14,7 @@ import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
 from ..tools import listtools as _lt
-from ..tools.legacytools import deprecated_fn as _deprecated_fn
+from ..tools.legacytools import deprecate as _deprecated_fn
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import Model as _Model
 from ..objects import Circuit as _Circuit
@@ -23,7 +23,7 @@ from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
 
-def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                          fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
                          keep_fraction=1, keep_seed=None, include_lgst=True,
                          germ_length_limits=None):
@@ -148,10 +148,10 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
                        + "")
 
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
     else: opLabels = op_label_src
 
-    lgst_list = _gsc.list_lgst_circuits(prep_strs, effect_strs, opLabels)
+    lgst_list = _gsc.create_lgst_circuits(prep_strs, effect_strs, opLabels)
 
     if keep_fraction < 1.0:
         rndm = _rndm.RandomState(keep_seed)  # ok if seed is None
@@ -174,7 +174,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
         fiducialPairs = {germ: lst for germ in germ_list}
 
     #running list of all strings so far (LGST strings or empty)
-    lsgst_list = lgst_list[:] if include_lgst else _gsc.circuit_list([()])
+    lsgst_list = lgst_list[:] if include_lgst else _gsc.to_circuits([()])
     lsgst_listOfLists = []  # list of lists to return
 
     Rfn = _get_trunc_function(trunc_scheme)
@@ -216,7 +216,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
                         [fiducialPairs[germ][k] for k in
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
-                lst += _gsc.create_circuit_list("f[0]+R(germ,N)+f[1]",
+                lst += _gsc.create_circuits("f[0]+R(germ,N)+f[1]",
                                                 f=fiducialPairsThisIter,
                                                 germ=germ, N=maxLen,
                                                 R=Rfn, order=('f',))
@@ -230,7 +230,7 @@ def make_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_le
     return lsgst_listOfLists
 
 
-@_deprecated_fn('make_lsgst_lists(...)')
+@_deprecated_fn('create_lsgst_circuit_lists(...)')
 def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                        fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
                        keep_fraction=1, keep_seed=None, include_lgst=True,
@@ -240,7 +240,7 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
     """
     Deprecated function.
     """
-    bulk_circuit_lists = make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+    bulk_circuit_lists = create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                                           fid_pairs, trunc_scheme, nest,
                                           keep_fraction, keep_seed, include_lgst,
                                           op_label_aliases, sequence_rules,
@@ -248,7 +248,7 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
     return [bcl.circuit_structure for bcl in bulk_circuit_lists]
 
 
-def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                      fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
                      keep_fraction=1, keep_seed=None, include_lgst=True,
                      op_label_aliases=None, sequence_rules=None,
@@ -391,7 +391,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     if germ_length_limits is None: germ_length_limits = {}
 
     if nest and include_lgst and len(max_length_list) > 0 and max_length_list[0] == 0:
@@ -404,10 +404,10 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
                        + "")
 
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
     else: opLabels = op_label_src
 
-    lgst_list = _gsc.list_lgst_circuits(prep_strs, effect_strs, opLabels)
+    lgst_list = _gsc.create_lgst_circuits(prep_strs, effect_strs, opLabels)
 
     allPossiblePairs = list(_itertools.product(range(len(prep_strs)),
                                                range(len(effect_strs))))
@@ -549,7 +549,7 @@ def make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length
     return bulk_circuit_lists
 
 
-def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
+def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
                                max_length_list, fid_pairs=None,
                                trunc_scheme="whole germ powers", keep_fraction=1,
                                keep_seed=None, include_lgst=True):
@@ -562,7 +562,7 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
     the experiments required to run LSGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
     data sets.  The breakdown of which circuits are used for which
-    iteration(s) of LSGST is given by make_lsgst_lists(...).
+    iteration(s) of LSGST is given by create_lsgst_circuit_lists(...).
 
     Parameters
     ----------
@@ -627,13 +627,13 @@ def make_lsgst_experiment_list(op_label_src, prep_strs, effect_strs, germ_list,
     list of Circuits
     """
     nest = True  # => the final list contains all of the strings
-    return make_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list,
+    return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list,
                             max_length_list, fid_pairs, trunc_scheme, nest,
                             keep_fraction, keep_seed, include_lgst)[-1]
 
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
-def make_elgst_lists(op_label_src, germ_list, max_length_list,
+def create_elgst_lists(op_label_src, germ_list, max_length_list,
                      trunc_scheme="whole germ powers", nest=True,
                      include_lgst=True):
     """
@@ -710,13 +710,13 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
         label strings.
     """
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.get_primitive_op_labels() + op_label_src.get_primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
     else: opLabels = op_label_src
 
-    singleOps = _gsc.circuit_list([(g,) for g in opLabels])
+    singleOps = _gsc.to_circuits([(g,) for g in opLabels])
 
     #running list of all strings so far (length-1 strs or empty)
-    elgst_list = singleOps[:] if include_lgst else _gsc.circuit_list([()])
+    elgst_list = singleOps[:] if include_lgst else _gsc.to_circuits([()])
     elgst_listOfLists = []  # list of lists to return
 
     Rfn = _get_trunc_function(trunc_scheme)
@@ -727,7 +727,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
             lst = singleOps[:]
         else:
             #Typical case of germs repeated to maxLen using Rfn
-            lst = _gsc.create_circuit_list("R(germ,N)", germ=germ_list, N=maxLen, R=Rfn)
+            lst = _gsc.create_circuits("R(germ,N)", germ=germ_list, N=maxLen, R=Rfn)
 
         if nest:
             elgst_list += lst  # add new strings to running list
@@ -740,7 +740,7 @@ def make_elgst_lists(op_label_src, germ_list, max_length_list,
 
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
-def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
+def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
                                trunc_scheme="whole germ powers",
                                include_lgst=True):
     """
@@ -752,7 +752,7 @@ def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     the experiments required to run eLGST using the supplied parameters,
     and so commonly used when construting data set templates or simulated
     data sets.  The breakdown of which circuits are used for which
-    iteration(s) of eLGST is given by make_elgst_lists(...).
+    iteration(s) of eLGST is given by create_elgst_lists(...).
 
     Parameters
     ----------
@@ -790,7 +790,7 @@ def make_elgst_experiment_list(op_label_src, germ_list, max_length_list,
 
     #When nest == True the final list contains all of the strings
     nest = True
-    return make_elgst_lists(op_label_src, germ_list,
+    return create_elgst_lists(op_label_src, germ_list,
                             max_length_list, trunc_scheme, nest,
                             include_lgst)[-1]
 

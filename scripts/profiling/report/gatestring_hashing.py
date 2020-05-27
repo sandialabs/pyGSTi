@@ -17,7 +17,7 @@ def main():
                                  ('Gx', 'Gx', 'Gi', 'Gy',), ('Gx', 'Gy', 'Gy', 'Gi',),
                                  ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy',)] )
     maxLengths = [1,2,4,8,16,32,64,128,256]    
-    lsgst_lists = pc.make_lsgst_experiment_list(gates, fiducials, fiducials, germs, maxLengths) 
+    lsgst_lists = pc.create_lsgst_circuits(gates, fiducials, fiducials, germs, maxLengths) 
     lsgst_tuple = tuple(lsgst_lists)
     iterations = 1000
     timeDict = dict()

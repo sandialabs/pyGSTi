@@ -40,7 +40,7 @@ class Results(object):
 
     Typically, each `Estimate` is related to the input & output of a single
     GST calculation performed by a high-level driver routine like
-    :func:`do_long_sequence_gst`.
+    :func:`run_long_sequence_gst`.
     """
 
     def __init__(self):
@@ -248,7 +248,7 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.gst_init(self, target_model, seed_model,
+        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.create_gst_estimate(self, target_model, seed_model,
                                                                                    models_by_iter, parameters)
 
         #Set gate sequence related parameters inherited from Results
@@ -294,7 +294,7 @@ class Results(object):
             for ky in defaults:
                 if ky in est.parameters: defaults[ky] = est.parameters[ky]
 
-        #Construct a parameters dict, similar to do_model_test(...)
+        #Construct a parameters dict, similar to run_model_test(...)
         parameters = _collections.OrderedDict()
         parameters['objective'] = defaults['objective']
         if parameters['objective'] == 'logl':
@@ -308,7 +308,7 @@ class Results(object):
         parameters['opLabelAliases'] = defaults['opLabelAliases']
         parameters['weights'] = None  # Hardcoded
 
-        #Set default gate group to trival group to mimic do_model_test (an to
+        #Set default gate group to trival group to mimic run_model_test (an to
         # be consistent with this function creating "gauge-optimized" models
         # by just copying the initial one).
         themodel = themodel.copy()

@@ -127,7 +127,7 @@ class Formatter(object):
 
         if isinstance(item, _ReportableQty):
             # If values are replaced with dashes or empty, leave them be
-            s = str(item.get_value())
+            s = str(item.value())
             if s == '--' or s == '':
                 return s
             return item.render_with(self, specs, self.ebstring, self.nmebstring)

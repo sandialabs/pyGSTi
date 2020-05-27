@@ -478,7 +478,7 @@ class Benchmarker(object):
 
         if len(self.multids['success-fail']) > 1:
             self.dscomparator = _dcomp.DataComparator(self.multids['success-fail'], allow_bad_circuits=True)
-            self.dscomparator.implement(verbosity=verbosity)
+            self.dscomparator.run(verbosity=verbosity)
 
     def generate_success_or_fail_dataset(self, overwrite=False):
         """
@@ -714,7 +714,7 @@ class Benchmarker(object):
                                     else:
                                         trimmedcirc = circ
 
-                                    predsp = predmodel.probs(trimmedcirc)[('success',)]
+                                    predsp = predmodel.probabilities(trimmedcirc)[('success',)]
                                     predsummarydata[pkey][specind][qubits]['success_probabilities'][depth].append(
                                         predsp)
 

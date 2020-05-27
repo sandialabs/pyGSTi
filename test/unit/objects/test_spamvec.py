@@ -17,9 +17,9 @@ class SpamvecUtilTester(BaseCase):
         ]
         for bad_vec in bad_vecs:
             with self.assertRaises(ValueError):
-                sv.SPAMVec.convert_to_vector(bad_vec)
+                sv.SPAMVec._to_vector(bad_vec)
         with self.assertRaises(ValueError):
-            sv.SPAMVec.convert_to_vector(0.0)  # something with no len()
+            sv.SPAMVec._to_vector(0.0)  # something with no len()
 
     def test_base_spamvec(self):
         raw = sv.SPAMVec(4, "densitymx", "prep")
@@ -31,9 +31,9 @@ class SpamvecUtilTester(BaseCase):
                       [0, 0, 0, 1]], 'd'))
 
         with self.assertRaises(NotImplementedError):
-            raw.todense()
+            raw.to_dense()
         with self.assertRaises(NotImplementedError):
-            raw.transform(T, "prep")
+            raw.transform_inplace(T, "prep")
         with self.assertRaises(NotImplementedError):
             raw.depolarize(0.01)
 
@@ -52,11 +52,11 @@ class SpamvecBase(object):
         self.assertEqual(type(vec_copy), type(self.vec))
 
     def test_get_dimension(self):
-        self.assertEqual(self.vec.get_dimension(), 4)
+        self.assertEqual(self.vec.dimension(), 4)
 
     def test_set_value_raises_on_bad_size(self):
         with self.assertRaises(ValueError):
-            self.vec.set_value(np.zeros((1, 1), 'd'))  # bad size
+            self.vec.set_dense(np.zeros((1, 1), 'd'))  # bad size
 
     def test_vector_conversion(self):
         v = self.vec.to_vector()
@@ -119,31 +119,31 @@ class SpamvecBase(object):
         self.assertFalse(self.vec.has_nonzero_hessian())
 
     def test_frobeniusdist2(self):
-        self.vec.frobeniusdist2(self.vec, "prep")
-        self.vec.frobeniusdist2(self.vec, "effect")
+        self.vec.frobeniusdist_squared(self.vec, "prep")
+        self.vec.frobeniusdist_squared(self.vec, "effect")
         # TODO assert correctness
 
     def test_frobeniusdist2_raises_on_bad_type(self):
         with self.assertRaises(ValueError):
-            self.vec.frobeniusdist2(self.vec, "foobar")
+            self.vec.frobeniusdist_squared(self.vec, "foobar")
 
 
 class MutableSpamvecBase(SpamvecBase):
     def test_set_value(self):
         v = np.asarray(self.vec)
-        self.vec.set_value(v)
+        self.vec.set_dense(v)
         # TODO assert correctness
 
     def test_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
-        self.vec.transform(S, 'prep')
-        self.vec.transform(S, 'effect')
+        self.vec.transform_inplace(S, 'prep')
+        self.vec.transform_inplace(S, 'effect')
         # TODO assert correctness
 
     def test_transform_raises_on_bad_type(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises(ValueError):
-            self.vec.transform(S, 'foobar')
+            self.vec.transform_inplace(S, 'foobar')
 
     def test_depolarize(self):
         self.vec.depolarize(0.9)
@@ -155,12 +155,12 @@ class ImmutableSpamvecBase(SpamvecBase):
     def test_raises_on_set_value(self):
         v = np.asarray(self.vec)
         with self.assertRaises(ValueError):
-            self.vec.set_value(v)
+            self.vec.set_dense(v)
 
     def test_raises_on_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises(ValueError):
-            self.vec.transform(S, 'prep')
+            self.vec.transform_inplace(S, 'prep')
 
     def test_raises_on_depolarize(self):
         with self.assertRaises(ValueError):
@@ -201,7 +201,7 @@ class TPSpamvecTester(MutableSpamvecBase, BaseCase):
             sv.TPSPAMVec([1.0, 0, 0, 0])
             # incorrect initial element for TP!
         with self.assertRaises(ValueError):
-            self.vec.set_value([1.0, 0, 0, 0])
+            self.vec.set_dense([1.0, 0, 0, 0])
             # incorrect initial element for TP!
 
     def test_convert(self):
@@ -277,7 +277,7 @@ class TensorProdSpamvecBase(ImmutableSpamvecBase):
 
     def test_copy(self):
         vec_copy = self.vec.copy()
-        self.assertArraysAlmostEqual(vec_copy.todense(), self.vec.todense())
+        self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
         self.assertEqual(type(vec_copy), type(self.vec))
 
     def test_element_accessors(self):
@@ -287,7 +287,7 @@ class TensorProdSpamvecBase(ImmutableSpamvecBase):
     def test_pickle(self):
         pklstr = pickle.dumps(self.vec)
         vec_pickle = pickle.loads(pklstr)
-        self.assertArraysAlmostEqual(vec_pickle.todense(), self.vec.todense())
+        self.assertArraysAlmostEqual(vec_pickle.to_dense(), self.vec.to_dense())
         self.assertEqual(type(vec_pickle), type(self.vec))
 
 

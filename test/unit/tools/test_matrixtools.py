@@ -153,34 +153,34 @@ class MatrixToolsTester(BaseCase):
         smx = sps.csr_matrix(mx)
         smx_lil = sps.lil_matrix(mx)  # currently unsupported
 
-        r = mt.safereal(mx, inplace=False)
+        r = mt.safe_real(mx, inplace=False)
         self.assertArraysAlmostEqual(r, np.real(mx))
-        i = mt.safeimag(mx, inplace=False)
+        i = mt.safe_imag(mx, inplace=False)
         self.assertArraysAlmostEqual(i, np.imag(mx))
 
-        r = mt.safereal(smx, inplace=False)
+        r = mt.safe_real(smx, inplace=False)
         self.assertArraysAlmostEqual(r.toarray(), np.real(mx))
-        i = mt.safeimag(smx, inplace=False)
+        i = mt.safe_imag(smx, inplace=False)
         self.assertArraysAlmostEqual(i.toarray(), np.imag(mx))
 
         with self.assertRaises(NotImplementedError):
-            mt.safereal(smx_lil, inplace=False)
+            mt.safe_real(smx_lil, inplace=False)
         with self.assertRaises(NotImplementedError):
-            mt.safeimag(smx_lil, inplace=False)
+            mt.safe_imag(smx_lil, inplace=False)
 
         with self.assertRaises(AssertionError):
-            mt.safereal(mx, check=True)
+            mt.safe_real(mx, check=True)
         with self.assertRaises(AssertionError):
-            mt.safeimag(mx, check=True)
+            mt.safe_imag(mx, check=True)
 
-        M = mx.copy(); M = mt.safereal(M, inplace=True)
+        M = mx.copy(); M = mt.safe_real(M, inplace=True)
         self.assertArraysAlmostEqual(M, np.real(mx))
-        M = mx.copy(); M = mt.safeimag(M, inplace=True)
+        M = mx.copy(); M = mt.safe_imag(M, inplace=True)
         self.assertArraysAlmostEqual(M, np.imag(mx))
 
-        M = smx.copy(); M = mt.safereal(M, inplace=True)
+        M = smx.copy(); M = mt.safe_real(M, inplace=True)
         self.assertArraysAlmostEqual(M.toarray(), np.real(mx))
-        M = smx.copy(); M = mt.safeimag(M, inplace=True)
+        M = smx.copy(); M = mt.safe_imag(M, inplace=True)
         self.assertArraysAlmostEqual(M.toarray(), np.imag(mx))
 
     def test_fast_expm(self):

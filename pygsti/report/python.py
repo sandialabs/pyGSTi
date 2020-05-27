@@ -73,7 +73,7 @@ def table(custom_headings, col_headings_formatted, rows, spec):
         assert(len(formatted_rowData) == nCols)
         for i, formatted_cellData in enumerate(formatted_rowData):
             if isinstance(formatted_cellData, _ReportableQty) and \
-               formatted_cellData.has_eb():
+               formatted_cellData.has_errorbar():
                 cols_containing_ebs.add(i)
 
     n = 0  # number of cols inserted
@@ -97,7 +97,7 @@ def table(custom_headings, col_headings_formatted, rows, spec):
         for i, formatted_cellData in enumerate(formatted_rowData[1:], start=1):
             if i in cols_containing_ebs:
                 if isinstance(formatted_cellData, _ReportableQty):
-                    val, eb = formatted_cellData.get_value_and_err_bar()
+                    val, eb = formatted_cellData.value_and_errorbar()
                 else:
                     val, eb = formatted_cellData, None
                 dict_of_columns[colLabels[i + n]].append(val)

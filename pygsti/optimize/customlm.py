@@ -23,7 +23,7 @@ from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 _signal.signal(_signal.SIGINT, _signal.default_int_handler)
 
 #constants
-MACH_PRECISION = 1e-12
+_MACH_PRECISION = 1e-12
 #MU_TOL1 = 1e10 # ??
 #MU_TOL2 = 1e3  # ??
 
@@ -77,7 +77,7 @@ class Optimizer(object):
     """
 
     @classmethod
-    def create_from(cls, obj):
+    def cast(cls, obj):
         """
         Cast `obj` to a :class:`Optimizer`.
 
@@ -248,7 +248,7 @@ class CustomLMOptimizer(Optimizer):
 
         unpenalized_f = f[0:-objective.ex] if (objective.ex > 0) else f
         unpenalized_normf = sum(unpenalized_f**2)  # objective function without penalty factors
-        chi2k_qty = objective.get_chi2k_distributed_qty(norm_f)
+        chi2k_qty = objective.chi2k_distributed_qty(norm_f)
 
         return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
@@ -392,7 +392,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         A message indicating why the solution converged (or didn't).
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
     msg = ""
     converged = False
@@ -456,11 +456,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
 
-            if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
+            if profiler: profiler.memory_check("custom_leastsq: begin outer iter *before de-alloc*")
             Jac = None; JTJ = None; JTf = None
 
             #printer.log("PT1: %.3fs" % (_time.time()-t0)) # REMOVE
-            if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
+            if profiler: profiler.memory_check("custom_leastsq: begin outer iter")
             if k >= num_fd_iters:
                 Jac = jac_fn(x)
             else:
@@ -480,7 +480,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
             # DB: from ..tools import matrixtools as _mt
             # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
-            if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
+            if profiler: profiler.memory_check("custom_leastsq: after jacobian:"
                                             + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                                      Jac.nbytes / (1024.0**3)))
 
@@ -567,7 +567,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #determing increment using adaptive damping
             while True:  # inner loop
 
-                if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
+                if profiler: profiler.memory_check("custom_leastsq: begin inner iter")
                 #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 if damping_mode == 'identity':
@@ -624,7 +624,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
 
                 try:
-                    if profiler: profiler.mem_check("custom_leastsq: before linsolve")
+                    if profiler: profiler.memory_check("custom_leastsq: before linsolve")
                     tm = _time.time()
                     success = True
 
@@ -674,7 +674,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         print("WARNING - value error during computation of acceleration term!")
 
                 reject_msg = ""
-                if profiler: profiler.mem_check("custom_leastsq: after linsolve")
+                if profiler: profiler.memory_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
                     #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
 
@@ -715,7 +715,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             mu, nu, norm_f, f, _ = best_x_state
                             break
 
-                    if norm_dx > (norm_x + rel_xtol) / (MACH_PRECISION**2):
+                    if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
 
                     if oob_check_interval > 0:
@@ -761,7 +761,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                     if new_x_is_allowed:
 
-                        if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
+                        if profiler: profiler.memory_check("custom_leastsq: after obj_fn")
                         if damping_mode == 'adaptive':
                             norm_new_f_lst = [_np.dot(new_f, new_f) for new_f in new_f_lst]
                             if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
@@ -834,7 +834,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
-                        if profiler: profiler.mem_check("custom_leastsq: before success")
+                        if profiler: profiler.memory_check("custom_leastsq: before success")
 
                         if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
                             # reduction in error: increment accepted!
@@ -1136,7 +1136,7 @@ def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
 #                    msg = "relative change in x is small"
 #                    converged = True; break
 #
-#                if norm_dx > (norm_x+rel_tol)/MACH_PRECISION:
+#                if norm_dx > (norm_x+rel_tol)/_MACH_PRECISION:
 #                    msg = "(near-)singular linear system"; break
 #
 #                new_f = obj_fn(new_x)
