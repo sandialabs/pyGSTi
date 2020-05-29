@@ -105,6 +105,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.extras.idletomography',
             'pygsti.extras.crosstalk',
             'pygsti.extras.devices',
+            'pygsti.extras.paritybenchmarking',
             'pygsti.io',
             'pygsti.io.circuitparser',
             'pygsti.modelpacks',

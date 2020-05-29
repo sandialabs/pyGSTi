@@ -4,10 +4,14 @@ from scipy.stats import chi2 as _chi2
 import warnings as _warnings
 import time as _time
 
-import cvxpy as _cp
 import itertools as _itertools
 from functools import reduce as _reduce
 from functools import lru_cache as _lru_cache
+
+try:
+    import cvxpy as _cp
+except ImportError:
+    _cp = None
 
 
 REBUILD = True
