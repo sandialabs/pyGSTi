@@ -708,7 +708,7 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
         #Run Long-sequence GST on data
-        mdl_lsgst_list, optimums_list, final_cache = _alg.run_iterative_gst(
+        mdl_lsgst_list, optimums_list, final_store = _alg.run_iterative_gst(
             ds, mdl_start, bulk_circuit_lists, self.optimizer,
             self.iteration_builders, self.final_builders,
             resource_alloc, printer)
@@ -720,17 +720,19 @@ class GateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
             else self.iteration_builders[-1]
-        parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
+        parameters['final_objfn_store'] = final_store  # Final obj. function evaluated at best-fit point (cache too)
         parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
         #TODO: add qtys abot fit from optimums_list
 
+        # TODO: use final_store more fully - it may contain useful cached quantities for creating
+        # the estimate and gaugeopt/badfit below
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lsgst_list[-1], data.edesign.target_model,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store.model, data.edesign.target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, parameters['final_objfn_builder'], self.optimizer,
                                         resource_alloc, printer)
