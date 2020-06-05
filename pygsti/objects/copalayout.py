@@ -10,7 +10,9 @@ A object representing the indexing into a (flat) array of circuit outcome probab
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 import collections as _collections
+import iteratools as _it
 from functtools import reduce as _reduce
 from operator import add as _add
 
@@ -18,6 +20,7 @@ from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .label import Label as _Label
 from . import circuits as _cir
 from ..tools import listtools as _lt
+from ..tools import slicetools as _slct
 
 
 class CircuitOutcomeProbabilityArrayLayout(object):
@@ -55,11 +58,11 @@ class CircuitOutcomeProbabilityArrayLayout(object):
                 first_copy[c] = to_unique[i] = i
             else:
                 to_unique[i] = first_copy[c]
-        unique_circuits = list(first_copy.keys())  # in same order as in `circuits`
+        unique_circuits = list(first_copy.keys())  # unique_circuits is in same order as in `circuits`
         return unique_circuits, to_unique
 
     @classmethod
-    def create_from(cls, circuits, model_shlp, dataset=None, expand=False):
+    def create_from(cls, circuits, model_shlp, dataset=None, additional_dimensions=()):
         """
         TODO: docstring
         Simplifies a list of :class:`Circuit`s.
@@ -131,18 +134,27 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             elindex_outcome_tuples[i] = tuple([(k + j, outcome) for j, outcome in enumerate(present_outcomes[i])])
             k += num_outcomes
 
-        return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits)
+        return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
+                   additional_dimensions)
 
-    def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits=None):
+    def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples,
+                 unique_complete_circuits=None, additional_dimensions=()):
         # to_unique : dict maping indices of `circuits` to indices of `unique_circuits`
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
         self.circuits = circuits if isinstance(circuits, _BulkCircuitList) else _BulkCircuitList(circuits)
         self._unique_circuits = unique_circuits
-        self._to_unique = to_unique
-        self.size = sum(map(len, elindex_outcome_tuples.values()))  # total number of elements
-        self._unique_complete_circuits = unique_complete_circuits # Note: can be None
+        self._unique_circuit_index = _collections.OrderedDict(
+            [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
+        self._to_unique = to_unique  # original indices => unique circuit indices
+        self._size = sum(map(len, elindex_outcome_tuples.values()))  # total number of elements
+        self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
+        self._additional_dimensions = additional_dimensions
+
+        max_element_index = max(_it.chain(*[tup[0] for tup in elindex_outcome_tuples.values()]))
+        assert(self._size == max_element_index + 1), \
+            f"Inconsistency: {self._size} elements but max index is {max_element_index}!"
 
         self._outcomes = _collections.OrderedDict()
         self._element_indices = _collections.OrderedDict()
@@ -151,3 +163,63 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = outcomes
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
+
+    def __len__(self):
+        return self._size
+
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def num_circuits(self):
+        return len(self.circuits)
+
+    def allocate_array(self, array_type, zero_out=False, dtype='d'):
+        # type can be "p", "dp" or "hp"
+        alloc_fn = _np.zeros if zero_out else _np.empty
+        if array_type == "p": return alloc_fn((self._size,), dtype=dtype)
+        if array_type == "dp": return alloc_fn((self._size, self._additional_dimensions[0]), dtype=dtype)
+        if array_type == "hp": return alloc_fn((self._size, self._additional_dimensions[0],
+                                                self._additional_dimensions[1]), dtype=dtype)
+        raise ValueError(f"Invalid `array_type`: {array_type}")
+
+    def memory_estimate(self, array_type, dtype='d'):
+        """
+        Memory required to allocate an array (an estimate in bytes).
+        """
+        bytes_per_element = _np.dtype(dtype).itemsize
+        if array_type == "p": return self._size * bytes_per_element
+        if array_type == "dp": return self._size * self._additional_dimensions[0] * bytes_per_element
+        if array_type == "hp": return self._size * self._additional_dimensions[0] * \
+           self._additional_dimensions[1] * bytes_per_element
+        raise ValueError(f"Invalid `array_type`: {array_type}")
+
+    def indices(self, circuit):
+        return self._element_indices[self._unique_circuit_index[circuit]]
+
+    def outcomes(self, circuit):
+        return self._outcomes[self._unique_circuit_index[circuit]]
+
+    def indices_and_outcomes(self, circuit):
+        unique_circuit_index = self._unique_circuit_index[circuit]
+        return self._element_indices[unique_circuit_index], self._outcomes[unique_circuit_index]
+
+    def indices_for_index(self, index):
+        return self._element_indices[self._to_unique[index]]
+
+    def outcomes_for_index(self, index):
+        return self._outcomes[self._to_unique[index]]
+
+    def indices_and_outcomes_for_index(self, index):
+        unique_circuit_index = self._to_unique[index]
+        return self._element_indices[unique_circuit_index], self._outcomes[unique_circuit_index]
+
+    def __iter__(self):
+        for circuit, i in self._unique_circuit_index.items():
+            for element_index, outcome in zip(self._element_indices[i], self._outcomes[i]):
+                yield element_index, circuit, outcome
+
+    def iter_circuits(self):
+        for circuit, i in self._unique_circuit_index.items():
+            yield self._element_indices[i], circuit, self._outcomes[i]

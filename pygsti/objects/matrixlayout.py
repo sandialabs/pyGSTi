@@ -15,6 +15,8 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from .evalstrategy import COPAEvalStrategy as _COPAEvalStrategy
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .distlayout import _DistributableAtom
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 import numpy as _np
 import collections as _collections
@@ -434,7 +436,7 @@ def _find_splitting(eval_tree, num_elements, max_sub_tree_size, num_sub_trees, v
 #        assert(None not in circuits[0:nFinal])
 #        return circuits[0:nFinal]
 
-class _MatrixCOPAEvalStrategyAtom(object):
+class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
@@ -463,6 +465,7 @@ class _MatrixCOPAEvalStrategyAtom(object):
 
         expanded_nospam_circuits = {i: cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
         self.tree = _create_tree(expanded_nospam_circuits)
+        self._num_nonscratch_tree_items = len(expanded_nospam_circuits)
 
         # self.trees elements give instructions for evaluating ("caching") no-spam quantities (e.g. products).
         # Now we assign final element indices to the circuit outcomes corresponding to a given no-spam ("tree")
@@ -483,8 +486,8 @@ class _MatrixCOPAEvalStrategyAtom(object):
             offset += len(tree_indices)
             #TODO: allow tree_indices to be None or a slice?
 
-        self.element_slice = slice(initial_offset, offset)
-        self.num_elements = offset - initial_offset
+        element_slice = slice(initial_offset, offset)
+        num_elements = offset - initial_offset
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), tree_indices):
@@ -492,13 +495,54 @@ class _MatrixCOPAEvalStrategyAtom(object):
                 outcome, orig_i = outcome_by_spamtuple[spam_tuple]
                 elindex_outcome_tuples[orig_i].append((elindex, outcome))
 
+        super().__init(element_slice, num_elements)
+
+    def nonscratch_cache_view(self, a, axis=None):
+        """
+        Create a view of array `a` restricting it to only the *final* results computed by this tree.
+
+        This need not be the entire array because there could be intermediate results
+        (e.g. "scratch space") that are excluded.
+
+        Parameters
+        ----------
+        a : ndarray
+            An array of results computed using this EvalTree,
+            such that the `axis`-th dimension equals the full
+            length of the tree.  The other dimensions of `a` are
+            unrestricted.
+
+        axis : int, optional
+            Specified the axis along which the selection of the
+            final elements is performed. If None, than this
+            selection if performed on flattened `a`.
+
+        Returns
+        -------
+        ndarray
+            Of the same shape as `a`, except for along the
+            specified axis, whose dimension has been reduced
+            to filter out the intermediate (non-final) results.
+        """
+        if axis is None:
+            return a[0:self._num_nonscratch_tree_items]
+        else:
+            sl = [slice(None)] * a.ndim
+            sl[axis] = slice(0, self._num_nonscratch_tree_items)
+            ret = a[tuple(sl)]
+            assert(ret.base is a or ret.base is a.base)  # check that what is returned is a view
+            assert(ret.size == 0 or _np.may_share_memory(ret, a))
+            return ret
+
     @property
     def cache_size(self):
         return len(self.tree)
 
 
-class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
+class MatrixCOPALayout(_DistributableCOPALayout):
     """
+    TODO: update docstring
+
     An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
 
     MatrixEvalTree instances create and store the decomposition of a list of circuits into
@@ -512,9 +556,18 @@ class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
     items : list, optional
         Initial items.  This argument should only be used internally
         in the course of serialization.
+
+    num_strategy_subcomms : int, optional
+        The number of processor groups (communicators) to divide the "atomic" portions
+        of this strategy (a circuit probability array layout) among when calling `distribute`.
+        By default, the communicator is not divided.  This default behavior is fine for cases
+        when derivatives are being taken, as multiple processors are used to process differentiations
+        with respect to different variables.  If no derivaties are needed, however, this should be
+        set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model_shlp, dataset=None, max_sub_tree_size=None, num_sub_trees=None, verbosity=0):
+    def __init__(self, circuits, model_shlp, dataset=None, max_sub_tree_size=None,
+                 num_sub_trees=None, additional_dimensions=(), verbosity=0):
 
         # 1. pre-process => get complete circuits => spam-tuples list for each no-spam circuit (no expanding yet)
         # 2. decide how to divide no-spam circuits into groups corresponding to sub-strategies
@@ -545,17 +598,18 @@ class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
                                  max_sub_tree_size, num_sub_trees, verbosity)  # a list of tuples/sets?
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
-        self.atoms = []
+        atoms = []
         elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
 
         offset = 0
         for group in groups:
-            self.atoms.append(_MatrixCOPAEvalStrategyAtom(unique_complete_circuits, unique_nospam_circuits,
-                                                          circuits_by_unique_nospam_circuits, ds_circuits, group,
-                                                          model_shlp, dataset, offset, elindex_outcome_tuples))
-            offset += self.atoms[-1].size
+            atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+                                               circuits_by_unique_nospam_circuits, ds_circuits, group,
+                                               model_shlp, dataset, offset, elindex_outcome_tuples))
+            offset += atoms[-1].size
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits)
+        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
+                         atoms, additional_dimensions)
 
     def copy(self):
         """
@@ -573,7 +627,6 @@ class MatrixCOPAEvalStrategy(_COPAEvalStrategy):
         ##newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         #newTree.spamtuple_indices = self.spamtuple_indices.copy()
         #return newTree
-
 
     #def cache_size(self):
     #    """

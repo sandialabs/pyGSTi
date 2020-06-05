@@ -22,25 +22,40 @@ import warnings as _warnings
 #import time as _time #DEBUG TIMERS
 
 
-class COPAEvalStrategy(_CircuitOutcomeProbabilityArrayLayout):
-    def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                 atoms, num_sub_strategy_comms=1):
-        """
-        num_sub_tree_comms : int, optional
-            The number of processor groups (communicators)
-            to divide the subtrees of this EvalTree among
-            when calling `distribute`.  By default, the
-            communicator is not divided.
+class _DistributableAtom(object):
+    """
+    Behaves as a sub-layout for general purposes...
+    needs .element_slice to indicate "final"/"global" indices.
+    needs .wrt_block_size[1,2] to indicate how to distribute derivative calculations in arrays
+      with derivative dimensions.
+    needs __len__ and .iter_circuits like a COPA layout (so functions as a sub-layout)
+    """
 
+    def __init__(self, element_slice, num_elements=None):
+        self.element_slice = element_slice
+        self.num_elements = _slct.length(element_slice) if (num_elements is None) else num_elements
+
+
+class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
+
+    def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
+                 atoms, additional_dimensions=()):
         """
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits)
+        num_strategy_subcomms : int, optional
+            The number of processor groups (communicators) to divide the "atomic" portions
+            of this strategy (a circuit probability array layout) among when calling `distribute`.
+            By default, the communicator is not divided.  This default behavior is fine for cases
+            when derivatives are being taken, as multiple processors are used to process differentiations
+            with respect to different variables.  If no derivaties are needed, however, this should be
+            set to (at least) the number of processors.
+        """
+        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
+                         additional_dimensions)
 
         self.atoms = atoms
-
-        # a dict to hold various MPI distribution info
-        self.distribution = {}
-        if num_sub_strategy_comms is not None:
-            self.distribution['num_sub_strategy_comms'] = num_sub_strategy_comms
+        self.num_atom_processing_subcomms = 1
+        self.additional_dimension_blk_sizes = (None,) * len(self._additional_dimensions)
+        self.gather_mem_limit = None
 
         # ********* Only non-None for sub-strategies ******************
 
@@ -62,15 +77,32 @@ class COPAEvalStrategy(_CircuitOutcomeProbabilityArrayLayout):
         ## passed to initialize(...) is, it's at index original_index_lookup[i]
         #self.original_index_lookup = None
 
-    def is_split(self):
-        """
-        Whether strategy contains multiple atomic parts (sub-strategies).
+    def allocate_local_array(self, array_type, zero_out=False, dtype='d'):
+        raise NotImplementedError(("This function should only allocate the space needed "
+                                   "for this processor when fwdsim's gather=False (?)"))
 
-        Returns
-        -------
-        bool
+    def local_memory_estimate(self, nprocs, array_type, dtype='d'):
         """
-        return len(self.atoms) > 0
+        Per-processor memory required to allocate a local array (an estimate in bytes).
+        """
+        #bytes_per_element = _np.dtype(dtype).itemsize
+        raise NotImplementedError()
+
+    def set_distribution_params(self, num_atom_processing_subcomms, additional_dimension_blk_sizes,
+                                gather_mem_limit):
+        self.num_atom_processing_subcomms = num_atom_processing_subcomms
+        self.additional_dimension_blk_sizes = additional_dimension_blk_sizes
+        self.gather_mem_limit = gather_mem_limit
+
+    #def is_split(self):
+    #    """
+    #    Whether strategy contains multiple atomic parts (sub-strategies).
+    #
+    #    Returns
+    #    -------
+    #    bool
+    #    """
+    #    return len(self.atoms) > 0
 
     def distribute(self, comm, verbosity=0):
         """
@@ -126,16 +158,16 @@ class COPAEvalStrategy(_CircuitOutcomeProbabilityArrayLayout):
 
         #rank = 0 if (comm is None) else comm.Get_rank()
         nprocs = 1 if (comm is None) else comm.Get_size()
-        nAtomComms = self.distribution.get('num_sub_strategy_comms', 1)
+        nAtomComms = self.num_atom_processing_subcomms
         nAtoms = len(self.atoms)
+        assert(nAtomComms <= nAtoms), "Cannot request more sub-comms ({nAtomComms}) than there are atoms ({nAtoms})!"
 
-        assert(nAtomComms <= nprocs)  # => len(mySubCommIndices) == 1
+        assert(nAtomComms <= nprocs), f"Not enough processors ({nprocs}) to make {nAtomComms=}"
         mySubCommIndices, subCommOwners, mySubComm = \
             _mpit.distribute_indices(list(range(nAtomComms)), comm)
-        assert(len(mySubCommIndices) == 1)
+        assert(len(mySubCommIndices) == 1), "Each rank should be assigned to exactly 1 subComm group"
         mySubCommIndex = mySubCommIndices[0]
 
-        assert(nAtomComms <= nAtoms)  # don't allow more comms than trees
         myAtomIndices, atomOwners = _mpit.distribute_indices_base(
             list(range(nAtoms)), nAtomComms, mySubCommIndex)
 
@@ -150,6 +182,52 @@ class COPAEvalStrategy(_CircuitOutcomeProbabilityArrayLayout):
 
         return myAtomIndices, atomOwners, mySubComm
 
+    def distribution_info(self, nprocs):
+        """
+        Generates information about how this layout is distributed across multiple processors.
+
+        This is useful when comparing and selecting a layout, as this information
+        can be used to compute the amount of required memory *per processor*.
+
+        Parameters
+        ----------
+        nprocs : int
+            The number of processors.
+
+        Returns
+        -------
+        dict
+        """
+        # layout is already split into atoms.  We split these atoms
+        # into `self.num_atom_processing_subcomms` groups, each of which
+        # has roughly nprocs / self.num_atom_processing_subcomms processors.
+        # Parallelization is then performed over the additional dimensions
+        # (usually model parameters).
+        info = {}
+        subcomm_ranks = _collections.defaultdict(list)
+
+        nAtomComms = self.num_atom_processing_subcomms
+        nAtoms = len(self.atoms)
+        assert(nAtomComms <= nAtoms), "Cannot request more sub-comms ({nAtomComms}) than there are atoms ({nAtoms})!"
+
+        assert(nAtomComms <= nprocs), f"Not enough processors ({nprocs}) to make {nAtomComms=}"
+        for rank in range(nprocs):
+            mySubCommIndices, _ = \
+                _mpit.distribute_indices_base(list(range(nAtomComms)), nprocs, rank)
+            assert(len(mySubCommIndices) == 1), "Each rank should be assigned to exactly 1 subComm group"
+            mySubCommIndex = mySubCommIndices[0]
+            subcomm_ranks[mySubCommIndex].append(rank)
+
+            myAtomIndices, _ = _mpit.distribute_indices_base(
+                list(range(nAtoms)), nAtomComms, mySubCommIndex)
+
+            info[rank] = {'atom_indices': myAtomIndices, 'subcomm_index': mySubCommIndex}
+
+        #Set the subcomm size (# of processors) that each rank is a part of.
+        for rank in range(nprocs):
+            info[rank]['subcomm_size'] = len(subcomm_ranks[info[rank]['subcomm_index']])
+
+        return info
 
     #def get_sub_trees(self):
     #    """

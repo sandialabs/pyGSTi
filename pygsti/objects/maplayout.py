@@ -19,6 +19,8 @@ from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from .evalstrategy import COPAEvalStrategy as _COPAEvalStrategy
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .distlayout import _DistributableAtom
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 import time as _time  # DEBUG TIMERS
 
@@ -187,29 +189,29 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
         cacheIndices = [None] * cachesize
         contents_by_idest = {tup[0]: tup for tup in table_contents}  # for fast lookup by a circuit index
 
-        def traverse_index(iDest, iStart, remainder, current_table):
+        def traverse_index(idest, istart, remainder, current_table):
             """Get the set of indices you'd need to add along with and including `k`, and their cost."""
             cost = cost_fn(remainder)
-            inds = set([iDest])
+            inds = set([idest])
 
-            if iStart is not None and cacheIndices[iStart] not in current_table:
-                #we need to add the table elements traversed by following iStart
-                j = iStart  # index into cache
+            if istart is not None and cacheIndices[istart] not in current_table:
+                #we need to add the table elements traversed by following istart
+                j = istart  # index into cache
                 while j is not None:
-                    j_circuit = cacheIndices[j]  # cacheIndices[ iStart ]
+                    j_circuit = cacheIndices[j]  # cacheIndices[ istart ]
                     inds.add(j_circuit)
                     _, jStart, jrem, _ = contents_by_idest[j_circuit]
                     cost += cost_fn(jrem)  # remainder
                     j = jStart
             return inds, cost
 
-        for iDest, iStart, remainder, iCache in table_contents:
+        for idest, istart, remainder, iCache in table_contents:
             if iCache is not None:
-                cacheIndices[iCache] = iDest
+                cacheIndices[iCache] = idest
 
             #compute the cost (additional #applies) which results from
-            # adding this element (iDest) to the current sub-table.
-            inds, cost = traverse_index(iDest, iStart, remainder)
+            # adding this element (idest) to the current sub-table.
+            inds, cost = traverse_index(idest, istart, remainder)
 
             if curTableCost + cost < max_cost:
                 #Just add current string to current table
@@ -219,7 +221,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
                 #End the current table and begin a new one
                 #print("cost %d+%d exceeds %d" % (curTableCost,cost,max_cost))
                 subTables.append(curSubTable)
-                curSubTable, curTableCost = traverse_index(iDest, iStart, remainder)
+                curSubTable, curTableCost = traverse_index(idest, istart, remainder)
                 #print("Added new table w/initial cost %d" % (cost))
 
             max_cost += max_cost_rate
@@ -364,7 +366,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
 #        assert(None not in circuits[0:nFinal])
 #        return circuits[0:nFinal]
 
-class _MapCOPAEvalStrategyAtom(object):
+class _MapCOPAEvalStrategyAtom(_DistributableAtom):
     """
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
@@ -381,7 +383,7 @@ class _MapCOPAEvalStrategyAtom(object):
             expanded_circuit_outcomes.update(d)
 
         expanded_circuits = {i: cir for i, cir in enumerate(expanded_circuit_outcomes.keys())}
-        self.table = _create_prefix_table(expanded_circuits, max_cache_size)
+        self.table, self._cache_size = _create_prefix_table(expanded_circuits, max_cache_size)
 
         #Create circuit element <=> integer index lookups for speed
         all_rholabels = set()
@@ -419,15 +421,14 @@ class _MapCOPAEvalStrategyAtom(object):
                 elindex_outcome_tuples[orig_i].extend(list(zip(elindices, outcomes)))
             table_offset += len(expanded_circuit_outcomes)
 
-        self.element_slice = slice(initial_offset, offset)
-        self.num_elements = offset - initial_offset
+        super().__init__(slice(initial_offset, offset), offset - initial_offset)
 
     @property
     def cache_size(self):
-        return self.table[1]
+        return self._cache_size
 
 
-class MapCOPAEvalStrategy(_COPAEvalStrategy):
+class MapCOPALayout(_DistributableCOPALayout):
     """
     TODO: docstring (update)
     An Evaluation Tree that structures a circuit list for map-based calculations.
@@ -444,18 +445,20 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
         POVM-label, effect-label pair because these are *simplified*
         effect labels).
 
-    num_sub_tree_comms : int, optional
-        The number of processor groups (communicators)
-        to divide the subtrees of this EvalTree among
-        when calling `distribute`.  By default, the
-        communicator is not divided.
+    num_strategy_subcomms : int, optional
+        The number of processor groups (communicators) to divide the "atomic" portions
+        of this strategy (a circuit probability array layout) among when calling `distribute`.
+        By default, the communicator is not divided.  This default behavior is fine for cases
+        when derivatives are being taken, as multiple processors are used to process differentiations
+        with respect to different variables.  If no derivaties are needed, however, this should be
+        set to (at least) the number of processors.
 
     max_cache_size : int, optional
         Maximum cache size, used for holding common circuit prefixes.
     """
 
-    def __init__(self, circuits, model_shlp, dataset=None, num_sub_table_comms=1, max_cache_size=None,
-                 max_sub_table_size=None, num_sub_tables=None, verbosity=0):
+    def __init__(self, circuits, model_shlp, dataset=None, max_cache_size=None,
+                 max_sub_table_size=None, num_sub_tables=None, additional_dimensions=(), verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
@@ -465,17 +468,17 @@ class MapCOPAEvalStrategy(_COPAEvalStrategy):
         circuit_table = _create_prefix_table(unique_complete_circuits, max_cache_size)
         groups = self._find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)
 
-        self.atoms = []
+        atoms = []
         elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
 
         offset = 0
         for group in groups:
-            self.atoms.append(_MapCOPAEvalStrategyAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
-                                                       dataset, offset, elindex_outcome_tuples, max_cache_size))
-            offset += self.atoms[-1].size
+            atoms.append(_MapCOPAEvalStrategyAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
+                                                  dataset, offset, elindex_outcome_tuples, max_cache_size))
+            offset += atoms[-1].size
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         num_sub_table_comms)
+                         atoms, additional_dimensions)
 
         #self.cachesize = curCacheSize
         #self.myFinalToParentFinalMap = None  # this tree has no "children",
