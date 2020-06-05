@@ -42,12 +42,11 @@ from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
-from . import simplifierhelper as _sh
-from . import layerlizard as _ll
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from .label import Label as _Label
+from .layerrules import LayerRules as _LayerRules
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -191,112 +190,23 @@ class ExplicitOpModel(_mdl.OpModel):
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
                 else "sv"  # ( if evotype in ("statevec","stabilizer") )
 
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
-        self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), sim_type)
 
-    def primitive_prep_labels(self):
-        """
-        Return the primitive state preparation labels of this model
+    @property
+    def _primitive_prep_labels(self):
+        return self.preps.keys()
 
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.preps.keys())
+    @property
+    def _primitive_povm_labels(self):
+        return self.povms.keys()
 
-    def set_primitive_prep_labels(self, lbls):
-        """
-        Set the primitive state preparation labels of this model
+    @property
+    def _primitive_op_labels(self):
+        return self.operations.keys()
 
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.operations dict)."))
-
-    def primitive_povm_labels(self):
-        """
-        Return the primitive POVM labels of this model
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.povms.keys())
-
-    def set_primitive_povm_labels(self, lbls):
-        """
-        Set the primitive POVM labels of this model
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels.
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.povms dict)."))
-
-    def primitive_op_labels(self):
-        """
-        Return the primitive operation labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.operations.keys())
-
-    def set_primitive_op_labels(self, lbls):
-        """
-        Set the primitive operation labels of this model.
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.operations dict)."))
-
-    def primitive_instrument_labels(self):
-        """
-        Return the primitive instrument labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.instruments.keys())
-
-    def set_primitive_instrument_labels(self, lbls):
-        """
-        Set the primitive instrument labels of this model.
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.instrument dict)."))
+    @property
+    def _primitive_instruments_labels(self):
+        return self.instruments.keys()
 
     #Functions required for base class functionality
 
@@ -306,11 +216,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.operations.items(),
                                          self.instruments.items()):
             yield (lbl, obj)
-
-    def _layer_lizard(self):
-        """ Return a layer lizard for this model """
-        self._clean_paramvec()  # just to be safe
-        return _ll.ExplicitLayerLizard(self.preps, self.operations, self.povms, self.instruments, self)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
@@ -609,8 +514,6 @@ class ExplicitOpModel(_mdl.OpModel):
             self.operations = state_dict['gates']
             self._state_space_labels = state_dict['stateSpaceLabels']
             self._paramlbls = None
-            self._shlp = _sh.MemberDictSimplifierHelper(
-                state_dict['preps'], state_dict['povms'], state_dict['instruments'], self._state_space_labels)
             del state_dict['gates']
             del state_dict['_autogator']
             del state_dict['auto_idle_gatename']
@@ -822,282 +725,283 @@ class ExplicitOpModel(_mdl.OpModel):
 
         self._clean_paramvec()  # transform may leave dirty members
 
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: Operator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().product(circuit, scale)
-
-    def dproduct(self, circuit, flat=False):
-        """
-        Compute the derivative of a specified sequence of operation labels.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        Returns
-        -------
-        deriv : numpy array
-            * if flat == False, a M x G x G array, where:
-
-              - M == length of the vectorized model (number of model parameters)
-              - G == the linear dimension of a operation matrix (G x G operation matrices).
-
-              and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
-              with respect to the i-th model parameter.
-
-            * if flat == True, a N x M array, where:
-
-              - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
-              - M == length of the vectorized model (number of model parameters)
-
-              and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th model parameter.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().dproduct(circuit, flat)
-
-    def hproduct(self, circuit, flat=False):
-        """
-        Compute the hessian of a specified sequence of operation labels.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        Returns
-        -------
-        hessian : numpy array
-            * if flat == False, a  M x M x G x G numpy array, where:
-
-              - M == length of the vectorized model (number of model parameters)
-              - G == the linear dimension of a operation matrix (G x G operation matrices).
-
-              and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
-              with respect to the j-th then i-th model parameters.
-
-            * if flat == True, a  N x M x M numpy array, where:
-
-              - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
-              - M == length of the vectorized model (number of model parameters)
-
-              and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
-              product with respect to the k-th then k-th model parameters.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().hproduct(circuit, flat)
-
-    def bulk_product(self, eval_tree, scale=False, comm=None):
-        """
-        Compute the products of many operation sequences at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  This is done over operation sequences when a
-            *split* eval_tree is given, otherwise no parallelization is performed.
-
-        Returns
-        -------
-        prods : numpy array
-            Array of shape S x G x G, where:
-
-            - S == the number of operation sequences
-            - G == the linear dimension of a operation matrix (G x G operation matrices).
-        scaleValues : numpy array
-            Only returned when scale == True. A length-S array specifying
-            the scaling that needs to be applied to the resulting products
-            (final_product[i] = scaleValues[i] * prods[i]).
-        """
-        return self._fwdsim().bulk_product(eval_tree, scale, comm)
-
-    def bulk_dproduct(self, eval_tree, flat=False, return_prods=False,
-                      scale=False, comm=None):
-        """
-        Compute the derivative of many operation sequences at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        return_prods : bool, optional
-            when set to True, additionally return the products.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first done over the set
-            of parameters being differentiated with respect to.  If there are
-            more processors than model parameters, distribution over a split
-            eval_tree (if given) is possible.
-
-        Returns
-        -------
-        derivs : numpy array
-            * if `flat` is ``False``, an array of shape S x M x G x G, where:
-
-              - S = len(circuit_list)
-              - M = the length of the vectorized model
-              - G = the linear dimension of a operation matrix (G x G operation matrices)
-
-              and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
-              of the i-th operation sequence product with respect to the j-th model
-              parameter.
-
-            * if `flat` is ``True``, an array of shape S*N x M where:
-
-              - N = the number of entries in a single flattened gate (ordering
-                same as numpy.flatten),
-              - S,M = as above,
-
-              and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
-              entry of the ``(i / G^2)``-th flattened operation sequence product  with
-              respect to the j-th model parameter.
-        products : numpy array
-            Only returned when `return_prods` is ``True``.  An array of shape
-            S x G x G; ``products[i]`` is the i-th operation sequence product.
-        scale_vals : numpy array
-            Only returned when `scale` is ``True``.  An array of shape S such
-            that ``scale_vals[i]`` contains the multiplicative scaling needed for
-            the derivatives and/or products for the i-th operation sequence.
-        """
-        return self._fwdsim().bulk_dproduct(eval_tree, flat, return_prods,
-                                            scale, comm)
-
-    def bulk_hproduct(self, eval_tree, flat=False, return_dprods_and_prods=False,
-                      scale=False, comm=None):
-        """
-        Return the Hessian of many operation sequence products at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        return_dprods_and_prods : bool, optional
-            when set to True, additionally return the probabilities and
-            their derivatives.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first done over the
-            set of parameters being differentiated with respect to when the
-            *second* derivative is taken.  If there are more processors than
-            model parameters, distribution over a split eval_tree (if given)
-            is possible.
-
-        Returns
-        -------
-        hessians : numpy array
-            * if flat == False, an  array of shape S x M x M x G x G, where
-
-              - S == len(circuit_list)
-              - M == the length of the vectorized model
-              - G == the linear dimension of a operation matrix (G x G operation matrices)
-
-              and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
-              of the i-th operation sequence product with respect to the k-th then j-th
-              model parameters.
-
-            * if flat == True, an array of shape S*N x M x M where
-
-              - N == the number of entries in a single flattened gate (ordering as numpy.flatten),
-              - S,M == as above,
-
-              and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened operation sequence product with respect to
-              the k-th then j-th model parameters.
-        derivs : numpy array
-            Only returned if return_dprods_and_prods == True.
-
-            * if flat == False, an array of shape S x M x G x G, where
-
-              - S == len(circuit_list)
-              - M == the length of the vectorized model
-              - G == the linear dimension of a operation matrix (G x G operation matrices)
-
-              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-              of the i-th operation sequence product with respect to the j-th model
-              parameter.
-
-            * if flat == True, an array of shape S*N x M where
-
-              - N == the number of entries in a single flattened gate (ordering is
-                     the same as that used by numpy.flatten),
-              - S,M == as above,
-
-              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-              the (i / G^2)-th flattened operation sequence product  with respect to
-              the j-th model parameter.
-        products : numpy array
-            Only returned when return_dprods_and_prods == True.  An array of shape
-            S x G x G; products[i] is the i-th operation sequence product.
-        scale_vals : numpy array
-            Only returned when scale == True.  An array of shape S such that
-            scale_vals[i] contains the multiplicative scaling needed for
-            the hessians, derivatives, and/or products for the i-th operation sequence.
-        """
-        ret = self._fwdsim().bulk_hproduct(
-            eval_tree, flat, return_dprods_and_prods, scale, comm)
-        if return_dprods_and_prods:
-            return ret[0:2] + ret[3:]  # remove ret[2] == deriv wrt filter2,
-            # which isn't an input param for Model version
-        else: return ret
+#REMOVE
+#    def product(self, circuit, scale=False):
+#        """
+#        Compute the product of a specified sequence of operation labels.
+#
+#        Note: Operator matrices are multiplied in the reversed order of the tuple. That is,
+#        the first element of circuit can be thought of as the first gate operation
+#        performed, which is on the far right of the product of matrices.
+#
+#        Parameters
+#        ----------
+#        circuit : Circuit or tuple of operation labels
+#            The sequence of operation labels.
+#
+#        scale : bool, optional
+#            When True, return a scaling factor (see below).
+#
+#        Returns
+#        -------
+#        product : numpy array
+#            The product or scaled product of the operation matrices.
+#
+#        scale : float
+#            Only returned when scale == True, in which case the
+#            actual product == product * scale.  The purpose of this
+#            is to allow a trace or other linear operation to be done
+#            prior to the scaling.
+#        """
+#        circuit = _cir.Circuit(circuit)  # cast to Circuit
+#        return self._fwdsim().product(circuit, scale)
+#
+#    def dproduct(self, circuit, flat=False):
+#        """
+#        Compute the derivative of a specified sequence of operation labels.
+#
+#        Parameters
+#        ----------
+#        circuit : Circuit or tuple of operation labels
+#            The sequence of operation labels.
+#
+#        flat : bool, optional
+#            Affects the shape of the returned derivative array (see below).
+#
+#        Returns
+#        -------
+#        deriv : numpy array
+#            * if flat == False, a M x G x G array, where:
+#
+#              - M == length of the vectorized model (number of model parameters)
+#              - G == the linear dimension of a operation matrix (G x G operation matrices).
+#
+#              and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
+#              with respect to the i-th model parameter.
+#
+#            * if flat == True, a N x M array, where:
+#
+#              - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
+#              - M == length of the vectorized model (number of model parameters)
+#
+#              and deriv[i,j] holds the derivative of the i-th entry of the flattened
+#              product with respect to the j-th model parameter.
+#        """
+#        circuit = _cir.Circuit(circuit)  # cast to Circuit
+#        return self._fwdsim().dproduct(circuit, flat)
+#
+#    def hproduct(self, circuit, flat=False):
+#        """
+#        Compute the hessian of a specified sequence of operation labels.
+#
+#        Parameters
+#        ----------
+#        circuit : Circuit or tuple of operation labels
+#            The sequence of operation labels.
+#
+#        flat : bool, optional
+#            Affects the shape of the returned derivative array (see below).
+#
+#        Returns
+#        -------
+#        hessian : numpy array
+#            * if flat == False, a  M x M x G x G numpy array, where:
+#
+#              - M == length of the vectorized model (number of model parameters)
+#              - G == the linear dimension of a operation matrix (G x G operation matrices).
+#
+#              and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
+#              with respect to the j-th then i-th model parameters.
+#
+#            * if flat == True, a  N x M x M numpy array, where:
+#
+#              - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
+#              - M == length of the vectorized model (number of model parameters)
+#
+#              and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
+#              product with respect to the k-th then k-th model parameters.
+#        """
+#        circuit = _cir.Circuit(circuit)  # cast to Circuit
+#        return self._fwdsim().hproduct(circuit, flat)
+#
+#    def bulk_product(self, eval_tree, scale=False, comm=None):
+#        """
+#        Compute the products of many operation sequences at once.
+#
+#        Parameters
+#        ----------
+#        eval_tree : EvalTree
+#            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+#            to compute the bulk operation on.
+#
+#        scale : bool, optional
+#            When True, return a scaling factor (see below).
+#
+#        comm : mpi4py.MPI.Comm, optional
+#            When not None, an MPI communicator for distributing the computation
+#            across multiple processors.  This is done over operation sequences when a
+#            *split* eval_tree is given, otherwise no parallelization is performed.
+#
+#        Returns
+#        -------
+#        prods : numpy array
+#            Array of shape S x G x G, where:
+#
+#            - S == the number of operation sequences
+#            - G == the linear dimension of a operation matrix (G x G operation matrices).
+#        scaleValues : numpy array
+#            Only returned when scale == True. A length-S array specifying
+#            the scaling that needs to be applied to the resulting products
+#            (final_product[i] = scaleValues[i] * prods[i]).
+#        """
+#        return self._fwdsim().bulk_product(eval_tree, scale, comm)
+#
+#    def bulk_dproduct(self, eval_tree, flat=False, return_prods=False,
+#                      scale=False, comm=None):
+#        """
+#        Compute the derivative of many operation sequences at once.
+#
+#        Parameters
+#        ----------
+#        eval_tree : EvalTree
+#            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+#            to compute the bulk operation on.
+#
+#        flat : bool, optional
+#            Affects the shape of the returned derivative array (see below).
+#
+#        return_prods : bool, optional
+#            when set to True, additionally return the products.
+#
+#        scale : bool, optional
+#            When True, return a scaling factor (see below).
+#
+#        comm : mpi4py.MPI.Comm, optional
+#            When not None, an MPI communicator for distributing the computation
+#            across multiple processors.  Distribution is first done over the set
+#            of parameters being differentiated with respect to.  If there are
+#            more processors than model parameters, distribution over a split
+#            eval_tree (if given) is possible.
+#
+#        Returns
+#        -------
+#        derivs : numpy array
+#            * if `flat` is ``False``, an array of shape S x M x G x G, where:
+#
+#              - S = len(circuit_list)
+#              - M = the length of the vectorized model
+#              - G = the linear dimension of a operation matrix (G x G operation matrices)
+#
+#              and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
+#              of the i-th operation sequence product with respect to the j-th model
+#              parameter.
+#
+#            * if `flat` is ``True``, an array of shape S*N x M where:
+#
+#              - N = the number of entries in a single flattened gate (ordering
+#                same as numpy.flatten),
+#              - S,M = as above,
+#
+#              and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
+#              entry of the ``(i / G^2)``-th flattened operation sequence product  with
+#              respect to the j-th model parameter.
+#        products : numpy array
+#            Only returned when `return_prods` is ``True``.  An array of shape
+#            S x G x G; ``products[i]`` is the i-th operation sequence product.
+#        scale_vals : numpy array
+#            Only returned when `scale` is ``True``.  An array of shape S such
+#            that ``scale_vals[i]`` contains the multiplicative scaling needed for
+#            the derivatives and/or products for the i-th operation sequence.
+#        """
+#        return self._fwdsim().bulk_dproduct(eval_tree, flat, return_prods,
+#                                            scale, comm)
+#
+#    def bulk_hproduct(self, eval_tree, flat=False, return_dprods_and_prods=False,
+#                      scale=False, comm=None):
+#        """
+#        Return the Hessian of many operation sequence products at once.
+#
+#        Parameters
+#        ----------
+#        eval_tree : EvalTree
+#            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+#            to compute the bulk operation on.
+#
+#        flat : bool, optional
+#            Affects the shape of the returned derivative array (see below).
+#
+#        return_dprods_and_prods : bool, optional
+#            when set to True, additionally return the probabilities and
+#            their derivatives.
+#
+#        scale : bool, optional
+#            When True, return a scaling factor (see below).
+#
+#        comm : mpi4py.MPI.Comm, optional
+#            When not None, an MPI communicator for distributing the computation
+#            across multiple processors.  Distribution is first done over the
+#            set of parameters being differentiated with respect to when the
+#            *second* derivative is taken.  If there are more processors than
+#            model parameters, distribution over a split eval_tree (if given)
+#            is possible.
+#
+#        Returns
+#        -------
+#        hessians : numpy array
+#            * if flat == False, an  array of shape S x M x M x G x G, where
+#
+#              - S == len(circuit_list)
+#              - M == the length of the vectorized model
+#              - G == the linear dimension of a operation matrix (G x G operation matrices)
+#
+#              and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
+#              of the i-th operation sequence product with respect to the k-th then j-th
+#              model parameters.
+#
+#            * if flat == True, an array of shape S*N x M x M where
+#
+#              - N == the number of entries in a single flattened gate (ordering as numpy.flatten),
+#              - S,M == as above,
+#
+#              and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
+#              of the (i / G^2)-th flattened operation sequence product with respect to
+#              the k-th then j-th model parameters.
+#        derivs : numpy array
+#            Only returned if return_dprods_and_prods == True.
+#
+#            * if flat == False, an array of shape S x M x G x G, where
+#
+#              - S == len(circuit_list)
+#              - M == the length of the vectorized model
+#              - G == the linear dimension of a operation matrix (G x G operation matrices)
+#
+#              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+#              of the i-th operation sequence product with respect to the j-th model
+#              parameter.
+#
+#            * if flat == True, an array of shape S*N x M where
+#
+#              - N == the number of entries in a single flattened gate (ordering is
+#                     the same as that used by numpy.flatten),
+#              - S,M == as above,
+#
+#              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
+#              the (i / G^2)-th flattened operation sequence product  with respect to
+#              the j-th model parameter.
+#        products : numpy array
+#            Only returned when return_dprods_and_prods == True.  An array of shape
+#            S x G x G; products[i] is the i-th operation sequence product.
+#        scale_vals : numpy array
+#            Only returned when scale == True.  An array of shape S such that
+#            scale_vals[i] contains the multiplicative scaling needed for
+#            the hessians, derivatives, and/or products for the i-th operation sequence.
+#        """
+#        ret = self._fwdsim().bulk_hproduct(
+#            eval_tree, flat, return_dprods_and_prods, scale, comm)
+#        if return_dprods_and_prods:
+#            return ret[0:2] + ret[3:]  # remove ret[2] == deriv wrt filter2,
+#            # which isn't an input param for Model version
+#        else: return ret
 
     def frobeniusdist(self, other_model, transform_mx=None,
                       item_weights=None, normalize=True):
@@ -1339,9 +1243,6 @@ class ExplicitOpModel(_mdl.OpModel):
         copy_into.povms = self.povms.copy(copy_into)
         copy_into.operations = self.operations.copy(copy_into)
         copy_into.instruments = self.instruments.copy(copy_into)
-        copy_into._shlp = _sh.MemberDictSimplifierHelper(copy_into.preps, copy_into.povms, copy_into.instruments,
-                                                         self.state_space_labels)
-
         copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):
@@ -1838,3 +1739,110 @@ class ExplicitOpModel(_mdl.OpModel):
                 [ev.real for ev in _np.linalg.eigvals(
                     _jt.jamiolkowski_iso(gate))]), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
+
+    def _effect_labels_for_povm(self, povm_lbl):
+        """
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
+
+        Parameters
+        ----------
+        povm_lbl : Label
+            POVM label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the POVM outcomes.
+        """
+        return tuple(self.povms[povm_lbl].keys())
+
+    def _member_labels_for_instrument(self, inst_lbl):
+        """
+        Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
+
+        Parameters
+        ----------
+        inst_lbl : Label
+            Instrument label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the instrument members.
+        """
+        return tuple(self.instruments[inst_lbl].keys())
+
+    def _reinit_layerop_cache(self):
+        self._layerop_cache.clear()
+
+        # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
+        simplified_effects = _collections.OrderedDict()
+        for povm_lbl, povm in self.povms.items():
+            for k, e in povm.simplify_effects(povm_lbl).items():
+                simplified_effects[k] = e
+
+        simplified_ops = _collections.OrderedDict()
+        for k, g in self.operations.items(): simplified_ops[k] = g
+        for inst_lbl, inst in self.instruments.items():
+            for k, g in inst.simplify_operations(inst_lbl).items():
+                simplified_ops[k] = g
+
+        self._layerop_cache.update(simplified_effects)
+        self._layerop_cache.update(simplified_ops)
+
+
+class ExplicitLayerRules(_LayerRules):
+    """ Rule: layer must appear explicitly as a "primitive op" """
+    def prep_layer_operator(self, model, layerlbl, cache):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        POVM or SPAMVec
+        """
+        if layerlbl in cache: return cache[layerlbl]
+        return self.preps[layerlbl]  # don't cache this - it's not a new operator
+
+    def povm_layer_operator(self, model, layerlbl, cache):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        POVM or SPAMVec
+        """
+        if layerlbl in cache: return cache[layerlbl]
+        return self.povms[layerlbl]  # don't cache this - it's not a new operator
+
+    def operation_layer_operator(self, model, layerlbl, cache):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        if layerlbl in cache: return cache[layerlbl]
+        if isinstance(layerlbl, _CircuitLabel):
+            dense = bool(model.get_sim_type() == "matrix")  # whether dense matrix gates should be created
+            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            cache[layerlbl] = op
+            return op
+        else:
+            raise ValueError(f"Cannot create operator for non-primitive layer: {layerlbl}")

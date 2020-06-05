@@ -27,7 +27,7 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
+from .layerrules import LayerRules as _LayerRules
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis
@@ -680,7 +680,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
             #Only extract qubit labels from the first tensor-product block...
 
-        super(LocalNoiseModel, self).__init__(qubit_sslbls, basis1Q.name, {}, _SimpleCompLayerLizard, {},
+        super(LocalNoiseModel, self).__init__(qubit_sslbls, _SimpleCompLayerRules(), basis1Q.name,
                                               sim_type=sim_type, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
@@ -856,81 +856,75 @@ class LocalNoiseModel(_ImplicitOpModel):
         #(no instruments)
 
 
-class _SimpleCompLayerLizard(_ImplicitLayerLizard):
-    """
-    The layer lizard class for a :class:`LocalNoiseModel`.
+class _SimpleCompLayerRules(_LayerRules):
 
-    This class creates layers by composing perfect target gates, and local errors.
-
-    This is a simple process because gates in a layer will have disjoint sets
-    of target qubits, and thus the local errors (and, as always, the gate
-    operations) can be composed as separate quantum processes without regard
-    for ordering.
-    """
-
-    def prep(self, layerlbl):
+    def prep_layer_operator(self, model, layerlbl, cache):
         """
-        Return the (simplified) preparation layer operator given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The preparation layer label.
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
+        if layerlbl in cache: return cache[layerlbl]
         return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def effect(self, layerlbl):
+    def povm_layer_operator(self, model, layerlbl, cache):
         """
-        Return the (simplified) POVM effect layer operator given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The effect layer label
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
-        if layerlbl in self.effect_blks['layers']:
-            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        if layerlbl in cache: return cache[layerlbl]
+        if layerlbl in self.povm_blks['layers']:
+            return self.povm_blks['layers'][layerlbl]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
-            if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.effect_label_to_povm(layerlbl)
-                if povmName in self.povm_blks['layers']:
-                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
-                    # are not present in the stored POVM's label.
-                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
-                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
-                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
-                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
-                    return self.effect_blks['layers'][layerlbl]
-        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
+            assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
+            povmName = _gt.effect_label_to_povm(layerlbl)
+            if povmName in self.povm_blks['layers']:
+                # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+                # are not present in the stored POVM's label.
+                mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                                               model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                cache.update(mpovm.simplify_effects(mpovm_lbl))
+                assert(layerlbl in cache), "Failed to create marginalized effect!"
+                return cache[layerlbl]
+            else:
+                raise KeyError(f"Could not build povm/effect for {layerlbl}!")
 
-    def operation(self, layerlbl):
+    def operation_layer_operator(self, model, layerlbl, cache):
         """
-        Return the (simplified) layer operation given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The circuit (operation-) layer label.
+            A circuit layer label.
 
         Returns
         -------
         LinearOperator
         """
-        dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
+        if layerlbl in cache: return cache[layerlbl]
+        dense = bool(model.get_sim_type() == "matrix")  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.simpleop_blks['layers'])
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.operation_blks['layers'])
 
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
@@ -938,17 +932,18 @@ class _SimpleCompLayerLizard(_ImplicitLayerLizard):
         #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
-            return self._layer_component_operation(components[0], dense)
+            ret = self._layer_component_operation(model, components[0], cache, dense)
         else:
             gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            ret = Composed(gblIdle + [self._layer_component_operation(l, dense) for l in components],
-                           dim=self.model.dim,
-                           evotype=self.model._evotype)
-            self.model._init_virtual_obj(ret)  # so ret's gpindices get set
-            return ret
+            ret = Composed(gblIdle + [self._layer_component_operation(model, l, cache, dense) for l in components],
+                           dim=model.dim, evotype=model.evotype)
+            model._init_virtual_obj(ret)  # so ret's gpindices get set
 
-    def _layer_component_operation(self, complbl, dense):
+        cache[layerlbl] = ret  # cache the final label value
+        return ret
+
+    def _layer_component_operation(self, model, complbl, cache, dense):
         """
         Retrieves the operation corresponding to one component of a layer operation.
 
@@ -964,9 +959,132 @@ class _SimpleCompLayerLizard(_ImplicitLayerLizard):
         -------
         LinearOperator
         """
+        if complbl in cache:
+            return cache[complbl]
+
+        #Note: currently we don't cache complbl because it's not the final
+        # label being created, but we could if it would improve performance.
         if isinstance(complbl, _CircuitLabel):
-            return self._create_op_for_circuitlabel(complbl, dense)
-        elif complbl in self.simpleop_blks['layers']:
-            return self.simpleop_blks['layers'][complbl]
+            ret = self._create_op_for_circuitlabel(model, complbl, dense)
+        elif complbl in self.operation_blks['layers']:
+            ret = self.operation_blks['layers'][complbl]
         else:
-            return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
+            ret = _opfactory.op_from_factories(model.factories['layers'], complbl)
+        return ret
+
+
+#REMOVE
+#class _SimpleCompLayerLizard(_ImplicitLayerLizard):
+#    """
+#    The layer lizard class for a :class:`LocalNoiseModel`.
+#
+#    This class creates layers by composing perfect target gates, and local errors.
+#
+#    This is a simple process because gates in a layer will have disjoint sets
+#    of target qubits, and thus the local errors (and, as always, the gate
+#    operations) can be composed as separate quantum processes without regard
+#    for ordering.
+#    """
+#
+#    def prep(self, layerlbl):
+#        """
+#        Return the (simplified) preparation layer operator given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            The preparation layer label.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
+#
+#    def effect(self, layerlbl):
+#        """
+#        Return the (simplified) POVM effect layer operator given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            The effect layer label
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        if layerlbl in self.effect_blks['layers']:
+#            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+#        else:
+#            # See if this effect label could correspond to a *marginalized* POVM, and
+#            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+#            if isinstance(layerlbl, _Lbl):  # this should always be the case...
+#                povmName = _gt.effect_label_to_povm(layerlbl)
+#                if povmName in self.povm_blks['layers']:
+#                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+#                    # are not present in the stored POVM's label.
+#                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+#                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+#                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+#                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
+#                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
+#                    return self.effect_blks['layers'][layerlbl]
+#        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
+#
+#    def operation(self, layerlbl):
+#        """
+#        Return the (simplified) layer operation given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            The circuit (operation-) layer label.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
+#        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+#        components = layerlbl.components
+#        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.simpleop_blks['layers'])
+#
+#        # OLD: special case: 'Gi' acts as global idle!
+#        #if hasGlobalIdle and layerlbl == 'Gi' and \
+#        #   'Gi' not in self.simpleop_blks['layers'])):
+#        #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
+#
+#        if len(components) == 1 and not bHasGlobalIdle:
+#            return self._layer_component_operation(components[0], dense)
+#        else:
+#            gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+#            #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
+#            ret = Composed(gblIdle + [self._layer_component_operation(l, dense) for l in components],
+#                           dim=self.model.dim,
+#                           evotype=self.model._evotype)
+#            self.model._init_virtual_obj(ret)  # so ret's gpindices get set
+#            return ret
+#
+#    def _layer_component_operation(self, complbl, dense):
+#        """
+#        Retrieves the operation corresponding to one component of a layer operation.
+#
+#        Parameters
+#        ----------
+#        complbl : Label
+#            A component label of a larger layer label.
+#
+#        dense : bool
+#            Whether to create dense operators or not.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        if isinstance(complbl, _CircuitLabel):
+#            return self._create_op_for_circuitlabel(complbl, dense)
+#        elif complbl in self.simpleop_blks['layers']:
+#            return self.simpleop_blks['layers'][complbl]
+#        else:
+#            return _opfactory.op_from_factories(self.model.factories['layers'], complbl)

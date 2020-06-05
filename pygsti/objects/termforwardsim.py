@@ -140,7 +140,7 @@ class TermForwardSimulator(ForwardSimulator):
     """
 
     def __init__(self, dim, layer_op_server, paramvec,  # below here are simtype-specific args
-                 mode, max_order, desired_perr=None, allowed_perr=None,
+                 mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
@@ -255,7 +255,8 @@ class TermForwardSimulator(ForwardSimulator):
         self.desired_pathmagnitude_gap = desired_perr
         self.allowed_perr = allowed_perr  # used to abort optimizations when errors in probs are too high
         self.perr_heuristic = perr_heuristic  # method used to compute expected errors in probs (often heuristic)
-        self.min_term_mag = min_term_mag  # minimum abs(term coeff) to consider
+        self.min_term_mag = min_term_mag if (min_term_mag is not None) \
+            else desired_perr / (10 * max_paths_per_outcome)   # minimum abs(term coeff) to consider
         self.max_paths_per_outcome = max_paths_per_outcome
 
         self.poly_vindices_per_int = _Polynomial._vindices_per_int(len(paramvec))

@@ -27,7 +27,7 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
+from .layerrules import LayerRules as _LayerRules
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
@@ -714,10 +714,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         if global_idle_layer is None:
             self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
-        lizardArgs = {'add_idle_noise': self.addIdleNoiseToAllGates,
-                      'errcomp_type': errcomp_type, 'dense_rep': not sparse}
-        super(CloudNoiseModel, self).__init__(qubit_sslbls, "pp", {}, CloudNoiseLayerLizard,
-                                              lizardArgs, sim_type=sim_type, evotype=evotype)
+        layer_rules = CloudNoiseLayerRules(self.addIdleNoiseToAllGates, errcomp_type, not sparse)
+        super(CloudNoiseModel, self).__init__(qubit_sslbls, layer_rules, "pp", sim_type=sim_type, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
@@ -1271,77 +1269,66 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     return fullCloudErr
 
 
-class CloudNoiseLayerLizard(_ImplicitLayerLizard):
-    """
-    A layer-rule that creates layers by composing perfect target gates, global idle error, and local "cloud" errors.
+class CloudNoiseLayerRules(_LayerRules):
 
-    This is the standard layer lizard class for a :class:`CloudNoiseModel`.
+    def __init__(self, add_idle_noise, errcomp_type, dense_rep):
+        self.add_idle_noise = add_idle_noise
+        self.errcomp_type = errcomp_type
+        self.dense_rep = dense_rep
+        # can't create dense-rep LindbladOps with dense_rep=False
 
-    The value of `model._lizardArgs['errcomp_type']` determines which of two
-    composition strategies are employed.  When the errcomp_type is `"gates"`,
-    the errors on multiple gates in a single layer are composed as separate
-    and subsequent processes.  Specifically, the layer operation has the form
-    `Composed(target,idleErr,cloudErr)` where `target` is a composition of all
-    the ideal gate operations in the layer, `idleErr` is idle error
-    (`.operation_blks['layers']['globalIdle']`), and `cloudErr` is the
-    composition (ordered as layer-label) of cloud-noise contributions, i.e. a
-    map that acts as the product of exponentiated error-generator matrices.
-    `"errorgens"`, on the other hand, means that layer operations have the form
-    `Composed(target, error)` where `target` is as above and `error` results
-    from composing the idle and cloud-noise error *generators*, i.e. a map that
-    acts as the exponentiated sum of error generators (ordering is irrelevant in
-    this case).
-    """
-
-    def prep(self, layerlbl):
+    def prep_layer_operator(self, model, layerlbl, cache):
         """
-        Retrieve or create the state preparation operation given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            A state preparation label.
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
-        return self.prep_blks['layers'][layerlbl]  # prep_blks['layers'] are full prep ops
+        if layerlbl in cache: return cache[layerlbl]
+        return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def effect(self, layerlbl):
+    def povm_layer_operator(self, model, layerlbl, cache):
         """
-        Retrieve or create the POVM effect operation given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            A POVM effect label (typically a "simplified" label of the form POVM_label:outcome_label)
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
-        if layerlbl in self.effect_blks['layers']:
-            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        if layerlbl in cache: return cache[layerlbl]
+        if layerlbl in self.povm_blks['layers']:
+            return self.povm_blks['layers'][layerlbl]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
-            if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.effect_label_to_povm(layerlbl)
-                if povmName in self.povm_blks['layers']:
-                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
-                    # are not present in the stored POVM's label.
-                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
-                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE?
-                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
-                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
-                    return self.effect_blks['layers'][layerlbl]
-        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
+            assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
+            povmName = _gt.effect_label_to_povm(layerlbl)
+            if povmName in self.povm_blks['layers']:
+                # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+                # are not present in the stored POVM's label.
+                mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                                               model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                cache.update(mpovm.simplify_effects(mpovm_lbl))
+                assert(layerlbl in cache), "Failed to create marginalized effect!"
+                return cache[layerlbl]
+            else:
+                raise KeyError(f"Could not build povm/effect for {layerlbl}!")
 
-    def operation(self, layerlbl):
+    def operation_layer_operator(self, model, layerlbl, cache):
         """
-        Retrieve or create the circuit layer operation given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
@@ -1352,15 +1339,13 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         -------
         LinearOperator
         """
-        dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
+        if layerlbl in cache: return cache[layerlbl]
+        dense = bool(model._sim_type == "matrix")  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
-            return self._create_op_for_circuitlabel(layerlbl, dense)
-
-        add_idle_noise = self.model._lizardArgs['add_idle_noise']
-        errcomp_type = self.model._lizardArgs['errcomp_type']
-        dense_rep = self.model._lizardArgs['dense_rep'] or dense
-        # can't create dense-rep LindbladOps with dense_rep=False
+            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            cache[layerlbl] = op
+            return op
 
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
@@ -1370,50 +1355,49 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
 
         components = layerlbl.components
         if len(components) == 0:  # or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
-            return self.simpleop_blks['layers']['globalIdle']  # idle!
+            return self.operation_blks['layers']['globalIdle']  # idle!
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self._layer_component_targetop(l) for l in components], dim=self.model.dim,
-                                evotype=self.model._evotype)
-        else: targetOp = self._layer_component_targetop(components[0])
+            targetOp = Composed([self._layer_component_targetop(model, l, cache) for l in components],
+                                dim=model.dim, evotype=model.evotype)
+        else: targetOp = self._layer_component_targetop(model, components[0], cache)
         ops_to_compose = [targetOp]
 
-        if errcomp_type == "gates":
-            if add_idle_noise: ops_to_compose.append(self.simpleop_blks['layers']['globalIdle'])
-            component_cloudnoise_ops = self._layer_component_cloudnoises(components)
+        if self.errcomp_type == "gates":
+            if self.add_idle_noise: ops_to_compose.append(self.operation_blks['layers']['globalIdle'])
+            component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, cache)
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
-                                        dim=self.model.dim, evotype=self.model._evotype)
+                                        dim=model.dim, evotype=model.evotype)
                 else:
                     localErr = component_cloudnoise_ops[0]
                 ops_to_compose.append(localErr)
 
-        elif errcomp_type == "errorgens":
+        elif self.errcomp_type == "errorgens":
             #We compose the target operations to create a
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [self.simpleop_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
-            errorGens.extend(self._layer_component_cloudnoises(components))
+            errorGens = [self.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
+            errorGens.extend(self._layer_component_cloudnoises(model, components, cache))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
-                    error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
-                                               evotype=self.model._evotype),
-                                     dense_rep=dense_rep)
+                    error = Lindblad(None, Sum(errorGens, dim=model.dim, evotype=model.evotype),
+                                     dense_rep=self.dense_rep)
                 else:
-                    error = Lindblad(None, errorGens[0], dense_rep=dense_rep)
+                    error = Lindblad(None, errorGens[0], dense_rep=self.dense_rep)
                 ops_to_compose.append(error)
         else:
-            raise ValueError("Invalid errcomp_type in CloudNoiseLayerLizard: %s" % errcomp_type)
+            raise ValueError(f"Invalid errcomp_type in CloudNoiseLayerRules: {self.errcomp_type}")
 
-        ret = Composed(ops_to_compose, dim=self.model.dim,
-                       evotype=self.model._evotype)
-        self.model._init_virtual_obj(ret)  # so ret's gpindices get set
+        ret = Composed(ops_to_compose, dim=model.dim, evotype=model.evotype)
+        model._init_virtual_obj(ret)  # so ret's gpindices get set
+        cache[layerlbl] = ret  # cache the final label value
         return ret
 
-    def _layer_component_targetop(self, complbl):
+    def _layer_component_targetop(self, model, complbl, cache):
         """
         Retrieves the target- or ideal-operation portion of one component of a layer operation.
 
@@ -1426,17 +1410,20 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         -------
         LinearOperator
         """
+        if complbl in cache:
+            return cache[complbl]
+        
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
-        elif complbl in self.simpleop_blks['layers']:
-            return self.simpleop_blks['layers'][complbl]
+        elif complbl in self.operation_blks['layers']:
+            return self.operation_blks['layers'][complbl]
         else:
-            return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
+            return _opfactory.op_from_factories(model.factories['layers'], complbl)
 
-    def _layer_component_cloudnoises(self, complbl_list):
+    def _layer_component_cloudnoises(self, model, complbl_list, cache):
         """
         Retrieves cloud-noise portion of the components of a layer operation.
 
@@ -1455,10 +1442,204 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         """
         ret = []
         for complbl in complbl_list:
-            if complbl in self.simpleop_blks['cloudnoise']:
-                ret.append(self.simpleop_blks['cloudnoise'][complbl])
+            if complbl in self.operation_blks['cloudnoise']:
+                ret.append(self.operation_blks['cloudnoise'][complbl])
             else:
                 try:
-                    ret.append(_opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl))
+                    ret.append(_opfactory.op_from_factories(model.factories['cloudnoise'], complbl))
                 except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
         return ret
+
+
+#REMOVE
+#class CloudNoiseLayerLizard(_ImplicitLayerLizard):
+#    """
+#    A layer-rule that creates layers by composing perfect target gates, global idle error, and local "cloud" errors.
+#
+#    This is the standard layer lizard class for a :class:`CloudNoiseModel`.
+#
+#    The value of `model._lizardArgs['errcomp_type']` determines which of two
+#    composition strategies are employed.  When the errcomp_type is `"gates"`,
+#    the errors on multiple gates in a single layer are composed as separate
+#    and subsequent processes.  Specifically, the layer operation has the form
+#    `Composed(target,idleErr,cloudErr)` where `target` is a composition of all
+#    the ideal gate operations in the layer, `idleErr` is idle error
+#    (`.operation_blks['layers']['globalIdle']`), and `cloudErr` is the
+#    composition (ordered as layer-label) of cloud-noise contributions, i.e. a
+#    map that acts as the product of exponentiated error-generator matrices.
+#    `"errorgens"`, on the other hand, means that layer operations have the form
+#    `Composed(target, error)` where `target` is as above and `error` results
+#    from composing the idle and cloud-noise error *generators*, i.e. a map that
+#    acts as the exponentiated sum of error generators (ordering is irrelevant in
+#    this case).
+#    """
+#
+#    def prep(self, layerlbl):
+#        """
+#        Retrieve or create the state preparation operation given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            A state preparation label.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        return self.prep_blks['layers'][layerlbl]  # prep_blks['layers'] are full prep ops
+#
+#    def effect(self, layerlbl):
+#        """
+#        Retrieve or create the POVM effect operation given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            A POVM effect label (typically a "simplified" label of the form POVM_label:outcome_label)
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        if layerlbl in self.effect_blks['layers']:
+#            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+#        else:
+#            # See if this effect label could correspond to a *marginalized* POVM, and
+#            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+#            if isinstance(layerlbl, _Lbl):  # this should always be the case...
+#                povmName = _gt.effect_label_to_povm(layerlbl)
+#                if povmName in self.povm_blks['layers']:
+#                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+#                    # are not present in the stored POVM's label.
+#                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+#                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE?
+#                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+#                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
+#                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
+#                    return self.effect_blks['layers'][layerlbl]
+#        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
+#
+#    def operation(self, layerlbl):
+#        """
+#        Retrieve or create the circuit layer operation given by `layerlbl`.
+#
+#        Parameters
+#        ----------
+#        layerlbl : Label
+#            A circuit layer label.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
+#
+#        if isinstance(layerlbl, _CircuitLabel):
+#            return self._create_op_for_circuitlabel(layerlbl, dense)
+#
+#        add_idle_noise = self.model._lizardArgs['add_idle_noise']
+#        errcomp_type = self.model._lizardArgs['errcomp_type']
+#        dense_rep = self.model._lizardArgs['dense_rep'] or dense
+#        # can't create dense-rep LindbladOps with dense_rep=False
+#
+#        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+#        Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
+#        Sum = _op.ComposedErrorgen
+#        #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
+#        #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
+#
+#        components = layerlbl.components
+#        if len(components) == 0:  # or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
+#            return self.simpleop_blks['layers']['globalIdle']  # idle!
+#
+#        #Compose target operation from layer's component labels, which correspond
+#        # to the perfect (embedded) target ops in op_blks
+#        if len(components) > 1:
+#            targetOp = Composed([self._layer_component_targetop(l) for l in components], dim=self.model.dim,
+#                                evotype=self.model._evotype)
+#        else: targetOp = self._layer_component_targetop(components[0])
+#        ops_to_compose = [targetOp]
+#
+#        if errcomp_type == "gates":
+#            if add_idle_noise: ops_to_compose.append(self.simpleop_blks['layers']['globalIdle'])
+#            component_cloudnoise_ops = self._layer_component_cloudnoises(components)
+#            if len(component_cloudnoise_ops) > 0:
+#                if len(component_cloudnoise_ops) > 1:
+#                    localErr = Composed(component_cloudnoise_ops,
+#                                        dim=self.model.dim, evotype=self.model._evotype)
+#                else:
+#                    localErr = component_cloudnoise_ops[0]
+#                ops_to_compose.append(localErr)
+#
+#        elif errcomp_type == "errorgens":
+#            #We compose the target operations to create a
+#            # final target op, and compose this with a *singe* Lindblad gate which has as
+#            # its error generator the composition (sum) of all the factors' error gens.
+#            errorGens = [self.simpleop_blks['layers']['globalIdle'].errorgen] if add_idle_noise else []
+#            errorGens.extend(self._layer_component_cloudnoises(components))
+#            if len(errorGens) > 0:
+#                if len(errorGens) > 1:
+#                    error = Lindblad(None, Sum(errorGens, dim=self.model.dim,
+#                                               evotype=self.model._evotype),
+#                                     dense_rep=dense_rep)
+#                else:
+#                    error = Lindblad(None, errorGens[0], dense_rep=dense_rep)
+#                ops_to_compose.append(error)
+#        else:
+#            raise ValueError("Invalid errcomp_type in CloudNoiseLayerLizard: %s" % errcomp_type)
+#
+#        ret = Composed(ops_to_compose, dim=self.model.dim,
+#                       evotype=self.model._evotype)
+#        self.model._init_virtual_obj(ret)  # so ret's gpindices get set
+#        return ret
+#
+#    def _layer_component_targetop(self, complbl):
+#        """
+#        Retrieves the target- or ideal-operation portion of one component of a layer operation.
+#
+#        Parameters
+#        ----------
+#        complbl : Label
+#            A component label of a larger layer label.
+#
+#        Returns
+#        -------
+#        LinearOperator
+#        """
+#        if isinstance(complbl, _CircuitLabel):
+#            raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
+#            # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
+#            #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
+#            # Maybe we just need to expand the label and create a composition of those layers?
+#        elif complbl in self.simpleop_blks['layers']:
+#            return self.simpleop_blks['layers'][complbl]
+#        else:
+#            return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
+#
+#    def _layer_component_cloudnoises(self, complbl_list):
+#        """
+#        Retrieves cloud-noise portion of the components of a layer operation.
+#
+#        Get any present cloudnoise ops from a list of components.  This function processes
+#        a list rather than an item because it's OK if some components don't have
+#        corresponding cloudnoise ops - we just leave those off.
+#
+#        Parameters
+#        ----------
+#        complbl_list : list
+#            A list of circuit-layer component labels.
+#
+#        Returns
+#        -------
+#        list
+#        """
+#        ret = []
+#        for complbl in complbl_list:
+#            if complbl in self.simpleop_blks['cloudnoise']:
+#                ret.append(self.simpleop_blks['cloudnoise'][complbl])
+#            else:
+#                try:
+#                    ret.append(_opfactory.op_from_factories(self.model.factories['cloudnoise'], complbl))
+#                except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
+#        return ret
