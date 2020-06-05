@@ -19,18 +19,19 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import optimize as _opt, tools as _tools
 from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
-from .computationcache import ComputationCache as _ComputationCache
+#from .computationcache import ComputationCache as _ComputationCache
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
-CHECK = False
-CHECK_JACOBIAN = False
-FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
+#REMOVE:
+#CHECK = False
+#CHECK_JACOBIAN = False
+#FLOATSIZE = 8  # TODO - get bytes-in-float a better way!
 
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
-          regularization=None, penalties=None, op_label_aliases=None,
-          cache=None, comm=None, mem_limit=None, **addl_args):
+           regularization=None, penalties=None, op_label_aliases=None,
+           comm=None, mem_limit=None, **addl_args):
     """
     A convenience function for creating an objective function.
 
@@ -61,9 +62,6 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     op_label_aliases : dict, optional
         An alias dictionary.
 
-    cache : ComputationCache, optional
-        A computation cache to initialize and use.
-
     comm : mpi4py.MPI.Comm, optional
         For splitting load among processors.
 
@@ -82,8 +80,8 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
         circuits = _BulkCircuitList(circuits, op_label_aliases)
 
     resource_alloc = _ResourceAllocation(comm, mem_limit)
-    ofn = objfn_cls(model, dataset, circuits, regularization, penalties, cache,
-                    resource_alloc, verbosity=0, *addl_args)
+    ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
+                                resource_alloc, verbosity=0, *addl_args)
     return ofn
 
     #def __len__(self):
@@ -199,7 +197,7 @@ class ObjectiveFunctionBuilder(object):
         self.penalties = penalties
         self.additional_args = kwargs
 
-    def build(self, mdl, dataset, circuit_list, resource_alloc=None, cache=None, verbosity=0):
+    def build(self, mdl, dataset, circuits, resource_alloc=None, verbosity=0):
         """
         Build an objective function.  This is the workhorse method of an :class:`ObjectiveFunctionBuilder`.
 
@@ -215,16 +213,12 @@ class ObjectiveFunctionBuilder(object):
         dataset : DataSet.
             The data set.
 
-        circuit_list : list
+        circuits : list
             The circuits.
 
         resource_alloc : ResourceAllocation, optional
             Available resources and how they should be allocated for objective
             function computations.
-
-        cache : ComputationCache, optional
-            A cache to use, possibly already populated with useful values (from previous
-            calls with the *same* model, dataset, and circuit list.
 
         verbosity : int, optional
             Level of detail to print to stdout.
@@ -233,8 +227,32 @@ class ObjectiveFunctionBuilder(object):
         -------
         MDSObjectiveFunction
         """
-        return self.cls_to_build(mdl=mdl, dataset=dataset, circuit_list=circuit_list,
-                                 resource_alloc=resource_alloc, cache=cache, verbosity=verbosity,
+        return self.cls_to_build.create_from(mdl=mdl, dataset=dataset, circuits=circuits,
+                                             resource_alloc=resource_alloc, verbosity=verbosity,
+                                             regularization=self.regularization, penalties=self.penalties,
+                                             name=self.name, description=self.description, **self.additional_args)
+
+    def build_from_store(self, mdc_store, verbosity=0):
+        """
+        Build an objective function.  This is a workhorse method of an :class:`ObjectiveFunctionBuilder`.
+
+        Takes a single "store" argument (apart from `verbosity`) that encapsulates all the remaining
+        ingredients needed to build a :class:`MDCObjectiveFunction` object (beyond what is stored in
+        this builder object).
+
+        Parameters
+        ----------
+        mdc_store : ModelDatasetCircuitsStore
+            The store object, which doubles as a cache for reused information.
+
+        verbosity : int, optional
+            Level of detail to print to stdout.
+
+        Returns
+        -------
+        MDSObjectiveFunction
+        """
+        return self.cls_to_build(mdc_store, verbosity=verbosity,
                                  regularization=self.regularization, penalties=self.penalties,
                                  name=self.name, description=self.description, **self.additional_args)
 
@@ -782,38 +800,61 @@ class ModelDatasetCircuitsStore(object):
     that holds the values of an objective function at a certain parameter-space
     point.
     """
-    def __init__(self, model, dataset, circuits=None, resource_alloc=None):
+    def __init__(self, model, dataset, circuits=None, resource_alloc=None, array_types=('p', 'dp'),
+                 precomp_layout=None, verbosity=0):
         self.dataset = dataset
         self.model = model
         #self.nparams = mdl.num_params()
         #self.opBasis = mdl.basis
-        self.resource_alloc = _ResourceAllocation.create_from(resource_alloc)
+        self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
         # expand = ??? get from model based on fwdsim type?
 
         circuit_list = circuits if (circuits is not None) else list(dataset.keys())
         bulk_circuit_list = circuit_list if isinstance(
             circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
-        self.circuits = CircuitProbabilityArrayLayout(bulk_circuit_list, model, dataset, expand)
+        self.circuits = bulk_circuit_list
+
+        #The model's forward simulator gets to determine how the circuit outcome
+        # probabilities (and other results) are stored in arrays - this makes sense
+        # because it understands how to make this layout amenable to fast computation.
+        if precomp_layout is None:
+            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
+                                                  array_types)  # a CircuitProbabilityArrayLayout
+        else:
+            self.layout = precomp_layout
+        self.array_types = array_types
 
         #self.circuits_to_use = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
-        self.ds_circuits_to_use = self.circuits.apply_aliases()
+        self.ds_circuits = self.circuits.apply_aliases()
 
-        #HERE - create evaltree as self.circuits?
-        if not self.cache.has_evaltree():
-            subcalls = self.get_evaltree_subcalls()
-            evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
-                                                     self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-            self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
-                                    subcalls, self.raw_objfn.printer - 1)
+        # computed by add_count_vectors
+        self.counts = None
+        self.total_counts = None
+        self.freqs = None
 
-        self.eval_tree = self.cache.eval_tree
-        self.lookup = self.cache.lookup
-        self.outcomes_lookup = self.cache.outcomes_lookup
-        self.wrt_block_size = self.cache.wrt_block_size
-        self.wrt_block_size2 = self.cache.wrt_block_size2
+        # computed by add_omitted_freqs
+        self.firsts = None
+        self.indicesOfCircuitsWithOmittedData = None
+        self.dprobs_omitted_rowsum = None
 
-        self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
+        self.time_dependent = False  # indicates whether the data should be treated as time-resolved
+
+        #if not self.cache.has_evaltree():
+        #    subcalls = self.get_evaltree_subcalls()
+        #    evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
+        #                                             self.raw_objfn.profiler, self.raw_objfn.distribute_method)
+        #    self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
+        #                            subcalls, self.raw_objfn.printer - 1)
+        #self.eval_tree = self.cache.eval_tree
+        #self.lookup = self.cache.lookup
+        #self.outcomes_lookup = self.cache.outcomes_lookup
+        #self.wrt_block_size = self.cache.wrt_block_size
+        #self.wrt_block_size2 = self.cache.wrt_block_size2
+
+        #convenience attributes (could make properties?)
+        self.nparams = self.model.num_params()
+        self.nelements = len(self.layout)
 
     def get_num_data_params(self):
         """
@@ -823,92 +864,143 @@ class ModelDatasetCircuitsStore(object):
         -------
         int
         """
-        return self.dataset.get_degrees_of_freedom(self.ds_circuits_to_use,
+        return self.dataset.get_degrees_of_freedom(self.ds_circuits,
                                                    aggregate_times=not self.time_dependent)
+
+    def add_omitted_freqs(self, printer=None, force=False):
+        """
+        Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
+        """
+        if self.firsts is None or force:
+            self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+            for i, c in enumerate(self.circuits):
+                lklen = _slct.length(self.layout.indices_for_index(i))
+                if 0 < lklen < self.model.compute_num_outcomes(c):
+                    self.firsts.append(_slct.to_array(self.layout.indices_for_index(i))[0])
+                    self.indicesOfCircuitsWithOmittedData.append(i)
+            if len(self.firsts) > 0:
+                self.firsts = _np.array(self.firsts, 'i')
+                self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
+                self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
+                if printer: printer.log("SPARSE DATA: %d of %d rows have sparse data" %
+                                        (len(self.firsts), len(self.circuits)))
+            else:
+                self.firsts = None  # no omitted probs
+
+    def add_count_vectors(self, force=False):
+        """
+        Ensure this store contains count and total-count vectors.
+        """
+        if self.counts is None or self.total_counts is None or force:
+            counts = _np.empty(self.nelements, 'd')
+            totals = _np.empty(self.nelements, 'd')
+
+            for (i, circuit) in enumerate(self.ds_circuits):
+                cnts = self.dataset[circuit].counts
+                totals[self.layout.indices_for_index(i)] = sum(cnts.values())  # dataset[opStr].total
+                counts[self.layout.indices_for_index(i)] = [cnts.get(x, 0) for x in self.layout.outcomes_for_index(i)]
+
+            if self.circuits.circuit_weights is not None:
+                for i in range(len(self.ds_circuits)):  # multiply N's by weights
+                    counts[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
+                    totals[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
+
+            self.counts = counts
+            self.total_counts = totals
+            self.freqs = counts / totals
 
 
 class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
-    """ Additionally holds quantities at a specific model-parameter-space point """
+    """
+    Additionally holds quantities at a specific model-parameter-space point.
+    """
 
-    def __init__(self, mds_store, HERE):
-        self.enable_hessian = enable_hessian
+    def __init__(self, mdc_store, verbosity):
+        super().__init__(mdc_store.model, mdc_store.dataset, mdc_store.circuits, mdc_store.resource_alloc,
+                         mdc_store.array_types, mdc_store.layout, verbosity)
 
         # Memory check - see if there's enough memory to hold all the evaluated quantities
-        persistent_mem = self.get_persistent_memory_estimate()
-        in_gb = 1.0 / 1024.0**3  # in gigabytes
-        if self.raw_objfn.mem_limit is not None:
-            in_gb = 1.0 / 1024.0**3  # in gigabytes
-            cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
-            if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
-                raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
-                                  "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
-                                                   persistent_mem * in_gb))
+        #persistent_mem = self.layout.memory_estimate()
+        #in_gb = 1.0 / 1024.0**3  # in gigabytes
+        #if self.raw_objfn.mem_limit is not None:
+        #    in_gb = 1.0 / 1024.0**3  # in gigabytes
+        #    cur_mem = _profiler._get_max_mem_usage(self.raw_objfn.comm)  # is this what we want??
+        #    if self.raw_objfn.mem_limit - cur_mem < persistent_mem:
+        #        raise MemoryError("Memory limit ({}-{} GB) is < memory required to hold final results "
+        #                          "({} GB)".format(self.raw_objfn.mem_limit * in_gb, cur_mem * in_gb,
+        #                                           persistent_mem * in_gb))
+        #
+        #    self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
+        #    evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
+        #    self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
+        #    self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+        #                               (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
+        #    assert(evt_mlim > 0), 'Not enough memory, exiting..'
+        #else:
+        #    evt_mlim = None
 
-            self.gthrMem = int(0.1 * (self.raw_objfn.mem_limit - persistent_mem - cur_mem))
-            evt_mlim = self.raw_objfn.mem_limit - persistent_mem - self.gthrMem - cur_mem
-            self.raw_objfn.printer.log("Memory limit = %.2fGB" % (self.raw_objfn.mem_limit * in_gb))
-            self.raw_objfn.printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
-                                       (cur_mem * in_gb, persistent_mem * in_gb, self.gthrMem * in_gb))
-            assert(evt_mlim > 0), 'Not enough memory, exiting..'
-        else:
-            evt_mlim = None
+        self.probs = None
+        self.dprobs = None
+        self.hprobs = None
+        self.jac = None
+        self.v = None  # for time dependence - rename to objfn_terms or objfn_lsvec?
+
+    #REMOVE
+    ##PRIVATE
+    #def get_persistent_memory_estimate(self, num_elements=None):
+    #    #  Estimate & check persistent memory (from allocs within objective function)
+    #    """
+    #    Compute the amount of memory needed to perform evaluations of this objective function.
+    #
+    #    This number includes both intermediate and final results, and assumes
+    #    that the types of evauations given by :method:`get_evaltree_subcalls`
+    #    are required.
+    #
+    #    Parameters
+    #    ----------
+    #    num_elements : int, optional
+    #        The number of elements (circuit outcomes) that will be computed.
+    #
+    #    Returns
+    #    -------
+    #    int
+    #    """
+    #    if num_elements is None:
+    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
+    #        nc = len(self.circuits_to_use)
+    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
+    #    else:
+    #        ne = num_elements
+    #    np = self.mdl.num_params()
+    #
+    #    # "persistent" memory is that used to store the final results.
+    #    obj_fn_mem = FLOATSIZE * ne
+    #    jac_mem = FLOATSIZE * ne * np
+    #    hess_mem = FLOATSIZE * ne * np**2
+    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
+    #    if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
+    #        persistent_mem += hess_mem  # we need room for the hessian too!
+    #    # TODO: what about "bulk_hprobs_by_block"?
+    #
+    #    return persistent_mem
+    #
+    ##PRIVATE
+    #def get_evaltree_subcalls(self):
+    #    """
+    #    The types of calls that will be made to an evaluation tree.
+    #
+    #    This information is used for memory estimation purposes.
+    #
+    #    Returns
+    #    -------
+    #    list
+    #    """
+    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
+    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
+    #    return calls
 
 
-    #PRIVATE
-    def get_persistent_memory_estimate(self, num_elements=None):
-        #  Estimate & check persistent memory (from allocs within objective function)
-        """
-        Compute the amount of memory needed to perform evaluations of this objective function.
-
-        This number includes both intermediate and final results, and assumes
-        that the types of evauations given by :method:`get_evaltree_subcalls`
-        are required.
-
-        Parameters
-        ----------
-        num_elements : int, optional
-            The number of elements (circuit outcomes) that will be computed.
-
-        Returns
-        -------
-        int
-        """
-        if num_elements is None:
-            nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-            nc = len(self.circuits_to_use)
-            ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-        else:
-            ne = num_elements
-        np = self.mdl.num_params()
-
-        # "persistent" memory is that used to store the final results.
-        obj_fn_mem = FLOATSIZE * ne
-        jac_mem = FLOATSIZE * ne * np
-        hess_mem = FLOATSIZE * ne * np**2
-        persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-        if any([nm == "bulk_fill_hprobs" for nm in self.get_evaltree_subcalls()]):
-            persistent_mem += hess_mem  # we need room for the hessian too!
-        # TODO: what about "bulk_hprobs_by_block"?
-
-        return persistent_mem
-
-    #PRIVATE
-    def get_evaltree_subcalls(self):
-        """
-        The types of calls that will be made to an evaluation tree.
-
-        This information is used for memory estimation purposes.
-
-        Returns
-        -------
-        list
-        """
-        calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-        if self.enable_hessian: calls.append("bulk_fill_hprobs")
-        return calls
-
-
-class MDSObjectiveFunction(ObjectiveFunction):
+class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore):
     """
     An objective function whose probabilities and counts are given by a Model and DataSet, respectively.
 
@@ -955,25 +1047,32 @@ class MDSObjectiveFunction(ObjectiveFunction):
         A description of this objective function.
     """
 
-    @clasmethod
-    def create_from(cls, raw_objfn, mdl, dataset, circuit_list, cache=None, enable_hessian=False):
-        pass
+    @classmethod
+    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, enable_hessian=False):
+        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+        mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
+        return cls(raw_objfn, mdc_store, verbosity)
 
-    def __init__(self, mds_store):  # mds_store can be an evaluated or normal MDS store...
+    def __init__(self, raw_objfn, mdc_store, verbosity=0):
         """
         Create a new MDSObjectiveFunction.
+
+        mdc_store is thought to be a normal MDS store, but could also be an evaluated one,
+        in which case should we take enable_hessian from it?
         """
+        EvaluatedModelDatasetCircuitsStore.__init__(mdc_store)
         self.raw_objfn = raw_objfn
+
         #self.dataset = dataset
         #self.mdl = mdl
         #self.nparams = mdl.num_params()
         #self.opBasis = mdl.basis
         #self.enable_hessian = enable_hessian
-        self.gthrMem = None  # set below
+        #self.gthrMem = None  # set below
 
-        self.time_dependent = False
-        self.check = CHECK
-        self.check_jacobian = CHECK_JACOBIAN
+        #self.time_dependent = False
+        #REMOVED: self.check = CHECK
+        #REMOVED: self.check_jacobian = CHECK_JACOBIAN
 
         #circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
         #bulk_circuit_list = circuit_list if isinstance(
@@ -1018,7 +1117,7 @@ class MDSObjectiveFunction(ObjectiveFunction):
         #self.wrt_block_size2 = self.cache.wrt_block_size2
         #
         #self.nelements = self.eval_tree.num_final_elements()  # shorthand for combined spam+circuit dimension
-        self.firsts = None  # no omitted probs by default
+        #self.firsts = None  # no omitted probs by default
 
     @property
     def name(self):
@@ -1348,32 +1447,32 @@ class MDSObjectiveFunction(ObjectiveFunction):
     #    return self.dataset.degrees_of_freedom(self.ds_circuits_to_use,
     #                                               aggregate_times=not self.time_dependent)
 
-    def _precompute_omitted_freqs(self):
-        """
-        Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
-        """
-        self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-        for i, c in enumerate(self.circuits_to_use):
-            lklen = _slct.length(self.lookup[i])
-            if 0 < lklen < self.mdl.compute_num_outcomes(c):
-                self.firsts.append(_slct.to_array(self.lookup[i])[0])
-                self.indicesOfCircuitsWithOmittedData.append(i)
-        if len(self.firsts) > 0:
-            self.firsts = _np.array(self.firsts, 'i')
-            self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-            self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-            self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-                                       (len(self.firsts), len(self.circuits_to_use)))
-        else:
-            self.firsts = None  # no omitted probs
-
-    def _compute_count_vectors(self):
-        """
-        Ensure self.cache contains count and total-count vectors.
-        """
-        if not self.cache.has_count_vectors():
-            self.cache.add_count_vectors(self.dataset, self.ds_circuits_to_use, self.circuit_weights)
-        return self.cache.counts, self.cache.total_counts
+    #def _precompute_omitted_freqs(self):
+    #    """
+    #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
+    #    """
+    #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+    #    for i, c in enumerate(self.circuits_to_use):
+    #        lklen = _slct.length(self.lookup[i])
+    #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
+    #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
+    #            self.indicesOfCircuitsWithOmittedData.append(i)
+    #    if len(self.firsts) > 0:
+    #        self.firsts = _np.array(self.firsts, 'i')
+    #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
+    #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
+    #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
+    #                                   (len(self.firsts), len(self.circuits_to_use)))
+    #    else:
+    #        self.firsts = None  # no omitted probs
+    #
+    #def _compute_count_vectors(self):
+    #    """
+    #    Ensure self.cache contains count and total-count vectors.
+    #    """
+    #    if not self.cache.has_count_vectors():
+    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits_to_use, self.circuit_weights)
+    #    return self.cache.counts, self.cache.total_counts
 
     def _construct_hessian(self, counts_all, total_counts_all, prob_clip_interval):
         """
@@ -3828,9 +3927,9 @@ class RawTVDFunction(RawObjectiveFunction):
         raise NotImplementedError("Derivatives not implemented for TVD yet!")
 
 
-class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
+class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     """
-    A time-independent model-based (:class:`MDSObjectiveFunction`-derived) objective function.
+    A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
 
     Parameters
     ----------
@@ -3903,24 +4002,28 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         """
         return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
-    def __init__(self, raw_objfn, mdl, dataset, circuit_list, penalties=None, cache=None,
-                 verbosity=0, enable_hessian=False):
+    @classmethod
+    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
+                    verbosity=0, enable_hessian=False):
+        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+        mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
+        return cls(raw_objfn, mdc_store, penalties, verbosity)
 
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, cache, enable_hessian)
+    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
+
+        super().__init__(raw_objfn, mdc_store, verbosity=0)
 
         if penalties is None: penalties = {}
         self.ex = self.set_penalties(**penalties)  # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
 
-        #  Allocate peristent memory
-        #  (must be AFTER possible operation sequence permutation by
-        #   tree and initialization of ds_circuits_to_use)
+        #Setup underlying EvaluatedModelDatasetCircuitsStore object
+        #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
-        self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if self.enable_hessian else None
-        self.counts, self.N = self._compute_count_vectors()
-        self.freqs = self.counts / self.N
-        self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
-        self._precompute_omitted_freqs()  # sets self.first
+        self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if 'hp' in self.array_types else None
+        self.maxCircuitLength = max([len(x) for x in self.circuits])
+        self.add_count_vectors()
+        self.add_omitted_freqs()  # sets self.first and more
 
     #Model-based regularization and penalty support functions
 
@@ -4674,7 +4777,7 @@ class TimeIndependentMDSObjectiveFunction(MDSObjectiveFunction):
         return _np.sum(hessian, axis=0)
 
 
-class Chi2Function(TimeIndependentMDSObjectiveFunction):
+class Chi2Function(TimeIndependentMDCObjectiveFunction):
     """
     Model-based chi-squared function: `N(p-f)^2 / p`
 
@@ -4719,13 +4822,19 @@ class Chi2Function(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawChi2Function(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class ChiAlphaFunction(TimeIndependentMDSObjectiveFunction):
+class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based chi-alpha function: `N[x + 1/(alpha * x^alpha) - (1 + 1/alpha)]` where `x := p/f`.
 
@@ -4773,14 +4882,20 @@ class ChiAlphaFunction(TimeIndependentMDSObjectiveFunction):
     alpha : float, optional
         The alpha parameter, which lies in the interval (0,1].
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False,
-                 alpha=1):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False, alpha=1):
         raw_objfn = RawChiAlphaFunction(regularization, resource_alloc, name, description, verbosity, alpha)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
+                 alpha=1):
+        raw_objfn = RawChiAlphaFunction(regularization, mdc_store.resource_alloc, name, description, verbosity, alpha)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class FreqWeightedChi2Function(TimeIndependentMDSObjectiveFunction):
+class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     """
     Model-based frequency-weighted chi-squared function: `N(p-f)^2 / f`
 
@@ -4825,13 +4940,19 @@ class FreqWeightedChi2Function(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawFreqWeightedChi2Function(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class PoissonPicDeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
+class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based poisson-picture delta log-likelihood function: `N*f*log(f/p) - N*(f-p)`.
 
@@ -4876,13 +4997,20 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
+                                                   verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class DeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
+class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based delta log-likelihood function: `N*f*log(f/p)`.
 
@@ -4927,13 +5055,19 @@ class DeltaLogLFunction(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawDeltaLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
+class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based maximum-model log-likelihood function: `N*f*log(f)`
 
@@ -4978,13 +5112,19 @@ class MaxLogLFunction(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawMaxLogLFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class TVDFunction(TimeIndependentMDSObjectiveFunction):
+class TVDFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based TVD function: `0.5 * |p-f|`.
 
@@ -5029,13 +5169,19 @@ class TVDFunction(TimeIndependentMDSObjectiveFunction):
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
     """
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
         raw_objfn = RawTVDFunction(regularization, resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdl, dataset, circuit_list, penalties, cache, verbosity, enable_hessian)
+        return super().create_from(raw_objfn, model, dataset, circuits, resource_alloc, penalties, enable_hessian)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
+class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     """
     A time-dependent model-based objective function
 
@@ -5101,11 +5247,18 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
     #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
-    def __init__(self, mdl, dataset, circuit_list, regularization=None, penalties=None,
-                 cache=None, resource_alloc=None, name=None, description=None, verbosity=0):
 
-        dummy = RawObjectiveFunction({}, resource_alloc, name, description, verbosity)
-        super().__init__(dummy, mdl, dataset, circuit_list, cache, enable_hessian=False)
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0):
+        enable_hessian = False
+        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+        mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        dummy = RawObjectiveFunction({}, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(dummy, mdc_store, verbosity)
 
         self.time_dependent = True
 
@@ -5115,13 +5268,12 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
         if penalties is None: penalties = {}
         self.ex = self.set_penalties(**penalties)  # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
 
-        #  Allocate peristent memory
-        #  (must be AFTER possible operation sequence permutation by
-        #   tree and initialization of ds_circuits_to_use)
+        #Setup underlying EvaluatedModelDatasetCircuitsStore object
+        #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.v = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
-        self.maxCircuitLength = max([len(x) for x in self.circuits_to_use])
-        self.num_total_outcomes = [mdl.compute_num_outcomes(c) for c in self.circuits_to_use]  # for sparse data detection
+        self.maxCircuitLength = max([len(x) for x in self.circuits])
+        self.num_total_outcomes = [self.model.compute_num_outcomes(c) for c in self.circuits]  # to detect sparse-data
 
     def set_regularization(self):
         """
@@ -5184,7 +5336,7 @@ class TimeDependentMDSObjectiveFunction(MDSObjectiveFunction):
         raise NotImplementedError()
 
 
-class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
+class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
     """
     Chi-squared function that can handle time-dependent circuits and data.
 
@@ -5317,7 +5469,7 @@ class TimeDependentChi2Function(TimeDependentMDSObjectiveFunction):
         return self.jac
 
 
-class TimeDependentPoissonPicLogLFunction(TimeDependentMDSObjectiveFunction):
+class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
 
     """
     Poisson-picture delta log-likelihood function that can handle time-dependent circuits and data.
@@ -5720,8 +5872,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         `logl_objective_fn` before evaluating the rest of the objective function.
     """
     def __init__(self, logl_objective_fn, base_pt, wildcard):
-        from .. import tools as _tools
-
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
         self.wildcard_budget = wildcard
