@@ -1476,7 +1476,7 @@ class FullDenseOp(DenseOperator):
             "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
         DenseOperator.__init__(self, m, evotype)
 
-    def set_value(self, m):
+    def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
 
