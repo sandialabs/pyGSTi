@@ -1714,40 +1714,40 @@ class OpModel(Model):
     # and represent the fundamental building blocks of other layer operations.
     # "Primitive" layers are used to <TODO>
 
-    # These properties should return the keys of an OrdereDict,
-    #  to be used as an ordered set.
+    # These properties should return an OrdereDict, whose keys can
+    # be used as an ordered set (values can be anything - we don't care).
     @property
-    def _primitive_prep_labels(self):
+    def _primitive_prep_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_povm_labels(self):
+    def _primitive_povm_labels_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_op_labels(self):
+    def _primitive_op_labels_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_instruments_labels(self):
+    def _primitive_instrument_labels_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     # These are the public properties that return tuples
     @property
     def primitive_prep_labels(self):
-        return tuple(self._primitive_prep_labels)
+        return tuple(self._primitive_prep_label_dict.keys())
 
     @property
     def primitive_povm_labels(self):
-        return tuple(self._primitive_povm_labels)
+        return tuple(self._primitive_povm_label_dict.keys())
 
     @property
     def primitive_op_labels(self):
-        return tuple(self._primitive_op_labels)
+        return tuple(self._primitive_op_label_dict.keys())
 
     @property
-    def primitive_instruments_labels(self):
-        return tuple(self._primitive_instrument_labels)
+    def primitive_instrument_labels(self):
+        return tuple(self._primitive_instrument_label_dict.keys())
 
     def _is_primitive_prep_layer_lbl(self, lbl):
         """
@@ -1762,7 +1762,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_prep_labels
+        return lbl in self._primitive_prep_label_dict
 
     def _is_primitive_povm_layer_lbl(self, lbl):
         """
@@ -1777,7 +1777,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_povm_labels
+        return lbl in self._primitive_povm_label_dict
 
     def _is_primitive_op_layer_lbl(self, lbl):
         """
@@ -1792,7 +1792,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_op_labels
+        return lbl in self._primitive_op_label_dict
 
     def _is_primitive_instrument_layer_lbl(self, lbl):
         """
@@ -1807,7 +1807,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_instrument_labels
+        return lbl in self._primitive_instrument_label_dict
 
     def _default_primitive_prep_layer_lbl(self):
         """
@@ -1820,8 +1820,8 @@ class OpModel(Model):
         -------
         Label or None
         """
-        if len(self._primitive_prep_labels) == 1:
-            return next(iter(self._primitive_prep_labels))
+        if len(self._primitive_prep_label_dict) == 1:
+            return next(iter(self._primitive_prep_label_dict.keys()))
         else:
             return None
 

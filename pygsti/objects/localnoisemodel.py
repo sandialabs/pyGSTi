@@ -745,7 +745,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
         Composed = _op.ComposedDenseOp if isinstance(simulator, _MatrixFSim) else _op.ComposedOp
-        primitive_ops = []
 
         for gateName, gate in mm_gatedict.items():  # gate is a ModelMember - either LinearOperator, or an OpFactory
             if _Lbl(gateName).sslbls is not None: continue
@@ -832,7 +831,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                                                                     dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
-                        #Add any primitive ops for this factory?
 
                     elif gate_is_factory:
                         if inds == tuple(qubit_labels):  # then no need to embed
@@ -841,7 +839,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                             embedded_op = _opfactory.EmbeddedOpFactory(self.state_space_labels, inds, base_gate,
                                                                        dense=isinstance(simulator, _MatrixFSim))
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
-                        #Add any primitive ops for this factory?
                     else:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
@@ -849,7 +846,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                             EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                             embedded_op = EmbeddedOp(self.state_space_labels, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
-                        primitive_ops.append(_Lbl(gateName, inds))
 
                 except Exception as e:
                     if on_construction_error == 'warn':
@@ -877,11 +873,6 @@ class LocalNoiseModel(_ImplicitOpModel):
             assert(global_idle_nQubits == n_qubits), \
                 "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, n_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
-
-        self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
-        #(no instruments)
 
 
 class _SimpleCompLayerRules(_LayerRules):

@@ -179,20 +179,20 @@ class ExplicitOpModel(_mdl.OpModel):
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
-    def _primitive_prep_labels(self):
-        return self.preps.keys()
+    def _primitive_prep_label_dict(self):
+        return self.preps
 
     @property
-    def _primitive_povm_labels(self):
-        return self.povms.keys()
+    def _primitive_povm_label_dict(self):
+        return self.povms
 
     @property
-    def _primitive_op_labels(self):
-        return self.operations.keys()
+    def _primitive_op_label_dict(self):
+        return self.operations
 
     @property
-    def _primitive_instruments_labels(self):
-        return self.instruments.keys()
+    def _primitive_instrument_label_dict(self):
+        return self.instruments
 
     #Functions required for base class functionality
 

@@ -392,7 +392,7 @@ class GatesTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -554,7 +554,7 @@ class ChoiTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels  # use labels of 1st model
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
@@ -562,7 +562,7 @@ class ChoiTable(WorkspaceTable):
 
         qtysList = []
         for model in models:
-            opLabels = model.primitive_op_labels()  # operation labels
+            opLabels = model.primitive_op_labels  # operation labels
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(model, gl)) for gl in opLabels]
@@ -703,7 +703,7 @@ class GaugeRobustModelTable(WorkspaceTable):
     def _create(self, model, target_model, display_as, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.primitive_op_labels()  # use labels of 1st model
+        opLabels = model.primitive_op_labels  # use labels of 1st model
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -887,7 +887,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
     def _create(self, model, target_model, metric, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.primitive_op_labels()
+        opLabels = model.primitive_op_labels
 
         colHeadings = [''] + ['%s' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -1181,7 +1181,7 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, model, target_model, confidence_region_info,
                 display, virtual_ops, wildcard):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         instLabels = list(model.instruments.keys())  # requires an explicit model!
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -1443,7 +1443,7 @@ class ErrgenTable(WorkspaceTable):
     def _create(self, model, target_model,
                 confidence_region_info, display, display_as, gen_type):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
@@ -1763,7 +1763,7 @@ class NQubitErrgenTable(WorkspaceTable):
                                                 display, display_as)
 
     def _create(self, model, confidence_region_info, display, display_as):
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         #basis = model.basis
         #basisPrefix = ""
@@ -1977,7 +1977,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
 
     def _create(self, model, target_model, confidence_region_info):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters = (None, 'Conversion')
@@ -2046,7 +2046,7 @@ class GateDecompTable(WorkspaceTable):
                                               target_model, confidence_region_info)
 
     def _create(self, model, target_model, confidence_region_info):
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
             + tuple(["Axis angle w/%s" % str(gl) for gl in opLabels])
@@ -2135,7 +2135,7 @@ class OldGateDecompTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         colHeadings = ('Gate', 'Eigenvalues', 'Fixed pt', 'Rotn. axis', 'Diag. decay', 'Off-diag. decay')
         formatters = [None] * 6
 
@@ -2213,7 +2213,7 @@ class OldRotationAxisTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info, show_axis_angle_err_bars):
 
-        opLabels = model.primitive_op_labels()
+        opLabels = model.primitive_op_labels
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "OldRotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
@@ -2374,7 +2374,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidence_region_info, display,
                 virtual_ops):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         assert(isinstance(model, _objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']

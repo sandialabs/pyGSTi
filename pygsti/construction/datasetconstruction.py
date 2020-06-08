@@ -25,9 +25,9 @@ from pprint import pprint
 
 
 def simulate_data(model_or_dataset, circuit_list, n_samples,
-                       sample_error="multinomial", seed=None, rand_state=None,
-                       alias_dict=None, collision_action="aggregate",
-                       record_zero_counts=True, comm=None, mem_limit=None, times=None):
+                  sample_error="multinomial", seed=None, rand_state=None,
+                  alias_dict=None, collision_action="aggregate",
+                  record_zero_counts=True, comm=None, mem_limit=None, times=None):
     """
     Creates a DataSet using the probabilities obtained from a model.
 

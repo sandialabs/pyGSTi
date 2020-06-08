@@ -2108,7 +2108,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
 
     # collect gates that only act on core_qubits.
     oplabel_list = []; full_core_list = []
-    for gl in model.primitive_op_labels():
+    for gl in model.primitive_op_labels:
         if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)
         if set(gl.sslbls).issubset(core_qubits):
             oplabel_list.append(gl)
@@ -2892,7 +2892,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
-    weights = set([len(gl.sslbls) for gl in model.primitive_op_labels() if (gl.sslbls is not None)])
+    weights = set([len(gl.sslbls) for gl in model.primitive_op_labels if (gl.sslbls is not None)])
     for gateWt in sorted(list(weights)):
         maxSyntheticIdleWt = (gateWt + extra_gate_weight) + (gateWt - 1)  # gate-error-wt + spreading potential
         maxSyntheticIdleWt = min(maxSyntheticIdleWt, n_qubits)
@@ -2950,7 +2950,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         # OK b/c model.num_params() called above
         Gi_params = set(_slct.to_array(model.operation_blks['layers']['globalIdle'].gpindices))
         pure_op_labels = []
-        for gl in model.primitive_op_labels():  # take this as the set of "base"/"serial" operations
+        for gl in model.primitive_op_labels:  # take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)
             if set(gl.sslbls) == set(core_qubits):
                 pure_op_labels.append(gl)

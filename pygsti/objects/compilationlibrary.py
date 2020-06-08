@@ -180,7 +180,7 @@ class CompilationLibrary(_collections.OrderedDict):
         for template_compilation in self.templates.get(oplabel.name, []):
             #Check availability of gates in self.model to determine
             # whether template_compilation can be applied.
-            model_primitive_ops = self.model.primitive_op_labels()
+            model_primitive_ops = self.model.primitive_op_labels
             if all([(gl in model_primitive_ops) for gl in map(to_real_label,
                                                               template_compilation)]):
                 template_to_use = template_compilation
@@ -192,7 +192,7 @@ class CompilationLibrary(_collections.OrderedDict):
             #construct a list of the available gates on the qubits of
             # `oplabel` (or a subset of them)
             available_glabels = list(filter(lambda gl: set(gl.qubits).issubset(oplabel.qubits),
-                                            self.model.primitive_op_labels()))
+                                            self.model.primitive_op_labels))
             available_glabels.extend([_Label(IDENT, k) for k in oplabel.qubits])
             available_template_labels = set(map(to_template_label, available_glabels))
             available_srep_dict = self.model.compute_clifford_symplectic_reps(available_glabels)

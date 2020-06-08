@@ -130,20 +130,20 @@ class ImplicitOpModel(_mdl.OpModel):
                                               layer_rules, simulator)
 
     @property
-    def _primitive_prep_labels(self):
-        return self.prep_blks['layers'].keys()
+    def _primitive_prep_label_dict(self):
+        return self.prep_blks['layers']
 
     @property
-    def _primitive_povm_labels(self):
-        return self.povm_blks['layers'].keys()
+    def _primitive_povm_label_dict(self):
+        return self.povm_blks['layers']
 
     @property
-    def _primitive_op_labels(self):
-        return self.operation_blks['layers'].keys()
+    def _primitive_op_label_dict(self):
+        return self.operation_blks['layers']
 
     @property
-    def _primitive_instruments_labels(self):
-        return self.instrument_blks['layers'].keys()
+    def _primitive_instrument_label_dict(self):
+        return self.instrument_blks['layers']
 
     #Functions required for base class functionality
 
@@ -231,7 +231,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         srep_dict = {}
 
-        for gl in self.primitive_op_labels():
+        for gl in self.primitive_op_labels:
             gate = self.operation_blks['layers'][gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 
@@ -296,7 +296,7 @@ class ImplicitOpModel(_mdl.OpModel):
         -------
         Label or None
         """
-        if len(self._primitive_povm_labels) == 1:
+        if len(self.primitive_povm_labels) == 1:
             povmName = next(iter(self._primitive_povm_labels)).name
             if len(self.state_space_labels.labels) == 1 and (self.state_space_labels.labels[0] == sslbls
                                                              or sslbls == ('*',)):

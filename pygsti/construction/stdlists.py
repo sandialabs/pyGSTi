@@ -148,7 +148,7 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
                        + "")
 
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
     lgst_list = _gsc.create_lgst_circuits(prep_strs, effect_strs, opLabels)
@@ -404,7 +404,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
                        + "")
 
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
     lgst_list = _gsc.create_lgst_circuits(prep_strs, effect_strs, opLabels)
@@ -710,7 +710,7 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
         label strings.
     """
     if isinstance(op_label_src, _Model):
-        opLabels = op_label_src.primitive_op_labels() + op_label_src.primitive_instrument_labels()
+        opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
     singleOps = _gsc.to_circuits([(g,) for g in opLabels])

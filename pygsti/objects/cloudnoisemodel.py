@@ -762,7 +762,6 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.clouds = _collections.OrderedDict()
 
         #Get gates availability
-        primitive_ops = []
         gates_and_avail = _collections.OrderedDict()
         for gateName, gate in mm_gatedict.items():  # gate is a static ModelMember (op or factory)
             gate_nQubits = int(round(_np.log2(gate.dim) / 2)) if (evotype in ("densitymx", "svterm", "cterm")) \
@@ -822,7 +821,6 @@ class CloudNoiseModel(_ImplicitOpModel):
                     else:
                         self.operation_blks['layers'][_Lbl(gn, inds)] = EmbeddedDenseOp(
                             ssAllQ, inds, gate)
-                        primitive_ops.append(_Lbl(gn, inds))
 
                 #Cloudnoise operation
                 if build_cloudnoise_fn is not None:
@@ -948,11 +946,6 @@ class CloudNoiseModel(_ImplicitOpModel):
         #
         #else:
         #    raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
-
-        self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
-        #(no instruments)
 
         printer.log("DONE! - created Model with dim=%d and op-blks=" % self.dim)
         for op_blk_lbl, op_blk in self.operation_blks.items():

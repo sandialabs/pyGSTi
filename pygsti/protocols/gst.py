@@ -1781,7 +1781,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels() + model.primitive_instrument_labels(),
+    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
                                               add_spam=badfit_options.get('wildcard_budget_includes_spam', True),
                                               start_budget=0.0)
 
