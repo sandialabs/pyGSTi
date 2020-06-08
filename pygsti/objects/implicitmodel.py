@@ -42,8 +42,6 @@ from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
-from . import simplifierhelper as _sh
-from . import layerlizard as _ll
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import Basis as _Basis

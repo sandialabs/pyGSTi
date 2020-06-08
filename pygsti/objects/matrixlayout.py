@@ -13,7 +13,6 @@ Defines the MatrixEvalTree class which implements an evaluation tree.
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
-from .evalstrategy import COPAEvalStrategy as _COPAEvalStrategy
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .distlayout import _DistributableAtom
 from .distlayout import DistributableCOPALayout as _DistributableCOPALayout

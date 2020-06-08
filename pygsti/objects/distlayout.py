@@ -15,7 +15,7 @@ import collections as _collections
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .coparray import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
 
 import numpy as _np
 import warnings as _warnings

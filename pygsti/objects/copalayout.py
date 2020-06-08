@@ -12,13 +12,12 @@ A object representing the indexing into a (flat) array of circuit outcome probab
 
 import numpy as _np
 import collections as _collections
-import iteratools as _it
-from functtools import reduce as _reduce
+import itertools as _it
+from functools import reduce as _reduce
 from operator import add as _add
 
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .label import Label as _Label
-from . import circuits as _cir
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 
