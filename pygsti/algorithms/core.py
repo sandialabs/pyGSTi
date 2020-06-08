@@ -26,6 +26,7 @@ from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects.computationcache import ComputationCache as _ComputationCache
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..optimize.customlm import Optimizer as _Optimizer
 from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 _dummy_profiler = _DummyProfiler()
@@ -657,7 +658,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     printer.log("--- %s GST ---" % objective.name, 1)
 
     #Step 3: solve least squares minimization problem
-    if objective.model.simtype in ("termgap", "termorder"):  # could have used mdc_store.model (it's the same model)
+    if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
         #Normal case of just a single "sub-iteration"

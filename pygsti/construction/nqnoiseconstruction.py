@@ -35,6 +35,9 @@ from ..objects import qubitgraph as _qgraph
 from ..objects import labeldicts as _ld
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
+from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..objects.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
@@ -190,7 +193,7 @@ def create_cloudnoise_model_from_hops_and_weights(
         availability=None, qubit_labels=None, geometry="line",
         max_idle_weight=1, max_spam_weight=1, maxhops=0,
         extra_weight_1_hops=0, extra_gate_weight=0, sparse=False,
-        rough_noise=None, sim_type="auto", parameterization="H+S",
+        rough_noise=None, simulator="auto", parameterization="H+S",
         spamtype="lindblad", add_idle_noise_to_all_gates=True,
         errcomp_type="gates", independent_clouds=True,
         return_clouds=False, verbosity=0):  # , debug=False):
@@ -336,13 +339,11 @@ def create_cloudnoise_model_from_hops_and_weights(
         `gate.from_vector` initialization for the model, and as such applies an
         often unstructured and unmeaningful type of noise.
 
-    sim_type : {"auto","matrix","map","termorder:<N>"}
-        The type of forward simulation (probability computation) to use for the
-        returned :class:`Model`.  That is, how should the model compute
-        operation sequence/circuit probabilities when requested.  `"matrix"` is better
-        for small numbers of qubits, `"map"` is better for larger numbers. The
-        `"termorder"` option is designed for even larger numbers.  Usually,
-        the default of `"auto"` is what you want.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The simulator used to compute predicted probabilities for the
+        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
 
     parameterization : {"P", "P terms", "P clifford terms"}
         Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
@@ -403,7 +404,7 @@ def create_cloudnoise_model_from_hops_and_weights(
         availability, qubit_labels, geometry,
         max_idle_weight, max_spam_weight, maxhops,
         extra_weight_1_hops, extra_gate_weight, sparse,
-        sim_type, parameterization, spamtype,
+        simulator, parameterization, spamtype,
         add_idle_noise_to_all_gates, errcomp_type,
         independent_clouds, verbosity)
 
@@ -429,9 +430,9 @@ def create_cloudnoise_model_from_hops_and_weights(
 
 
 def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
-                                availability=None, qubit_labels=None, geometry="line", parameterization='auto',
-                                evotype="auto", sim_type="auto", independent_gates=False, sparse=True,
-                                errcomp_type="errorgens", add_idle_noise_to_all_gates=True, verbosity=0):
+                                 availability=None, qubit_labels=None, geometry="line", parameterization='auto',
+                                 evotype="auto", simulator="auto", independent_gates=False, sparse=True,
+                                 errcomp_type="errorgens", add_idle_noise_to_all_gates=True, verbosity=0):
     """
     Create a n-qubit model that may contain crosstalk errors.
 
@@ -533,13 +534,11 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.  If "auto" is specified, "densitymx" is used.
 
-    sim_type : {"auto","matrix","map","termorder:<N>"}
-        The type of forward simulation (probability computation) to use for the
-        returned :class:`Model`.  That is, how should the model compute
-        operation sequence/circuit probabilities when requested.  `"matrix"` is better
-        for small numbers of qubits, `"map"` is better for larger numbers. The
-        `"termorder"` option is designed for even larger numbers.  Usually,
-        the default of `"auto"` is what you want.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The simulator used to compute predicted probabilities for the
+        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
 
     independent_gates : bool, optional
         Whether gates are allowed independent cloud noise or not.  If False,
@@ -805,13 +804,12 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
         else:
             return errgen
 
-    #Process "auto" sim_type
+    #Process "auto" simulator
     _, evotype = _gt.split_lindblad_paramtype(parameterization)  # what about "auto" parameterization?
     assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
-    if sim_type == "auto":
-        if evotype in ("svterm", "cterm"): sim_type = "termorder"
-        else: sim_type = "map" if n_qubits > 2 else "matrix"
-    assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder"))
+    if simulator == "auto":
+        if evotype in ("svterm", "cterm"): simulator = _TermFSim()
+        else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
 
     #Global Idle
     if 'idle' in error_rates:
@@ -885,7 +883,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     return _CloudNoiseModel(n_qubits, gatedict, availability, qubit_labels, geometry,
                             global_idle_layer, prep_layers, povm_layers,
                             build_cloudnoise_fn, build_cloudkey_fn,
-                            sim_type, evotype, errcomp_type,
+                            simulator, evotype, errcomp_type,
                             add_idle_noise_to_all_gates, sparse, printer)
 
 
@@ -906,9 +904,9 @@ def _onqubit(s, i_qubit):
 
 
 def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, single_q_fiducials=None,
-                                       prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
-                                       wrt_params=None, algorithm="greedy", require_all_amped=True,
-                                       idt_pauli_dicts=None, comm=None, verbosity=0):
+                                              prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
+                                              wrt_params=None, algorithm="greedy", require_all_amped=True,
+                                              idt_pauli_dicts=None, comm=None, verbosity=0):
     """
     Find fiducial pairs which amplify the parameters of a synthetic idle gate.
 
@@ -1036,8 +1034,8 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
     # Assert that model uses termorder, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
-        '`model` must use "termorder:1" simulation type!'
+    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+        '`model` must use a 1-st order Term-type forward simulator!'
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
@@ -1242,8 +1240,8 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     """
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
-        '`model` must use "termorder:1" simulation type!'
+    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+        '`model` must use a 1-st order Term-type forward simulator!'
 
     # printer = _VerbosityPrinter.create_printer(verbosity)
 
@@ -1399,8 +1397,8 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(model._sim_type == "termorder" and model._sim_args['max_order'] == 1), \
-        '`model` must use "termorder:1" simulation type!'
+    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+        '`model` must use a 1-st order Term-type forward simulator!'
 
     printer = _VerbosityPrinter.create_printer(verbosity)
 
@@ -2791,7 +2789,8 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         availability, None, qubitGraph,
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, sparse, verbosity=printer - 5,
-        sim_type="termorder", parameterization=ptermstype,
+        simulator=_TermFSim(mode="taylor", max_order=1),
+        parameterization=ptermstype,
         errcomp_type="gates")
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
@@ -2809,7 +2808,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         n_qubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
         0, 0, 0, 0, 0, False, verbosity=printer - 5,
-        sim_type="map", parameterization=paramroot, errcomp_type="gates")
+        simulator=_MapFSim(), parameterization=paramroot, errcomp_type="gates")
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params()
@@ -2827,7 +2826,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, sparse, verbosity=printer - 5,
-        sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
+        simulator=_TermFSim(mode="taylor", max_order=1), parameterization=ptermstype, errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -2906,7 +2905,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
                     syntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, sparse, verbosity=printer - 5,
-                    sim_type="termorder", parameterization=ptermstype, errcomp_type="gates")
+                    simulator=_TermFSim(mode="taylor", max_order=1), parameterization=ptermstype, errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -3828,7 +3827,7 @@ def stdmodule_to_smqmodule(std_module):
     out_module['_stdtarget'] = _stdtarget
     out_module['_gscache'] = _gscache
 
-    def target_model(parameterization_type="full", sim_type="auto"):
+    def target_model(parameterization_type="full", simulator="auto"):
         """
         Returns a copy of the target model in the given parameterization.
 
@@ -3838,8 +3837,8 @@ def stdmodule_to_smqmodule(std_module):
             The gate and SPAM vector parameterization type. See
             :function:`Model.set_all_parameterizations` for all allowed values.
 
-        sim_type : {"auto", "matrix", "map", "termorder:X" }
-            The simulator type to be used for model calculations (leave as
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The simulator (or type) to be used for model calculations (leave as
             "auto" if you're not sure what this is).
 
         Returns
@@ -3847,7 +3846,7 @@ def stdmodule_to_smqmodule(std_module):
         Model
         """
         return _stdtarget._copy_target(_sys.modules[new_module_name], parameterization_type,
-                                       sim_type, _gscache)
+                                       simulator, _gscache)
     out_module['target_model'] = target_model
 
     # circuit lists

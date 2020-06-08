@@ -72,6 +72,17 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         super().__init__(model)
         self._max_cache_size = max_cache_size
 
+    def copy(self):
+        """
+        Return a shallow copy of this MapForwardSimulator
+
+        Returns
+        -------
+        MapForwardSimulator
+        """
+        return MapForwardSimulator(self.model, self._max_cache_size)
+
+
     #NEEDED by fastreplib routines, but really this should be part of the op-container/model (sos)
     #def _rho_from_label(self, rholabel):
     #    # Note: caching here is *essential* to the working of bulk_fill_dprobs,
@@ -101,16 +112,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     #    Es = [self.sos.effect(elabel) for elabel in elabels]
     #    #No support for "custom" spamlabel stuff here
     #    return rho, Es
-
-    #def copy(self):
-    #    """
-    #    Return a shallow copy of this MatrixForwardSimulator
-    #
-    #    Returns
-    #    -------
-    #    MapForwardSimulator
-    #    """
-    #    return MapForwardSimulator(self.dim, self.sos, self.paramvec)
 
     #def default_distribute_method(self):
     #    """

@@ -45,7 +45,7 @@ from . import explicitcalc as _explicitcalc
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from .label import Label as _Label
+from .label import Label as _Label, CircuitLabel as _CircuitLabel
 from .layerrules import LayerRules as _LayerRules
 
 
@@ -94,12 +94,12 @@ class ExplicitOpModel(_mdl.OpModel):
         Key prefix for instruments, allowing the model to determing what
         type of object a key corresponds to.
 
-    sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
-        The type of gate sequence / circuit simulation used to compute any
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
         requested probabilities, e.g. from :method:`probs` or
         :method:`bulk_probs`.  The default value of `"auto"` automatically
-        selects the simulation type, and is usually what you want. Allowed
-        values are:
+        selects the simulation type, and is usually what you want. Other
+        special allowed values are:
 
         - "matrix" : op_matrix-op_matrix products are computed and
           cached to get composite gates which can then quickly simulate
@@ -108,8 +108,6 @@ class ExplicitOpModel(_mdl.OpModel):
         - "map" : op_matrix-state_vector products are repeatedly computed
           to simulate circuits.  Slower for a small number of qubits, but
           faster and more memory efficient for higher numbers of qubits (3+).
-        - "termorder", "termgap", "termdirect" : Use Taylor expansions of
-          gates in error rates to compute probabilities approximately.
 
     evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
         The evolution type of this model, describing how states are
@@ -122,7 +120,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def __init__(self, state_space_labels, basis="auto", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="auto",
+                 povm_prefix="M", instrument_prefix="I", simulator="auto",
                  evotype="densitymx"):
         """
         Initialize an ExplictOpModel.
@@ -150,22 +148,10 @@ class ExplicitOpModel(_mdl.OpModel):
             gates, POVM, and instruments respectively.  These prefixes allow
             the Model to determine what type of object a key corresponds to.
 
-        sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
-            The type of gate sequence / circuit simulation used to compute any
-            requested probabilities, e.g. from :method:`probabilities` or
-            :method:`bulk_probs`.  The default value of `"auto"` automatically
-            selects the simulation type, and is usually what you want. Allowed
-            values are:
-
-            - "matrix" : op_matrix-op_matrix products are computed and
-              cached to get composite gates which can then quickly simulate
-              a circuit for any preparation and outcome.  High memory demand;
-              best for a small number of (1 or 2) qubits.
-            - "map" : op_matrix-state_vector products are repeatedly computed
-              to simulate circuits.  Slower for a small number of qubits, but
-              faster and more memory efficient for higher numbers of qubits (3+).
-            - "termorder", "termgap", "termdirect" : Use Taylor expansions of
-              gates in error rates to compute probabilities approximately.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
@@ -190,7 +176,7 @@ class ExplicitOpModel(_mdl.OpModel):
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
                 else "sv"  # ( if evotype in ("statevec","stabilizer") )
 
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), sim_type)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
     def _primitive_prep_labels(self):
@@ -278,12 +264,10 @@ class ExplicitOpModel(_mdl.OpModel):
         if op_val.dim == self.dim and not force:
             return op_val  # if gate operates on full dimension, no need to embed.
 
-        if self._sim_type == "matrix":
+        if isinstance(self._sim, _matrixfwdsim.MatrixForwardSimulator):
             return _op.EmbeddedDenseOp(self.state_space_labels, op_target_labels, op_val)
-        elif self._sim_type in ("map", "termorder"):
+        else:  # all other types, e.g. "map" and "termorder"
             return _op.EmbeddedOp(self.state_space_labels, op_target_labels, op_val)
-        else:
-            assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
     @property
     def default_gauge_group(self):
@@ -450,27 +434,30 @@ class ExplicitOpModel(_mdl.OpModel):
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
             self._evotype = "statevec"
             self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
-            if self._sim_type not in ("matrix", "map"):
-                self.set_simtype("matrix" if self.dim <= 4 else "map")
+            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
+                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif typ == 'clifford':
             self._evotype = "stabilizer"
-            self.set_simtype("map")
+            self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif _gt.is_valid_lindblad_paramtype(typ):
             baseType, evotype = _gt.split_lindblad_paramtype(typ)
             self._evotype = evotype
             if evotype == "densitymx":
-                if self._sim_type not in ("matrix", "map"):
-                    self.set_simtype("matrix" if self.dim <= 16 else "map")
+                if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                    self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+                        _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
             elif evotype in ("svterm", "cterm"):
-                if self._sim_type != "termorder":
-                    self.set_simtype("termorder", max_order=1)
+                if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
+                    self._sim = _termfwdsim.TermForwardSimulator(self)
 
         else:  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
-            if self._sim_type not in ("matrix", "map"):
-                self.set_simtype("matrix" if self.dim <= 16 else "map")
+            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         basis = self.basis
         if extra is None: extra = {}
@@ -1527,7 +1514,8 @@ class ExplicitOpModel(_mdl.OpModel):
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim_type)
+                                    self.instruments._prefix, self._sim.copy())
+        new_model._sim.model = new_model  # update "parent link" of simulator
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1598,7 +1586,8 @@ class ExplicitOpModel(_mdl.OpModel):
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim_type)
+                                    self.instruments._prefix, self._sim.copy())
+        new_model._sim.model = new_model  # update "parent link" of simulator
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -1840,7 +1829,7 @@ class ExplicitLayerRules(_LayerRules):
         """
         if layerlbl in cache: return cache[layerlbl]
         if isinstance(layerlbl, _CircuitLabel):
-            dense = bool(model.get_sim_type() == "matrix")  # whether dense matrix gates should be created
+            dense = isinstance(model._sim, _matrixfwdsim.MatrixForwardSimulator)  # True => create dense-matrix gates
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)
             cache[layerlbl] = op
             return op

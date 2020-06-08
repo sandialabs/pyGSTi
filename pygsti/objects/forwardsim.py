@@ -57,8 +57,9 @@ class ForwardSimulator(object):
         The current parameter vector of the Model.
     """
 
-    def __init__(self, model):
+    def __init__(self, model=None):
         """
+        TODO: docstring
         Construct a new ForwardSimulator object.
 
         Parameters
@@ -73,7 +74,7 @@ class ForwardSimulator(object):
             The current parameter vector of the Model.
         """
         #self.dim = model.dim
-        self.model = model
+        self._model = model
 
         #self.paramvec = paramvec
         #self.Np = len(paramvec)
@@ -87,6 +88,14 @@ class ForwardSimulator(object):
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
+
+    @property
+    def model(self):
+        return self._model
+
+    @model.setter
+    def model(self, val):
+        self._model = val
 
     #def to_vector(self):
     #    """

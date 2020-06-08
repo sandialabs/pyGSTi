@@ -28,6 +28,10 @@ from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerrules import LayerRules as _LayerRules
+from .forwardsim import ForwardSimulator as _FSim
+from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from .mapforwardsim import MapForwardSimulator as _MapFSim
+from .termforwardsim import TermForwardSimulator as _TermFSim
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis
@@ -118,11 +122,20 @@ class LocalNoiseModel(_ImplicitOpModel):
     evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.
 
-    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-        The simulation method used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
+        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        selects the simulation type, and is usually what you want. Other
+        special allowed values are:
+
+        - "matrix" : op_matrix-op_matrix products are computed and
+          cached to get composite gates which can then quickly simulate
+          a circuit for any preparation and outcome.  High memory demand;
+          best for a small number of (1 or 2) qubits.
+        - "map" : op_matrix-state_vector products are repeatedly computed
+          to simulate circuits.  Slower for a small number of qubits, but
+          faster and more memory efficient for higher numbers of qubits (3+).
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the conversion from a value in `gatedict` to a
@@ -144,7 +157,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        be either :class:`ComposedDenseOp` (with a "matrix" forward simulator) or
         :class:`ComposedOp` (othewise) objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
@@ -160,11 +173,11 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     @classmethod
     def from_parameterization(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
-                                    custom_gates=None, availability=None, qubit_labels=None,
-                                    geometry="line", parameterization='static', evotype="auto",
-                                    sim_type="auto", on_construction_error='raise',
-                                    independent_gates=False, ensure_composed_gates=False,
-                                    global_idle=None):
+                              custom_gates=None, availability=None, qubit_labels=None,
+                              geometry="line", parameterization='static', evotype="auto",
+                              simulator="auto", on_construction_error='raise',
+                              independent_gates=False, ensure_composed_gates=False,
+                              global_idle=None):
         """
         Creates a n-qubit model, usually of ideal gates, that is capable of describing "local noise".
 
@@ -288,9 +301,10 @@ class LocalNoiseModel(_ImplicitOpModel):
             if you give unitary maps instead of superoperators in `gatedict`
             you'll want to set this to `"statevec"`.
 
-        sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-            The simulation method used to compute predicted probabilities for the
-            resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.  Usually `"auto"` is fine, the default for
             each `evotype` is usually what you want.  Setting this to something
             else is expert-level tuning.
 
@@ -314,8 +328,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         ensure_composed_gates : bool, optional
             If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
-            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
+            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often
             dense gates) are used directly.
@@ -378,14 +392,19 @@ class LocalNoiseModel(_ImplicitOpModel):
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
             v0 = v1 = None  # then we shouldn't use these
 
-        if sim_type == "auto":
+        if simulator == "auto":
             if evotype == "densitymx":
-                sim_type = "matrix" if n_qubits <= 2 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                sim_type = "matrix" if n_qubits <= 4 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
-                sim_type = "map"  # use map as default for stabilizer-type evolutions
+                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
+        elif simulator == "map":
+            simulator = _MapFSim()
+        elif simulator == "matrix":
+            simulator = _MatrixFSim()
+        assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
         prep_layers = {}
         povm_layers = {}
@@ -423,11 +442,11 @@ class LocalNoiseModel(_ImplicitOpModel):
             # geometry doesn't matter while maxSpamWeight==1
 
             prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
-            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
+            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, simulator,
                                                         parameterization, errcomp_type, verbosity)
             prep_layers['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
 
-            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
+            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, simulator,
                                                         parameterization, errcomp_type, verbosity)
             povm_layers['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
@@ -471,7 +490,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 
         return cls(n_qubits, gatedict, prep_layers, povm_layers, availability,
-                   qubit_labels, geometry, evotype, sim_type, on_construction_error,
+                   qubit_labels, geometry, evotype, simulator, on_construction_error,
                    independent_gates, ensure_composed_gates, global_idle)
 
     #        spamdict : dict
@@ -484,7 +503,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def __init__(self, n_qubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
                  qubit_labels=None, geometry="line", evotype="densitymx",
-                 sim_type="auto", on_construction_error='raise',
+                 simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
         """
@@ -572,11 +591,20 @@ class LocalNoiseModel(_ImplicitOpModel):
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.
 
-        sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-            The simulation method used to compute predicted probabilities for the
-            resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-            each `evotype` is usually what you want.  Setting this to something
-            else is expert-level tuning.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.  The default value of `"auto"` automatically
+            selects the simulation type, and is usually what you want. Other
+            special allowed values are:
+    
+            - "matrix" : op_matrix-op_matrix products are computed and
+              cached to get composite gates which can then quickly simulate
+              a circuit for any preparation and outcome.  High memory demand;
+              best for a small number of (1 or 2) qubits.
+            - "map" : op_matrix-state_vector products are repeatedly computed
+              to simulate circuits.  Slower for a small number of qubits, but
+              faster and more memory efficient for higher numbers of qubits (3+).
 
         on_construction_error : {'raise','warn',ignore'}
             What to do when the conversion from a value in `gatedict` to a
@@ -598,8 +626,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         ensure_composed_gates : bool, optional
             If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
-            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
+            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often
             dense gates) are used directly.
@@ -663,13 +691,13 @@ class LocalNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("sv", 2)
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
 
-        if sim_type == "auto":
+        if simulator == "auto":
             if evotype == "densitymx":
-                sim_type = "matrix" if n_qubits <= 2 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                sim_type = "matrix" if n_qubits <= 4 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
-                sim_type = "map"  # use map as default for stabilizer-type evolutions
+                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
         qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
@@ -681,7 +709,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             #Only extract qubit labels from the first tensor-product block...
 
         super(LocalNoiseModel, self).__init__(qubit_sslbls, _SimpleCompLayerRules(), basis1Q.name,
-                                              sim_type=sim_type, evotype=evotype)
+                                              simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
@@ -716,7 +744,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
-        Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
+        Composed = _op.ComposedDenseOp if isinstance(simulator, _MatrixFSim) else _op.ComposedOp
         primitive_ops = []
 
         for gateName, gate in mm_gatedict.items():  # gate is a ModelMember - either LinearOperator, or an OpFactory
@@ -801,7 +829,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds[0] == '*':
                         embedded_op = _opfactory.EmbeddingOpFactory(self.state_space_labels, base_gate,
-                                                                    dense=bool(sim_type == "matrix"),
+                                                                    dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
                         #Add any primitive ops for this factory?
@@ -811,14 +839,14 @@ class LocalNoiseModel(_ImplicitOpModel):
                             embedded_op = base_gate
                         else:
                             embedded_op = _opfactory.EmbeddedOpFactory(self.state_space_labels, inds, base_gate,
-                                                                       dense=bool(sim_type == "matrix"))
+                                                                       dense=isinstance(simulator, _MatrixFSim))
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                         #Add any primitive ops for this factory?
                     else:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            EmbeddedOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+                            EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                             embedded_op = EmbeddedOp(self.state_space_labels, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
                         primitive_ops.append(_Lbl(gateName, inds))
@@ -839,7 +867,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
             if n_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QIdle')] = global_idle
-                Embedded = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+                Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                 global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
                                         for qlbl in qubit_labels])
 
@@ -921,7 +949,7 @@ class _SimpleCompLayerRules(_LayerRules):
         LinearOperator
         """
         if layerlbl in cache: return cache[layerlbl]
-        dense = bool(model.get_sim_type() == "matrix")  # whether dense matrix gates should be created
+        dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
         bHasGlobalIdle = bool(_Lbl('globalIdle') in self.operation_blks['layers'])

@@ -66,35 +66,17 @@ class ImplicitOpModel(_mdl.OpModel):
         and imposed structure.  If a list or tuple is given, it must be
         of a from that can be passed to `StateSpaceLabels.__init__`.
 
+    layer_rules : LayerRules
+        The "layer rules" used for constructing operators for circuit
+        layers.  This functionality is essential to using this model to
+        simulate ciruits, and is typically supplied by derived classes.
+
     basis : Basis
         The basis used for the state space by dense operator representations.
 
-    primitive_labels : dict, optional
-        A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
-        `"instruments`" giving the primitive-layer labels for each member
-        type.  This information is needed for interfacing with the LGST
-        algorithm and for circuit compiling.
-
-    layer_lizard_class : class, optional
-        The class of the layer lizard to use, which should usually be derived
-        from :class:`ImplicitLayerLizard` and will be created using:
-        `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
-
-    layer_lizard_args : tuple, optional
-        Additional arguments reserved for the custom layer lizard class.
-        These arguments are not passed to the `layer_lizard_class`'s
-        constructor, but are stored in the model's `._lizardArgs` member and
-        may be accessed from within the layer lizard object (which gets a
-        reference to the model upon initialization).
-
-    simplifier_helper_class : class, optional
-        The :class:`SimplifierHelper`-derived type used to provide the
-        mimial interface needed for circuit compiling.  Initalized
-        using `simplifier_helper_class(self)`.
-
-    sim_type : {"auto", "matrix", "map", "termorder:X"}
-        The type of forward simulator this model should use.  `"auto"`
-        tries to determine the best type automatically.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
 
     evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
         The evolution type of this model, describing how states are
@@ -105,7 +87,7 @@ class ImplicitOpModel(_mdl.OpModel):
                  state_space_labels,
                  layer_rules,
                  basis="pp",
-                 sim_type="auto",
+                 simulator="auto",
                  evotype="densitymx"):
         """
         Creates a new ImplicitOpModel.  Usually only called from derived
@@ -120,36 +102,18 @@ class ImplicitOpModel(_mdl.OpModel):
             and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
+        layer_rules : LayerRules
+            The "layer rules" used for constructing operators for circuit
+            layers.  This functionality is essential to using this model to
+            simulate ciruits, and is typically supplied by derived classes.
+    
         basis : Basis
             The basis used for the state space by dense operator representations.
-
-        primitive_labels : dict, optional
-            A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
-            `"instruments`" giving the primitive-layer labels for each member
-            type.  This information is needed for interfacing with the LGST
-            algorithm and for circuit compiling.
-
-        layer_lizard_class : class, optional
-            The class of the layer lizard to use, which should usually be derived
-            from :class:`ImplicitLayerLizard` and will be created using:
-            `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
-
-        layer_lizard_args : tuple, optional
-            Additional arguments reserved for the custom layer lizard class.
-            These arguments are not passed to the `layer_lizard_class`'s
-            constructor, but are stored in the model's `._lizardArgs` member and
-            may be accessed from within the layer lizard object (which gets a
-            reference to the model upon initialization).
-
-        simplifier_helper_class : class, optional
-            The :class:`SimplifierHelper`-derived type used to provide the
-            mimial interface needed for circuit compiling.  Initalized
-            using `simplifier_helper_class(self)`.
-
-        sim_type : {"auto", "matrix", "map", "termorder:X"}
-            The type of forward simulator this model should use.  `"auto"`
-            tries to determine the best type automatically.
-
+    
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+    
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
             represented, allowing compatibility checks with (super)operator
@@ -163,7 +127,7 @@ class ImplicitOpModel(_mdl.OpModel):
         self.factories = _collections.OrderedDict()
 
         super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
-                                              layer_rules, sim_type)
+                                              layer_rules, simulator)
 
     @property
     def _primitive_prep_labels(self):

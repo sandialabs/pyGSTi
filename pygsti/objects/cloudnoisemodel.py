@@ -28,6 +28,10 @@ from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerrules import LayerRules as _LayerRules
+from .forwardsim import ForwardSimulator as _FSim
+from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from .mapforwardsim import MapForwardSimulator as _MapFSim
+from .termforwardsim import TermForwardSimulator as _TermFSim
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
@@ -157,13 +161,20 @@ class CloudNoiseModel(_ImplicitOpModel):
         should be something hashable with the property that two noise
         which act on the same qubits should have the same cloud key.
 
-    sim_type : {"matrix","map","termorder:<N>"}
-        The type of forward simulation (probability computation) to use for the
-        returned :class:`Model`.  That is, how should the model compute
-        operation sequence/circuit probabilities when requested.  `"matrix"` is better
-        for small numbers of qubits, `"map"` is better for larger numbers. The
-        `"termorder"` option is designed for even larger numbers.  Usually,
-        the default of `"auto"` is what you want.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
+        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        selects the simulation type, and is usually what you want. Other
+        special allowed values are:
+
+        - "matrix" : op_matrix-op_matrix products are computed and
+          cached to get composite gates which can then quickly simulate
+          a circuit for any preparation and outcome.  High memory demand;
+          best for a small number of (1 or 2) qubits.
+        - "map" : op_matrix-state_vector products are repeatedly computed
+          to simulate circuits.  Slower for a small number of qubits, but
+          faster and more memory efficient for higher numbers of qubits (3+).
 
     evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.
@@ -197,13 +208,13 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     @classmethod
     def from_hops_and_weights(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
-                                    custom_gates=None, availability=None,
-                                    qubit_labels=None, geometry="line",
-                                    max_idle_weight=1, max_spam_weight=1, maxhops=0,
-                                    extra_weight_1_hops=0, extra_gate_weight=0, sparse=False,
-                                    sim_type="auto", parameterization="H+S",
-                                    spamtype="lindblad", add_idle_noise_to_all_gates=True,
-                                    errcomp_type="gates", independent_clouds=True, verbosity=0):
+                              custom_gates=None, availability=None,
+                              qubit_labels=None, geometry="line",
+                              max_idle_weight=1, max_spam_weight=1, maxhops=0,
+                              extra_weight_1_hops=0, extra_gate_weight=0, sparse=False,
+                              simulator="auto", parameterization="H+S",
+                              spamtype="lindblad", add_idle_noise_to_all_gates=True,
+                              errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
         Create a :class:`CloudNoiseModel` from hopping rules.
 
@@ -312,13 +323,10 @@ class CloudNoiseModel(_ImplicitOpModel):
             considering particularly high-weight terms (b/c then the Lindblad gates
             are higher dimensional and sparsity has a significant impact).
 
-        sim_type : {"auto","matrix","map","termorder:<N>"}
-            The type of forward simulation (probability computation) to use for the
-            returned :class:`Model`.  That is, how should the model compute
-            operation sequence/circuit probabilities when requested.  `"matrix"` is better
-            for small numbers of qubits, `"map"` is better for larger numbers. The
-            `"termorder"` option is designed for even larger numbers.  Usually,
-            the default of `"auto"` is what you want.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.
 
         parameterization : {"P", "P terms", "P clifford terms"}
             Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
@@ -411,18 +419,22 @@ class CloudNoiseModel(_ImplicitOpModel):
                                                          qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
-        #Process "auto" sim_type
-        if sim_type == "auto":
-            if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
-            else: sim_type = "map" if n_qubits > 2 else "matrix"
-        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder") or sim_type.startswith("termgap"))
+        #Process "auto" simulator
+        if simulator == "auto":
+            if evotype in ("svterm", "cterm"): simulator = _TermFSim()
+            else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
+        elif simulator == "map":
+            simulator = _MapFSim()
+        elif simulator == "matrix":
+            simulator = _MatrixFSim()
+        assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
         #Global Idle
         if max_idle_weight > 0:
             printer.log("Creating Idle:")
             global_idle_layer = _build_nqn_global_noise(
                 qubitGraph, max_idle_weight, sparse,
-                sim_type, parameterization, errcomp_type, printer - 1)
+                simulator, parameterization, errcomp_type, printer - 1)
         else:
             global_idle_layer = None
 
@@ -466,11 +478,11 @@ class CloudNoiseModel(_ImplicitOpModel):
 
             prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
             prepNoiseMap = _build_nqn_global_noise(
-                qubitGraph, max_spam_weight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
+                qubitGraph, max_spam_weight, sparse, simulator, parameterization, errcomp_type, printer - 1)
             prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
 
             povmNoiseMap = _build_nqn_global_noise(
-                qubitGraph, max_spam_weight, sparse, sim_type, parameterization, errcomp_type, printer - 1)
+                qubitGraph, max_spam_weight, sparse, simulator, parameterization, errcomp_type, printer - 1)
             povm_layers = {'Mdefault': _povm.LindbladPOVM(povmNoiseMap, None, "pp")}
 
         else:
@@ -492,7 +504,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             weight_maxhops_tuples = weight_maxhops_tuples_1Q if len(lbl.sslbls) == 1 else weight_maxhops_tuples_2Q
             return _build_nqn_cloud_noise(
                 lbl.sslbls, qubitGraph, weight_maxhops_tuples,
-                errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
+                errcomp_type=errcomp_type, sparse=sparse, simulator=simulator,
                 parameterization=parameterization, verbosity=printer - 1)
 
         def build_cloudkey_fn(lbl):
@@ -504,14 +516,14 @@ class CloudNoiseModel(_ImplicitOpModel):
         return cls(n_qubits, gatedict, availability, qubit_labels, geometry,
                    global_idle_layer, prep_layers, povm_layers,
                    build_cloudnoise_fn, build_cloudkey_fn,
-                   sim_type, evotype, errcomp_type,
+                   simulator, evotype, errcomp_type,
                    add_idle_noise_to_all_gates, sparse, printer)
 
     def __init__(self, n_qubits, gatedict, availability=None,
                  qubit_labels=None, geometry="line",
                  global_idle_layer=None, prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
-                 sim_type="map", evotype="densitymx", errcomp_type="gates",
+                 simulator="map", evotype="densitymx", errcomp_type="gates",
                  add_idle_noise_to_all_gates=True, sparse=False, verbosity=0):
         """
         Creates a CloudNoiseModel.
@@ -610,13 +622,10 @@ class CloudNoiseModel(_ImplicitOpModel):
             should be something hashable with the property that two noise
             which act on the same qubits should have the same cloud key.
 
-        sim_type : {"matrix","map","termorder:<N>"}
-            The type of forward simulation (probability computation) to use for the
-            returned :class:`Model`.  That is, how should the model compute
-            operation sequence/circuit probabilities when requested.  `"matrix"` is better
-            for small numbers of qubits, `"map"` is better for larger numbers. The
-            `"termorder"` option is designed for even larger numbers.  Usually,
-            the default of `"auto"` is what you want.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.
 
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.
@@ -656,7 +665,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  For cloud-
         # noise models, these gate operations should be *static* (no parameters) as they represent the target
         # operations and all noise (and parameters) are assumed to enter through the cloudnoise members.
-        StaticDenseOp = _get_static_factory(sim_type, evotype)  # always a *gate*
+        StaticDenseOp = _get_static_factory(simulator, evotype)  # always a *gate*
         mm_gatedict = _collections.OrderedDict()  # static *target* ops as ModelMembers
         #REMOVE self.gatedict = _collections.OrderedDict()  # static *target* ops (unused) as numpy arrays
         for gn, gate in gatedict.items():
@@ -694,15 +703,15 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.addIdleNoiseToAllGates = add_idle_noise_to_all_gates
         self.errcomp_type = errcomp_type
 
-        #REMOVE
-        ##Process "auto" sim_type
-        #_, evotype = _gt.split_lindblad_paramtype(parameterization)
-        #assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
-        #if sim_type == "auto":
-        #    if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
-        #    else: sim_type = "map" if n_qubits > 2 else "matrix"
-
-        assert(sim_type in ("matrix", "map") or sim_type.startswith("termorder") or sim_type.startswith("termgap"))
+        #Process "auto" simulator
+        if simulator == "auto":
+            if evotype in ("svterm", "cterm"): simulator = _TermFSim()
+            else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
+        elif simulator == "map":
+            simulator = _MapFSim()
+        elif simulator == "matrix":
+            simulator = _MatrixFSim()
+        assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
         qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
         if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
@@ -715,7 +724,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if global_idle_layer is None:
             self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
         layer_rules = CloudNoiseLayerRules(self.addIdleNoiseToAllGates, errcomp_type, not sparse)
-        super(CloudNoiseModel, self).__init__(qubit_sslbls, layer_rules, "pp", sim_type=sim_type, evotype=evotype)
+        super(CloudNoiseModel, self).__init__(qubit_sslbls, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
@@ -779,7 +788,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             gates_and_avail[gateName] = (gate, availList)
 
         ssAllQ = qubit_sslbls  # labls should also be node-names of qubitGraph
-        EmbeddedDenseOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+        EmbeddedDenseOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
 
         for gn, (gate, availList) in gates_and_avail.items():
             #Note: gate was taken from mm_gatedict, and so is a static op or factory
@@ -797,7 +806,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                     printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (inds[1], gn))
 
                     self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
-                        ssAllQ, gate, dense=bool(sim_type == "matrix"), num_target_labels=inds[1])
+                        ssAllQ, gate, dense=isinstance(simulator, _MatrixFSim), num_target_labels=inds[1])
                     # add any primitive ops for this embedding factory?
                 else:
                     printer.log("Creating %dQ %s gate on qubits %s!!" % (len(inds), gn, inds))
@@ -808,7 +817,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
                     if gate_is_factory:
                         self.factories['layers'][_Lbl(gn, inds)] = _opfactory.EmbeddedOpFactory(
-                            ssAllQ, inds, gate, dense=bool(sim_type == "matrix"))
+                            ssAllQ, inds, gate, dense=isinstance(simulator, _MatrixFSim))
                         # add any primitive ops for this factory?
                     else:
                         self.operation_blks['layers'][_Lbl(gn, inds)] = EmbeddedDenseOp(
@@ -960,19 +969,20 @@ class CloudNoiseModel(_ImplicitOpModel):
         return self.clouds
 
 
-def _get_lindblad_factory(sim_type, parameterization, errcomp_type):
+def _get_lindblad_factory(simulator, parameterization, errcomp_type):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
     _, evotype = _gt.split_lindblad_paramtype(parameterization)
     if errcomp_type == "gates":
         if evotype == "densitymx":
-            cls = _op.LindbladDenseOp if sim_type == "matrix" \
+            cls = _op.LindbladDenseOp if isinstance(simulator, _MatrixFSim) \
                 else _op.LindbladOp
         elif evotype in ("svterm", "cterm"):
-            assert(sim_type.startswith("termorder"))
+            assert(isinstance(simulator, _TermFSim))
             cls = _op.LindbladOp
         else:
-            raise ValueError("Cannot create Lindblad gate factory for ", sim_type, parameterization)
+            raise ValueError((f"Cannot create Lindblad gate factory for simtype={type(simulator)}"
+                              f" and {parameterization=}"))
 
         #Just call cls.from_operation_matrix with appropriate evotype
         def _f(op_matrix,  # unitaryPostfactor=None,
@@ -1004,17 +1014,17 @@ def _get_lindblad_factory(sim_type, parameterization, errcomp_type):
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
 
 
-def _get_static_factory(sim_type, evotype):
+def _get_static_factory(simulator, evotype):
     """ Returns a function that creates a static-type gate appropriate
         given the simulation and parameterization """
     if evotype == "densitymx":
-        if sim_type == "matrix":
+        if isinstance(simulator, _MatrixFSim):
             return lambda g, b: _op.StaticDenseOp(g, evotype)
-        elif sim_type == "map":
+        else:  # e.g. "map"-type forward simes
             return lambda g, b: _op.StaticDenseOp(g, evotype)  # TODO: create StaticGateMap?
 
     elif evotype in ("svterm", "cterm"):
-        assert(sim_type.startswith("termorder") or sim_type.startswith("termgap"))
+        assert(isinstance(simulator, _TermFSim))
 
         def _f(op_matrix, mx_basis="pp"):
             return _op.LindbladOp.from_operation_matrix(
@@ -1022,10 +1032,10 @@ def _get_static_factory(sim_type, evotype):
             # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
 
         return _f
-    raise ValueError("Cannot create Static gate factory for ", sim_type, evotype)
+    raise ValueError(f"Cannot create Static gate factory for simtype={type(simulator)} {evotype=}")
 
 
-def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="matrix",
+def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, simulator=None,
                             parameterization="H+S", errcomp_type="gates", verbosity=0):
     """
     Create a "global" idle gate, meaning one that acts on all the qubits in
@@ -1045,10 +1055,11 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
         gate are represented as sparse or dense matrices.  (This is determied by
         whether they are constructed using sparse basis matrices.)
 
-    sim_type : {"matrix","map","termorder:<N>"}
-        The type of forward simulation (probability computation) being used by
+    simulator : ForwardSimulator
+        The forward simulation (probability computation) being used by
         the model this gate is destined for.  This affects what type of
         gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
+        `None` means a :class:`MatrixForwardSimulator`.
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -1066,9 +1077,10 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
     LinearOperator
     """
     assert(max_weight <= 2), "Only `max_weight` equal to 0, 1, or 2 is supported"
-
+    if simulator is None: simulator = _MatrixFSim()
+    
     if errcomp_type == "gates":
-        if sim_type == "matrix":
+        if isinstance(simulator, _MatrixFSim):
             Composed = _op.ComposedDenseOp
             Embedded = _op.EmbeddedDenseOp
         else:
@@ -1078,7 +1090,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(sim_type, parameterization, errcomp_type)
+    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1130,14 +1142,14 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
         return Composed(termops)
     elif errcomp_type == "errorgens":
         errgen = Composed(termops)
-        LindbladOp = _op.LindbladDenseOp if sim_type == "matrix" \
+        LindbladOp = _op.LindbladDenseOp if isinstance(simulator, _MatrixFSim) \
             else _op.LindbladOp
         return LindbladOp(None, errgen, dense_rep=not sparse)
     else: assert(False)
 
 
 def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples,
-                           errcomp_type="gates", sparse=False, sim_type="matrix",
+                           errcomp_type="gates", sparse=False, simulator=None,
                            parameterization="H+S", verbosity=0):
     """
     Create an n-qubit gate that is a composition of:
@@ -1178,10 +1190,11 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         gate are represented as sparse or dense matrices.  (This is determied by
         whether they are constructed using sparse basis matrices.)
 
-    sim_type : {"matrix","map","termorder:<N>"}
-        The type of forward simulation (probability computation) being used by
+    simulator : ForwardSimulator
+        The forward simulation (probability computation) being used by
         the model this gate is destined for.  This affects what type of
         gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
+        `None` means a :class:`MatrixForwardSimulator`.
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -1194,7 +1207,8 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     -------
     LinearOperator
     """
-    if sim_type == "matrix":
+    if simulator is None: simulator = _MatrixFSim()
+    if isinstance(simulator, _MatrixFSim):
         ComposedDenseOp = _op.ComposedDenseOp
         EmbeddedDenseOp = _op.EmbeddedDenseOp
     else:
@@ -1208,7 +1222,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(sim_type, parameterization, errcomp_type)
+    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1340,7 +1354,7 @@ class CloudNoiseLayerRules(_LayerRules):
         LinearOperator
         """
         if layerlbl in cache: return cache[layerlbl]
-        dense = bool(model._sim_type == "matrix")  # whether dense matrix gates should be created
+        dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)

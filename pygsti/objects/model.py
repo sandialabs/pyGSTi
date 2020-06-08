@@ -837,12 +837,13 @@ class OpModel(Model):
         represented, allowing compatibility checks with (super)operator
         objects.
 
-    simplifier_helper : SimplifierHelper
-        Provides a minimal interface for compiling circuits for forward
-        simulation.
+    layer_rules : LayerRules
+        The "layer rules" used for constructing operators for circuit
+        layers.  This functionality is essential to using this model to
+        simulate ciruits, and is typically supplied by derived classes.
 
-    sim_type : {"auto", "matrix", "map", "termorder:X"}
-        The type of forward simulator this model should use.  `"auto"`
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The forward simulator (or typ) that this model should use.  `"auto"`
         tries to determine the best type automatically.
     """
 
@@ -883,17 +884,7 @@ class OpModel(Model):
         self._set_state_space(state_space_labels, basis)
         #sets self._state_space_labels, self._basis, self._dim
 
-        if simulator == "auto":
-            d = self._dim if (self._dim is not None) else 0
-            simulator = "matrix" if d <= 16 else "map"
-        if simulator == "matrix":
-            self._sim = _matrixfwdsim.MatrixForwardSimulator(self)
-        elif simulator == "map":
-            self._sim = _mapfwdsim.MapForwardSimulator(max_cache_size=0)  # default is to *not* use a cache
-        else:
-            assert(isinstance(simulator, _fwdsim.ForwardSimulator)), "`simulator` argument must be a ForwardSimulator!"
-            self._sim = simulator
-
+        self.sim = simulator  # property setter does nontrivial initialization
         self._layer_rules = layer_rules if (layer_rules is not None) else _LayerRules()
         self._layerop_cache = {}  # for all (any type) of non-primitive layer operation
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
@@ -910,6 +901,21 @@ class OpModel(Model):
         """ Forward simulator for this model """
         self._clean_paramvec()  # clear opcache and rebuild paramvec when needed
         return self._sim
+
+    @sim.setter
+    def sim(self, simulator):
+        if simulator == "auto":
+            d = self._dim if (self._dim is not None) else 0
+            simulator = "matrix" if d <= 16 else "map"
+
+        if simulator == "matrix":
+            self._sim = _matrixfwdsim.MatrixForwardSimulator(self)
+        elif simulator == "map":
+            self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)  # default is to *not* use a cache
+        else:
+            assert(isinstance(simulator, _fwdsim.ForwardSimulator)), "`simulator` argument must be a ForwardSimulator!"
+            self._sim = simulator
+            self._sim.model = self  # ensure the simulator's `model` is set to this object
 
     #@property
     #def simtype(self):
