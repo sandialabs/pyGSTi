@@ -808,7 +808,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         returned when `return_all==True`.
     """
     if isinstance(objfn_builder, str):
-        objfn_builder = _objfns.ObjectiveFunctionBuilder.simple(objfn_builder)
+        objfn_builder = _objfns.ObjectiveFunctionBuilder.create_from(objfn_builder)
 
     objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache)
     if wildcard:

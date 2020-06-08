@@ -945,7 +945,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         return "circuits"
 
-    def construct_evaltree(self, simplified_circuits, num_subtree_comms):
+    def create_evaltree(self, simplified_circuits, num_subtree_comms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 

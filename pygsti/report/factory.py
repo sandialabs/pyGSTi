@@ -317,9 +317,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 est_modvi = est
 
             switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.simple('logl'))
+                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.simple('logl'))
+                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
 
             #REMOVE

@@ -99,8 +99,8 @@ class ModelTest(_proto.Protocol):
         """
         builder_cls = _objfns.ObjectiveFunctionBuilder
         if isinstance(obj, builder_cls): return obj
-        elif obj is None: return builder_cls.simple()
-        elif isinstance(obj, dict): return builder_cls.simple(**obj)
+        elif obj is None: return builder_cls.create_from()
+        elif isinstance(obj, dict): return builder_cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return builder_cls(*obj)
         else: raise ValueError("Cannot build a objective-fn builder from '%s'" % str(type(obj)))
 

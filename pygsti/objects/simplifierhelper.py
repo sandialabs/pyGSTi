@@ -327,7 +327,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         """
         return lbl in self.instruments
 
-    def default_prep_lbl(self):
+    def default_prep_label(self):
         """
         Gets the default state prep label.
 
@@ -341,7 +341,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         return tuple(self.preps.keys())[0] \
             if len(self.preps) == 1 else None
 
-    def default_povm_lbl(self, sslbls):
+    def default_povm_label(self, sslbls):
         """
         Gets the default POVM label.
 
