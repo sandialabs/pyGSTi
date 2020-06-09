@@ -778,7 +778,7 @@ class Circuit(object):
             layers = list(range(len(self._labels)))
         elif isinstance(layers, slice):
             if layers.start is None and layers.stop is None:
-                layers = ()
+                layers = list(range(len(self._labels)))  # e.g. circuit[:]
             else:
                 layers = _slct.indices(layers, len(self._labels))
         elif not isinstance(layers, (list, tuple)):
