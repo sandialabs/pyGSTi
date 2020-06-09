@@ -807,13 +807,10 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
 class MatrixForwardSimulator(_DistributableForwardSimulator):
 
-    def __init__(self, model):
-        super().__init__(model)
-
     def copy(self):
         """
         Return a shallow copy of this MatrixForwardSimulator
-    
+
         Returns
         -------
         MatrixForwardSimulator

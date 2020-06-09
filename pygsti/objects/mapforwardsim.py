@@ -68,7 +68,7 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
 
-    def __init__(self, model, max_cache_size=None):
+    def __init__(self, model=None, max_cache_size=None):
         super().__init__(model)
         self._max_cache_size = max_cache_size
 
@@ -231,7 +231,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
         def create_layout_candidate(num_atoms):
-            return _MapCOPALayout(circuits, self.model, dataset, None, num_atoms,
+            return _MapCOPALayout(circuits, self.model, dataset, None, None, num_atoms,
                                   (num_params, num_params), verbosity)
 
         #Start with how we'd like to split processors up (without regard to memory limit):
@@ -298,8 +298,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 #     if mem_limit < estimate:
                 #         reductionFactor = float(estimate) / float(mem_limit)
                 #         maxTreeSize = int(nstrs / reductionFactor)
+        else:
+            gather_mem_limit = None
 
-                layout = layout_cache[nc]
+        layout = layout_cache[nc]
 
         paramBlkSize1 = num_params / np1
         paramBlkSize2 = num_params / np2  # the *average* param block size
@@ -335,18 +337,19 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        replib.DM_mapfill_probs_block(self, array_to_fill, None, layout, resource_alloc.comm)
+        replib.DM_mapfill_probs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
+                                      layout, resource_alloc.comm)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        replib.DM_mapfill_dprobs_block(self, array_to_fill, None, dest_param_slice, layout, param_slice,
-                                       resource_alloc.comm)
+        replib.DM_mapfill_dprobs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
+                                       layout, param_slice, resource_alloc.comm)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
                                 param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        self._dm_mapfill_hprobs_block(array_to_fill, None, dest_param_slice1, dest_param_slice2, layout,
-                                      param_slice1, param_slice2, resource_alloc.comm)
+        self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
+                                      dest_param_slice2, layout, param_slice1, param_slice2, resource_alloc.comm)
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
     def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,

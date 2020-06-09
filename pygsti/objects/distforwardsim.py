@@ -23,7 +23,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
     Assumes layout is a :class:`DistributableCOPALayout`
     """
 
-    def __init__(self, model):
+    def __init__(self, model=None):
         super().__init__(model)
         self._default_distribute_method = "circuits"
 

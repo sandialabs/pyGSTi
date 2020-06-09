@@ -1644,23 +1644,23 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-def DM_mapfill_probs_block(calc, mx_to_fill, dest_indices, eval_tree, comm):
+def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-    cacheSize = eval_tree.cache_size()
+    cacheSize = layout_atom.cache_size
 
     #Create rhoCache
     rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
 
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
-    rhoreps = {rholbl: calc._rho_from_label(rholbl)._rep for rholbl in eval_tree.rholabels}
-    operationreps = {gl: calc.sos.operation(gl)._rep for gl in eval_tree.opLabels}
-    effectreps = {i: E._rep for i, E in enumerate(calc._es_from_labels(eval_tree.elabels))}  # cache these in future
+    rhoreps = {rholbl: fwdsim.model.circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
+    operationreps = {gl: fwdsim.model.circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
+    effectreps = {i: fwdsim.model.circuit_layer_operator(Elbl, 'povm')._rep for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
 
     #comm is currently ignored
-    #TODO: if eval_tree is split, distribute among processors
-    for i in eval_tree.evaluation_order():
-        iStart, remainder, iCache = eval_tree[i]
+    #TODO: if layout_atom is split, distribute among processors
+    for i in layout_atom.evaluation_order():
+        iStart, remainder, iCache = layout_atom[i]
         if iStart is None:  # then first element of remainder is a state prep label
             rholabel = remainder[0]
             init_state = rhoreps[rholabel]
@@ -1672,19 +1672,19 @@ def DM_mapfill_probs_block(calc, mx_to_fill, dest_indices, eval_tree, comm):
         final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
 
-        ereps = [effectreps[j] for j in eval_tree.eLbl_indices_per_circuit[i]]
-        final_indices = [dest_indices[j] for j in eval_tree.final_indices_per_circuit[i]]
+        ereps = [effectreps[j] for j in layout_atom.eLbl_indices_per_circuit[i]]
+        final_indices = [dest_indices[j] for j in layout_atom.final_indices_per_circuit[i]]
 
         for j, erep in zip(final_indices, ereps):
             mx_to_fill[j] = erep.probability(final_state)  # outcome probability
 
 
-def DM_mapfill_dprobs_block(calc, mx_to_fill, dest_indices, dest_param_indices, eval_tree, param_indices, comm):
+def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices, comm):
 
     eps = 1e-7  # hardcoded?
 
     if param_indices is None:
-        param_indices = list(range(calc.Np))
+        param_indices = list(range(fwdsim.model.num_params()))
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
@@ -1702,27 +1702,27 @@ def DM_mapfill_dprobs_block(calc, mx_to_fill, dest_indices, dest_param_indices, 
     # final index within mx_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-    nEls = eval_tree.num_final_elements()
+    nEls = layout_atom.num_final_elements()
     probs = _np.empty(nEls, 'd')
     probs2 = _np.empty(nEls, 'd')
-    DM_mapfill_probs_block(calc, probs, slice(0, nEls), eval_tree, comm)
+    DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, comm)
 
-    orig_vec = calc.to_vector().copy()
-    for i in range(calc.Np):
+    orig_vec = fwdsim.to_vector().copy()
+    for i in range(fwdsim.model.num_params()):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec, close=True)
-            DM_mapfill_probs_block(calc, probs2, slice(0, nEls), eval_tree, subComm)
+            fwdsim.from_vector(vec, close=True)
+            DM_mapfill_probs_block(fwdsim, probs2, slice(0, nEls), layout_atom, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    calc.from_vector(orig_vec, close=True)
+    fwdsim.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
     _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
 
 
-def DM_mapfill_TDchi2_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows,
+def DM_mapfill_TDchi2_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
                             min_prob_clip_for_weighting, prob_clip_interval, comm):
 
     def obj_fn(p, f, n_i, n, omitted_p):
@@ -1735,10 +1735,10 @@ def DM_mapfill_TDchi2_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval_t
             v = _np.sqrt(v**2 + n * omitted_p**2 / omitted_cp)
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
-    return DM_mapfill_TDterms(calc, obj_fn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm)
+    return DM_mapfill_TDterms(fwdsim, obj_fn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm)
 
 
-def DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows,
+def DM_mapfill_TDloglpp_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
                               min_prob_clip, radius, prob_clip_interval, comm):
 
     min_p = min_prob_clip; a = radius
@@ -1775,16 +1775,16 @@ def DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, num_outcomes, eval
 
         return v  # objective function term (the qty stored in cache)
 
-    return DM_mapfill_TDterms(calc, obj_fn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm)
+    return DM_mapfill_TDterms(fwdsim, obj_fn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm)
 
 
-def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval_tree, dataset_rows, comm):
+def DM_mapfill_TDterms(fwdsim, objfn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm):
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-    cacheSize = eval_tree.cache_size()
+    cacheSize = layout_atom.cache_size
 
-    EVecs = calc._es_from_labels(eval_tree.elabels)
-    elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in eval_tree.elabels]
+    EVecs = fwdsim._es_from_labels(layout_atom.elabels)
+    elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in layout_atom.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
@@ -1794,12 +1794,12 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
     mx_to_fill[dest_indices] = 0.0  # reset destination (we sum into it)
 
     #comm is currently ignored
-    #TODO: if eval_tree is split, distribute among processors
-    for i in eval_tree.evaluation_order():
-        iStart, remainder, iCache = eval_tree[i]
+    #TODO: if layout_atom is split, distribute among processors
+    for i in layout_atom.evaluation_order():
+        iStart, remainder, iCache = layout_atom[i]
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
         rholabel = remainder[0]; remainder = remainder[1:]
-        rhoVec = calc._rho_from_label(rholabel)
+        rhoVec = fwdsim._rho_from_label(rholabel)
         datarow = dataset_rows[i]
         nTotOutcomes = num_outcomes[i]
 
@@ -1814,8 +1814,8 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
                 totalCnts[t0] = Nreps; outcome_cnts[t0] = 1
             lastInds[t0] = k
 
-        elbl_indices = eval_tree.eLbl_indices_per_circuit[i]
-        final_indices = [dest_indices[j] for j in eval_tree.final_indices_per_circuit[i]]
+        elbl_indices = layout_atom.eLbl_indices_per_circuit[i]
+        final_indices = [dest_indices[j] for j in layout_atom.final_indices_per_circuit[i]]
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
 
         cur_probtotal = 0; last_t = 0
@@ -1827,7 +1827,7 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
             t += rholabel.time
 
             for gl in remainder:
-                op = calc.sos.operation(gl)
+                op = fwdsim.sos.operation(gl)
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
@@ -1849,42 +1849,42 @@ def DM_mapfill_TDterms(calc, objfn, mx_to_fill, dest_indices, num_outcomes, eval
             mx_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
 
 
-def DM_mapfill_TDdchi2_terms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, eval_tree, dataset_rows,
+def DM_mapfill_TDdchi2_terms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom, dataset_rows,
                              min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
 
-    def fillfn(mx_to_fill, dest_indices, n_outcomes, eval_tree, dataset_rows, fill_comm):
-        DM_mapfill_TDchi2_terms(calc, mx_to_fill, dest_indices, n_outcomes,
-                                eval_tree, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
+    def fillfn(mx_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+        DM_mapfill_TDchi2_terms(fwdsim, mx_to_fill, dest_indices, n_outcomes,
+                                layout_atom, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
 
-    return DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices,
-                                     num_outcomes, eval_tree, dataset_rows, fillfn, wrt_slice, comm)
-
-
-def DM_mapfill_TDdloglpp_terms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                               eval_tree, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
-
-    def fillfn(mx_to_fill, dest_indices, n_outcomes, eval_tree, dataset_rows, fill_comm):
-        DM_mapfill_TDloglpp_terms(calc, mx_to_fill, dest_indices, n_outcomes,
-                                  eval_tree, dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
-
-    return DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices,
-                                     num_outcomes, eval_tree, dataset_rows, fillfn, wrt_slice, comm)
+    return DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices,
+                                     num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
 
 
-def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, eval_tree,
+def DM_mapfill_TDdloglpp_terms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes,
+                               layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
+
+    def fillfn(mx_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+        DM_mapfill_TDloglpp_terms(fwdsim, mx_to_fill, dest_indices, n_outcomes,
+                                  layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
+
+    return DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices,
+                                     num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
+
+
+def DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
                               dataset_rows, fillfn, wrt_slice, comm):
 
     eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(calc.Np) if (wrt_slice is None) else _slct.indices(wrt_slice)
+    param_indices = range(fwdsim.model.num_params()) if (wrt_slice is None) else _slct.indices(wrt_slice)
 
-    nEls = eval_tree.num_final_elements()
+    nEls = layout_atom.num_final_elements()
     vals = _np.empty(nEls, 'd')
     vals2 = _np.empty(nEls, 'd')
-    assert(eval_tree.cache_size() == 0)  # so all elements have None as start and remainder[0] is a prep label
+    assert(layout_atom.cache_size == 0)  # so all elements have None as start and remainder[0] is a prep label
 
-    fillfn(vals, slice(0, nEls), num_outcomes, eval_tree, dataset_rows, comm)
+    fillfn(vals, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, comm)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -1897,16 +1897,16 @@ def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = calc.to_vector().copy()
-    for i in range(calc.Np):
-        #print("dprobs cache %d of %d" % (i,calc.Np))
+    orig_vec = fwdsim.to_vector().copy()
+    for i in range(fwdsim.model.num_params()):
+        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params()))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            calc.from_vector(vec, close=True)
-            fillfn(vals2, slice(0, nEls), num_outcomes, eval_tree, dataset_rows, subComm)
+            fwdsim.from_vector(vec, close=True)
+            fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
-    calc.from_vector(orig_vec, close=True)
+    fwdsim.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
@@ -1915,25 +1915,25 @@ def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (calc.Np, calc.dim, cache_size, len(eval_tree), eval_tree.num_applies(), _time.time()-tStart)) #DEBUG
+    #      (fwdsim.model.num_params(), fwdsim.model.dim, cache_size, len(layout_atom), layout_atom.num_applies(), _time.time()-tStart)) #DEBUG
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+def SV_prs_as_polys(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+    return _prs_as_polys(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
-def SB_prs_as_polynomials(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+    return _prs_as_polys(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def _prs_as_polys(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
     """
     Computes polynomials of the probabilities for multiple spam-tuples of `circuit`
 
     Parameters
     ----------
-    calc : TermForwardSimulator
+    fwdsim : TermForwardSimulator
         The calculator object holding vital information for the computation.
 
     rholabel : Label
@@ -1964,7 +1964,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
         A list of PolynomialRep objects, one per element of `elabels`.
     """
     #print("PRS_AS_POLY circuit = ",circuit)
-    #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
+    #print("DB: prs_as_polys(",spamTuple,circuit,fwdsim.max_order,")")
 
     #NOTE for FUTURE: to adapt this to work with numerical rather than polynomial coeffs:
     # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of taylor_order_terms??
@@ -1974,27 +1974,27 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
     #       res *= (pLeft * pRight)
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
-    mpv = calc.Np  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_poly_vars
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.to_rep() for t in calc.sos.operation(glbl).taylor_order_terms(order, mpv)]
-                        for order in range(calc.max_order + 1)
+                        [t.to_rep() for t in fwdsim.sos.operation(glbl).taylor_order_terms(order, mpv)]
+                        for order in range(fwdsim.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.to_rep() for t in calc.sos.prep(rholabel).taylor_order_terms(order, mpv)]
-                     for order in range(calc.max_order + 1)]
+    rho_term_reps = [[t.to_rep() for t in fwdsim.sos.prep(rholabel).taylor_order_terms(order, mpv)]
+                     for order in range(fwdsim.max_order + 1)]
 
     E_term_reps = []
     E_indices = []
-    for order in range(calc.max_order + 1):
+    for order in range(fwdsim.max_order + 1):
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.to_rep() for t in calc.sos.effect(elbl).taylor_order_terms(order, mpv)]
+            term_reps = [t.to_rep() for t in fwdsim.sos.effect(elbl).taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -2013,14 +2013,14 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
     global DEBUG_FCOUNT
     # db_part_cnt = 0
     # db_factor_cnt = 0
-    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
+    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",fwdsim.max_order)
 
     prps = [None] * len(elabels)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
-    for order in range(calc.max_order + 1):
+    for order in range(fwdsim.max_order + 1):
         #print("DB: pr_as_poly order=",order)
         # db_npartitions = 0
         for p in _lt.partition_into(order, len(circuit) + 2):  # +2 for SPAM bookends
-            #factor_lists = [ calc.sos.operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
+            #factor_lists = [ fwdsim.sos.operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
             factor_lists = [rho_term_reps[p[0]]] + \
                            [op_term_reps[glbl][pi] for glbl, pi in zip(circuit, p[1:-1])] + \
                            [E_term_reps[p[-1]]]
@@ -2129,15 +2129,15 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, f
     return prps  # can be a list of polys
 
 
-def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
+def SV_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
                     reset_term_weights=True, debug=None):
-    #return _prs_directly(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+    #return _prs_directly(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
 
-def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
+def SB_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
                     reset_term_weights=True, debug=None):
-    #return _prs_directly(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+    #return _prs_directly(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
 
@@ -2151,51 +2151,51 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
                                          comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
                                               comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
-def SB_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+def SB_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
                                          comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
                                               comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
-def SV_compute_pruned_path_polynomials_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
                                                  circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
 
 
-def SB_compute_pruned_path_polynomials_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
                                                  circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
 
 
-def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
     """ TODO: docstring """
-    mpv = calc.Np  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_poly_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.operation(glbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        hmterms, foat_indices = fwdsim.sos.prep(rholabel).highmagnitude_terms(
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
         repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
@@ -2203,8 +2203,8 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.effect(elbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
@@ -2223,10 +2223,10 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    ops = [fwdsim.sos.prep(rholabel)] + [fwdsim.sos.operation(glbl) for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
     nPaths = _np.zeros(len(elabels), int)
@@ -2249,14 +2249,14 @@ global_cnt = 0
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 
 
-def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm,
+def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm,
                                        mem_limit, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
     Parameters
     ----------
-    calc : TermForwardSimulator
+    fwdsim : TermForwardSimulator
         The calculator object holding vital information for the computation.
 
     rholabel : Label
@@ -2328,7 +2328,7 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, calc.Np)
+            fwdsim, rholabel, elabels, circuit, repcache, opcache, min_term_mag, fwdsim.model.num_params())
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2337,10 +2337,10 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
         [E_term_reps]
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    ops = [fwdsim.sos.prep(rholabel)] + [fwdsim.sos.operation(glbl) for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2363,7 +2363,7 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
     #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
     # print("nPaths = ",npaths)
     # print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" \
-    #       % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    #       % (min_term_mag, fwdsim.max_order, str([len(factors) for factors in factor_lists])))
     # print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
     # print("---------------------------")
 
@@ -2374,14 +2374,14 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
     return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
-def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabels, circuit, repcache, opcache,
+def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
                                                circuitsetup_cache, comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
     Parameters
     ----------
-    calc : TermForwardSimulator
+    fwdsim : TermForwardSimulator
         The calculator object holding vital information for the computation.
 
     rholabel : Label
@@ -2429,7 +2429,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            calc, rholabel, elabels, circuit, repcache, opcache, calc.min_term_mag, calc.Np)
+            fwdsim, rholabel, elabels, circuit, repcache, opcache, fwdsim.min_term_mag, fwdsim.model.num_params())
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2571,23 +2571,23 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
     return prps
 
 
-def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
+def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
     # Construct dict of gate term reps
-    mpv = calc.Np  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_poly_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.operation(glbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        hmterms, foat_indices = fwdsim.sos.prep(rholabel).highmagnitude_terms(
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
         repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
@@ -2595,8 +2595,8 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.effect(elbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
@@ -2614,7 +2614,7 @@ def create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opca
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, comm=None, mem_limit=None, fastmode=True,
+def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, comm=None, mem_limit=None, fastmode=True,
                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None,
                          compute_polyreps=True):
     """
@@ -2622,7 +2622,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
     Parameters
     ----------
-    calc : TermForwardSimulator
+    fwdsim : TermForwardSimulator
         The calculator object holding vital information for the computation.
 
     rholabel : Label
@@ -2696,21 +2696,21 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     """
     #t0 = _time.time()
     # Construct dict of gate term reps
-    mpv = calc.Np  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_poly_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = calc.sos.operation(glbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.operation(glbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = calc.sos.prep(rholabel).highmagnitude_terms(
-            min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+        hmterms, foat_indices = fwdsim.sos.prep(rholabel).highmagnitude_terms(
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
         repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
@@ -2718,8 +2718,8 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = calc.sos.effect(elbl).highmagnitude_terms(
-                min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
+            hmterms, foat_indices = fwdsim.sos.effect(elbl).highmagnitude_terms(
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
@@ -2741,10 +2741,10 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
+    ops = [fwdsim.sos.prep(rholabel)] + [fwdsim.sos.operation(glbl) for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2860,7 +2860,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
     # print("nPaths = ",npaths)
     # print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" \
-    #       % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    #       % (min_term_mag, fwdsim.max_order, str([len(factors) for factors in factor_lists])))
     # print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
     # print("---------------------------")
 

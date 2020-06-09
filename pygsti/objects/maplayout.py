@@ -394,15 +394,16 @@ class _MapCOPAEvalStrategyAtom(_DistributableAtom):
         for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
             for sep_povm_c in expanded_circuit_outcomes:
                 if sep_povm_c.effect_labels == [None]:  # special case -- needed (for bulk_product?)
-                    all_oplabels.update(sep_povm_c[:])
+                    all_oplabels.update(sep_povm_c.circuit_without_povm[:])
                 else:
-                    all_rholabels.add(sep_povm_c[0])
-                    all_oplabels.update(sep_povm_c[1:])
+                    all_rholabels.add(sep_povm_c.circuit_without_povm[0])
+                    all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
                     all_elabels.update(sep_povm_c.full_effect_labels)
 
         self.rho_labels = sorted(all_rholabels)
         self.op_labels = sorted(all_oplabels)
-        self.elabel_lookup = {elbl: i for i, elbl in enumerate(all_elabels)}
+        self.full_effect_labels = all_elabels
+        self.elabel_lookup = {elbl: i for i, elbl in enumerate(self.full_effect_labels)}
 
         #Lookup arrays for faster replib computation.
         table_offset = 0
