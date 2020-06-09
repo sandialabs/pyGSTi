@@ -819,7 +819,7 @@ def _do_runopt(objective, optimizer, printer):
     OptimizerResult
     """
 
-    mdl = objective.mdl
+    mdl = objective.model
     resource_alloc = objective.resource_alloc
     profiler = resource_alloc.profiler
 

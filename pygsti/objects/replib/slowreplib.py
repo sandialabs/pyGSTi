@@ -1707,16 +1707,16 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     probs2 = _np.empty(nEls, 'd')
     DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, comm)
 
-    orig_vec = fwdsim.to_vector().copy()
+    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params()):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.from_vector(vec, close=True)
+            fwdsim.model.from_vector(vec, close=True)
             DM_mapfill_probs_block(fwdsim, probs2, slice(0, nEls), layout_atom, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.from_vector(orig_vec, close=True)
+    fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
     _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
@@ -1897,16 +1897,16 @@ def DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indic
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.to_vector().copy()
+    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params()):
         #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params()))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.from_vector(vec, close=True)
+            fwdsim.model.from_vector(vec, close=True)
             fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
-    fwdsim.from_vector(orig_vec, close=True)
+    fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:

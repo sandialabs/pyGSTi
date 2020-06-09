@@ -1626,10 +1626,10 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
+def _get_fit_qty(model, ds, circuit_list, parameters, comm, mem_limit):
     # Get by-sequence goodness of fit
     objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-    objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
+    objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm})
     fitqty = objfn.chi2k_distributed_qty(objfn.percircuit())
     return fitqty
 
@@ -1679,7 +1679,7 @@ def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cach
         Omitted circuits should not be scaled.
     """
 
-    fitqty = _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit)
+    fitqty = _get_fit_qty(model, ds, circuit_list, parameters, comm, mem_limit)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
     expected = (len(ds.outcome_labels()) - 1)  # == "k"
@@ -1755,7 +1755,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     PrimitiveOpsWildcardBudget
     """
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
-    fitqty = _get_fit_qty(model, ds, circuits_to_use, parameters, cache, comm, mem_limit)
+    fitqty = _get_fit_qty(model, ds, circuits_to_use, parameters, comm, mem_limit)
     badfit_options = badfit_options or {}
 
     printer.log("******************* Adding Wildcard Budget **************************")
@@ -1791,7 +1791,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
         wvec = _np.zeros(len(budget.to_vector()), 'd')
     else:
         objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build(model, ds, circuits_to_use, {'comm': comm}, cache)
+        objfn = objfn_builder.build(model, ds, circuits_to_use, {'comm': comm})
         # assert this is a logl function?
 
         # Note: evaluate objfn before passing to wildcard fn init so internal probs are init;

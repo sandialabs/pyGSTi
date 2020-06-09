@@ -805,7 +805,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #                                _nla.norm(h_pr_mx_to_fill[fInds] - check_vhp)))  # pragma: no cover
 
 
-class MatrixForwardSimulator(_DistributableForwardSimulator):
+class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForwardSimulator):
 
     def copy(self):
         """
@@ -888,7 +888,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
         nDerivCols = self.model.num_params() if (wrt_slice is None) \
             else _slct.length(wrt_slice)
         deriv_shape = (nDerivCols, dim, dim)
-        eval_tree = layout_atom.eval_tree
+        eval_tree = layout_atom.tree
         cacheSize = len(eval_tree)
 
         # ------------------------------------------------------------------
@@ -945,6 +945,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
                     #doperation = self.dproduct( (opLabel,) , wrt_filter=wrtIndices)
                     doperation = self._doperation(opLabel, wrt_filter=wrtIndices)
                     dProdCache[iDest] = doperation / _np.exp(scale_cache[iDest])
+                continue
 
             tm = _time.time()
 
@@ -1089,6 +1090,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
                                               wrt_filter1=wrtIndices1,
                                               wrt_filter2=wrtIndices2)
                 hProdCache[iDest] = hoperation / _np.exp(scale_cache[iDest])
+            continue
 
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from eval_tree because

@@ -222,7 +222,7 @@ class CustomLMOptimizer(Optimizer):
         """
         objective_func = objective.lsvec
         jacobian = objective.dlsvec
-        x0 = objective.mdl.to_vector()
+        x0 = objective.model.to_vector()
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,

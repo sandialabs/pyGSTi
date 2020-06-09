@@ -743,8 +743,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
 #     return ret
 
 
-def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard=None, return_all=False,
-                  comm=None, cache=None):
+def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard=None, return_all=False, comm=None):
     """
     Computes the number of standard deviations of model violation between `model` and `data`.
 
@@ -786,10 +785,6 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    cache : ComputationCache, optional
-        A cache object form computing values with the same model, dataset,
-        and circuit list as are given to this function.
-
     Returns
     -------
     Nsig : float
@@ -810,7 +805,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
     if isinstance(objfn_builder, str):
         objfn_builder = _objfns.ObjectiveFunctionBuilder.simple(objfn_builder)
 
-    objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache)
+    objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm})
     if wildcard:
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
     fitqty = objfn.chi2k_distributed_qty(objfn.fn())

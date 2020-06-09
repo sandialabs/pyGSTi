@@ -1723,8 +1723,7 @@ class ColorBoxPlot(WorkspacePlot):
 
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 objfn_builder = ptyp
-                CACHE = None  # use self.ws.smartCache?
-                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE)
+                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm})
 
                 lookup = {circuit: elindices for circuit, elindices in zip(circuit_list, objfn.lookup.values())}
                 outcomes_lookup = {circuit: outcomes for circuit, outcomes in zip(circuit_list,

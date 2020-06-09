@@ -103,6 +103,8 @@ from .objectivefns import ObjectiveFunctionBuilder, \
     Chi2Function, ChiAlphaFunction, FreqWeightedChi2Function, PoissonPicDeltaLogLFunction, DeltaLogLFunction, \
     MaxLogLFunction, TVDFunction, TimeDependentChi2Function, TimeDependentPoissonPicLogLFunction, LogLWildcardFunction
 
+from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
+
 from .results import Results
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 from .smartcache import SmartCache

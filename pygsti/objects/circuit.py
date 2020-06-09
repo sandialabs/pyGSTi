@@ -3630,7 +3630,7 @@ class Circuit(object):
                         expanded_layer_lbl = component_lookup.copy()
                         expanded_layer_lbl.update({i: sel for i, sel in zip(instrument_inds, selected_instrmt_members)})
                         expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
-    
+
                         if ootree is not None:
                             new_ootree = ootree
                             for sel in selected_instrmt_members:
@@ -3646,7 +3646,7 @@ class Circuit(object):
             else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
                 assert(cir not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
                 elabels = model_shlp._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
-                    else tuple(observed_outcomes.keys())
+                    else tuple(ootree.keys())
                 outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
                 expanded_circuit_outcomes[SeparatePOVMCircuit(cir, povm_lbl, elabels)] = outcomes
 

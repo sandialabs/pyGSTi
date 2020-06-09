@@ -188,7 +188,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
     def __init__(self, gauge_group_el):
         self.inverse_element = gauge_group_el
 
-    def get_transform_matrix(self):
+    def transform_matrix(self):
         """
         The gauge-transform matrix.
 
@@ -198,7 +198,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.transform_matrix_inverse()
 
-    def get_transform_matrix_inverse(self):
+    def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
 
@@ -226,7 +226,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         numpy.ndarray
         """
         #Derivative of inv(M): d(inv_M) = inv_M * dM * inv_M
-        Tinv = self.get_transform_matrix()  # inverse of *original* transform
+        Tinv = self.transform_matrix()  # inverse of *original* transform
         dT = self.inverse_element.deriv_wrt_params(wrt_filter)  # shape (d*d, n)
         d, n = int(round(_np.sqrt(dT.shape[0]))), dT.shape[1]
 
@@ -336,7 +336,7 @@ class OpGaugeGroup(GaugeGroup):
         """
         return self._operation.num_params()
 
-    def element(self, param_vec):
+    def compute_element(self, param_vec):
         """
         Retrieve the element of this group corresponding to `param_vec`
 
@@ -865,7 +865,7 @@ class TrivialGaugeGroup(GaugeGroup):
         """
         return 0
 
-    def element(self, param_vec):
+    def compute_element(self, param_vec):
         """
         Retrieve the element of this group corresponding to `param_vec`
 

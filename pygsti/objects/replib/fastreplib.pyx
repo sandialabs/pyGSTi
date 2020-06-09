@@ -2184,7 +2184,7 @@ def DM_mapfill_dprobs_block(fwdsim,
     #Get (extension-type) representation objects
     # NOTE: these fwdsim._X_from_label(lbl) functions cache the returned operation
     # inside fwdsim.sos's (the layer lizard's) opcache.  This speeds up future calls, but
-    # more importantly causes fwdsim.from_vector to be aware of these operations and to
+    # more importantly causes fwdsim.model.from_vector to be aware of these operations and to
     # re-initialize them with updated parameter vectors as is necessary for the finite difference loop.
     rho_lookup = { lbl:i for i,lbl in enumerate(layout_atom.rholabels) } # rho labels -> ints for faster lookup
     rhoreps = { i: fwdsim._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
@@ -2222,17 +2222,17 @@ def DM_mapfill_dprobs_block(fwdsim,
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
 
-    orig_vec = fwdsim.to_vector().copy()
+    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params()):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.from_vector(vec, close=True)
+            fwdsim.model.from_vector(vec, close=True)
             dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                              elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.from_vector(orig_vec, close=True)
+    fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
     _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
@@ -2440,16 +2440,16 @@ def DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indic
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.to_vector().copy()
+    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params()):
         #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params()))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.from_vector(vec, close=True)
+            fwdsim.model.from_vector(vec, close=True)
             fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
             _fas(mx_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
-    fwdsim.from_vector(orig_vec, close=True)
+    fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:

@@ -562,7 +562,7 @@ class Estimate(object):
         cache = self.parameters.get('final_cache', None)
         ds = self.create_effective_dataset()
         objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, cache)
+        objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
         fitqty = objfn.chi2k_distributed_qty(objfn.fn())
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
 

@@ -196,8 +196,7 @@ class ModelTest(_proto.Protocol):
         chi2k_distributed_vals = []
         assert(len(self.objfn_builders) == 1), "Only support for a single objective function so far."
         for circuit_list in bulk_circuit_lists:
-            cache = _ComputationCache()  # store objects for this particular model, dataset, and circuit list
-            objective = self.objfn_builders[0].build(the_model, ds, circuit_list, resource_alloc, cache, printer - 1)
+            objective = self.objfn_builders[0].build(the_model, ds, circuit_list, resource_alloc, printer - 1)
             f = objective.fn(the_model.to_vector())
             objfn_vals.append(f)
             chi2k_distributed_vals.append(objective.chi2k_distributed_qty(f))
