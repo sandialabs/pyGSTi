@@ -176,7 +176,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         atomOwners = {iAtom: subCommOwners[atomOwners[iAtom]]
                       for iAtom in atomOwners}
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
         printer.log("*** Distributing %d atoms into %d sub-comms (%s processors) ***" %
                     (nAtoms, nAtomComms, nprocs))
 

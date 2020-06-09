@@ -25,6 +25,7 @@ from . import operation as _op
 from . import labeldicts as _ld
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .circuit import Circuit as _Circuit
 
 # SCRATCH NOTES TODO REMOVE
 # ForwardSimulator
@@ -302,14 +303,18 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
+            circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         vp = _np.empty(copa_layout.size, 'd')
         if smartc:
-            smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout, clip_to,
+            smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
                                   resource_alloc, _filledarrays=(0,))
         else:
-            self.bulk_fill_probs(vp, copa_layout, clip_to, resource_alloc)
+            self.bulk_fill_probs(vp, copa_layout, resource_alloc)
+
+        if clip_to is not None:
+            vp = _np.clip(vp, clip_to[0], clip_to[1])
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_circuits():

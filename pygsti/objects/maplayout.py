@@ -50,6 +50,7 @@ def _create_prefix_table(circuits_to_evaluate, max_cache_size):
     """
     #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
     sorted_circuits_to_evaluate = sorted(list(enumerate(circuits_to_evaluate)), key=lambda x: x[1])
+    circuits_to_evaluate_fastlookup = {i: cir for i, cir in enumerate(circuits_to_evaluate)}
 
     if max_cache_size is None or max_cache_size > 0:
         #CACHE assessment pass: figure out what's worth keeping in the cache.
@@ -63,7 +64,7 @@ def _create_prefix_table(circuits_to_evaluate, max_cache_size):
         for i, circuit in sorted_circuits_to_evaluate:
             L = len(circuit)
             for cached_index in reversed(cacheIndices):
-                candidate = circuits_to_evaluate[cached_index]
+                candidate = circuits_to_evaluate_fastlookup[cached_index]
                 Lc = len(candidate)
                 if L >= Lc > 0 and circuit[0:Lc] == candidate:  # a cache hit!
                     cache_hits[cached_index] += 1
@@ -82,7 +83,7 @@ def _create_prefix_table(circuits_to_evaluate, max_cache_size):
         # and finding the first string that *is* a prefix of this string
         # (this will necessarily be the longest prefix, given the sorting)
         for i_in_cache in range(curCacheSize - 1, -1, -1):  # from curCacheSize-1 -> 0
-            candidate = circuits_to_evaluate[cacheIndices[i_in_cache]]
+            candidate = circuits_to_evaluate_fastlookup[cacheIndices[i_in_cache]]
             Lc = len(candidate)
             if L >= Lc > 0 and circuit[0:Lc] == candidate:  # ">=" allows for duplicates
                 iStart = i_in_cache  # an index into the *cache*, not into circuits_to_evaluate
@@ -145,9 +146,11 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
     """
     table_contents, cachesize = prefix_table
 
-    if (max_sub_table_size is None and num_sub_tables is None) or \
-       (max_sub_table_size is not None and num_sub_tables is not None):
-        raise ValueError("Specify *either* max_sub_table_size or num_sub_tables")
+    if max_sub_table_size is None and num_sub_tables is None:
+        return [set(range(len(table_contents)))]  # no splitting needed
+    
+    if max_sub_table_size is not None and num_sub_tables is not None:
+        raise ValueError("Cannot specify both max_sub_table_size and num_sub_tables")
     if num_sub_tables is not None and num_sub_tables <= 0:
         raise ValueError("Error: num_sub_tables must be > 0!")
 
@@ -381,7 +384,7 @@ class _MapCOPAEvalStrategyAtom(_DistributableAtom):
             expanded_circuit_outcomes_by_orig[i] = d
             expanded_circuit_outcomes.update(d)
 
-        expanded_circuits = {i: cir for i, cir in enumerate(expanded_circuit_outcomes.keys())}
+        expanded_circuits = list(expanded_circuit_outcomes.keys())
         self.table, self._cache_size = _create_prefix_table(expanded_circuits, max_cache_size)
 
         #Create circuit element <=> integer index lookups for speed
@@ -390,12 +393,12 @@ class _MapCOPAEvalStrategyAtom(_DistributableAtom):
         all_elabels = set()
         for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
             for sep_povm_c in expanded_circuit_outcomes:
-                if sep_povm_c.effect_labels == [None]:  # special case
+                if sep_povm_c.effect_labels == [None]:  # special case -- needed (for bulk_product?)
                     all_oplabels.update(sep_povm_c[:])
                 else:
                     all_rholabels.add(sep_povm_c[0])
                     all_oplabels.update(sep_povm_c[1:])
-                    all_elabels.update(sep_povm_c.effect_labels)
+                    all_elabels.update(sep_povm_c.full_effect_labels)
 
         self.rho_labels = sorted(all_rholabels)
         self.op_labels = sorted(all_oplabels)
@@ -412,7 +415,7 @@ class _MapCOPAEvalStrategyAtom(_DistributableAtom):
             for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
                 elindices = list(range(offset, offset + len(outcomes)))
-                self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[elbl] for elbl in sep_povm_c.effect_labels]
+                self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[lbl] for lbl in sep_povm_c.full_effect_labels]
                 self.elindices_by_expcircuit[i] = elindices
                 offset += len(outcomes)
 
@@ -461,11 +464,11 @@ class MapCOPALayout(_DistributableCOPALayout):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
-        ds_circuits = _lt.apply_aliases_to_circuit_list(unique_circuits, aliases)
+        ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
 
         circuit_table = _create_prefix_table(unique_complete_circuits, max_cache_size)
-        groups = self._find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)
+        groups = _find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)
 
         atoms = []
         elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
@@ -474,7 +477,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         for group in groups:
             atoms.append(_MapCOPAEvalStrategyAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
                                                   dataset, offset, elindex_outcome_tuples, max_cache_size))
-            offset += atoms[-1].size
+            offset += atoms[-1].num_elements
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
                          atoms, additional_dimensions)

@@ -891,7 +891,7 @@ class _SimpleCompLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
+        return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
     def povm_layer_operator(self, model, layerlbl, cache):
         """
@@ -907,17 +907,17 @@ class _SimpleCompLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        if layerlbl in self.povm_blks['layers']:
-            return self.povm_blks['layers'][layerlbl]
+        if layerlbl in model.povm_blks['layers']:
+            return model.povm_blks['layers'][layerlbl]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
-            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+            # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
             assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
             povmName = _gt.effect_label_to_povm(layerlbl)
-            if povmName in self.povm_blks['layers']:
+            if povmName in model.povm_blks['layers']:
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.
-                mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
                 cache.update(mpovm.simplify_effects(mpovm_lbl))
@@ -943,7 +943,7 @@ class _SimpleCompLayerRules(_LayerRules):
         dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.operation_blks['layers'])
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
@@ -953,7 +953,7 @@ class _SimpleCompLayerRules(_LayerRules):
         if len(components) == 1 and not bHasGlobalIdle:
             ret = self._layer_component_operation(model, components[0], cache, dense)
         else:
-            gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+            gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = Composed(gblIdle + [self._layer_component_operation(model, l, cache, dense) for l in components],
                            dim=model.dim, evotype=model.evotype)
@@ -985,8 +985,8 @@ class _SimpleCompLayerRules(_LayerRules):
         # label being created, but we could if it would improve performance.
         if isinstance(complbl, _CircuitLabel):
             ret = self._create_op_for_circuitlabel(model, complbl, dense)
-        elif complbl in self.operation_blks['layers']:
-            ret = self.operation_blks['layers'][complbl]
+        elif complbl in model.operation_blks['layers']:
+            ret = model.operation_blks['layers'][complbl]
         else:
             ret = _opfactory.op_from_factories(model.factories['layers'], complbl)
         return ret

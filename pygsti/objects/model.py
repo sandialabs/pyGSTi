@@ -48,6 +48,7 @@ from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from .label import Label as _Label
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .layerrules import LayerRules as _LayerRules
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 class Model(object):
@@ -377,23 +378,20 @@ v
 #    #    """
 #    #    return False
 
-    def bulk_probs(self, circuit_list, clip_to=None, check=False,
-                   comm=None, mem_limit=None, dataset=None, smartc=None):
+    def bulk_probs(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to compute quantities for.
+        circuits : (list of Circuits) or CircuitOutcomeProbabilityArrayLayout
+            When a list, each element specifies a circuit to compute outcome probabilities for.
+            A :class:`CircuitOutcomeProbabilityArrayLayout` specifies the circuits along with
+            an internal memory layout that reduces the time required by this function and can
+            restrict the computed probabilities to those corresponding to only certain outcomes.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
@@ -403,11 +401,6 @@ v
         mem_limit : int, optional
             A rough memory limit in bytes which is used to determine processor
             allocation.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
 
         smartc : SmartCache, optional
             A cache object to cache & use previously cached values inside this
@@ -1689,11 +1682,11 @@ class OpModel(Model):
         povm_lbl_to_append = None
 
         if len(circuit) == 0 or not self._is_primitive_prep_layer_lbl(circuit[0]):
-            prep_lbl_to_prepend = self._default_primitive_prep_layer_label()
+            prep_lbl_to_prepend = self._default_primitive_prep_layer_lbl()
             if prep_lbl_to_prepend is None:
                 raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
         if len(circuit) == 0 or not self._is_primitive_povm_layer_lbl(circuit[-1]):
-            povm_lbl_to_append = self._default_primitive_povm_layer_label()
+            povm_lbl_to_append = self._default_primitive_povm_layer_lbl(None)
             if povm_lbl_to_append is None:
                 raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
 
@@ -1841,8 +1834,10 @@ class OpModel(Model):
         -------
         Label or None
         """
-        if len(self._primitive_povm_labels) == 1:
-            return next(iter(self._primitive_povm_labels))
+        if len(self._primitive_povm_label_dict) == 1 and \
+           (sslbls is None or sslbls == ('*',) or (len(self.state_space_labels.labels) == 1
+                                                   and self.state_space_labels.labels[0] == sslbls)):
+            return next(iter(self._primitive_povm_label_dict.keys()))
         else:
             return None
 
@@ -1854,7 +1849,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return len(self._primitive_prep_labels) > 0
+        return len(self._primitive_prep_label_dict) > 0
 
     def _has_primitive_povms(self):
         """
@@ -1864,7 +1859,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return len(self._primitive_povm_labels) > 0
+        return len(self._primitive_povm_label_dict) > 0
 
     def _effect_labels_for_povm(self, povm_lbl):
         """
@@ -1935,7 +1930,7 @@ class OpModel(Model):
         """ Called when parameter vector structure changes and self._layerop_cache should be cleared & re-initialized """
         self._layerop_cache.clear()
 
-    def probs(self, circuit, clip_to=None, time=None):
+    def probs(self, circuit, outcomes=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -1944,20 +1939,20 @@ class OpModel(Model):
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip probabilities to if not None.
+        outcomes : list or tuple
+            A sequence of outcomes, which can themselves be either tuples
+            (to include intermediate measurements) or simple strings, e.g. `'010'`.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
-        probs : dictionary
-            A dictionary such that
-            probs[SL] = pr(SL,circuit,clip_to)
-            for each spam label (string) SL.
+        probs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to probabilities.
         """
-        return self._fwdsim().probs(self.simplify_circuit(circuit), clip_to, time)
+        return self._sim.probs(circuit, outcomes, time)
 
 #    def dprobs(self, circuit, return_pr=False, clip_to=None):
 #        """
@@ -2499,23 +2494,20 @@ class OpModel(Model):
 #            self.bulk_fill_probs(probs, eval_tree, clip_to=None, comm=comm)
 #        return fwdsim.bulk_test_if_paths_are_sufficient(eval_tree, probs, comm, mem_limit, printer)
 
-    def bulk_probs(self, circuit_list, clip_to=None, check=False,
-                   comm=None, mem_limit=None, dataset=None, smartc=None):
+    def bulk_probs(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to compute quantities for.
+        circuits : (list of Circuits) or CircuitOutcomeProbabilityArrayLayout
+            When a list, each element specifies a circuit to compute outcome probabilities for.
+            A :class:`CircuitOutcomeProbabilityArrayLayout` specifies the circuits along with
+            an internal memory layout that reduces the time required by this function and can
+            restrict the computed probabilities to those corresponding to only certain outcomes.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
@@ -2542,14 +2534,8 @@ class OpModel(Model):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        circuit_list = [opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
-                        for opstr in circuit_list]  # cast to Circuits
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            circuit_list, comm, mem_limit, subcalls=['bulk_fill_probs'],
-            dataset=dataset, verbosity=0)  # FUTURE (maybe make verbosity into an arg?)
-
-        return self._fwdsim().bulk_probs(circuit_list, evalTree, elIndices,
-                                         outcomes, clip_to, check, comm, smartc)
+        resource_alloc = _ResourceAllocation(comm, mem_limit)
+        return self.sim.bulk_probs(circuits, clip_to, resource_alloc, smartc)
 
 #    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
 #                    check=False, comm=None, wrt_block_size=None, dataset=None):
@@ -2922,9 +2908,9 @@ class OpModel(Model):
         deep copying everything else within a .copy() operation.
         """
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
-        copy_into._shlp = None  # must be set by a derived-class _init_copy() method
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
-        copy_into._opcache = {}  # don't copy opcache
+        copy_into._layerop_cache = {}  # don't copy opcache
+        copy_into.sim = self.sim.copy()  # setter will correctly set copy's `.model` link
         super(OpModel, self)._init_copy(copy_into)
 
     def copy(self):

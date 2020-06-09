@@ -1298,7 +1298,7 @@ class CloudNoiseLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
+        return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
     def povm_layer_operator(self, model, layerlbl, cache):
         """
@@ -1314,17 +1314,17 @@ class CloudNoiseLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        if layerlbl in self.povm_blks['layers']:
-            return self.povm_blks['layers'][layerlbl]
+        if layerlbl in model.povm_blks['layers']:
+            return model.povm_blks['layers'][layerlbl]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
-            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
+            # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
             assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
             povmName = _gt.effect_label_to_povm(layerlbl)
-            if povmName in self.povm_blks['layers']:
+            if povmName in model.povm_blks['layers']:
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.
-                mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
+                mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
                 cache.update(mpovm.simplify_effects(mpovm_lbl))
@@ -1362,7 +1362,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         components = layerlbl.components
         if len(components) == 0:  # or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
-            return self.operation_blks['layers']['globalIdle']  # idle!
+            return model.operation_blks['layers']['globalIdle']  # idle!
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
@@ -1373,7 +1373,7 @@ class CloudNoiseLayerRules(_LayerRules):
         ops_to_compose = [targetOp]
 
         if self.errcomp_type == "gates":
-            if self.add_idle_noise: ops_to_compose.append(self.operation_blks['layers']['globalIdle'])
+            if self.add_idle_noise: ops_to_compose.append(model.operation_blks['layers']['globalIdle'])
             component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, cache)
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
@@ -1387,7 +1387,7 @@ class CloudNoiseLayerRules(_LayerRules):
             #We compose the target operations to create a
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [self.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
+            errorGens = [model.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
             errorGens.extend(self._layer_component_cloudnoises(model, components, cache))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
@@ -1425,8 +1425,8 @@ class CloudNoiseLayerRules(_LayerRules):
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
-        elif complbl in self.operation_blks['layers']:
-            return self.operation_blks['layers'][complbl]
+        elif complbl in model.operation_blks['layers']:
+            return model.operation_blks['layers'][complbl]
         else:
             return _opfactory.op_from_factories(model.factories['layers'], complbl)
 
@@ -1449,8 +1449,8 @@ class CloudNoiseLayerRules(_LayerRules):
         """
         ret = []
         for complbl in complbl_list:
-            if complbl in self.operation_blks['cloudnoise']:
-                ret.append(self.operation_blks['cloudnoise'][complbl])
+            if complbl in model.operation_blks['cloudnoise']:
+                ret.append(model.operation_blks['cloudnoise'][complbl])
             else:
                 try:
                     ret.append(_opfactory.op_from_factories(model.factories['cloudnoise'], complbl))

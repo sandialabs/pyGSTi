@@ -88,5 +88,5 @@ class BulkCircuitList(list):
         list
             A list of :class:`Circuit`s.
         """
-        return _lt.apply_aliases_to_circuit_list(self[:], self.op_label_aliases)
+        return _lt.apply_aliases_to_circuits(self[:], self.op_label_aliases)
 

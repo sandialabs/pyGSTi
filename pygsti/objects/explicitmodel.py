@@ -1515,7 +1515,6 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim.copy())
-        new_model._sim.model = new_model  # update "parent link" of simulator
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1587,7 +1586,6 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim.copy())
-        new_model._sim.model = new_model  # update "parent link" of simulator
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -1796,7 +1794,7 @@ class ExplicitLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        return self.preps[layerlbl]  # don't cache this - it's not a new operator
+        return model.preps[layerlbl]  # don't cache this - it's not a new operator
 
     def povm_layer_operator(self, model, layerlbl, cache):
         """
@@ -1812,7 +1810,7 @@ class ExplicitLayerRules(_LayerRules):
         POVM or SPAMVec
         """
         if layerlbl in cache: return cache[layerlbl]
-        return self.povms[layerlbl]  # don't cache this - it's not a new operator
+        return model.povms[layerlbl]  # don't cache this - it's not a new operator
 
     def operation_layer_operator(self, model, layerlbl, cache):
         """
@@ -1834,4 +1832,4 @@ class ExplicitLayerRules(_LayerRules):
             cache[layerlbl] = op
             return op
         else:
-            raise ValueError(f"Cannot create operator for non-primitive layer: {layerlbl}")
+            return model.operations[layerlbl]

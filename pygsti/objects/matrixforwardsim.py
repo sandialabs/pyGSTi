@@ -70,7 +70,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             G = _np.identity(self.model.dim)
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.operation(lOp).to_dense()
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense()
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -91,7 +91,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         else:
             G = _np.identity(self.model.dim)
             for lOp in circuit:
-                G = _np.dot(self.model.operation(lOp).to_dense(), G)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(), G)  # LEXI VS MATRIX ORDER
             return G
 
     def _process_wrt_filter(self, wrt_filter, obj):
@@ -149,7 +149,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         Return the derivative of a length-1 (single-gate) sequence
         """
         dim = self.model.dim
-        gate = self.model.operation(op_label)
+        gate = self.model.circuit_layer_operator(op_label, 'op')
         op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
@@ -178,7 +178,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         dim = self.model.dim
 
-        gate = self.model.operation(op_label)
+        gate = self.model.circuit_layer_operator(op_label, 'op')
         op_wrtFilter1, gpindices1 = self._process_wrt_filter(wrt_filter1, gate)
         op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
@@ -265,13 +265,13 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         leftProds = []
         G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G, self.model.operation(opLabel).to_dense())
+            G = _np.dot(G, self.model.circuit_layer_operator(opLabel, 'op').to_dense())
             leftProds.append(G)
 
         rightProdsT = []
         G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.model.operation(opLabel).to_dense(), G)
+            G = _np.dot(self.model.circuit_layer_operator(opLabel, 'op').to_dense(), G)
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
@@ -283,7 +283,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         for opLabel in uniqueOpLabels:
-            gate = self.model.operation(opLabel)
+            gate = self.model.circuit_layer_operator(opLabel, 'op')
             op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
             dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
 
@@ -378,7 +378,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         gpindices1 = {}; gate_wrtFilters1 = {}
         gpindices2 = {}; gate_wrtFilters2 = {}
         for l in uniqueOpLabels:
-            used_operations[l] = self.model.operation(l)
+            used_operations[l] = self.model.circuit_layer_operator(l, 'op')
             gate_wrtFilters1[l], gpindices1[l] = self._process_wrt_filter(wrt_filter1, used_operations[l])
             gate_wrtFilters2[l], gpindices2[l] = self._process_wrt_filter(wrt_filter2, used_operations[l])
 
@@ -389,7 +389,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             prods[(i, i - 1)] = ident  # product of no gates
             G = ident
             for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
-                G = _np.dot(G, self.model.operation(opLabel2).to_dense())
+                G = _np.dot(G, self.model.circuit_layer_operator(opLabel2, 'op').to_dense())
                 prods[(i, j)] = G
         prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
@@ -536,7 +536,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             if use_scaling:
                 old_err = _np.seterr(over='ignore')
                 G, scale = self.product(circuit_ops, True)
-                if self.evotype == "statevec":
+                if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
                 else:  # evotype == "densitymx"
                     # probability, with scaling applied (may generate overflow, but OK)
@@ -545,7 +545,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
             else:  # no scaling -- faster but susceptible to overflow
                 G = self.product(circuit_ops, False)
-                if self.evotype == "statevec":
+                if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
                 else:  # evotype == "densitymx"
                     ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
@@ -853,7 +853,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
                     prodCache[iDest] = _np.identity(dim)
                     # Note: scaleCache[i] = 0.0 from initialization
                 else:
-                    gate = self.model.operation(opLabel).todense()
+                    gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense()
                     nG = max(_nla.norm(gate), 1.0)
                     prodCache[iDest] = gate / nG
                     scaleCache[iDest] = _np.log(nG)
@@ -1083,7 +1083,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
                 opLabel = iLeft
                 if opLabel == ():
                     hProdCache[iDest] = _np.zeros(hessn_shape)
-            elif not self.model.operation(opLabel).has_nonzero_hessian():
+            elif not self.model.circuit_layer_operator(opLabel, 'op').has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
                 # all hessians for single- or zero-circuits are zero.
                 hProdCache[iDest] = _np.zeros(hessn_shape)
@@ -1272,6 +1272,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
                     if _next >= cmem:  # special failsafe
                         raise MemoryError("Not enough memory: splitting unproductive")
                     cmem = _next
+        else:
+            gather_mem_limit = None
 
         layout = layout_cache[nc]
 
@@ -1674,8 +1676,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
         if isinstance(spam_tuple[0], _Label):
             rholabel, elabel = spam_tuple
             # This calculator uses the convention that rho has shape (N,1)
-            rho = self.model.prep(rholabel).to_dense()[:, None]
-            E = _np.conjugate(_np.transpose(self.model.effect(elabel).to_dense()
+            rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense()[:, None]
+            E = _np.conjugate(_np.transpose(self.model.circuit_layer_operator(elabel, 'povm').to_dense()
                                             [:, None]))  # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
@@ -1685,7 +1687,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
         return rho, E
 
     def _probs_from_rho_e(self, rho, e, gs, scale_vals):
-        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        if self.model.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
 
         #Compute probability and save in return array
         # want vp[iFinal] = float(dot(e, dot(G, rho)))
@@ -1697,14 +1699,16 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
         # shape == (len(circuit_list),) ; may overflow but OK
 
     def _dprobs_from_rho_e(self, spam_tuple, rho, e, gs, d_gs, scale_vals, wrt_slice=None):
-        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        if self.model.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
 
         rholabel, elabel = spam_tuple
-        rhoVec = self.model.prep(rholabel)  # distinct from rho,e b/c rho,e are
-        EVec = self.model.effect(elabel)   # arrays, these are SPAMVecs
+        rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
+        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are SPAMVecs
         nCircuits = gs.shape[0]
-        rho_wrtFilter, rho_gpindices = self._process_wrt_filter(wrt_slice, self.model.prep(rholabel))
-        E_wrtFilter, E_gpindices = self._process_wrt_filter(wrt_slice, self.model.effect(elabel))
+        rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
+            wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
+        E_wrtFilter, E_gpindices = self._process_wrt_filter(
+            wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
         nDerivCols = self.model.num_params() if wrt_slice is None else _slct.length(wrt_slice)
 
         # GATE DERIVS (assume d_gs is already sized/filtered) -------------------
@@ -1754,17 +1758,21 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
 
     def _hprobs_from_rho_e(self, spam_tuple, rho, e, gs, d_gs1, d_gs2, h_gs, scale_vals,
                            wrt_slice1=None, wrt_slice2=None):
-        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        if self.model.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
 
         rholabel, elabel = spam_tuple
-        rhoVec = self.model.prep(rholabel)  # distinct from rho,e b/c rho,e are
-        EVec = self.model.effect(elabel)   # arrays, these are SPAMVecs
+        rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
+        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are SPAMVecs
         nCircuits = gs.shape[0]
 
-        rho_wrtFilter1, rho_gpindices1 = self._process_wrt_filter(wrt_slice1, self.model.prep(rholabel))
-        rho_wrtFilter2, rho_gpindices2 = self._process_wrt_filter(wrt_slice2, self.model.prep(rholabel))
-        E_wrtFilter1, E_gpindices1 = self._process_wrt_filter(wrt_slice1, self.model.effect(elabel))
-        E_wrtFilter2, E_gpindices2 = self._process_wrt_filter(wrt_slice2, self.model.effect(elabel))
+        rho_wrtFilter1, rho_gpindices1 = self._process_wrt_filter(
+            wrt_slice1, self.model.circuit_layer_operator(rholabel, 'prep'))
+        rho_wrtFilter2, rho_gpindices2 = self._process_wrt_filter(
+            wrt_slice2, self.model.circuit_layer_operator(rholabel, 'prep'))
+        E_wrtFilter1, E_gpindices1 = self._process_wrt_filter(
+            wrt_slice1, self.model.circuit_layer_operator(elabel, 'povm'))
+        E_wrtFilter2, E_gpindices2 = self._process_wrt_filter(
+            wrt_slice2, self.model.circuit_layer_operator(elabel, 'povm'))
 
         nDerivCols1 = self.model.num_params() if wrt_slice1 is None else _slct.length(wrt_slice1)
         nDerivCols2 = self.model.num_params() if wrt_slice2 is None else _slct.length(wrt_slice2)
@@ -1866,24 +1874,24 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
 
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
-        if self.model.prep(rholabel).has_nonzero_hessian():
+        if self.model.circuit_layer_operator(rholabel, 'prep').has_nonzero_hessian():
             dp_dAnyRho = _np.dot(e, gs).squeeze(0) * scale_vals[:, None]  # overflow OK
             d2pr_d2rhos = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
             _fas(d2pr_d2rhos, [None, rho_gpindices1, rho_gpindices2],
-                 _np.tensordot(dp_dAnyRho, self.model.prep(rholabel).hessian_wrt_params(
+                 _np.tensordot(dp_dAnyRho, self.model.circuit_layer_operator(rholabel, 'prep').hessian_wrt_params(
                      rho_wrtFilter1, rho_wrtFilter2), (1, 0)))
-            # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.model.prep(rholabel).hessian_wrt_params(
-            #    rho_wrtFilter1, rho_wrtFilter2))
+            # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.model.circuit_layer_operator(rholabel, 'prep') \
+            #    .hessian_wrt_params(rho_wrtFilter1, rho_wrtFilter2))
         else:
             d2pr_d2rhos = 0
 
-        if self.model.effect(elabel).has_nonzero_hessian():
+        if self.model.circuit_layer_operator(elabel, 'povm').has_nonzero_hessian():
             dp_dAnyE = _np.dot(gs, rho).squeeze(2) * scale_vals[:, None]  # overflow OK
             d2pr_d2Es = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
             _fas(d2pr_d2Es, [None, E_gpindices1, E_gpindices2],
-                 _np.tensordot(dp_dAnyE, self.model.effect(elabel).hessian_wrt_params(
+                 _np.tensordot(dp_dAnyE, self.model.circuit_layer_operator(elabel, 'povm').hessian_wrt_params(
                      E_wrtFilter1, E_wrtFilter2), (1, 0)))
-            # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.model.effect(elabel).hessian_wrt_params(
+            # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.model.circuit_layer_operator(elabel, 'povm').hessian_wrt_params(
             #    E_wrtFilter1, E_wrtFilter2))
         else:
             d2pr_d2Es = 0
@@ -2808,7 +2816,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator):
 #        #            prodCache[iDest] = _np.identity(dim)
 #        #            # Note: scaleCache[i] = 0.0 from initialization
 #        #        else:
-#        #            gate = self.model.get_operation(opLabel).todense()
+#        #            gate = self.model.get_operation(opLabel).to_dense()
 #        #            nG = max(_nla.norm(gate), 1.0)
 #        #            prodCache[iDest] = gate / nG
 #        #            scaleCache[iDest] = _np.log(nG)

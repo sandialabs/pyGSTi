@@ -86,7 +86,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         circuits = circuits if isinstance(circuits, _BulkCircuitList) else _BulkCircuitList(circuits)
         unique_circuits, to_unique = cls._compute_unique_circuits(circuits)
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
-        ds_circuits = _lt.apply_aliases_to_circuit_list(unique_circuits, circuits.op_label_aliases)
+        ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, circuits.op_label_aliases)
 
         # Create a dict of the "present outcomes" of each circuit, defined as those outcomes
         #  for which `dataset` contains data (if `dataset is None` treat *all* outcomes as present).
@@ -151,7 +151,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
         self._additional_dimensions = additional_dimensions
 
-        max_element_index = max(_it.chain(*[tup[0] for tup in elindex_outcome_tuples.values()]))
+        max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()]))
         assert(self._size == max_element_index + 1), \
             f"Inconsistency: {self._size} elements but max index is {max_element_index}!"
 
