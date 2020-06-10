@@ -67,8 +67,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 
     target_model : Model
         A model used to specify which operation labels should be estimated, a
-        guess for which gauge these estimates should be returned in, and
-        used to simplify circuits.
+        guess for which gauge these estimates should be returned in.
 
     op_labels : list, optional
         A list of which operation labels (or aliases) should be estimated.
@@ -372,7 +371,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 def _lgst_matrix_dims(mdl, prep_fiducials, effect_fiducials):
     assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
-    povmLbls = [mdl._split_circuit(s, ('povm',))[2]  # povm_label
+    povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
     povmLens = ([len(mdl.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
@@ -389,10 +388,11 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            raw_dict, outcomes = model.simplify_circuit(opLabelString)
-            assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
-            unique_key = list(raw_dict.keys())[0]
-            assert(len(raw_dict[unique_key]) == povmLen)
+            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            assert(len(expd_circuit_outcomes) == 1), "No instruments are allowed in LGST fiducials!"
+            unique_key = next(iter(expd_circuit_outcomes.keys()))
+            outcomes = expd_circuit_outcomes[unique_key]
+            assert(len(outcomes) == povmLen)
 
             dsRow = dataset[dsStr]
             AB[eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
@@ -417,16 +417,13 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + _objs.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            raw_dict, outcomes = model.simplify_circuit(opLabelString)
+            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
             dsRow = dataset[dsStr]
-            assert(len(raw_dict) == nVariants)
+            assert(len(expd_circuit_outcomes) == nVariants)
 
-            ooff = 0  # outcome offset
-            for k, (raw_str, spamtups) in enumerate(raw_dict.items()):
-                assert(len(spamtups) == povmLen)
-                X[k, eoff:eoff + povmLen, j] = [
-                    dsRow.fraction(ol) for ol in outcomes[ooff:ooff + len(spamtups)]]
-                ooff += len(spamtups)
+            for k, (sep_povm_c, outcomes) in enumerate(expd_circuit_outcomes.items()):
+                assert(len(outcomes) == povmLen)
+                X[k, eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
         eoff += povmLen
 
     return X
@@ -678,8 +675,8 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
 
 def run_iterative_gst(dataset, start_model, circuit_lists,
-                     optimizer, iteration_objfn_builders, final_objfn_builders,
-                     resource_alloc, verbosity=0):
+                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      resource_alloc, verbosity=0):
     """
     Performs Iterative Gate Set Tomography on the dataset.
 
@@ -785,8 +782,10 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
                 #send final cache back to caller to facilitate more operations on the final (model, circuits, dataset)
                 final_store = mdc_store
-
-            models.append(mdc_store.model.copy())
+                models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
+            else:
+                models.append(mdc_store.model.copy())
+                
             optimums.append(opt_result)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))

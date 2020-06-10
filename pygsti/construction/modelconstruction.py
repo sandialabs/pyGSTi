@@ -708,15 +708,15 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
         del mdl_new.operations[gl]  # remove all gates from mdl_new
 
     for gl, opstr in alias_dict.items():
-        mdl_new.operations[gl] = mdl_primitives.product(opstr)
+        mdl_new.operations[gl] = mdl_primitives.sim.product(opstr)
         #Creates fully parameterized gates by default...
     return mdl_new
 
 
 def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
-                           availability=None, qubit_labels=None, geometry="line", parameterization='static',
-                           evotype="auto", simulator="auto", on_construction_error='raise',
-                           independent_gates=False, ensure_composed_gates=False, global_idle=None):
+                            availability=None, qubit_labels=None, geometry="line", parameterization='static',
+                            evotype="auto", simulator="auto", on_construction_error='raise',
+                            independent_gates=False, ensure_composed_gates=False, global_idle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
 

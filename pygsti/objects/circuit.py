@@ -3581,18 +3581,18 @@ class Circuit(object):
     def expand_instruments_and_separate_povm(self, model_shlp, observed_outcomes=None):
         """
         Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
-    
+
         Each key of the returned dictionary replaces the instruments in this circuit with a selection
         of their members.  (The size of the resulting dictionary is the product of the sizes of
         each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
         as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
         correspond to observed data.  This function is, for the most part, used internally to process
         a circuit before computing its outcome probabilities.
-    
+
         Parameters
         ----------
         model_shlp : TODO docstring
-    
+
         Returns
         -------
         OrderedDict

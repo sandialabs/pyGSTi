@@ -741,12 +741,12 @@ class GaugeRobustModelTable(WorkspaceTable):
         M = 0.0  # max abs for colorscale
         op_decomps = {}
         for gl in opLabels:
-            try:
+            if 1: #try:
                 op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(),
                                                 target_model.operations[gl].to_dense())
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
-            except Exception as e:
-                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
+            #except Exception as e:
+            #    _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
 
         for i, lbl in enumerate(opLabels):
             if lbl not in op_decomps: continue
@@ -965,14 +965,14 @@ class GaugeRobustMetricTable(WorkspaceTable):
                 if i > j:  # leave lower diagonal blank
                     el = _objs.reportableqty.ReportableQty(_np.nan)
                 elif i == j:  # diagonal element
-                    try:
+                    if 1: #try:
                         el = _reportables.evaluate_opfn_by_name(
                             metric, mdl_in_best_gauge[i], target_model, lbl, confidence_region_info)
-                    except Exception:
-                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
-                        el = _objs.reportableqty.ReportableQty(_np.nan)
+                    #except Exception:
+                    #    _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
+                    #    el = _objs.reportableqty.ReportableQty(_np.nan)
                 else:  # off-diagonal element
-                    try:
+                    if 1: #try:
                         el1 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2,
                             confidence_region_info)
@@ -980,10 +980,10 @@ class GaugeRobustMetricTable(WorkspaceTable):
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
                             confidence_region_info)
                         el = _objs.reportableqty.minimum(el1, el2)
-                    except Exception:
-                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
-                                       (metric, lbl, lbl2))
-                        el = _objs.reportableqty.ReportableQty(_np.nan)
+                    #except Exception:
+                    #    _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
+                    #                   (metric, lbl, lbl2))
+                    #    el = _objs.reportableqty.ReportableQty(_np.nan)
 
                 row_data.append(el)
                 row_formatters.append('Normal')
@@ -1669,7 +1669,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         baseStrs = _cnst.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1, maxPower):
-                if len(s**i) > 1 and _np.linalg.norm(target_model.product(s**i) - Id) < 1e-6:
+                if len(s**i) > 1 and _np.linalg.norm(target_model.sim.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
         #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
         #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
@@ -2476,7 +2476,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 if isinstance(gl, _objs.Label) or isinstance(gl, str):
                     target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense())  # no error bars
                 else:
-                    target_evals = _np.linalg.eigvals(target_model.product(gl))  # no error bars
+                    target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
                     if isinstance(gl, _objs.Label) or isinstance(gl, str):
@@ -2492,7 +2492,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 for i, j in pairs:
                     matched_target_evals[i] = target_evals[j]
                 target_evals = matched_target_evals
-                target_evals = target_evals.reshape(evals.value.shape)
+                target_evals = target_evals.reshape(evals.value().shape)
                 # b/c evals have shape (x,1) and targets (x,),
                 # which causes problems when we try to subtract them
 
@@ -2884,14 +2884,13 @@ class FitComparisonTable(WorkspaceTable):
                     'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
 
-        CACHE = None
         for X, mdl, circuit_list, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
                 _ph.rated_n_sigma, dataset, mdl, circuit_list,
                 objfn_builder, Np, wildcard, return_all=True,
-                comm=comm, cache=CACHE)  # self.ws.smartCache derived?
+                comm=comm)  # self.ws.smartCache derived?
             table.add_row((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
-                         (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
+                          (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 
         table.finish()
         return table

@@ -288,7 +288,7 @@ class CircuitEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        Mx = model.product(self.circuit)
+        Mx = model.sim.product(self.circuit)
         evals, evecs = _np.linalg.eig(Mx)
 
         ev_list = list(enumerate(evals))
@@ -317,7 +317,7 @@ class CircuitEigenvalues(_modf.ModelFunction):
         numpy.ndarray
         """
         #avoid calling minweight_match again
-        Mx = nearby_model.product(self.circuit)
+        Mx = nearby_model.sim.product(self.circuit)
         dMx = Mx - self.Mx
         #evalsM = evals0 + Uinv * (M-M0) * U
         return _np.array([self.evals[k] + _np.dot(self.inv_evecs[k, :], _np.dot(dMx, self.evecs[:, k]))
@@ -326,7 +326,7 @@ class CircuitEigenvalues(_modf.ModelFunction):
 
 
 #def circuit_eigenvalues(model, circuit):
-#    return _np.array(sorted(_np.linalg.eigvals(model.product(circuit)),
+#    return _np.array(sorted(_np.linalg.eigvals(model.sim.product(circuit)),
 #                            key=lambda ev: abs(ev), reverse=True))
 #CircuitEigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
 ## init args == (model, circuit)
@@ -351,8 +351,8 @@ def rel_circuit_eigenvalues(model_a, model_b, circuit):
     -------
     numpy.ndarray
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op)
 
@@ -380,8 +380,8 @@ def circuit_frobenius_diff(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return frobenius_diff(A, B, model_b.basis)
 
 
@@ -408,8 +408,8 @@ def circuit_entanglement_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return entanglement_infidelity(A, B, model_b.basis)
 
 
@@ -436,8 +436,8 @@ def circuit_avg_gate_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return avg_gate_infidelity(A, B, model_b.basis)
 
 
@@ -464,8 +464,8 @@ def circuit_jtrace_diff(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return jtrace_diff(A, B, model_b.basis)
 
 
@@ -492,7 +492,7 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, circuit):
             self.circuit = circuit
-            self.B = model_b.product(circuit)
+            self.B = model_b.sim.product(circuit)
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, ["all"])
 
@@ -509,7 +509,7 @@ if _CVXPY_AVAILABLE:
             -------
             float
             """
-            A = model.product(self.circuit)
+            A = model.sim.product(self.circuit)
             dm, W = _tools.diamonddist(A, self.B, model.basis,
                                        return_x=True)
             self.W = W
@@ -530,14 +530,14 @@ if _CVXPY_AVAILABLE:
             """
             mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_model.product(self.circuit), mxBasis)
+                nearby_model.sim.product(self.circuit), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
 
     #def circuit_half_diamond_norm(model_a, model_b, circuit):
-    #    A = model_a.product(circuit) # "gate"
-    #    B = model_b.product(circuit) # "target gate"
+    #    A = model_a.sim.product(circuit) # "gate"
+    #    B = model_b.sim.product(circuit) # "target gate"
     #    return half_diamond_norm(A, B, model_b.basis)
     #CircuitHalfDiamondNorm = _modf.modelfn_factory(circuit_half_diamond_norm)
     #  # init args == (model_a, model_b, circuit)
@@ -566,8 +566,8 @@ def circuit_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return nonunitary_entanglement_infidelity(A, B, model_b.basis)
 
 
@@ -594,8 +594,8 @@ def circuit_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return nonunitary_avg_gate_infidelity(A, B, model_b.basis)
 
 
@@ -622,8 +622,8 @@ def circuit_eigenvalue_entanglement_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_entanglement_infidelity(A, B, model_b.basis)
 
 
@@ -650,8 +650,8 @@ def circuit_eigenvalue_avg_gate_infidelity(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_avg_gate_infidelity(A, B, model_b.basis)
 
 
@@ -678,8 +678,8 @@ def circuit_eigenvalue_nonunitary_entanglement_infidelity(model_a, model_b, circ
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_entanglement_infidelity(A, B, model_b.basis)
 
 
@@ -707,8 +707,8 @@ def circuit_eigenvalue_nonunitary_avg_gate_infidelity(model_a, model_b, circuit)
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_avg_gate_infidelity(A, B, model_b.basis)
 
 
@@ -736,8 +736,8 @@ def circuit_eigenvalue_diamondnorm(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_diamondnorm(A, B, model_b.basis)
 
 
@@ -764,8 +764,8 @@ def circuit_eigenvalue_nonunitary_diamondnorm(model_a, model_b, circuit):
     -------
     float
     """
-    A = model_a.product(circuit)  # "gate"
-    B = model_b.product(circuit)  # "target gate"
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
     return eigenvalue_nonunitary_diamondnorm(A, B, model_b.basis)
 
 
@@ -1958,8 +1958,8 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         noise = _np.zeros((model_b.dim, model_b.dim), 'd')
         for n, gl in enumerate(opstr):
             if gl == gl_with_err:
-                noise += _np.dot(model_b.product(opstr[n + 1:]),
-                                 _np.dot(err_sup_op, model_b.product(opstr[:n + 1])))
+                noise += _np.dot(model_b.sim.product(opstr[n + 1:]),
+                                 _np.dot(err_sup_op, model_b.sim.product(opstr[:n + 1])))
         #DEBUG
         #print("first order noise (%s,%s) Choi superop : " % (str(opstr),gl_with_err))
         #_tools.print_mx( _tools.jamiolkowski_iso(noise, mxBasis, mxBasis) ,width=4,prec=1)
@@ -1986,8 +1986,8 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
 
     runningJac = None; runningY = None
     for s in synthetic_idle_circuits:
-        Sa = model_a.product(s)
-        Sb = model_b.product(s)
+        Sa = model_a.sim.product(s)
+        Sb = model_b.sim.product(s)
         assert(_np.linalg.norm(Sb - _np.identity(model_b.dim, 'd')) < 1e-6), \
             "Synthetic idle %s is not an idle!!" % str(s)
         SIerrgen = _tools.error_generator(Sa, Sb, mxBasis, "logGTi")

@@ -157,7 +157,7 @@ v
         assert(len(v) == self.num_params())
         self._paramvec = v.copy()
 
-    def probs(self, circuit, clip_to=None):
+    def probabilities(self, circuit, clip_to=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -378,7 +378,7 @@ v
 #    #    """
 #    #    return False
 
-    def bulk_probs(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
+    def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
@@ -1930,7 +1930,7 @@ class OpModel(Model):
         """ Called when parameter vector structure changes and self._layerop_cache should be cleared & re-initialized """
         self._layerop_cache.clear()
 
-    def probs(self, circuit, outcomes=None, time=None):
+    def probabilities(self, circuit, outcomes=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -2494,7 +2494,7 @@ class OpModel(Model):
 #            self.bulk_fill_probs(probs, eval_tree, clip_to=None, comm=comm)
 #        return fwdsim.bulk_test_if_paths_are_sufficient(eval_tree, probs, comm, mem_limit, printer)
 
-    def bulk_probs(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
+    def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 

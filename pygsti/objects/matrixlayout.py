@@ -65,8 +65,8 @@ def _create_tree(circuits_to_evaluate):
         #  These labels serve as the initial values, and each operation sequence is assumed to be a tuple of
         #  operation labels.
         if L == 0:
-            eval_tree.append((k, None, ()))  # iLeft = None => evaluate iRight as a label
-            evalDict[()] = k
+            eval_tree.append((k, None, None))  # iLeft = iRight = None => no-op (length-0 circuit)
+            evalDict[None] = k
             continue
 
         elif L == 1:
@@ -96,7 +96,7 @@ def _create_tree(circuits_to_evaluate):
                 #print("DB: taking bite: ", circuit[0:bite], "indx = ",iCur)
                 if bFinal:
                     if iCur != k:  # then we have a duplicate final operation sequence
-                        iEmptyStr = evalDict.get((), None)
+                        iEmptyStr = evalDict.get(None, None)
                         assert(iEmptyStr is not None)  # duplicate final strs require
                         # the empty string to be included in the tree too!
                         #assert(self[k] is None)  # make sure we haven't put anything here yet

@@ -31,7 +31,7 @@ from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
-           comm=None, mem_limit=None, **addl_args):
+           comm=None, mem_limit=None, mdc_store=None, **addl_args):
     """
     A convenience function for creating an objective function.
 
@@ -68,20 +68,32 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     mem_limit : int, optional
         Rough memory limit in bytes.
 
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+
     Returns
     -------
     ObjectiveFunction
     """
 
-    if circuits is None:
-        circuits = list(dataset.keys())
+    if mdc_store is None:
 
-    if op_label_aliases:
-        circuits = _BulkCircuitList(circuits, op_label_aliases)
+        if circuits is None:
+            circuits = list(dataset.keys())
 
-    resource_alloc = _ResourceAllocation(comm, mem_limit)
-    ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
-                                resource_alloc, verbosity=0, *addl_args)
+        if op_label_aliases:
+            circuits = _BulkCircuitList(circuits, op_label_aliases)
+
+        resource_alloc = _ResourceAllocation(comm, mem_limit)
+        ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
+                                    resource_alloc, verbosity=0, **addl_args)
+
+    else:
+        #Create directly from store object, which contains everything else
+        assert(model is None and dataset is None and circuits is None and comm is None and mem_limit is None)
+        ofn = objfn_cls(mdc_store, regularization, penalties, verbosity=0, **addl_args)
+
     return ofn
 
     #def __len__(self):
@@ -856,7 +868,7 @@ class ModelDatasetCircuitsStore(object):
         self.nparams = self.model.num_params()
         self.nelements = len(self.layout)
 
-    def get_num_data_params(self):
+    def num_data_params(self):
         """
         The number of degrees of freedom in the data used by this objective function.
 
@@ -864,8 +876,8 @@ class ModelDatasetCircuitsStore(object):
         -------
         int
         """
-        return self.dataset.get_degrees_of_freedom(self.ds_circuits,
-                                                   aggregate_times=not self.time_dependent)
+        return self.dataset.degrees_of_freedom(self.ds_circuits,
+                                               aggregate_times=not self.time_dependent)
 
     def add_omitted_freqs(self, printer=None, force=False):
         """

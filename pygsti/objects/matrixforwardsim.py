@@ -26,6 +26,7 @@ from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 _dummy_profiler = _DummyProfiler()
 
@@ -846,7 +847,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Special case of an "initial operation" that can be filled directly
             if iRight is None:  # then iLeft gives operation:
                 opLabel = iLeft
-                if opLabel == ():
+                if opLabel is None:
                     prodCache[iDest] = _np.identity(dim)
                     # Note: scaleCache[i] = 0.0 from initialization
                 else:
@@ -939,7 +940,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Special case of an "initial operation" that can be filled directly
             if iRight is None:  # then iLeft gives operation:
                 opLabel = iLeft
-                if opLabel == ():
+                if opLabel is None:
                     dProdCache[iDest] = _np.zeros(deriv_shape)
                 else:
                     #doperation = self.dproduct( (opLabel,) , wrt_filter=wrtIndices)
@@ -1079,18 +1080,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Special case of an "initial operation" that can be filled directly
             if iRight is None:  # then iLeft gives operation:
                 opLabel = iLeft
-                if opLabel == ():
+                if opLabel is None:
                     hProdCache[iDest] = _np.zeros(hessn_shape)
-            elif not self.model.circuit_layer_operator(opLabel, 'op').has_nonzero_hessian():
-                #all gate elements are at most linear in params, so
-                # all hessians for single- or zero-circuits are zero.
-                hProdCache[iDest] = _np.zeros(hessn_shape)
-            else:
-                hoperation = self._hoperation(opLabel,
-                                              wrt_filter1=wrtIndices1,
-                                              wrt_filter2=wrtIndices2)
-                hProdCache[iDest] = hoperation / _np.exp(scale_cache[iDest])
-            continue
+                elif not self.model.circuit_layer_operator(opLabel, 'op').has_nonzero_hessian():
+                    #all gate elements are at most linear in params, so
+                    # all hessians for single- or zero-circuits are zero.
+                    hProdCache[iDest] = _np.zeros(hessn_shape)
+                else:
+                    hoperation = self._hoperation(opLabel,
+                                                  wrt_filter1=wrtIndices1,
+                                                  wrt_filter2=wrtIndices2)
+                    hProdCache[iDest] = hoperation / _np.exp(scale_cache[iDest])
+                continue
 
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from eval_tree because
@@ -1150,6 +1151,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #   - num_params % np == 0 (each param group has same size)
         #   - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
 
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)

@@ -25,6 +25,7 @@ from .mapevaltree import MapEvalTree as _MapEvalTree
 from .maplayout import MapCOPALayout as _MapCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import replib
 
@@ -218,6 +219,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
                       derivative_dimension=None, verbosity=0):
 
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)

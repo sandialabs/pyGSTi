@@ -183,34 +183,37 @@ class ForwardSimulator(object):
             values equal to probabilities.
         """
         copa_layout = self.create_layout([circuit])
-        probs_array = _np.array(copa_layout.size, 'd')
+        probs_array = _np.empty(copa_layout.size, 'd')
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
             self._bulk_fill_probs_at_times(probs_array, copa_layout, [time])
 
         probs = _ld.OutcomeLabelDict()
-        for element_index, outcome in copa_layout.indices_and_outcomes_for_index(0):
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
             probs[outcome] = probs_array[element_index]
         return probs
 
     def dprobs(self, circuit, clip_to=None):
         copa_layout = self.create_layout([circuit])
-        dprobs_array = _np.array((copa_layout.size, self.model.num_params()), 'd')
+        dprobs_array = _np.empty((copa_layout.size, self.model.num_params()), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout, clip_to)
 
         dprobs = _ld.OutcomeLabelDict()
-        for element_index, outcome in copa_layout.indices_and_outcomes_for_index(0):
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
             dprobs[outcome] = dprobs_array[element_index]
         return dprobs
 
     def hprobs(self, circuit, clip_to=None):
         copa_layout = self.create_layout([circuit])
-        hprobs_array = _np.array((copa_layout.size, self.model.num_params(), self.model.num_params()), 'd')
+        hprobs_array = _np.empty((copa_layout.size, self.model.num_params(), self.model.num_params()), 'd')
         self.bulk_fill_dprobs(hprobs_array, copa_layout, clip_to)
 
         hprobs = _ld.OutcomeLabelDict()
-        for element_index, outcome in copa_layout.indices_and_outcomes_for_index(0):
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
             hprobs[outcome] = hprobs_array[element_index]
         return hprobs
 
