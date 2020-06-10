@@ -365,10 +365,10 @@ class LocalNoiseModel(_ImplicitOpModel):
             if lbl not in gate_names: gatedict[lbl] = gate
 
         if evotype in ("densitymx", "svterm", "cterm"):
-            from ..construction import _basis_create_spam_vector as _basis_build_vector
+            from ..construction.modelconstruction import _basis_create_spam_vector
             basis1Q = _BuiltinBasis("pp", 4)
-            v0 = _basis_build_vector("0", basis1Q)
-            v1 = _basis_build_vector("1", basis1Q)
+            v0 = _basis_create_spam_vector("0", basis1Q)
+            v1 = _basis_create_spam_vector("1", basis1Q)
         elif evotype == "statevec":
             basis1Q = _BuiltinBasis("sv", 2)
             v0 = _np.array([[1], [0]], complex)
@@ -655,7 +655,6 @@ class LocalNoiseModel(_ImplicitOpModel):
         #    else: evotype = "densitymx"  # everything else
 
         if evotype in ("densitymx", "svterm", "cterm"):
-            from ..construction import _basis_create_spam_vector as _basis_build_vector
             basis1Q = _BuiltinBasis("pp", 4)
         elif evotype == "statevec":
             basis1Q = _BuiltinBasis("sv", 2)
