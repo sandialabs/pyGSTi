@@ -138,7 +138,7 @@ v
         """
         return self._paramvec
 
-    def from_vector(self, v, reset_basis=False):
+    def from_vector(self, v):
         """
         Sets this Model's operations based on parameter values `v`.
 
@@ -147,8 +147,9 @@ v
         v : numpy.ndarray
             A vector of parameters, with length equal to `self.num_params()`.
 
-        reset_basis : bool, optional
-            UNUSED
+        close : bool, optional
+            Set to `True` if `v` is close to the current parameter vector.
+            This can make some operations more efficient.
 
         Returns
         -------
@@ -1069,6 +1070,18 @@ class OpModel(Model):
             that tries to insure _paramvec & Model elements are consistent
             before their use."""
 
+        #Note on dirty flag processing and the "dirty_value" flag of members:
+        #    A model member's "dirty" flag is set to True when the member's
+        #    value (local parameter vector) may be different from its parent
+        #    model's parameter vector.  Usually, when `from_vector` is called on
+        #    a member, this should set the dirty flag (since it sets the local
+        #    parameter vector).  The exception is when this function is being
+        #    called within the parent's `from_vector` method, in which case the
+        #    flag should be reset to `False`, even if it was True before.
+        #    Whether this operation should refrain from setting it's dirty
+        #    flag as a result of this call.  `False` is the safe option, as
+        #    this call potentially changes this operation's parameters.
+
         #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
         #import inspect, pprint
         #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
@@ -1097,18 +1110,13 @@ class OpModel(Model):
                     clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
                 clean_single_obj(obj, lbl)
 
-            def reset_dirty(obj):  # recursive so works with objects that have sub-members
-                for i, subm in enumerate(obj.submembers()): reset_dirty(subm)
-                obj.dirty = False
-
             for lbl, obj in self._iter_parameterized_objs():
                 clean_obj(obj, lbl)
 
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             for _, obj in self._iter_parameterized_objs():
-                obj.from_vector(self._paramvec[obj.gpindices], nodirty=True)
-                reset_dirty(obj)  # like "obj.dirty = False" but recursive
+                obj.from_vector(self._paramvec[obj.gpindices], dirty_value=False)
                 #object is known to be consistent with _paramvec
 
             self.dirty = False
@@ -1265,7 +1273,7 @@ class OpModel(Model):
         self._clean_paramvec()  # will rebuild if needed
         return self._paramvec
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False):
         """
         Sets this Model's operations based on parameter values `v`.
 
@@ -1276,6 +1284,10 @@ class OpModel(Model):
         v : numpy.ndarray
             A vector of parameters, with length equal to `self.num_params()`.
 
+        close : bool, optional
+            Set to `True` if `v` is close to the current parameter vector.
+            This can make some operations more efficient.
+
         Returns
         -------
         None
@@ -1284,13 +1296,9 @@ class OpModel(Model):
 
         self._paramvec = v.copy()
         for _, obj in self._iter_parameterized_objs():
-            obj.from_vector(v[obj.gpindices])
-            obj.dirty = False  # object is known to be consistent with _paramvec
+            obj.from_vector(v[obj.gpindices], close, dirty_value=False)
+            # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
 
-        #if reset_basis:
-        #    self.reset_basis()
-            # assume the vector we're loading isn't producing gates & vectors in
-            # a known basis.
         if OpModel._pcheck: self._check_paramvec()
 
     ######################################

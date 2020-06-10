@@ -808,7 +808,7 @@ class SPAMVec(_modelmember.ModelMember):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -823,10 +823,10 @@ class SPAMVec(_modelmember.ModelMember):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1249,7 +1249,7 @@ class FullSPAMVec(DenseSPAMVec):
         else:
             return self._base_1d
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1264,10 +1264,10 @@ class FullSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1277,7 +1277,7 @@ class FullSPAMVec(DenseSPAMVec):
             self._base_1d[:] = v[0:self.dim] + 1j * v[self.dim:]
         else:
             self._base_1d[:] = v
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1420,7 +1420,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         return self._base_1d[1:]  # .real in case of complex matrices?
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1435,10 +1435,10 @@ class TPSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1446,7 +1446,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         assert(_np.isclose(self._base_1d[0], (self.dim)**-0.25))
         self._base_1d[1:] = v
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1565,7 +1565,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         raise ValueError(("ComplementSPAMVec.to_vector() should never be called"
                           " - use TPPOVM.to_vector() instead"))
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1580,10 +1580,10 @@ class ComplementSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1593,7 +1593,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
         self._construct_vector()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1834,7 +1834,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         """
         return self.params
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1849,10 +1849,10 @@ class CPTPSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1861,7 +1861,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(len(v) == self.num_params())
         self.params[:] = v[:]
         self._construct_vector()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -2391,7 +2391,7 @@ class TensorProdSPAMVec(SPAMVec):
                               " TensorProdSPAMVecs (instead it should be called"
                               " on the POVM)"))
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2406,10 +2406,10 @@ class TensorProdSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -2417,7 +2417,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
-                sv.from_vector(v[sv.gpindices], close, nodirty)  # factors hold local indices
+                sv.from_vector(v[sv.gpindices], close, dirty_value)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]
                   for i, povm in enumerate(self.factors)]):
@@ -2426,7 +2426,7 @@ class TensorProdSPAMVec(SPAMVec):
             for povm in self.factors:
                 local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
-                povm.from_vector(v[local_inds], close, nodirty)
+                povm.from_vector(v[local_inds], close, dirty_value)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -2752,7 +2752,7 @@ class PureStateSPAMVec(SPAMVec):
         """
         return self.pure_state_vec.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2767,16 +2767,16 @@ class PureStateSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.pure_state_vec.from_vector(v, close, nodirty)
+        self.pure_state_vec.from_vector(v, close, dirty_value)
         #Update dense rep if one is created (TODO)
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -3590,7 +3590,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return self.error_map.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -3605,18 +3605,18 @@ class LindbladSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.error_map.from_vector(v, close, nodirty)
+        self.error_map.from_vector(v, close, dirty_value)
         self._update_rep()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def transform_inplace(self, s, typ):
         """
@@ -4162,7 +4162,7 @@ class ComputationalSPAMVec(SPAMVec):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -4177,10 +4177,10 @@ class ComputationalSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------

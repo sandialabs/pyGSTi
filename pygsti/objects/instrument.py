@@ -257,7 +257,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         return self._paramvec
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -272,10 +272,10 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this Instrument should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -283,7 +283,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == self.num_params())
         for gate in self.values():
-            gate.from_vector(v[gate.gpindices], close, nodirty)
+            gate.from_vector(v[gate.gpindices], close, dirty_value)
         self._paramvec = v
 
     def transform_inplace(self, s):
@@ -593,7 +593,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             v[gate.gpindices] = gate.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -608,17 +608,17 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this Instrument should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
         for gate in self.param_ops:
-            gate.from_vector(v[gate.gpindices], close, nodirty)
+            gate.from_vector(v[gate.gpindices], close, dirty_value)
         for instGate in self.values():
             instGate._construct_matrix()
 

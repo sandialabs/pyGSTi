@@ -1525,7 +1525,7 @@ class FullDenseOp(DenseOperator):
         else:
             return self.base.flatten()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -1540,10 +1540,10 @@ class FullDenseOp(DenseOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1555,7 +1555,7 @@ class FullDenseOp(DenseOperator):
                 1j * v[self.dim**2:].reshape((self.dim, self.dim))
         else:
             self.base[:, :] = v.reshape((self.dim, self.dim))
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1703,7 +1703,7 @@ class TPDenseOp(DenseOperator):
         """
         return self.base.flatten()[self.dim:]  # .real in case of complex matrices?
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -1718,10 +1718,10 @@ class TPDenseOp(DenseOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1729,7 +1729,7 @@ class TPDenseOp(DenseOperator):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1978,7 +1978,7 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         return self.parameterArray
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -1993,10 +1993,10 @@ class LinearlyParamDenseOp(DenseOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -2004,7 +2004,7 @@ class LinearlyParamDenseOp(DenseOperator):
         """
         self.parameterArray[:] = v
         self._construct_matrix()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -2468,7 +2468,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -2483,10 +2483,10 @@ class EigenvalueParamDenseOp(DenseOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -2495,7 +2495,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -2831,7 +2831,7 @@ class StochasticNoiseOp(LinearOperator):
         """
         return self.params
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -2846,10 +2846,10 @@ class StochasticNoiseOp(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -2857,7 +2857,7 @@ class StochasticNoiseOp(LinearOperator):
         """
         self.params[:] = v
         self._update_rep()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     #Transform functions? (for gauge opt)
 
@@ -3987,7 +3987,7 @@ class LindbladOp(LinearOperator):
         """
         return self.errorgen.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -4002,18 +4002,18 @@ class LindbladOp(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.errorgen.from_vector(v, close, nodirty)
+        self.errorgen.from_vector(v, close, dirty_value)
         self._update_rep(close)
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -4678,7 +4678,7 @@ class TPInstrumentOp(DenseOperator):
         raise ValueError(("TPInstrumentOp.to_vector() should never be called"
                           " - use TPInstrument.to_vector() instead"))
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -4693,10 +4693,10 @@ class TPInstrumentOp(DenseOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -4713,7 +4713,7 @@ class TPInstrumentOp(DenseOperator):
                 if i == 0 and self.index > 0: continue  # 0th param-operation already init by index==0 element
                 paramop_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, self.param_ops[i].gpindices)
-                self.param_ops[i].from_vector(v[paramop_local_inds], close, nodirty)
+                self.param_ops[i].from_vector(v[paramop_local_inds], close, dirty_value)
 
         self._construct_matrix()
 
@@ -5201,7 +5201,7 @@ class ComposedOp(LinearOperator):
             v[factorgate_local_inds] = operation.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -5216,10 +5216,10 @@ class ComposedOp(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -5229,9 +5229,9 @@ class ComposedOp(LinearOperator):
         for operation in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, operation.gpindices)
-            operation.from_vector(v[factorgate_local_inds], close, nodirty)
+            operation.from_vector(v[factorgate_local_inds], close, dirty_value)
         if self.dense_rep: self._update_denserep()
-        self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -5543,7 +5543,7 @@ class ExponentiatedOp(LinearOperator):
         """
         return self.exponentiated_op.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -5558,18 +5558,18 @@ class ExponentiatedOp(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
         assert(len(v) == self.num_params())
-        self.exponentiated_op.from_vector(v, close, nodirty)
-        if not nodirty: self.dirty = True
+        self.exponentiated_op.from_vector(v, close, dirty_value)
+        self.dirty = dirty_value
 
     def __str__(self):
         """ Return string representation """
@@ -6100,7 +6100,7 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -6115,19 +6115,19 @@ class EmbeddedOp(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
         assert(len(v) == self.num_params())
-        self.embedded_op.from_vector(v, close, nodirty)
+        self.embedded_op.from_vector(v, close, dirty_value)
         if self.dense_rep: self._update_denserep()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -7121,7 +7121,7 @@ class ComposedErrorgen(LinearOperator):
             v[factor_local_inds] = eg.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -7136,10 +7136,10 @@ class ComposedErrorgen(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -7149,8 +7149,8 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            eg.from_vector(v[factor_local_inds], close, nodirty)
-        if not nodirty: self.dirty = True
+            eg.from_vector(v[factor_local_inds], close, dirty_value)
+        self.dirty = dirty_value
 
     def transform_inplace(self, s):
         """
@@ -7307,7 +7307,7 @@ class EmbeddedErrorgen(EmbeddedOp):
     #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
     #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -7322,17 +7322,17 @@ class EmbeddedErrorgen(EmbeddedOp):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setging it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        EmbeddedOp.from_vector(self, v, close, nodirty)
-        if not nodirty: self.dirty = True
+        EmbeddedOp.from_vector(self, v, close, dirty_value)
+        self.dirty = dirty_value
 
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -8536,7 +8536,7 @@ class LindbladErrorgen(LinearOperator):
         """
         return self.paramvals
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.
 
@@ -8551,10 +8551,10 @@ class LindbladErrorgen(LinearOperator):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this operation's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -8564,7 +8564,7 @@ class LindbladErrorgen(LinearOperator):
         self.paramvals = v
         if self._evotype == "densitymx":
             self._update_rep()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """

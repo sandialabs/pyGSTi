@@ -394,7 +394,7 @@ class EmbeddedOpFactory(OpFactory):
         """
         return self.embedded_factory.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -409,17 +409,17 @@ class EmbeddedOpFactory(OpFactory):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option,
-            and should be left unless you know what you're doing.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.embedded_factory.from_vector(v, close, nodirty)
-        if not nodirty: self.dirty = True
+        self.embedded_factory.from_vector(v, close, dirty_value)
+        self.dirty = dirty_value
 
 
 class EmbeddingOpFactory(OpFactory):
@@ -579,7 +579,7 @@ class EmbeddingOpFactory(OpFactory):
         """
         return self.embedded_factory_or_op.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this OpFactory using a vector of its parameters.
 
@@ -594,17 +594,17 @@ class EmbeddingOpFactory(OpFactory):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option,
-            and should be left unless you know what you're doing.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.embedded_factory_or_op.from_vector(v, close, nodirty)
-        if not nodirty: self.dirty = True
+        self.embedded_factory_or_op.from_vector(v, close, dirty_value)
+        self.dirty = dirty_value
 
 
 class ComposedOpFactory(OpFactory):
@@ -752,7 +752,7 @@ class ComposedOpFactory(OpFactory):
             v[factor_local_inds] = gate.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this factory using a vector of parameters.
 
@@ -767,10 +767,10 @@ class ComposedOpFactory(OpFactory):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this operation should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option,
-            and should be left unless you know what you're doing.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -780,8 +780,8 @@ class ComposedOpFactory(OpFactory):
         for gate in self.factors:
             factor_local_inds = _gm._decompose_gpindices(
                 self.gpindices, gate.gpindices)
-            gate.from_vector(v[factor_local_inds], close, nodirty)
-        if not nodirty: self.dirty = True
+            gate.from_vector(v[factor_local_inds], close, dirty_value)
+        self.dirty = dirty_value
 
 
 #Note: to pickle these Factories we'll probably need to some work
