@@ -1,5 +1,5 @@
 """
-Defines the EvalTree class which implements an evaluation tree.
+Defines the DistributableCOPALayout class.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
