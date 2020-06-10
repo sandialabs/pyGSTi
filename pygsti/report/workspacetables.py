@@ -22,6 +22,7 @@ from .reportables import evaluate as _ev
 from ..objects.label import Label as _Lbl
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects import objectivefns as _objfns
+from ..objects import MatrixForwardSimulator as _MatrixFSim
 from ..algorithms import gaugeopt as _gopt
 
 from .table import ReportTable as _ReportTable
@@ -1063,7 +1064,7 @@ class ModelVsTargetTable(WorkspaceTable):
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
-        if clifford_compilation:
+        if clifford_compilation and isinstance(model.sim, _MatrixFSim):
             clifford_model = _cnst.create_explicit_alias_model(model, clifford_compilation)
             clifford_targetModel = _cnst.create_explicit_alias_model(target_model, clifford_compilation)
 
