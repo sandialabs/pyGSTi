@@ -4456,11 +4456,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
         if oob_check:  # Only used for termgap cases
-            if not self.model.sim.bulk_probs_paths_are_sufficient(self.layout,
-                                                                  self.probs,
-                                                                  self.resource_alloc.comm,
-                                                                  mem_limit=self.resource_alloc.mem_limit,
-                                                                  verbosity=1):
+            if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs,
+                                                                    self.resource_alloc, verbosity=1):
                 raise ValueError("Out of bounds!")  # signals LM optimizer
 
         lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)

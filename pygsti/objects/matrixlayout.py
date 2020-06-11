@@ -1,5 +1,5 @@
 """
-Defines the MatrixEvalTree class which implements an evaluation tree.
+Defines the MatrixCOPALayout class.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -617,11 +617,11 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
     def copy(self):
         """
-        Create a copy of this evaluation strategy.
+        Create a copy of this layout.
 
         Returns
         -------
-        MatrixCOPAEvalStrategy
+        MatrixCOPALayout
         """
         raise NotImplementedError("TODO! update this!")
         #newTree = self._copy_base(MatrixEvalTree(self[:]))

@@ -888,23 +888,20 @@ def _do_term_runopt(objective, optimizer, printer):
     """
 
     mdl = objective.model
-    fwdsim = mdl._fwdsim()
+    fwdsim = mdl.sim
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
     maxTermStages = fwdsim.max_term_stages
     pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
     oob_check_interval = fwdsim.oob_check_interval
 
-    #assume a path set has already been chosen, as one should have been chosen
-    # when evTree was created.
-    evTree = objective.layout  # TODO: update term-calcs to use new layouts!! HERE
-    raise NotImplementedError("update term-calcs to use new layouts!")
+    #assume a path set has already been chosen, (one should have been chosen when layout was created)
+    layout = objective.layout
 
     resource_alloc = objective.resource_alloc
-    comm, memLimit = resource_alloc.comm, resource_alloc.mem_limit
-    pathSet = fwdsim.get_current_pathset(evTree, comm)
+    pathSet = layout.pathset(resource_alloc.comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
-        pathFraction = pathSet.allowed_path_fraction()
+        pathFraction = pathSet.allowed_path_fraction
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                     (pathSet.num_failures, 100 * pathFraction))
     else:
@@ -917,7 +914,7 @@ def _do_term_runopt(objective, optimizer, printer):
         optimizer.oob_check_interval = oob_check_interval
         # don't stop early on last iter - do as much as possible.
         optimizer.oob_action = "reject" if bFinalIter else "stop"
-        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, printer)
 
         if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
@@ -931,9 +928,9 @@ def _do_term_runopt(objective, optimizer, printer):
 
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
-            pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
-            mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
-            pathFraction = pathSet.allowed_path_fraction()
+            pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            mdl.sim.select_paths_set(layout, pathSet, resource_alloc)  # ensure paramvec is updated
+            pathFraction = pathSet.allowed_path_fraction
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
                         (pathSet.num_failures, 100 * pathFraction))

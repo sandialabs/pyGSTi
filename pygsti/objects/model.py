@@ -709,6 +709,13 @@ v
         """
         copy_into.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
 
+    def _post_copy(self, copy_into):
+        """
+        Called after all other copying is done, to perform "linking" between
+        the new model (`copy_into`) and its members.
+        """
+        pass
+
     def copy(self):
         """
         Copy this model.
@@ -733,6 +740,7 @@ v
                 assert(attr != "uuid"), "Should not be copying UUID!"
                 setattr(newModel, attr, _copy.deepcopy(val))
 
+        self._post_copy(newModel)
         return newModel
 
     def __str__(self):
@@ -2918,8 +2926,15 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
         copy_into._layerop_cache = {}  # don't copy opcache
-        copy_into.sim = self.sim.copy()  # setter will correctly set copy's `.model` link
+        copy_into._sim = self.sim.copy()  # not actually difficult - just so we use the object's copy() method
         super(OpModel, self)._init_copy(copy_into)
+
+    def _post_copy(self, copy_into):
+        """
+        Called after all other copying is done, to perform "linking" between
+        the new model (`copy_into`) and its members.
+        """
+        copy_into._sim.model = copy_into # set copy's `.model` link
 
     def copy(self):
         """

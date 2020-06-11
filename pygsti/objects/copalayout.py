@@ -167,7 +167,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         return self._size
 
     @property
-    def size(self):
+    def num_elements(self):
         return self._size
 
     @property

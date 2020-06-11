@@ -1306,7 +1306,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
 
         layout.set_distribution_params(Ng, (paramBlkSize1, paramBlkSize2), gather_mem_limit)
-        #self.prepare_layout(layout, comm, mem_limit)
         return layout
 
     ## Unused, and not often needed -- REMOVE or change eval_tree => circuits and have it build a COPA layout with "dummy" outcomes?

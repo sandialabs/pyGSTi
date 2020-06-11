@@ -84,6 +84,7 @@ from .hypothesistest import HypothesisTest
 from .forwardsim import ForwardSimulator
 from .matrixforwardsim import MatrixForwardSimulator
 from .mapforwardsim import MapForwardSimulator
+from .termforwardsim import TermForwardSimulator
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement

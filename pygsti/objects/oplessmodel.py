@@ -21,7 +21,7 @@ from .polynomial import Polynomial as _Polynomial
 from ..tools import slicetools as _slct
 
 from .opcalc import compact_deriv as _compact_deriv, float_product as prod, \
-    safe_bulk_eval_compact_polys as _safe_bulk_eval_compact_polys
+    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
 
 
 class OplessModelTree(_EvalTree):
@@ -501,7 +501,7 @@ class OplessModel(_Model):
         """
         if False and eval_tree.cache:  # TEST (disabled)
             cpolys = eval_tree.cache
-            ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], self._paramvec, (eval_tree.num_final_elements(),))
+            ps = _bulk_eval_compact_polynomials(cpolys[0], cpolys[1], self._paramvec, (eval_tree.num_final_elements(),))
             assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
             ps = _np.real(ps)
             if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
@@ -579,13 +579,13 @@ class OplessModel(_Model):
         if False and eval_tree.cache:  # TEST (disabled)
             cpolys = eval_tree.cache
             if pr_mx_to_fill is not None:
-                ps = _safe_bulk_eval_compact_polys(cpolys[0], cpolys[1], p, (eval_tree.num_final_elements(),))
+                ps = _bulk_eval_compact_polynomials(cpolys[0], cpolys[1], p, (eval_tree.num_final_elements(),))
                 assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
                 ps = _np.real(ps)
                 if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
                 pr_mx_to_fill[:] = ps
             dpolys = _compact_deriv(cpolys[0], cpolys[1], list(range(Np)))
-            dps = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], p, (eval_tree.num_final_elements(), Np))
+            dps = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], p, (eval_tree.num_final_elements(), Np))
             mx_to_fill[:, :] = dps
         else:
             # eps = 1e-6

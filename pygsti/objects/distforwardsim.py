@@ -220,3 +220,27 @@ class DistributableForwardSimulator(_ForwardSimulator):
         if pr_array_to_fill is not None:
             _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
                                 resource_alloc.comm, layout.gather_mem_limit)
+
+    def _run_on_atoms(self, layout, fn, resource_alloc):
+        """Runs `fn` on all the atoms of `layout`, returning a list of the local (current processor) return values."""
+        myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
+        sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
+        local_results = []  # list of the return values just from the atoms run on *this* processor
+
+        for iAtom in myAtomIndices:
+            atom = layout.atoms[iAtom]
+            local_results.append(fn(atom, sub_resource_alloc))
+
+        return local_results
+
+    def _compute_on_atoms(self, layout, fn, resource_alloc):
+        """Similar to _run_on_atoms, but returns a dict mapping atom indices (within layout.atoms) to
+           owning-processor ranks (the "owners" dict).  Assumes `fn` returns None.  """
+        myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
+        sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
+
+        for iAtom in myAtomIndices:
+            atom = layout.atoms[iAtom]
+            fn(atom, sub_resource_alloc)
+
+        return atomOwners

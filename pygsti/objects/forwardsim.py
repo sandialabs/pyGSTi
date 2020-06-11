@@ -183,7 +183,7 @@ class ForwardSimulator(object):
             values equal to probabilities.
         """
         copa_layout = self.create_layout([circuit])
-        probs_array = _np.empty(copa_layout.size, 'd')
+        probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
@@ -197,7 +197,7 @@ class ForwardSimulator(object):
 
     def dprobs(self, circuit, clip_to=None):
         copa_layout = self.create_layout([circuit])
-        dprobs_array = _np.empty((copa_layout.size, self.model.num_params()), 'd')
+        dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout, clip_to)
 
         dprobs = _ld.OutcomeLabelDict()
@@ -208,7 +208,7 @@ class ForwardSimulator(object):
 
     def hprobs(self, circuit, clip_to=None):
         copa_layout = self.create_layout([circuit])
-        hprobs_array = _np.empty((copa_layout.size, self.model.num_params(), self.model.num_params()), 'd')
+        hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
         self.bulk_fill_dprobs(hprobs_array, copa_layout, clip_to)
 
         hprobs = _ld.OutcomeLabelDict()
@@ -309,7 +309,7 @@ class ForwardSimulator(object):
             circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        vp = _np.empty(copa_layout.size, 'd')
+        vp = _np.empty(copa_layout.num_elements, 'd')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
                                   resource_alloc, _filledarrays=(0,))
@@ -375,7 +375,7 @@ class ForwardSimulator(object):
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         #Note: don't use smartc for now.
-        vdp = _np.empty((copa_layout.size, self.model.num_params()), 'd')
+        vdp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
         self.bulk_fill_dprobs(vdp, copa_layout, clip_to, resource_alloc, wrt_filter, wrt_block_size)
 
         ret = _collections.OrderedDict()
@@ -443,7 +443,7 @@ class ForwardSimulator(object):
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         #Note: don't use smartc for now.
-        vhp = _np.empty((copa_layout.size, self.model.num_params()), 'd')
+        vhp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
         self.bulk_fill_hprobs(vhp, copa_layout, clip_to, resource_alloc,
                               wrt_filter1, wrt_filter1, wrt_block_size1, wrt_block_size2)
 

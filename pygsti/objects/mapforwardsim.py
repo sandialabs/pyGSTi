@@ -21,7 +21,6 @@ from ..tools.matrixtools import _fas
 from ..tools import symplectic as _symp
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
-from .mapevaltree import MapEvalTree as _MapEvalTree
 from .maplayout import MapCOPALayout as _MapCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
@@ -334,24 +333,23 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
 
         layout.set_distribution_params(Ng, (paramBlkSize1, paramBlkSize2), gather_mem_limit)
-        #self.prepare_layout(layout, comm, mem_limit)
         return layout
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         replib.DM_mapfill_probs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
-                                      layout, resource_alloc.comm)
+                                      layout_atom, resource_alloc.comm)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         replib.DM_mapfill_dprobs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
-                                       layout, param_slice, resource_alloc.comm)
+                                       layout_atom, param_slice, resource_alloc.comm)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
+    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
-                                      dest_param_slice2, layout, param_slice1, param_slice2, resource_alloc.comm)
+                                      dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc.comm)
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
     def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,

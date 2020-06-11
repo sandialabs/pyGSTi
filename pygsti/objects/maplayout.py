@@ -1,5 +1,5 @@
 """
-Defines the MapEvalTree class which implements an evaluation tree.
+Defines the MapCOPALayout class.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -368,7 +368,7 @@ def _find_splitting(prefix_table, max_sub_table_size=None, num_sub_tables=None, 
 #        assert(None not in circuits[0:nFinal])
 #        return circuits[0:nFinal]
 
-class _MapCOPAEvalStrategyAtom(_DistributableAtom):
+class _MapCOPALayoutAtom(_DistributableAtom):
     """
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
@@ -476,7 +476,7 @@ class MapCOPALayout(_DistributableCOPALayout):
 
         offset = 0
         for group in groups:
-            atoms.append(_MapCOPAEvalStrategyAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
+            atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
                                                   dataset, offset, elindex_outcome_tuples, max_cache_size))
             offset += atoms[-1].num_elements
 
@@ -491,26 +491,6 @@ class MapCOPALayout(_DistributableCOPALayout):
         #self.subTrees = []  # no subtrees yet
         #assert(self.generate_circuit_list() == circuit_list)
         #assert(None not in circuit_list)
-
-    def copy(self):
-        """
-        Create a copy of this evaluation strategy.
-
-        Returns
-        -------
-        MapCOPAEvalStrategy
-        """
-        raise NotImplementedError("TODO! update this!")
-        #cpy = self._copy_base(MapEvalTree(self[:]))
-        #cpy.cachesize = self.cachesize  # member specific to MapEvalTree
-        #cpy.opLabels = self.opLabels[:]
-        #cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
-        #cpy.element_offsets_for_circuit = self.element_offsets_for_circuit.copy()
-        #cpy.elabels = self.elabels[:]
-        #cpy.eLbl_indices_per_circuit = _copy.deepcopy(self.eLbl_indices_per_circuit)
-        #cpy.final_indices_per_circuit = _copy.deepcopy(self.final_indices_per_circuit)
-        #cpy.rholabels = self.rholabels[:]
-        #return cpy
 
     #def _remove_from_cache(self, indx):
     #    """ Removes self[indx] from cache (if it's in it)"""
