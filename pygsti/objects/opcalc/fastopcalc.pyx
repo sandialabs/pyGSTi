@@ -65,10 +65,10 @@ def test_map(s):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                            np.ndarray[double, ndim=1, mode="c"] ctape,
-                            np.ndarray[double, ndim=1, mode="c"] paramvec,
-                            dest_shape):
+def bulk_eval_compact_polynomials_real(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                 np.ndarray[double, ndim=1, mode="c"] ctape,
+                                 np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                 dest_shape):
     cdef INT dest_size = np.product(dest_shape)
     cdef np.ndarray[np.float64_t, ndim=1, mode="c"] res = np.empty(dest_size, np.float64)
 
@@ -103,7 +103,7 @@ def bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
 #Same as above, just takes a complex ctape
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+def bulk_eval_compact_polynomials_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
                                     np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
                                     np.ndarray[double, ndim=1, mode="c"] paramvec,
                                     dest_shape):
@@ -140,14 +140,14 @@ def bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vta
     # = dest_shape # reshape w/out possibility of copying
     return res.reshape(dest_shape)
 
-# sum(abs(bulk_eval_compact_polys_complex(.))), made into its own function because numpy sum(abs())
+# sum(abs(bulk_eval_compact_polynomials_complex(.))), made into its own function because numpy sum(abs())
 #  is slow and this is done often in get_total_term_magnitude calls.
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def abs_sum_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
-                                            np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
-                                            np.ndarray[double, ndim=1, mode="c"] paramvec,
-                                            INT dest_size):
+def abs_sum_bulk_eval_compact_polynomials_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                                  np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                                  np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                                  INT dest_size):
     cdef INT c = 0
     cdef INT i = 0
     cdef INT vtape_sz = vtape.size
