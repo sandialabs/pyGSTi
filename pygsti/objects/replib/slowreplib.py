@@ -1975,18 +1975,18 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None,
     #       res *= (pLeft * pRight)
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
-    mpv = fwdsim.model.num_params()  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_polynomial_vars
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = {glbl:
                     [
-                        [t.to_rep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
+                        [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                         for order in range(fwdsim.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.to_rep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
+    rho_term_reps = [[t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                      for order in range(fwdsim.max_order + 1)]
 
     E_term_reps = []
@@ -1995,7 +1995,7 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.to_rep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
+            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -2143,46 +2143,46 @@ def SB_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem
 
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    from ..opcalc import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    from ..opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps
             v, c = termrep.coeff.compact_complex()
-            coeff_array = _bulk_eval_compact_polys(v, c, paramvec, (1,), dtype="complex")
+            coeff_array = _bulk_eval_compact_polynomials_complex(v, c, paramvec, (1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache,
                                          comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache,
                                               comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
-def SB_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+def SB_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache,
                                          comm=None, mem_limit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                          max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
+    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache,
                                               comm, mem_limit, pathmagnitude_gap, min_term_mag, max_paths,
                                               threshold_guess)
 
 
-def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
-                                                 circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
+def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache,
+                                                       circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
 
 
-def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
-                                                 circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
+def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache,
+                                                       circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache,
                                                       circuitsetup_cache, comm, mem_limit, fastmode)
 
 
-def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, opcache, threshold, min_term_mag):
+def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
     """ TODO: docstring """
-    mpv = fwdsim.model.num_params()  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -2190,14 +2190,14 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
-            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -2205,9 +2205,9 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2250,7 +2250,7 @@ global_cnt = 0
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 
 
-def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache, comm,
+def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache, comm,
                                        mem_limit, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
@@ -2275,14 +2275,10 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repca
         Dictionary used to cache operator representations to speed up future
         calls to this function that would use the same set of operations.
 
-    opcache : dict, optional
-        Dictionary used to cache operator objects to speed up future
-        calls to this function that would use the same set of operations.
-
     circuitsetup_cache : dict, optional
         Dictionary used to cache preparation specific to this function, to
         speed up repeated calls using the same circuit and set of parameters,
-        including the same repcache and opcache.
+        including the same repcache.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -2329,7 +2325,7 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repca
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            fwdsim, rholabel, elabels, circuit, repcache, opcache, min_term_mag, fwdsim.model.num_params())
+            fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, fwdsim.model.num_params())
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2375,7 +2371,7 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repca
     return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
-def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache, opcache,
+def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, repcache,
                                                circuitsetup_cache, comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
@@ -2400,14 +2396,10 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
         Dictionary used to cache operator representations to speed up future
         calls to this function that would use the same set of operations.
 
-    opcache : dict, optional
-        Dictionary used to cache operator objects to speed up future
-        calls to this function that would use the same set of operations.
-
     circuitsetup_cache : dict, optional
         Dictionary used to cache preparation specific to this function, to
         speed up repeated calls using the same circuit and set of parameters,
-        including the same repcache and opcache.
+        including the same repcache.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -2430,7 +2422,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            fwdsim, rholabel, elabels, circuit, repcache, opcache, fwdsim.min_term_mag, fwdsim.model.num_params())
+            fwdsim, rholabel, elabels, circuit, repcache, fwdsim.min_term_mag, fwdsim.model.num_params())
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2572,9 +2564,9 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
     return prps
 
 
-def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv):
+def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv):
     # Construct dict of gate term reps
-    mpv = fwdsim.model.num_params()  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -2582,14 +2574,14 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, op
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
-            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -2597,9 +2589,9 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, op
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
@@ -2615,7 +2607,7 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, op
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, comm=None, mem_limit=None, fastmode=True,
+def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True,
                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, current_threshold=None,
                          compute_polyreps=True):
     """
@@ -2639,10 +2631,6 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, 
 
     repcache : dict, optional
         Dictionary used to cache operator representations to speed up future
-        calls to this function that would use the same set of operations.
-
-    opcache : dict, optional
-        Dictionary used to cache operator objects to speed up future
         calls to this function that would use the same set of operations.
 
     comm : mpi4py.MPI.Comm, optional
@@ -2697,7 +2685,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, 
     """
     #t0 = _time.time()
     # Construct dict of gate term reps
-    mpv = fwdsim.model.num_params()  # max_poly_vars
+    mpv = fwdsim.model.num_params()  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -2705,14 +2693,14 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, 
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-            repcache[glbl] = ([t.to_rep() for t in hmterms], foat_indices)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+            repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
         hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
-            min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
-        repcache[rholabel] = ([t.to_rep() for t in hmterms], foat_indices)
+            min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
+        repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels)  # so hashable
@@ -2720,9 +2708,9 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, opcache, 
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
             hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
-                min_term_mag, max_taylor_order=fwdsim.max_order, max_poly_vars=mpv)
+                min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
-                [(i, t.to_rep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
+                [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
