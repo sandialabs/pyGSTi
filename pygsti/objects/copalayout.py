@@ -93,6 +93,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         #  Note: `circuits` may have duplicates; this is ok: `dataset` doesn't have duplicates so outcomes are the same.
         #  Note2: dict keys are integer unique-circuit indices rather than complete circuits for hashing speed.
 
+        #REMOVE:
         #if expand:
         #    # if we're going to expand the instruments and POVMs of the circuits, then we'll store the outcomes
         #    # for each circuit in the order given by this expansion, rather than using the ordering of the dataset.

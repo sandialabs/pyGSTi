@@ -18,45 +18,47 @@ from .evaltree import EvalTree as _EvalTree
 from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
 from .circuit import Circuit as _Circuit
 from .polynomial import Polynomial as _Polynomial
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from .successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
 from ..tools import slicetools as _slct
 
 from .opcalc import compact_deriv as _compact_deriv, float_product as prod, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
 
-
-class OplessModelTree(_EvalTree):
-    """
-    An evaluation tree for an :class:`OplessModel`.
-
-    Parameters
-    ----------
-    circuit_list : list
-        A list of the circuits to compute values for.
-
-    lookup : collections.OrderedDict
-        A dictionary whose keys are integer indices into `circuit_list` and
-        whose values are slices and/or integer-arrays into the space/axis of
-        final elements returned by the 'bulk fill' routines.
-
-    outcome_lookup : collections.OrderedDict
-        A dictionary whose keys are integer indices into `circuit_list` and
-        whose values are lists of outcome labels (an outcome label is a tuple
-        of POVM-effect and/or instrument-element labels).
-
-    cache : dict, optional
-        A dictionary for holding cached intermediate results.
-    """
-    def __init__(self, circuit_list, lookup, outcome_lookup, cache=None):
-        _EvalTree.__init__(self, circuit_list)
-        self.element_indices = lookup
-        self.outcomes = outcome_lookup
-        self.num_final_strs = len(circuit_list)  # circuits
-        max_el_index = -1
-        for elIndices in lookup.values():
-            max_i = elIndices.stop - 1 if isinstance(elIndices, slice) else max(elIndices)
-            max_el_index = max(max_el_index, max_i)
-        self.num_final_els = max_el_index + 1
-        self.cache = cache
+#REMOVE
+#class OplessModelTree(_EvalTree):
+#    """
+#    An evaluation tree for an :class:`OplessModel`.
+#
+#    Parameters
+#    ----------
+#    circuit_list : list
+#        A list of the circuits to compute values for.
+#
+#    lookup : collections.OrderedDict
+#        A dictionary whose keys are integer indices into `circuit_list` and
+#        whose values are slices and/or integer-arrays into the space/axis of
+#        final elements returned by the 'bulk fill' routines.
+#
+#    outcome_lookup : collections.OrderedDict
+#        A dictionary whose keys are integer indices into `circuit_list` and
+#        whose values are lists of outcome labels (an outcome label is a tuple
+#        of POVM-effect and/or instrument-element labels).
+#
+#    cache : dict, optional
+#        A dictionary for holding cached intermediate results.
+#    """
+#    def __init__(self, circuit_list, lookup, outcome_lookup, cache=None):
+#        _EvalTree.__init__(self, circuit_list)
+#        self.element_indices = lookup
+#        self.outcomes = outcome_lookup
+#        self.num_final_strs = len(circuit_list)  # circuits
+#        max_el_index = -1
+#        for elIndices in lookup.values():
+#            max_i = elIndices.stop - 1 if isinstance(elIndices, slice) else max(elIndices)
+#            max_el_index = max(max_el_index, max_i)
+#        self.num_final_els = max_el_index + 1
+#        self.cache = cache
 
 
 class OplessModel(_Model):
@@ -94,253 +96,62 @@ class OplessModel(_Model):
         _Model.__init__(self, state_space_labels)
 
         #Setting things the rest of pyGSTi expects but probably shouldn't...
-        self.simtype = "opless"
         self.basis = None
         self.dim = 0
 
-    def dimension(self):
+    def circuit_outcomes(self, circuit):  # needed for sparse data detection
         """
-        The dimension of this model.
-
-        Returns
-        -------
-        int
-        """
-        return self.dim
-
-    def compute_num_outcomes(self, circuit):  # needed for sparse data detection
-        """
-        The number of outcomes of `circuit`.
+        Get all the possible outcome labels produced by simulating this circuit.
 
         Parameters
         ----------
         circuit : Circuit
-            The circuit to get the number of outcomes for.
+            Circuit to get outcomes of.
 
         Returns
         -------
-        int
+        tuple
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def probabilities(self, circuit, clip_to=None, cache=None):
+    def probabilities(self, circuit, outcomes=None, time=None):
         """
-        Construct a dictionary of the outcome probabilities of `circuit`.
+        Construct a dictionary containing the outcome probabilities of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip probabilities to if not None.
+        outcomes : list or tuple
+            A sequence of outcomes, which can themselves be either tuples
+            (to include intermediate measurements) or simple strings, e.g. `'010'`.
 
-        cache : dict, optional
-            A cache for increasing performance.
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
-        probs : dictionary
-            A dictionary of circuit outcome probabilities.
+        probs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to probabilities.
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def dprobs(self, circuit, return_pr=False, clip_to=None):
-        """
-        Construct a dictionary of outcome-probability derivatives for `circuit`.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the circuit.
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
-
-        Returns
-        -------
-        dprobs : dictionary
-            A dictionary of outcome-probability derivatives, or `(derivative, probability)`
-            tuples if `return_pr=True`.
-        """
-        eps = 1e-7
-        orig_pvec = self.to_vector()
-        Np = self.num_params()
-        probs0 = self.probabilities(circuit, clip_to, None)
-
-        deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
-        for i in range(Np):
-            p_plus_dp = orig_pvec.copy()
-            p_plus_dp[i] += eps
-            self.from_vector(p_plus_dp)
-            probs1 = self.probabilities(circuit, clip_to, None)
-            for k, p0 in probs0.items():
-                deriv[k][i] = (probs1[k] - p0) / eps
-        self.from_vector(orig_pvec)
-
-        if return_pr:
-            return {k: (p0, deriv[k]) for k in probs0.keys()}
-        else:
-            return deriv
-
-    def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
-                                     distribute_method="default", subcalls=[],
-                                     dataset=None, verbosity=0):
-        """
-        Create an evaluation tree based on available memory and CPUs.
-
-        This tree can be used by other Bulk_* functions, and is it's own
-        function so that for many calls to Bulk_* made with the same
-        circuit_list, only a single call to bulk_evaltree is needed.
-
-        Parameters
-        ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to include in the evaluation tree.
-
-        comm : mpi4py.MPI.Comm
-            When not None, an MPI communicator for distributing computations
-            across multiple processors.
-
-        mem_limit : int, optional
-            A rough memory limit in bytes which is used to determine subtree
-            number and size.
-
-        distribute_method : {"circuits", "deriv"}
-            How to distribute calculation amongst processors (only has effect
-            when comm is not None).  "circuits" will divide the list of
-            circuits and thereby result in more subtrees; "deriv" will divide
-            the columns of any jacobian matrices, thereby resulting in fewer
-            (larger) subtrees.
-
-        subcalls : list, optional
-            A list of the names of the Model functions that will be called
-            using the returned evaluation tree, which are necessary for
-            estimating memory usage (for comparison to mem_limit).  If
-            mem_limit is None, then there's no need to specify `subcalls`.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        verbosity : int, optional
-            How much detail to send to stdout.
-
-        Returns
-        -------
-        evt : EvalTree
-            The evaluation tree object, split as necesary.
-
-        paramBlockSize1 : int or None
-            The maximum size of 1st-deriv-dimension parameter blocks
-            (i.e. the maximum number of parameters to compute at once
-             in calls to dprobs, etc., usually specified as wrt_block_size
-             or wrt_block_size1).
-
-        paramBlockSize2 : int or None
-            The maximum size of 2nd-deriv-dimension parameter blocks
-            (i.e. the maximum number of parameters to compute at once
-             in calls to hprobs, etc., usually specified as wrt_block_size2).
-
-        elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are slices and/or integer-arrays into the space/axis of
-            final elements returned by the 'bulk fill' routines.  Thus, to get the
-            final elements corresponding to `circuits[i]`, use
-            `filledArray[ elIndices[i] ]`.
-
-        outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are lists of outcome labels (an outcome label is a tuple
-            of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th circuit's final elements
-            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
-        """
-        #TODO: choose these based on resources, and enable split trees
-        minSubtrees = 0
-        numSubtreeComms = 1
-        maxTreeSize = None
-        evTree = self.bulk_evaltree(circuit_list, minSubtrees, maxTreeSize,
-                                    numSubtreeComms, dataset, verbosity)
-        return evTree, 0, 0, evTree.element_indices, evTree.outcomes
-
-    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
-                      num_subtree_comms=1, dataset=None, verbosity=0):
-        """
-        Create an evaluation tree for all the circuits in `circuit_list`.
-
-        This tree can be used by other Bulk_* functions, and is it's own
-        function so that for many calls to Bulk_* made with the same
-        circuit_list, only a single call to bulk_evaltree is needed.
-
-        Parameters
-        ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to include in the evaluation tree.
-
-        min_subtrees : int , optional
-            The minimum number of subtrees the resulting EvalTree must have.
-
-        max_tree_size : int , optional
-            The maximum size allowed for the single un-split tree or any of
-            its subtrees.
-
-        num_subtree_comms : int, optional
-            The number of processor groups (communicators)
-            to divide the subtrees of the EvalTree among
-            when calling its `distribute` method.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        verbosity : int, optional
-            How much detail to send to stdout.
-
-        Returns
-        -------
-        evt : EvalTree
-            An evaluation tree object.
-
-        elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are slices and/or integer-arrays into the space/axis of
-            final elements returned by the 'bulk fill' routines.  Thus, to get the
-            final elements corresponding to `circuits[i]`, use
-            `filledArray[ elIndices[i] ]`.
-
-        outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are lists of outcome labels (an outcome label is a tuple
-            of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th circuit's final elements
-            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
-        """
-        raise NotImplementedError("Derived classes should implement this!")
-
-    def bulk_probs(self, circuit_list, clip_to=None, check=False,
-                   comm=None, mem_limit=None, dataset=None, smartc=None):
+    def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to compute quantities for.
+        circuits : (list of Circuits) or CircuitOutcomeProbabilityArrayLayout
+            When a list, each element specifies a circuit to compute outcome probabilities for.
+            A :class:`CircuitOutcomeProbabilityArrayLayout` specifies the circuits along with
+            an internal memory layout that reduces the time required by this function and can
+            restrict the computed probabilities to those corresponding to only certain outcomes.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
@@ -350,11 +161,6 @@ class OplessModel(_Model):
         mem_limit : int, optional
             A rough memory limit in bytes which is used to determine processor
             allocation.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
 
         smartc : SmartCache, optional
             A cache object to cache & use previously cached values inside this
@@ -367,250 +173,267 @@ class OplessModel(_Model):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, mem_limit,
-                                                                                "default", [], dataset)
-        vp = _np.empty(evalTree.num_final_elements(), 'd')
-        self.bulk_fill_probs(vp, evalTree, clip_to, check, comm)
-
-        ret = _collections.OrderedDict()
-        for i, opstr in enumerate(evalTree):
-            elInds = _slct.indices(elIndices[i]) \
-                if isinstance(elIndices[i], slice) else elIndices[i]
-            ret[opstr] = _OutcomeLabelDict(
-                [(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
-        return ret
-
-    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
-                    check=False, comm=None, wrt_block_size=None, dataset=None):
-        """
-        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
-
-        Parameters
-        ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to compute quantities for.
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of evalTree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
-
-        wrt_block_size : int or float, optional
-            The maximum average number of derivative columns to compute *products*
-            for simultaneously.  None means compute all columns at once.
-            The minimum of wrt_block_size and the size that makes maximal
-            use of available processors is used as the final block size. Use
-            this argument to reduce amount of intermediate memory required.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        Returns
-        -------
-        dprobs : dictionary
-            A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
-            `p` is the corresponding probability, and `dp` is an array containing
-            the derivative of `p` with respect to each parameter.  If `return_pr`
-            if False, then `p` is not included in the tuples (so they're just
-            `(outcome, dp)`).>
-        """
-        memLimit = None
-        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit,
-                                                                                "default", [], dataset)
-        nElements = evalTree.num_final_elements()
-        nDerivCols = self.num_params()
-
-        vdp = _np.empty((nElements, nDerivCols), 'd')
-        vp = _np.empty(nElements, 'd') if return_pr else None
-
-        self.bulk_fill_dprobs(vdp, evalTree,
-                              vp, clip_to, check, comm,
-                              None, wrt_block_size)
-
-        ret = _collections.OrderedDict()
-        for i, opstr in enumerate(evalTree):
-            elInds = _slct.indices(elIndices[i]) \
-                if isinstance(elIndices[i], slice) else elIndices[i]
-            if return_pr:
-                ret[opstr] = _OutcomeLabelDict(
-                    [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
-            else:
-                ret[opstr] = _OutcomeLabelDict(
-                    [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
-        return ret
-
-    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False, comm=None):
-        """
-        Compute the outcome probabilities for an entire tree of circuits.
-
-        This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* circuits found in an evaluation
-        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
-        objects is *simplified* into a lists of gate-only sequences along with
-        a mapping of final elements (i.e. probabilities) to gate-only sequence
-        and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
-        must have length equal to the number of final elements (this can be
-        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
-        correspond to which strings and outcomes, you'll need the mappings
-        generated when the original list of `Circuits` was simplified.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated 1D numpy array of length equal to the
-            total number of computed elements (i.e. eval_tree.num_final_elements())
-
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
-
-        Returns
-        -------
-        None
-        """
-        if False and eval_tree.cache:  # TEST (disabled)
-            cpolys = eval_tree.cache
-            ps = _bulk_eval_compact_polynomials(cpolys[0], cpolys[1], self._paramvec, (eval_tree.num_final_elements(),))
-            assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
-            ps = _np.real(ps)
-            if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
-            mx_to_fill[:] = ps
-        else:
-            for i, c in enumerate(eval_tree):
-                cache = eval_tree.cache[i] if eval_tree.cache else None
-                probs = self.probabilities(c, clip_to, cache)
-                elInds = _slct.indices(eval_tree.element_indices[i]) \
-                    if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
-                for k, outcome in zip(elInds, eval_tree.outcomes[i]):
-                    mx_to_fill[k] = probs[outcome]
-
-    def bulk_fill_dprobs(self, mx_to_fill, eval_tree, pr_mx_to_fill=None, clip_to=None,
-                         check=False, comm=None, wrt_block_size=None,
-                         profiler=None, gather_mem_limit=None):
-
-        """
-        Compute the outcome probability-derivatives for an entire tree of circuits.
-
-        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `eval_tree`.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated ExM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M is the
-            number of model parameters.
-
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
-
-        pr_mx_to_fill : numpy array, optional
-            when not None, an already-allocated length-E numpy array that is filled
-            with probabilities, just like in bulk_fill_probs(...).
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
-
-        wrt_block_size : int or float, optional
-            The maximum average number of derivative columns to compute *products*
-            for simultaneously.  None means compute all columns at once.
-            The minimum of wrt_block_size and the size that makes maximal
-            use of available processors is used as the final block size. Use
-            this argument to reduce amount of intermediate memory required.
-
-        profiler : Profiler, optional
-            A profiler object used for to track timing and memory usage.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
-
-        Returns
-        -------
-        None
-        """
-        Np = self.num_params()
-        p = self.to_vector()
-
-        if False and eval_tree.cache:  # TEST (disabled)
-            cpolys = eval_tree.cache
-            if pr_mx_to_fill is not None:
-                ps = _bulk_eval_compact_polynomials(cpolys[0], cpolys[1], p, (eval_tree.num_final_elements(),))
-                assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
-                ps = _np.real(ps)
-                if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
-                pr_mx_to_fill[:] = ps
-            dpolys = _compact_deriv(cpolys[0], cpolys[1], list(range(Np)))
-            dps = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], p, (eval_tree.num_final_elements(), Np))
-            mx_to_fill[:, :] = dps
-        else:
-            # eps = 1e-6
-            for i, c in enumerate(eval_tree):
-                cache = eval_tree.cache[i] if eval_tree.cache else None
-                probs0 = self.probabilities(c, clip_to, cache)
-                dprobs0 = self.dprobs(c, False, clip_to, cache)
-                elInds = _slct.indices(eval_tree.element_indices[i]) \
-                    if isinstance(eval_tree.element_indices[i], slice) else eval_tree.element_indices[i]
-                for k, outcome in zip(elInds, eval_tree.outcomes[i]):
-                    if pr_mx_to_fill is not None:
-                        pr_mx_to_fill[k] = probs0[outcome]
-                    mx_to_fill[k, :] = dprobs0[outcome]
-
-                    #Do this to fill mx_to_fill instead of calling dprobs above as it's a little faster for finite diff?
-                    #for j in range(np):
-                    #    p_plus_dp = p.copy()
-                    #    p_plus_dp[j] += eps
-                    #    self.from_vector(p_plus_dp)
-                    #    probs1 = self.probs(c,clip_to,cache)
-                    #    mx_to_fill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
-                    #self.from_vector(p)
+        raise NotImplementedError("Derived classes should implement this!")
 
     def __str__(self):
-        raise "Derived classes should implement OplessModel.__str__ !!"
+        raise NotImplementedError("Derived classes should implement OplessModel.__str__ !!")
+
+    #TODO REMOVE
+    #def dprobs(self, circuit, return_pr=False, clip_to=None):
+    #    """
+    #    Construct a dictionary of outcome-probability derivatives for `circuit`.
+    #
+    #    Parameters
+    #    ----------
+    #    circuit : Circuit or tuple of operation labels
+    #        The sequence of operation labels specifying the circuit.
+    #
+    #    return_pr : bool, optional
+    #        when set to True, additionally return the probabilities.
+    #
+    #    clip_to : 2-tuple, optional
+    #        (min,max) to clip returned probability to if not None.
+    #        Only relevant when return_pr == True.
+    #
+    #    Returns
+    #    -------
+    #    dprobs : dictionary
+    #        A dictionary of outcome-probability derivatives, or `(derivative, probability)`
+    #        tuples if `return_pr=True`.
+    #    """
+    #    eps = 1e-7
+    #    orig_pvec = self.to_vector()
+    #    Np = self.num_params()
+    #    probs0 = self.probabilities(circuit, clip_to, None)
+    #
+    #    deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
+    #    for i in range(Np):
+    #        p_plus_dp = orig_pvec.copy()
+    #        p_plus_dp[i] += eps
+    #        self.from_vector(p_plus_dp)
+    #        probs1 = self.probabilities(circuit, clip_to, None)
+    #        for k, p0 in probs0.items():
+    #            deriv[k][i] = (probs1[k] - p0) / eps
+    #    self.from_vector(orig_pvec)
+    #
+    #    if return_pr:
+    #        return {k: (p0, deriv[k]) for k in probs0.keys()}
+    #    else:
+    #        return deriv
+
+#    def bulk_evaltree_from_resources(self, circuit_list, comm=None, mem_limit=None,
+#                                     distribute_method="default", subcalls=[],
+#                                     dataset=None, verbosity=0):
+#        """
+#        Create an evaluation tree based on available memory and CPUs.
+#
+#        This tree can be used by other Bulk_* functions, and is it's own
+#        function so that for many calls to Bulk_* made with the same
+#        circuit_list, only a single call to bulk_evaltree is needed.
+#
+#        Parameters
+#        ----------
+#        circuit_list : list of (tuples or Circuits)
+#            Each element specifies a circuit to include in the evaluation tree.
+#
+#        comm : mpi4py.MPI.Comm
+#            When not None, an MPI communicator for distributing computations
+#            across multiple processors.
+#
+#        mem_limit : int, optional
+#            A rough memory limit in bytes which is used to determine subtree
+#            number and size.
+#
+#        distribute_method : {"circuits", "deriv"}
+#            How to distribute calculation amongst processors (only has effect
+#            when comm is not None).  "circuits" will divide the list of
+#            circuits and thereby result in more subtrees; "deriv" will divide
+#            the columns of any jacobian matrices, thereby resulting in fewer
+#            (larger) subtrees.
+#
+#        subcalls : list, optional
+#            A list of the names of the Model functions that will be called
+#            using the returned evaluation tree, which are necessary for
+#            estimating memory usage (for comparison to mem_limit).  If
+#            mem_limit is None, then there's no need to specify `subcalls`.
+#
+#        dataset : DataSet, optional
+#            If not None, restrict what is computed to only those
+#            probabilities corresponding to non-zero counts (observed
+#            outcomes) in this data set.
+#
+#        verbosity : int, optional
+#            How much detail to send to stdout.
+#
+#        Returns
+#        -------
+#        evt : EvalTree
+#            The evaluation tree object, split as necesary.
+#
+#        paramBlockSize1 : int or None
+#            The maximum size of 1st-deriv-dimension parameter blocks
+#            (i.e. the maximum number of parameters to compute at once
+#             in calls to dprobs, etc., usually specified as wrt_block_size
+#             or wrt_block_size1).
+#
+#        paramBlockSize2 : int or None
+#            The maximum size of 2nd-deriv-dimension parameter blocks
+#            (i.e. the maximum number of parameters to compute at once
+#             in calls to hprobs, etc., usually specified as wrt_block_size2).
+#
+#        elIndices : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are slices and/or integer-arrays into the space/axis of
+#            final elements returned by the 'bulk fill' routines.  Thus, to get the
+#            final elements corresponding to `circuits[i]`, use
+#            `filledArray[ elIndices[i] ]`.
+#
+#        outcomes : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are lists of outcome labels (an outcome label is a tuple
+#            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+#            what outcomes the i-th circuit's final elements
+#            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+#        """
+#        #TODO: choose these based on resources, and enable split trees
+#        minSubtrees = 0
+#        numSubtreeComms = 1
+#        maxTreeSize = None
+#        evTree = self.bulk_evaltree(circuit_list, minSubtrees, maxTreeSize,
+#                                    numSubtreeComms, dataset, verbosity)
+#        return evTree, 0, 0, evTree.element_indices, evTree.outcomes
+#
+#    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+#                      num_subtree_comms=1, dataset=None, verbosity=0):
+#        """
+#        Create an evaluation tree for all the circuits in `circuit_list`.
+#
+#        This tree can be used by other Bulk_* functions, and is it's own
+#        function so that for many calls to Bulk_* made with the same
+#        circuit_list, only a single call to bulk_evaltree is needed.
+#
+#        Parameters
+#        ----------
+#        circuit_list : list of (tuples or Circuits)
+#            Each element specifies a circuit to include in the evaluation tree.
+#
+#        min_subtrees : int , optional
+#            The minimum number of subtrees the resulting EvalTree must have.
+#
+#        max_tree_size : int , optional
+#            The maximum size allowed for the single un-split tree or any of
+#            its subtrees.
+#
+#        num_subtree_comms : int, optional
+#            The number of processor groups (communicators)
+#            to divide the subtrees of the EvalTree among
+#            when calling its `distribute` method.
+#
+#        dataset : DataSet, optional
+#            If not None, restrict what is computed to only those
+#            probabilities corresponding to non-zero counts (observed
+#            outcomes) in this data set.
+#
+#        verbosity : int, optional
+#            How much detail to send to stdout.
+#
+#        Returns
+#        -------
+#        evt : EvalTree
+#            An evaluation tree object.
+#
+#        elIndices : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are slices and/or integer-arrays into the space/axis of
+#            final elements returned by the 'bulk fill' routines.  Thus, to get the
+#            final elements corresponding to `circuits[i]`, use
+#            `filledArray[ elIndices[i] ]`.
+#
+#        outcomes : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are lists of outcome labels (an outcome label is a tuple
+#            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+#            what outcomes the i-th circuit's final elements
+#            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+#        """
+#        raise NotImplementedError("Derived classes should implement this!")
+
+
+#    def bulk_dprobs(self, circuit_list, return_pr=False, clip_to=None,
+#                    check=False, comm=None, wrt_block_size=None, dataset=None):
+#        """
+#        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
+#
+#        Parameters
+#        ----------
+#        circuit_list : list of (tuples or Circuits)
+#            Each element specifies a circuit to compute quantities for.
+#
+#        return_pr : bool, optional
+#            when set to True, additionally return the probabilities.
+#
+#        clip_to : 2-tuple, optional
+#            (min,max) to clip returned probability to if not None.
+#            Only relevant when return_pr == True.
+#
+#        check : boolean, optional
+#            If True, perform extra checks within code to verify correctness,
+#            generating warnings when checks fail.  Used for testing, and runs
+#            much slower when True.
+#
+#        comm : mpi4py.MPI.Comm, optional
+#            When not None, an MPI communicator for distributing the computation
+#            across multiple processors.  Distribution is first performed over
+#            subtrees of evalTree (if it is split), and then over blocks (subsets)
+#            of the parameters being differentiated with respect to (see
+#            wrt_block_size).
+#
+#        wrt_block_size : int or float, optional
+#            The maximum average number of derivative columns to compute *products*
+#            for simultaneously.  None means compute all columns at once.
+#            The minimum of wrt_block_size and the size that makes maximal
+#            use of available processors is used as the final block size. Use
+#            this argument to reduce amount of intermediate memory required.
+#
+#        dataset : DataSet, optional
+#            If not None, restrict what is computed to only those
+#            probabilities corresponding to non-zero counts (observed
+#            outcomes) in this data set.
+#
+#        Returns
+#        -------
+#        dprobs : dictionary
+#            A dictionary such that `probs[opstr]` is an ordered dictionary of
+#            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
+#            `p` is the corresponding probability, and `dp` is an array containing
+#            the derivative of `p` with respect to each parameter.  If `return_pr`
+#            if False, then `p` is not included in the tuples (so they're just
+#            `(outcome, dp)`).>
+#        """
+#        memLimit = None
+#        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit,
+#                                                                                "default", [], dataset)
+#        nElements = evalTree.num_final_elements()
+#        nDerivCols = self.num_params()
+#
+#        vdp = _np.empty((nElements, nDerivCols), 'd')
+#        vp = _np.empty(nElements, 'd') if return_pr else None
+#
+#        self.bulk_fill_dprobs(vdp, evalTree,
+#                              vp, clip_to, check, comm,
+#                              None, wrt_block_size)
+#
+#        ret = _collections.OrderedDict()
+#        for i, opstr in enumerate(evalTree):
+#            elInds = _slct.indices(elIndices[i]) \
+#                if isinstance(elIndices[i], slice) else elIndices[i]
+#            if return_pr:
+#                ret[opstr] = _OutcomeLabelDict(
+#                    [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
+#            else:
+#                ret[opstr] = _OutcomeLabelDict(
+#                    [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+#        return ret
 
 
 class SuccessFailModel(OplessModel):
@@ -632,249 +455,288 @@ class SuccessFailModel(OplessModel):
     def __init__(self, state_space_labels, use_cache=False):
         OplessModel.__init__(self, state_space_labels)
         self.use_cache = use_cache
+        self.sim = _SuccessFailForwardSimulator(self)
 
-    def compute_num_outcomes(self, circuit):  # needed for sparse data detection
+    def _post_copy(self, copy_into):
         """
-        The number of outcomes of `circuit`.  Always == 2.
+        Called after all other copying is done, to perform "linking" between
+        the new model (`copy_into`) and its members.
+        """
+        copy_into.sim.model = copy_into  # set copy's `.model` link
+
+    def circuit_outcomes(self, circuit):  # needed for sparse data detection
+        """
+        Get all the possible outcome labels produced by simulating this circuit.
 
         Parameters
         ----------
         circuit : Circuit
-            The circuit to get the number of outcomes for.
+            Circuit to get outcomes of.
 
         Returns
         -------
-        int
+        tuple
         """
-        return 2
+        return (('success',), ('fail',))
 
     def _success_prob(self, circuit, cache):
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _success_dprob(self, circuit, cache):
-        raise NotImplementedError("Derived classes should implement this!")
+    def _success_dprob(self, circuit, param_slice, cache):
+        """ Derived classes can override this.  Default implemntation is to use finite difference. """
+        eps = 1e-7
+        orig_pvec = self.to_vector()
+        wrtIndices = _slct.indices(param_slice) if (param_slice is not None) else list(range(self.num_params()))
+        sp0 = self._success_prob(circuit, cache)
 
-    #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clip_to):
-    def probs(self, circuit, clip_to=None, cache=None):
+        deriv = _np.empty(len(wrtIndices), 'd')
+        for i in wrtIndices:
+            p_plus_dp = orig_pvec.copy()
+            p_plus_dp[i] += eps
+            self.from_vector(p_plus_dp)
+            sp1 = self._success_prob(circuit, cache)
+            deriv[i] = (sp1 - sp0) / eps
+        self.from_vector(orig_pvec)
+        return deriv
+
+    def probabilities(self, circuit, outcomes=None, time=None):
         """
-        Construct a dictionary of the outcome probabilities of `circuit`.
+        Construct a dictionary containing the outcome probabilities of `circuit`.
 
         Parameters
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip probabilities to if not None.
+        outcomes : list or tuple
+            A sequence of outcomes, which can themselves be either tuples
+            (to include intermediate measurements) or simple strings, e.g. `'010'`.
 
-        cache : dict, optional
-            A cache for increasing performance.
+        time : float, optional
+            The *start* time at which `circuit` is evaluated.
+
+        Returns
+        -------
+        probs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to probabilities.
+        """
+        return self._sim.probs(circuit, outcomes, time)
+
+    def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
+        """
+        Construct a dictionary containing the probabilities for an entire list of circuits.
+
+        Parameters
+        ----------
+        circuits : (list of Circuits) or CircuitOutcomeProbabilityArrayLayout
+            When a list, each element specifies a circuit to compute outcome probabilities for.
+            A :class:`CircuitOutcomeProbabilityArrayLayout` specifies the circuits along with
+            an internal memory layout that reduces the time required by this function and can
+            restrict the computed probabilities to those corresponding to only certain outcomes.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.  Distribution is performed over
+            subtrees of evalTree (if it is split).
+
+        mem_limit : int, optional
+            A rough memory limit in bytes which is used to determine processor
+            allocation.
+
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
 
         Returns
         -------
         probs : dictionary
-            A dictionary of circuit outcome probabilities.
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
+            `(outcome, p)` tuples, where `outcome` is a tuple of labels
+            and `p` is the corresponding probability.
         """
-        sp = self._success_prob(circuit, cache)
-        if clip_to is not None: sp = _np.clip(sp, clip_to[0], clip_to[1])
-        return _OutcomeLabelDict([('success', sp), ('fail', 1 - sp)])
+        resource_alloc = _ResourceAllocation(comm, mem_limit)
+        return self.sim.bulk_probs(circuits, clip_to, resource_alloc, smartc)
 
-    def dprobs(self, circuit, return_pr=False, clip_to=None, cache=None):
-        """
-        Construct a dictionary of outcome-probability derivatives for `circuit`.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the circuit.
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
-
-        cache : dict, optional
-            A cache for increasing performance.
-
-        Returns
-        -------
-        dprobs : dictionary
-            A dictionary of outcome-probability derivatives, or `(derivative, probability)`
-            tuples if `return_pr=True`.
-        """
-        try:
-            dsp = self._success_dprob(circuit, cache)
-        except NotImplementedError:
-            return OplessModel.dprobs(self, circuit, return_pr, clip_to)
-
-        if return_pr:
-            sp = self._success_prob(circuit, cache)
-            if clip_to is not None: sp = _np.clip(sp, clip_to[0], clip_to[1])
-            return {('success',): (sp, dsp), ('fail',): (1 - sp, -dsp)}
-        else:
-            return {('success',): dsp, ('fail',): -dsp}
-
-    def polynomial_probs(self, circuit):
-        """
-        Construct a dictionary of the outcome probabilities of `circuit` as *polynomials*.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the circuit.
-
-        Returns
-        -------
-        probs : dictionary
-            A dictionary containing probabilities as polynomials.
-        """
-        sp = self._success_prob_poly(circuit)
-        return _OutcomeLabelDict([('success', sp), ('fail', _Polynomial({(): 1.0}) - sp)])
-
-    def simplify_circuits(self, circuits, dataset=None):
-        """
-        Simplifies a list of :class:`Circuit`s.
-
-        Parameters
-        ----------
-        circuits : list of Circuits
-            The list to simplify.
-
-        dataset : DataSet, optional
-            If not None, restrict what is simplified to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        Returns
-        -------
-        raw_elabels_dict : collections.OrderedDict
-            A dictionary whose keys are simplified circuits (containing just
-            "simplified" gates, i.e. not instruments) that include preparation
-            labels but no measurement (POVM). Values are lists of simplified
-            effect labels, each label corresponds to a single "final element" of
-            the computation, e.g. a probability.  The ordering is important - and
-            is why this needs to be an ordered dictionary - when the lists of tuples
-            are concatenated (by key) the resulting tuple orderings corresponds to
-            the final-element axis of an output array that is being filled (computed).
-        elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuits` and
-            whose values are slices and/or integer-arrays into the space/axis of
-            final elements.  Thus, to get the final elements corresponding to
-            `circuits[i]`, use `filledArray[ elIndices[i] ]`.
-        outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuits` and
-            whose values are lists of outcome labels (an outcome label is a tuple
-            of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th circuit's final elements
-            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
-        nTotElements : int
-            The total number of "final elements" - this is how big of an array
-            is need to hold all of the probabilities `circuits` generates.
-        """
-        rawdict = None  # TODO - is this needed?
-        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuits))}
-        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuits))}
-
-        return rawdict, lookup, outcome_lookup, 2 * len(circuits)
-
-    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
-                      num_subtree_comms=1, dataset=None, verbosity=0):
-        """
-        Create an evaluation tree for all the circuits in `circuit_list`.
-
-        This tree can be used by other Bulk_* functions, and is it's own
-        function so that for many calls to Bulk_* made with the same
-        circuit_list, only a single call to bulk_evaltree is needed.
-
-        Parameters
-        ----------
-        circuit_list : list of (tuples or Circuits)
-            Each element specifies a circuit to include in the evaluation tree.
-
-        min_subtrees : int , optional
-            The minimum number of subtrees the resulting EvalTree must have.
-
-        max_tree_size : int , optional
-            The maximum size allowed for the single un-split tree or any of
-            its subtrees.
-
-        num_subtree_comms : int, optional
-            The number of processor groups (communicators)
-            to divide the subtrees of the EvalTree among
-            when calling its `distribute` method.
-
-        dataset : DataSet, optional
-            If not None, restrict what is computed to only those
-            probabilities corresponding to non-zero counts (observed
-            outcomes) in this data set.
-
-        verbosity : int, optional
-            How much detail to send to stdout.
-
-        Returns
-        -------
-        evt : EvalTree
-            An evaluation tree object.
-
-        elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are slices and/or integer-arrays into the space/axis of
-            final elements returned by the 'bulk fill' routines.  Thus, to get the
-            final elements corresponding to `circuits[i]`, use
-            `filledArray[ elIndices[i] ]`.
-
-        outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `circuit_list` and
-            whose values are lists of outcome labels (an outcome label is a tuple
-            of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th circuit's final elements
-            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
-        """
-        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuit_list))}
-        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuit_list))}
-
-        if self.use_cache == "poly":
-            #Do precomputation here
-            polys = []
-            for i, circuit in enumerate(circuit_list):
-                print("Generating probs for circuit %d of %d" % (i + 1, len(circuit_list)))
-                probs = self.polynomial_probs(circuit)
-                polys.append(probs['success'])
-                polys.append(probs['fail'])
-            compact_polys = compact_polynomial_list(polys)
-            cache = compact_polys
-        elif self.use_cache is True:
-            cache = [self._circuit_cache(circuit) for circuit in circuit_list]
-        else:
-            cache = None
-
-        return OplessModelTree(circuit_list, lookup, outcome_lookup, cache)
+#    def polynomial_probabilities(self, circuit):
+#        """
+#        Construct a dictionary of the outcome probabilities of `circuit` as *polynomials*.
+#
+#        Parameters
+#        ----------
+#        circuit : Circuit or tuple of operation labels
+#            The sequence of operation labels specifying the circuit.
+#
+#        Returns
+#        -------
+#        probs : dictionary
+#            A dictionary containing probabilities as polynomials.
+#        """
+#        sp = self._success_prob_polynomial(circuit)
+#        return _OutcomeLabelDict([('success', sp), ('fail', _Polynomial({(): 1.0}) - sp)])
 
 
-#TODO: move this to polynomial.py??
-def compact_polynomial_list(list_of_polys):
-    """
-    Create a single vtape,ctape pair from a list of normal Polynomals
 
-    Parameters
-    ----------
-    list_of_polys : list
-        A list of :class:`Polynomial` objects.
+#REMOVE
+#    def dprobs(self, circuit, return_pr=False, clip_to=None, cache=None):
+#        """
+#        Construct a dictionary of outcome-probability derivatives for `circuit`.
+#
+#        Parameters
+#        ----------
+#        circuit : Circuit or tuple of operation labels
+#            The sequence of operation labels specifying the circuit.
+#
+#        return_pr : bool, optional
+#            when set to True, additionally return the probabilities.
+#
+#        clip_to : 2-tuple, optional
+#            (min,max) to clip returned probability to if not None.
+#            Only relevant when return_pr == True.
+#
+#        cache : dict, optional
+#            A cache for increasing performance.
+#
+#        Returns
+#        -------
+#        dprobs : dictionary
+#            A dictionary of outcome-probability derivatives, or `(derivative, probability)`
+#            tuples if `return_pr=True`.
+#        """
+#        try:
+#            dsp = self._success_dprob(circuit, cache)
+#        except NotImplementedError:
+#            return OplessModel.dprobs(self, circuit, return_pr, clip_to)
+#
+#        if return_pr:
+#            sp = self._success_prob(circuit, cache)
+#            if clip_to is not None: sp = _np.clip(sp, clip_to[0], clip_to[1])
+#            return {('success',): (sp, dsp), ('fail',): (1 - sp, -dsp)}
+#        else:
+#            return {('success',): dsp, ('fail',): -dsp}
 
-    Returns
-    -------
-    vtape: numpy.ndarray
-        A "tape" of the variable indices.
 
-    ctape: numpy.ndarray
-        A "tape" of the polynomial coefficients.
-    """
-    tapes = [p.compact() for p in list_of_polys]
-    vtape = _np.concatenate([t[0] for t in tapes])
-    ctape = _np.concatenate([t[1] for t in tapes])
-    return vtape, ctape
+#    def simplify_circuits(self, circuits, dataset=None):
+#        """
+#        Simplifies a list of :class:`Circuit`s.
+#
+#        Parameters
+#        ----------
+#        circuits : list of Circuits
+#            The list to simplify.
+#
+#        dataset : DataSet, optional
+#            If not None, restrict what is simplified to only those
+#            probabilities corresponding to non-zero counts (observed
+#            outcomes) in this data set.
+#
+#        Returns
+#        -------
+#        raw_elabels_dict : collections.OrderedDict
+#            A dictionary whose keys are simplified circuits (containing just
+#            "simplified" gates, i.e. not instruments) that include preparation
+#            labels but no measurement (POVM). Values are lists of simplified
+#            effect labels, each label corresponds to a single "final element" of
+#            the computation, e.g. a probability.  The ordering is important - and
+#            is why this needs to be an ordered dictionary - when the lists of tuples
+#            are concatenated (by key) the resulting tuple orderings corresponds to
+#            the final-element axis of an output array that is being filled (computed).
+#        elIndices : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuits` and
+#            whose values are slices and/or integer-arrays into the space/axis of
+#            final elements.  Thus, to get the final elements corresponding to
+#            `circuits[i]`, use `filledArray[ elIndices[i] ]`.
+#        outcomes : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuits` and
+#            whose values are lists of outcome labels (an outcome label is a tuple
+#            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+#            what outcomes the i-th circuit's final elements
+#            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+#        nTotElements : int
+#            The total number of "final elements" - this is how big of an array
+#            is need to hold all of the probabilities `circuits` generates.
+#        """
+#        rawdict = None  # TODO - is this needed?
+#        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuits))}
+#        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuits))}
+#
+#        return rawdict, lookup, outcome_lookup, 2 * len(circuits)
+#
+#    def bulk_evaltree(self, circuit_list, min_subtrees=None, max_tree_size=None,
+#                      num_subtree_comms=1, dataset=None, verbosity=0):
+#        """
+#        Create an evaluation tree for all the circuits in `circuit_list`.
+#
+#        This tree can be used by other Bulk_* functions, and is it's own
+#        function so that for many calls to Bulk_* made with the same
+#        circuit_list, only a single call to bulk_evaltree is needed.
+#
+#        Parameters
+#        ----------
+#        circuit_list : list of (tuples or Circuits)
+#            Each element specifies a circuit to include in the evaluation tree.
+#
+#        min_subtrees : int , optional
+#            The minimum number of subtrees the resulting EvalTree must have.
+#
+#        max_tree_size : int , optional
+#            The maximum size allowed for the single un-split tree or any of
+#            its subtrees.
+#
+#        num_subtree_comms : int, optional
+#            The number of processor groups (communicators)
+#            to divide the subtrees of the EvalTree among
+#            when calling its `distribute` method.
+#
+#        dataset : DataSet, optional
+#            If not None, restrict what is computed to only those
+#            probabilities corresponding to non-zero counts (observed
+#            outcomes) in this data set.
+#
+#        verbosity : int, optional
+#            How much detail to send to stdout.
+#
+#        Returns
+#        -------
+#        evt : EvalTree
+#            An evaluation tree object.
+#
+#        elIndices : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are slices and/or integer-arrays into the space/axis of
+#            final elements returned by the 'bulk fill' routines.  Thus, to get the
+#            final elements corresponding to `circuits[i]`, use
+#            `filledArray[ elIndices[i] ]`.
+#
+#        outcomes : collections.OrderedDict
+#            A dictionary whose keys are integer indices into `circuit_list` and
+#            whose values are lists of outcome labels (an outcome label is a tuple
+#            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+#            what outcomes the i-th circuit's final elements
+#            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+#        """
+#        lookup = {i: slice(2 * i, 2 * i + 2, 1) for i in range(len(circuit_list))}
+#        outcome_lookup = {i: (('success',), ('fail',)) for i in range(len(circuit_list))}
+#
+#        if self.use_cache == "poly":
+#            #Do precomputation here
+#            polys = []
+#            for i, circuit in enumerate(circuit_list):
+#                print("Generating probs for circuit %d of %d" % (i + 1, len(circuit_list)))
+#                probs = self.polynomial_probs(circuit)
+#                polys.append(probs['success'])
+#                polys.append(probs['fail'])
+#            compact_polys = compact_polynomial_list(polys)
+#            cache = compact_polys
+#        elif self.use_cache is True:
+#            cache = [self._circuit_cache(circuit) for circuit in circuit_list]
+#        else:
+#            cache = None
+#
+#        return OplessModelTree(circuit_list, lookup, outcome_lookup, cache)
 
 
 class ErrorRatesModel(SuccessFailModel):
@@ -982,7 +844,7 @@ class ErrorRatesModel(SuccessFailModel):
         layers_with_idles = [circuit.layer_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
         inds_to_mult_by_layer = [_np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
                                  for layer in layers_with_idles]
-
+        
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
@@ -1056,7 +918,9 @@ class TwirledLayersModel(ErrorRatesModel):
 
         return successprob_circuit
 
-    def _success_dprob(self, circuit, cache):
+    def _success_dprob(self, circuit, param_slice, cache):
+        assert(param_slice is None or _slct.length(param_slice) == len(self._paramvec)), \
+            "No support for derivatives with respect to a subset of model parameters yet!"        
         pvec = self._paramvec**2
         dpvec_dparams = 2 * self._paramvec
 
@@ -1170,10 +1034,12 @@ class TwirledGatesModel(ErrorRatesModel):
 
         return successprob_circuit
 
-    def _success_dprob(self, circuit, cache):
+    def _success_dprob(self, circuit, param_slice, cache):
         """
         todo
         """
+        assert(param_slice is None or _slct.length(param_slice) == len(self._paramvec)), \
+            "No support for derivatives with respect to a subset of model parameters yet!"
         pvec = self._paramvec**2
         dpvec_dparams = 2 * self._paramvec
 
@@ -1265,7 +1131,9 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
 
         return successprob_circuit
 
-    def _success_dprob(self, circuit, cache):
+    def _success_dprob(self, circuit, param_slice, cache):
+        assert(param_slice is None or _slct.length(param_slice) == len(self._paramvec)), \
+            "No support for derivatives with respect to a subset of model parameters yet!"
         pvec = self._paramvec**2
         dpvec_dparams = 2 * self._paramvec
 
@@ -1346,10 +1214,12 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
 
         return successprob_circuit
 
-    def _success_dprob(self, circuit, cache):
+    def _success_dprob(self, circuit, param_slice, cache):
         """
         todo
         """
+        assert(param_slice is None or _slct.length(param_slice) == len(self._paramvec)), \
+            "No support for derivatives with respect to a subset of model parameters yet!"
         pvec = self._paramvec**2
         dpvec_dparams = 2 * self._paramvec
 

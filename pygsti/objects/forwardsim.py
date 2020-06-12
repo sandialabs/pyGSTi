@@ -25,6 +25,7 @@ from . import operation as _op
 from . import labeldicts as _ld
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .circuit import Circuit as _Circuit
 
 # SCRATCH NOTES TODO REMOVE
@@ -159,6 +160,12 @@ class ForwardSimulator(object):
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
 
+    def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
+                                                         resource_alloc):
+        # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
+        # derivatives of each specified circuit outcome probability.
+        raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
+
     def probs(self, circuit, outcomes=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `simplified_circuit`
@@ -245,7 +252,7 @@ class ForwardSimulator(object):
         CircuitOutcomeProbabilityArrayLayout
         """
         #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
-        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset)
+        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions)
 
     #TODO UPDATE
     #def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
@@ -548,12 +555,22 @@ class ForwardSimulator(object):
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter):
         if wrt_filter is not None:
-            wrtSlice = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
+            wrt_filter = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
-        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, wrtSlice, resource_alloc)
+        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, wrt_filter, resource_alloc)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+
+        #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
+        try:
+            for element_indices, circuit, outcomes in layout.iter_circuits():
+                self._compute_circuit_outcome_probability_derivatives(
+                    array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc)
+            return
+        except NotImplementedError:
+            pass  # otherwise, proceed to compute derivatives via finite difference.
+
         eps = 1e-7  # hardcoded?
         if param_slice is None:
             param_slice = slice(0, self.model.num_params())
@@ -776,3 +793,63 @@ class ForwardSimulator(object):
                 yield wrtSlice1, wrtSlice2, hprobs, dprobs12
             else:
                 yield wrtSlice1, wrtSlice2, hprobs
+
+
+class CacheForwardSimulator(ForwardSimulator):
+    """
+    A forward simulator that works with :class:`CachedCOPALayout` layouts.
+
+    This is just a small addition to :class:`ForwardSimulator`, adding a
+    persistent cache passed to new derived-class-overridable compute routines.
+    """
+
+    def create_layout(self, circuits, dataset=None, resource_alloc=None,
+                      array_types=(), derivative_dimensions=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
+
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be computed.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        Returns
+        -------
+        CachedCOPALayout
+        """
+        #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
+        cache = None  # Derived classes should override this function and create a cache here.
+        # A dictionary whose keys are the elements of `circuits` and values can be
+        #    whatever the user wants.  These values are provided when calling
+        #    :method:`iter_circuits_with_cache`.
+        return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
+
+    # Override these two functions to plumb `cache` down to _compute* methods
+    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+            self._compute_circuit_outcome_probabilities_with_cache(array_to_fill[element_indices], circuit,
+                                                                   outcomes, resource_alloc, cache, time=None)
+
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+            self._compute_circuit_outcome_probability_derivatives_with_cache(
+                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc, cache)
+
+    def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
+                                                          cache, time=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def _compute_circuit_outcome_probability_derivatives_with_cache(self, array_to_fill, circuit, outcomes, param_slice,
+                                                                    resource_alloc, cache):
+        # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
+        # derivatives of each specified circuit outcome probability.
+        raise NotImplementedError("Derived classes can implement this to speed up derivative computation")

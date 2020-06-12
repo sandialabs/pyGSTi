@@ -2934,7 +2934,7 @@ class OpModel(Model):
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
         """
-        copy_into._sim.model = copy_into # set copy's `.model` link
+        copy_into._sim.model = copy_into  # set copy's `.model` link
 
     def copy(self):
         """
