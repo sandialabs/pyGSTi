@@ -655,7 +655,7 @@ class SuccessFailModel(OplessModel):
         raise NotImplementedError("Derived classes should implement this!")
 
     #FUTURE?: def _fill_circuit_probs(self, array_to_fill, outcomes, circuit, clip_to):
-    def probs(self, circuit, clip_to=None, cache=None):
+    def probabilities(self, circuit, clip_to=None, cache=None):
         """
         Construct a dictionary of the outcome probabilities of `circuit`.
 

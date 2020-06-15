@@ -154,7 +154,7 @@ v
         assert(len(v) == self.num_params())
         self._paramvec = v.copy()
 
-    def probs(self, circuit, clip_to=None):
+    def probabilities(self, circuit, clip_to=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -1058,7 +1058,7 @@ class OpModel(Model):
         return self._dim
 
     #TODO REMOVE - use dim property
-    def get_dimension(self):
+    def dimension(self):
         """
         Get the dimension of the model.
 
@@ -1717,7 +1717,7 @@ class OpModel(Model):
         _, outcomes = self.simplify_circuit(circuit, dataset=None)
         return len(outcomes)
 
-    def probs(self, circuit, clip_to=None, time=None):
+    def probabilities(self, circuit, clip_to=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 

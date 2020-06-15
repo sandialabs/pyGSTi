@@ -550,7 +550,7 @@ class _BasePOVM(POVM):
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each POVM effect E as s^T * E.
 

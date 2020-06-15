@@ -346,7 +346,7 @@ class MapForwardSimulator(ForwardSimulator):
         evTree.initialize(simplified_circuits, num_subtree_comms, self.max_cache_size)
         return evTree
 
-    def _estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
+    def estimate_memory_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
                            num_param2_groups, num_final_strs):
         """
