@@ -1723,7 +1723,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
 
 
-def DM_mapfill_TDchi2_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
+def DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
                             min_prob_clip_for_weighting, prob_clip_interval, comm):
 
     def obj_fn(p, f, n_i, n, omitted_p):
@@ -1736,10 +1736,11 @@ def DM_mapfill_TDchi2_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, layo
             v = _np.sqrt(v**2 + n * omitted_p**2 / omitted_cp)
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
-    return DM_mapfill_TDterms(fwdsim, obj_fn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm)
+    return DM_mapfill_TDterms(fwdsim, obj_fn, array_to_fill, dest_indices, num_outcomes, layout_atom,
+                              dataset_rows, comm)
 
 
-def DM_mapfill_TDloglpp_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
+def DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
                               min_prob_clip, radius, prob_clip_interval, comm):
 
     min_p = min_prob_clip; a = radius
@@ -1776,23 +1777,24 @@ def DM_mapfill_TDloglpp_terms(fwdsim, mx_to_fill, dest_indices, num_outcomes, la
 
         return v  # objective function term (the qty stored in cache)
 
-    return DM_mapfill_TDterms(fwdsim, obj_fn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm)
+    return DM_mapfill_TDterms(fwdsim, obj_fn, array_to_fill, dest_indices, num_outcomes, layout_atom,
+                              dataset_rows, comm)
 
 
-def DM_mapfill_TDterms(fwdsim, objfn, mx_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm):
+def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm):
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = layout_atom.cache_size
 
-    EVecs = [fwdsim.model.circuit_layer_operator(elbl) for elbl in layout_atom.full_effect_labels]
-    elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
-    outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
+    EVecs = [fwdsim.model.circuit_layer_operator(elbl, 'povm') for elbl in layout_atom.full_effect_labels]
+    #OLD REMOVE: elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
+    #OLD REMOVE: outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
     #if clip_to is not None:
-    #    _np.clip(mx_to_fill, clip_to[0], clip_to[1], out=mx_to_fill)  # in-place clip
+    #    _np.clip(array_to_fill, clip_to[0], clip_to[1], out=array_to_fill)  # in-place clip
 
-    mx_to_fill[dest_indices] = 0.0  # reset destination (we sum into it)
+    array_to_fill[dest_indices] = 0.0  # reset destination (we sum into it)
 
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
@@ -1808,6 +1810,7 @@ def DM_mapfill_TDterms(fwdsim, objfn, mx_to_fill, dest_indices, num_outcomes, la
         lastInds = {}; outcome_cnts = {}
 
         # consolidate multiple outcomes that occur at same time? or sort?
+        #CHECK - should this loop filter only outcomes relevant to this expanded circuit (like below)?
         for k, (t0, Nreps) in enumerate(zip(datarow.time, datarow.reps)):
             if t0 in totalCnts:
                 totalCnts[t0] += Nreps; outcome_cnts[t0] += 1
@@ -1816,23 +1819,29 @@ def DM_mapfill_TDterms(fwdsim, objfn, mx_to_fill, dest_indices, num_outcomes, la
             lastInds[t0] = k
 
         elbl_indices = layout_atom.elbl_indices_by_expcircuit[iDest]
+        outcomes = layout_atom.outcomes_by_expcircuit[iDest]
+        outcome_to_elbl_index = {outcome: elbl_index for outcome, elbl_index in zip(outcomes, elbl_indices)}
+        #FUTURE: construct outcome_to_elbl_index dict in layout_atom, so we don't construct it here?
         final_indices = [dest_indices[j] for j in layout_atom.elindices_by_expcircuit[iDest]]
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
 
         cur_probtotal = 0; last_t = 0
         # consolidate multiple outcomes that occur at same time? or sort?
         for k, (t0, Nreps, outcome) in enumerate(zip(datarow.time, datarow.reps, datarow.outcomes)):
+            if outcome not in outcome_to_elbl_index:
+                continue  # skip datarow outcomes not for this expanded circuit
+
             t = t0
             rhoVec.set_time(t)
             rho = rhoVec._rep
             t += rholabel.time
 
             for gl in remainder:
-                op = fwdsim.circuit_layer_operator(gl, 'op')
+                op = fwdsim.model.circuit_layer_operator(gl, 'op')
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
-            j = outcome_to_elabel_index[outcome]
+            j = outcome_to_elbl_index[outcome]
             E = EVecs[j]; E.set_time(t)
             p = E._rep.probability(rho)  # outcome probability
             N = totalCnts[t0]
@@ -1847,32 +1856,32 @@ def DM_mapfill_TDterms(fwdsim, objfn, mx_to_fill, dest_indices, num_outcomes, la
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
-            mx_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
+            array_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
 
 
-def DM_mapfill_TDdchi2_terms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom, dataset_rows,
-                             min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
+def DM_mapfill_TDdchi2_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
+                             dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
 
-    def fillfn(mx_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
-        DM_mapfill_TDchi2_terms(fwdsim, mx_to_fill, dest_indices, n_outcomes,
+    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+        DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, n_outcomes,
                                 layout_atom, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
 
-    return DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices,
+    return DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices,
                                      num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
 
 
-def DM_mapfill_TDdloglpp_terms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes,
+def DM_mapfill_TDdloglpp_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
                                layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
 
-    def fillfn(mx_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
-        DM_mapfill_TDloglpp_terms(fwdsim, mx_to_fill, dest_indices, n_outcomes,
+    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+        DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, n_outcomes,
                                   layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
 
-    return DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices,
+    return DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices,
                                      num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
 
 
-def DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
+def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
                               dataset_rows, fillfn, wrt_slice, comm):
 
     eps = 1e-7  # hardcoded?
@@ -1906,12 +1915,12 @@ def DM_mapfill_timedep_dterms(fwdsim, mx_to_fill, dest_indices, dest_param_indic
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
             fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
-            _fas(mx_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
+            _fas(array_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
     fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
-    _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
+    _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS

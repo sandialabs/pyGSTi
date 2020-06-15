@@ -52,16 +52,17 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
                                                    [self.sos.operation(ol)._rep for ol in spc.circuit_without_povm[1:]])
                 array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
             else:
-                t = time
+                t = time  # Note: time in labels == duration
                 rholabel = spc.circuit_without_povm[0]
-                op = self.sos.prep(rholabel); op.set_time(t); t += rholabel.time
+                op = self.model.circuit_layer_operator(rholabel, 'prep'); op.set_time(t); t += rholabel.time
                 state = op._rep
                 for ol in spc.circuit_without_povm[1:]:
-                    op = self.sos.operation(ol); op.set_time(t); t += ol.time  # time in labels == duration
+                    op = self.model.circuit_layer_operator(ol, 'op'); op.set_time(t); t += ol.time
                     state = op._rep.acton(state)
                 ps = []
-                for elabel in spc.effect_labels:
-                    op = self.sos.effect(elabel); op.set_time(t)  # don't advance time (all effects occur at same time)
+                for elabel in spc.full_effect_labels:
+                    op = self.model.circuit_layer_operator(elabel, 'povm'); op.set_time(t)
+                    # Note: don't advance time (all effects occur at same time)
                     ps.append(op._rep.probability(state))
                 array_to_fill[indices] = ps
 
@@ -404,8 +405,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     ## TIME DEPENDENT functionality -- TODO: update later
 
-    def bulk_fill_timedep_chi2(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
-                               min_prob_clip_for_weighting, prob_clip_interval, comm=None):
+    def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None):
         """
         Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -414,18 +415,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
+        array_to_fill : numpy ndarray
             an already-allocated 1D numpy array of length equal to the
-            total number of computed elements (i.e. eval_tree.num_final_elements())
+            total number of computed elements (i.e. layout.num_elements)
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        ds_circuits_to_use : list of Circuits
+        ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
             below).  This is typically the same list of circuits used to
-            construct `eval_tree` potentially with some aliases applied.
+            construct `layout` potentially with some aliases applied.
 
         num_total_outcomes : list or array
             a list of the total number of *possible* outcomes for each circuit
@@ -445,41 +446,33 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
         None
         """
+        def compute_timedep(layout_atom, sub_resource_alloc):
+            dataset_rows = {i_expanded: dataset[ds_circuits[i]]
+                            for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
+            num_outcomes = {i_expanded: num_total_outcomes[i]
+                            for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
+            replib.DM_mapfill_TDchi2_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
+                                           layout_atom, dataset_rows, min_prob_clip_for_weighting,
+                                           prob_clip_interval, sub_resource_alloc)
 
-        #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
-            dataset_rows = [dataset[ds_circuits_to_use[i]] for i in _slct.indices(evalSubTree.final_slice(eval_tree))]
-            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(eval_tree))]
-
-            replib.DM_mapfill_TDchi2_terms(self, mx_to_fill, felInds, num_outcomes,
-                                           evalSubTree, dataset_rows, min_prob_clip_for_weighting,
-                                           prob_clip_interval, mySubComm)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mx_to_fill, [], 0, comm)
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, resource_alloc.comm)
         #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
 
-    def bulk_fill_timedep_dchi2(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
-                                min_prob_clip_for_weighting, prob_clip_interval, chi2_mx_to_fill=None,
-                                comm=None, wrt_filter=None, wrt_block_size=None,
-                                profiler=None, gather_mem_limit=None):
+    def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
+                                wrt_filter=None, resource_alloc=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -489,19 +482,19 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
+        array_to_fill : numpy ndarray
             an already-allocated ExM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            computed elements (i.e. layout.num_elements) and M is the
             number of model parameters.
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        ds_circuits_to_use : list of Circuits
+        ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
             below).  This is typically the same list of circuits used to
-            construct `eval_tree` potentially with some aliases applied.
+            construct `layout` potentially with some aliases applied.
 
         num_total_outcomes : list or array
             a list of the total number of *possible* outcomes for each circuit
@@ -521,59 +514,42 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        chi2_mx_to_fill : numpy array, optional
+        chi2_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit chi2 contributions, just like in
             bulk_fill_timedep_chi2(...).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
 
         wrt_filter : list of ints, optional
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
+            processors and to control memory usage.
 
-        wrt_block_size : int or float, optional
-            The maximum number of derivative columns to compute *products*
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
-
-        profiler : Profiler, optional
-            A profiler object used for to track timing and memory usage.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
         None
         """
-        def dchi2(dest_mx, dest_indices, dest_param_indices, num_tot_outcomes, eval_sub_tree,
+        def dchi2(dest_mx, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                   dataset_rows, wrt_slice, fill_comm):
             replib.DM_mapfill_TDdchi2_terms(self, dest_mx, dest_indices, dest_param_indices, num_tot_outcomes,
-                                            eval_sub_tree, dataset_rows, min_prob_clip_for_weighting,
+                                            layout_atom, dataset_rows, min_prob_clip_for_weighting,
                                             prob_clip_interval, wrt_slice, fill_comm)
 
-        def chi2(dest_mx, dest_indices, num_tot_outcomes, eval_sub_tree, dataset_rows, fill_comm):
-            return replib.DM_mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, eval_sub_tree,
+        def chi2(dest_mx, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
+            return replib.DM_mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, layout_atom,
                                                   dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
                                                   fill_comm)
 
-        return self.bulk_fill_timedep_deriv(eval_tree, dataset, ds_circuits_to_use, num_total_outcomes,
-                                            mx_to_fill, dchi2, chi2_mx_to_fill, chi2,
-                                            comm, wrt_filter, wrt_block_size, profiler, gather_mem_limit)
+        return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
+                                             array_to_fill, dchi2, chi2_array_to_fill, chi2,
+                                             wrt_filter, resource_alloc)
 
-    def bulk_fill_timedep_loglpp(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
-                                 min_prob_clip, radius, prob_clip_interval, comm=None):
+    def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None):
         """
         Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
 
@@ -582,18 +558,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
+        array_to_fill : numpy ndarray
             an already-allocated 1D numpy array of length equal to the
-            total number of computed elements (i.e. eval_tree.num_final_elements())
+            total number of computed elements (i.e. layout.num_elements)
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+       layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        ds_circuits_to_use : list of Circuits
+        ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
             below).  This is typically the same list of circuits used to
-            construct `eval_tree` potentially with some aliases applied.
+            construct `layout` potentially with some aliases applied.
 
         num_total_outcomes : list or array
             a list of the total number of *possible* outcomes for each circuit
@@ -619,40 +595,33 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
         None
         """
-        #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
+        def compute_timedep(layout_atom, sub_resource_alloc):
+            dataset_rows = {i_expanded: dataset[ds_circuits[i]]
+                            for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
+            num_outcomes = {i_expanded: num_total_outcomes[i]
+                            for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
+            replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
+                                             layout_atom, dataset_rows, min_prob_clip,
+                                             radius, prob_clip_interval, sub_resource_alloc)
 
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
-            dataset_rows = [dataset[ds_circuits_to_use[i]] for i in _slct.indices(evalSubTree.final_slice(eval_tree))]
-            num_outcomes = [num_total_outcomes[i] for i in _slct.indices(evalSubTree.final_slice(eval_tree))]
-
-            replib.DM_mapfill_TDloglpp_terms(self, mx_to_fill, felInds, num_outcomes,
-                                             evalSubTree, dataset_rows, min_prob_clip,
-                                             radius, prob_clip_interval, mySubComm)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mx_to_fill, [], 0, comm)
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, resource_alloc.comm)
         #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
 
-    def bulk_fill_timedep_dloglpp(self, mx_to_fill, eval_tree, ds_circuits_to_use, num_total_outcomes, dataset,
-                                  min_prob_clip, radius, prob_clip_interval, logl_mx_to_fill=None,
-                                  comm=None, wrt_filter=None, wrt_block_size=None,
-                                  profiler=None, gather_mem_limit=None):
+    def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
+                                  wrt_filter=None, resource_alloc=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -662,19 +631,19 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
+        array_to_fill : numpy ndarray
             an already-allocated ExM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M is the
+            computed elements (i.e. layout.num_elements) and M is the
             number of model parameters.
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        ds_circuits_to_use : list of Circuits
+        ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
             below).  This is typically the same list of circuits used to
-            construct `eval_tree` potentially with some aliases applied.
+            construct `layout` potentially with some aliases applied.
 
         num_total_outcomes : list or array
             a list of the total number of *possible* outcomes for each circuit
@@ -695,55 +664,39 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        logl_mx_to_fill : numpy array, optional
+        logl_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit logl contributions, just like in
             bulk_fill_timedep_loglpp(...).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
 
         wrt_filter : list of ints, optional
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
+            processors and to control memory usage.
 
-        wrt_block_size : int or float, optional
-            The maximum number of derivative columns to compute *products*
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
-
-        profiler : Profiler, optional
-            A profiler object used for to track timing and memory usage.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
         None
         """
-        def dloglpp(mx_to_fill, dest_indices, dest_param_indices, num_tot_outcomes, eval_sub_tree,
+        def dloglpp(array_to_fill, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                     dataset_rows, wrt_slice, fill_comm):
-            return replib.DM_mapfill_TDdloglpp_terms(self, mx_to_fill, dest_indices, dest_param_indices,
-                                                     num_tot_outcomes, eval_sub_tree, dataset_rows, min_prob_clip,
+            return replib.DM_mapfill_TDdloglpp_terms(self, array_to_fill, dest_indices, dest_param_indices,
+                                                     num_tot_outcomes, layout_atom, dataset_rows, min_prob_clip,
                                                      radius, prob_clip_interval, wrt_slice, fill_comm)
 
-        def loglpp(mx_to_fill, dest_indices, num_tot_outcomes, eval_sub_tree, dataset_rows, fill_comm):
-            return replib.DM_mapfill_TDloglpp_terms(self, mx_to_fill, dest_indices, num_tot_outcomes, eval_sub_tree,
+        def loglpp(array_to_fill, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
+            return replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, dest_indices, num_tot_outcomes, layout_atom,
                                                     dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
 
-        return self.bulk_fill_timedep_deriv(eval_tree, dataset, ds_circuits_to_use, num_total_outcomes,
-                                            mx_to_fill, dloglpp, logl_mx_to_fill, loglpp,
-                                            comm, wrt_filter, wrt_block_size, profiler, gather_mem_limit)
+        return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
+                                             array_to_fill, dloglpp, logl_array_to_fill, loglpp,
+                                             wrt_filter, resource_alloc)
+
 
 #class OLDMapForwardSimulator(ForwardSimulator):
 #    """

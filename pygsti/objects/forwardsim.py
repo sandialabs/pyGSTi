@@ -194,7 +194,8 @@ class ForwardSimulator(object):
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
-            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time])
+            resource_alloc = _ResourceAllocation.cast(None)
+            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time], resource_alloc)
 
         probs = _ld.OutcomeLabelDict()
         elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
@@ -502,7 +503,7 @@ class ForwardSimulator(object):
 
     def _bulk_fill_probs_at_times(self, array_to_fill, layout, times, resource_alloc):
         # A separate function because computation with time-dependence is often approached differently
-        return self._bulk_fill_probs_block_at_time(array_to_fill, layout, times, resource_alloc)
+        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times, resource_alloc)
 
     def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times, resource_alloc):
         for (element_indices, circuit, outcomes), time in zip(layout.iter_circuits(), times):
@@ -538,7 +539,7 @@ class ForwardSimulator(object):
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
             for partitioning them.
-
+o
         wrt_filter : list of ints, optional
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used

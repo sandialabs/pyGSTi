@@ -373,15 +373,15 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
 
-    def __init__(self, unique_complete_circuits, ds_circuits, group, model_shlp, dataset,
-                 offset, elindex_outcome_tuples, max_cache_size):
+    def __init__(self, unique_complete_circuits, ds_circuits, unique_to_orig, group, model_shlp,
+                 dataset, offset, elindex_outcome_tuples, max_cache_size):
 
-        expanded_circuit_outcomes_by_orig = _collections.OrderedDict()
+        expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
             d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
-            expanded_circuit_outcomes_by_orig[i] = d
+            expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 
         expanded_circuits = list(expanded_circuit_outcomes.keys())
@@ -391,7 +391,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         all_rholabels = set()
         all_oplabels = set()
         all_elabels = set()
-        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
+        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.values():
             for sep_povm_c in expanded_circuit_outcomes:
                 if sep_povm_c.effect_labels == [None]:  # special case -- needed (for bulk_product?)
                     all_oplabels.update(sep_povm_c.circuit_without_povm[:])
@@ -407,21 +407,25 @@ class _MapCOPALayoutAtom(_DistributableAtom):
 
         #Lookup arrays for faster replib computation.
         table_offset = 0
+        self.orig_indices_by_expcircuit = {}  # record original circuit index so dataset row can be retrieved
         self.elbl_indices_by_expcircuit = {}
         self.elindices_by_expcircuit = {}
+        self.outcomes_by_expcircuit = {}
 
         #Assign element indices, starting at `offset`
         initial_offset = offset
-        for orig_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.items():
+        for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
             for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
                 elindices = list(range(offset, offset + len(outcomes)))
                 self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[lbl] for lbl in sep_povm_c.full_effect_labels]
                 self.elindices_by_expcircuit[i] = elindices
+                self.outcomes_by_expcircuit[i] = outcomes
+                self.orig_indices_by_expcircuit[i] = unique_to_orig[unique_i]
                 offset += len(outcomes)
 
                 # fill in running dict of per-circuit element indices and outcomes:
-                elindex_outcome_tuples[orig_i].extend(list(zip(elindices, outcomes)))
+                elindex_outcome_tuples[unique_i].extend(list(zip(elindices, outcomes)))
             table_offset += len(expanded_circuit_outcomes)
 
         super().__init__(slice(initial_offset, offset), offset - initial_offset)
@@ -472,12 +476,13 @@ class MapCOPALayout(_DistributableCOPALayout):
         groups = _find_splitting(circuit_table, max_sub_table_size, num_sub_tables, verbosity)
 
         atoms = []
-        elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
+        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
+        to_orig = {unique_i: orig_i for orig_i, unique_i in to_unique.items()}  # unique => original indices
 
         offset = 0
         for group in groups:
-            atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
-                                                  dataset, offset, elindex_outcome_tuples, max_cache_size))
+            atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
+                                            model_shlp, dataset, offset, elindex_outcome_tuples, max_cache_size))
             offset += atoms[-1].num_elements
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,

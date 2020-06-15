@@ -138,7 +138,7 @@ v
         """
         return self._paramvec
 
-    def from_vector(self, v):
+    def from_vector(self, v, close=False):
         """
         Sets this Model's operations based on parameter values `v`.
 
@@ -1934,7 +1934,7 @@ class OpModel(Model):
                'prep': self._layer_rules.prep_layer_operator,
                'povm': self._layer_rules.povm_layer_operator}
         if typ == 'auto':
-            for fn in fns:
+            for fn in fns.values():
                 try:
                     return fn(self, layerlbl, self._layerop_cache)
                 except KeyError: pass  # Indicates failure to create op: try next type

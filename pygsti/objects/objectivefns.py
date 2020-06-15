@@ -1091,8 +1091,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
         #self.circuits_to_use = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
-        #self.ds_circuits_to_use = _tools.apply_aliases_to_circuits(self.circuits_to_use,
-        #                                                               bulk_circuit_list.op_label_aliases)
+        #self.ds_circuits = _tools.apply_aliases_to_circuits(self.circuits_to_use,
+        #                                                    bulk_circuit_list.op_label_aliases)
         #
         ## Memory check
         #persistent_mem = self._persistent_memory_estimate()
@@ -1456,7 +1456,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    -------
     #    int
     #    """
-    #    return self.dataset.degrees_of_freedom(self.ds_circuits_to_use,
+    #    return self.dataset.degrees_of_freedom(self.ds_circuits,
     #                                               aggregate_times=not self.time_dependent)
 
     #def _precompute_omitted_freqs(self):
@@ -1483,7 +1483,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    Ensure self.cache contains count and total-count vectors.
     #    """
     #    if not self.cache.has_count_vectors():
-    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits_to_use, self.circuit_weights)
+    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits, self.circuit_weights)
     #    return self.cache.counts, self.cache.total_counts
 
     def _construct_hessian(self, counts_all, total_counts_all, prob_clip_interval):
@@ -5438,7 +5438,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
         v = self.v
-        fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits_to_use, self.num_total_outcomes,
+        fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
                                     self.resource_alloc)
         self.raw_objfn.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
@@ -5469,9 +5469,9 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
 
         fsim = self.model.sim
-        fsim.bulk_fill_timedep_dchi2(dprobs, self.layout, self.ds_circuits_to_use, self.num_total_outcomes,
+        fsim.bulk_fill_timedep_dchi2(dprobs, self.layout, self.ds_circuits, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     self.resource_alloc)
+                                     None, self.resource_alloc)
 
         self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -5595,7 +5595,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
         v = self.v
-        fsim.bulk_fill_timedep_loglpp(v, self.layout, self.ds_circuits_to_use, self.num_total_outcomes,
+        fsim.bulk_fill_timedep_loglpp(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
                                       self.resource_alloc)
         v = _np.sqrt(v)
@@ -5637,9 +5637,9 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
 
         fsim = self.model.sim
-        fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits_to_use, self.num_total_outcomes,
+        fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits, self.num_total_outcomes,
                                        self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
-                                       self.resource_alloc)
+                                       None, self.resource_alloc)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)

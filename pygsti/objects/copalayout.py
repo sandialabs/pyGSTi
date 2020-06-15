@@ -18,6 +18,7 @@ from operator import add as _add
 
 from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .label import Label as _Label
+from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 
@@ -53,6 +54,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def _compute_unique_circuits(cls, circuits):
         first_copy = _collections.OrderedDict(); to_unique = {}
         for i, c in enumerate(circuits):
+            if not isinstance(c, _Circuit): c = _Circuit(c)  # ensure all returned circuits are Circuits
             if c not in first_copy:
                 first_copy[c] = to_unique[i] = i
             else:

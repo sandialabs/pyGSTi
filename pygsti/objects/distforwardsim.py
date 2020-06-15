@@ -31,7 +31,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         if wrt_filter is None:
             blkSize = wrt_block_size  # could be None
             if (comm is not None) and (comm.Get_size() > 1):
-                comm_blkSize = self.Np / comm.Get_size()
+                comm_blkSize = self.model.num_params() / comm.Get_size()
                 blkSize = comm_blkSize if (blkSize is None) \
                     else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
         else:
@@ -55,6 +55,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
         sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
         wrt_block_size = layout.additional_dimension_blk_sizes[0]
+        Np = self.model.num_params()
 
         if wrt_filter is not None:
             assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
@@ -77,16 +78,16 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
-                nBlks = int(_np.ceil(self.Np / blkSize))
+                nBlks = int(_np.ceil(Np / blkSize))
                 # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.Np, nBlks)
+                blocks = _mpit.slice_up_range(Np, nBlks)
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
                     _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than derivative columns(%d)!" % self.Np
+                                   + " than derivative columns(%d)!" % Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
 
                 for iBlk in myBlkIndices:
@@ -114,6 +115,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                           resource_alloc, wrt_filter1, wrt_filter2):
         myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
         sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
+        Np = self.model.num_params()
 
         if wrt_filter1 is not None:
             assert(layout.additional_dimension_blk_sizes[0] is None)  # Can't specify both wrt_filter and wrt_block_size
@@ -153,11 +155,11 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
             else:  # Divide columns into blocks of at most blkSize
                 assert(wrt_filter1 is None and wrt_filter2 is None)  # cannot specify both wrt_filter and blkSize
-                nBlks1 = int(_np.ceil(self.Np / blkSize1))
-                nBlks2 = int(_np.ceil(self.Np / blkSize2))
+                nBlks1 = int(_np.ceil(Np / blkSize1))
+                nBlks2 = int(_np.ceil(Np / blkSize2))
                 # num blocks required to achieve desired average size == blkSize1 or blkSize2
-                blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
-                blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
+                blocks1 = _mpit.slice_up_range(Np, nBlks1)
+                blocks2 = _mpit.slice_up_range(Np, nBlks2)
 
                 #distribute derivative computation across blocks
                 myBlk1Indices, blk1Owners, blk1Comm = \
@@ -170,10 +172,10 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than hessian elements(%d)!" % (self.Np**2)
+                                   + " than hessian elements(%d)!" % (Np**2)
                                    + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
 
-                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
                 # will always be the same whenever they're desired (they'll both cover the entire range of params)
                 derivArToFill = deriv1_array_to_fill if (deriv1_array_to_fill is not None) else deriv2_array_to_fill
 
@@ -199,7 +201,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                     _mpit.gather_slices(blocks1, blk1Owners, derivArToFill, [atom.element_slice],
                                         1, mySubComm, layout.gather_mem_limit)
 
-                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
+                #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
                 # will always be the same whenever they're desired (they'll both cover the entire range of params)
                 if deriv1_array_to_fill is not None:
                     deriv1_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
@@ -220,6 +222,146 @@ class DistributableForwardSimulator(_ForwardSimulator):
         if pr_array_to_fill is not None:
             _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
                                 resource_alloc.comm, layout.gather_mem_limit)
+
+    def _bulk_fill_timedep_deriv(self, layout, dataset, ds_circuits, num_total_outcomes,
+                                 deriv_array_to_fill, deriv_fill_fn, array_to_fill=None, fill_fn=None,
+                                 wrt_filter=None, resource_alloc=None):
+        """
+        A helper method for computing (filling) the derivative of a time-dependent quantity.
+
+        A generic method providing the scaffolding used when computing (filling) the
+        derivative of a time-dependent quantity.  In particular, it distributes the
+        computation among the subtrees of `eval_tree` and relies on the caller to supply
+        "compute_cache" and "compute_dcache" functions which just need to compute the
+        quantitiy being filled and its derivative given a sub-tree and a parameter-slice.
+
+        Parameters
+        ----------
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
+
+        dataset : DataSet
+            the data set passed on to the computation functions.
+
+        ds_circuits : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `layout` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(ds_circuits)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        deriv_array_to_fill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. layout.num_elements) and M is the
+            number of model parameters.
+
+        deriv_fill_fn : function
+            a function used to compute the objective funtion jacobian.
+
+        array_to_fill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit contributions computed using `fn` below.
+
+        fill_fn : function, optional
+            a function used to compute the objective function.
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        None
+        """
+        #Note: this function is similar to _bulk_fill_dprobs, and may be able to consolidated in the FUTURE.
+
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
+        #sub_resource_alloc = _ResourceAllocation(comm=mySubComm)  # FUTURE: pass this to *_fn instead of mySubComm?
+        wrt_block_size = layout.additional_dimension_blk_sizes[0]
+        Np = self.model.num_params()
+
+        if wrt_filter is not None:
+            assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
+            wrtSlice = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
+        else:
+            wrtSlice = None
+
+        for iAtom in myAtomIndices:
+            atom = layout.atoms[iAtom]
+            elInds = atom.element_slice
+
+            #NOTE: this block uses atom.orig_indices_by_expcircuit, which is specific to _MapCOPALayoutAtom - TODO
+            dataset_rows = {i_expanded: dataset[ds_circuits[i]]
+                            for i_expanded, i in atom.orig_indices_by_expcircuit.items()}
+            num_outcomes = {i_expanded: num_total_outcomes[i]
+                            for i_expanded, i in atom.orig_indices_by_expcircuit.items()}
+
+            if array_to_fill is not None:
+                fill_fn(array_to_fill, elInds, num_outcomes, atom, dataset_rows, mySubComm)
+
+            #Set wrt_block_size to use available processors if it isn't specified
+            blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, mySubComm)
+
+            if blkSize is None:  # wrt_filter gives entire computed parameter block
+                #Fill derivative cache info
+                deriv_fill_fn(deriv_array_to_fill, elInds, None, num_outcomes, atom,
+                              dataset_rows, wrtSlice, mySubComm)
+                #profiler.mem_check("bulk_fill_dprobs: post fill")
+
+            else:  # Divide columns into blocks of at most blkSize
+                assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
+                nBlks = int(_np.ceil(Np / blkSize))
+                # num blocks required to achieve desired average size == blkSize
+                blocks = _mpit.slice_up_range(Np, nBlks)
+
+                #distribute derivative computation across blocks
+                myBlkIndices, blkOwners, blkComm = \
+                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
+                if blkComm is not None:
+                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                                   + " than derivative columns(%d)!" % Np
+                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
+
+                for iBlk in myBlkIndices:
+                    paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
+                    deriv_fill_fn(deriv_array_to_fill, elInds, paramSlice, num_outcomes, atom,
+                                  dataset_rows, paramSlice, mySubComm)
+                    #profiler.mem_check("bulk_fill_dprobs: post fill blk")
+
+                #gather results
+                _mpit.gather_slices(blocks, blkOwners, deriv_array_to_fill, [elInds],
+                                    1, mySubComm, layout.gather_mem_limit)
+                #note: gathering axis 1 of deriv_mx_to_fill[:,fslc], dim=(ks,M)
+                #profiler.mem_check("bulk_fill_dprobs: post gather blocks")
+
+        #collect/gather results
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, deriv_array_to_fill, [], 0,
+                            resource_alloc.comm, layout.gather_mem_limit)
+        #note: pass deriv_mx_to_fill, dim=(KS,M), so gather deriv_mx_to_fill[felInds] (axis=0)
+
+        if array_to_fill is not None:
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
+                                resource_alloc.comm, layout.gather_mem_limit)
+            #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
+
+        #profiler.mem_check("bulk_fill_timedep_dchi2: post gather subtrees")
+        #
+        #profiler.add_time("bulk_fill_timedep_dchi2: total", tStart)
+        #profiler.add_count("bulk_fill_timedep_dchi2 count")
+        #profiler.mem_check("bulk_fill_timedep_dchi2: end")
 
     def _run_on_atoms(self, layout, fn, resource_alloc):
         """Runs `fn` on all the atoms of `layout`, returning a list of the local (current processor) return values."""
