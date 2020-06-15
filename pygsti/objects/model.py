@@ -1018,7 +1018,7 @@ class OpModel(Model):
         return self._dim
 
     #TODO REMOVE - use dim property
-    def get_dimension(self):
+    def dimension(self):
         """
         Get the dimension of the model.
 

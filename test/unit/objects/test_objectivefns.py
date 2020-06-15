@@ -51,7 +51,7 @@ class ObjectiveFunctionBuilderTester(ObjectiveFunctionData, BaseCase):
     """
 
     def test_create_from(self):
-        builder1 = _objfns.ObjectiveFunctionBuilder.simple('chi2')
+        builder1 = _objfns.ObjectiveFunctionBuilder.create_from('chi2')
         builder2 = _objfns.ObjectiveFunctionBuilder.cast(builder1)
         self.assertTrue(builder1 is builder2)
 
@@ -71,11 +71,11 @@ class ObjectiveFunctionBuilderTester(ObjectiveFunctionData, BaseCase):
 
     def test_simple_builds(self):
         for objective in ('logl', 'chi2', 'tvd'):
-            builder = _objfns.ObjectiveFunctionBuilder.simple(objective)
+            builder = _objfns.ObjectiveFunctionBuilder.create_from(objective)
             fn = builder.build(self.model, self.dataset, self.circuits)
             self.assertTrue(isinstance(fn, builder.cls_to_build))
 
-        builder = _objfns.ObjectiveFunctionBuilder.simple('chi2', True)
+        builder = _objfns.ObjectiveFunctionBuilder.create_from('chi2', True)
         fn = builder.build(self.model, self.dataset, self.circuits)
         self.assertTrue(isinstance(fn, builder.cls_to_build))
 

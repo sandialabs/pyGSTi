@@ -523,8 +523,8 @@ class GSTObjFnBuilders(object):
         -------
         GSTObjFnBuilders
         """
-        chi2_builder = _objfns.ObjectiveFunctionBuilder.simple('chi2', freq_weighted_chi2)
-        mle_builder = _objfns.ObjectiveFunctionBuilder.simple('logl')
+        chi2_builder = _objfns.ObjectiveFunctionBuilder.create_from('chi2', freq_weighted_chi2)
+        mle_builder = _objfns.ObjectiveFunctionBuilder.create_from('logl')
 
         if objective == "chi2":
             iteration_builders = [chi2_builder]

@@ -1149,7 +1149,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for k in range(1, operationMx.shape[1]):
                 penalty += abs(operationMx[0, k])**2
 
-        op_dim = self.get_dimension()
+        op_dim = self.dimension()
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
             penalty += abs(rhoVec[0, 0] - firstEl)**2
@@ -1392,7 +1392,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the rotated Model
         """
         newModel = self.copy()  # start by just copying model
-        dim = self.get_dimension()
+        dim = self.dimension()
         myBasis = self.basis
 
         if max_rotate is not None:
@@ -1458,7 +1458,7 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             rndm = rand_state
 
-        op_dim = self.get_dimension()
+        op_dim = self.dimension()
         unitary_dim = int(round(_np.sqrt(op_dim)))
         assert(unitary_dim**2 == op_dim), \
             "Model dimension must be a perfect square, %d is not" % op_dim
@@ -1505,7 +1505,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the increased-dimension Model
         """
 
-        curDim = self.get_dimension()
+        curDim = self.dimension()
         assert(new_dimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1576,7 +1576,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the decreased-dimension Model
         """
-        curDim = self.get_dimension()
+        curDim = self.dimension()
         assert(new_dimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:

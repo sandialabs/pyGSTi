@@ -268,11 +268,11 @@ class InstrumentTestCase(BaseTestCase):
                      np.dot( model.operations['Gy'],
                              np.dot(model.operations['Gx'],
                                     model.preps['rho0'].to_dense())))
-        probs = model.probs(gatestring1)
+        probs = model.probabilities(gatestring1)
         print(probs)
         p20,p21 = probs[('0',)],probs[('1',)]
 
-        #probs = model.probs(gatestring1, use_scaling=True)
+        #probs = model.probabilities(gatestring1, use_scaling=True)
         #print(probs)
         #p30,p31 = probs['0'],probs['1']
 

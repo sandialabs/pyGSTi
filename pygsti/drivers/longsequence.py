@@ -147,7 +147,7 @@ def run_model_test(model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
 
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-    builder = _objfns.ObjectiveFunctionBuilder.simple(advanced_options.get('objective', 'logl'),
+    builder = _objfns.ObjectiveFunctionBuilder.create_from(advanced_options.get('objective', 'logl'),
                                                       advanced_options.get('use_freq_weighted_chi2', False))
     _update_objfn_builders([builder], advanced_options)
 

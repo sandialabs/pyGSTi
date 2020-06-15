@@ -162,7 +162,7 @@ class EvalTree(list):
         -------
         tuple
         """
-        return tuple(self.init_indices)
+        return tuple(self._init_indices)
 
     def evaluation_order(self):
         """

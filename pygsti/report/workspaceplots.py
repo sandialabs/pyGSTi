@@ -1724,7 +1724,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         for ptyp in plottypes:
             if ptyp in ("logl", "chi2", "tvd"):
-                ptyp = _objfns.ObjectiveFunctionBuilder.simple(ptyp)
+                ptyp = _objfns.ObjectiveFunctionBuilder.create_from(ptyp)
 
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 if mdc_store is None:

@@ -22,7 +22,7 @@ class AbstractForwardSimTester(BaseCase):
 
     def test_construct_evaltree(self):
         with self.assertRaises(NotImplementedError):
-            self.fwdsim.construct_evaltree(None, None)
+            self.fwdsim.create_evaltree(None, None)
 
     def test_bulk_fill_probs(self):
         with self.assertRaises(NotImplementedError):

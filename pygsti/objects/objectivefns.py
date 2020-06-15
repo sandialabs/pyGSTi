@@ -147,14 +147,14 @@ class ObjectiveFunctionBuilder(object):
         ObjectiveFunctionBuilder
         """
         if isinstance(obj, cls): return obj
-        elif obj is None: return cls.simple()
-        elif isinstance(obj, str): return cls.simple(objective=obj)
-        elif isinstance(obj, dict): return cls.simple(**obj)
+        elif obj is None: return cls.create_from()
+        elif isinstance(obj, str): return cls.create_from(objective=obj)
+        elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod
-    def simple(cls, objective='logl', freq_weighted_chi2=False):
+    def create_from(cls, objective='logl', freq_weighted_chi2=False):
         """
         Creates common :class:`ObjectiveFunctionBuilder`s from a few arguments.
 

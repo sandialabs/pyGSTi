@@ -41,7 +41,7 @@ class ModelConstructionTester(BaseCase):
         model = mc.create_explicit_model([('Q0',)],
                                         ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertEqual(set(model.operations.keys()), set(['Gi', 'Gx', 'Gy']))
-        self.assertAlmostEqual(sum(model.probs(('Gx', 'Gi', 'Gy')).values()), 1.0)
+        self.assertAlmostEqual(sum(model.probabilities(('Gx', 'Gi', 'Gy')).values()), 1.0)
         self.assertEqual(model.num_params(), 60)
 
         model2 = mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
@@ -137,7 +137,7 @@ class ModelConstructionTester(BaseCase):
                                               {}, nonstd_gate_unitaries={'Ga': fn})
 
         c = pygsti.obj.Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
-        p = cfmdl.probs(c)
+        p = cfmdl.probabilities(c)
 
         self.assertAlmostEqual(p['00'], 0.08733219254516078)
         self.assertAlmostEqual(p['01'], 0.9126678074548386)

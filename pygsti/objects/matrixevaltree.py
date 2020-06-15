@@ -41,7 +41,7 @@ class MatrixEvalTree(EvalTree):
 
         # indices for initial computation that is viewed separately
         # from the "main evaluation" given by eval_order
-        self.init_indices = []
+        self._init_indices = []
 
         # a list of spam_tuple-lists, one for each final operation sequence
         self.simplified_circuit_spamTuples = None
@@ -139,7 +139,7 @@ class MatrixEvalTree(EvalTree):
         #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
         #  These labels serve as the initial values, and each operation sequence is assumed to be a tuple of
         #  operation labels.
-        self.init_indices = []  # indices to put initial zero & single gate results
+        self._init_indices = []  # indices to put initial zero & single gate results
         for opLabel in self.opLabels:
             tup = () if opLabel == "" else (opLabel,)  # special case of empty label == no gate
             if tup in circuit_list:
@@ -148,7 +148,7 @@ class MatrixEvalTree(EvalTree):
             else:
                 indx = len(self)
                 self.append((None, None))  # iLeft = iRight = None for always-evaluated zero string
-            self.init_indices.append(indx)
+            self._init_indices.append(indx)
             evalDict[tup] = indx
 
         #print("DB: initial eval dict = ",evalDict)
@@ -223,7 +223,7 @@ class MatrixEvalTree(EvalTree):
                 #nBites += 1
 
             #if nBites > 0: avgBiteSize += L / float(nBites)
-            assert(k in self.eval_order or k in self.init_indices)
+            assert(k in self.eval_order or k in self._init_indices)
 
         #avgBiteSize /= float(len(circuit_list))
         #print "DEBUG: Avg bite size = ",avgBiteSize
@@ -636,8 +636,8 @@ class MatrixEvalTree(EvalTree):
                     iLeft = iRight = None
                     #assert(len(subTree.opLabels) == len(subTree)) #make sure all oplabel items come first
                     subTree.opLabels.append(parent_tree.opLabels[
-                        parent_tree.init_indices.index(k)])
-                    subTree.init_indices.append(ik)
+                        self._init_indices.index(k)])
+                    self._init_indices.append(ik)
                 else:
                     iLeft = mapParentIndxToSubTreeIndx[oLeft]
                     iRight = mapParentIndxToSubTreeIndx[oRight]
@@ -770,7 +770,7 @@ class MatrixEvalTree(EvalTree):
         """
         newTree = self._copy_base(MatrixEvalTree(self[:]))
         newTree.opLabels = self.opLabels[:]
-        newTree.init_indices = self.init_indices[:]
+        self._init_indices = self._init_indices[:]
         newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
         #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
@@ -798,11 +798,11 @@ class MatrixEvalTree(EvalTree):
 
     def _get_full_eval_order(self):
         """Includes init_indices in matrix-based evaltree case... HACK """
-        return self.init_indices + self.eval_order
+        return self._init_indices + self.eval_order
 
     def _update_eval_order_helpers(self, index_permutation):
         """Update anything pertaining to the "full" evaluation order - e.g. init_inidces in matrix-based case (HACK)"""
-        self.init_indices = [index_permutation[iCur] for iCur in self.init_indices]
+        self._init_indices = [index_permutation[iCur] for iCur in self._init_indices]
 
     def _update_element_indices(self, new_indices_in_old_order, old_indices_in_new_order, element_indices_dict):
         """
