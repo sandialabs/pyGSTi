@@ -2320,7 +2320,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
     cdef INT cacheSize = layout_atom.cache_size
     #cdef np.ndarray ret = np.zeros((len(layout_atom), len(elabels)), 'd')  # zeros so we can just add contributions below
     #rhoVec, EVecs = fwdsim._rho_es_from_labels(rholabel, elabels)
-    EVecs = [fwdsim.model.circuit_layer_operator(elbl, 'povm') for elbl in layout_atom.full_effect_labels]
+    EVecs = {i: fwdsim.model.circuit_layer_operator(elbl, 'povm') for i, elbl in enumerate(layout_atom.full_effect_labels)}
 
     #elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
     #outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
@@ -2336,23 +2336,29 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         nTotOutcomes = num_outcomes[iDest]
         N = 0; nOutcomes = 0
 
+        datarow_time = {i: tm for i, tm in enumerate(datarow.time)}  # dict for speed
+        datarow_reps = {i: repcnt for i, repcnt in enumerate(datarow.reps)}  # dict for speed
+        datarow_outcomes = {i: outcome for i, outcome in enumerate(datarow.outcomes)}  # dict for speed
+
         elbl_indices = layout_atom.elbl_indices_by_expcircuit[iDest]
         outcomes = layout_atom.outcomes_by_expcircuit[iDest]
         outcome_to_elbl_index = {outcome: elbl_index for outcome, elbl_index in zip(outcomes, elbl_indices)}
         #FUTURE: construct outcome_to_elbl_index dict in layout_atom, so we don't construct it here?
         final_indices = [dest_indices[j] for j in layout_atom.elindices_by_expcircuit[iDest]]
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
+        model = fwdsim.model  # just for faster inner loop performance
+        opcache = fwdsim.model._layerop_cache  # use knowledge of internals for faster innerloop performance
 
-        n = len(datarow.reps) # == len(datarow.time)
+        n = len(datarow_reps) # == len(datarow.time)
         kinit = 0
         while kinit < n:
             #Process all outcomes of this datarow occuring at a single time, t0
-            t0 = datarow.time[kinit]
+            t0 = datarow_time[kinit]
 
             #Compute N, nOutcomes for t0
             N = 0; k = kinit
-            while k < n and datarow.time[k] == t0:
-                N += datarow.reps[k]
+            while k < n and datarow_time[k] == t0:
+                N += datarow_reps[k]
                 k += 1
             nOutcomes = k - kinit
 
@@ -2364,11 +2370,11 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
                 rho = rhoVec._rep
                 t += rholabel.time
 
-                n_i = datarow.reps[l]
-                outcome = datarow.outcomes[l]
+                n_i = datarow_reps[l]
+                outcome = datarow_outcomes[l]
 
                 for gl in remainder:
-                    op = fwdsim.model.circuit_layer_operator(gl, 'op')
+                    op = opcache[gl] if (gl in opcache) else model.circuit_layer_operator(gl, 'op')
                     op.set_time(t); t += gl.time  # time in gate label == gate duration?
                     rho = op._rep.acton(rho)
 
