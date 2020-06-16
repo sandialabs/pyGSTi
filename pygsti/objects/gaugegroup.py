@@ -336,7 +336,7 @@ class OpGaugeGroup(GaugeGroup):
         """
         return self._operation.num_params()
 
-    def element(self, param_vec):
+    def compute_element(self, param_vec):
         """
         Retrieve the element of this group corresponding to `param_vec`
 
@@ -865,7 +865,7 @@ class TrivialGaugeGroup(GaugeGroup):
         """
         return 0
 
-    def element(self, param_vec):
+    def compute_element(self, param_vec):
         """
         Retrieve the element of this group corresponding to `param_vec`
 

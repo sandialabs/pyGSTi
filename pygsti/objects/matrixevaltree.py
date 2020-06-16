@@ -636,8 +636,8 @@ class MatrixEvalTree(EvalTree):
                     iLeft = iRight = None
                     #assert(len(subTree.opLabels) == len(subTree)) #make sure all oplabel items come first
                     subTree.opLabels.append(parent_tree.opLabels[
-                        self._init_indices.index(k)])
-                    self._init_indices.append(ik)
+                        parent_tree._init_indices.index(k)])
+                    subTree._init_indices.append(ik)
                 else:
                     iLeft = mapParentIndxToSubTreeIndx[oLeft]
                     iRight = mapParentIndxToSubTreeIndx[oRight]
@@ -770,7 +770,7 @@ class MatrixEvalTree(EvalTree):
         """
         newTree = self._copy_base(MatrixEvalTree(self[:]))
         newTree.opLabels = self.opLabels[:]
-        self._init_indices = self._init_indices[:]
+        newTree._init_indices = self._init_indices[:]
         newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
         #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         newTree.spamtuple_indices = self.spamtuple_indices.copy()

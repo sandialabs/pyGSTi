@@ -478,22 +478,22 @@ class DataComparator():
             self.fixed_totalcount_data = True
             self.counts_per_sequence = int(total_counts[0])
 
-        self.aggregate_llr = _np.sum(list(self.llrs.values()))
-        self.aggregate_llr_threshold = None
-        self.aggregate_pVal = _pval(self.aggregate_llr, self.num_strs * self.dof)
+        self._aggregate_llr = _np.sum(list(self.llrs.values()))
+        self._aggregate_llr_threshold = None
+        self.aggregate_pVal = _pval(self._aggregate_llr, self.num_strs * self.dof)
         self.aggregate_pVal_threshold = None
 
         # Convert the aggregate LLR to a signed standard deviations.
-        self.aggregate_nsigma = _llr_to_signed_nsigma(self.aggregate_llr, self.num_strs * self.dof)
-        self.aggregate_nsigma_threshold = None
+        self._aggregate_nsigma = _llr_to_signed_nsigma(self._aggregate_llr, self.num_strs * self.dof)
+        self._aggregate_nsigma_threshold = None
 
         # All attributes to be populated in methods that can be called from .get methods, so
         # we can raise a meaningful warning if they haven't been calculated yet.
         self.sstvds = None
         self.pVal_pseudothreshold = None
-        self.llr_pseudothreshold = None
+        self._llr_pseudothreshold = None
         self.pVal_pseudothreshold = None
-        self.jsd_pseudothreshold = None
+        self._jsd_pseudothreshold = None
 
     def run(self, significance=0.05, per_sequence_correction='Hochberg',
                   aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
@@ -613,21 +613,21 @@ class DataComparator():
         self.results = hypotest
 
         if aggregate_test_weighting == 0:
-            self.aggregate_llr_threshold = _np.inf
-            self.aggregate_nsigma_threshold = _np.inf
+            self._aggregate_llr_threshold = _np.inf
+            self._aggregate_nsigma_threshold = _np.inf
             self.aggregate_pVal_threshold = 0.
         else:
-            self.aggregate_llr_threshold = _compute_llr_threshold(
+            self._aggregate_llr_threshold = _compute_llr_threshold(
                 aggregate_test_weighting * significance, self.num_strs * self.dof)
-            self.aggregate_nsigma_threshold = _llr_to_signed_nsigma(
-                self.aggregate_llr_threshold, self.num_strs * self.dof)
+            self._aggregate_nsigma_threshold = _llr_to_signed_nsigma(
+                self._aggregate_llr_threshold, self.num_strs * self.dof)
             self.aggregate_pVal_threshold = aggregate_test_weighting * significance
 
         self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[circuits]
-        self.llr_pseudothreshold = _compute_llr_threshold(self.pVal_pseudothreshold, self.dof)
+        self._llr_pseudothreshold = _compute_llr_threshold(self.pVal_pseudothreshold, self.dof)
 
         if self.fixed_totalcount_data:
-            self.jsd_pseudothreshold = self.llr_pseudothreshold / self.counts_per_sequence
+            self._jsd_pseudothreshold = self._llr_pseudothreshold / self.counts_per_sequence
 
         temp_hypothesis_rejected_dict = _copy.copy(hypotest.hypothesis_rejected)
         self.inconsistent_datasets_detected = any(list(temp_hypothesis_rejected_dict.values()))
@@ -652,9 +652,9 @@ class DataComparator():
                 print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
                 print("    - The aggregate log-_likelihood ratio test is "
-                      "significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
+                      "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
                 print("    - The aggregate log-_likelihood ratio test "
-                      "standard deviations signficance threshold is {0:.2f}".format(self.aggregate_nsigma_threshold))
+                      "standard deviations signficance threshold is {0:.2f}".format(self._aggregate_nsigma_threshold))
                 print(
                     "    - The number of sequences with data that is "
                     "inconsistent is {0}".format(self.number_of_significant_sequences))
@@ -818,9 +818,9 @@ class DataComparator():
         float
             The statistical significance pseudo-threshold for per-sequence LLR.
         """
-        assert(self.llr_pseudothreshold is not None), \
+        assert(self._llr_pseudothreshold is not None), \
             "This has not yet been calculated! Run the .run() method first!"
-        return self.llr_pseudothreshold
+        return self._llr_pseudothreshold
 
     def jsd(self, circuit):
         """
@@ -865,9 +865,9 @@ class DataComparator():
         """
         assert(self.fixed_totalcount_data), \
             "The JSD only has a pseudo-threshold when there is the same number of total counts per sequence!"
-        assert(self.jsd_pseudothreshold is not None), \
+        assert(self._jsd_pseudothreshold is not None), \
             "This has not yet been calculated! Run the .run() method first!"
-        return self.jsd_pseudothreshold
+        return self._jsd_pseudothreshold
 
     def ssjsd(self, circuit):
         """
@@ -891,7 +891,7 @@ class DataComparator():
         float
             The JSD of the specified circuit.
         """
-        assert(self.llr_pseudothreshold is not None), \
+        assert(self._llr_pseudothreshold is not None), \
             "The hypothsis testing has not been implemented yet! Run the .run() method first!"
         if self.results.hypothesis_rejected[circuit]:
             return self.jsds[circuit]
@@ -912,7 +912,7 @@ class DataComparator():
         float
             The aggregate LLR.
         """
-        return self.aggregate_llr
+        return self._aggregate_llr
 
     def aggregate_llr_threshold(self):
         """
@@ -927,9 +927,9 @@ class DataComparator():
         float
             The threshold above which the aggregate LLR is statistically significant.
         """
-        assert(self.aggregate_llr_threshold is not None), \
+        assert(self._aggregate_llr_threshold is not None), \
             "This has not yet been calculated! Run the .run() method first!"
-        return self.aggregate_llr_threshold
+        return self._aggregate_llr_threshold
 
     def aggregate_pvalue(self):
         """
@@ -981,7 +981,7 @@ class DataComparator():
         float
             The number of signed standard deviations of the aggregate LLR .
         """
-        return self.aggregate_nsigma
+        return self._aggregate_nsigma
 
     def aggregate_nsigma_threshold(self):
         """
@@ -998,9 +998,9 @@ class DataComparator():
             The statistical significance threshold above which the signed standard deviations
             of the aggregate LLR is significant.
         """
-        assert(self.aggregate_nsigma_threshold is not None), \
+        assert(self._aggregate_nsigma_threshold is not None), \
             "This has not yet been calculated! Run the .run() method first!"
-        return self.aggregate_nsigma_threshold
+        return self._aggregate_nsigma_threshold
 
     def worst_circuits(self, number):
         """

@@ -89,7 +89,7 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     for s in circuit_list:
         nSamples = input_data_set[s].total
         if generation_method == 'parametric':
-            ps = input_model.probs(s)
+            ps = input_model.probabilities(s)
         elif generation_method == 'nonparametric':
             ps = {ol: input_data_set[s].fraction(ol) for ol in outcome_labels}
         pList = _np.array([_np.clip(ps[outcomeLabel], 0, 1) for outcomeLabel in outcome_labels])

@@ -5,11 +5,12 @@ from ..util import BaseCase
 
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.construction import _create_operation
+from pygsti.construction.modelconstruction import _create_operation
 import pygsti.tools.basistools as bt
 from pygsti.objects import ExplicitOpModel, Basis
 
 from pygsti.tools import jamiolkowski as j
+
 
 class JamiolkowskiBasisTester(BaseCase):
     def setUp(self):
