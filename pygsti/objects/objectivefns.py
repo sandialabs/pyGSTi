@@ -97,7 +97,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     return ofn
 
     #def __len__(self):
-    #    return len(self.circuits_to_use)
+    #    return len(self.circuits)
 
 
 class ObjectiveFunctionBuilder(object):
@@ -836,7 +836,7 @@ class ModelDatasetCircuitsStore(object):
             self.layout = precomp_layout
         self.array_types = array_types
 
-        #self.circuits_to_use = bulk_circuit_list[:]
+        #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
         self.ds_circuits = self.circuits.apply_aliases()
 
@@ -979,7 +979,7 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
     #    """
     #    if num_elements is None:
     #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits_to_use)
+    #        nc = len(self.circuits)
     #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
     #    else:
     #        ne = num_elements
@@ -1089,9 +1089,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
         #bulk_circuit_list = circuit_list if isinstance(
         #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
-        #self.circuits_to_use = bulk_circuit_list[:]
+        #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
-        #self.ds_circuits = _tools.apply_aliases_to_circuits(self.circuits_to_use,
+        #self.ds_circuits = _tools.apply_aliases_to_circuits(self.circuits,
         #                                                    bulk_circuit_list.op_label_aliases)
         #
         ## Memory check
@@ -1282,10 +1282,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #Aggregate over outcomes:
         # obj_per_el[iElement] contains contributions per element - now aggregate over outcomes
         # percircuit[iCircuit] will contain contributions for each original circuit (aggregated over outcomes)
-        num_circuits = len(self.circuits_to_use)
+        num_circuits = len(self.circuits)
         percircuit = _np.empty(num_circuits, 'd')
         for i in range(num_circuits):
-            percircuit[i] = _np.sum(terms[self.lookup[i]], axis=0)
+            percircuit[i] = _np.sum(terms[self.layout.indices_for_index(i)], axis=0)
         return percircuit
 
     def dpercircuit(self, paramvec=None):
@@ -1310,10 +1310,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #Aggregate over outcomes:
         # obj_per_el[iElement] contains contributions per element - now aggregate over outcomes
         # percircuit[iCircuit] will contain contributions for each original circuit (aggregated over outcomes)
-        num_circuits = len(self.circuits_to_use)
+        num_circuits = len(self.circuits)
         dpercircuit = _np.empty((num_circuits, self.nparams), 'd')
         for i in range(num_circuits):
-            dpercircuit[i] = _np.sum(dterms[self.lookup[i]], axis=0)
+            dpercircuit[i] = _np.sum(dterms[self.layout.indices_for_index(i)], axis=0)
         return dpercircuit
 
     def fn(self, paramvec=None):
@@ -1417,7 +1417,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    """
     #    if num_elements is None:
     #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits_to_use)
+    #        nc = len(self.circuits)
     #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
     #    else:
     #        ne = num_elements
@@ -1464,7 +1464,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
     #    """
     #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-    #    for i, c in enumerate(self.circuits_to_use):
+    #    for i, c in enumerate(self.circuits):
     #        lklen = _slct.length(self.lookup[i])
     #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
     #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
@@ -1474,7 +1474,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
     #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
     #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-    #                                   (len(self.firsts), len(self.circuits_to_use)))
+    #                                   (len(self.firsts), len(self.circuits)))
     #    else:
     #        self.firsts = None  # no omitted probs
     #
@@ -4242,7 +4242,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         -------
         numpy.ndarray
         """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
         #DEBUG TODO REMOVE
@@ -4326,7 +4326,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             array of length equal to the number of circuits with omitted
             contributions.
         """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
+        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_dterms(self.total_counts[self.firsts], omitted_probs)
 
@@ -4558,7 +4558,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
         dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts, self.freqs)
         dprobs *= dg_dprobs[:, None]
@@ -4615,7 +4615,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if self.firsts is not None:
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.lookup[i], :], axis=0)
+                self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
         dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
         # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
@@ -4762,11 +4762,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             dprobs12_omitted_rowsum = _np.empty((len(self.firsts),) + dprobs12.shape[1:], 'd')
             hprobs_omitted_rowsum = _np.empty((len(self.firsts),) + hprobs.shape[1:], 'd')
 
-            omitted_probs = 1.0 - _np.array([_np.sum(probs[self.lookup[i]])
+            omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
                                              for i in self.indicesOfCircuitsWithOmittedData])
             for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[self.lookup[i], :, :], axis=0)
-                hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[self.lookup[i], :, :], axis=0)
+                dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[self.layout.indices_for_index(i), :, :], axis=0)
+                hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[self.layout.indices_for_index(i), :, :], axis=0)
 
             dprobs12_omitted_coeffs = -self.raw_objfn.zero_freq_hterms(total_counts[self.firsts], omitted_probs)
             hprobs_omitted_coeffs = -self.raw_objfn.zero_freq_dterms(total_counts[self.firsts], omitted_probs)
@@ -5124,12 +5124,15 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0, enable_hessian=False):
+                    resource_alloc=None, name=None, description=None, verbosity=0,
+                    enable_hessian=False, poisson_picture=True):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, enable_hessian)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
 
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
-        raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
+                 poisson_picture=True):
+        raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity,
+                                       poisson_picture)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
@@ -5253,7 +5256,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
-    #This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
+    #This objective function can handle time-dependent circuits - that is, circuits are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
 
@@ -5349,7 +5352,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
     """
     Chi-squared function that can handle time-dependent circuits and data.
 
-    This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
+    This objective function can handle time-dependent circuits - that is, circuits are treated as
     potentially time-dependent and mdl as well.  This function currently doesn't support much
     regularization or penalization.
     """
@@ -5482,7 +5485,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
     """
     Poisson-picture delta log-likelihood function that can handle time-dependent circuits and data.
 
-    This objective function can handle time-dependent circuits - that is, circuits_to_use are treated as
+    This objective function can handle time-dependent circuits - that is, circuits are treated as
     potentially time-dependent and mdl as well.  This function currently doesn't support much
     regularization or penalization.
     """
@@ -5882,7 +5885,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
         self.wildcard_budget = wildcard
-        self.wildcard_budget_precomp = wildcard.precompute_for_same_circuits(self.logl_objfn.circuits_to_use)
+        self.wildcard_budget_precomp = wildcard.precompute_for_same_circuits(self.logl_objfn.circuits)
 
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.probs = self.logl_objfn.probs.copy()
@@ -5954,8 +5957,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.wildcard_budget.update_probs(self.probs,
                                           self.logl_objfn.probs,
                                           self.logl_objfn.freqs,
-                                          self.logl_objfn.circuits_to_use,
-                                          self.logl_objfn.lookup,
+                                          self.logl_objfn.layout,
                                           self.wildcard_budget_precomp)
 
         counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.N, self.logl_objfn.freqs
