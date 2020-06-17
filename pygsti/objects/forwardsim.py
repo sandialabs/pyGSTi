@@ -28,13 +28,6 @@ from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeP
 from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .circuit import Circuit as _Circuit
 
-# SCRATCH NOTES TODO REMOVE
-# ForwardSimulator
-#  - user implements _outcome_probs(circuit, outcomes)
-#  -> base class extends to probs (are these the same?) -> finite-diff gives derivs, standard COPAlayout gives bulk_fill_probs
-#  - if use "simplified circuits" (as all do now), do model -> simplified_model[_helper] (simplifies all instruments and povms, but keeps? paramvec),
-#    then pass this to fwdsim?  or can fwdsim somehow query model for simplified ops?
-
 
 class ForwardSimulator(object):
     """
