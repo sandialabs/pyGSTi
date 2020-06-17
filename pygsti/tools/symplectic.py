@@ -2091,7 +2091,7 @@ def random_symplectic_index(n):
             temp = 0
             for i in range(0, n):
                 add = zeros_string(m)
-                sample = _np.random.randint(10**digits2)
+                sample = _np.random.randint(10**digits2, dtype=_np.int64)
                 for j in range(0, i):
                     add += zeros_string(digits2)
                 add += str(sample)
@@ -2099,7 +2099,7 @@ def random_symplectic_index(n):
                     add += zeros_string(digits2)
                 temp += int(add)
 
-            add = str(_np.random.randint(10**m)) + zeros_string(n * digits2)
+            add = str(_np.random.randint(10**m, dtype=_np.int64)) + zeros_string(n * digits2)
             index = int(add) + temp
 
     return index
