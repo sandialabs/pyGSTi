@@ -570,11 +570,6 @@ class Circuit(object):
         """
         return self._name
 
-    #TODO REMOVE
-    #@property
-    #def reps(self):
-    #    return self._reps
-
     @property
     def layertup(self):
         """
@@ -3509,92 +3504,6 @@ class Circuit(object):
         if not self._static:
             self._static = True
             self._labels = tuple([_Label(layer_lbl) for layer_lbl in self._labels])
-
-    #REMOVE
-    #def expand_instruments(self, model_shlp, observed_outcomes=None):
-    #    """
-    #    Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
-    #
-    #    Each key of the returned dictionary replaces the instruments in this circuit with a selection
-    #    of their members.  (The size of the resulting dictionary is the product of the sizes of
-    #    each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
-    #    as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
-    #    correspond to observed data.  This function is, for the most part, used internally to process
-    #    a circuit before computing its outcome probabilities.
-    #
-    #    Parameters
-    #    ----------
-    #    model_shlp : TODO docstring
-    #
-    #    Returns
-    #    -------
-    #    OrderedDict
-    #        A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-    #        values are tuples of the outcome labels corresponding to this circuit,
-    #        one per POVM effect held in the key.
-    #    """
-    #    expanded_circuit_outcomes = _collections.OrderedDict()
-    #
-    #    def create_tree(lst):
-    #        subs = _collections.defaultdict(list)
-    #        for el in lst:
-    #            if len(el) > 0:
-    #                subs[el[0]].append(el[1:])
-    #        return {k: create_tree(sub_lst) for k, sub_lst in subs.items()}
-    #
-    #    def add_expanded_circuit_outcomes(cir, running_outcome_tup, ootree, start):
-    #        """
-    #        """
-    #        cir = cir if start == 0 else cir[start:]  # for performance, avoid uneeded slicing
-    #        for k, layer_label in enumerate(cir, start=start):
-    #            components = layer_label.components
-    #            instrument_inds = _np.nonzero([model_shlp.is_instrument_lbl(component) for component in components])[0]
-    #            if instrument_inds.size > 0:
-    #                # This layer contains at least one instrument => recurse with instrument(s) replaced with
-    #                #  all combinations of their members.
-    #                component_lookup = {i: comp for i, comp in enumerate(components)}
-    #                instrument_members = [model_shlp.get_member_labels_for_instrument(components[i])
-    #                                      for i in instrument_inds]  # also components of outcome labels
-    #                for selected_instrmt_members in _itertools.product(*instrument_members):
-    #                    expanded_layer_lbl = component_lookup.copy()
-    #                    expanded_layer_lbl.update({i: sel for i, sel in zip(instrument_inds, selected_instrmt_members)})
-    #                    expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
-    #
-    #                    if ootree is not None:
-    #                        new_ootree = ootree
-    #                        for sel in selected_instrmt_members:
-    #                            new_ootree = new_ootree.get(sel, {})
-    #                        if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
-    #                    else:
-    #                        new_ootree = None
-    #                            
-    #                    add_expanded_circuit_outcomes(cir[0:k] + Circuit((expanded_layer_lbl,)) + cir[k + 1:],
-    #                                                  running_outcome_tup + selected_instrmt_members, new_ootree, k + 1)
-    #                break
-    #            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-    #                assert(cir not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
-    #                observed_povm_outcomes = None if (observed_outcomes is None) else tuple(observed_outcomes.keys())
-    #                expanded_circuit_outcomes[cir] = (running_outcome_tup, observed_povm_outcomes)
-    #
-    #    ootree = create_tree(observed_outcomes)  # tree of observed outcomes
-    #    # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
-    #
-    #    add_expanded_circuit_outcomes(self, (), ootree, start=0)
-    #    return expanded_circuit_outcomes
-    #
-    #def separate_povm(self, model_shlp, instrument_outcomes=(), observed_outcomes=None):
-    #    #complete_circuit = model_shlp.complete_circuit(self)
-    #    if model_shlp.is_povm_lbl(self[-1]):
-    #        povm_lbl = self[-1]  # "complete" circuits always end with a POVM label
-    #        circuit_without_povm = self[0:len(self) - 1]
-    #
-    #        elabels = model_shlp.get_effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
-    #            else observed_outcomes
-    #        outcomes = tuple((instrument_outcomes + (elabel,) for elabel in elabels))
-    #        return SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels), outcomes
-    #    else:
-    #        outcomes = (instrument_outcomes,) if len(instrument_outcomes) > 0 else ()
-    #        return SeparatePOVMCircuit(self, None, None), outcomes
 
     def expand_instruments_and_separate_povm(self, model_shlp, observed_outcomes=None):
         """
