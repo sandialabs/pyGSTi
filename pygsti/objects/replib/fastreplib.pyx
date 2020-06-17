@@ -1312,7 +1312,7 @@ cdef class SBOpRepClifford(SBOpRep):
 
 
 # Other classes
-cdef class PolyRep:
+cdef class PolynomialRep:
     cdef PolyCRep* c_poly
 
     #Use normal init here so can bypass to create from an already alloc'd c_poly
@@ -1327,7 +1327,7 @@ cdef class PolyRep:
         self.c_poly = new PolyCRep(coeffs, max_num_vars, vindices_per_int)
 
     def __reduce__(self):
-        return (PolyRep, (self.int_coeffs, self.max_num_vars, self.vindices_per_int))
+        return (PolynomialRep, (self.int_coeffs, self.max_num_vars, self.vindices_per_int))
 
     def __dealloc__(self):
         del self.c_poly
@@ -1394,7 +1394,7 @@ cdef class PolyRep:
 
     def copy(self):
         cdef PolyCRep* c_poly = new PolyCRep(self.c_poly._coeffs, self.c_poly._max_num_vars, self.c_poly._vindices_per_int)
-        return PolyRep_from_allocd_PolyCRep(c_poly)
+        return PolynomialRep_from_allocd_PolyCRep(c_poly)
 
     @property
     def max_num_vars(self): # so we can convert back to python Polys
@@ -1512,17 +1512,17 @@ cdef class PolyRep:
 
         return vtape, ctape
 
-    def mult(self, PolyRep other):
+    def mult(self, PolynomialRep other):
         cdef PolyCRep result = self.c_poly.mult(deref(other.c_poly))
         cdef PolyCRep* persistent = new PolyCRep(result._coeffs, result._max_num_vars, result._vindices_per_int)
-        return PolyRep_from_allocd_PolyCRep(persistent)
+        return PolynomialRep_from_allocd_PolyCRep(persistent)
         #print "MULT ", self.coeffs, " * ", other.coeffs, " =", ret.coeffs  #DEBUG!!! HERE
         #return ret
 
     def scale(self, x):
         self.c_poly.scale(x)
 
-    def add_inplace(self, PolyRep other):
+    def add_inplace(self, PolynomialRep other):
         self.c_poly.add_inplace(deref(other.c_poly))
 
     def add_scalar_to_all_coeffs_inplace(self, x):
@@ -1632,7 +1632,7 @@ cdef class SVTermRep:
     cdef SVTermCRep* c_term
 
     #Hold references to other reps so we don't GC them
-    cdef public PolyRep coeff
+    cdef public PolynomialRep coeff
     cdef public SVStateRep pre_state
     cdef public SVStateRep post_state
     cdef public SVEffectRep pre_effect
@@ -1646,7 +1646,7 @@ cdef class SVTermRep:
     def composed(cls, terms_to_compose, double magnitude):
         cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
         cdef SVTermRep first = terms_to_compose[0]
-        cdef PolyRep coeffrep = first.coeff
+        cdef PolynomialRep coeffrep = first.coeff
         pre_ops = first.pre_ops[:]
         post_ops = first.post_ops[:]
         for t in terms_to_compose[1:]:
@@ -1656,7 +1656,7 @@ cdef class SVTermRep:
         return SVTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
                          first.pre_effect, first.post_effect, pre_ops, post_ops)
 
-    def __cinit__(self, PolyRep coeff, double mag, double logmag,
+    def __cinit__(self, PolynomialRep coeff, double mag, double logmag,
                   SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1808,7 +1808,7 @@ cdef class SBTermRep:
     cdef SBTermCRep* c_term
 
     #Hold references to other reps so we don't GC them
-    cdef public PolyRep coeff
+    cdef public PolynomialRep coeff
     cdef public SBStateRep pre_state
     cdef public SBStateRep post_state
     cdef public SBEffectRep pre_effect
@@ -1820,7 +1820,7 @@ cdef class SBTermRep:
     def composed(cls, terms_to_compose, double magnitude):
         cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
         cdef SBTermRep first = terms_to_compose[0]
-        cdef PolyRep coeffrep = first.coeff
+        cdef PolynomialRep coeffrep = first.coeff
         pre_ops = first.pre_ops[:]
         post_ops = first.post_ops[:]
         for t in terms_to_compose[1:]:
@@ -1830,7 +1830,7 @@ cdef class SBTermRep:
         return SBTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
                          first.pre_effect, first.post_effect, pre_ops, post_ops)
 
-    def __cinit__(self, PolyRep coeff, double mag, double logmag,
+    def __cinit__(self, PolynomialRep coeff, double mag, double logmag,
                   SBStateRep pre_state, SBStateRep post_state,
                   SBEffectRep pre_effect, SBEffectRep post_effect, pre_ops, post_ops):
         self.coeff = coeff
@@ -1968,7 +1968,7 @@ cdef vector[vector[INT]] convert_mapevaltree(eval_tree, operation_lookup, rho_lo
     # an array of INT-arrays; each INT-array is [i,iStart,iCache,<remainder gate indices>]
     cdef vector[INT] intarray
     cdef vector[vector[INT]] c_eval_tree = vector[vector[INT]](len(eval_tree))
-    for kk,ii in enumerate(eval_tree.get_evaluation_order()):
+    for kk,ii in enumerate(eval_tree.evaluation_order()):
         iStart,remainder,iCache = eval_tree[ii]
         if iStart is None: iStart = -1 # so always an int
         if iCache is None: iCache = -1 # so always an int
@@ -2052,14 +2052,14 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
 def DM_mapfill_probs_block(calc, np.ndarray[double, mode="c", ndim=1] mx_to_fill,
                            dest_indices, eval_tree, comm):
 
-    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     #dest_indices = np.ascontiguousarray(dest_indices) #unneeded
 
     #Get (extension-type) representation objects
     rho_lookup = { lbl:i for i,lbl in enumerate(eval_tree.rholabels) } # rho labels -> ints for faster lookup
     rhoreps = { i: calc._rho_from_label(rholbl)._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(eval_tree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc.sos.get_operation(lbl)._rep for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc.sos.operation(lbl)._rep for lbl,i in operation_lookup.items() }
     ereps = [E._rep for E in calc._es_from_labels(eval_tree.elabels)]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
@@ -2176,10 +2176,10 @@ def DM_mapfill_dprobs_block(calc,
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
-    param_indices = _slct.as_array(param_indices)
-    dest_param_indices = _slct.as_array(dest_param_indices)
+    param_indices = _slct.to_array(param_indices)
+    dest_param_indices = _slct.to_array(dest_param_indices)
 
-    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
@@ -2316,21 +2316,21 @@ def DM_mapfill_TDterms(calc, objective, mx_to_fill, dest_indices, num_outcomes,
         objfn = TDloglpp_obj_fn
 
     mx_to_fill[dest_indices] = 0.0  # reset destination (we sum into it)
-    dest_indices = _slct.as_array(dest_indices)  # make sure this is an array and not a slice
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
 
     cdef INT cacheSize = eval_tree.cache_size()
     #cdef np.ndarray ret = np.zeros((len(eval_tree), len(elabels)), 'd')  # zeros so we can just add contributions below
     #rhoVec, EVecs = calc._rho_es_from_labels(rholabel, elabels)
     EVecs = calc._es_from_labels(eval_tree.elabels)
 
-    elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in eval_tree.elabels]
+    elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in eval_tree.elabels]
     outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
     dataset_rows = {i: row for i,row in enumerate(dataset_rows) } # change to dict for indexing speed - maybe pass this in? FUTURE
     num_outcomes = {i: N for i,N in enumerate(num_outcomes) } # change to dict for indexing speed
 
     #comm is currently ignored
     #TODO: if eval_tree is split, distribute among processors
-    for i in eval_tree.get_evaluation_order():
+    for i in eval_tree.evaluation_order():
         iStart, remainder, iCache = eval_tree[i]
         #--
         rholabel = remainder[0]; remainder = remainder[1:]
@@ -2369,7 +2369,7 @@ def DM_mapfill_TDterms(calc, objective, mx_to_fill, dest_indices, num_outcomes,
                 outcome = datarow.outcomes[l]
 
                 for gl in remainder:
-                    op = calc.sos.get_operation(gl)
+                    op = calc.sos.operation(gl)
                     op.set_time(t); t += gl.time  # time in gate label == gate duration?
                     rho = op._rep.acton(rho)
 
@@ -2463,8 +2463,8 @@ def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices
 
 
 # Helper functions
-cdef PolyRep_from_allocd_PolyCRep(PolyCRep* crep):
-    cdef PolyRep ret = PolyRep.__new__(PolyRep) # doesn't call __init__
+cdef PolynomialRep_from_allocd_PolyCRep(PolyCRep* crep):
+    cdef PolynomialRep ret = PolynomialRep.__new__(PolynomialRep) # doesn't call __init__
     ret.c_poly = crep
     return ret
 
@@ -2499,12 +2499,12 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).get_taylor_order_terms(order, mpv)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).get_taylor_order_terms(order, mpv)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -2513,7 +2513,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in calc.sos.effect(elbl).get_taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -2541,7 +2541,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
         E_cindices, numEs, calc.max_order, mpv, vpi, stateDim, <bool>fastmode)
 
-    return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
+    return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
 cdef vector[PolyCRep*] sv_prs_as_polys(
@@ -2581,7 +2581,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(
         prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](), max_poly_vars, vindices_per_int)
         # create empty polys - maybe overload constructor for this?
         # these PolyCReps are alloc'd here and returned - it is the job of the caller to
-        #  free them (or assign them to new PolyRep wrapper objs)
+        #  free them (or assign them to new PolynomialRep wrapper objs)
 
     for order in range(max_order+1):
         #print("DB: pr_as_poly order=",order)
@@ -2980,7 +2980,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
                 op = opcache[glbl]
                 #db_made_op = False
             else:
-                op = calc.sos.get_operation(glbl)
+                op = calc.sos.operation(glbl)
                 opcache[glbl] = op
                 #db_made_op = True
 
@@ -3024,7 +3024,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
     else:
         repcel = RepCacheEl()
         if rholabel not in opcache:
-            opcache[rholabel] = calc.sos.get_prep(rholabel)
+            opcache[rholabel] = calc.sos.prep(rholabel)
         rhoOp = opcache[rholabel]
         hmterms, foat_indices = rhoOp.get_highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order,
@@ -3053,7 +3053,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
         E_term_indices_and_reps = []
         for i,elbl in enumerate(elabels):
             if elbl not in opcache:
-                opcache[elbl] = calc.sos.get_effect(elbl)
+                opcache[elbl] = calc.sos.effect(elbl)
             hmterms, foat_indices = opcache[elbl].get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
@@ -3116,13 +3116,13 @@ def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repca
     cdef vector[INT] npaths = vector[INT](numEs)
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).get_total_term_magnitude()
     for glbl in circuit:
-        op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
+        op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
-        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.get_effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
+        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
+        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
 
     cdef double threshold = sv_find_best_pathmagnitude_threshold(
         cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
@@ -3225,7 +3225,7 @@ def SV_compute_pruned_path_polys_given_threshold(
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.e_indices,
         numEs, stateDim, <INT>fastmode,  mpv, vpi)
 
-    return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
+    return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
 cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
@@ -3256,7 +3256,7 @@ cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
         prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](), max_poly_vars, vindices_per_int)
         # create empty polys - maybe overload constructor for this?
         # these PolyCReps are alloc'd here and returned - it is the job of the caller to
-        #  free them (or assign them to new PolyRep wrapper objs)
+        #  free them (or assign them to new PolynomialRep wrapper objs)
 
     cdef double log_thres = log10(threshold)
     cdef double current_mag = 1.0
@@ -3842,13 +3842,13 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).get_total_term_magnitude()
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl)
+        op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
         max_partial_sopm *= op.get_total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)).get_total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).get_total_term_magnitude()
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))
@@ -3930,11 +3930,11 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #    if 'circuitWeights' not in repcache:
 #        repcache['circuitWeights'] = {}
 #    if reset_term_weights or circuit not in repcache['circuitWeights']:
-#        circuitWeight = calc.sos.get_prep(rholabel).get_total_term_weight()
+#        circuitWeight = calc.sos.prep(rholabel).get_total_term_weight()
 #        for gl in circuit:
-#            circuitWeight *= calc.sos.get_operation(gl).get_total_term_weight()
+#            circuitWeight *= calc.sos.operation(gl).get_total_term_weight()
 #        for i,elbl in enumerate(elabels):
-#            remainingWeight[i] = circuitWeight * calc.sos.get_effect(elbl).get_total_term_weight()
+#            remainingWeight[i] = circuitWeight * calc.sos.effect(elbl).get_total_term_weight()
 #        repcache['circuitWeights'][circuit] = [ remainingWeight[i] for i in range(remainingWeight.size()) ]
 #    else:
 #        for i,wt in enumerate(repcache['circuitWeights'][circuit]):
@@ -3966,31 +3966,31 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #            op_term_reps[ glmap[glbl] ] = repcel.reps
 #            for order in range(calc.max_order+1):
 #                treps = repcel.reps[order]
-#                coeffs_array = calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base)
+#                coeffs_array = calc.sos.operation(glbl).get_direct_order_coeffs(order,order_base)
 #                coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #                for i in range(treps.size()):
 #                    treps[i]._coeff = coeffs[i]
 #                    if reset_term_weights: treps[i]._magnitude = abs(coeffs[i])
 #            #for order,treps in enumerate(op_term_reps[ glmap[glbl] ]):
-#            #    for coeff,trep in zip(calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base), treps):
+#            #    for coeff,trep in zip(calc.sos.operation(glbl).get_direct_order_coeffs(order,order_base), treps):
 #            #        trep.set_coeff(coeff)
 #        else:
 #            repcel = RepCacheEl(calc.max_order)
 #            for order in range(calc.max_order+1):
 #                reps_at_order = vector[SVTermDirectCRep_ptr](0)
-#                for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base):
+#                for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base):
 #                    rep = (<SVTermDirectRep?>t.torep(None,None,"gate"))
 #                    repcel.pyterm_references.append(rep)
 #                    reps_at_order.push_back( rep.c_term )
 #                repcel.reps[order] = reps_at_order
 #            #OLD
-#            #reps = [ [t.torep(None,None,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base)]
+#            #reps = [ [t.torep(None,None,"gate") for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base)]
 #            #                                for order in range(calc.max_order+1) ]
 #            op_term_reps[ glmap[glbl] ] = repcel.reps
 #            repcache[glbl] = repcel
 #
 #    #OLD
-#    #op_term_reps = { glmap[glbl]: [ [t.torep(None,None,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base)]
+#    #op_term_reps = { glmap[glbl]: [ [t.torep(None,None,"gate") for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base)]
 #    #                                  for order in range(calc.max_order+1) ]
 #    #                   for glbl in distinct_gateLabels }
 #
@@ -4001,20 +4001,20 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #        rho_term_reps = repcel.reps
 #        for order in range(calc.max_order+1):
 #            treps = rho_term_reps[order]
-#            coeffs_array = calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base)
+#            coeffs_array = calc.sos.prep(rholabel).get_direct_order_coeffs(order,order_base)
 #            coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #            for i in range(treps.size()):
 #                treps[i]._coeff = coeffs[i]
 #                if reset_term_weights: treps[i]._magnitude = abs(coeffs[i])
 #
 #        #for order,treps in enumerate(rho_term_reps):
-#        #    for coeff,trep in zip(calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
+#        #    for coeff,trep in zip(calc.sos.prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
 #        #        trep.set_coeff(coeff)
 #    else:
 #        repcel = RepCacheEl(calc.max_order)
 #        for order in range(calc.max_order+1):
 #            reps_at_order = vector[SVTermDirectCRep_ptr](0)
-#            for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order,order_base):
+#            for t in calc.sos.prep(rholabel).get_direct_order_terms(order,order_base):
 #                rep = (<SVTermDirectRep?>t.torep(None,None,"prep"))
 #                repcel.pyterm_references.append(rep)
 #                reps_at_order.push_back( rep.c_term )
@@ -4023,7 +4023,7 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #        repcache[rholabel] = repcel
 #
 #        #OLD
-#        #rho_term_reps = [ [t.torep(None,None,"prep") for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order,order_base)]
+#        #rho_term_reps = [ [t.torep(None,None,"prep") for t in calc.sos.prep(rholabel).get_direct_order_terms(order,order_base)]
 #        #              for order in range(calc.max_order+1) ]
 #        #repcache[rholabel] = rho_term_reps
 #
@@ -4037,10 +4037,10 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #            cur_indices = [] # the Evec-index corresponding to each term rep
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
-#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base) ]
+#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base) ]
 #
 #                treps = repcel.reps[order]
-#                coeffs_array = calc.sos.get_effect(elbl).get_direct_order_coeffs(order,order_base)
+#                coeffs_array = calc.sos.effect(elbl).get_direct_order_coeffs(order,order_base)
 #                coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #                for i in range(treps.size()):
 #                    treps[i]._coeff = coeffs[i]
@@ -4050,7 +4050,7 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #
 #                #OLD
 #                #term_reps = repcache[elbl][order]
-#                #for coeff,trep in zip(calc.sos.get_effect(elbl).get_direct_order_coeffs(order,order_base), term_reps):
+#                #for coeff,trep in zip(calc.sos.effect(elbl).get_direct_order_coeffs(order,order_base), term_reps):
 #                #    trep.set_coeff(coeff)
 #                #cur_term_reps.extend( term_reps )
 #                # cur_indices.extend( [j]*len(term_reps) )
@@ -4068,14 +4068,14 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
 #                treps = vector[SVTermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
-#                for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base):
+#                for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base):
 #                    rep = (<SVTermDirectRep?>t.torep(None,None,"effect"))
 #                    repcel.pyterm_references.append(rep)
 #                    treps.push_back( rep.c_term )
 #                    reps_at_order.push_back( rep.c_term )
 #                repcel.reps[order] = treps
 #                cur_indices.extend( [j]*treps.size() )
-#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base) ]
+#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base) ]
 #                #repcache[elbl][order] = term_reps
 #                #cur_term_reps.extend( term_reps )
 #                #cur_indices.extend( [j]*len(term_reps) )
@@ -4579,12 +4579,12 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).get_taylor_order_terms(order, mpv)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).get_taylor_order_terms(order, mpv)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -4593,7 +4593,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in calc.sos.effect(elbl).get_taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -4623,7 +4623,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
         E_cindices, numEs, calc.max_order, mpv, vpi, nqubits, <bool>fastmode)
 
-    return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
+    return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
 cdef vector[PolyCRep*] sb_prs_as_polys(
@@ -4663,7 +4663,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
         prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](), max_poly_vars, vindices_per_int)
         # create empty polys - maybe overload constructor for this?
         # these PolyCReps are alloc'd here and returned - it is the job of the caller to
-        #  free them (or assign them to new PolyRep wrapper objs)
+        #  free them (or assign them to new PolynomialRep wrapper objs)
 
     for order in range(max_order+1):
         #print "DB CYTHON: pr_as_poly order=",INT(order)
