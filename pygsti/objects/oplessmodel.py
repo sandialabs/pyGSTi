@@ -14,7 +14,6 @@ import numpy as _np
 import collections as _collections
 
 from .model import Model as _Model
-from .evaltree import EvalTree as _EvalTree
 from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
 from .circuit import Circuit as _Circuit
 from .polynomial import Polynomial as _Polynomial
