@@ -10,7 +10,9 @@
 
 import numpy as _np
 import copy as _copy
-from . import analysis as _analysis
+
+#from . import analysis as _analysis  # Doesn't exist!
+_analysis = None  # TODO - fix or remove this dependency
 
 
 def create_summary_datasets(ds, spec, datatype='adjusted', verbosity=1):
