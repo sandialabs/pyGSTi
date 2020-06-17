@@ -976,7 +976,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
     evalTree, lookup, _ = model.bulk_evaltree(circuits)
     dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
-    op_dim = model.dimension()
+    op_dim = model.dim
     fd = op_dim**2  # flattened gate dimension
 
     nOrigStrs = len(circuits)
@@ -1055,7 +1055,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
     nGerms = len(germs_to_test)
     germToPowL = [germ * length for germ in germs_to_test]
 
-    op_dim = model.dimension()
+    op_dim = model.dim
     evt, lookup, _ = model.bulk_evaltree(germToPowL)
 
     # shape (nGerms*flattened_op_dim, vec_model_dim)
