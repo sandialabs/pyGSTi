@@ -442,52 +442,46 @@ class Circuit(object):
                     assert(num_lines >= 0), "`num_lines` must be >= 0!"
                     if len(layer_labels) > 0:
                         assert(num_lines > 0), "`num_lines` must be > 0!"
-                    self._line_labels = tuple(range(num_lines))
+                    my_line_labels = tuple(range(num_lines))
                 elif len(layer_labels) > 0 or not editable:
-                    self._line_labels = ('*',)  # special single line-label when no line labels are given
+                    my_line_labels = ('*',)  # special single line-label when no line labels are given
                 else:
-                    self._line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
+                    my_line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
             else:
-                self._line_labels = tuple(sorted(explicit_lbls))
+                my_line_labels = tuple(sorted(explicit_lbls))
         else:
             explicit_lbls = None
-            self._line_labels = tuple(line_labels)
+            my_line_labels = tuple(line_labels)
 
-        if (num_lines is not None) and (num_lines != len(self.line_labels)):
-            if num_lines > len(self.line_labels) and \
-               set(self.line_labels).issubset(set(range(num_lines))):
+        if (num_lines is not None) and (num_lines != len(my_line_labels)):
+            if num_lines > len(my_line_labels) and \
+               set(my_line_labels).issubset(set(range(num_lines))):
                 # special case where we just add missing integer-labeled line(s)
-                self._line_labels = tuple(range(num_lines))
+                my_line_labels = tuple(range(num_lines))
             else:
                 raise ValueError("`num_lines` was expected to be %d but equals %d!" %
-                                 (len(self.line_labels), num_lines))
+                                 (len(my_line_labels), num_lines))
 
         if check:
             if explicit_lbls is None:
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
                 explicit_lbls = _accumulate_explicit_sslbls(layer_labels_objs)
-            if not set(explicit_lbls).issubset(self.line_labels):
+            if not set(explicit_lbls).issubset(my_line_labels):
                 raise ValueError("line labels must contain at least %s" % str(explicit_lbls))
 
-        #Set self._labels, which is either a nested list of simple labels (non-static case)
+        #Set compute self._labels, which is either a nested list of simple labels (non-static case)
         #  or a tuple of Label objects (static case)
         if not editable:
             if layer_labels_objs is None:
                 layer_labels_objs = tuple(map(to_label, layer_labels))
-            self._labels = layer_labels_objs
+            labels = layer_labels_objs
         else:
-            self._labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
-                            for layer_lbl in layer_labels]
+            labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
+                      for layer_lbl in layer_labels]
 
-        #Set self._static, _reps, _name
-        self._static = not editable
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
-        self._name = name  # can be None
-        self._str = stringrep if self._static else None  # can be None (lazy generation)
-        self._times = None  # for FUTURE expansion
-        self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
+        #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep)
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
@@ -506,6 +500,23 @@ class Circuit(object):
         #    self._reps = layer_labels.reps
         #    self._name = name
         #    self._static = not editable
+
+    @classmethod
+    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None):
+        ret = cls.__new__(cls)
+        ret._bare_init(labels, line_labels, editable, name, stringrep)
+        return ret
+
+    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None):
+        self._labels = labels
+        self._line_labels = line_labels
+        self._static = not editable
+        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
+        self._name = name  # can be None
+        self._str = stringrep if self._static else None  # can be None (lazy generation)
+        self._times = None  # for FUTURE expansion
+        self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
 
     def to_label(self, nreps=1):
         """
@@ -791,7 +802,7 @@ class Circuit(object):
             lines = self.line_labels
         elif isinstance(lines, slice):
             if lines.start is None and lines.stop is None:
-                lines = ()
+                lines = self.line_labels
             else:
                 lines = _slct.indices(lines)
         elif not isinstance(lines, (list, tuple)):
@@ -898,13 +909,20 @@ class Circuit(object):
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
         """
-
         nonint_layers = not isinstance(layers, int)
+
+        #Shortcut for common case when lines == None and when we're only taking a layer slice/index
+        if lines is None:
+            assert(layers is not None)
+            if nonint_layers is False: return self.layertup[layers]
+            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                return Circuit._fastinit(self._labels[layers], self.line_labels, not self._static)
+
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit((), lines, None, not self._static, stringrep=None, check=False) \
-                if nonint_layers else None  # zero-area region
+            return Circuit._fastinit(() if self._static else [],
+                                     lines, not self._static) if nonint_layers else None  # zero-area region
 
         ret = []
         if self._static:
@@ -931,7 +949,7 @@ class Circuit(object):
         if nonint_layers:
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
-            return Circuit(ret, lines, None, not self._static, stringrep=None, check=False)
+            return Circuit._fastinit(tuple(ret) if self._static else ret, lines, not self._static)
         else:
             return _Label(ret[0])
 
@@ -1485,7 +1503,7 @@ class Circuit(object):
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
                 serial_lbls.append(c)
-        return Circuit(serial_lbls, self.line_labels, editable=False, check=False)
+        return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -1569,7 +1587,7 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
-        return Circuit(parallel_lbls, self.line_labels, editable=False, check=False)
+        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
 
     def expand_subcircuits(self):
         """
@@ -1903,11 +1921,11 @@ class Circuit(object):
         if not self._static:
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
-            return Circuit([new_layer if lbl == old_layer else lbl
-                            for lbl in cpy._labels], self.line_labels)
+            return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
+                                            for lbl in cpy._labels]), self.line_labels, editable=False)
         else:  # static case: so self._labels is a tuple of Labels
-            return Circuit([new_layer if lbl == old_layer else lbl
-                            for lbl in self._labels], self.line_labels)
+            return Circuit(tuple([new_layer if lbl == old_layer else lbl
+                                  for lbl in self._labels]), self.line_labels, editable=False)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -1936,7 +1954,7 @@ class Circuit(object):
                 while label in layers:
                     i = layers.index(label)
                     layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit(layers, self.line_labels)
+            return Circuit._fastinit(layers, self.line_labels, editable=False)
 
         else:  # static case: so self._labels is a tuple of Labels
             if not alias_dict: return self  # no copy needed b/c static
@@ -1946,7 +1964,7 @@ class Circuit(object):
                 while label in layers:
                     i = layers.index(label)
                     layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit(layers, self.line_labels)
+            return Circuit._fastinit(layers, self.line_labels, editable=False)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
