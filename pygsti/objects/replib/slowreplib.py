@@ -1659,7 +1659,7 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
 
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
-    for iDest, iStart, remainder, iCache in layout_atom.table:
+    for iDest, iStart, remainder, iCache in layout_atom.table.contents:
         remainder = remainder.circuit_without_povm.layertup
 
         if iStart is None:  # then first element of remainder is a state prep label
@@ -1798,7 +1798,7 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
 
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
-    for iDest, iStart, remainder, iCache in layout_atom.table:
+    for iDest, iStart, remainder, iCache in layout_atom.table.contents:
         remainder = remainder.circuit_without_povm.layertup
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
         rholabel = remainder[0]; remainder = remainder[1:]

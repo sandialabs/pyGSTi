@@ -22,7 +22,6 @@ from ..tools import slicetools as _slct
 from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
-from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
