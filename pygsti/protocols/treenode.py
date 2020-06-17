@@ -65,7 +65,7 @@ class TreeNode(object):
     def _init_children(self, dirname, meta_subdir=None, **kwargs):
         dirname = _pathlib.Path(dirname)
         edesign_dir = dirname / 'edesign'  # because subdirs.json is always & only in 'edesign'
-        with open(edesign_dir / 'subdirs.json', 'r') as f:
+        with open(str(edesign_dir / 'subdirs.json'), 'r') as f:
             meta = _json.load(f)
 
         child_dirs = {}
@@ -243,7 +243,7 @@ class TreeNode(object):
             subdirs = {}
             subdirs['directories'] = {dirname: subname for subname, dirname in self._dirs.items()}
             # write self._dirs "backwards" b/c json doesn't allow tuple-like keys (sometimes keys are tuples)
-            with open(dirname / 'edesign' / 'subdirs.json', 'w') as f:
+            with open(str(dirname / 'edesign' / 'subdirs.json'), 'w') as f:
                 _json.dump(subdirs, f)
 
         for nm, val in self._vals.items():  # only write *existing* values
