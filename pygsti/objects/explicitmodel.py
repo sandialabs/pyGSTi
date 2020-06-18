@@ -1437,8 +1437,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return tuple(self.instruments[inst_lbl].keys())
 
-    def _reinit_layerop_cache(self):
-        self._layerop_cache.clear()
+    def _reinit_opcaches(self):
+        self._opcaches.clear()
 
         # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
         simplified_effects = _collections.OrderedDict()
@@ -1447,18 +1447,17 @@ class ExplicitOpModel(_mdl.OpModel):
                 simplified_effects[k] = e
 
         simplified_ops = _collections.OrderedDict()
-        for k, g in self.operations.items(): simplified_ops[k] = g
         for inst_lbl, inst in self.instruments.items():
             for k, g in inst.simplify_operations(inst_lbl).items():
                 simplified_ops[k] = g
 
-        self._layerop_cache.update(simplified_effects)
-        self._layerop_cache.update(simplified_ops)
+        self._opcaches['povm-layers'] = simplified_effects
+        self._opcaches['op-layers'] = simplified_ops
 
 
 class ExplicitLayerRules(_LayerRules):
     """ Rule: layer must appear explicitly as a "primitive op" """
-    def prep_layer_operator(self, model, layerlbl, cache):
+    def prep_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1471,10 +1470,10 @@ class ExplicitLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        # No need for caching preps
         return model.preps[layerlbl]  # don't cache this - it's not a new operator
 
-    def povm_layer_operator(self, model, layerlbl, cache):
+    def povm_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1487,10 +1486,10 @@ class ExplicitLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
         return model.povms[layerlbl]  # don't cache this - it's not a new operator
 
-    def operation_layer_operator(self, model, layerlbl, cache):
+    def operation_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1503,11 +1502,11 @@ class ExplicitLayerRules(_LayerRules):
         -------
         LinearOperator
         """
-        if layerlbl in cache: return cache[layerlbl]
+        if layerlbl in caches['op-layers']: return caches['op-layers'][layerlbl]
         if isinstance(layerlbl, _CircuitLabel):
             dense = isinstance(model._sim, _matrixfwdsim.MatrixForwardSimulator)  # True => create dense-matrix gates
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)
-            cache[layerlbl] = op
+            caches['op-layers'][layerlbl] = op
             return op
         else:
             return model.operations[layerlbl]

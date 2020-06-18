@@ -1215,7 +1215,7 @@ class CloudNoiseLayerRules(_LayerRules):
         self.dense_rep = dense_rep
         # can't create dense-rep LindbladOps with dense_rep=False
 
-    def prep_layer_operator(self, model, layerlbl, cache):
+    def prep_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1228,10 +1228,10 @@ class CloudNoiseLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        #No cache for preps
         return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def povm_layer_operator(self, model, layerlbl, cache):
+    def povm_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1244,7 +1244,8 @@ class CloudNoiseLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        # caches['povm-layers'] *are* just complete layers
+        if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
         if layerlbl in model.povm_blks['layers']:
             return model.povm_blks['layers'][layerlbl]
         else:
@@ -1258,13 +1259,13 @@ class CloudNoiseLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                cache.update(mpovm.simplify_effects(mpovm_lbl))
-                assert(layerlbl in cache), "Failed to create marginalized effect!"
-                return cache[layerlbl]
+                caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
+                return caches['povm-layers'][layerlbl]
             else:
                 raise KeyError(f"Could not build povm/effect for {layerlbl}!")
 
-    def operation_layer_operator(self, model, layerlbl, cache):
+    def operation_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -1277,12 +1278,13 @@ class CloudNoiseLayerRules(_LayerRules):
         -------
         LinearOperator
         """
-        if layerlbl in cache: return cache[layerlbl]
+        #Note: cache uses 'op-layers' for *simple target* layers, not complete ones
+        if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)
-            cache[layerlbl] = op
+            caches['complete-layers'][layerlbl] = op
             return op
 
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
@@ -1298,14 +1300,14 @@ class CloudNoiseLayerRules(_LayerRules):
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self._layer_component_targetop(model, l, cache) for l in components],
+            targetOp = Composed([self._layer_component_targetop(model, l, caches['op-layers']) for l in components],
                                 dim=model.dim, evotype=model.evotype)
-        else: targetOp = self._layer_component_targetop(model, components[0], cache)
+        else: targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
         ops_to_compose = [targetOp]
 
         if self.errcomp_type == "gates":
             if self.add_idle_noise: ops_to_compose.append(model.operation_blks['layers']['globalIdle'])
-            component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, cache)
+            component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, caches['op-cloudnoise'])
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
@@ -1319,7 +1321,7 @@ class CloudNoiseLayerRules(_LayerRules):
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [model.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
-            errorGens.extend(self._layer_component_cloudnoises(model, components, cache))
+            errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
                     error = Lindblad(None, Sum(errorGens, dim=model.dim, evotype=model.evotype),
@@ -1332,7 +1334,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         ret = Composed(ops_to_compose, dim=model.dim, evotype=model.evotype)
         model._init_virtual_obj(ret)  # so ret's gpindices get set
-        cache[layerlbl] = ret  # cache the final label value
+        caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
 
     def _layer_component_targetop(self, model, complbl, cache):
@@ -1349,7 +1351,7 @@ class CloudNoiseLayerRules(_LayerRules):
         LinearOperator
         """
         if complbl in cache:
-            return cache[complbl]
+            return cache[complbl]  # caches['op-layers'] would hold "simplified" instrument members
         
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
@@ -1380,7 +1382,9 @@ class CloudNoiseLayerRules(_LayerRules):
         """
         ret = []
         for complbl in complbl_list:
-            if complbl in model.operation_blks['cloudnoise']:
+            if complbl in cache:
+                ret.append(cache[complbl])  # caches['cloudnoise-layers'] would hold "simplified" instrument members
+            elif complbl in model.operation_blks['cloudnoise']:
                 ret.append(model.operation_blks['cloudnoise'][complbl])
             else:
                 try:

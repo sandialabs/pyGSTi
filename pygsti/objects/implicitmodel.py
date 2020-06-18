@@ -348,24 +348,27 @@ class ImplicitOpModel(_mdl.OpModel):
                 return tuple(idict[inst_lbl].keys())
         raise KeyError("No instrument labeled %s!" % inst_lbl)
 
-    def _reinit_layerop_cache(self):
-        self._layerop_cache.clear()
+    def _reinit_opcaches(self):
+        self._opcaches.clear()
 
         # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
         simplified_effect_blks = _collections.OrderedDict()
         for povm_dict_lbl, povmdict in self.povm_blks.items():
-            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+            simplified_effect_blks['povm-' + povm_dict_lbl] = _collections.OrderedDict(
                 [(k, e) for povm_lbl, povm in povmdict.items()
                  for k, e in povm.simplify_effects(povm_lbl).items()])
 
-        simplified_op_blks = self.operation_blks.copy()  # no compilation needed
+        simplified_op_blks = _collections.OrderedDict()
+        for op_dict_lbl in self.operation_blks:
+            simplified_op_blks['op-' + op_dict_lbl] = {}  # create *empty* caches corresponding to op categories
         for inst_dict_lbl, instdict in self.instrument_blks.items():
-            if inst_dict_lbl not in simplified_op_blks:  # only create when needed
-                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+            if 'op-' + inst_dict_lbl not in simplified_op_blks:  # only create when needed
+                simplified_op_blks['op-' + inst_dict_lbl] = _collections.OrderedDict()
             for inst_lbl, inst in instdict.items():
                 for k, g in inst.simplify_operations(inst_lbl).items():
-                    simplified_op_blks[inst_dict_lbl][k] = g
+                    simplified_op_blks['op-' + inst_dict_lbl][k] = g
 
         #FUTURE: allow cache "cateogories"?  Now we just flatten the work we did above:
-        for dct in simplified_effect_blks.values(): self._layerop_cache.update(dct)
-        for dct in simplified_op_blks.values(): self._layerop_cache.update(dct)
+        self._opcaches.update(simplified_effect_blks)
+        self._opcaches.update(simplified_op_blks)
+        self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed

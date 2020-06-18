@@ -403,7 +403,7 @@ class OpModel(Model):
         super(OpModel, self).__init__(self.state_space_labels)  # do this as soon as possible
 
         self._layer_rules = layer_rules if (layer_rules is not None) else _LayerRules()
-        self._layerop_cache = {}  # for all (any type) of non-primitive layer operation
+        self._opcaches = {}  # dicts of non-primitive operations (organized by derived class)
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
@@ -577,7 +577,7 @@ class OpModel(Model):
         if self._need_to_rebuild:
             self._rebuild_paramvec()
             self._need_to_rebuild = False
-            self._reinit_layerop_cache()  # changes to parameter vector structure invalidate cached ops
+            self._reinit_opcaches()  # changes to parameter vector structure invalidate cached ops
 
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
@@ -608,7 +608,7 @@ class OpModel(Model):
                 #object is known to be consistent with _paramvec
 
             self.dirty = False
-            self._reinit_layerop_cache()  # changes to parameter vector structure invalidate cached ops
+            self._reinit_opcaches()  # changes to parameter vector structure invalidate cached ops
 
         if OpModel._pcheck: self._check_paramvec()
 
@@ -786,6 +786,11 @@ class OpModel(Model):
         for _, obj in self._iter_parameterized_objs():
             obj.from_vector(v[obj.gpindices], close, dirty_value=False)
             # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
+
+        # Call from_vector on elements of the cache
+        for opcache in self._opcaches.values():
+            for obj in opcache.values():
+                obj.from_vector(v[obj.gpindices], close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
 
@@ -1114,15 +1119,15 @@ class OpModel(Model):
         if typ == 'auto':
             for fn in fns.values():
                 try:
-                    return fn(self, layerlbl, self._layerop_cache)
+                    return fn(self, layerlbl, self._opcaches)
                 except KeyError: pass  # Indicates failure to create op: try next type
             raise ValueError(f"Cannot create operator for non-primitive circuit layer: {layerlbl}")
         else:
-            return fns[typ](self, layerlbl, self._layerop_cache)
+            return fns[typ](self, layerlbl, self._opcaches)
 
-    def _reinit_layerop_cache(self):
-        """ Called when parameter vector structure changes and self._layerop_cache should be cleared & re-initialized """
-        self._layerop_cache.clear()
+    def _reinit_opcaches(self):
+        """Called when parameter vector structure changes and self._opcaches should be cleared & re-initialized"""
+        self._opcaches.clear()
 
     def probabilities(self, circuit, outcomes=None, time=None):
         """
@@ -1198,7 +1203,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
-        copy_into._layerop_cache = {}  # don't copy opcache
+        copy_into._opcaches = {}  # don't copy opcaches
         copy_into._sim = self.sim.copy()  # not actually difficult - just so we use the object's copy() method
         super(OpModel, self)._init_copy(copy_into)
 

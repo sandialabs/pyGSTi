@@ -869,7 +869,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
 class _SimpleCompLayerRules(_LayerRules):
 
-    def prep_layer_operator(self, model, layerlbl, cache):
+    def prep_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -882,10 +882,10 @@ class _SimpleCompLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        #No cache for preps
         return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def povm_layer_operator(self, model, layerlbl, cache):
+    def povm_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -898,7 +898,8 @@ class _SimpleCompLayerRules(_LayerRules):
         -------
         POVM or SPAMVec
         """
-        if layerlbl in cache: return cache[layerlbl]
+        # caches['povm-layers'] *are* just complete layers
+        if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
         if layerlbl in model.povm_blks['layers']:
             return model.povm_blks['layers'][layerlbl]
         else:
@@ -912,13 +913,13 @@ class _SimpleCompLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                cache.update(mpovm.simplify_effects(mpovm_lbl))
-                assert(layerlbl in cache), "Failed to create marginalized effect!"
-                return cache[layerlbl]
+                caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
+                return caches['povm-layers'][layerlbl]
             else:
                 raise KeyError(f"Could not build povm/effect for {layerlbl}!")
 
-    def operation_layer_operator(self, model, layerlbl, cache):
+    def operation_layer_operator(self, model, layerlbl, caches):
         """
         Create the operator corresponding to `layerlbl`.
 
@@ -931,7 +932,7 @@ class _SimpleCompLayerRules(_LayerRules):
         -------
         LinearOperator
         """
-        if layerlbl in cache: return cache[layerlbl]
+        if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
@@ -943,15 +944,16 @@ class _SimpleCompLayerRules(_LayerRules):
         #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
-            ret = self._layer_component_operation(model, components[0], cache, dense)
+            ret = self._layer_component_operation(model, components[0], caches['op-layers'], dense)
         else:
             gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            ret = Composed(gblIdle + [self._layer_component_operation(model, l, cache, dense) for l in components],
+            ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
+                                      for l in components],
                            dim=model.dim, evotype=model.evotype)
             model._init_virtual_obj(ret)  # so ret's gpindices get set
 
-        cache[layerlbl] = ret  # cache the final label value
+        caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
 
     def _layer_component_operation(self, model, complbl, cache, dense):
