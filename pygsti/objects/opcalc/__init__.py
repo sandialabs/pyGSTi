@@ -34,7 +34,7 @@ except ImportError:
 
 
 def safe_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-    """Typechecking wrapper for :function:`bulk_eval_compact_polys`.
+    """Typechecking wrapper for :function:`bulk_eval_compact_polynomials`.
 
     The underlying method has two implementations: one for real-valued
     `ctape`, and one for complex-valued. This wrapper will dynamically
@@ -44,10 +44,10 @@ def safe_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
     directly; if not.
     """
     if _np.iscomplexobj(ctape):
-        ret = bulk_eval_compact_polys_complex(vtape, ctape, paramvec, dest_shape)
+        ret = bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, dest_shape)
         im_norm = _np.linalg.norm(_np.imag(ret))
         if im_norm > 1e-6:
             print("WARNING: norm(Im part) = {:g}".format(im_norm))
     else:
-        ret = bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+        ret = bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape)
     return _np.real(ret)

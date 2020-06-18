@@ -14,7 +14,7 @@ import numpy as _np
 from numpy import prod as float_product
 
 
-def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape, dtype="auto"):
+def bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dtype="auto"):
     """
     Evaluate many compact polynomial forms at a given set of variable values.
 
@@ -73,12 +73,12 @@ def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape, dtype="auto"):
 
 
 # These have separate cython implementations but the same python implementation, so we'll simply alias the names
-bulk_eval_compact_polys_complex = bulk_eval_compact_polys
+bulk_eval_compact_polynomials_complex = bulk_eval_compact_polynomials
 
 
-def abs_sum_bulk_eval_compact_polys_complex(vtape, ctape, paramvec, dest_size, **kwargs):
-    """Equivalent to np.sum(np.abs(bulk_eval_compact_polys_complex(.)))"""
-    return _np.sum(_np.abs(bulk_eval_compact_polys_complex(vtape, ctape, paramvec, (dest_size,), **kwargs)))
+def abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, dest_size, **kwargs):
+    """Equivalent to np.sum(np.abs(bulk_eval_compact_polynomials_complex(.)))"""
+    return _np.sum(_np.abs(bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, (dest_size,), **kwargs)))
 
 
 def compact_deriv(vtape, ctape, wrt_params):
