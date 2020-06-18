@@ -1996,13 +1996,6 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
 
-    #DEBUG:
-    for glbl in distinct_gateLabels:
-        for order in range(fwdsim.max_order + 1):
-            op = fwdsim.model.circuit_layer_operator(glbl, 'op')
-            terms = op.taylor_order_terms(order, mpv)
-            reps = [t.torep() for t in terms]
-
     op_term_reps = {glbl:
                     [
                         [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]

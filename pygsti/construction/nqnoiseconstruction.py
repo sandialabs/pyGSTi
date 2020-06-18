@@ -1161,9 +1161,8 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                         #test adding all effect labels - get the overall increase in rank due to this fidpair
                         for k, (elbl, p, q) in enumerate(zip(effect_lbls, ps, qs)):
                             amped = p + -1 * q  # the amplified poly
-                            test = _np.array([[amped.deriv(iParam).evaluate(dummy)
+                            Jrows[k, :] = _np.array([[amped.deriv(iParam).evaluate(dummy)
                                                for iParam in _slct.to_array(wrt_params)]])
-                            Jrows[k, :] = test
                         Jtest = _np.concatenate((J, Jrows), axis=0)
                         testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                         rankInc = testRank - Jrank
