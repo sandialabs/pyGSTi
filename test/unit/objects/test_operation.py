@@ -8,6 +8,7 @@ from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, \
     ExplicitOpModel, Basis, FullSPAMVec, TPInstrument
 from pygsti.tools import basisconstructors as bc
 import pygsti.construction as pc
+from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
 import pygsti.objects.operation as op
 
 
@@ -257,7 +258,7 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc._create_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
+        return _create_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
 
     def test_composition(self):
         gate_linear = LinearlyParamOpTester.build_gate()
@@ -313,7 +314,7 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         # 'I' was 'D', 'full' was 'linear'
-        return pc._create_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
+        return _create_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
 
     def test_constructor_raises_on_real_param_constraint_violation(self):
         baseMx = np.zeros((2, 2))
@@ -363,7 +364,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc._create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="TP")
+        return _create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="TP")
 
     def test_composition(self):
         gate_full = FullOpTester.build_gate()
@@ -412,7 +413,7 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return pc._create_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
+        return _create_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
 
     def test_compose(self):
         gate_full = FullOpTester.build_gate()
@@ -752,7 +753,7 @@ class StochasticNoiseOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[2, 2] = expected_mx[3, 3] = 0.98  # = 2*(0.1^2)
         self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
-        rho = pc._create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
                                0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
@@ -767,6 +768,6 @@ class DepolarizeOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[1, 1] = expected_mx[2, 2] = expected_mx[3, 3] = 0.96  # = 4*(0.1^2)
         self.assertArraysAlmostEqual(dop.to_dense(), expected_mx)
 
-        rho = pc._create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
         # b/c both X and Y dephasing rates => 0.01 reduction
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)

@@ -1417,7 +1417,7 @@ class LabelTupWithArgs(Label, tuple):
         """
         return LabelTupWithArgs(newname, self.sslbls, self.time, self.args) if (self.name == oldname) else self
 
-    def issimple(self):
+    def is_simple(self):
         """
         Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
 

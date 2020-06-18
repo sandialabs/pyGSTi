@@ -103,7 +103,6 @@ class ReportableQty(object):
         """
         self._value = value
         self._errbar = errbar
-
         self.nonMarkovianEBs = non_markovian_ebs
 
     def __str__(self):

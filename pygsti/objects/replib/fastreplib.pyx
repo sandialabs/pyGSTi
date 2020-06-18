@@ -2374,7 +2374,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
                 outcome = datarow_outcomes[l]
 
                 for gl in remainder:
-                    op = opcache[gl] if (gl in opcache) else model.circuit_layer_operator(gl, 'op')
+                    op = model.circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
                     op.set_time(t); t += gl.time  # time in gate label == gate duration?
                     rho = op._rep.acton(rho)
 
@@ -3957,31 +3957,31 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #            op_term_reps[ glmap[glbl] ] = repcel.reps
 #            for order in range(calc.max_order+1):
 #                treps = repcel.reps[order]
-#                coeffs_array = calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base)
+#                coeffs_array = calc.sos.operation(glbl).get_direct_order_coeffs(order,order_base)
 #                coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #                for i in range(treps.size()):
 #                    treps[i]._coeff = coeffs[i]
 #                    if reset_term_weights: treps[i]._magnitude = abs(coeffs[i])
 #            #for order,treps in enumerate(op_term_reps[ glmap[glbl] ]):
-#            #    for coeff,trep in zip(calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base), treps):
+#            #    for coeff,trep in zip(calc.sos.operation(glbl).get_direct_order_coeffs(order,order_base), treps):
 #            #        trep.set_coeff(coeff)
 #        else:
 #            repcel = RepCacheEl(calc.max_order)
 #            for order in range(calc.max_order+1):
 #                reps_at_order = vector[SVTermDirectCRep_ptr](0)
-#                for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base):
+#                for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base):
 #                    rep = (<SVTermDirectRep?>t.torep(None,None,"gate"))
 #                    repcel.pyterm_references.append(rep)
 #                    reps_at_order.push_back( rep.c_term )
 #                repcel.reps[order] = reps_at_order
 #            #OLD
-#            #reps = [ [t.torep(None,None,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base)]
+#            #reps = [ [t.torep(None,None,"gate") for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base)]
 #            #                                for order in range(calc.max_order+1) ]
 #            op_term_reps[ glmap[glbl] ] = repcel.reps
 #            repcache[glbl] = repcel
 #
 #    #OLD
-#    #op_term_reps = { glmap[glbl]: [ [t.torep(None,None,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order,order_base)]
+#    #op_term_reps = { glmap[glbl]: [ [t.torep(None,None,"gate") for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base)]
 #    #                                  for order in range(calc.max_order+1) ]
 #    #                   for glbl in distinct_gateLabels }
 #
@@ -3992,20 +3992,20 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #        rho_term_reps = repcel.reps
 #        for order in range(calc.max_order+1):
 #            treps = rho_term_reps[order]
-#            coeffs_array = calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base)
+#            coeffs_array = calc.sos.prep(rholabel).get_direct_order_coeffs(order,order_base)
 #            coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #            for i in range(treps.size()):
 #                treps[i]._coeff = coeffs[i]
 #                if reset_term_weights: treps[i]._magnitude = abs(coeffs[i])
 #
 #        #for order,treps in enumerate(rho_term_reps):
-#        #    for coeff,trep in zip(calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
+#        #    for coeff,trep in zip(calc.sos.prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
 #        #        trep.set_coeff(coeff)
 #    else:
 #        repcel = RepCacheEl(calc.max_order)
 #        for order in range(calc.max_order+1):
 #            reps_at_order = vector[SVTermDirectCRep_ptr](0)
-#            for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order,order_base):
+#            for t in calc.sos.prep(rholabel).get_direct_order_terms(order,order_base):
 #                rep = (<SVTermDirectRep?>t.torep(None,None,"prep"))
 #                repcel.pyterm_references.append(rep)
 #                reps_at_order.push_back( rep.c_term )
@@ -4014,7 +4014,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #        repcache[rholabel] = repcel
 #
 #        #OLD
-#        #rho_term_reps = [ [t.torep(None,None,"prep") for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order,order_base)]
+#        #rho_term_reps = [ [t.torep(None,None,"prep") for t in calc.sos.prep(rholabel).get_direct_order_terms(order,order_base)]
 #        #              for order in range(calc.max_order+1) ]
 #        #repcache[rholabel] = rho_term_reps
 #
@@ -4028,10 +4028,10 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #            cur_indices = [] # the Evec-index corresponding to each term rep
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
-#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base) ]
+#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base) ]
 #
 #                treps = repcel.reps[order]
-#                coeffs_array = calc.sos.get_effect(elbl).get_direct_order_coeffs(order,order_base)
+#                coeffs_array = calc.sos.effect(elbl).get_direct_order_coeffs(order,order_base)
 #                coeffs = <DCOMPLEX*?>(coeffs_array.data)
 #                for i in range(treps.size()):
 #                    treps[i]._coeff = coeffs[i]
@@ -4041,7 +4041,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #
 #                #OLD
 #                #term_reps = repcache[elbl][order]
-#                #for coeff,trep in zip(calc.sos.get_effect(elbl).get_direct_order_coeffs(order,order_base), term_reps):
+#                #for coeff,trep in zip(calc.sos.effect(elbl).get_direct_order_coeffs(order,order_base), term_reps):
 #                #    trep.set_coeff(coeff)
 #                #cur_term_reps.extend( term_reps )
 #                # cur_indices.extend( [j]*len(term_reps) )
@@ -4059,14 +4059,14 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
 #                treps = vector[SVTermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
-#                for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base):
+#                for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base):
 #                    rep = (<SVTermDirectRep?>t.torep(None,None,"effect"))
 #                    repcel.pyterm_references.append(rep)
 #                    treps.push_back( rep.c_term )
 #                    reps_at_order.push_back( rep.c_term )
 #                repcel.reps[order] = treps
 #                cur_indices.extend( [j]*treps.size() )
-#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order,order_base) ]
+#                #term_reps = [t.torep(None,None,"effect") for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base) ]
 #                #repcache[elbl][order] = term_reps
 #                #cur_term_reps.extend( term_reps )
 #                #cur_indices.extend( [j]*len(term_reps) )
