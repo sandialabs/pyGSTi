@@ -2486,7 +2486,8 @@ cdef vector[vector[SVTermCRep_ptr]] sv_extract_cterms(python_termrep_lists, INT 
     return ret
 
 
-def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                          comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -2500,18 +2501,18 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_lim
 
     cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
     #cdef INT mpo = fwdsim.max_order*2 #max_polynomial_order
-    cdef INT vpi = fwdsim.polynomial_vindices_per_int
+    cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT order;
     cdef INT numEs = len(elabels)
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                                       for order in range(fwdsim.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                       for order in range(fwdsim.max_order+1) ]
 
     E_term_reps = []
@@ -2520,7 +2521,7 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_lim
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -3086,13 +3087,14 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache, comm=None, mem_limit=None,
+def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                         repcache, circuitsetup_cache, comm=None, mem_limit=None,
                                          pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
 
     cdef INT i
     cdef INT numEs = len(elabels)
     cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
-    cdef INT vpi = fwdsim.polynomial_vindices_per_int
+    cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef CircuitSetupCacheEl cscel;
 
     bHit = (circuit in circuitsetup_cache)
@@ -3193,13 +3195,13 @@ cdef double sv_find_best_pathmagnitude_threshold(
 
 
 def SV_compute_pruned_path_polynomials_given_threshold(
-        threshold, fwdsim, rholabel, elabels, circuit, repcache, circuitsetup_cache,
-        comm=None, mem_limit=None, fastmode=1):
+        threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+        repcache, circuitsetup_cache, comm=None, mem_limit=None, fastmode=1):
 
     cdef INT i
     cdef INT numEs = len(elabels)
     cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
-    cdef INT vpi = fwdsim.polynomial_vindices_per_int
+    cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT stateDim = int(round(np.sqrt(fwdsim.model.dim)))
     cdef double min_term_mag = fwdsim.min_term_mag
     cdef CircuitSetupCacheEl cscel;
@@ -4548,7 +4550,8 @@ cdef vector[vector[SBTermCRep_ptr]] sb_extract_cterms(python_termrep_lists, INT 
     return ret
 
 
-def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                          comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -4562,18 +4565,18 @@ def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_lim
 
     cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
     #cdef INT mpo = fwdsim.max_order*2 #max_polynomial_order
-    cdef INT vpi = fwdsim.polynomial_vindices_per_int
+    cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT order;
     cdef INT numEs = len(elabels)
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                                       for order in range(fwdsim.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                       for order in range(fwdsim.max_order+1) ]
 
     E_term_reps = []
@@ -4582,7 +4585,7 @@ def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, comm=None, mem_lim
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )

@@ -264,8 +264,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             else desired_perr / (10 * max_paths_per_outcome)   # minimum abs(term coeff) to consider
         self.max_paths_per_outcome = max_paths_per_outcome
 
-        self.polynomial_vindices_per_int = None  # set this after (and whenever) our .model is updated (see below)
-
         #DEBUG - for profiling cython routines TODO REMOVE (& references)
         #print("DEBUG: termfwdsim: ",self.max_order, self.pathmagnitude_gap, self.min_term_mag)
         self.times_debug = {'tstartup': 0.0, 'total': 0.0,
@@ -282,7 +280,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _ForwardSimulator.model.fset(self, val)  # set the base class property (self.model)
 
         #Do some additional initialization
-        self.polynomial_vindices_per_int = _Polynomial._vindices_per_int(len(self.model.to_vector()))
         if self.model.evotype not in ("svterm", "cterm"):
             raise ValueError(f"Evolution type {self.model.evotype} is incompatbile with term-based calculations")
 
@@ -523,7 +520,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
     #    return dprobs
 
     ## ----- Find a "minimal" path set (i.e. find thresholds for each circuit -----
-    def _compute_pruned_pathmag_threshold(self, rholabel, elabels, circuit,
+    def _compute_pruned_pathmag_threshold(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                                           repcache, circuitsetup_cache,
                                           resource_alloc, threshold_guess=None):
         """
@@ -540,6 +537,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         circuit : Circuit or tuple
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
 
         repcache : dict, optional
             Dictionaries used to cache operator representations  to speed up future
@@ -582,7 +583,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if self.model.evotype == "svterm":
             npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_find_best_pathmagnitude_threshold(
-                    self, rholabel, elabels, circuit, repcache, circuitsetup_cache,
+                    self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache, circuitsetup_cache,
                     resource_alloc.comm, resource_alloc.mem_limit, self.desired_pathmagnitude_gap,
                     self.min_term_mag, self.max_paths_per_outcome, threshold_guess
                 )
@@ -626,6 +627,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         thresholds = {}
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
 
         for sep_povm_circuit in layout_atom.expanded_circuits:
             rholabel = sep_povm_circuit.circuit_without_povm[0]
@@ -633,7 +635,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             elabels = sep_povm_circuit.full_effect_labels
 
             npaths, threshold, target_sopm, achieved_sopm = \
-                self._compute_pruned_pathmag_threshold(rholabel, elabels, opstr,
+                self._compute_pruned_pathmag_threshold(rholabel, elabels, opstr, polynomial_vindices_per_int,
                                                        repcache, circuitsetup_cache,
                                                        resource_alloc, None)  # add guess?
             thresholds[sep_povm_circuit] = threshold
@@ -1043,6 +1045,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                        rholabel,
                                        elabels,
                                        circuit,
+                                       polynomial_vindices_per_int,
                                        repcache,
                                        circuitsetup_cache,
                                        resource_alloc,
@@ -1070,6 +1073,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         circuit : Circuit or tuple
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
 
         repcache : dict, optional
             Dictionaries used to cache operator representations  to speed up future
@@ -1113,7 +1120,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         if self.model.evotype == "svterm":
             poly_reps = replib.SV_compute_pruned_path_polynomials_given_threshold(
-                threshold, self, rholabel, elabels, circuit, repcache,
+                threshold, self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
                 circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
@@ -1165,6 +1172,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         repcache = layout_atom.pathset.highmag_termrep_cache
         circuitsetup_cache = layout_atom.pathset.circuitsetup_cache
         thresholds = layout_atom.pathset.thresholds
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
 
@@ -1176,7 +1184,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             threshold = thresholds[sep_povm_circuit]
 
             raw_polyreps = self._prs_as_pruned_polynomial_reps(
-                threshold, rholabel, elabels, opstr, repcache, circuitsetup_cache, resource_alloc)
+                threshold, rholabel, elabels, opstr, polynomial_vindices_per_int,
+                repcache, circuitsetup_cache, resource_alloc)
 
             compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
             layout_atom.percircuit_p_polys[sep_povm_circuit] = (threshold, compact_polys)
@@ -1188,7 +1197,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
         return
 
-    def _prs_as_polynomials(self, rholabel, elabels, circuit, resource_alloc, fastmode=True):
+    def _prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                            resource_alloc, fastmode=True):
         """
         Computes polynomial-representations of circuit-outcome probabilities.
 
@@ -1207,6 +1217,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
         resource_alloc : ResourceAllocation
             Available resources for this computation. Includes the number of processors
             (MPI comm) and memory limit.
@@ -1220,15 +1234,15 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         list
             A list of Polynomial objects.
         """
-        if self.evotype == "svterm":
-            poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, circuit,
+        if self.model.evotype == "svterm":
+            poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                                                resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit,
+            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                                                      resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         return [_Polynomial.from_rep(rep) for rep in poly_reps]
 
-    def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, resource_alloc):
+    def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc):
         """
         Compute compact-form polynomials of the outcome probabilities for `circuit`.
 
@@ -1247,6 +1261,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
         resource_alloc : ResourceAllocation
             Available resources for this computation. Includes the number of processors
             (MPI comm) and memory limit.
@@ -1260,7 +1278,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
             return [self.cache[ck] for ck in cache_keys]
 
-        raw_prps = self._prs_as_polynomials(rholabel, elabels, circuit, resource_alloc)
+        raw_prps = self._prs_as_polynomials(rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc)
         prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
         # create compact polys w/*complex* coeffs always since we're likely
         # going to concatenate a bunch of them.
@@ -1270,7 +1288,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self.cache[ck] = poly
         return prps
 
-    def _cache_p_polynomials(self, layout_atom, resource_alloc):
+    def _cache_p_polynomials(self, layout_atom, resource_alloc, polynomial_vindices_per_int):
         """
         Compute and cache the compact-form polynomials that evaluate the probabilities of a single layout atom.
 
@@ -1287,6 +1305,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             Available resources for this computation. Includes the number of processors
             (MPI comm) and memory limit.
 
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
         Returns
         -------
         None
@@ -1299,7 +1321,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             rholabel = sep_povm_circuit.circuit_without_povm[0]
             opstr = sep_povm_circuit.circuit_without_povm[1:]
             elabels = sep_povm_circuit.full_effect_labels
-            compact_polys = self._prs_as_compact_polynomials(rholabel, elabels, opstr, resource_alloc)
+            compact_polys = self._prs_as_compact_polynomials(rholabel, elabels, opstr, polynomial_vindices_per_int,
+                                                             resource_alloc)
             all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
 
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
@@ -1330,6 +1353,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         None
         """
         local_path_sets = list(path_set.local_atom_pathsets) if self.mode == "pruned" else None
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
 
         def set_pathset_for_atom(layout_atom, sub_resource_alloc):
             if self.mode == "pruned":
@@ -1337,7 +1361,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self._select_paths_set_block(layout_atom, sub_pathset, sub_resource_alloc)
                 #This computes (&caches) polys for this path set as well
             else:
-                self._cache_p_polynomials(layout_atom, sub_resource_alloc)
+                self._cache_p_polynomials(layout_atom, sub_resource_alloc, polynomial_vindices_per_int)
 
         self._run_on_atoms(layout, set_pathset_for_atom, resource_alloc)
 

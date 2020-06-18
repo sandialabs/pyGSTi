@@ -886,13 +886,13 @@ class OpModel(Model):
         self._set_state_space(state_space_labels, basis)
         #sets self._state_space_labels, self._basis, self._dim
 
-        self.sim = simulator  # property setter does nontrivial initialization
+        super(OpModel, self).__init__(self.state_space_labels)  # do this as soon as possible
+
         self._layer_rules = layer_rules if (layer_rules is not None) else _LayerRules()
         self._layerop_cache = {}  # for all (any type) of non-primitive layer operation
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
-
-        super(OpModel, self).__init__(self.state_space_labels)
+        self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
 
     ##########################################
     ## Get/Set methods

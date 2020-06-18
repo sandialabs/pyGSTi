@@ -42,6 +42,8 @@ from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from ..objects.label import Label as _Lbl
+from ..objects.polynomial import Polynomial as _Polynomial
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
@@ -900,7 +902,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 def _onqubit(s, i_qubit):
     """ Takes `s`, a tuple of gate *names* and creates a Circuit
         where those names act on the `i_qubit`-th qubit """
-    return _objs.Circuit([_Lbl(nm, i_qubit) for nm in s])
+    return _objs.Circuit([_Lbl(nm, i_qubit) for nm in s], line_labels=(i_qubit,))  # set line labels in case s is empty
 
 
 def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, single_q_fiducials=None,
@@ -1034,17 +1036,19 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
     # Assert that model uses termorder, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    resource_alloc = _ResourceAllocation()  # don't use comm here, since it's not used for prs_as_polynomials
 
     if prep_lbl is None:
-        prep_lbl = model._shlp.default_prep_label()
+        prep_lbl = model._default_primitive_prep_layer_lbl()
     if effect_lbls is None:
-        povmLbl = model._shlp.default_povm_label(sslbls=None)
+        povmLbl = model._default_primitive_povm_layer_lbl(sslbls=None)
         effect_lbls = [_Lbl("%s_%s" % (povmLbl, l))
-                       for l in model._shlp.effect_labels_for_povm(povmLbl)]
+                       for l in model._effect_labels_for_povm(povmLbl)]
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -1054,6 +1058,9 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     #dummy = 0.05*_np.random.random(model.num_params())
     dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
+
+    print("DB gpindices = ")
+    model._print_gpindices()
 
     #amped_polys = []
     selected_gatename_fidpair_lists = []
@@ -1097,8 +1104,8 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                     continue
                 #print("DB: Rank %d: running itr=%d" % (comm.Get_rank(), itr))
 
-                printer.show_progress(loc_itr, nLocIters, prefix='--- Finding amped-polys for idle: ')
-                prepFid = _objs.Circuit(())
+                printer.show_progress(loc_itr - 1, nLocIters, prefix='--- Finding amped-polys for idle: ')
+                prepFid = _objs.Circuit((), line_labels=idle_str.line_labels)
                 for i, el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
@@ -1115,7 +1122,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                         # if all are not the same or all are not different, skip
                         if not (all(cmp) or not any(cmp)): continue
 
-                    measFid = _objs.Circuit(())
+                    measFid = _objs.Circuit((), line_labels=idle_str.line_labels)
                     for i, el in enumerate(meas):
                         measFid = measFid + _onqubit(el, qubit_filter[i])
 
@@ -1125,8 +1132,10 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
                     gstr_L0 = prepFid + measFid            # should be a Circuit
                     gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-                    ps = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1)
-                    qs = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0)
+                    ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
+                                                       polynomial_vindices_per_int, resource_alloc)
+                    qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
+                                                       polynomial_vindices_per_int, resource_alloc)
 
                     if algorithm == "sequential":
                         added = False
@@ -1152,8 +1161,9 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                         #test adding all effect labels - get the overall increase in rank due to this fidpair
                         for k, (elbl, p, q) in enumerate(zip(effect_lbls, ps, qs)):
                             amped = p + -1 * q  # the amplified poly
-                            Jrows[k, :] = _np.array([[amped.deriv(iParam).evaluate(dummy)
-                                                      for iParam in _slct.to_array(wrt_params)]])
+                            test = _np.array([[amped.deriv(iParam).evaluate(dummy)
+                                               for iParam in _slct.to_array(wrt_params)]])
+                            Jrows[k, :] = test
                         Jtest = _np.concatenate((J, Jrows), axis=0)
                         testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                         rankInc = testRank - Jrank
@@ -1193,7 +1203,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
 
 def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None, effect_lbls=None,
-                                       wrt_params=None, verbosity=0):
+                                              wrt_params=None, verbosity=0):
     """
     Compute the number of model parameters amplified by a given (synthetic) idle sequence.
 
@@ -1240,16 +1250,18 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     """
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
 
     # printer = _VerbosityPrinter.create_printer(verbosity)
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    resource_alloc = _ResourceAllocation()
 
     if prep_lbl is None:
-        prep_lbl = model._shlp.default_prep_label()
+        prep_lbl = model._default_primitive_prep_layer_lbl()
     if effect_lbls is None:
-        povmLbl = model._shlp.default_povm_label()
-        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._shlp.effect_labels_for_povm(povmLbl)]
+        povmLbl = model._default_primitive_povm_layer_lbl()
+        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
     dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
 
     if wrt_params is None: wrt_params = slice(0, model.num_params())
@@ -1261,8 +1273,10 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     for i, (prepFid, measFid) in enumerate(fidpairs):
         gstr_L0 = prepFid + measFid            # should be a Circuit
         gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-        ps = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1)
-        qs = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0)
+        ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
+                                           polynomial_vindices_per_int, resource_alloc)
+        qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
+                                           polynomial_vindices_per_int, resource_alloc)
 
         for k, (elbl, p, q) in enumerate(zip(effect_lbls, ps, qs)):
             amped = p + -1 * q  # the amplified poly
@@ -1397,16 +1411,18 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(isinstance(model._sim, _TermFSim) and model._sim.max_order == 1), \
+    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    resource_alloc = _ResourceAllocation()
 
     printer = _VerbosityPrinter.create_printer(verbosity)
 
     if prep_lbl is None:
-        prep_lbl = model._shlp.default_prep_label()
+        prep_lbl = model._default_primitive_prep_layer_lbl()
     if effect_lbls is None:
-        povmLbl = model._shlp.default_povm_label()
-        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._shlp.effect_labels_for_povm(povmLbl)]
+        povmLbl = model._default_primitive_povm_layer_lbl()
+        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -1513,8 +1529,10 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
         gstr_L0 = prepFid + measFid            # should be a Circuit
         gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-        ps = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1)
-        qs = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0)
+        ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
+                                           polynomial_vindices_per_int, resource_alloc)
+        qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
+                                           polynomial_vindices_per_int, resource_alloc)
         added = False
         for elbl, p, q in zip(effect_lbls, ps, qs):
             amped = p + -1 * q  # the amplified poly
@@ -1633,12 +1651,14 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         See :function:`_find_amped_polynomials_for_syntheticidle` for details.
     """
     printer = _VerbosityPrinter.create_printer(verbosity)
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    resource_alloc = _ResourceAllocation()
 
     if prep_lbl is None:
-        prep_lbl = model._shlp.default_prep_label()
+        prep_lbl = model._default_primitive_prep_layer_lbl()
     if effect_lbls is None:
-        povmLbl = model._shlp.default_povm_label()
-        effect_lbls = model._shlp.effect_labels_for_povm(povmLbl)
+        povmLbl = model._default_primitive_povm_layer_lbl(sslbls=None)
+        effect_lbls = model._effect_labels_for_povm(povmLbl)
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -1723,7 +1743,8 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                 if opstr in already_tried: continue
                 else: already_tried.add(opstr)
 
-                ps = model._fwdsim()._prs_as_polynomials(prep_lbl, effect_lbls, opstr)
+                ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, opstr,
+                                                   polynomial_vindices_per_int, resource_alloc)
                 #OLD: Jtest = J
                 added = False
                 for elbl, p in zip(effect_lbls, ps):
@@ -2789,7 +2810,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         availability, None, qubitGraph,
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, sparse, verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor", max_order=1),
+        simulator=_TermFSim(mode="taylor-order", max_order=1),
         parameterization=ptermstype,
         errcomp_type="gates")
     clouds = model.get_clouds()
@@ -2814,7 +2835,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     Np = model.num_params()
     idle_op_str = _objs.Circuit(idle_op_str, num_lines=n_qubits)
     prepLbl = _Lbl("rho0")
-    effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._shlp.effect_labels_for_povm('Mdefault')]
+    effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
 
     # create a model with max_idle_weight qubits that includes all
     # the errors of the actual n-qubit model...
@@ -2826,7 +2847,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, sparse, verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor", max_order=1), parameterization=ptermstype, errcomp_type="gates")
+        simulator=_TermFSim(mode="taylor-order", max_order=1), parameterization=ptermstype, errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -2905,7 +2926,8 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
                     syntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, sparse, verbosity=printer - 5,
-                    simulator=_TermFSim(mode="taylor", max_order=1), parameterization=ptermstype, errcomp_type="gates")
+                    simulator=_TermFSim(mode="taylor-order", max_order=1),
+                    parameterization=ptermstype, errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
