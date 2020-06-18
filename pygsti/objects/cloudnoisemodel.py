@@ -975,7 +975,7 @@ def _get_lindblad_factory(simulator, parameterization, errcomp_type):
             cls = _op.LindbladOp
         else:
             raise ValueError((f"Cannot create Lindblad gate factory for simtype={type(simulator)}"
-                              f" and {parameterization=}"))
+                              f" and parameterization={parameterization}"))
 
         #Just call cls.from_operation_matrix with appropriate evotype
         def _f(op_matrix,  # unitaryPostfactor=None,
@@ -1025,7 +1025,7 @@ def _get_static_factory(simulator, evotype):
             # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
 
         return _f
-    raise ValueError(f"Cannot create Static gate factory for simtype={type(simulator)} {evotype=}")
+    raise ValueError(f"Cannot create Static gate factory for simtype={type(simulator)} evotype={evotype}")
 
 
 def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, simulator=None,
