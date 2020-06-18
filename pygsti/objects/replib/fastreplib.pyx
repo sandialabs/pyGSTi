@@ -1968,7 +1968,7 @@ cdef vector[vector[INT]] convert_maplayout(layout_atom, operation_lookup, rho_lo
     # an array of INT-arrays; each INT-array is [iDest,iStart,iCache,<remainder gate indices>]
     cdef vector[INT] intarray
     cdef vector[vector[INT]] c_layout_atom = vector[vector[INT]](len(layout_atom.table))
-    for kk, (iDest, iStart, remainder, iCache) in enumerate(layout_atom.table):
+    for kk, (iDest, iStart, remainder, iCache) in enumerate(layout_atom.table.contents):
         if iStart is None: iStart = -1 # so always an int
         if iCache is None: iCache = -1 # so always an int
         remainder = remainder.circuit_without_povm.layertup
@@ -2327,7 +2327,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
 
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
-    for iDest, iStart, remainder, iCache in layout_atom.table:
+    for iDest, iStart, remainder, iCache in layout_atom.table.contents:
         remainder = remainder.circuit_without_povm.layertup
         rholabel = remainder[0]; remainder = remainder[1:]
         rhoVec = fwdsim.model.circuit_layer_operator(rholabel, 'prep')

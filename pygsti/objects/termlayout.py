@@ -21,8 +21,6 @@ from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from .distlayout import _DistributableAtom
 from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
-import time as _time  # DEBUG TIMERS
-
 
 class _TermCOPALayoutAtom(_DistributableAtom):
     """
@@ -48,12 +46,9 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         all_elabels = set()
         for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
             for sep_povm_c in expanded_circuit_outcomes:
-                if sep_povm_c.effect_labels == [None]:  # special case -- needed (for bulk_product?)
-                    all_oplabels.update(sep_povm_c.circuit_without_povm[:])
-                else:
-                    all_rholabels.add(sep_povm_c.circuit_without_povm[0])
-                    all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
-                    all_elabels.update(sep_povm_c.full_effect_labels)
+                all_rholabels.add(sep_povm_c.circuit_without_povm[0])
+                all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
+                all_elabels.update(sep_povm_c.full_effect_labels)
 
         self.rho_labels = sorted(all_rholabels)
         self.op_labels = sorted(all_oplabels)

@@ -13,6 +13,7 @@ A object representing the indexing into a (flat) array of circuit outcome probab
 import numpy as _np
 import collections as _collections
 import itertools as _it
+import copy as _copy
 from functools import reduce as _reduce
 from operator import add as _add
 
@@ -94,32 +95,6 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         #  for which `dataset` contains data (if `dataset is None` treat *all* outcomes as present).
         #  Note: `circuits` may have duplicates; this is ok: `dataset` doesn't have duplicates so outcomes are the same.
         #  Note2: dict keys are integer unique-circuit indices rather than complete circuits for hashing speed.
-
-        #REMOVE:
-        #if expand:
-        #    # if we're going to expand the instruments and POVMs of the circuits, then we'll store the outcomes
-        #    # for each circuit in the order given by this expansion, rather than using the ordering of the dataset.
-        #    # (This is more likely to produce "cache-hit" speedups later on.)
-        #    if dataset is not None:
-        #        excircuit_outcomes_by_indx = {i: c.expand_instruments_and_povms(model_shlp, dataset[ds_c].outcomes)
-        #                                      for i, (c, ds_c) in enumerate(zip(unique_circuits, ds_circuits))}
-        #    else:
-        #        excircuit_outcomes_by_indx = {i: c.expand_instruments_and_povms(model_shlp, None)
-        #                                      for i, c in enumerate(unique_circuits)}
-        #
-        #    expanded_present_outcomes = _collections.OrderedDict()  # keys = expanded circuits, vals = list of outcomes
-        #    for i, expanded_dict in excircuit_outcomes_by_indx.items():
-        #        expanded_present_outcomes.update(expanded_dict)
-        #
-        #    #NEEDED?
-        #    #expanded_element_indices = _collections.OrderedDict(); k = 0
-        #    #for expanded_circuit, outcomes in expanded_present_outcomes.items():
-        #    #    num_outcomes = len(expanded_present_outcomes[i])
-        #    #    expanded_element_indices[expanded_circuit] = slice(k, k + num_outcomes)
-        #    #    k += num_outcomes
-        #
-        #    present_outcomes = {i: _reduce(_add, exdict.values()) for i, exdict in excircuit_outcomes_by_indx.items()}
-        #else:
 
         # If we don't need to expand the instruments and POVMs, then just use the outcomes
         # given in the dataset or by the op container.
@@ -225,3 +200,14 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def iter_circuits(self):
         for circuit, i in self._unique_circuit_index.items():
             yield self._element_indices[i], circuit, self._outcomes[i]
+
+    def copy(self):
+        """
+        Create a copy of this layout.
+
+        Returns
+        -------
+        MatrixCOPALayout
+        """
+        return _copy.deepcopy(self)  # in the future maybe we need to do something more complicated?
+

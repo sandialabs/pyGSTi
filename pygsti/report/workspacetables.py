@@ -182,7 +182,7 @@ class SpamTable(WorkspaceTable):
 
                 if confidence_region_info is not None:
                     intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
-                    if intervalVec.shape[0] == models[-1].dimension() - 1:
+                    if intervalVec.shape[0] == models[-1].dim - 1:
                         #TP constrained, so pad with zero top row
                         intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
                     rowData.append(intervalVec); rowFormatters.append('Normal')
@@ -451,19 +451,19 @@ class GatesTable(WorkspaceTable):
                     lbl)[:, None]  # TODO: won't work for instruments
                 if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim, op_dim)
                 elif isinstance(per_model_ops[-1], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
                                                   intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
                 else:
                     # we don't know how best to reshape interval matrix for gate, so
                     # use derivative
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     op_deriv = per_model_ops[-1].deriv_wrt_params()
                     intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))

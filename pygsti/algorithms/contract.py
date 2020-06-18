@@ -298,7 +298,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
     printer.log(('The closest legal point found was distance: %s' % str(distance)), 1)
 
     if tp_also:  # TP also constrains prep vectors
-        op_dim = mdl.dimension()
+        op_dim = mdl.dim
         for rhoVec in list(mdl.preps.values()):
             rhoVec[0, 0] = 1.0 / op_dim**0.25
 
@@ -316,7 +316,7 @@ def _contract_to_tp(model, verbosity):
         gate[0, 0] = 1.0
         for k in range(1, gate.shape[1]): gate[0, k] = 0.0
 
-    op_dim = mdl.dimension()
+    op_dim = mdl.dim
     for rhoVec in list(mdl.preps.values()):
         rhoVec[0, 0] = 1.0 / op_dim**0.25
 
@@ -354,7 +354,7 @@ def _contract_to_valid_spam(model, verbosity=0):
     mdl = model.copy()
 
     # ** assumption: only the first vector element of pauli vectors has nonzero trace
-    dummyVec = _np.zeros((model.dimension(), 1), 'd'); dummyVec[0, 0] = 1.0
+    dummyVec = _np.zeros((model.dim, 1), 'd'); dummyVec[0, 0] = 1.0
     firstElTrace = _np.real(_tools.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
     diff = 0
 

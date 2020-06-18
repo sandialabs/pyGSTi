@@ -302,7 +302,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         An M by N matrix where M is the number of operation elements and
         N is the number of operation parameters.
     """
-    dim = operation.dimension()
+    dim = operation.dim
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params()), operation.dtype)

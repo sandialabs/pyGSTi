@@ -892,8 +892,8 @@ class LinearGateSetTomography(_proto.Protocol):
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
-                                op_labels, svd_truncate_to=target_model.dimension(),
-                                op_label_aliases=aliases, verbosity=printer)
+                                 op_labels, svd_truncate_to=target_model.dim,
+                                 op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results

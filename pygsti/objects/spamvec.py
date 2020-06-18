@@ -250,7 +250,7 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
         An M by N matrix where M is the number of gate elements and
         N is the number of gate parameters.
     """
-    dim = spamvec.dimension()
+    dim = spamvec.dim
     spamvec2 = spamvec.copy()
     p = spamvec.to_vector()
     fd_deriv = _np.empty((dim, spamvec.num_params()), 'd')  # assume real (?)
