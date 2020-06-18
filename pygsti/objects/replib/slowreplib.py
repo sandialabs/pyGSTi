@@ -1918,7 +1918,7 @@ def DM_mapfill_timedep_dterms(calc, mx_to_fill, dest_indices, dest_param_indices
     #      (calc.Np, calc.dim, cache_size, len(eval_tree), eval_tree.num_applies(), _time.time()-tStart)) #DEBUG
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SV_prs_as_polynomials(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
     return _prs_as_polys(calc, rholabel, elabels, circuit, comm, mem_limit, fastmode)
 
 
@@ -2142,7 +2142,7 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_l
 
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    from ..opcalc import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    from ..opcalc import bulk_eval_compact_polynomials as _bulk_eval_compact_polys
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps

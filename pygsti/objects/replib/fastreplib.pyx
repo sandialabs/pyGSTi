@@ -418,7 +418,7 @@ cdef class DMStateRep: #(StateRep):
         reducefix = 1 if self.base.flags.writeable else 2
         return (DMStateRep, (self.base, reducefix))
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     @property
@@ -568,11 +568,11 @@ cdef class DMOpRep:
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = DMStateRep(np.ascontiguousarray(v,'d'))
-            return self.acton(in_state).todense()
+            return self.acton(in_state).to_dense()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = DMStateRep(np.ascontiguousarray(v,'d'))
-            return self.adjoint_acton(in_state).todense()
+            return self.adjoint_acton(in_state).to_dense()
         dim = self.c_gate._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
 
@@ -827,7 +827,7 @@ cdef class SVStateRep: #(StateRep):
     def dim(self):
         return self.c_state._dim
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     def __dealloc__(self):
@@ -2479,7 +2479,7 @@ cdef vector[vector[SVTermCRep_ptr]] sv_extract_cterms(python_termrep_lists, INT 
     return ret
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SV_prs_as_polynomials(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -2499,12 +2499,12 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).taylor_order_terms(order, mpv)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).taylor_order_terms(order, mpv)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -2513,7 +2513,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in calc.sos.effect(elbl).get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in calc.sos.effect(elbl).taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -2537,14 +2537,14 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
     stateDim = int(round(np.sqrt(calc.dim)))
 
     #Call C-only function (which operates with C-representations only)
-    cdef vector[PolyCRep*] polys = sv_prs_as_polys(
+    cdef vector[PolyCRep*] polys = sv_prs_as_polynomials(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
         E_cindices, numEs, calc.max_order, mpv, vpi, stateDim, <bool>fastmode)
 
     return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
-cdef vector[PolyCRep*] sv_prs_as_polys(
+cdef vector[PolyCRep*] sv_prs_as_polynomials(
     vector[INT]& circuit, vector[vector[SVTermCRep_ptr]] rho_term_reps,
     unordered_map[INT, vector[vector[SVTermCRep_ptr]]] op_term_reps,
     vector[vector[SVTermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
@@ -2984,7 +2984,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
                 opcache[glbl] = op
                 #db_made_op = True
 
-            hmterms, foat_indices = op.get_highmagnitude_terms(
+            hmterms, foat_indices = op.highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
 
             #TODO REMOVE
@@ -3026,7 +3026,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
         if rholabel not in opcache:
             opcache[rholabel] = calc.sos.prep(rholabel)
         rhoOp = opcache[rholabel]
-        hmterms, foat_indices = rhoOp.get_highmagnitude_terms(
+        hmterms, foat_indices = rhoOp.highmagnitude_terms(
             min_term_mag, max_taylor_order=calc.max_order,
             max_poly_vars=mpv)
 
@@ -3054,7 +3054,7 @@ def SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, o
         for i,elbl in enumerate(elabels):
             if elbl not in opcache:
                 opcache[elbl] = calc.sos.effect(elbl)
-            hmterms, foat_indices = opcache[elbl].get_highmagnitude_terms(
+            hmterms, foat_indices = opcache[elbl].highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order, max_poly_vars=mpv)
             E_term_indices_and_reps.extend(
                 [ (i,t,t.magnitude,1 if (j in foat_indices) else 0) for j,t in enumerate(hmterms) ] )
@@ -3091,7 +3091,7 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel.pyterm_references:
-            coeff_array = _fastopcalc.bulk_eval_compact_polys_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
+            coeff_array = _fastopcalc.bulk_eval_compact_polynomials_complex(termrep.compact_coeff[0],termrep.compact_coeff[1],paramvec,(1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
@@ -3116,13 +3116,13 @@ def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repca
     cdef vector[INT] npaths = vector[INT](numEs)
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude()
     for glbl in circuit:
         op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
-        max_partial_sopm *= op.get_total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).get_total_term_magnitude() - pathmagnitude_gap  # absolute gap
-        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.effect(elbl).get_total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
+        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude() - pathmagnitude_gap  # absolute gap
+        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.effect(elbl).total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
 
     cdef double threshold = sv_find_best_pathmagnitude_threshold(
         cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
@@ -3201,7 +3201,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
 
 
 
-def SV_compute_pruned_path_polys_given_threshold(
+def SV_compute_pruned_path_polynomials_given_threshold(
         threshold, calc, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
         comm=None, mem_limit=None, fastmode=1):
 
@@ -3220,7 +3220,7 @@ def SV_compute_pruned_path_polys_given_threshold(
         cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(calc, rholabel, elabels, circuit, repcache, opcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
-    cdef vector[PolyCRep*] polys = sv_compute_pruned_polys_given_threshold(
+    cdef vector[PolyCRep*] polys = sv_compute_pruned_polynomials_given_threshold(
         <double>threshold, cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.e_indices,
         numEs, stateDim, <INT>fastmode,  mpv, vpi)
@@ -3228,7 +3228,7 @@ def SV_compute_pruned_path_polys_given_threshold(
     return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
-cdef vector[PolyCRep*] sv_compute_pruned_polys_given_threshold(
+cdef vector[PolyCRep*] sv_compute_pruned_polynomials_given_threshold(
     double threshold, vector[INT]& circuit,
     vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] e_indices,
@@ -3842,13 +3842,13 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).get_total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude()
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
         op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
-        max_partial_sopm *= op.get_total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude()
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).get_total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude()
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))
@@ -4559,7 +4559,7 @@ cdef vector[vector[SBTermCRep_ptr]] sb_extract_cterms(python_termrep_lists, INT 
     return ret
 
 
-def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
+def SB_prs_as_polynomials(calc, rholabel, elabels, circuit, comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -4579,12 +4579,12 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).get_taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in calc.sos.operation(glbl).taylor_order_terms(order, mpv)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).get_taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in calc.sos.prep(rholabel).taylor_order_terms(order, mpv)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -4593,7 +4593,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in calc.sos.effect(elbl).get_taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in calc.sos.effect(elbl).taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -4619,14 +4619,14 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, mem_limit=None,
     cdef INT nqubits = <INT>(np.log2(calc.dim)//2)
 
     #Call C-only function (which operates with C-representations only)
-    cdef vector[PolyCRep*] polys = sb_prs_as_polys(
+    cdef vector[PolyCRep*] polys = sb_prs_as_polynomials(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
         E_cindices, numEs, calc.max_order, mpv, vpi, nqubits, <bool>fastmode)
 
     return [ PolynomialRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
 
-cdef vector[PolyCRep*] sb_prs_as_polys(
+cdef vector[PolyCRep*] sb_prs_as_polynomials(
     vector[INT]& circuit, vector[vector[SBTermCRep_ptr]] rho_term_reps,
     unordered_map[INT, vector[vector[SBTermCRep_ptr]]] op_term_reps,
     vector[vector[SBTermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
