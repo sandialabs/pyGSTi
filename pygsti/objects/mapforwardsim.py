@@ -142,7 +142,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 return _cache_mem(max_cache_size, blk1, blk2)
 
             def approx_cache_mem_estimate(nc, np1, np2, n_comms):
-                approx_cache_size = min((len(circuits) / nc) * 0.7, self._max_cache_size)
+                approx_cache_size = (len(circuits) / nc) * 0.7
+                if self._max_cache_size is not None:
+                    approx_cache_size = min(approx_cache_size, self._max_cache_size)
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
