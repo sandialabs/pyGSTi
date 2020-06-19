@@ -64,23 +64,23 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         self.elindices_by_expcircuit = {}
         self.outcomes_by_expcircuit = {}
 
-        #Assign element indices, starting at `offset`
-        initial_offset = offset
+        #Assign element indices, "global" indices starting at `offset`
+        local_offset = 0
         for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
             for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
-                elindices = list(range(offset, offset + len(outcomes)))
+                elindices = list(range(local_offset, local_offset + len(outcomes)))
                 self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[lbl] for lbl in sep_povm_c.full_effect_labels]
-                self.elindices_by_expcircuit[i] = elindices
+                self.elindices_by_expcircuit[i] = elindices  # *local* indices (0 is 1st element computed by this atom)
                 self.outcomes_by_expcircuit[i] = outcomes
                 self.orig_indices_by_expcircuit[i] = unique_to_orig[unique_i]
-                offset += len(outcomes)
+                local_offset += len(outcomes)
 
-                # fill in running dict of per-circuit element indices and outcomes:
-                elindex_outcome_tuples[unique_i].extend(list(zip(elindices, outcomes)))
+                # fill in running dict of per-circuit *global* element indices and outcomes:
+                elindex_outcome_tuples[unique_i].extend([(offset + eli, out) for eli, out in zip(elindices, outcomes)])
             table_offset += len(expanded_circuit_outcomes)
 
-        super().__init__(slice(initial_offset, offset), offset - initial_offset)
+        super().__init__(slice(offset, offset + local_offset), local_offset)
 
     @property
     def cache_size(self):
