@@ -284,7 +284,7 @@ class FASTPolynomial(object):
         Generate a compact form of this polynomial designed for fast evaluation.
 
         The resulting "tapes" can be evaluated using
-        :function:`opcalc.bulk_eval_compact_polys`.
+        :function:`opcalc.bulk_eval_compact_polynomials`.
 
         Parameters
         ----------
@@ -776,7 +776,7 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         Generate a compact form of this polynomial designed for fast evaluation.
 
         The resulting "tapes" can be evaluated using
-        :function:`opcalc.bulk_eval_compact_polys`.
+        :function:`opcalc.bulk_eval_compact_polynomials`.
 
         Parameters
         ----------

@@ -440,7 +440,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("pp", 4)
             prep_factors = []; povm_factors = []
 
-            from ..construction import _basis_create_spam_vector
+            from ..construction.modelconstruction import _basis_create_spam_vector
 
             v0 = _basis_create_spam_vector("0", basis1Q)
             v1 = _basis_create_spam_vector("1", basis1Q)

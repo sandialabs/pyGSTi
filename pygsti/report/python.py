@@ -49,7 +49,7 @@ def table(custom_headings, col_headings_formatted, rows, spec):
                           "installed to render tables in the 'python' format"))
 
     def getval(lbl):
-        return lbl.value if isinstance(lbl, _ReportableQty) else lbl
+        return lbl.value() if isinstance(lbl, _ReportableQty) else lbl
 
     if custom_headings is not None \
             and "python" in custom_headings:

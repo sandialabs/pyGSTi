@@ -34,7 +34,7 @@ from . import term as _term
 from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
 from . import replib
-from .opcalc import bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
+from .opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polys_complex
 
 try:
     from ..tools import fastcalc as _fastcalc

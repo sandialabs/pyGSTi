@@ -42,8 +42,8 @@ from .polynomial import Polynomial as _Polynomial
 from . import replib
 from . import opcalc
 from .opcalc import compact_deriv as _compact_deriv, \
-    bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex, \
-    abs_sum_bulk_eval_compact_polys_complex as _abs_sum_bulk_eval_compact_polys_complex
+    bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polys_complex, \
+    abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polys_complex
 
 TOL = 1e-12
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero

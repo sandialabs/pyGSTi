@@ -697,7 +697,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         fastmode = True
         if self.evotype == "svterm":
-            poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
+            poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
         else:  # "cterm" (stabilizer-based term evolution)
             poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
         prps = [_Polynomial.from_rep(rep) for rep in poly_reps]
@@ -1188,7 +1188,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(eval_tree)
 
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset().highmag_termrep_cache, self.to_vector())
             maxx, achieved = evalSubTree.achieved_and_max_sopm(self)
 
             _fas(max_sopm, [felInds], maxx)
@@ -1266,7 +1266,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(eval_tree)
 
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset.highmag_termrep_cache, self.to_vector())
+            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset().highmag_termrep_cache, self.to_vector())
             #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
             gap_jacs = evalSubTree.sopm_gaps_jacobian(self)
             # # set deriv to zero where gap would be clipped to 0

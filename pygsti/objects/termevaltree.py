@@ -17,7 +17,7 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import mpitools as _mpit
 from .evaltree import EvalTree
-from .opcalc import compact_deriv as _compact_deriv, bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
+from .opcalc import compact_deriv as _compact_deriv, bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polys_complex
 
 import time as _time  # DEBUG TIMERS
 
@@ -110,7 +110,7 @@ class TermEvalTree(EvalTree):
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
         # defines a set of paths to use in probability computations.
-        self.pathset = None
+        self._pathset = None
         self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
 
         self.merged_compact_polys = None
@@ -470,7 +470,7 @@ class TermEvalTree(EvalTree):
             achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel,
                                                                 elabels,
                                                                 opstr,
-                                                                self.pathset.highmag_termrep_cache,
+                                                                self.pathset().highmag_termrep_cache,
                                                                 calc.sos.opcache,
                                                                 current_threshold)
             achieved_sopm.extend(list(achieved))
@@ -675,7 +675,7 @@ class TermEvalTree(EvalTree):
         -------
         PathSet
         """
-        return self.pathset
+        return self._pathset
 
     def select_paths_set(self, calc, pathset, comm, mem_limit):
         """
@@ -709,11 +709,11 @@ class TermEvalTree(EvalTree):
         # these values determine what is a "high-magnitude" term and the path magnitudes that are
         # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
 
-        self.pathset = pathset
+        self._pathset = pathset
         self.percircuit_p_polys = {}
-        repcache = self.pathset.highmag_termrep_cache
-        circuitsetup_cache = self.pathset.circuitsetup_cache
-        thresholds = self.pathset.thresholds
+        repcache = self.pathset().highmag_termrep_cache
+        circuitsetup_cache = self.pathset().circuitsetup_cache
+        thresholds = self.pathset().thresholds
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
 

@@ -6,6 +6,7 @@ import pickle
 import os
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.construction import modelconstruction
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -170,8 +171,8 @@ class InstrumentTestCase(BaseTestCase):
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = pygsti.construction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp",4))
-        v1 = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4))
+        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp",4))
+        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4))
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)

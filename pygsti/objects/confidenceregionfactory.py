@@ -350,7 +350,7 @@ class ConfidenceRegionFactory(object):
             label = projection_type
 
         model = self.parent.models[self.model_lbl]
-        proj_non_gauge = model.nongauge_projector()
+        proj_non_gauge = model.compute_nongauge_projector()
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
         self.nGaugeParams = model.num_params() - self.nNonGaugeParams
 
@@ -522,7 +522,7 @@ class ConfidenceRegionFactory(object):
 
         def _objective_func(vector_m):
             matM = vector_m.reshape((self.nNonGaugeParams, self.nGaugeParams))
-            proj_extra = model.nongauge_projector(non_gauge_mix_mx=matM)
+            proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=matM)
             projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
             sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl, self.circuit_list_lbl,
@@ -544,7 +544,7 @@ class ConfidenceRegionFactory(object):
                                callback=print_obj_func if verbosity > 2 else None)
 
         mixMx = minSol.x.reshape((self.nNonGaugeParams, self.nGaugeParams))
-        proj_extra = model.nongauge_projector(non_gauge_mix_mx=mixMx)
+        proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=mixMx)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
         printer.log('The resulting min sqrt(sum(operationCIs**2)): %g' % minSol.fun, 2)
@@ -560,7 +560,7 @@ class ConfidenceRegionFactory(object):
         printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indent_offset=-1)
 
         #get gate-intrinsic-error
-        proj = model.nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
@@ -571,7 +571,7 @@ class ConfidenceRegionFactory(object):
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
         #get spam-intrinsic-error
-        proj = model.nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
@@ -583,7 +583,7 @@ class ConfidenceRegionFactory(object):
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
 
         ratio = op_intrinsic_err / spam_intrinsic_err
-        proj = model.nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
 
         if printer.verbosity >= 2:

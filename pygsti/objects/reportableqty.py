@@ -32,7 +32,7 @@ def minimum(qty1, qty2):
     -------
     ReportableQty
     """
-    if qty1.value <= qty2.value:
+    if qty1.value() <= qty2.value():
         return qty1
     else:
         return qty2
@@ -54,7 +54,7 @@ def maximum(qty1, qty2):
     -------
     ReportableQty
     """
-    if qty1.value >= qty2.value:
+    if qty1.value() >= qty2.value():
         return qty1
     else:
         return qty2

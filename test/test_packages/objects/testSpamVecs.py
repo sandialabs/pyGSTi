@@ -9,6 +9,7 @@ from numpy.random import random,seed
 from pygsti.modelpacks.legacy import std1Q_XYI
 from  pygsti.objects import SPAMVec, DenseSPAMVec
 import pygsti.construction as pc
+from pygsti.construction import modelconstruction
 
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -76,7 +77,7 @@ class SPAMVecTestCase(BaseTestCase):
         E0 = model.povms['Mdefault']['0']
         E1 = model.povms['Mdefault']['1']
         Ec = pygsti.obj.ComplementSPAMVec(
-            pygsti.construction._create_identity_vec([4],"pp"),
+            modelconstruction._create_identity_vec([4],"pp"),
             [E0])
         print(Ec.gpindices)
 
@@ -175,29 +176,29 @@ class SPAMVecTestCase(BaseTestCase):
 
     def test_compbasis_povm(self):
         cv = pygsti.obj.ComputationalSPAMVec([0,1],'densitymx')
-        v = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**2))
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**2))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = pygsti.construction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         #Only works with Python replib (only there is to_dense implemented)
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,1],'densitymx')
-        #v = pygsti.construction._basis_create_spam_vector("3", pygsti.obj.Basis.cast("pp",4**3))
+        #v = modelconstruction._basis_create_spam_vector("3", pygsti.obj.Basis.cast("pp",4**3))
         #s = pygsti.obj.FullSPAMVec(v)
         #assert(np.linalg.norm(cv.to_rep("effect").todense(np.empty(cv.dim,'d'))-v.flat) < 1e-6)
         #
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,0,1],'densitymx')
-        #v = pygsti.construction._basis_create_spam_vector("5", pygsti.obj.Basis.cast("pp",4**4))
+        #v = modelconstruction._basis_create_spam_vector("5", pygsti.obj.Basis.cast("pp",4**4))
         #assert(np.linalg.norm(cv.to_rep("effect").todense(np.empty(cv.dim,'d'))-v.flat) < 1e-6)
 
         nqubits = 3

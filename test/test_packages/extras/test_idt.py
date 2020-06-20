@@ -346,7 +346,7 @@ class IDTTestCase(BaseTestCase):
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.run_long_sequence_gst_base(ds, target_model, gss,
                                                       advanced_options={'tolerance': 1e-1}, verbosity=3)
-        
+
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
             gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)
