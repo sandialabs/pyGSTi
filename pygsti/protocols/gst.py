@@ -34,8 +34,7 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from pygsti.protocols.estimate import Estimate as _Estimate
-from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
-from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
+from ..objects.ciruitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
@@ -826,20 +825,11 @@ class LinearGateSetTomography(_proto.Protocol):
         else:
             raise ValueError("LGST can only be applied to explicit models with dense operators")
 
-        if isinstance(edesign, _proto.CircuitListsDesign):
-            if len(edesign.circuit_lists) != 1:
-                raise ValueError("There should only be one circuit list in the input exp-design!")
-            circuit_list = edesign.circuit_lists[0]
-        else:
-            circuit_list = edesign.all_circuits_needing_data
-
-        if not isinstance(circuit_list, _BulkCircuitList) or circuit_list.circuit_structure is None:
-            raise ValueError("LGST must be given an experiment design with a circuit structure!")
-        circuit_struct = circuit_list.circuit_structure
-
-        valid_struct_types = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if not isinstance(circuit_struct, valid_struct_types):
-            raise ValueError("Cannot run LGST: fiducials not specified in input experiment design!")
+        if not isinstance(edesign, StandardGSTDesign):
+            raise ValueError("LGST must be given an experiment design with a fiducial circuits!")
+        
+        if len(edesign.circuit_lists) != 1:
+            raise ValueError("There should only be one circuit list in the input exp-design!")
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -869,8 +859,8 @@ class LinearGateSetTomography(_proto.Protocol):
         if isinstance(edesign, _proto.CircuitListsDesign):
             circuit_list = edesign.circuit_lists[0]
         else:
-            circuit_list = edesign.all_circuits_needing_data
-        circuit_struct = circuit_list.circuit_structure
+            circuit_list = edesign.all_circuits_needing_data  # Never reached, since design must be a StandardGSTDesign!
+        circuit_list = _BulkCircuitList.cast(circuit_list)
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
@@ -886,12 +876,13 @@ class LinearGateSetTomography(_proto.Protocol):
                                              distribute_method="default")
 
         ds = data.dataset
-        aliases = circuit_struct.aliases if self.oplabel_aliases is None else self.oplabel_aliases
+        
+        aliases = circuit_list.op_label_aliases if self.oplabel_aliases is None else self.oplabel_aliases
         op_labels = self.oplabels if self.oplabels != "default" else \
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
 
         # Note: this returns a model with the *same* parameterizations as target_model
-        mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
+        mdl_lgst = _alg.run_lgst(ds, edesign.prep_fiducials, edesign.meas_fiducials, target_model,
                                  op_labels, svd_truncate_to=target_model.dim,
                                  op_label_aliases=aliases, verbosity=printer)
 
@@ -2011,26 +2002,20 @@ class ModelEstimateResults(_proto.ProtocolResults):
         #Initialize some basic "results" by just exposing the circuit lists more directly
         circuit_lists = _collections.OrderedDict()
 
-        def cast_bcl(x):
-            return _BulkCircuitList(x) if not isinstance(x, _BulkCircuitList) else x
-
         if init_circuits:
             edesign = self.data.edesign
             if isinstance(edesign, _proto.CircuitListsDesign):
-                circuit_lists['iteration'] = [cast_bcl(cl) for cl in edesign.circuit_lists]
+                circuit_lists['iteration'] = [_BulkCircuitList.cast(cl) for cl in edesign.circuit_lists]
 
-                #Set "Ls and germs" info: gives particular structure
-                final_list = edesign.circuit_lists[-1]
-                if hasattr(final_list, 'circuit_structure') \
-                   and isinstance(final_list.circuit_structure, _LsGermsStructure):
-                    # FUTURE: do something w/ a *LsGermsSerialStructure*
-                    circuit_lists['prep fiducials'] = final_list.circuit_structure.prep_fiducials
-                    circuit_lists['meas fiducials'] = final_list.circuit_structure.meas_fiducials
-                    circuit_lists['germs'] = final_list.circuit_structure.germs
+                #Set "Ls and germs" info if available
+                if isinstance(edesign, StandardGSTDesign):
+                    circuit_lists['prep fiducials'] = edesign.prep_fiducials
+                    circuit_lists['meas fiducials'] = edesign.meas_fiducials
+                    circuit_lists['germs'] = edesign.germs
 
             else:
                 #Single iteration
-                circuit_lists['iteration'] = [cast_bcl(edesign.all_circuits_needing_data)]
+                circuit_lists['iteration'] = [_BulkCircuitList.cast(edesign.all_circuits_needing_data)]
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 

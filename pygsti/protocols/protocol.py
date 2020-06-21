@@ -863,14 +863,9 @@ class CircuitListsDesign(ExperimentDesign):
         CircuitListsDesign
         """
 
-        if isinstance(circuit_lists, _objs.BulkCircuitList):
+        if isinstance(circuit_lists, _objs.PlaquetteGridCircuitStructure):
             master = circuit_lists
-            assert(master.circuit_structure is not None), \
-                "When specifying a set of lists using a single BulkCircuitList it must contain a circuit structure."
-            master_struct = master.circuit_structure
-            circuit_lists = [_objs.BulkCircuitList(master_struct.truncate(max_lengths=master.Ls[0:i + 1]),
-                                                   master.op_label_aliases, master.circuit_weights)
-                             for i in range(len(master.Ls))]
+            circuit_lists = [master.truncate(xs_to_keep=master.xs[0:i + 1]) for i in range(len(master.xs))]
             nested = True  # (by this construction)
 
         if all_circuits_needing_data is not None:

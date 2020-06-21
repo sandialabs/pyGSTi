@@ -254,18 +254,15 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     return fig
 
 
-def _summable_color_boxplot(sub_mxs,
-                     xlabels, ylabels, inner_xlabels, inner_ylabels,
-                     xlabel, ylabel, inner_xlabel, inner_ylabel,
-                     colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
-                     sum_up=False, invert=False, scale=1.0, bgcolor='white'):
+def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
+                            colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
+                            sum_up=False, scale=1.0, bgcolor='white'):
     """
     A helper function for generating typical nested color box plots used in pyGSTi.
 
     Given the list-of-lists, `sub_mxs`, along with x and y labels for both the "outer"
-    (i.e. the list-indices) and "inner" (i.e. the sub-matrix-indices) axes, this function
-    will produce a nested color box plot with the option of summing over the inner axes
-    or inverting (swapping) the inner and outer axes.
+    (i.e. the list-indices), this function will produce a nested color box plot with
+    the option of summing over the sub-matrix elements (the "inner" axes).
 
     Parameters
     ----------
@@ -280,23 +277,11 @@ def _summable_color_boxplot(sub_mxs,
     ylabels : list
         Labels for the outer y-axis values.
 
-    inner_xlabels : list
-        Labels for the inner x-axis values.
-
-    inner_ylabels : list
-        Labels for the inner y-axis values.
-
     xlabel : str
         Outer x-axis label.
 
     ylabel : str
         Outer y-axis label.
-
-    inner_xlabel : str
-        Inner x-axis label.
-
-    inner_ylabel : str
-        Inner y-axis label.
 
     colormap : Colormap
         The colormap used to determine box color.
@@ -316,21 +301,16 @@ def _summable_color_boxplot(sub_mxs,
 
     hover_info : bool or function, optional
         If a boolean, indicates whether to include interactive hover labels. If
-        a function, then must take arguments `(val, iy, ix, iiy, iix)` if
-        `sum_up == False` or `(val, iy, ix)` if `sum_up == True` and return a
-        label string, where `val` is the box value, `ix` and `iy` index
-        `xlabels` and `ylabels`, and `iix` and `iiy` index `inner_xlabels`
-        and `inner_ylabels`.
+        a function, then must take arguments `(val, i, j, ii, jj)` if
+        `sum_up == False` or `(val, i, j)` if `sum_up == True` and return a
+        label string, where `val` is the box value, `j` and `i` index
+        `xlabels` and `ylabels`, and `ii` and `jj` index the row and column index
+        of the sub-matrix element the label is for.
 
     sum_up : bool, optional
         False displays each matrix element as it's own color box
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
-
-    invert : bool, optional
-        If True, invert the nesting order of the nested color box plot
-        (applicable only when sum_up == False).  E.g. use inner_x_labels and
-        inner_y_labels to label the x and y axes.
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
@@ -354,31 +334,32 @@ def _summable_color_boxplot(sub_mxs,
 
     # flip so [0,0] el of original sub_mxs is at *top*-left (FLIP)
     sub_mxs = [[_np.flipud(subMx) for subMx in row] for row in sub_mxs]
-    inner_ylabels = list(reversed(inner_ylabels))
+    #inner_ylabels = list(reversed(inner_ylabels))
 
-    if invert:
-        if sum_up:
-            _warnings.warn("Cannot invert a summed-up plot.  Ignoring invert=True.")
-        else:
-            invertedSubMxs = []  # will be indexed as invertedSubMxs[inner-y][inner-x]
-            for iny in range(nIYs):
-                invertedSubMxs.append([])
-                for inx in range(nIXs):
-                    mx = _np.array([[sub_mxs[iy][ix][iny, inx] for ix in range(nXs)]
-                                    for iy in range(nYs)], 'd')
-                    invertedSubMxs[-1].append(mx)
-
-            # flip the now-inverted mxs to counteract the flip that will occur upon
-            # entering _summable_color_boxplot again (with invert=False this time), since we
-            # *don't* want the now-inner dimension (the germs) actually flipped (FLIP)
-            invertedSubMxs = [[_np.flipud(subMx) for subMx in row] for row in invertedSubMxs]
-            ylabels = list(reversed(ylabels))
-
-            return _summable_color_boxplot(invertedSubMxs,
-                                    inner_xlabels, inner_ylabels,
-                                    xlabels, ylabels, inner_xlabel, inner_ylabel, xlabel, ylabel,
-                                    colormap, colorbar, box_labels, prec, hover_info,
-                                    sum_up, False, scale, bgcolor)
+    #FUTURE: to restore "invert" functionality, make PlaquetteGridCircuitStructure invertible
+    #if invert:
+    #    if sum_up:
+    #        _warnings.warn("Cannot invert a summed-up plot.  Ignoring invert=True.")
+    #    else:
+    #        invertedSubMxs = []  # will be indexed as invertedSubMxs[inner-y][inner-x]
+    #        for iny in range(nIYs):
+    #            invertedSubMxs.append([])
+    #            for inx in range(nIXs):
+    #                mx = _np.array([[sub_mxs[iy][ix][iny, inx] for ix in range(nXs)]
+    #                                for iy in range(nYs)], 'd')
+    #                invertedSubMxs[-1].append(mx)
+    #
+    #        # flip the now-inverted mxs to counteract the flip that will occur upon
+    #        # entering _summable_color_boxplot again (with invert=False this time), since we
+    #        # *don't* want the now-inner dimension (the germs) actually flipped (FLIP)
+    #        invertedSubMxs = [[_np.flipud(subMx) for subMx in row] for row in invertedSubMxs]
+    #        ylabels = list(reversed(ylabels))
+    #
+    #        return _summable_color_boxplot(invertedSubMxs,
+    #                                       inner_xlabels, inner_ylabels,
+    #                                xlabels, ylabels, inner_xlabel, inner_ylabel, xlabel, ylabel,
+    #                                colormap, colorbar, box_labels, prec, hover_info,
+    #                                sum_up, False, scale, bgcolor)
 
     def val_filter(vals):
         """filter to latex-ify circuits.  Later add filter as a possible parameter"""
@@ -422,7 +403,7 @@ def _summable_color_boxplot(sub_mxs,
 
         boxLabelSize = 8 * scale if box_labels else 0
         fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
-                            prec, hover_label_fn)
+                             prec, hover_label_fn)
         #update tickvals b/c _color_boxplot doesn't do this (unlike _nested_color_boxplot)
         if fig is not None:
             fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
@@ -439,15 +420,16 @@ def _summable_color_boxplot(sub_mxs,
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%s: %s<br>%s: %s<br>%g" % \
                     (xlabel, str(xlabels[j]), ylabel, str(ylabels[i]),
-                     inner_xlabel, str(inner_xlabels[jj]),
-                     inner_ylabel, str(inner_ylabels[ii]), val)
+                     "row", str(ii), "column", str(jj), val)
         elif callable(hover_info):
-            hover_label_fn = hover_info
+            def hover_label_fn(val, i, j, ii, jj):
+                N = len(sub_mxs[i][j])  # number of rows in submatrix
+                return hover_info(val, i, j, N - 1 - ii, jj)  # FLIP row index
         else: hover_label_fn = None
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
         fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
-                                   prec, hover_label_fn)
+                                    prec, hover_label_fn)
 
         xBoxes = nXs * (nIXs + 1) - 1
         yBoxes = nYs * (nIYs + 1) - 1
@@ -521,9 +503,36 @@ def _summable_color_boxplot(sub_mxs,
     return fig
 
 
+def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs):
+    if sum_up:
+        def hover_label_fn(val, iy, ix):
+            """ Standard hover labels """
+            if _np.isnan(val): return ""
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            txt = plaq.summary_label()
+            txt += "<br>value: %g" % val
+            for lbl, addl_subMxs in addl_hover_submxs.items():
+                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
+            return txt
+
+    else:
+        def hover_label_fn(val, iy, ix, iiy, iix):
+            """ Standard hover labels """
+            #Note: in this case, we need to "flip" the iiy index because
+            # the matrices being plotted are flipped within _summable_color_boxplot(...)
+            if _np.isnan(val): return ""
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            txt = plaq.element_label(iiy, iix)  # note: *row* index = iiy
+            txt += ("<br>value: %g" % val)
+            for lbl, addl_subMxs in addl_hover_submxs.items():
+                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
+            return txt
+    return hover_label_fn
+
+
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
-                          colorbar=False, box_labels=True, prec='compact', hover_info=True,
-                          sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
+                           colorbar=False, box_labels=True, prec='compact', hover_info=True,
+                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
     """
     A wrapper around :func:`_summable_color_boxplot` for creating color box plots displaying circuits.
 
@@ -533,8 +542,8 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     Parameters
     ----------
     circuit_structure : CircuitStructure
-        Specifies a set of circuits along with their outer and inner x,y
-        structure, e.g. fiducials, germs, and maximum lengths.
+        Specifies a set of circuits along with their structure, e.g. fiducials, germs,
+        and maximum lengths.
 
     sub_mxs : list
         A list of lists of 2D numpy.ndarrays.  sub_mxs[iy][ix] specifies the matrix of values
@@ -587,86 +596,32 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     -------
     plotly.Figure
     """
-    g = circuit_structure
-    xvals = g.used_xvals()
-    yvals = g.used_yvals()
-    inner_xvals = g.minor_xvals()
-    inner_yvals = g.minor_yvals()
+    xvals = circuit_structure.used_xs
+    yvals = circuit_structure.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
-    # Note: invert == True case not handled yet, and the below hover label
-    # routines assume L,germ structure in particular
-    if hover_info and not invert and isinstance(g, _objs.LsGermsStructure):
-        if sum_up:
-            def hover_label_fn(val, iy, ix):
-                """ Standard hover labels """
-                if _np.isnan(val): return ""
-                L, germ = xvals[ix], yvals[iy]
-                baseStr = g.get_plaquette(L, germ, False).base
-                reps = (len(baseStr) // len(germ)) if len(germ) > 0 else 1
-                guess = germ * reps
-                if baseStr == guess:
-                    if len(baseStr) == 0:
-                        txt = "{}"
-                    else:
-                        txt = "(%s)<sup>%d</sup>" % (germ.str, reps)
-                else:
-                    txt = "L: %s<br>germ: %s" % (str(L), germ.str)
+    # Note: invert == True case not handled yet
+    assert(invert is False), "`invert=True` is no longer supported."
 
-                txt += "<br>value: %g" % val
-                for lbl, addl_subMxs in addl_hover_submxs.items():
-                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
-                return txt
+    if hover_info:
+        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
 
-        else:
-            def hover_label_fn(val, iy, ix, iiy, iix):
-                """ Standard hover labels """
-                #Note: in this case, we need to "flip" the iiy index because
-                # the matrices being plotted are flipped within _summable_color_boxplot(...)
-                if _np.isnan(val): return ""
-
-                N = len(inner_yvals)
-                L, germ = xvals[ix], yvals[iy]
-                rhofid, efid = inner_xvals[iix], inner_yvals[N - 1 - iiy]  # FLIP
-                baseStr = g.get_plaquette(L, germ, False).base
-                reps = (len(baseStr) // len(germ)) if len(germ) > 0 else 1
-                guess = germ * reps
-                if baseStr == guess:
-                    if len(baseStr) == 0:
-                        txt = "%s+{}+%s" % (rhofid.str, efid.str)
-                    else:
-                        txt = "%s+(%s)<sup>%d</sup>+%s" % (
-                            rhofid.str, germ.str, reps, efid.str)
-                else:
-                    txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
-                          % (str(L), germ.str, rhofid.str, efid.str)
-                txt += ("<br>value: %g" % val)
-                for lbl, addl_subMxs in addl_hover_submxs.items():
-                    N = len(addl_subMxs[iy][ix])  # flip so original [0,0] el is at top-left (FLIP)
-                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N - 1 - iiy][iix]))
-                return txt
-
-        hover_info = hover_label_fn  # _summable_color_boxplot can handle this
-
-    return _summable_color_boxplot(sub_mxs,
-                            g.used_xvals(), g.used_yvals(),
-                            g.minor_xvals(), g.minor_yvals(),
-                            "L", "germ", "rho", "E<sub>i</sub>", colormap,
-                            colorbar, box_labels, prec, hover_info,
-                            sum_up, invert, scale, bgcolor)  # "$\\rho_i$","$\\E_i$"
+    return _summable_color_boxplot(sub_mxs, circuit_structure.used_xs, circuit_structure.used_ys,
+                                   circuit_structure.xlabel, circuit_structure.ylabel, colormap, colorbar,
+                                   box_labels, prec, hover_info, sum_up, scale, bgcolor)
 
 
 def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
-                              colorbar=False, hover_info=True, sum_up=False,
-                              ylabel="", scale=1.0, addl_hover_submxs=None):
+                               colorbar=False, hover_info=True, sum_up=False,
+                               ylabel="", scale=1.0, addl_hover_submxs=None):
     """
     Similar to :func:`_circuit_color_boxplot` except a scatter plot is created.
 
     Parameters
     ----------
-    circuit_structure : CircuitStructure
+    circuit_structure : PlaquetteGridCircuitStructure
         Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
@@ -706,69 +661,19 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xvals()
-    yvals = g.used_yvals()
-    inner_xvals = g.minor_xvals()
-    inner_yvals = g.minor_yvals()
+    xvals = g.used_xs
+    yvals = g.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
-    #TODO: move hover-function creation routines to new function since duplicated in
-    # _circuit_color_boxplot
-
-    if hover_info and isinstance(g, _objs.LsGermsStructure):
-        if sum_up:
-            def hover_label_fn(val, iy, ix):
-                """ Standard hover labels """
-                if _np.isnan(val): return ""
-                L, germ = xvals[ix], yvals[iy]
-                baseStr = g.get_plaquette(L, germ, False).base
-                reps = (len(baseStr) // len(germ)) if len(germ) > 0 else 1
-                guess = germ * reps
-                if baseStr == guess:
-                    if len(baseStr) == 0:
-                        txt = "{}"
-                    else:
-                        txt = "(%s)<sup>%d</sup>" % (germ.str, reps)
-                else:
-                    txt = "L: %s<br>germ: %s" % (str(L), germ.str)
-
-                txt += "<br>value: %g" % val
-                for lbl, addl_subMxs in addl_hover_submxs.items():
-                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
-                return txt
-
-        else:
-            def hover_label_fn(val, iy, ix, iiy, iix):
-                """ Standard hover labels """
-                if _np.isnan(val): return ""
-
-                L, germ = xvals[ix], yvals[iy]
-                rhofid, efid = inner_xvals[iix], inner_yvals[iiy]
-                baseStr = g.get_plaquette(L, germ, False).base
-                reps = (len(baseStr) // len(germ)) if len(germ) > 0 else 1
-                guess = germ * reps
-                if baseStr == guess:
-                    if len(baseStr) == 0:
-                        txt = "%s+{}+%s" % (rhofid.str, efid.str)
-                    else:
-                        txt = "%s+(%s)<sup>%d</sup>+%s" % (
-                            rhofid.str, germ.str, reps, efid.str)
-                else:
-                    txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
-                          % (str(L), germ.str, rhofid.str, efid.str)
-                txt += ("<br>value: %g" % val)
-                for lbl, addl_subMxs in addl_hover_submxs.items():
-                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
-                return txt
-
-        hover_info = hover_label_fn  # _summable_color_boxplot can handle this
+    if hover_info:
+        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
 
     xs = []; ys = []; texts = []
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xvals()):
-        for iy, y in enumerate(g.used_yvals()):
+    for ix, x in enumerate(g.used_xs):
+        for iy, y in enumerate(g.used_ys):
             plaq = g.get_plaquette(x, y)
             if sum_up:
                 if plaq.base not in gstrs:
@@ -833,13 +738,13 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
 
 
 def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
-                            ylabel="", scale=1.0):
+                             ylabel="", scale=1.0):
     """
     Similar to :func:`_circuit_color_boxplot` except a histogram is created.
 
     Parameters
     ----------
-    circuit_structure : CircuitStructure
+    circuit_structure : PlaquetteGridCircuitStructure
         Specifies a set of circuits along with their outer and inner x,y
         structure, e.g. fiducials, germs, and maximum lengths.
 
@@ -865,9 +770,9 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
     ys = []  # artificially add minval so
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xvals()):
-        for iy, y in enumerate(g.used_yvals()):
-            plaq = g.get_plaquette(x, y)
+    for ix, x in enumerate(g.used_xs):
+        for iy, y in enumerate(g.used_ys):
+            plaq = g.plaquette(x, y)
             #TODO: if sum_up then need to sum before appending...
             for iiy, iix, opstr in plaq:
                 if opstr in gstrs: continue  # skip duplicates
@@ -1889,8 +1794,7 @@ class ColorBoxPlot(WorkspacePlot):
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
-            circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _BulkCircuitList) \
-                else _objs.LsGermsSerialStructure.from_list(circuit_list, dataset)  # default struct
+            circuit_struct = _PlaquetteGridCircuitStructure.cast(circuit_list)  # , dataset?
 
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
@@ -1940,8 +1844,8 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
                     max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(circuit_struct.used_xvals()))
-                                   for iy in range(len(circuit_struct.used_yvals()))])
+                                   for ix in range(len(circuit_struct.used_xs))
+                                   for iy in range(len(circuit_struct.used_ys))])
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -2087,7 +1991,7 @@ def _outcome_to_str(x):  # same function as in writers.py
 
 
 def _addl_mx_fn_outcomes(plaq, x, y, layout):
-    slmx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
+    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object)
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx

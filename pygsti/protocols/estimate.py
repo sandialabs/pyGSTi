@@ -22,6 +22,7 @@ from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _Confid
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.ciruitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -491,19 +492,19 @@ class Estimate(object):
             scale values (see above).
         """
         p = self.parent
-        gss = p.circuit_lists['final'].circuit_structure  # FUTURE: overrideable?
+        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overrideable?
         weights = self.parameters.get("weights", None)
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-            nrows, ncols = gss.num_plaquette_rows_cols()
 
             sub_mxs = []
-            for y in gss.used_yvals():
+            for y in gss.used_ys:
                 sub_mxs.append([])
-                for x in gss.used_xvals():
-                    scaling_mx = _np.nan * _np.ones((nrows, ncols), 'd')
+                for x in gss.used_xs:
                     plaq = gss.get_plaquette(x, y).expand_aliases()
+                    scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
+
                     if len(plaq) > 0:
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = weights.get(opstr, 1.0)
@@ -524,9 +525,9 @@ class Estimate(object):
 
             if return_submxs:  # then need to create subMxs with all 1's
                 sub_mxs = []
-                for y in gss.used_yvals():
+                for y in gss.used_ys:
                     sub_mxs.append([])
-                    for x in gss.used_xvals():
+                    for x in gss.used_xs:
                         plaq = gss.get_plaquette(x, y)
                         scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
                         for i, j, opstr in plaq:

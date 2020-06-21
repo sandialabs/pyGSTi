@@ -44,6 +44,7 @@ from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from ..objects.label import Label as _Lbl
 from ..objects.polynomial import Polynomial as _Polynomial
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.ciruitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
 from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
@@ -2900,15 +2901,16 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
         germList = [idle_op_str]
         Ls = sorted(max_lengths)
-        gss = _objs.LsGermsSerialStructure(Ls, germList, nMinorRows, nMinorCols,
-                                           aliases=None, sequence_rules=None)
+
+        plaquettes = {}
         serial_germ = idle_op_str.serialize()  # must serialize to get correct count
         for L, fidpairs in Gi_fidpairs.items():
-            germ_power = _gsc.repeat_with_max_length(serial_germ, L)
+            power = _gsc.repeat_count_with_max_length(serial_germ, L)
             # returns 'missing_list'; useful if using dsfilter arg
-            gss.add_plaquette(germ_power, L, idle_op_str, fidpairs)
+            assert((L, idle_op_str) not in plaquettes), "L-values should be different!"
+            plaquettes[(L, idle_op_str)] = _GermFiducialPairPlaquette(idle_op_str, power, fidpairs, None, None)
 
-        return gss
+        return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, name=None)
 
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
@@ -3296,16 +3298,17 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     germList = list(germs.keys())  # ordered dict so retains nice ordering
     Ls = sorted(list(Ls))
-    gss = _objs.LsGermsSerialStructure(Ls, germList, nMinorRows, nMinorCols,
-                                       aliases=None, sequence_rules=None)
+    #gss = _objs.LsGermsSerialStructure(Ls, germList, nMinorRows, nMinorCols,
+    #                                   aliases=None, sequence_rules=None)
 
+    plaquettes = {}
     for germ, gdict in germs.items():
         serial_germ = germ.serialize()  # must serialize to get correct count
         for L, fidpairs in gdict.items():
-            germ_power = _gsc.repeat_with_max_length(serial_germ, L)
-            gss.add_plaquette(germ_power, L, germ, fidpairs)  # returns 'missing_list'; useful if using dsfilter arg
+            power = _gsc.repeat_count_with_max_length(serial_germ, L)
+            plaquettes[(L, germ)] = _GermFiducialPairPlaquette(germ, power, fidpairs, None, None)
 
-    return gss
+    return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, name=None)
 
 
 def _get_kcoverage_template_k2(n):
