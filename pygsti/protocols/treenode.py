@@ -81,7 +81,7 @@ class TreeNode(object):
             #if meta_subdir:
             submeta_dir = subobj_dir / meta_subdir
             if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
-                self._vals[nm] = _io._cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self,
+                self._vals[nm] = _io.metadir._cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self,
                                                                               name=nm, **kwargs)
             #else:  # if meta_subdir is None, we default to the same class as self
             #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
