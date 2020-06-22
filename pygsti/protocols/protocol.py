@@ -1283,10 +1283,7 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                # Note: setting with_times and ignore_zero_count_lines allows proper loading of circuits without data,
-                #  but we may want to update this in the future so we can load time-dependent data.
-                dataset = _io.load_dataset(dataset_files[0], with_times=False, ignore_zero_count_lines=False,
-                                           verbosity=0)
+                dataset = _io.load_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
             else:
                 dataset = {pth.stem: _io.load_dataset(pth, with_times=False, ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
