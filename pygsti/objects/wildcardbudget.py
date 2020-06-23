@@ -105,7 +105,7 @@ class WildcardBudget(object):
 
         precomp : numpy.ndarray, optional
             A precomputed quantity that speeds up the computation of circuit
-            budgets.  Given by :method:`get_precomp_for_circuits`.
+            budgets.  Given by :method:`precompute_for_same_circuits`.
 
         Returns
         -------
@@ -115,7 +115,7 @@ class WildcardBudget(object):
         # circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
         pass
 
-    def get_descriptive_dict(self):
+    def description(self):
         """
         A dictionary of quantities describing this budget.
 
@@ -133,7 +133,7 @@ class WildcardBudget(object):
     #    #for now, assume w_vec is a length-1 vector
     #    return abs(w_vec[0]) * len(c)
 
-    def get_precomp_for_circuits(self, circuits):
+    def precompute_for_same_circuits(self, circuits):
         """
         Compute a pre-computed quantity for speeding up circuit calculations.
 
@@ -646,7 +646,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
         precomp : numpy.ndarray, optional
             A precomputed quantity that speeds up the computation of circuit
-            budgets.  Given by :method:`get_precomp_for_circuits`.
+            budgets.  Given by :method:`precompute_for_same_circuits`.
 
         Returns
         -------
@@ -660,7 +660,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             circuit_budgets = _np.dot(precomp, Wvec) + off
         return circuit_budgets
 
-    def get_descriptive_dict(self):
+    def description(self):
         """
         A dictionary of quantities describing this budget.
 
@@ -679,7 +679,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
         return wildcardDict
 
-    def get_op_budget(self, op_label):
+    def budget_for(self, op_label):
         """
         Retrieve the budget amount correponding to primitive op `op_label`.
 

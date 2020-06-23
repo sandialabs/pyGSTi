@@ -314,14 +314,14 @@ def init_notebook_mode_ex(connected=False):
             '}});'
             '}}'
             '</script>'
-            '').format(script=get_plotlyjs_ex())  # EGN changed to _ex
+            '').format(script=format_plotlylib_inclusion_js())  # EGN changed to _ex
 
     #ORIG: ipython_display.display(ipython_display.HTML(script_inject))
     __PLOTLY_OFFLINE_INITIALIZED = True
     return script_inject  # EGN: just return so we can combine with other HTML
 
 
-def get_plotlyjs_ex():
+def format_plotlylib_inclusion_js():
     """
     Gets the custom pyGSTi version of plotly
 

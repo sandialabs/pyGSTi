@@ -87,7 +87,7 @@ def extract_rotation_hat(xhat, yhat, k, nx, ny, angle_name="epsilon",
         return angle_j
 
 
-def est_angle_list(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon",
+def estimate_angles(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon",
                    length_list=None, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
@@ -145,7 +145,7 @@ def est_angle_list(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon"
     return angleHatList
 
 
-def sin_phi2_func(theta, phi, epsilon, rpeconfig_inst=None):
+def _sin_phi2(theta, phi, epsilon, rpeconfig_inst=None):
     """
     Returns the function whose zero, for fixed phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
@@ -165,7 +165,7 @@ def sin_phi2_func(theta, phi, epsilon, rpeconfig_inst=None):
     Returns
     -------
     sinPhi2FuncVal
-        The value of sin_phi2_func for given inputs.  (Must be 0 to achieve "true" theta.)
+        The value of _sin_phi2 for given inputs.  (Must be 0 to achieve "true" theta.)
     """
 
     newEpsilon = rpeconfig_inst.new_epsilon_func(epsilon)
@@ -177,7 +177,7 @@ def sin_phi2_func(theta, phi, epsilon, rpeconfig_inst=None):
     return sinPhi2FuncVal
 
 
-def est_theta_list(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
+def estimate_thetas(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
                    return_phi_fun_list=False, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
@@ -212,17 +212,17 @@ def est_theta_list(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
         A list of theta estimates, ordered by generation (k).
 
     PhiFunList : list of floats
-        A list of sin_phi2_func vals at optimal theta values.  If not close to
+        A list of _sin_phi2 vals at optimal theta values.  If not close to
         0, constraints unsatisfiable.  Only returned if return_phi_fun_list is set
         to True.
     """
 
-    PhiList = est_angle_list(dataset, angle_sin_strs, angle_cos_strs, 'Phi', rpeconfig_inst=rpeconfig_inst)
+    PhiList = estimate_angles(dataset, angle_sin_strs, angle_cos_strs, 'Phi', rpeconfig_inst=rpeconfig_inst)
     thetaList = []
     PhiFunList = []
     for index, Phi in enumerate(PhiList):
         epsilon = epsilon_list[index]
-        soln = _opt.minimize(lambda x: sin_phi2_func(x, Phi, epsilon, rpeconfig_inst), 0)
+        soln = _opt.minimize(lambda x: _sin_phi2(x, Phi, epsilon, rpeconfig_inst), 0)
         thetaList.append(soln['x'][0])
         PhiFunList.append(soln['fun'])
 #        if soln['fun'] > 1e-2:
@@ -385,7 +385,7 @@ def analyze_rpe_data(input_dataset, true_or_target_model, string_list_d, rpeconf
           epsilon and RPE estimate of epsilon.
         -'thetaErrorList' : List (ordered by k) of difference between true
           theta and RPE estimate of theta.
-        -'PhiFunErrorList' : List (ordered by k) of sin_phi2_func values.
+        -'PhiFunErrorList' : List (ordered by k) of _sin_phi2 values.
 
     """
     alphaCosStrList = string_list_d['alpha', 'cos']
@@ -410,13 +410,13 @@ def analyze_rpe_data(input_dataset, true_or_target_model, string_list_d, rpeconf
     epsilonErrorList = []
     thetaErrorList = []
 #    PhiFunErrorList = []
-    alphaHatList = est_angle_list(input_dataset,
+    alphaHatList = estimate_angles(input_dataset,
                                   alphaSinStrList,
                                   alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
-    epsilonHatList = est_angle_list(input_dataset,
+    epsilonHatList = estimate_angles(input_dataset,
                                     epsilonSinStrList,
                                     epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
-    thetaHatList, PhiFunErrorList = est_theta_list(input_dataset,
+    thetaHatList, PhiFunErrorList = estimate_thetas(input_dataset,
                                                    thetaSinStrList,
                                                    thetaCosStrList,
                                                    epsilonHatList, rpeconfig_inst=rpeconfig_inst,

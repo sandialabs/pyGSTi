@@ -23,7 +23,7 @@ QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
 
 
 #Class-name utils...
-def full_class_name(x):
+def _full_class_name(x):
     """
     Returns the <module>.<classname> for `x`.
 
@@ -39,7 +39,7 @@ def full_class_name(x):
     return x.__class__.__module__ + '.' + x.__class__.__name__
 
 
-def class_for_name(module_and_class_name):
+def _class_for_name(module_and_class_name):
     """
     Return the class object given an name.
 
@@ -168,22 +168,22 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
 
         elif typ == 'protocolobj':
             protocol_dir = root_dir / (key + ext)
-            val = cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
+            val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
 
         elif typ == 'list-of-protocolobjs':
             i = 0; val = []
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
-                val.append(cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
+                val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
 
         elif typ == 'dict-of-protocolobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
+            val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
 
         elif typ == 'dict-of-resultsobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+            val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
                    for k, pth in zip(keys, paths)}
 
         else:  # cases with 'standard' expected path
@@ -318,7 +318,7 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
         _json.dump(meta, f)
 
 
-def cls_from_meta_json(dirname):
+def _cls_from_meta_json(dirname):
     """
     Get the object-type corresponding to the 'type' field in `dirname`/meta.json.
 
@@ -333,10 +333,10 @@ def cls_from_meta_json(dirname):
     """
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'r') as f:
         meta = _json.load(f)
-    return class_for_name(meta['type'])  # class of object to create
+    return _class_for_name(meta['type'])  # class of object to create
 
 
-def obj_to_meta_json(obj, dirname):
+def _obj_to_meta_json(obj, dirname):
     """
     Create a meta.json file within `dirname` that contains (only) the type of `obj` in its 'type' field.
 
@@ -355,7 +355,7 @@ def obj_to_meta_json(obj, dirname):
     -------
     None
     """
-    meta = {'type': full_class_name(obj)}
+    meta = {'type': _full_class_name(obj)}
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'w') as f:
         _json.dump(meta, f)
 
@@ -389,7 +389,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
     -------
     None
     """
-    meta = {'type': full_class_name(obj)}
+    meta = {'type': _full_class_name(obj)}
 
     if len(omit_attributes) > 0:
         vals = obj.__dict__.copy()
@@ -404,7 +404,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
     write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
 
 
-def read_json_or_pkl_files_to_dict(dirname):
+def _read_json_or_pkl_files_to_dict(dirname):
     """
     Load any .json or .pkl files in `dirname` into a dict.
 
@@ -442,7 +442,7 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     If the element is json-able, it is JSON-serialized and the ".json"
     extension is used.  If not, pickle is used to serialize the element,
     and the ".pkl" extension is used.  This is the reverse of
-    :function:`read_json_or_pkl_files_to_dict`.
+    :function:`_read_json_or_pkl_files_to_dict`.
 
     Parameters
     ----------

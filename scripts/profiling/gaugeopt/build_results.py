@@ -88,7 +88,7 @@ maxLengths = [1,2,4]
 #the specified fiducials, germs, and maximum lengths.  We use
 #"germs4" here so that the tutorial runs quickly; really, you'd
 #want to use germs71!
-listOfExperiments = pygsti.construction.make_lsgst_experiment_list(gs_target.gates.keys(), prep_fiducials,
+listOfExperiments = pygsti.construction.create_lsgst_circuits(gs_target.gates.keys(), prep_fiducials,
                                                                    effect_fiducials, germs4, maxLengths)
 
 #Create an empty dataset file, which stores the list of experiments
@@ -99,18 +99,18 @@ pygsti.io.write_empty_dataset("tutorial_files/My2QDataTemplate.txt", listOfExper
 
 #Generate some "fake" (simulated) data based on a depolarized version of the target gateset
 gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
-ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments, n_samples=1000,
+ds = pygsti.construction.simulate_data(gs_datagen, listOfExperiments, n_samples=1000,
                                             sample_error="multinomial", seed=2016)
 
 
 start = time.time()
 '''
-results = pygsti.do_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
+results = pygsti.run_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
                                     maxLengths, gaugeOptParams={'item_weights': {'spam':0.1,'gates': 1.0}},
                                     advancedOptions={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
                                     verbosity=3 )
 '''
-results = pygsti.do_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
+results = pygsti.run_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
                                     maxLengths, gauge_opt_params=None,
                                     advanced_options={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
                                     verbosity=3 )

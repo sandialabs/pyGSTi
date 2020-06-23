@@ -185,7 +185,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
         raise ValueError("List does not correspond to a slice!")
 
 
-def as_array(slc_or_list_like):
+def to_array(slc_or_list_like):
     """
     Returns `slc_or_list_like` as an index array (an integer numpy.ndarray).
 

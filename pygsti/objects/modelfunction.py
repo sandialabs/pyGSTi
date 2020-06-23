@@ -190,7 +190,7 @@ def opfn_factory(fn):
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].todense(), model.basis,
+            return fn(model.operations[self.gl].to_dense(), model.basis,
                       *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -233,7 +233,7 @@ def opsfn_factory(fn):
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].todense(), self.other_model.operations[self.gl].todense(),
+            return fn(model.operations[self.gl].to_dense(), self.other_model.operations[self.gl].to_dense(),
                       model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -280,11 +280,11 @@ def vecfn_factory(fn):
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(model.preps[self.lbl].todense(), model.basis,
+                return fn(model.preps[self.lbl].to_dense(), model.basis,
                           *self.args, **self.kwargs)
             else:
                 povmlbl, Elbl = self.lbl.split(":")  # for effect, lbl must == "povmLbl:ELbl"
-                return fn(model.povms[povmlbl][Elbl].todense(), model.basis,
+                return fn(model.povms[povmlbl][Elbl].to_dense(), model.basis,
                           *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -335,11 +335,11 @@ def vecsfn_factory(fn):
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(model.preps[self.lbl].todense(), self.other_vecsrc[self.lbl].todense(),
+                return fn(model.preps[self.lbl].to_dense(), self.other_vecsrc[self.lbl].to_dense(),
                           model.basis, *self.args, **self.kwargs)
             else:
                 povmlbl, Elbl = self.lbl.split(":")  # for effect, lbl must == "povmLbl:ELbl"
-                return fn(model.povms[povmlbl][Elbl].todense(), self.other_vecsrc[povmlbl][Elbl].todense(),
+                return fn(model.povms[povmlbl][Elbl].to_dense(), self.other_vecsrc[povmlbl][Elbl].to_dense(),
                           model.basis, *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")

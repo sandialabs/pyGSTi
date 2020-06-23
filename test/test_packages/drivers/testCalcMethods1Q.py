@@ -19,7 +19,7 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
-#Mimics a function that used to be in pyGSTi, replaced with build_cloudnoise_model_from_hops_and_weights
+#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=False,
@@ -39,7 +39,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
 
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.build_cloudnoise_model_from_hops_and_weights(
+    return pc.create_cloudnoise_model_from_hops_and_weights(
         nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight, sparse,
@@ -67,12 +67,12 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Standard GST dataset
         cls.maxLengths = [1,2,4]
         cls.mdl_datagen = std.target_model().depolarize(op_noise=0.03, spam_noise=0.001)
-        cls.listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        cls.listOfExperiments = pygsti.construction.create_lsgst_circuits(
             std.target_model(), std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
-            ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
+            ds = pygsti.construction.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
                                                         n_samples=1000, sample_error="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset")
 
@@ -96,19 +96,19 @@ class CalcMethods1QTestCase(BaseTestCase):
         fids1Q = std1Q_XY.fiducials[1:2] # for speed, just take 1 non-empty fiducial
         cls.redmod_fiducials = [ Circuit([], line_labels=(0,)) ]  # special case for empty fiducial (need to change line label)
         for i in range(cls.nQubits):
-            cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuit_list(
+            cls.redmod_fiducials.extend( pygsti.construction.manipulate_circuits(
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.circuit_list([ (gl,) for gl in op_labels ])
+        cls.redmod_germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ])
         cls.redmod_maxLs = [1]
-        expList = pygsti.construction.make_lsgst_experiment_list(
+        expList = pygsti.construction.create_lsgst_circuits(
             op_labels, cls.redmod_fiducials, cls.redmod_fiducials,
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
-            redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
+            redmod_ds = pygsti.construction.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
             redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
 
         cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q_redmod.dataset")
@@ -143,7 +143,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
 
         #CHECK that copy gives identical models - this is checked by other
@@ -176,7 +176,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
@@ -197,7 +197,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder', max_order=1) # this is the default set by set_all_parameterizations above
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=1)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
@@ -232,7 +232,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_simtype('termgap', max_order=3, desired_perr=0.01, allowed_perr=0.1,
                                  max_paths_per_outcome=1000, perr_heuristic='scaled', max_term_stages=5)
 
-        results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
+        results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=3)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
@@ -266,7 +266,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="matrix", verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -288,7 +288,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -309,7 +309,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -324,7 +324,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -345,7 +345,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -361,7 +361,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                       sim_type="termorder", parameterization="H+S terms", errcomp_type='gates')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -384,7 +384,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                       sim_type="termorder", parameterization="H+S terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -403,7 +403,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -420,7 +420,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="termorder", parameterization="H+S clifford terms", errcomp_type='gates')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -438,7 +438,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                              sim_type="termorder", parameterization="H+S clifford terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
-        results = pygsti.do_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
+        results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
@@ -456,25 +456,25 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Using simple "std" models (which are all density-matrix/superop type)
         mdl = std.target_model()
-        probs1 = mdl.probs(self.circuit1)
+        probs1 = mdl.probabilities(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
         print(probs1)
 
         gs2 = std.target_model()
         gs2.set_simtype("map")
-        probs1 = gs2.probs(self.circuit1)
+        probs1 = gs2.probabilities(self.circuit1)
         #self.circuit1.simulate(gs2) # calls probs - same as above line
         print(probs1)
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         #Using n-qubit models
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="matrix", ensure_composed_gates=False)
-        probs1 = mdl.probs(self.circuit3)
+        probs1 = mdl.probabilities(self.circuit3)
 
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="map", ensure_composed_gates=False)
-        probs2 = mdl.probs(self.circuit3)
+        probs2 = mdl.probabilities(self.circuit3)
 
         expected = { ('000',): 0.0,
                      ('001',): 0.0,
@@ -513,23 +513,23 @@ class CalcMethods1QTestCase(BaseTestCase):
             {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec', 'effect'),
              '1': pygsti.obj.StaticSPAMVec( [0,1], 'statevec', 'effect')})
 
-        probs1 = mdl.probs(self.circuit1)
+        probs1 = mdl.probabilities(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
         print(probs1)
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         gs2 = mdl.copy()
         gs2.set_simtype("map")
-        gs2.probs(self.circuit1)
+        gs2.probabilities(self.circuit1)
         #self.circuit1.simulate(gs2) # calls probs - same as above line
 
         #Using n-qubit models
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], evotype="statevec", sim_type="matrix", ensure_composed_gates=False)
-        probs1 = mdl.probs(self.circuit3)
-        mdl = pygsti.construction.build_localnoise_model(
+        probs1 = mdl.probabilities(self.circuit3)
+        mdl = pygsti.construction.create_localnoise_model(
             self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'],  evotype="statevec", sim_type="map", ensure_composed_gates=False)
-        probs2 = mdl.probs(self.circuit3)
+        probs2 = mdl.probabilities(self.circuit3)
 
         expected = { ('000',): 0.0,
                      ('001',): 0.0,
@@ -553,17 +553,17 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl.set_simtype('termorder', max_order=1) # 1st-order in error rates
         mdl.set_all_parameterizations("H+S terms")
 
-        probs1 = mdl.probs(self.circuit1)
+        probs1 = mdl.probabilities(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
 
         print(probs1)
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         #Using n-qubit models ("H+S terms" parameterization constructs embedded/composed gates containing LindbladTermGates, etc.)
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="termorder",
             parameterization="H+S terms", ensure_composed_gates=False)
-        probs1 = mdl.probs(self.circuit3)
+        probs1 = mdl.probabilities(self.circuit3)
         probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
         print(probs1)
         print(probs2)
@@ -586,13 +586,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             1, ['Gi','Gx','Gy'], parameterization="clifford", ensure_composed_gates=False)
 
-        probs0 = mdl.probs(c0)
-        probs1 = mdl.probs(c1)
-        probs2 = mdl.probs(c2)
-        probs3 = mdl.probs(c3)
+        probs0 = mdl.probabilities(c0)
+        probs1 = mdl.probabilities(c1)
+        probs2 = mdl.probabilities(c2)
+        probs3 = mdl.probabilities(c3)
 
         self.assert_outcomes(probs0, {('0',): 1.0,  ('1',): 0.0} )
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
@@ -604,10 +604,10 @@ class CalcMethods1QTestCase(BaseTestCase):
         from pygsti.modelpacks.legacy import std1Q_XYI as stdChk
 
         maxLengths = [1,2,4]
-        listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        listOfExperiments = pygsti.construction.create_lsgst_circuits(
             stdChk.target_model(), stdChk.prepStrs, stdChk.effectStrs, stdChk.germs, maxLengths)
-        #listOfExperiments = pygsti.construction.circuit_list([ ('Gcnot','Gxi') ])
-        #listOfExperiments = pygsti.construction.circuit_list([ ('Gxi','Gcphase','Gxi','Gix') ])
+        #listOfExperiments = pygsti.construction.to_circuits([ ('Gcnot','Gxi') ])
+        #listOfExperiments = pygsti.construction.to_circuits([ ('Gxi','Gcphase','Gxi','Gix') ])
 
         mdl_normal = stdChk.target_model()
         mdl_clifford = stdChk.target_model()
@@ -620,8 +620,8 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         for opstr in listOfExperiments:
             #print(str(opstr))
-            p_normal = mdl_normal.probs(opstr)
-            p_clifford = mdl_clifford.probs(opstr)
+            p_normal = mdl_normal.probabilities(opstr)
+            p_clifford = mdl_clifford.probabilities(opstr)
             #p_clifford = bprobs[opstr]
             for outcm in p_normal.keys():
                 if abs(p_normal[outcm]-p_clifford[outcm]) > 1e-8:
@@ -636,13 +636,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
-        mdl = pygsti.construction.build_localnoise_model(
+        mdl = pygsti.construction.create_localnoise_model(
             1, ['Gi','Gx','Gy'], sim_type="termorder", parameterization="H+S clifford terms", ensure_composed_gates=False)
 
-        probs0 = mdl.probs(c0)
-        probs1 = mdl.probs(c1)
-        probs2 = mdl.probs(c2)
-        probs3 = mdl.probs(c3)
+        probs0 = mdl.probabilities(c0)
+        probs1 = mdl.probabilities(c1)
+        probs2 = mdl.probabilities(c2)
+        probs3 = mdl.probabilities(c3)
 
         self.assert_outcomes(probs0, {('0',): 1.0,  ('1',): 0.0} )
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )

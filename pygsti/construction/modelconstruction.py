@@ -35,14 +35,14 @@ from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
-from ..tools.legacytools import deprecated_fn as _deprecated_fn
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 
 #############################################
 # Build gates based on "standard" gate names
 ############################################
 
-def basis_build_vector(vec_expr, basis):
+def _basis_create_spam_vector(vec_expr, basis):
     """
     Build a rho or E vector from an expression.
 
@@ -80,10 +80,10 @@ def basis_build_vector(vec_expr, basis):
         raise ValueError("Expression must be the index of a state (as a string)")
 
     #standard basis that has the same direct-sum structure as `basis`:
-    std_basis = basis.equivalent('std')
+    std_basis = basis.create_equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.get_from_element_std(), vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix(), vecInSimpleStdBasis.flatten())
     # translates the density matrx / SPAMVec to the std basis with our desired block structure
 
     #TODO REMOVE
@@ -104,15 +104,15 @@ def basis_build_vector(vec_expr, basis):
     return vec.reshape(-1, 1)
 
 
-@_deprecated_fn('basis_build_vector(...)')
-def build_vector(state_space_dims, state_space_labels, vec_expr, basis="gm"):
+@_deprecated_fn('_basis_create_spam_vector(...)')
+def _create_spam_vector(state_space_dims, state_space_labels, vec_expr, basis="gm"):
     """
-    DEPRECATED: use :func:`basis_build_vector` instead.
+    DEPRECATED: use :func:`_basis_create_spam_vector` instead.
     """
-    return basis_build_vector(vec_expr, _Basis.cast(basis, state_space_dims))
+    return _basis_create_spam_vector(vec_expr, _Basis.cast(basis, state_space_dims))
 
 
-def basis_build_identity_vec(basis):
+def _basis_create_identity_vec(basis):
     """
     Build a the identity vector for a given space and basis.
 
@@ -148,7 +148,7 @@ def basis_build_identity_vec(basis):
     return _bt.change_basis(vecInReducedStdBasis, "std", basis)
 
 
-def build_identity_vec(state_space_dims, basis="gm"):
+def _create_identity_vec(state_space_dims, basis="gm"):
     """
     Build the identity vector given a certain density matrix struture.
 
@@ -167,10 +167,10 @@ def build_identity_vec(state_space_dims, basis="gm"):
     -------
     numpy array
     """
-    return basis_build_identity_vec(_Basis.cast(basis, state_space_dims))
+    return _basis_create_identity_vec(_Basis.cast(basis, state_space_dims))
 
 
-def basis_build_operation(state_space_labels, op_expr, basis="gm", parameterization="full"):
+def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameterization="full"):
     """
     Build an operation object from an expression.
 
@@ -405,7 +405,7 @@ def basis_build_operation(state_space_labels, op_expr, basis="gm", parameterizat
         else _op.ComposedDenseOp(list(reversed(opTermsInFinalBasis)))
     #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
 
-    finalOpMx = opInFinalBasis.todense()
+    finalOpMx = opInFinalBasis.to_dense()
     if basis.real:
         assert(_np.linalg.norm(finalOpMx.imag) < 1e-6), "Operation matrix should be real but isn't!"
         finalOpMx = _np.real(finalOpMx)
@@ -422,17 +422,17 @@ def basis_build_operation(state_space_labels, op_expr, basis="gm", parameterizat
                      % parameterization)
 
 
-@_deprecated_fn('basis_build_operation(...)')
-def build_operation(state_space_dims, state_space_labels, op_expr, basis="gm", parameterization="full"):
+@_deprecated_fn('_basis_create_operation(...)')
+def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm", parameterization="full"):
     """
-    DEPRECATED: use :func:`basis_build_operation` instead.
+    DEPRECATED: use :func:`_basis_create_operation` instead.
     """
     sslbls = _ld.StateSpaceLabels(state_space_labels, state_space_dims)
-    return basis_build_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
+    return _basis_create_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
                                  parameterization)
 
 
-def basis_build_explicit_model(state_space_labels, basis,
+def basis_create_explicit_model(state_space_labels, basis,
                                op_labels, op_expressions,
                                prep_labels=('rho0',), prep_expressions=('0',),
                                effect_labels='standard', effect_expressions='standard',
@@ -464,7 +464,7 @@ def basis_build_explicit_model(state_space_labels, basis,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`build_operation`).
+        documentation for :meth:`_create_operation`).
 
     prep_labels : list of string, optional
         A list of labels for each created state preparation in the final
@@ -473,7 +473,7 @@ def basis_build_explicit_model(state_space_labels, basis,
 
     prep_expressions : list of strings, optional
         A list of vector expressions for each state preparation vector (see
-        documentation for :meth:`build_vector`).
+        documentation for :meth:`_create_spam_vector`).
 
     effect_labels : list, optional
         If `povm_labels` is a string, then this is just a list of the effect
@@ -487,7 +487,7 @@ def basis_build_explicit_model(state_space_labels, basis,
 
     effect_expressions : list, optional
         A list or list-of-lists of (string) vector expressions for each POVM
-        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        effect vector (see documentation for :meth:`_create_spam_vector`).  Expressions
         correspond to labels in `effect_labels`.  If set to the special string
         `"standard"`, then the expressions `"0"`, `"1"`, ... `"<dim>"` are used,
         where `<dim>` is the dimension of the state space.
@@ -499,7 +499,7 @@ def basis_build_explicit_model(state_space_labels, basis,
 
     parameterization : {"full","TP","static"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`build_operation`).
+        documentation for :meth:`_create_operation`).
 
     Returns
     -------
@@ -513,7 +513,7 @@ def basis_build_explicit_model(state_space_labels, basis,
     #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label, rhoExpr in zip(prep_labels, prep_expressions):
-        vec = basis_build_vector(rhoExpr, basis)
+        vec = _basis_create_spam_vector(rhoExpr, basis)
         if parameterization == "full":
             ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx', 'prep')
         elif parameterization == "TP":
@@ -546,7 +546,7 @@ def basis_build_explicit_model(state_space_labels, basis,
             EExprs = list(map(str, range(dmDim)))  # standard = 0,1,...,dmDim
 
         for label, EExpr in zip(ELbls, EExprs):
-            evec = basis_build_vector(EExpr, basis)
+            evec = _basis_create_spam_vector(EExpr, basis)
             if parameterization == "static":
                 effects.append((label, _spamvec.StaticSPAMVec(evec, 'densitymx', 'effect')))
             else:
@@ -559,7 +559,7 @@ def basis_build_explicit_model(state_space_labels, basis,
                 ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
 
     for (opLabel, opExpr) in zip(op_labels, op_expressions):
-        ret.operations[opLabel] = basis_build_operation(state_space_labels,
+        ret.operations[opLabel] = _basis_create_operation(state_space_labels,
                                                         opExpr, basis, parameterization)
 
     if parameterization == "full":
@@ -572,7 +572,7 @@ def basis_build_explicit_model(state_space_labels, basis,
     return ret
 
 
-def build_explicit_model(state_space_labels,
+def create_explicit_model(state_space_labels,
                          op_labels, op_expressions,
                          prep_labels=('rho0',), prep_expressions=('0',),
                          effect_labels='standard', effect_expressions='standard',
@@ -599,7 +599,7 @@ def build_explicit_model(state_space_labels,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`build_operation`).
+        documentation for :meth:`_create_operation`).
 
     prep_labels : list of string
         A list of labels for each created state preparation in the final
@@ -608,7 +608,7 @@ def build_explicit_model(state_space_labels,
 
     prep_expressions : list of strings
         A list of vector expressions for each state preparation vector (see
-        documentation for :meth:`build_vector`).
+        documentation for :meth:`_create_spam_vector`).
 
     effect_labels : list, optional
         If `povm_labels` is a string, then this is just a list of the effect
@@ -622,7 +622,7 @@ def build_explicit_model(state_space_labels,
 
     effect_expressions : list, optional
         A list or list-of-lists of (string) vector expressions for each POVM
-        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        effect vector (see documentation for :meth:`_create_spam_vector`).  Expressions
         correspond to labels in `effect_labels`.  If set to the special string
         `"standard"`, then the expressions `"0"`, `"1"`, ... `"<dim>"` are used,
         where `<dim>` is the dimension of the state space.
@@ -648,7 +648,7 @@ def build_explicit_model(state_space_labels,
 
     parameterization : {"full","TP"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`build_operation`).
+        documentation for :meth:`_create_operation`).
 
     Returns
     -------
@@ -669,7 +669,7 @@ def build_explicit_model(state_space_labels,
             basis = "qt"
         else: basis = "gm"
 
-    return basis_build_explicit_model(state_space_labels,
+    return basis_create_explicit_model(state_space_labels,
                                       _Basis.cast(basis, state_space_labels),
                                       op_labels, op_expressions,
                                       prep_labels, prep_expressions,
@@ -677,7 +677,7 @@ def build_explicit_model(state_space_labels,
                                       povm_labels, parameterization=parameterization)
 
 
-def build_explicit_alias_model(mdl_primitives, alias_dict):
+def create_explicit_alias_model(mdl_primitives, alias_dict):
     """
     Creates a model by applying aliases to an existing model.
 
@@ -713,7 +713,7 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     return mdl_new
 
 
-def build_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
                            availability=None, qubit_labels=None, geometry="line", parameterization='static',
                            evotype="auto", sim_type="auto", on_construction_error='raise',
                            independent_gates=False, ensure_composed_gates=False, global_idle=None):
@@ -870,14 +870,14 @@ def build_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cus
         `availability`).  For instance, the operation label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    return _LocalNoiseModel.build_from_parameterization(
+    return _LocalNoiseModel.from_parameterization(
         n_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
         availability, qubit_labels, geometry, parameterization, evotype,
         sim_type, on_construction_error, independent_gates,
         ensure_composed_gates, global_idle)
 
 
-def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
                                availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                evotype="auto", sim_type="auto", on_construction_error='raise',
                                independent_gates=False, ensure_composed_gates=False):
@@ -1024,7 +1024,7 @@ def build_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_un
 
     if custom_gates is None: custom_gates = {}
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-    std_unitaries = _itgs.get_standard_gatename_unitaries()
+    std_unitaries = _itgs.standard_gatename_unitaries()
 
     if evotype == "auto":
         evotype = "densitymx"  # FUTURE: do something more sophisticated?

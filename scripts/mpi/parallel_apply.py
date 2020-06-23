@@ -9,7 +9,7 @@ def f(x):
         return f(x - 1) + f(x - 2)
 
 def main(args):
-    comm = pygsti.get_comm()
+    comm = pygsti.mpi4py_comm()
     numbers = list(range(100))
     results = pygsti.parallel_apply(f, numbers, comm)
     if comm.Get_rank() == 0:

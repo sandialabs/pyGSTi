@@ -19,7 +19,7 @@ from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
 
-def create_standard_cost_function(name):
+def _create_standard_costfunction(name):
     """
     Creates the standard 'costfunctions' from an input string.
 
@@ -215,8 +215,8 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     else: circuit.append_circuit(pauli_circuit)
 
     # If we aren't Pauli-randomizing, do a final bit of depth compression
-    if pspec is not None: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
-    else: circuit.compress_depth(verbosity=0)
+    if pspec is not None: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    else: circuit.compress_depth_inplace(verbosity=0)
 
     # Check that the correct Clifford has been compiled. This should never fail, but could if
     # the compilation provided for the internal gates is incorrect (the alternative is a mistake in this algorithm).
@@ -352,7 +352,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
     if isinstance(costfunction, str):
-        costfunction = create_standard_cost_function(costfunction)
+        costfunction = _create_standard_costfunction(costfunction)
 
     # Deterministic basic global Gaussian elimination
     if 'BGGE' in algorithms:
@@ -362,14 +362,14 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
             eliminationorder = list(range(len(pspec.qubit_labels)))
         else:
             eliminationorder = list(range(n))
-        circuit = compile_symplectic_using_ogge_algorithm(s, eliminationorder=eliminationorder, pspec=pspec,
+        circuit = _compile_symplectic_using_ogge_algorithm(s, eliminationorder=eliminationorder, pspec=pspec,
                                                           qubit_labels=qubit_labels, ctype='basic', check=False)
         circuits.append(circuit)
 
     # Randomized basic global Gaussian elimination, whereby the order that the qubits are eliminated in
     # is randomized.
     if 'ROGGE' in algorithms:
-        circuit = compile_symplectic_using_rogge_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, ctype='basic',
+        circuit = _compile_symplectic_using_rogge_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, ctype='basic',
                                                            costfunction=costfunction, iterations=iterations,
                                                            check=False)
         circuits.append(circuit)
@@ -378,7 +378,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     # The Aaraonson-Gottesman method for compiling a symplectic matrix using 5 CNOT circuits + local layers,
     # with the CNOT circuits compiled using Gaussian elimination.
     # if 'AGvGE' in algorithms:
-    #     circuit = compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod='GE',
+    #     circuit = _compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod='GE',
     #                                                     check=False)
     #     circuits.append(circuit)
 
@@ -387,7 +387,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     # with the CNOT circuits compiled using the asymptotically optimal O(n^2/logn) CNOT circuit algorithm of
     # PMH.
     # if 'AGvPMH' in algorithms:
-    #     circuit = compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod = 'PMH',
+    #     circuit = _compile_symplectic_using_ag_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, cnotmethod = 'PMH',
     #                                                     check=False)
     #     circuits.append(circuit)
 
@@ -397,7 +397,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         # This defaults to what we think is the best Gauss. elimin. based CNOT compiler in pyGSTi (this one may actual
         # not be the best one though). Note that this is a randomized version of the algorithm (using the albert-factor
         # randomization).
-        circuit = compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
+        circuit = _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
                                                          cnotalg='COiCAGE', cargs=[], costfunction=costfunction,
                                                          check=False)
         circuits.append(circuit)
@@ -454,12 +454,12 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     return circuit
 
 
-def compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
+def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
                                              costfunction='2QGC:10:depth:1', iterations=10, check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the ROGGE algorithm.
 
-    The order global Gaussian elimiation algorithm of compile_symplectic_using_ogge_algorithm() with the
+    The order global Gaussian elimiation algorithm of _compile_symplectic_using_ogge_algorithm() with the
     qubit elimination order randomized. See that function for further details on the algorithm, This algorithm
     is more conveniently and flexibly accessed via the `compile_symplectic()` or  `compile_clifford()` wrap-around
     functions.
@@ -523,7 +523,7 @@ def compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, c
     n = _np.shape(s)[0] // 2
     # If the costfunction is a string, create the relevant "standard" costfunction function.
     if isinstance(costfunction, str):
-        costfunction = create_standard_cost_function(costfunction)
+        costfunction = _create_standard_costfunction(costfunction)
 
     # The elimination order in terms of qubit *index*, which is randomized below.
     if qubit_labels is not None:
@@ -539,7 +539,7 @@ def compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, c
         _np.random.shuffle(eliminationorder)
         # Call the re-ordered global Gaussian elimination, which is wrap-around for the GE algorithms to deal
         # with qubit relabeling. Check is False avoids multiple checks of success, when only the last check matters.
-        circuit = compile_symplectic_using_ogge_algorithm(
+        circuit = _compile_symplectic_using_ogge_algorithm(
             s, eliminationorder, pspec=pspec, qubit_labels=qubit_labels, ctype=ctype, check=False)
         # Find the cost of the circuit, and keep it if this circuit is the lowest-cost circuit so far.
         circuit_cost = costfunction(circuit, pspec)
@@ -554,7 +554,7 @@ def compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, c
     return bestcircuit
 
 
-def compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
+def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
                                             ctype='basic', check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the OGGE algorithm.
@@ -626,11 +626,11 @@ def compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qub
     P2n = _np.zeros((2 * n, 2 * n), int)
     P2n[0:n, 0:n] = P
     P2n[n:2 * n, n:2 * n] = P
-    permuted_s = _mtx.dotmod2(_mtx.dotmod2(P2n, s), _np.transpose(P2n))
+    permuted_s = _mtx.dot_mod2(_mtx.dot_mod2(P2n, s), _np.transpose(P2n))
 
     if ctype == 'basic':
         # Check is False avoids multiple checks of success, when only the last check matters.
-        circuit = compile_symplectic_using_gge_core(permuted_s, check=False)
+        circuit = _compile_symplectic_using_gge_core(permuted_s, check=False)
         circuit = circuit.copy(editable=True)  # make editable - maybe make `editable` a param of above fn call?
     else: raise ValueError("The compilation sub-method is not valid!")
     # Futures: write a connectivity-adjusted algorithm, similar to the COGE/iCAGE CNOT compilers.
@@ -669,14 +669,14 @@ def compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qub
     return circuit
 
 
-def compile_symplectic_using_gge_core(s, check=True):
+def _compile_symplectic_using_gge_core(s, check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the GGE algorithm.
 
     Creates a circuit over 'I','H','HP','PH','HPH', and 'CNOT' that implements a Clifford
     gate with `s` as its symplectic matrix in the symplectic representation (and with any
     phase vector). This circuit is generated using a basic Gaussian elimination algorithm,
-    which is described in more detail in compile_symplectic_using_ogge_algorithm(), which
+    which is described in more detail in _compile_symplectic_using_ogge_algorithm(), which
     is a wrap-around for this algorithm that implements a more flexible compilation method.
 
     This algorithm is more conveniently accessed via the `compile_symplectic()` or
@@ -894,11 +894,11 @@ def compile_symplectic_using_gge_core(s, check=True):
     # That circuit implements the inverse of s (it maps s to the identity). As all the gates in this
     # set are self-inverse (up to Pauli multiplication) we just reverse the circuit to get a circuit
     # for s.
-    circuit.reverse()
+    circuit.reverse_inplace()
     # To do the depth compression, we use the 1-qubit gate relations for the standard set of gates used
     # here.
     oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
-    circuit.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
+    circuit.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
     # We check that the correct Clifford -- up to Pauli operators -- has been implemented.
     if check:
         implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit)
@@ -908,7 +908,7 @@ def compile_symplectic_using_gge_core(s, check=True):
     return circuit
 
 
-def compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cnotmethod='PMH', check=False):
+def _compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cnotmethod='PMH', check=False):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the AG algorithm.
 
@@ -958,7 +958,7 @@ def compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cnot
     return circuit
 
 
-def compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
+def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
                                            cargs=[], costfunction='2QGC:10:depth:1', check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the RIAG algorithm.
@@ -1033,11 +1033,11 @@ def compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iteratio
         A circuit implementing the input symplectic matrix.
     """
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if isinstance(costfunction, str): costfunction = _create_standard_costfunction(costfunction)
 
     mincost = _np.inf
     for i in range(iterations):
-        circuit = compile_symplectic_using_iag_algorithm(
+        circuit = _compile_symplectic_using_iag_algorithm(
             s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs, check=False)
 
         # Change to the native gate library
@@ -1065,11 +1065,11 @@ def compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iteratio
     return bestcircuit
 
 
-def compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True):
+def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
 
-    A single iteration of the algorithm in compile_symplectic_using_riag_algoritm(). See that functions
+    A single iteration of the algorithm in _compile_symplectic_using_riag_algoritm(). See that functions
     docstring for more information. Note that it is normallly better to access this algorithm through that
     function even when only a single iteration of the randomization is desired: this function does *not* change
     into the native model.
@@ -1120,42 +1120,42 @@ def compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg=
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, LHS1_Hsome_layer = make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
+    sout, LHS1_Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
-    sout, RHS1A_CNOTs, success = submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
+    sout, RHS1A_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
     assert(success), \
         "The 1st Gaussian elimination stage of the algorithm has failed! Perhaps the input was not a symplectic matrix."
     assert(_symp.check_symplectic(sout))
     # Stage 3: Phase circuit from the LHS to make the LR submatrix of s invertible
-    sout, LHS2_Psome_layer = make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
+    sout, LHS2_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, LHS3_CNOTs = do_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+    sout, LHS3_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 5: A CNOT circuit from the RHS to map the URH and LRH submatrices of s from M to I.
-    sout, RHS1B_CNOTs, success = submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
+    sout, RHS1B_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
     assert(success), \
         "The 3rd Gaussian elimination stage of the algorithm has failed! Perhaps the input was not a symplectic matrix."
     assert(_symp.check_symplectic(sout))
     # Stage 6: Phase gates on all qubits acting from the LHS to map the LR submatrix of s to 0.
-    sout, LHS4_Pall_layer = apply_phase_to_all(sout, 'row', qubit_labels)
+    sout, LHS4_Pall_layer = _apply_phase_to_all_qubits(sout, 'row', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 7: Hadamard gates on all qubits acting from the LHS to swap the LR and UR matrices
     # of s, (mapping them to I and 0 resp.,).
-    sout, LHS5_Hall_layer = apply_hadamard_to_all_qubits(sout, 'row', qubit_labels)
+    sout, LHS5_Hall_layer = _apply_hadamard_to_all_qubits(sout, 'row', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 8 : Phase circuit from the LHS to make the LL submatrix of s invertible
-    sout, LHS6_Psome_layer = make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LL', qubit_labels)
+    sout, LHS6_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LL', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 9: CNOT circuit from the RHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, RHS1C_CNOTs = do_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels)
+    sout, RHS1C_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 10: Phase gates on all qubits acting from the RHS to map the LL submatrix of s to 0.
-    sout, RHS2_Pall_layer = apply_phase_to_all(sout, 'column', qubit_labels)
+    sout, RHS2_Pall_layer = _apply_phase_to_all_qubits(sout, 'column', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 11: A CNOT circuit from the LHS to map the to I. (can do the GE on either UL or LR)
-    sout, LHS7_CNOTs, success = submatrix_gaussian_elimination_using_cnots(sout, 'row', 'UL', qubit_labels)
+    sout, LHS7_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'row', 'UL', qubit_labels)
     assert(_symp.check_symplectic(sout))
     assert(_np.array_equal(sout, _np.identity(2 * n, int))), "Algorithm has failed!"
 
@@ -1290,7 +1290,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     assert(_symp.check_symplectic(s)), "`s` is not symplectic, so it does not rep. a valid CNOT circuit!"
 
     # basic GE
-    if algorithm == 'BGE': circuit = compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=qubit_labels)
+    if algorithm == 'BGE': circuit = _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=qubit_labels)
 
     # ordered GE with the qubit elimination order specified by the aargs list.
     elif algorithm == 'OCAGE' or algorithm == 'OiCAGE':
@@ -1298,10 +1298,10 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
             'With the `OCAGE` algorithm, `arrgs` must be a length-1 list/tuple containing a list of all the qubits!'
         qubitorder = _copy.copy(aargs[0])
         if algorithm == 'OCAGE':
-            circuit = compile_cnot_circuit_using_ocage_algorithm(
+            circuit = _compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs[1:])
         if algorithm == 'OiCAGE':
-            circuit = compile_cnot_circuit_using_oicage_algorithm(
+            circuit = _compile_cnot_circuit_using_oicage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs[1:])
 
     # ordered GE with the qubit elimination order from least to most connected qubit
@@ -1324,10 +1324,10 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
             del remaining_qubits[qindex]
 
         if algorithm == 'COCAGE':
-            circuit = compile_cnot_circuit_using_ocage_algorithm(
+            circuit = _compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs)
         if algorithm == 'COiCAGE':
-            circuit = compile_cnot_circuit_using_oicage_algorithm(
+            circuit = _compile_cnot_circuit_using_oicage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=False, *aargs)
 
     # ordered GE with the qubit elimination order random. This is likely a pretty stupid algorithm to use
@@ -1337,7 +1337,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
         qubitorder = _copy.copy(qubits)
         _np.random.shuffle(qubitorder)
         if algorithm == 'ROCAGE':
-            circuit = compile_cnot_circuit_using_ocage_algorithm(
+            circuit = _compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=True, *aargs)
 
     else: raise ValueError("The choice of algorithm is invalid!")
@@ -1357,7 +1357,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     return circuit
 
 
-def compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname=None, check=True):
+def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname=None, check=True):
     """
     Compile a CNOT circuit.
 
@@ -1411,7 +1411,7 @@ def compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname
 
     assert(len(qubit_labels) == n), "The CNOT circuit is over the wrong number of qubits!"
     # We can just use this more general function for this task.
-    sout, instructions, success = submatrix_gaussian_elimination_using_cnots(s, 'row', 'UL', qubit_labels)
+    sout, instructions, success = _submatrix_gaussian_elimination_using_cnots(s, 'row', 'UL', qubit_labels)
     assert(_np.array_equal(sout, _np.identity(2 * n, int))
            ), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
     # The instructions returned are for mapping s -> I, so we need to reverse them.
@@ -1423,7 +1423,7 @@ def compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname
     return circuit
 
 
-def add_cnot(qubitgraph, controllabel, targetlabel):
+def _add_cnot(qubitgraph, controllabel, targetlabel):
     """
     A helper function for CNOT circuit compilations.
 
@@ -1469,7 +1469,7 @@ def add_cnot(qubitgraph, controllabel, targetlabel):
 # algorithm is only slightly better on average than this one).
 
 
-def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labels=None, check=True,
+def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labels=None, check=True,
                                                respect_connectivity=True):
     """
     An ordered and connectivity-adjusted Gaussian-elimination (OCAGE) algorithm for compiling a CNOT circuit.
@@ -1570,7 +1570,7 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
     # Find the correct qubit graph to take into account.
     if qubit_labels is None: qubitgraph = pspec.qubitgraph
     else: qubitgraph = pspec.qubitgraph.subgraph(qubit_labels)
-    nodenames = qubitgraph.get_node_names()
+    nodenames = qubitgraph.node_names()
 
     # Find the distances and the shortest path predecessor matrix for this set of qubits.
     # The indexing here is w.r.t. the order of nodenames.
@@ -1607,7 +1607,7 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
                         if not respect_connectivity:
                             rowaction_instructionlist.append(_Label('CNOT', (qq, q)))
                         else:
-                            rowaction_instructionlist += add_cnot(qubitgraph, qq, q)
+                            rowaction_instructionlist += _add_cnot(qubitgraph, qq, q)
                         # Do the row-action of CNOT
                         sout[qindex, :] = sout[qindex, :] ^ sout[qqindex, :]
                         found = True
@@ -1617,7 +1617,7 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
                             columnaction_instructionlist.append(_Label('CNOT', (q, qq)))
 
                         else:
-                            columnaction_instructionlist += add_cnot(qubitgraph, q, qq)
+                            columnaction_instructionlist += _add_cnot(qubitgraph, q, qq)
                         # Do the column action of sout.
                         sout[:, qindex] = sout[:, qindex] ^ sout[:, qqindex]
                         found = True
@@ -1667,7 +1667,7 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
                 if qubitgraph.shortest_path_intersect(mostdistantQ, q, eliminated_qubits):
 
                     if not respect_connectivity: rowaction_instructionlist.append(_Label('CNOT', (q, mostdistantQ)))
-                    else: rowaction_instructionlist += add_cnot(qubitgraph, q, mostdistantQ)
+                    else: rowaction_instructionlist += _add_cnot(qubitgraph, q, mostdistantQ)
                     sout[mostdistantQ_index, :] = sout[qindex, :] ^ sout[mostdistantQ_index, :]
 
                 # If the shortest path doesn't include eliminated qubits, we can use a method for mapping
@@ -1697,7 +1697,7 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
                 if qubitgraph.shortest_path_intersect(mostdistantQ, q, eliminated_qubits):
 
                     if not respect_connectivity: columnaction_instructionlist.append(_Label('CNOT', (mostdistantQ, q)))
-                    else: columnaction_instructionlist += add_cnot(qubitgraph, mostdistantQ, q)
+                    else: columnaction_instructionlist += _add_cnot(qubitgraph, mostdistantQ, q)
                     sout[:, mostdistantQ_index] = sout[:, qindex] ^ sout[:, mostdistantQ_index]
                 else:
                     for nextqubit, currentqubit in reversed(qubitgraph.shortest_path_edges(mostdistantQ, q)):
@@ -1739,12 +1739,12 @@ def compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_label
     return cnot_circuit
 
 
-def compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, clname=None, check=True):
+def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, clname=None, check=True):
     """
     An improved, ordered and connectivity-adjusted Gaussian-elimination (OiCAGE) algorithm for compiling a CNOT circuit.
 
     This is a *slight* improvement (for some CNOT circuits), on the algorithm in
-    :function:`compile_cnot_circuit_using_ocage_algorithm()`, which is the meaning of the "improved". See the docstring
+    :function:`_compile_cnot_circuit_using_ocage_algorithm()`, which is the meaning of the "improved". See the docstring
     for that function for information on the parameters of this function and the basic outline of the algorithm.
 
     Parameters
@@ -1818,7 +1818,7 @@ def compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labe
         qindex = allqubits.index(q)
         # A qubit graph over the remaining qubits
         rQsgraph = qubitgraph.subgraph(remaining_qubits)
-        rQsgraph_llist = list(rQsgraph.get_node_names())
+        rQsgraph_llist = list(rQsgraph.node_names())
         q_rQSgraph_index = rQsgraph_llist.index(q)
 
         # The distances from this qubit to the other qubits.
@@ -2041,7 +2041,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
         "The input `s` is the wrong size for the number of qubits specified by `pspec` or `qubit_labels`!"
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if isinstance(costfunction, str): costfunction = _create_standard_costfunction(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
     oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
@@ -2058,7 +2058,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             tc = tc.copy(editable=True)
             i += 1
             # Do the depth-compression *before* changing gate library
-            tc.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
+            tc.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
             tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
             cost = costfunction(tc, pspec)
             # If this is the best circuit so far, then save it.
@@ -2087,7 +2087,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
 
     check_circuit.append_circuit(circuit)
     # Add CNOT into the dictionary, because the gates in check_circuit are 'CNOT'.
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
+    sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
                                 [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
     implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, srep_dict=sreps)
@@ -2103,7 +2103,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
     circuit.append_circuit(paulicircuit)
 
-    if not paulirandomize: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
@@ -2208,7 +2208,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     sin, pin = _symp.inverse_clifford(s, p)
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if isinstance(costfunction, str): costfunction = _create_standard_costfunction(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
     oneQgate_relations = _symp.one_q_clifford_symplectic_group_relations()
@@ -2225,10 +2225,10 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False)
             tc = tc.copy(editable=True)
-            tc.reverse()
+            tc.reverse_inplace()
             # Do the depth-compression *after* the circuit is reversed (after this, reversing circuit doesn't implement
             # inverse).
-            tc.compress_depth(one_q_gate_relations=oneQgate_relations, verbosity=0)
+            tc.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
             # Change into the gates of pspec.
             tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
             # If this is the best circuit so far, then save it.
@@ -2257,10 +2257,10 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     # We didn't reverse tcc, so reverse check_circuit now. This circuit contains CNOTs, and is the circuit we'd need
     # to do after `circuit` in order to correctly generate the top half of s inverse (which we don't actually need to
     # do), rather than only correctly do this up to a CNOT circuit.
-    check_circuit.reverse()
+    check_circuit.reverse_inplace()
     check_circuit.prefix_circuit(circuit)
 
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
+    sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
                                 [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
     #implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, srep_dict=sreps)
@@ -2284,13 +2284,13 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     circuit.prefix_circuit(paulicircuit)
     # We can only do depth compression again if we haven't Pauli-randomized. Otherwise we'd potentially undo this
     # randomization.
-    if not paulirandomize: circuit.compress_depth(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
 
 
-def convert_submatrix_to_echelon_form_using_cnots(s, optype, position, qubit_labels):
+def _convert_submatrix_to_echelon_form_using_cnots(s, optype, position, qubit_labels):
     """
     Converts a submatrix of `s` to row- or column-echelon form.
 
@@ -2403,7 +2403,7 @@ def convert_submatrix_to_echelon_form_using_cnots(s, optype, position, qubit_lab
     return sout, instruction_list, True
 
 
-def submatrix_gaussian_elimination_using_cnots(s, optype, position, qubit_labels):
+def _submatrix_gaussian_elimination_using_cnots(s, optype, position, qubit_labels):
     """
     Converts a submatrix of `s` to the identity matrix using CNOTs.
 
@@ -2454,7 +2454,7 @@ def submatrix_gaussian_elimination_using_cnots(s, optype, position, qubit_labels
         When the returned bool is False, this list is None.
     """
     # First, we convert to row/column echelon form.
-    sout, instruction_list, success = convert_submatrix_to_echelon_form_using_cnots(s, optype, position, qubit_labels)
+    sout, instruction_list, success = _convert_submatrix_to_echelon_form_using_cnots(s, optype, position, qubit_labels)
     # If converting to row/column echelon form fails, we quit and return a fail message.
     if not success: return sout, None, False
 
@@ -2499,7 +2499,7 @@ def submatrix_gaussian_elimination_using_cnots(s, optype, position, qubit_labels
     return sout, instruction_list, True
 
 
-def make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels):
+def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels):
     """
     Uses row-action or column-action Hadamard gates to make a submatrix of `s` invertable.
 
@@ -2546,7 +2546,7 @@ def make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels)
         iteration += 1
         # This returns success = True if the matrix is invertable. Note it doesn't actual matter
         # what 'optype' or 'qubit_labels' is here, but we just set them to the input of this function.
-        sref, junk, success = convert_submatrix_to_echelon_form_using_cnots(sout, optype, position, qubit_labels)
+        sref, junk, success = _convert_submatrix_to_echelon_form_using_cnots(sout, optype, position, qubit_labels)
         # If this didn't succed, the matrix isn't currently invertable
         if not success:
             # Pick a random qubit.
@@ -2571,7 +2571,7 @@ def make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels)
     return sout, instructions
 
 
-def make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype, position, qubit_labels):
+def _make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype, position, qubit_labels):
     """
     Uses row-action or column-action Phase gates to make a submatrix of `s` invertable.
 
@@ -2656,7 +2656,7 @@ def make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype, position, 
     return sout, instructions
 
 
-def do_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels):
+def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels):
     """
     Performs an Albert factorization transform on `s`.
 
@@ -2726,7 +2726,7 @@ def do_albert_factorization_transform_using_cnots(s, optype, position, qubit_lab
     # If it's a column-action (from the RHS) we're mapping D = M M.T -> M
     if optype == 'column': sout[rs:rs + n, cs:cs + n] = M.T
     # Do GE to map that quadrant of sout to I. (which is then replaced with Mdecomposition).
-    sout, instructions, success = submatrix_gaussian_elimination_using_cnots(sout, optype, position, qubit_labels)
+    sout, instructions, success = _submatrix_gaussian_elimination_using_cnots(sout, optype, position, qubit_labels)
     # Correct the submatrix quadrant of sout:
     # put what the quadrant is actually mapped to given it was M M.T not M or M.T
     # If it's a row-action (from the LHS) we're mapping D = M M.T -> M.T
@@ -2737,7 +2737,7 @@ def do_albert_factorization_transform_using_cnots(s, optype, position, qubit_lab
     return sout, instructions
 
 
-def apply_phase_to_all(s, optype, qubit_labels):
+def _apply_phase_to_all_qubits(s, optype, qubit_labels):
     """
     Applies phase gates to all qubits
 
@@ -2774,7 +2774,7 @@ def apply_phase_to_all(s, optype, qubit_labels):
     return sout, instructions
 
 
-def apply_hadamard_to_all_qubits(s, optype, qubit_labels):
+def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
     """
     Applies Hadamard gates to all qubits
 
@@ -2898,11 +2898,11 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, Hsome_layer = make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
+    sout, Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
 
     if n > 1:
         # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
-        sout, CNOTs_RHS1, success = submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
+        sout, CNOTs_RHS1, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
         # We reverse the list, because its a list doing the GE on s, and we want to do the inverse of that on I.
         CNOTs_RHS1.reverse()
         assert(success), \
@@ -2910,16 +2910,16 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
              "Perhaps the input was not a symplectic matrix.")
 
     # Stage 3: Phase circuit from the LHS to make the LR submatrix of s invertible
-    sout, Psome_layer = make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
+    sout, Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
 
     if n > 1:
         # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-        sout, CNOTs = do_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+        sout, CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
         # We reverse the list, because its a list doing the GE on s, and we want to do the inverse of that on I.
         CNOTs.reverse()
 
         # Stage 5: A CNOT circuit from the RHS to map the URH and LRH submatrices of s from M to I.
-        sout, CNOTs_RHS2, success = submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
+        sout, CNOTs_RHS2, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
         # We reverse the list, because its a list doing the GE on s, and we want to do the inverse of that on I.
         CNOTs_RHS2.reverse()
         assert(success), \
@@ -2927,18 +2927,18 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
              "Perhaps the input was not a symplectic matrix.")
 
     # Stage 6: Phase gates on all qubits acting from the LHS to map the LR submatrix of s to 0.
-    sout, Pall_layer = apply_phase_to_all(sout, 'row', qubit_labels)
+    sout, Pall_layer = _apply_phase_to_all_qubits(sout, 'row', qubit_labels)
 
     # Stage 7: Hadamard gates on all qubits acting from the LHS to swap the LR and UR matrices
     # of s, (mapping them to I and 0 resp.,).
-    sout, Hall_layer = apply_hadamard_to_all_qubits(s, 'row', qubit_labels)
+    sout, Hall_layer = _apply_hadamard_to_all_qubits(s, 'row', qubit_labels)
 
     if n > 1:
         # If we're using the basic Gauss. elimin. algorithm for the CNOT circuit, we just keep this CNOTs list
         # as this is what the above algorithm has provided.
         if calg == 'BGE': circuit = _Circuit(layer_labels=CNOTs, line_labels=qubit_labels).parallelize()
         # Otherwise, we recompile the CNOTs circuit. (note : it would be more efficient if we used this algorithm
-        # to start with inside `do_albert_factorization_transform_using_cnots`, so this is something we can do in
+        # to start with inside `find_albert_factorization_transform_using_cnots`, so this is something we can do in
         # the future if the speed of this algorithm matters).
         else:
             # Finds the CNOT circuit we are trying to compile in the symplectic rep.

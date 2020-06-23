@@ -101,7 +101,7 @@ Gx^4 20 80 0.2 100
 
     @_memo
     def circuit_list(self):
-        return pygsti.construction.circuit_list([(), ('Gx',), ('Gx', 'Gy')])
+        return pygsti.construction.to_circuits([(), ('Gx',), ('Gx', 'Gy')])
 
     @_memo
     def circuit_list_header(self):

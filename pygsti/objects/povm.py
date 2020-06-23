@@ -161,7 +161,7 @@ def convert(povm, to_type, basis, extra=None):
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
         for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if not _np.allclose(testvec, povm[lbl].todense()):
+            if not _np.allclose(testvec, povm[lbl].to_dense()):
                 raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
 
         #If no errors, then return a stabilizer POVM
@@ -254,7 +254,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == 0)  # should be no parameters
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each POVM effect E as s^T * E.
 
@@ -550,7 +550,7 @@ class _BasePOVM(POVM):
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each POVM effect E as s^T * E.
 
@@ -565,14 +565,14 @@ class _BasePOVM(POVM):
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.transform(s, 'effect')
+            effect.transform_inplace(s, 'effect')
 
         if self.complement_label:
             #Other effects being transformed transforms the complement,
             # so just check that the transform preserves the identity.
             TOL = 1e-6
-            identityVec = self[self.complement_label].identity.todense().reshape((-1, 1))
-            SmxT = _np.transpose(s.get_transform_matrix())
+            identityVec = self[self.complement_label].identity.to_dense().reshape((-1, 1))
+            SmxT = _np.transpose(s.transform_matrix())
             assert(_np.linalg.norm(identityVec - _np.dot(SmxT, identityVec)) < TOL),\
                 ("Cannot transform complement effect in a way that doesn't"
                  " preserve the identity!")
@@ -679,7 +679,7 @@ class TPPOVM(_BasePOVM):
         #add complement effect as a std numpy array - it will get
         # re-created correctly by __init__ w/preserve_sum == True
         effects.append((self.complement_label,
-                        self[self.complement_label].todense().reshape((-1, 1))))
+                        self[self.complement_label].to_dense().reshape((-1, 1))))
 
         return (TPPOVM, (effects,), {'_gpindices': self._gpindices})
 
@@ -1364,7 +1364,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         self.error_map.from_vector(v, close, nodirty)
 
-    def transform(self, s):
+    def transform_inplace(self, s):
         """
         Update each POVM effect E as s^T * E.
 
@@ -1381,10 +1381,10 @@ class LindbladPOVM(POVM):
         -------
         None
         """
-        self.error_map.spam_transform(s, 'effect')  # only do this *once*
+        self.error_map.spam_transform_inplace(s, 'effect')  # only do this *once*
         for lbl, effect in self.items():
             effect._update_rep()  # these two lines mimic the bookeepging in
-            effect.dirty = True   # a "effect.transform(s, 'effect')" call.
+            effect.dirty = True   # a "effect.transform_inplace(s, 'effect')" call.
         self.dirty = True
 
     def __str__(self):
@@ -1515,9 +1515,9 @@ class MarginalizedPOVM(POVM):
             for k in self._elements_to_sum[key]:
                 e = self.povm_to_marginalize[k]
                 if effect_vec is None:
-                    effect_vec = e.todense()
+                    effect_vec = e.to_dense()
                 else:
-                    effect_vec += e.todense()
+                    effect_vec += e.to_dense()
             effect = _sv.StaticSPAMVec(effect_vec, self._evotype, 'effect')
             effect.set_gpindices(slice(0, 0), self.parent)
             _collections.OrderedDict.__setitem__(self, key, effect)

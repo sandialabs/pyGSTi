@@ -24,7 +24,7 @@ class TestReportables(BaseTestCase):
         self.assertAlmostEqual(rptbl._project_to_valid_prob(0.5), 0.5)
 
         nan_qty = rptbl.evaluate(None) # none function -> nan qty
-        self.assertTrue( np.isnan(nan_qty.value) )
+        self.assertTrue( np.isnan(nan_qty.value()) )
 
         #deprecated:
         rptbl.decomposition( std.target_model().operations['Gx'] )
@@ -36,7 +36,7 @@ class TestReportables(BaseTestCase):
         gs2 = std.target_model()
         gl = "Gx" # operation label
         opstr = pygsti.obj.Circuit( ('Gx','Gx') )
-        syntheticIdles = pygsti.construction.circuit_list( [
+        syntheticIdles = pygsti.construction.to_circuits( [
              ('Gx',)*4, ('Gy',)*4 ] )
 
         gatesetfn_factories = (  # model, oplabel

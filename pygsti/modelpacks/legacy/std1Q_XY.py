@@ -19,11 +19,11 @@ from collections import OrderedDict as _OrderedDict
 description = "X(pi/2) and Y(pi/2) gates"
 
 gates = ['Gx', 'Gy']
-fiducials = _strc.circuit_list([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
+fiducials = _strc.to_circuits([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
                                 ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')], line_labels=('*',))  # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.circuit_list(
+germs = _strc.to_circuits(
     [('Gx',),
      ('Gy',),
      ('Gx', 'Gy',),
@@ -33,7 +33,7 @@ germs = _strc.circuit_list(
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/2), Y(pi/2)
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gx', 'Gy'],
+_target_model = _setc.create_explicit_model([('Q0',)], ['Gx', 'Gy'],
                                            ["X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}

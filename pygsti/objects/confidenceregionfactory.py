@@ -267,10 +267,10 @@ class ConfidenceRegionFactory(object):
         assert(useFreqWt is False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
         #Expand operation label aliases used in DataSet lookups
-        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
+        ds_circuit_list = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
         nModelParams = model.num_nongauge_params()
-        nDataParams = dataset.get_degrees_of_freedom(ds_circuit_list)
+        nDataParams = dataset.degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)
 
         MIN_NON_MARK_RADIUS = 1e-8  # must be >= 0
@@ -350,7 +350,7 @@ class ConfidenceRegionFactory(object):
             label = projection_type
 
         model = self.parent.models[self.model_lbl]
-        proj_non_gauge = model.get_nongauge_projector()
+        proj_non_gauge = model.compute_nongauge_projector()
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
         self.nGaugeParams = model.num_params() - self.nNonGaugeParams
 
@@ -512,7 +512,7 @@ class ConfidenceRegionFactory(object):
 
     def _opt_projection_for_operation_cis(self, method="L-BFGS-B", maxiter=10000,
                                           maxfev=10000, tol=1e-6, verbosity=0):
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
         level = 95  # or 50, or whatever - the scale factory doesn't matter for the optimization
@@ -522,7 +522,7 @@ class ConfidenceRegionFactory(object):
 
         def _objective_func(vector_m):
             matM = vector_m.reshape((self.nNonGaugeParams, self.nGaugeParams))
-            proj_extra = model.get_nongauge_projector(non_gauge_mix_mx=matM)
+            proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=matM)
             projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
             sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl, self.circuit_list_lbl,
@@ -530,28 +530,28 @@ class ConfidenceRegionFactory(object):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
                                             for gl in model.operations])
             return _np.sqrt(_np.sum(operationCIs**2))
 
         #Run Minimization Algorithm
         startM = _np.zeros((self.nNonGaugeParams, self.nGaugeParams), 'd')
         x0 = startM.flatten()
-        print_obj_func = _opt.create_obj_func_printer(_objective_func)
+        print_obj_func = _opt.create_objfn_printer(_objective_func)
         minSol = _opt.minimize(_objective_func, x0,
                                method=method, maxiter=maxiter,
                                maxfev=maxfev, tol=tol,
                                callback=print_obj_func if verbosity > 2 else None)
 
         mixMx = minSol.x.reshape((self.nNonGaugeParams, self.nGaugeParams))
-        proj_extra = model.get_nongauge_projector(non_gauge_mix_mx=mixMx)
+        proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=mixMx)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
         printer.log('The resulting min sqrt(sum(operationCIs**2)): %g' % minSol.fun, 2)
         return projected_hessian_ex
 
     def _opt_projection_from_split(self, verbosity=0):
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
         level = 95  # or 50, or whatever - the scale factory doesn't matter for the optimization
@@ -560,30 +560,30 @@ class ConfidenceRegionFactory(object):
         printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indent_offset=-1)
 
         #get gate-intrinsic-error
-        proj = model.get_nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        operationCIs = _np.concatenate([crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+        operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
                                         for gl in model.operations])
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
         #get spam-intrinsic-error
-        proj = model.get_nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        spamCIs = _np.concatenate([crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
+        spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
                                    for sl in _itertools.chain(iter(model.preps),
                                                               iter(model.povms))])
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
 
         ratio = op_intrinsic_err / spam_intrinsic_err
-        proj = model.get_nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
+        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
 
         if printer.verbosity >= 2:
@@ -593,9 +593,9 @@ class ConfidenceRegionFactory(object):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
                                             for gl in model.operations])
-            spamCIs = _np.concatenate([crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
+            spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
                                        for sl in _itertools.chain(iter(model.preps),
                                                                   iter(model.povms))])
             op_err = _np.sqrt(_np.mean(operationCIs**2))
@@ -796,7 +796,7 @@ class ConfidenceRegionFactoryView(object):
         else:
             return "standard"
 
-    def get_profile_likelihood_confidence_intervals(self, label=None):
+    def retrieve_profile_likelihood_confidence_intervals(self, label=None):
         """
         Retrieve the profile-likelihood confidence intervals for a specified model object (or all such intervals).
 
@@ -833,7 +833,7 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError(("Invalid item label (%s) for computing" % label)
                              + "profile likelihood confidence intervals")
 
-    def get_fn_confidence_interval(self, fn_obj, eps=1e-7,
+    def compute_confidence_interval(self, fn_obj, eps=1e-7,
                                    return_fn_val=False, verbosity=0):
         """
         Compute the confidence interval for an arbitrary function.
@@ -969,7 +969,7 @@ class ConfidenceRegionFactoryView(object):
         penalties.update({'forcefn_grad': grad_f, 'shift_fctr': 100.0})
         mlgst_args['objective_function_builder'].penalties = penalties
 
-        _, bestGS = _alg.core.do_gst_fit(**mlgst_args)
+        _, bestGS = _alg.core.run_gst_fit(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
         delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
@@ -996,7 +996,7 @@ class ConfidenceRegionFactoryView(object):
         #  so df = sqrt( grad_f.dag * U * 1/D * U.dag * grad_f )
         #        = sqrt( grad_f.dag * invRegionQuadcForm * grad_f )
 
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         printer.log("grad_f = %s" % grad_f)
 

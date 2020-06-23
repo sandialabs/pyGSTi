@@ -259,10 +259,10 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     """
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
-    obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
 
@@ -338,7 +338,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
@@ -410,7 +410,7 @@ def logl_hessian(model, dataset, circuit_list=None,
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         regularization, {'prob_clip_interval': prob_clip_interval},
                         op_label_aliases, cache, comm, mem_limit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
@@ -492,7 +492,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         array of shape (M,M), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         {'min_prob_clip': min_prob_clip,
                          'radius': radius},
                         {'prob_clip_interval': prob_clip_interval},
@@ -537,7 +537,7 @@ def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
     -------
     float
     """
-    obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.fn()
 
@@ -579,7 +579,7 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
         Values are the maximum log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
-    obj_max = _objfns.objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, cache=cache,
                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.percircuit()
 
@@ -736,7 +736,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         {'min_prob_clip': min_prob_clip,
                          'radius': radius},
                         {'prob_clip_interval': prob_clip_interval},
@@ -760,10 +760,10 @@ def two_delta_logl(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
+        ds_strs = _lt.apply_aliases_to_circuits(circuit_list, op_label_aliases)
     else: ds_strs = None
 
-    ds_dof = dataset.get_degrees_of_freedom(ds_strs)
+    ds_dof = dataset.degrees_of_freedom(ds_strs)
     k = max(ds_dof - mdl_dof, 1)
     if ds_dof <= mdl_dof:
         _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof))
@@ -851,7 +851,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns.objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
                         {'min_prob_clip': min_prob_clip,
                          'radius': radius}, None,
                         {'prob_clip_interval': prob_clip_interval},
@@ -869,10 +869,10 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuit_list(circuit_list, op_label_aliases)
+        ds_strs = _lt.apply_aliases_to_circuits(circuit_list, op_label_aliases)
     else: ds_strs = None
 
-    ds_dof = dataset.get_degrees_of_freedom(ds_strs)
+    ds_dof = dataset.degrees_of_freedom(ds_strs)
     k = max(ds_dof - mdl_dof, 1)
     # HACK - just take a single average #dof per circuit to use as chi_k distribution!
     k = int(_np.ceil(k / (1.0 * len(circuit_list))))
@@ -908,7 +908,7 @@ def forbidden_prob(model, dataset):
     forbidden_prob = 0
 
     for mdl, dsrow in dataset.items():
-        probs = model.probs(mdl)
+        probs = model.probabilities(mdl)
         for (spamlabel, p) in probs.items():
             if p < TOL:
                 if round(dsrow[spamlabel]) == 0: continue  # contributes zero to the sum
@@ -1012,7 +1012,7 @@ def cptp_penalty(model, include_spam_penalty=True):
     float
         CPTP penalty (possibly with added spam penalty).
     """
-    ret = _jam.sum_of_negative_choi_evals(model)
+    ret = _jam.sum_of_negative_choi_eigenvalues(model)
     if include_spam_penalty:
         b = model.basis
         ret += sum([prep_penalty(r, b) for r in model.preps.values()])
@@ -1021,7 +1021,7 @@ def cptp_penalty(model, include_spam_penalty=True):
     return ret
 
 
-def two_delta_loglfn(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
+def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding to a single circuit and spam label.
 

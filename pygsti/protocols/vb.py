@@ -264,7 +264,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         ideal_outs = [[] for d in depths]
 
         for j in range(circuits_per_depth):
-            circtemp, outtemp, junk = _rc.random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
+            circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
                                                                            localclifford=localclifford,
                                                                            paulirandomize=paulirandomize,
                                                                            interactingQs_density=samplerargs[0],
@@ -315,7 +315,7 @@ class SummaryStatistics(_proto.Protocol):
     def __init__(self, name):
         super().__init__(name)
 
-    def compute_summary_data(self, data):
+    def _compute_summary_statistics(self, data):
         """
         Computes all summary statistics for the given data.
 
@@ -363,10 +363,10 @@ class SummaryStatistics(_proto.Protocol):
                    'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
 
-        return self.compute_dict(data, self.summary_statistics,
+        return self._compute_dict(data, self.summary_statistics,
                                  get_summary_values, for_passes='all')
 
-    def compute_circuit_data(self, data):
+    def _compute_circuit_statistics(self, data):
         """
         Computes all circuit statistics for the given data.
 
@@ -388,7 +388,7 @@ class SummaryStatistics(_proto.Protocol):
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self.compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
+        return self._compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
 
     # def compute_dscmp_data(self, data, dscomparator):
 
@@ -401,7 +401,7 @@ class SummaryStatistics(_proto.Protocol):
 
     #     return self.compute_dict(data, "dscmpdata", self.dsmp_statistics, get_dscmp_values, for_passes="none")
 
-    def compute_predicted_probs(self, data, model):
+    def _compute_predicted_probs(self, data, model):
         """
         Compute the predicted success probabilities of `model` given `data`.
 
@@ -425,12 +425,12 @@ class SummaryStatistics(_proto.Protocol):
             #            trimmedcirc.delete_lines(q)
             #else:
             #    trimmedcirc = circ
-            return {'success_probabilities': model.probs(circ)[('success',)]}
+            return {'success_probabilities': model.probabilities(circ)[('success',)]}
 
-        return self.compute_dict(data, ('success_probabilities',),
+        return self._compute_dict(data, ('success_probabilities',),
                                  get_success_prob, for_passes="none")
 
-    def compute_dict(self, data, component_names, compute_fn, for_passes="all"):
+    def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
         """
         Executes a computation function row-by-row on the data in `data` and packages the results.
 
@@ -446,7 +446,7 @@ class SummaryStatistics(_proto.Protocol):
         compute_fn : function
             A function that computes values for each item in `component_names` for each row of data.
             This function should have signature:
-            `compute_fn(icirc : int, circ : Circuit, dsrow : DataSetRow, idealout : OutcomeLabel)`
+            `compute_fn(icirc : int, circ : Circuit, dsrow : _DataSetRow, idealout : OutcomeLabel)`
             and should return a dictionary whose keys are the same as `component_names`.
 
         for_passes : {'all', 'none', 'first'}
@@ -481,7 +481,7 @@ class SummaryStatistics(_proto.Protocol):
 
         return qty_data
 
-    def create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
+    def _create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
         """
         Create a nested :class:`NamedDict` with depht and width indices.
 
@@ -508,7 +508,7 @@ class SummaryStatistics(_proto.Protocol):
             'Depth', 'int', None, None, {depth: _tools.NamedDict(
                 'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
-    def add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
+    def _add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
         Adds bootstrapped "summary datasets".
 
@@ -606,7 +606,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
     names_to_compute : tuple, optional
         A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
         the statistic names themselves are used.  These names are the column names produced by calling
-        `as_dataframe` on this protocol's results, so can be useful to name the computed statistics differently
+        `to_dataframe` on this protocol's results, so can be useful to name the computed statistics differently
         from the statistic name itself to distinguish it from the same statistic run on other data, when you
         want to combine data frames generated from multiple :class:`ProtocolData` objects.
 
@@ -637,7 +637,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
             if statistic in self.summary_statistics:
                 if statistic not in data.cache:
-                    summary_data_dict = self.compute_summary_data(data)
+                    summary_data_dict = self._compute_summary_statistics(data)
                     data.cache.update(summary_data_dict)
             # Code currently doesn't work with a dscmp, so commented out.
             # elif statistic in self.dscmp_statistics:
@@ -646,7 +646,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             #         data.cache.update(dscmp_data)
             elif statistic in self.circuit_statistics:
                 if statistic not in data.cache:
-                    circuit_data = self.compute_circuit_data(data)
+                    circuit_data = self._compute_circuit_statistics(data)
                     data.cache.update(circuit_data)
             else:
                 raise ValueError("Invalid statistic: %s" % statistic)
@@ -663,7 +663,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
             for depth in depths:
                 for circ in circuit_lists_for_depths[depth]:
-                    predicted_success_prob = sfmodel.probs(circ)[('success',)]
+                    predicted_success_prob = sfmodel.probabilities(circ)[('success',)]
                     if statistic == 'success_probabilities':
                         statistic_per_depth[depth].append(predicted_success_prob)
                     elif statistic == 'polarization':
@@ -713,7 +713,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
             statistic_per_depth = self._get_statistic_per_depth(statistic, data)
             depths = statistic_per_depth.keys() if self.depths == 'all' else \
                 filter(lambda d: d in statistic_per_depth, self.depths)
-            statistic_per_dwc = self.create_depthwidth_dict(depths, (width,), lambda: None, 'float')
+            statistic_per_dwc = self._create_depthwidth_dict(depths, (width,), lambda: None, 'float')
             # a nested NamedDict with indices: depth, width, circuit_index (width only has single value though)
 
             for depth in depths:

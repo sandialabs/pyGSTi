@@ -234,7 +234,7 @@ class Report:
         confidenceLevel = self._report_params['confidence_level']
 
         path = _Path(path)
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         templatePath = _Path(__file__).parent / 'templates' / self._templates['notebook']
         outputDir = path.parent
 
@@ -300,7 +300,7 @@ class Report:
             params = estimate.parameters
             objfn_builder = estimate.parameters.get('final_objfn_builder', 'logl')
             clifford_compilation = estimate.parameters.get('clifford_compilation',None)
-            effective_ds, scale_submxs = estimate.get_effective_dataset(True)
+            effective_ds, scale_submxs = estimate.create_effective_dataset(True)
 
             models        = estimate.models
             mdl           = models[gopt]  # final, gauge-optimized estimate
@@ -316,7 +316,7 @@ class Report:
             if confidenceLevel is None:
                 cri = None
             else:
-                crfactory = estimate.get_confidence_region_factory(gopt)
+                crfactory = estimate.create_confidence_region_factory(gopt)
                 region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
                 cri = crfactory.view(abs(confidenceLevel), region_type)\
         """.format(goLabel=goLabels[0], CL=confidenceLevel))
@@ -427,7 +427,7 @@ class Report:
         for k in range(brevity, 4):
             toggles['BrevityLT' + str(k + 1)] = True
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
         path = _Path(path)
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 

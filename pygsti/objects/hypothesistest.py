@@ -109,7 +109,7 @@ class HypothesisTest(object):
         """
         Initializes a HypothesisTest object. This specifies the set of null hypotheses,
         and the tests to be implemented, it does *not* implement the tests. Methods are used
-        to add the data (.add_pvalues) and run the tests (.implement).
+        to add the data (.add_pvalues) and run the tests (.run).
 
         Parameters
         ----------
@@ -295,7 +295,7 @@ class HypothesisTest(object):
 
         return
 
-    def implement(self):
+    def run(self):
         """
         Implements the multiple hypothesis testing routine encoded by this object.
 

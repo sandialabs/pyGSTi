@@ -141,7 +141,7 @@ class EvalTree(list):
         new_tree.simplified_circuit_nEls = self.simplified_circuit_nEls[:]
         return new_tree
 
-    def get_init_labels(self):
+    def init_labels(self):
         """
         Return a tuple of the operation labels which form the beginning of the tree.
 
@@ -151,20 +151,20 @@ class EvalTree(list):
         """
         return tuple(self.opLabels)
 
-    def get_init_indices(self):
+    def init_indices(self):
         """
         Return a tuple of the indices corresponding to the initial operation labels.
 
-        These "initial labels" are returned by :method:`get_init_labels` and
+        These "initial labels" are returned by :method:`init_labels` and
         form the beginning of the tree.
 
         Returns
         -------
         tuple
         """
-        return tuple(self.init_indices)
+        return tuple(self._init_indices)
 
-    def get_evaluation_order(self):
+    def evaluation_order(self):
         """
         Return a list of indices specifying the evaluation order.
 
@@ -205,10 +205,10 @@ class EvalTree(list):
             to filter out the intermediate (non-final) results.
         """
         if axis is None:
-            return a[0:self.num_final_strings()]
+            return a[0:self.num_final_circuits()]
         else:
             sl = [slice(None)] * a.ndim
-            sl[axis] = slice(0, self.num_final_strings())
+            sl[axis] = slice(0, self.num_final_circuits())
             ret = a[tuple(sl)]
             assert(ret.base is a or ret.base is a.base)  # check that what is returned is a view
             assert(ret.size == 0 or _np.may_share_memory(ret, a))
@@ -227,7 +227,7 @@ class EvalTree(list):
             This tree's parent tree.  If the parent tree is None
             or isn't split (which sometimes means that this
             "sub-tree" is the same as the parent tree - see
-            `get_sub_trees`), then a slice for the entire set of
+            `sub_trees`), then a slice for the entire set of
             final values is returned, which is appropriate in this
             case.
 
@@ -241,7 +241,7 @@ class EvalTree(list):
                 parent_tree.is_split():
             return self.myFinalToParentFinalMap
         else:
-            return slice(0, self.num_final_strings())
+            return slice(0, self.num_final_circuits())
 
     def final_element_indices(self, parent_tree):
         """
@@ -260,7 +260,7 @@ class EvalTree(list):
             This tree's parent tree.  If the parent tree is None
             or isn't split (which sometimes means that this
             "sub-tree" is the same as the parent tree - see
-            `get_sub_trees`), then an index for the entire set of
+            `sub_trees`), then an index for the entire set of
             final values is returned, which is appropriate in this
             case.
 
@@ -276,7 +276,7 @@ class EvalTree(list):
         else:
             return slice(0, self.num_final_elements())
 
-    def num_final_strings(self):
+    def num_final_circuits(self):
         """
         Returns the integer number of "final" circuits.
 
@@ -302,7 +302,7 @@ class EvalTree(list):
         """
         return self.num_final_els
 
-    def generate_circuit_list(self, permute=True):
+    def compute_circuits(self, permute=True):
         """
         Generate a list of the final circuits this tree evaluates.
 
@@ -330,9 +330,9 @@ class EvalTree(list):
             A list of the circuits evaluated by this tree, each
             specified as a tuple of operation labels.
         """
-        raise NotImplementedError("generate_circuit_list(...) not implemented!")
+        raise NotImplementedError("compute_circuits(...) not implemented!")
 
-    def permute_original_to_computation(self, a, axis=0):
+    def _permute_original_to_computation(self, a, axis=0):
         """
         Permute an array's elements from "original" to "computational" circuit ordering.
 
@@ -354,8 +354,8 @@ class EvalTree(list):
         -------
         numpy array
         """
-        assert(a.shape[axis] == self.num_final_strings())
-        nFinal = self.num_final_strings()
+        assert(a.shape[axis] == self.num_final_circuits())
+        nFinal = self.num_final_circuits()
         ret = a.copy()
 
         def _mkindx(i):
@@ -391,8 +391,8 @@ class EvalTree(list):
         -------
         numpy array
         """
-        assert(a.shape[axis] == self.num_final_strings())
-        nFinal = self.num_final_strings()
+        assert(a.shape[axis] == self.num_final_circuits())
+        nFinal = self.num_final_circuits()
         ret = a.copy()
 
         def _mkindx(i):
@@ -459,7 +459,7 @@ class EvalTree(list):
         #rank = 0 if (comm is None) else comm.Get_rank()
         nprocs = 1 if (comm is None) else comm.Get_size()
         nSubtreeComms = self.distribution.get('numSubtreeComms', 1)
-        nSubtrees = len(self.get_sub_trees())
+        nSubtrees = len(self.sub_trees())
 
         assert(nSubtreeComms <= nprocs)  # => len(mySubCommIndices) == 1
         mySubCommIndices, subCommOwners, mySubComm = \
@@ -476,7 +476,7 @@ class EvalTree(list):
         subTreeOwners = {iSubTree: subCommOwners[subTreeOwners[iSubTree]]
                          for iSubTree in subTreeOwners}
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
         printer.log("*** Distributing %d subtrees into %d sub-comms (%s processors) ***" %
                     (nSubtrees, nSubtreeComms, nprocs))
 
@@ -525,7 +525,7 @@ class EvalTree(list):
         # Create subtrees from index sets
         import time as _time
         need_to_compute = _np.zeros(len(self), 'bool')  # flags so we don't duplicate computation of needed quantities
-        need_to_compute[0:self.num_final_strings()] = True  # b/c multiple subtrees need them as intermediates
+        need_to_compute[0:self.num_final_circuits()] = True  # b/c multiple subtrees need them as intermediates
 
         #print("DEBUG Tree split: ")
         #print("  sub_tree_set_list = ",sub_tree_set_list)
@@ -549,7 +549,7 @@ class EvalTree(list):
                 subTreeNumFinal = len(subTreeIndices)
             else:
                 #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
-                subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
+                subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_circuits())
 
                 #Swap the indices of "final" strings that have already been computed past the end
                 # of the "final strings" region of the subtree's list (i.e. the subtree itself).
@@ -593,8 +593,8 @@ class EvalTree(list):
         #Permute parent tree indices according to parentIndexPerm
         # parentIndexRevPerm maps: newIndex -> currentIndex, so looking at it as a list
         #  gives the new (permuted) elements
-        assert(len(parentIndexRevPerm) == self.num_final_strings())
-        parentIndexRevPerm.extend(list(range(self.num_final_strings(), len(self))))
+        assert(len(parentIndexRevPerm) == self.num_final_circuits())
+        parentIndexRevPerm.extend(list(range(self.num_final_circuits(), len(self))))
         #don't permute non-final indices (no need)
 
         #Create forward permutation map: currentIndex -> newIndex
@@ -607,7 +607,7 @@ class EvalTree(list):
         #print("PT2 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
 
         #print("DEBUG: PERM REV MAP = ", parentIndexRevPerm,
-        #      "(first %d are 'final')" % self.num_final_strings())
+        #      "(first %d are 'final')" % self.num_final_circuits())
         #print("DEBUG: PERM MAP = ", parentIndexPerm)
 
         #Permute parent indices
@@ -651,7 +651,7 @@ class EvalTree(list):
             #                  (subTree.parentIndexMap, len(subTree), subTree.num_final_strings()))
 
         # print("PT7 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
-        #dbList2 = self.generate_circuit_list()
+        #dbList2 = self.compute_circuits()
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
         #assert(dbList == dbList2)
@@ -715,7 +715,7 @@ class EvalTree(list):
             i += len(Xs)
 
         permute_newToOld = []
-        for iOldStr in old_indices_in_new_order[0:self.num_final_strings()]:
+        for iOldStr in old_indices_in_new_order[0:self.num_final_circuits()]:
             permute_newToOld.extend(old_finalStringToElsMap[iOldStr])
         permute_oldToNew = {iOld: iNew for iNew, iOld in enumerate(permute_newToOld)}
 
@@ -727,7 +727,7 @@ class EvalTree(list):
 
         # Now update simplified_circuit_xs
         updated_simplified_circuit_Xs = [simplified_circuit_xs[iCur]
-                                         for iCur in old_indices_in_new_order[0:self.num_final_strings()]]
+                                         for iCur in old_indices_in_new_order[0:self.num_final_circuits()]]
         return updated_simplified_circuit_Xs, updated_elIndices
 
     def is_split(self):
@@ -740,7 +740,7 @@ class EvalTree(list):
         """
         return len(self.subTrees) > 0
 
-    def get_sub_trees(self):
+    def sub_trees(self):
         """
         A list of all the sub-trees (also EvalTree instances) of this tree.
 
@@ -764,7 +764,7 @@ class EvalTree(list):
     #        self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
     #        i += len(spamTuples)
 
-    def print_analysis(self):
+    def _print_analysis(self):
         """
         Print a brief analysis of this tree.
 
@@ -778,7 +778,7 @@ class EvalTree(list):
         #Analyze tree
         if not self.is_split():
             print("Size of eval_tree = %d" % len(self))
-            print("Size of circuit_list = %d" % self.num_final_strings())
+            print("Size of circuit_list = %d" % self.num_final_circuits())
 
             #TODO: maybe revive this later if it ever becomes useful again.
             # Currently left un-upgraded after evaltree was changed to hold
@@ -809,7 +809,7 @@ class EvalTree(list):
 
         else:  # tree is split
             print("Size of original tree = %d" % len(self))
-            print("Size of original circuit_list = %d" % self.num_final_strings())
+            print("Size of original circuit_list = %d" % self.num_final_circuits())
             print("Tree is split into %d sub-trees" % len(self.subTrees))
             print("Sub-tree lengths = ", list(map(len, self.subTrees)), " (Sum = %d)" % sum(map(len, self.subTrees)))
             #for i,t in enumerate(self.subTrees):

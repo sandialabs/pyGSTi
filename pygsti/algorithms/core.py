@@ -46,7 +46,7 @@ FLOATSIZE = 8  # TODO: better way?
 ###################################################################################
 
 
-def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
+def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
@@ -127,7 +127,7 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
     # A       = (nESpecs, gsDim)
     # B       = (gsDim, nRhoSpecs)
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     if target_model is None:
         raise ValueError("Must specify a target model for LGST!")
 
@@ -265,7 +265,7 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
     if guess_model_for_gauge is not None:
-        guessTrunc = guess_model_for_gauge.get_dimension()  # the truncation to apply to it's B matrix
+        guessTrunc = guess_model_for_gauge.dimension()  # the truncation to apply to it's B matrix
         # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
         assert(guessTrunc <= trunc)
 
@@ -298,10 +298,10 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
             for i in range(guessTrunc, trunc):
                 BMat_p_padded[i, i] = _np.sqrt(s[i])  # set diagonal as sqrt of actual AB matrix's singular values
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
-            lgstModel.transform(ggEl)
+            lgstModel.transform_inplace(ggEl)
         else:
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
-            lgstModel.transform(ggEl)
+            lgstModel.transform_inplace(ggEl)
 
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
         # guess_model_for_gauge, but we only know how to do this when the dimensions of the target and
@@ -359,7 +359,7 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
-        #lgstModel.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p )
+        #lgstModel.transform_inplace( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p )
 
     printer.log("Resulting model:\n", 3)
     printer.log(lgstModel, 3)
@@ -371,7 +371,7 @@ def do_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=N
 def _lgst_matrix_dims(mdl, prep_fiducials, effect_fiducials):
     assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
-    povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
+    povmLbls = [mdl._split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
     povmLens = ([len(mdl.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
@@ -435,7 +435,7 @@ def _construct_a(effect_fiducials, mdl):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
         mdl, [], effect_fiducials)
 
-    dim = mdl.get_dimension()
+    dim = mdl.dimension()
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
 
@@ -447,7 +447,7 @@ def _construct_a(effect_fiducials, mdl):
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
             mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probs(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            probs = mdl.probabilities(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in mdl.povms[povmLbl]]  # CHECK will this work?
             del mdl.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
@@ -458,7 +458,7 @@ def _construct_a(effect_fiducials, mdl):
 
 def _construct_b(prep_fiducials, mdl):
     n = len(prep_fiducials)
-    dim = mdl.get_dimension()
+    dim = mdl.dimension()
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
 
@@ -474,7 +474,7 @@ def _construct_b(prep_fiducials, mdl):
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probs(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = mdl.probabilities(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del mdl.povms['M_LGST_tmp_povm']
@@ -490,7 +490,7 @@ def _construct_target_ab(prep_fiducials, effect_fiducials, target_model):
     for i, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
-            probs = target_model.probs(opLabelString)
+            probs = target_model.probabilities(opLabelString)
             AB[eoff:eoff + povmLen, j] = \
                 [probs[(ol,)] for ol in target_model.povms[povmLbl]]
             # outcomes (keys of probs) should just be povm effect labels
@@ -500,7 +500,7 @@ def _construct_target_ab(prep_fiducials, effect_fiducials, target_model):
     return AB
 
 
-def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model):
+def gram_rank_and_eigenvalues(dataset, prep_fiducials, effect_fiducials, target_model):
     """
     Returns the rank and singular values of the Gram matrix for a dataset.
 
@@ -545,7 +545,7 @@ def gram_rank_and_evals(dataset, prep_fiducials, effect_fiducials, target_model)
 #                 Long sequence GST
 ##################################################################################
 
-def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
+def run_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
                resource_alloc, cache, verbosity=0):
     """
     Performs core Gate Set Tomography function of model optimization.
@@ -596,11 +596,11 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
     model : Model
         the best-fit model.
     """
-    resource_alloc = _ResourceAllocation.create_from(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.create_from(optimizer)
+    resource_alloc = _ResourceAllocation.cast(resource_alloc)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     tStart = _time.time()
     mdl = start_model  # .copy()  # to allow caches in start_model to be retained
@@ -612,9 +612,9 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
-    objective_function_builder = _objs.ObjectiveFunctionBuilder.create_from(objective_function_builder)
+    objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
     objective = objective_function_builder.build(mdl, dataset, circuit_list, resource_alloc, cache, printer)
-    profiler.add_time("do_gst_fit: pre-opt", tStart)
+    profiler.add_time("run_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
     #Step 3: solve least squares minimization problem
@@ -637,7 +637,7 @@ def do_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function
     return opt_result, mdl
 
 
-def do_iterative_gst(dataset, start_model, circuit_lists,
+def run_iterative_gst(dataset, start_model, circuit_lists,
                      optimizer, iteration_objfn_builders, final_objfn_builders,
                      resource_alloc, verbosity=0):
     """
@@ -689,19 +689,19 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
     final_cache : ComputationCache
         The final iteration's computation cache.
     """
-    resource_alloc = _ResourceAllocation.create_from(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.create_from(optimizer)
+    resource_alloc = _ResourceAllocation.cast(resource_alloc)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     models = []; optimums = []
     mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
 
-    iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.create_from(ofb) for ofb in iteration_objfn_builders]
-    final_objfn_builders = [_objs.ObjectiveFunctionBuilder.create_from(ofb) for ofb in final_objfn_builders]
+    iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
+    final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
 
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
@@ -720,9 +720,9 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
                 optimizer.fditer = optimizer.first_fditer if (i == 0 and j == 0) else 0
-                opt_result, mdl = do_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
+                opt_result, mdl = run_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
                                              resource_alloc, cache, printer - 1)
-                profiler.add_time('do_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
+                profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()
             printer.log("Iteration %d took %.1fs\n" % (i + 1, tNxt - tRef), 2)
@@ -734,9 +734,9 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdl = do_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
+                    opt_result, mdl = run_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
                                                  resource_alloc, cache, printer - 1)
-                    profiler.add_time('do_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
+                    profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
 
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
@@ -749,7 +749,7 @@ def do_iterative_gst(dataset, start_model, circuit_lists,
             optimums.append(opt_result)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
-    profiler.add_time('do_iterative_gst: total time', tStart)
+    profiler.add_time('run_iterative_gst: total time', tStart)
     return models, optimums, final_cache
 
 
@@ -787,7 +787,7 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
     #Perform actual optimization
     tm = _time.time()
     opt_result = optimizer.run(objective, resource_alloc.comm, profiler, printer)
-    profiler.add_time("do_gst_fit: optimize", tm)
+    profiler.add_time("run_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
@@ -810,8 +810,8 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
         #Get number of maximal-model parameter ("dataset params") if needed for print messages
         # -> number of independent parameters in dataset (max. model # of params)
         tm = _time.time()
-        nDataParams = objective.get_num_data_params()  # TODO - cache this somehow in term-based calcs...
-        profiler.add_time("do_gst_fit: num data params", tm)
+        nDataParams = objective.num_data_params()  # TODO - cache this somehow in term-based calcs...
+        profiler.add_time("run_gst_fit: num data params", tm)
 
         chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
         desc = objective.description
@@ -866,7 +866,7 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
     comm, memLimit = resource_alloc.comm, resource_alloc.mem_limit
     pathSet = fwdsim.get_current_pathset(evTree, comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
-        pathFraction = pathSet.get_allowed_path_fraction()
+        pathFraction = pathSet.allowed_path_fraction()
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                     (pathSet.num_failures, 100 * pathFraction))
     else:
@@ -895,7 +895,7 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
             # Try to get more paths if we can and use those regardless of whether there are failures
             pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
             mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
-            pathFraction = pathSet.get_allowed_path_fraction()
+            pathFraction = pathSet.allowed_path_fraction()
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
                         (pathSet.num_failures, 100 * pathFraction))
@@ -956,7 +956,7 @@ def find_closest_unitary_opmx(operation_mx):
         #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
         return -_tools.fidelity(gate_JMx, JU)
 
-    # print_obj_func = _opt.create_obj_func_printer(_objective_func)
+    # print_obj_func = _opt.create_objfn_printer(_objective_func)
     solution = _spo.minimize(_objective_func, initialBasisVec, options={'maxiter': 10000},
                              method='Nelder-Mead', callback=None, tol=1e-8)  # if verbosity > 2 else None
     operation_mx = getGateMx(solution.x)

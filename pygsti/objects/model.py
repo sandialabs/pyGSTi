@@ -154,7 +154,7 @@ v
         assert(len(v) == self.num_params())
         self._paramvec = v.copy()
 
-    def probs(self, circuit, clip_to=None):
+    def probabilities(self, circuit, clip_to=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -1058,7 +1058,7 @@ class OpModel(Model):
         return self._dim
 
     #TODO REMOVE - use dim property
-    def get_dimension(self):
+    def dimension(self):
         """
         Get the dimension of the model.
 
@@ -1357,7 +1357,7 @@ class OpModel(Model):
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
         return self._calcClass(self._dim, layer_lizard, self._paramvec, **self._sim_args)  # fwdsim class
 
-    def split_circuit(self, circuit, erroron=('prep', 'povm')):
+    def _split_circuit(self, circuit, erroron=('prep', 'povm')):
         """
         Splits a circuit into prepLabel + opsOnlyString + povmLabel components.
 
@@ -1388,8 +1388,8 @@ class OpModel(Model):
         if len(circuit) > 0 and self._shlp.is_prep_lbl(circuit[0]):
             prep_lbl = circuit[0]
             circuit = circuit[1:]
-        elif self._shlp.get_default_prep_lbl() is not None:
-            prep_lbl = self._shlp.get_default_prep_lbl()
+        elif self._shlp.default_prep_label() is not None:
+            prep_lbl = self._shlp.default_prep_label()
         else:
             if 'prep' in erroron and self._shlp.has_preps():
                 raise ValueError("Cannot resolve state prep in %s" % circuit)
@@ -1398,8 +1398,8 @@ class OpModel(Model):
         if len(circuit) > 0 and self._shlp.is_povm_lbl(circuit[-1]):
             povm_lbl = circuit[-1]
             circuit = circuit[:-1]
-        elif self._shlp.get_default_povm_lbl(circuit.line_labels) is not None:
-            povm_lbl = self._shlp.get_default_povm_lbl(circuit.line_labels)
+        elif self._shlp.default_povm_label(circuit.line_labels) is not None:
+            povm_lbl = self._shlp.default_povm_label(circuit.line_labels)
         else:
             if 'povm' in erroron and self._shlp.has_povms():
                 raise ValueError("Cannot resolve POVM in %s" % str(circuit))
@@ -1459,8 +1459,8 @@ class OpModel(Model):
         # simplify all gsplaq strs -> elementIndices[(i,j)],
 
         aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
-        circuits = list(map(_cir.Circuit.create_from, circuits))  # cast to Circuits
-        ds_circuits = _lt.apply_aliases_to_circuit_list(circuits, aliases)
+        circuits = list(map(_cir.Circuit.cast, circuits))  # cast to Circuits
+        ds_circuits = _lt.apply_aliases_to_circuits(circuits, aliases)
 
         #Indexed by raw circuit
         raw_elabels_dict = _collections.OrderedDict()  # final
@@ -1476,7 +1476,7 @@ class OpModel(Model):
             """ Determines simplified effect labels that correspond to circuit
                 and strips any spam-related pieces off """
             prep_lbl, circuit, povm_lbl = \
-                self.split_circuit(circuit)
+                self._split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
                 assert(prep_lbl is None and povm_lbl is None)
                 elabels = [None]  # put a single "dummy" elabel placeholder
@@ -1501,10 +1501,10 @@ class OpModel(Model):
                 else:
                     if isinstance(povm_lbl, _Label):  # support for POVMs being labels, e.g. for marginalized POVMs
                         elabels = [_Label(povm_lbl.name + "_" + elbl, povm_lbl.sslbls)
-                                   for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
+                                   for elbl in self._shlp.effect_labels_for_povm(povm_lbl)]
                     else:
                         elabels = [povm_lbl + "_" + elbl
-                                   for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl)]
+                                   for elbl in self._shlp.effect_labels_for_povm(povm_lbl)]
 
             #Include prep-label as part of circuit
             if prep_lbl is not None:
@@ -1544,7 +1544,7 @@ class OpModel(Model):
                         if self._shlp.is_instrument_lbl(sub_gl):
                             sublabel_tups_to_iter.append(
                                 [(sub_gl, inst_el_lbl)
-                                 for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl)])
+                                 for inst_el_lbl in self._shlp.member_labels_for_instrument(sub_gl)])
                         else:
                             sublabel_tups_to_iter.append([(sub_gl, None)])  # just a single element
 
@@ -1571,7 +1571,7 @@ class OpModel(Model):
                     #if action == "add":
                     od = raw_elabels_dict[s]  # ordered dict
                     for elabel in elabels:
-                        outcome_tup = op_outcomes + (_gt.e_label_to_outcome(elabel),)
+                        outcome_tup = op_outcomes + (_gt.effect_label_to_outcome(elabel),)
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                         # don't add elabels we don't observe
@@ -1588,7 +1588,7 @@ class OpModel(Model):
                 else:
                     # Note: store elements of raw_elabels_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples = [op_outcomes + (_gt.e_label_to_outcome(x),) for x in elabels]
+                    outcome_tuples = [op_outcomes + (_gt.effect_label_to_outcome(x),) for x in elabels]
 
                     if observed_outcomes is not None:
                         # only add els of `elabels` corresponding to observed data (w/indexes starting at 0)
@@ -1701,7 +1701,7 @@ class OpModel(Model):
         assert(len(outcomes[0]) == nEls)
         return raw_dict, outcomes[0]
 
-    def get_num_outcomes(self, circuit):
+    def compute_num_outcomes(self, circuit):
         """
         The number of outcomes of `circuit`, given by it's existing or implied POVM label.
 
@@ -1717,7 +1717,7 @@ class OpModel(Model):
         _, outcomes = self.simplify_circuit(circuit, dataset=None)
         return len(outcomes)
 
-    def probs(self, circuit, clip_to=None, time=None):
+    def probabilities(self, circuit, clip_to=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `circuit`.
 
@@ -1900,7 +1900,7 @@ class OpModel(Model):
         #       - num_params % np == 0 (each param group has same size)
         #       - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
@@ -1933,17 +1933,17 @@ class OpModel(Model):
                             dataset=dataset, verbosity=printer)
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
                         # circuits as input so don't have to re-simplify every time we hit this line.
-                    cache_size = max([s.cache_size() for s in evt_cache[n_groups][0].get_sub_trees()])
-                    nFinalStrs = max([s.num_final_strings() for s in evt_cache[n_groups][0].get_sub_trees()])
+                    cache_size = max([s.cache_size() for s in evt_cache[n_groups][0].sub_trees()])
+                    nFinalStrs = max([s.num_final_circuits() for s in evt_cache[n_groups][0].sub_trees()])
                 else:
                     #heuristic (but fast)
-                    cache_size = calc.estimate_cache_size(nFinalStrs)
+                    cache_size = calc._estimate_cache_size(nFinalStrs)
 
-            mem = calc.estimate_mem_usage(subcalls, cache_size, n_groups, n_comms, np1, np2, nFinalStrs)
+            mem = calc.estimate_memory_usage(subcalls, cache_size, n_groups, n_comms, np1, np2, nFinalStrs)
 
             if verb == 1:
                 if (not fast_cache_size):
-                    fast_estimate = calc.estimate_mem_usage(
+                    fast_estimate = calc.estimate_memory_usage(
                         subcalls, cache_size, n_groups, n_comms, np1, np2, nFinalStrs)
                     fc_est_str = " (%.2fGB fc)" % (fast_estimate * C)
                 else: fc_est_str = ""
@@ -2100,7 +2100,7 @@ class OpModel(Model):
             mem_estimate(ng, np1, np2, Ng, False, verb=2)  # print mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
-            if printer.verbosity >= 2: evt.print_analysis()
+            if printer.verbosity >= 2: evt._print_analysis()
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
@@ -2175,12 +2175,12 @@ class OpModel(Model):
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         tm = _time.time()
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         simplified_circuits, elIndices, outcomes, nEls = \
             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, num_subtree_comms)
+        evalTree = self._fwdsim().create_evaltree(simplified_circuits, num_subtree_comms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list), _time.time() - tm)); tm = _time.time()
@@ -2189,11 +2189,11 @@ class OpModel(Model):
             elIndices = evalTree.split(elIndices, max_tree_size, None, printer - 1)  # won't split if unnecessary
 
         if min_subtrees is not None:
-            if not evalTree.is_split() or len(evalTree.get_sub_trees()) < min_subtrees:
+            if not evalTree.is_split() or len(evalTree.sub_trees()) < min_subtrees:
                 evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
                 elIndices = evalTree.split(elIndices, None, min_subtrees, printer - 1)
                 if max_tree_size is not None and \
-                        any([len(sub) > max_tree_size for sub in evalTree.get_sub_trees()]):
+                        any([len(sub) > max_tree_size for sub in evalTree.sub_trees()]):
                     _warnings.warn("Could not create a tree with min_subtrees=%d" % min_subtrees
                                    + " and max_tree_size=%d" % max_tree_size)
                     evalTree.original_index_lookup = None  # reset this so we can re-split TODO: cleaner
@@ -2201,7 +2201,7 @@ class OpModel(Model):
 
         if max_tree_size is not None or min_subtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs"
-                        % (len(evalTree.get_sub_trees()), _time.time() - tm))
+                        % (len(evalTree.sub_trees()), _time.time() - tm))
 
         assert(evalTree.num_final_elements() == nEls)
         return evalTree, elIndices, outcomes
@@ -2275,7 +2275,7 @@ class OpModel(Model):
         fwdsim = self._fwdsim()
         assert(isinstance(fwdsim, _termfwdsim.TermForwardSimulator)), \
             "bulk_probs_num_term_failures(...) can only be called on models with a term-based forward simulator!"
-        printer = _VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
         if probs is None:
             probs = _np.empty(eval_tree.num_final_elements(), 'd')
             self.bulk_fill_probs(probs, eval_tree, clip_to=None, comm=comm)
@@ -2684,7 +2684,7 @@ class OpModel(Model):
             arrays of shape K x S x B x B', where:
 
             - K is the length of spam_label_rows,
-            - S is the number of circuits (i.e. eval_tree.num_final_strings()),
+            - S is the number of circuits (i.e. eval_tree.num_final_circuits()),
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 

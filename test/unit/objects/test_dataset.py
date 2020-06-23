@@ -80,8 +80,8 @@ class DataSetTester(BaseCase):
         ds.add_count_dict(('Gx', 'Gx'), {'0': 30, '1': 70})  # a duplicate
         self.assertEqual(ds.keys(), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', '#1')])
         self.assertEqual(ds.keys(strip_occurrence_tags=True), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
-        # TODO set_row test separately
-        ds.set_row(('Gx', 'Gx'), {'0': 5, '1': 95}, occurrence=1)  # test set_row with occurrence arg
+        # TODO _set_row test separately
+        ds._set_row(('Gx', 'Gx'), {'0': 5, '1': 95}, occurrence=1)  # test _set_row with occurrence arg
 
     def test_constructor_raises_on_missing_spam_labels(self):
         gstrs = [('Gx',), ('Gx', 'Gy'), ('Gy',)]
@@ -146,11 +146,11 @@ class DataSetMethodBase(object):
         # TODO assert correctness
 
     def test_get_outcome_labels(self):
-        outcomes = self.ds.get_outcome_labels()
+        outcomes = self.ds.outcome_labels()
         self.assertEqual(outcomes, [('0',), ('1',)])
 
     def test_get_gate_labels(self):
-        gates = self.ds.get_gate_labels()
+        gates = self.ds.gate_labels()
         self.assertEqual(gates, ['Gx', 'Gy'])
 
     def test_copy(self):
@@ -163,8 +163,8 @@ class DataSetMethodBase(object):
         writable[('Gy',)] = {'0': 20, '1': 80}
 
     def test_get_degrees_of_freedom(self):
-        dof = self.ds.get_degrees_of_freedom()
-        dof = self.ds.get_degrees_of_freedom([('Gx',)])
+        dof = self.ds.degrees_of_freedom()
+        dof = self.ds.degrees_of_freedom([('Gx',)])
         # TODO assert correctness
 
     def test_truncate(self):
@@ -215,15 +215,15 @@ class DataSetMethodBase(object):
 
     # Row instance tests
     def test_row_get_expanded_ol(self):
-        self.dsRow.get_expanded_ol()
+        self.dsRow.expanded_ol()
         # TODO assert correctness
 
     def test_row_get_expanded_oli(self):
-        self.dsRow.get_expanded_oli()
+        self.dsRow.expanded_oli()
         # TODO assert correctness
 
     def test_row_get_expanded_times(self):
-        self.dsRow.get_expanded_times()
+        self.dsRow.expanded_times()
         # TODO assert correctness
 
     def test_row_fraction(self):
@@ -256,7 +256,7 @@ class DataSetMethodBase(object):
         # TODO assert correctness
 
     def test_row_as_dict(self):
-        cntDict = self.dsRow.as_dict()
+        cntDict = self.dsRow.to_dict()
         # TODO assert correctness
 
     def test_row_outcomes_raise_on_modify(self):
@@ -267,22 +267,22 @@ class DataSetMethodBase(object):
 class DataSetNonstaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):
     def test_process_circuits(self):
         self.ds.process_circuits(lambda s: pc.manipulate_circuit(s, [(('Gx',), ('Gy',))]))
-        test_cntDict = self.ds[('Gy',)].as_dict()
+        test_cntDict = self.ds[('Gy',)].to_dict()
         # TODO assert correctness
 
     def test_scale(self):
-        self.dsRow.scale(2.0)
+        self.dsRow.scale_inplace(2.0)
         self.assertEqual(self.dsRow['0'], 20)
         self.assertEqual(self.dsRow['1'], 180)
 
     def test_warn_on_nonintegral_scaled_row_access(self):
-        self.dsRow.scale(3.141592)
+        self.dsRow.scale_inplace(3.141592)
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_ol()
+            self.dsRow.expanded_ol()
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_oli()
+            self.dsRow.expanded_oli()
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_times()
+            self.dsRow.expanded_times()
 
 
 class DataSetStaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):
@@ -312,17 +312,17 @@ class DataSetStaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, Bas
 
     def test_raise_on_scale(self):
         with self.assertRaises(ValueError):
-            self.dsRow.scale(2.0)
+            self.dsRow.scale_inplace(2.0)
 
 
 class RawSeriesDataSetInstanceTester(DataSetMethodBase, RawSeriesDataSetInstance, BaseCase):
     def test_build_repetition_counts(self):
-        self.ds.build_repetition_counts()
+        self.ds._add_explicit_repetition_counts()
         # TODO assert correctness
 
     def test_scale_raises_on_missing_repeat_counts(self):
         with self.assertRaises(ValueError):
-            self.ds[('Gx',)].scale(2.0)
+            self.ds[('Gx',)].scale_inplace(2.0)
 
 
 class RawSeriesDatasetStaticInstanceTester(DataSetMethodBase, RawSeriesDataSetInstance, BaseCase):
@@ -332,4 +332,4 @@ class RawSeriesDatasetStaticInstanceTester(DataSetMethodBase, RawSeriesDataSetIn
 
     def test_raise_on_build_repetition_counts(self):
         with self.assertRaises(ValueError):
-            self.ds.build_repetition_counts()
+            self.ds._add_explicit_repetition_counts()

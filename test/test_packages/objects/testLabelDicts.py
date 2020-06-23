@@ -45,15 +45,15 @@ class LabelDictTestCase(BaseTestCase):
         G = np.kron([[0.8,0.2],[0.2,0.8]], mdl1Q.operations['Gi'])
         mdl.operations['Gcmix'] = G
 
-        p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Gx','Mboth') )
+        p = mdl.probabilities( ('rho_c1','Gx','Gy','Gcmix','Gx','Mboth') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0c0',), 0.0), (('1c0',), 0.2), (('0c1',), 0.0), (('1c1',), 0.8)]))
-        p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Gx','Mqubit') )
+        p = mdl.probabilities( ('rho_c1','Gx','Gy','Gcmix','Gx','Mqubit') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0',), 0.0), (('1',), 1.0)]))
 
-        p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Mboth') )
+        p = mdl.probabilities( ('rho_c1','Gx','Gy','Gcmix','Mboth') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0c0',), 0.1), (('1c0',), 0.1), (('0c1',), 0.4), (('1c1',), 0.4)]))
-        p = mdl.probs( ('rho_c1','Gx','Gy','Gcmix','Mqubit') )
+        p = mdl.probabilities( ('rho_c1','Gx','Gy','Gcmix','Mqubit') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)]))
 
-        p = mdl.probs( ('rho_mix', 'Mboth') )
+        p = mdl.probabilities( ('rho_mix', 'Mboth') )
         self.assertDictsAlmostEqual(p, pygsti.objects.labeldicts.OutcomeLabelDict([(('0c0',), 0.5), (('1c0',), 0.0), (('0c1',), 0.5), (('1c1',), 0.0)]))

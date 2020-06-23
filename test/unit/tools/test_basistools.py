@@ -212,9 +212,9 @@ class BasisToolsTester(BaseCase):
         std2x2 = Basis.cast([('std', 4), ('std', 4)])
         gm = Basis.cast('gm', 4)
 
-        from_basis, to_basis = bt.build_basis_pair(np.identity(4, 'd'), "std", "gm")
-        from_basis, to_basis = bt.build_basis_pair(np.identity(4, 'd'), std, "gm")
-        from_basis, to_basis = bt.build_basis_pair(np.identity(4, 'd'), "std", gm)
+        from_basis, to_basis = bt.create_basis_pair(np.identity(4, 'd'), "std", "gm")
+        from_basis, to_basis = bt.create_basis_pair(np.identity(4, 'd'), std, "gm")
+        from_basis, to_basis = bt.create_basis_pair(np.identity(4, 'd'), "std", gm)
 
         mx = np.array([
             [1, 0, 0, 1],

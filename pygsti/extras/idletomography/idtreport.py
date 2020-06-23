@@ -141,10 +141,10 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
             row_data = [fig, intrinsic_reln]
             row_formatters = ['Figure', None]
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         if nBelowThreshold > 0:
-            table.addrow(["%d observed rates below %g" % (nBelowThreshold, rate_threshold), ""],
+            table.add_row(["%d observed rates below %g" % (nBelowThreshold, rate_threshold), ""],
                          [None, None])
 
         table.finish()
@@ -257,10 +257,10 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
                                                  mdl_simulator=mdl_simulator)
             row_data = [str(jac_element), fig]
             row_formatters = [None, 'Figure']
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         if nBelowThreshold > 0:
-            table.addrow(["", "%d observed rates below %g" % (nBelowThreshold, rate_threshold)],
+            table.add_row(["", "%d observed rates below %g" % (nBelowThreshold, rate_threshold)],
                          [None, None])
 
         table.finish()
@@ -625,7 +625,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_data.append(values)
                         row_formatters.append('Brackets')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -788,7 +788,7 @@ def create_idletomography_report(results, filename, title="auto",
         The workspace object used to create the report
     """
     tStart = _time.time()
-    printer = _VerbosityPrinter.build_printer(verbosity)  # , comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity)  # , comm=comm)
 
     if advanced_options is None: advanced_options = {}
     precision = advanced_options.get('precision', None)

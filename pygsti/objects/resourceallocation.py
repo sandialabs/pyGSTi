@@ -38,7 +38,7 @@ class ResourceAllocation(object):
     """
 
     @classmethod
-    def create_from(cls, arg):
+    def cast(cls, arg):
         """
         Cast `arg` to a :class:`ResourceAllocation` object.
 

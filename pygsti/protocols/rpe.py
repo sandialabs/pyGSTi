@@ -199,7 +199,7 @@ class RobustPhaseEstimation(_proto.Protocol):
             )
         return measured
 
-    def raw_angles(self, measured):
+    def compute_raw_angles(self, measured):
         """
         Determine the raw angles from the count data.
 
@@ -250,7 +250,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         RobustPhaseEstimationResults
         """
         meas = self.parse_dataset(data.edesign, data.dataset)
-        angles = self.raw_angles(meas)
+        angles = self.compute_raw_angles(meas)
 
         _res = _RobustPhaseEstimation(Namespace(raw_angles=angles, _measured=meas))
 

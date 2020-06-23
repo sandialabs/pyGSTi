@@ -134,7 +134,7 @@ class ModelMember(ModelChild):
         # last setting of dirty=False
         super(ModelMember, self).__init__(parent)
 
-    def get_dimension(self):
+    def dimension(self):
         """
         Return the dimension of this object.
 

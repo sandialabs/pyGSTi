@@ -78,7 +78,7 @@ class ForwardSimulator(object):
 
         self.paramvec = paramvec
         self.Np = len(paramvec)
-        self.evotype = layer_op_server.get_evotype()
+        self.evotype = layer_op_server.evotype()
 
     def to_vector(self):
         """
@@ -169,7 +169,7 @@ class ForwardSimulator(object):
 
         for raw_circuit, elabels in raw_dict.items():
             # evaluate spamTuples w/same rholabel together
-            for pval in self.prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
+            for pval in self._prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
                 probs[outcomeLbls[iOut]] = pval; iOut += 1
         return probs
 
@@ -204,7 +204,7 @@ class ForwardSimulator(object):
         iOut = 0  # outcome index
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
-                dprobs[outcomeLbls[iOut]] = self.dpr(
+                dprobs[outcomeLbls[iOut]] = self._dpr(
                     (raw_circuit[0], elabel), raw_circuit[1:], return_pr, clip_to)
                 iOut += 1
         return dprobs
@@ -244,7 +244,7 @@ class ForwardSimulator(object):
         iOut = 0  # outcome index
         for raw_circuit, elabels in raw_dict.items():
             for elabel in elabels:
-                hprobs[outcomeLbls[iOut]] = self.hpr(
+                hprobs[outcomeLbls[iOut]] = self._hpr(
                     (raw_circuit[0], elabel), raw_circuit[1:], return_pr, return_deriv, clip_to)
                 iOut += 1
         return hprobs
@@ -515,7 +515,7 @@ class ForwardSimulator(object):
 
         return ret
 
-    def construct_evaltree(self, simplified_circuits, num_subtree_comms):
+    def create_evaltree(self, simplified_circuits, num_subtree_comms):
         """
         Constructs an EvalTree object appropriate for this calculator.
 
@@ -538,7 +538,7 @@ class ForwardSimulator(object):
         -------
         EvalTree
         """
-        raise NotImplementedError("construct_evaltree(...) is not implemented!")
+        raise NotImplementedError("create_evaltree(...) is not implemented!")
 
     def _set_param_block_size(self, wrt_filter, wrt_block_size, comm):
         if wrt_filter is None:
@@ -830,7 +830,7 @@ class ForwardSimulator(object):
             arrays of shape K x S x B x B', where:
 
             - K is the length of spam_label_rows,
-            - S is the number of circuits (i.e. eval_tree.num_final_strings()),
+            - S is the number of circuits (i.e. eval_tree.num_final_circuits()),
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 

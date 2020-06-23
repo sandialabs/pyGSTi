@@ -62,7 +62,7 @@ def _get_max_mem_usage(comm):
     return mem
 
 
-BtoGB = 1.0 / (1024.0**3)  # convert bytes -> GB
+_BtoGB = 1.0 / (1024.0**3)  # convert bytes -> GB
 
 
 class Profiler(object):
@@ -174,7 +174,7 @@ class Profiler(object):
         else:
             self.counters[name] = inc
 
-    def mem_check(self, name, printme=None, prefix=0):
+    def memory_check(self, name, printme=None, prefix=0):
         """
         Record the memory usage at this point and tag with a `name`.
 
@@ -202,7 +202,7 @@ class Profiler(object):
         if prefix > 0:
             stack = _inspect.stack()
             try:
-                depth = len(stack) - 1  # -1 to discount current fn (mem_check)
+                depth = len(stack) - 1  # -1 to discount current fn (memory_check)
                 functions = " : ".join(_inspect.getframeinfo(frm[0]).filename
                                        for frm in reversed(stack[1:1 + prefix]))
                 name = "%2d: %s: %s" % (depth, functions, name)
@@ -217,9 +217,9 @@ class Profiler(object):
             self.mem_checkpoints[name] = [(timestamp, usage)]
 
         bPrint = self.print_memchecks if (printme is None) else printme
-        if bPrint: self.print_mem(name)
+        if bPrint: self.print_memory(name)
 
-    def print_mem(self, name, show_minmax=False):
+    def print_memory(self, name, show_minmax=False):
         """
         Prints the current memory usage (but doesn't store it).
 
@@ -236,7 +236,7 @@ class Profiler(object):
             If True and there are multiple processors, print the
             min, average, and max memory usage from among the processors.
             Note that this will invoke MPI collective communication and so
-            this `print_mem` call **must** be executed by all the processors.
+            this `print_memory` call **must** be executed by all the processors.
             If False and there are multiple processors, only the rank 0
             processor prints output.
 
@@ -249,17 +249,17 @@ class Profiler(object):
             if show_minmax:
                 memlist = self.comm.gather(usage, root=0)
                 if self.comm.Get_rank() == 0:
-                    avg_usage = sum(memlist) * BtoGB / self.comm.Get_size()
-                    min_usage = min(memlist) * BtoGB
-                    max_usage = max(memlist) * BtoGB
+                    avg_usage = sum(memlist) * _BtoGB / self.comm.Get_size()
+                    min_usage = min(memlist) * _BtoGB
+                    max_usage = max(memlist) * _BtoGB
                     print("MEM USAGE [%s] = %.2f GB, %.2f GB, %.2f GB" %
                           (name, min_usage, avg_usage, max_usage))
             elif self.comm.Get_rank() == 0:
-                print("MEM USAGE [%s] = %.2f GB" % (name, usage * BtoGB))
+                print("MEM USAGE [%s] = %.2f GB" % (name, usage * _BtoGB))
         else:
-            print("MEM USAGE [%s] = %.2f GB" % (name, usage * BtoGB))
+            print("MEM USAGE [%s] = %.2f GB" % (name, usage * _BtoGB))
 
-    def print_msg(self, msg, all_ranks=False):
+    def print_message(self, msg, all_ranks=False):
         """
         Prints a message to stdout, possibly from all ranks.
 
@@ -288,7 +288,7 @@ class Profiler(object):
                 print(msg)
         else: print(msg)
 
-    def format_times(self, sort_by="name"):
+    def _format_times(self, sort_by="name"):
         """
         Formats a string to report the timer values recorded in this Profiler.
 
@@ -315,7 +315,7 @@ class Profiler(object):
         s += "\n"
         return s
 
-    def format_counts(self, sort_by="name"):
+    def _format_counts(self, sort_by="name"):
         """
         Formats a string to report the counter values recorded in this Profiler.
 
@@ -342,7 +342,7 @@ class Profiler(object):
         s += "\n"
         return s
 
-    def format_memory(self, sort_by="name"):
+    def _format_memory(self, sort_by="name"):
         """
         Formats a string to report the memory usage checkpoints recorded in this Profiler.
 
@@ -364,7 +364,7 @@ class Profiler(object):
         #print("LIST: ",list(self.mem_checkpoints.values()))
         max_memory = max([usage for timestamp, usage in
                           _itertools.chain(*self.mem_checkpoints.values())])
-        s = "---> Max Memory usage = %.2fGB\n" % (max_memory * BtoGB)
+        s = "---> Max Memory usage = %.2fGB\n" % (max_memory * _BtoGB)
         s += "---> Memory usage (by %s): \n" % sort_by
 
         if sort_by == "timestamp":
@@ -385,7 +385,7 @@ class Profiler(object):
         for nm in chkptNames:
             usages = [u for t, u in self.mem_checkpoints[nm]]
             s += "  %s : %.2fGB (min=%.2f,max=%.2f)\n" % \
-                (nm, avg_usages[nm] * BtoGB, min(usages) * BtoGB, max(usages) * BtoGB)
+                (nm, avg_usages[nm] * _BtoGB, min(usages) * _BtoGB, max(usages) * _BtoGB)
         s += "\n"
         return s
 
@@ -464,7 +464,7 @@ class DummyProfiler(object):
         """
         pass
 
-    def mem_check(self, name, printme=None, prefix=0):
+    def memory_check(self, name, printme=None, prefix=0):
         """
         Stub function that does nothing
 

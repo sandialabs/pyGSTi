@@ -83,7 +83,7 @@ class ExplicitOpModelCalc(object):
         self.effects = simplified_effects
         self.Np = np
 
-    def iter_objs(self):
+    def all_objects(self):
         """
         An iterator over all the state preparation, POVM effect, and layer operations.
         """
@@ -153,36 +153,36 @@ class ExplicitOpModelCalc(object):
             Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist2(
+                d += wt * gate.frobeniusdist_squared(
                     other_calc.operations[opLabel], T, Ti)
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist2(other_calc.preps[lbl],
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl],
                                               'prep', T, Ti)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist2(other_calc.effects[lbl],
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl],
                                               'effect', T, Ti)
                 nSummands += wt * Evec.dim
 
         else:
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist2(other_calc.operations[opLabel])
+                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel])
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist2(other_calc.preps[lbl], 'prep')
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], 'prep')
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist2(other_calc.effects[lbl], 'effect')
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], 'effect')
                 nSummands += wt * Evec.dim
 
         #Temporary: check that this function can be computed by
@@ -328,12 +328,12 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
                                              'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
                                              'effect', T, Ti)
                     nSummands += Evec.dim
 
@@ -345,12 +345,12 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
                                              'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
                                              'effect')
                     nSummands += Evec.dim
 
@@ -397,12 +397,12 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
                                              'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
                                              'effect', T, Ti)
                     nSummands += Evec.dim
 
@@ -414,12 +414,12 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist2(other_calc.preps[lbl],
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
                                              'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist2(other_calc.effects[lbl],
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
                                              'effect')
                     nSummands += Evec.dim
 
@@ -439,12 +439,12 @@ class ExplicitOpModelCalc(object):
         numpy array
             2D array of derivatives.
         """
-        num_els = sum([obj.size for _, obj in self.iter_objs()])
+        num_els = sum([obj.size for _, obj in self.all_objects()])
         num_params = self.Np
         deriv = _np.zeros((num_els, num_params), 'd')
 
         eo = 0  # element offset
-        for lbl, obj in self.iter_objs():
+        for lbl, obj in self.all_objects():
             #Note: no overlaps possible b/c of independent *elements*
             deriv[eo:eo + obj.size, obj.gpindices] = obj.deriv_wrt_params()
             eo += obj.size
@@ -459,12 +459,12 @@ class ExplicitOpModelCalc(object):
         whose nullspace gives the gauge directions in parameter space.
         """
 
-        # ** See comments at the beginning of get_nongauge_projector for explanation **
+        # ** See comments at the beginning of nongauge_projector for explanation **
 
         try:
-            self_operations = _collections.OrderedDict([(lbl, gate.todense()) for lbl, gate in self.operations.items()])
-            self_preps = _collections.OrderedDict([(lbl, vec.todense()[:, None]) for lbl, vec in self.preps.items()])
-            self_effects = _collections.OrderedDict([(lbl, vec.todense()[:, None])
+            self_operations = _collections.OrderedDict([(lbl, gate.to_dense()) for lbl, gate in self.operations.items()])
+            self_preps = _collections.OrderedDict([(lbl, vec.to_dense()[:, None]) for lbl, vec in self.preps.items()])
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense()[:, None])
                                                      for lbl, vec in self.effects.items()])
         except:
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
@@ -494,14 +494,14 @@ class ExplicitOpModelCalc(object):
             self = newSelf  # HACK!!! replacing self for remainder of this fn with version without Ecs
 
             #recompute effects in case we deleted any ComplementSPAMVecs
-            self_effects = _collections.OrderedDict([(lbl, vec.todense()[:, None])
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense()[:, None])
                                                      for lbl, vec in self.effects.items()])
 
         #Use a Model object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self.dim
         nParams = self.Np
 
-        nElements = sum([obj.size for _, obj in self.iter_objs()])
+        nElements = sum([obj.size for _, obj in self.all_objects()])
         #nElements = sum([o.size for o in self_operations.values()]) + \
         #            sum([o.size for o in self_preps.values()]) + \
         #            sum([o.size for o in self_effects.values()])
@@ -562,7 +562,7 @@ class ExplicitOpModelCalc(object):
         dPG[:, 0:nParams] = self.deriv_wrt_params()
         return dPG
 
-    def get_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
+    def nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
         Constructs a projector onto the non-gauge parameter space.
 
@@ -773,6 +773,6 @@ class ExplicitOpModelCalc(object):
         except(_np.linalg.LinAlgError):
             _warnings.warn("Linear algebra error (probably a non-convergent"
                            "SVD) ignored during matric rank checks in "
-                           "Model.get_nongauge_projector(...) ")
+                           "Model.nongauge_projector(...) ")
 
         return Pp

@@ -16,7 +16,7 @@ from . import optools as _gts
 from . import symplectic as _symp
 
 
-def get_internal_gate_unitaries():
+def internal_gate_unitaries():
     """
     The unitaries for the *internally* defined gates.
 
@@ -88,7 +88,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
     Whether a unitary is, up to a phase, the standard gate specified by the name `standard_gate_name`.
 
     The correspondence between the standard names and unitaries is w.r.t the
-    internally-used gatenames (see get_internal_gate_unitaries()).  For example, one use
+    internally-used gatenames (see internal_gate_unitaries()).  For example, one use
     of this function is to check whether some gate specifed by a user with the name
     'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
@@ -106,7 +106,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
         True if the `gate_unitary` is, up to phase, the unitary specified `standard_gate_name`.
         False otherwise.
     """
-    std_unitaries = get_internal_gate_unitaries()
+    std_unitaries = internal_gate_unitaries()
     if _np.shape(gate_unitary) != _np.shape(std_unitaries[standard_gate_name]):
         return False
     else:
@@ -125,7 +125,7 @@ def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary, standard_gat
 
     This equivalence is tested up to pre- and post-multiplication by some Pauli and up to
     a phase, The correspondence between the standard names and unitaries is w.r.t the
-    internally-used gatenames (see get_internal_gate_unitaries()).
+    internally-used gatenames (see internal_gate_unitaries()).
 
     Currently only supported for Clifford gates.
 
@@ -143,7 +143,7 @@ def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary, standard_gat
         True if the `gate_unitary` is, up to phase and Pauli-multiplication, the unitary
         specified `standard_gate_name`. False otherwise.
     """
-    std_symplectic_reps = _symp.get_internal_gate_symplectic_representations()
+    std_symplectic_reps = _symp.compute_internal_gate_symplectic_representations()
     gate_symplectic_rep = _symp.unitary_to_symplectic(gate_unitary)
 
     if _np.shape(gate_symplectic_rep[0]) != _np.shape(std_symplectic_reps[standard_gate_name][0]):
@@ -152,7 +152,7 @@ def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary, standard_gat
         return _np.allclose(gate_symplectic_rep[0], std_symplectic_reps[standard_gate_name][0])
 
 
-def get_standard_gatename_unitaries():
+def standard_gatename_unitaries():
     """
     Constructs and returns a dictionary of unitary matrices describing the action of "standard" gates.
 
@@ -258,11 +258,11 @@ def get_standard_gatename_unitaries():
     return std_unitaries
 
 
-def get_standard_gatenames_cirq_conversions():
+def standard_gatenames_cirq_conversions():
     """
     A dictionary converting the gates with standard names to the cirq names for these gates.
 
-    See :function:`get_standard_gatename_unitaries`.
+    See :function:`standard_gatename_unitaries`.
 
     By default, an idle operation will not be converted to a gate.
     If you want an idle to be converted to a `cirq.WaitGate`, you will have
@@ -310,11 +310,11 @@ def get_standard_gatenames_cirq_conversions():
     return std_gatenames_to_cirq
 
 
-def get_standard_gatenames_quil_conversions():
+def standard_gatenames_quil_conversions():
     """
     A dictionary converting the gates with standard names to the QUIL names for these gates.
 
-    See :function:`get_standard_gatename_unitaries`.
+    See :function:`standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user
@@ -374,11 +374,11 @@ def get_standard_gatenames_quil_conversions():
     return std_gatenames_to_quil
 
 
-def get_standard_gatenames_openqasm_conversions():
+def standard_gatenames_openqasm_conversions():
     """
     A dictionary converting the gates with standard names to the QASM names for these gates.
 
-    See :function:`get_standard_gatename_unitaries`.
+    See :function:`standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user

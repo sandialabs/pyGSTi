@@ -76,7 +76,7 @@ class Cell(object):
                                                 + " returned None for item = " + str(self.data))
             return formatted_item
         else:
-            if self.data.get_value() is not None:
+            if self.data.value() is not None:
                 return str(self.data)
             else:
                 raise ValueError("Unformatted None in Cell")

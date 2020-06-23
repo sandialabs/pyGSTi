@@ -97,7 +97,7 @@ class ReportTable(object):
         else:
             self._headings = Row(col_headings, formatters, col_heading_labels, self.nonMarkovianEBs)
 
-    def addrow(self, data, formatters=None, labels=None, non_markovian_ebs=None):
+    def add_row(self, data, formatters=None, labels=None, non_markovian_ebs=None):
         """
         Adds a row to the table.
 
@@ -251,7 +251,7 @@ class ReportTable(object):
             header_lines = max(header_lines, _nlines(nm))
         for k, row in enumerate(self._rows):
             for i, el in enumerate(row.cells):
-                el = el.data.get_value()
+                el = el.data.value()
                 col_widths[i] = max(_strlen(el), col_widths[i])
                 row_lines[k] = max(row_lines[k], _nlines(el))
 
@@ -270,7 +270,7 @@ class ReportTable(object):
         for rowIndex, row in enumerate(self._rows):
             for k in range(row_lines[rowIndex]):
                 for i, el in enumerate(row.cells):
-                    el = el.data.get_value()
+                    el = el.data.value()
                     s += "|  %*s  " % (col_widths[i], _getline(el, k))
                 s += "|\n"
             s += row_separator
@@ -287,7 +287,7 @@ class ReportTable(object):
         """Indexes the first column rowdata"""
         for row in self._rows:
             row_data = row.cells
-            if len(row_data) > 0 and row_data[0].data.get_value() == key:
+            if len(row_data) > 0 and row_data[0].data.value() == key:
                 return _OrderedDict(zip(self._columnNames, row_data))
         raise KeyError("%s not found as a first-column value" % key)
 
@@ -312,7 +312,7 @@ class ReportTable(object):
         -------
         list
         """
-        return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
+        return [row.cells[0].data.value() for row in self._rows if len(row.cells) > 0]
 
     def row(self, key=None, index=None):
         """
@@ -338,7 +338,7 @@ class ReportTable(object):
                 raise ValueError("Cannot specify *both* key and index")
             for row in self._rows:
                 row_data = row.cells
-                if len(row_data) > 0 and row_data[0].data.get_value() == key:
+                if len(row_data) > 0 and row_data[0].data.value() == key:
                     return row_data
             raise KeyError("%s not found as a first-column value" % key)
 

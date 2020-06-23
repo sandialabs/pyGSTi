@@ -368,7 +368,7 @@ class CrosstalkResults(object):
 
         thetable.auto_set_font_size(False)
         thetable.set_fontsize(14)
-        thetable.scale(1.7, 1.7)
+        thetable.scale_inplace(1.7, 1.7)
         # insert plot title
         _plt.title(title, fontsize=17)
 

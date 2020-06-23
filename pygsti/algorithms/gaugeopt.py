@@ -235,7 +235,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         final gauge-transformed model.
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
 
     if comm is not None:
@@ -259,8 +259,8 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
             else:
                 return model.copy()
 
-    x0 = gauge_group.get_initial_params()  # gauge group picks a good initial el
-    gaugeGroupEl = gauge_group.get_element(x0)  # re-used element for evals
+    x0 = gauge_group.initial_params()  # gauge group picks a good initial el
+    gaugeGroupEl = gauge_group.compute_element(x0)  # re-used element for evals
 
     def _call_objective_fn(gauge_group_el_vec, oob_check=False):
         # Note: oob_check can be True if oob_check_interval>=1 is given to the custom_leastsq below
@@ -296,7 +296,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
         bToStdout = (printer.verbosity >= 2 and printer.filename is None)
         if bToStdout and (comm is None or comm.Get_rank() == 0):
-            print_obj_func = _opt.create_obj_func_printer(_call_objective_fn)  # only ever prints to stdout!
+            print_obj_func = _opt.create_objfn_printer(_call_objective_fn)  # only ever prints to stdout!
             # print_obj_func(x0) #print initial point (can be a large vector though)
         else: print_obj_func = None
 
@@ -309,7 +309,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     gaugeGroupEl.from_vector(solnX)
     newModel = model.copy()
-    newModel.transform(gaugeGroupEl)
+    newModel.transform_inplace(gaugeGroupEl)
 
     printer.log("Gauge optimization completed in %gs." % (_time.time() - tStart))
 
@@ -339,14 +339,14 @@ def _create_objective_fn(model, target_model, item_weights=None,
         mxBasis = target_model.basis
 
     def _transform_with_oob_check(mdl, gauge_group_el, oob_check):
-        """ Helper function that sometimes checks if mdl.transform(gauge_group_el) fails. """
+        """ Helper function that sometimes checks if mdl.transform_inplace(gauge_group_el) fails. """
         mdl = mdl.copy()
         if oob_check:
-            try: mdl.transform(gauge_group_el)
+            try: mdl.transform_inplace(gauge_group_el)
             except Exception as e:
                 raise ValueError("Out of bounds: %s" % str(e))  # signals OOB condition
         else:
-            mdl.transform(gauge_group_el)
+            mdl.transform_inplace(gauge_group_el)
         return mdl
 
     if method == "ls":
@@ -406,7 +406,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
             else:
                 mdl_pre = model.copy()
                 mdl_post = mdl_pre.copy()
-            mdl_post.transform(gauge_group_el)
+            mdl_post.transform_inplace(gauge_group_el)
 
             # Indices: Jacobian output matrix has shape (L, N)
             start = 0
@@ -464,8 +464,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
             my_jacMx = jacMx[:, myDerivColSlice]  # just the columns I'm responsible for
 
             # S, and S_inv are shape (d,d)
-            #S       = gauge_group_el.get_transform_matrix()
-            S_inv = gauge_group_el.get_transform_matrix_inverse()
+            #S       = gauge_group_el.transform_matrix()
+            S_inv = gauge_group_el.transform_matrix_inverse()
             dS = gauge_group_el.deriv_wrt_params(wrtIndices)  # shape (d*d),n
             dS.shape = (d, d, n)  # call it (d1,d2,n)
             dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -482,8 +482,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 # d(op_term) = S_inv * (-dS * S_inv * G * S + G * dS) = S_inv * (-dS * G' + G * dS)
                 #   Note: (S_inv * G * S) is G' (transformed G)
                 wt = item_weights.get(lbl, opWeight)
-                left = -1 * _np.dot(dS, mdl_post.operations[lbl].todense())  # shape (n,d1,d2)
-                right = _np.swapaxes(_np.dot(G.todense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
+                left = -1 * _np.dot(dS, mdl_post.operations[lbl].to_dense())  # shape (n,d1,d2)
+                right = _np.swapaxes(_np.dot(G.to_dense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
                 result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                 result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                 my_jacMx[start:start + d**2] = wt * result
@@ -495,8 +495,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 wt = item_weights.get(ilbl, opWeight)
                 for lbl, G in Inst.items():
                     # same calculation as for operation terms
-                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].todense())  # shape (n,d1,d2)
-                    right = _np.swapaxes(_np.dot(G.todense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
+                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].to_dense())  # shape (n,d1,d2)
+                    right = _np.swapaxes(_np.dot(G.to_dense(), dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
                     result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                     result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                     my_jacMx[start:start + d**2] = wt * result
@@ -509,7 +509,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 #   Note: (S_inv * rho) is transformed rho
                 wt = item_weights.get(lbl, spamWeight)
                 Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-                result = -1 * _np.dot(Sinv_dS, rho.todense())  # shape (d,n)
+                result = -1 * _np.dot(Sinv_dS, rho.to_dense())  # shape (d,n)
                 my_jacMx[start:start + d] = wt * result
                 start += d
 
@@ -519,7 +519,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 for lbl, E in povm.items():
                     # d(ET_term) = E.T * dS
                     wt = item_weights.get(povmlbl + "_" + lbl, spamWeight)
-                    result = _np.dot(E.todense()[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    result = _np.dot(E.to_dense()[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
                     my_jacMx[start:start + d] = wt * result.squeeze(2)  # (d2,n)
                     start += d
 
@@ -530,7 +530,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                     gauge_group_el = original_gauge_group_el
                     mdl_pre = model.copy()
                     mdl_post = mdl_pre.copy()
-                    mdl_post.transform(gauge_group_el)
+                    mdl_post.transform_inplace(gauge_group_el)
 
                 if cptp_penalty_factor > 0:
                     start += _cptp_penalty_jac_fill(my_jacMx[start:], mdl_pre, mdl_post,
@@ -730,8 +730,8 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     # S, and S_inv are shape (d,d)
     d, N = mdl_pre.dim, gauge_group_el.num_params()
     n = N if (wrt_filter is None) else len(wrt_filter)
-    #S       = gauge_group_el.get_transform_matrix()
-    S_inv = gauge_group_el.get_transform_matrix_inverse()
+    #S       = gauge_group_el.transform_matrix()
+    S_inv = gauge_group_el.transform_matrix_inverse()
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -802,7 +802,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     # S, and S_inv are shape (d,d)
     d, N = mdl_pre.dim, gauge_group_el.num_params()
     n = N if (wrt_filter is None) else len(wrt_filter)
-    S_inv = gauge_group_el.get_transform_matrix_inverse()
+    S_inv = gauge_group_el.transform_matrix_inverse()
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -816,7 +816,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec.todense()[:, None], op_basis)
+        denMx = _tools.vec_to_stdmx(prepvec.to_dense()[:, None], op_basis)
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -830,7 +830,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in op_basis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
         Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-        dVdp = -1 * _np.dot(Sinv_dS, prepvec.todense()[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec.to_dense()[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
         assert(dVdp.shape == (d, n))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -855,7 +855,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         for lbl, effectvec in povm.items():
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec.todense()[:, None], op_basis)
+            EMx = _tools.vec_to_stdmx(effectvec.to_dense()[:, None], op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
@@ -870,7 +870,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
             # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in op_basis [shape == (n,dim)]
             #                      = [effectvec.T * dS].T
             #  OR = dS.T * effectvec
-            pre_effectvec = mdl_pre.povms[povmlbl][lbl].todense()[:, None]
+            pre_effectvec = mdl_pre.povms[povmlbl][lbl].to_dense()[:, None]
             dVdp = _np.dot(pre_effectvec.T, dS).squeeze(0).T
             # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
             assert(dVdp.shape == (d, n))

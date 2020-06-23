@@ -80,7 +80,7 @@ def model_with_lgst_circuit_estimates(
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
@@ -110,7 +110,7 @@ def model_with_lgst_circuit_estimates(
             if targetOpLabel not in opLabels:  # very unlikely that this is false
                 opLabels.append(targetOpLabel)
 
-    return _core.do_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
+    return _core.run_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
                          opLabels, aliases, guess_model_for_gauge,
                          svd_truncate_to, verbosity)
 
@@ -157,7 +157,7 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
@@ -209,7 +209,7 @@ def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) call.
+        Verbosity value to send to run_lgst(...) call.
 
     Returns
     -------
@@ -219,7 +219,7 @@ def direct_lgst_models(circuits, dataset, prep_fiducials, meas_fiducials, target
         stored under the operation label "GsigmaLbl", along with LGST estimates
         of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     directLGSTmodels = {}
     printer.log("--- Direct LGST precomputation ---")
@@ -296,7 +296,7 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mc2gst(...) calls.
 
     Returns
     -------
@@ -321,7 +321,7 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_lsgst = _core.do_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
+    _, direct_lsgst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                        objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                        verbosity=verbosity)
 
@@ -376,7 +376,7 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mc2gst(...) calls.
 
     Returns
     -------
@@ -386,7 +386,7 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         stored under the operation label "GsigmaLbl", along with LSGST estimates
         of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     directLSGSTmodels = {}
     printer.log("--- Direct LSGST precomputation ---")
     with printer.progress_logging(1):
@@ -463,7 +463,7 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mlgst(...) calls.
 
     Returns
     -------
@@ -488,7 +488,7 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.PoissonPicDeltaLogLFunction.builder(regularization={'min_prob_clip': min_prob_clip},
                                                          penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_mlegst = _core.do_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
+    _, direct_mlegst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                         objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                         verbosity=verbosity)
 
@@ -542,7 +542,7 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
         computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
-        Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
+        Verbosity value to send to run_lgst(...) and do_mlgst(...) calls.
 
     Returns
     -------
@@ -552,7 +552,7 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
         stored under the operation label "GsigmaLbl", along with MLEGST estimates
         of the gates in `target_model`.
     """
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     directMLEGSTmodels = {}
     printer.log("--- Direct MLEGST precomputation ---")
     with printer.progress_logging(1):
@@ -628,7 +628,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, op_label_aliases)
-    _, focused_lsgst = _core.do_gst_fit(dataset, start_model, bulk_circuits, optimizer=None,
+    _, focused_lsgst = _core.run_gst_fit(dataset, start_model, bulk_circuits, optimizer=None,
                                         objective_function_builder=obuilder, resource_alloc=None, cache=None,
                                         verbosity=verbosity)
 
@@ -689,7 +689,7 @@ def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         operation label "GsigmaLbl".
     """
 
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity)
     focusedLSGSTmodels = {}
     printer.log("--- Focused LSGST precomputation ---")
     with printer.progress_logging(1):

@@ -17,12 +17,12 @@ class AbstractForwardSimTester(BaseCase):
     # XXX is it really neccessary to test an abstract base class?
     def setUp(self):
         mock_SOS = mock.MagicMock()
-        mock_SOS.get_evotype.return_value = "densitymx"  # SOS = Simplified Op Server
+        mock_SOS.evotype.return_value = "densitymx"  # SOS = Simplified Op Server
         self.fwdsim = ForwardSimulator(4, mock_SOS, np.zeros(16, 'd'))
 
     def test_construct_evaltree(self):
         with self.assertRaises(NotImplementedError):
-            self.fwdsim.construct_evaltree(None, None)
+            self.fwdsim.create_evaltree(None, None)
 
     def test_bulk_fill_probs(self):
         with self.assertRaises(NotImplementedError):
@@ -46,7 +46,7 @@ class ForwardSimBase(object):
     def setUpClass(cls):
         # XXX can this be constructed directly instead of taking it from a model instance?  EGN: yet, but maybe painful - see model's ._fwdsim()
         ExplicitOpModel._strict = False
-        cls.model = pc.build_explicit_model(
+        cls.model = pc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"]
         )
@@ -103,16 +103,16 @@ class ForwardSimBase(object):
         # TODO assert correctness
 
     def test_prs(self):
-        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1))
-        self.fwdsim.prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1), use_scaling=True)
+        self.fwdsim._prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1))
+        self.fwdsim._prs(L('rho0'), [L('Mdefault_0')], Ls('Gx', 'Gx'), clip_to=(-1, 1), use_scaling=True)
         # TODO assert correctness
 
     def test_estimate_cache_size(self):
-        self.fwdsim.estimate_cache_size(100)
+        self.fwdsim._estimate_cache_size(100)
         # TODO assert correctness
 
     def test_estimate_mem_usage(self):
-        est = self.fwdsim.estimate_mem_usage(
+        est = self.fwdsim.estimate_memory_usage(
             ["bulk_fill_probs", "bulk_fill_dprobs", "bulk_fill_hprobs"],
             cache_size=100, num_subtrees=2, num_subtree_proc_groups=1,
             num_param1_groups=1, num_param2_groups=1, num_final_strs=100
@@ -121,13 +121,13 @@ class ForwardSimBase(object):
 
     def test_estimate_mem_usage_raises_on_bad_subcall_key(self):
         with self.assertRaises(ValueError):
-            self.fwdsim.estimate_mem_usage(["foobar"], 1, 1, 1, 1, 1, 1)
+            self.fwdsim.estimate_memory_usage(["foobar"], 1, 1, 1, 1, 1, 1)
 
 
 class MatrixForwardSimTester(ForwardSimBase, BaseCase):
     def test_doperation(self):
-        dg = self.fwdsim.doperation(L('Gx'), flat=False)
-        dgflat = self.fwdsim.doperation(L('Gx'), flat=True)
+        dg = self.fwdsim._doperation(L('Gx'), flat=False)
+        dgflat = self.fwdsim._doperation(L('Gx'), flat=True)
         # TODO assert correctness
 
     def test_hproduct(self):
@@ -135,12 +135,12 @@ class MatrixForwardSimTester(ForwardSimBase, BaseCase):
         # TODO assert correctness
 
     def test_hoperation(self):
-        hg = self.fwdsim.hoperation(L('Gx'), flat=False)
-        hgflat = self.fwdsim.hoperation(L('Gx'), flat=True)
+        hg = self.fwdsim._hoperation(L('Gx'), flat=False)
+        hgflat = self.fwdsim._hoperation(L('Gx'), flat=True)
         # TODO assert correctness
 
     def test_hpr(self):
-        self.fwdsim.hpr(Ls('rho0', 'Mdefault_0'), Ls('Gx', 'Gx'), False, False, clip_to=(-1, 1))
+        self.fwdsim._hpr(Ls('rho0', 'Mdefault_0'), Ls('Gx', 'Gx'), False, False, clip_to=(-1, 1))
         # TODO assert correctness
 
     def test_rhoE_from_spamTuple(self):

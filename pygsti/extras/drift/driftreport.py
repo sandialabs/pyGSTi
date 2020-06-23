@@ -63,11 +63,11 @@ class DriftSummaryTable(_ws.WorkspaceTable):
     def _create(self, stabilityanalyzer, dskey, detectorkey, estimatekey):
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
-        table.addrow(['Global statistical significance level',
+        table.add_row(['Global statistical significance level',
                       stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
-        table.addrow(['Instability detected', stabilityanalyzer.instability_detected(
+        table.add_row(['Instability detected', stabilityanalyzer.instability_detected(
             detectorkey=detectorkey)], [None, None])
-        table.addrow(['Instability size', stabilityanalyzer.get_maxmax_tvd_bound(
+        table.add_row(['Instability size', stabilityanalyzer.get_maxmax_tvd_bound(
             dskey=dskey, estimatekey=estimatekey)], [None, None])
         table.finish()
         return table
@@ -91,15 +91,15 @@ class DriftDetailsTable(_ws.WorkspaceTable):
             estimatekey = stabilityanalyzer._def_probtrajectories
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
-        table.addrow(['Transform', stabilityanalyzer.transform], [None, None])
-        table.addrow(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
-        table.addrow(['Name of detector', detectorkey], [None, None])
+        table.add_row(['Transform', stabilityanalyzer.transform], [None, None])
+        table.add_row(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
+        table.add_row(['Name of detector', detectorkey], [None, None])
         string_condtestsrun = ''
         for test in stabilityanalyzer._condtests[detectorkey]: string_condtestsrun += str(test) + ', '
         string_estimatekey = ''
         for detail in estimatekey: string_estimatekey += str(detail) + ', '
-        table.addrow(['Tests run for detector', string_condtestsrun], [None, None])
-        table.addrow(['Type of estimator', string_estimatekey], [None, None])
+        table.add_row(['Tests run for detector', string_condtestsrun], [None, None])
+        table.add_row(['Type of estimator', string_estimatekey], [None, None])
         table.finish()
         return table
 
@@ -372,7 +372,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                 assert(len(stabilityanalyzer.data.keys()) == 1), \
                     "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
-            dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
+            dtimes, data = stabilityanalyzer.data[dskey][circuit].timeseries_for_outcomes()
             if times is None:
                 times = _np.linspace(min(dtimes), max(dtimes), 5000)
             p = stabilityanalyzer.get_probability_trajectory(
@@ -546,7 +546,7 @@ def _create_drift_switchboard(ws, results, circuits):
             [list(results.data.keys()), [c.str for c in circuit_struct.germs],
              [c.str for c in circuit_struct.prep_fiducials],
              [c.str for c in circuit_struct.meas_fiducials],
-             [i.str for i in results.data.get_outcome_labels()]],
+             [i.str for i in results.data.outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
@@ -559,7 +559,7 @@ def _create_drift_switchboard(ws, results, circuits):
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
             [[c.str for c in circuit_struct.germs], [c.str for c in circuit_struct.prep_fiducials],
-             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.get_outcome_labels()]],
+             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.outcome_labels()]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prep_fiducials", (1,))
@@ -569,24 +569,24 @@ def _create_drift_switchboard(ws, results, circuits):
         drift_switchBd.germs[:] = circuit_struct.germs
         drift_switchBd.prep_fiducials[:] = circuit_struct.prep_fiducials
         drift_switchBd.meas_fiducials[:] = circuit_struct.meas_fiducials
-        drift_switchBd.outcomes[:] = results.data.get_outcome_labels()
+        drift_switchBd.outcomes[:] = results.data.outcome_labels()
 
     return drift_switchBd
 
 
-# TODO deprecate in favor of `report.factory.construct_drift_report`
+# TODO deprecate in favor of `report.factory.create_drift_report`
 def create_drift_report(results, circuits, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
                         brevity=0, advanced_options=None, verbosity=1):
     """
     Creates a Drift report.
     """
-    from pygsti.report.factory import construct_drift_report
+    from pygsti.report.factory import create_drift_report
     # Wrap a call to the new factory method
     advanced_options = advanced_options or {}
     ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
-    report = construct_drift_report(
+    report = create_drift_report(
         results, circuits, title, ws, verbosity
     )
 

@@ -16,13 +16,13 @@ from contextlib import contextmanager
 from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
-from ..tools.legacytools import deprecated_fn
+from ..tools.legacytools import deprecate
 import warnings
 
 # note that this decorator ignores **kwargs
 
 
-@deprecated_fn('functools.lru_cache')
+@deprecate('functools.lru_cache')
 def cache_by_hashed_args(obj):
     """
     Decorator for caching a function values

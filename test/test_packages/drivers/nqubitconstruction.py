@@ -169,7 +169,7 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                            independent1Qgates=True, ZZonly=False, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s model" % (nQubits,geometry))
 
     qubitGraph = QubitGraph(nQubits, geometry)
@@ -245,7 +245,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                           gateNoise=None, prepNoise=None, povmNoise=None, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("Creating a %d-qubit %s model" % (nQubits,geometry))
 
     mdl = pygsti.obj.ExplicitOpModel() # no preps/POVMs
@@ -259,7 +259,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #    eLbls.append( format(i,formatStr))
     #    eExprs.append( str(i) )    
     #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
-    #mdl = pygsti.construction.build_explicit_model(
+    #mdl = pygsti.construction.create_explicit_model(
     #    [2**nQubits], [Qlbls], [], [], 
     #    effect_labels=eLbls, effect_expressions=eExprs)
     printer.log("Created initial model")
@@ -315,7 +315,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         
     #SPAM
     basis1Q = pygsti.obj.Basis("pp",2)
-    prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
+    prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction._basis_create_spam_vector("0", basis1Q))
                     for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
@@ -329,7 +329,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     
     factorPOVMs = []
     for i in range(nQubits):
-        effects = [ (l,pygsti.construction.basis_build_vector(l, basis1Q)) for l in ["0","1"] ]
+        effects = [ (l,pygsti.construction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
         factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
     if povmNoise is not None:
         if isinstance(povmNoise,tuple): # use as (seed, strength)
@@ -358,7 +358,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         Composed = _objs.ComposedDenseOp
         Embedded = _objs.EmbeddedDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating global idle ***")
     
     termgates = [] # gates to compose
@@ -506,7 +506,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         Embedded = _objs.EmbeddedDenseOp
         Static = _objs.StaticDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating composed gate ***")
     
     #Factor1: target operation

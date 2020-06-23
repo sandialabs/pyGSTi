@@ -93,12 +93,12 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("\nGate Test:")
         SparseId = sps.identity(4**2,'d','csr')
         gate = LindbladDenseOp.from_operation_matrix( np.identity(4**2,'d') )
-        print("gate Errgen type (should be dense):",type(gate.errorgen.todense()))
-        self.assertIsInstance(gate.errorgen.todense(), np.ndarray)
+        print("gate Errgen type (should be dense):",type(gate.errorgen.to_dense()))
+        self.assertIsInstance(gate.errorgen.to_dense(), np.ndarray)
         sparseOp = LindbladOp.from_operation_matrix( SparseId )
-        print("spareGate Errgen type (should be sparse):",type(sparseOp.errorgen.tosparse()))
-        self.assertIsInstance(sparseOp.errorgen.tosparse(), sps.csr_matrix)
-        self.assertArraysAlmostEqual(gate.errorgen.todense(),sparseOp.errorgen.todense())
+        print("spareGate Errgen type (should be sparse):",type(sparseOp.errorgen.to_sparse()))
+        self.assertIsInstance(sparseOp.errorgen.to_sparse(), sps.csr_matrix)
+        self.assertArraysAlmostEqual(gate.errorgen.to_dense(),sparseOp.errorgen.to_dense())
 
         perfectG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
         noisyG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
@@ -107,11 +107,11 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')
         op2 = LindbladDenseOp.from_operation_matrix( noisyG, perfectG )
         sparseGate2 = LindbladOp.from_operation_matrix( Sparse_noisyG, Sparse_perfectG )
-        print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.errorgen.tosparse()))
-        self.assertIsInstance(sparseGate2.errorgen.tosparse(), sps.csr_matrix)
+        print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.errorgen.to_sparse()))
+        self.assertIsInstance(sparseGate2.errorgen.to_sparse(), sps.csr_matrix)
         #print("errgen = \n"); pygsti.tools.print_mx(op2.err_gen,width=4,prec=1)
         #print("sparse errgen = \n"); pygsti.tools.print_mx(sparseGate2.err_gen.toarray(),width=4,prec=1)
-        self.assertArraysAlmostEqual(op2.errorgen.todense(),sparseGate2.errorgen.todense())
+        self.assertArraysAlmostEqual(op2.errorgen.to_dense(),sparseGate2.errorgen.to_dense())
 
     def test_setting_lindblad_stochastic_error_rates(self):
         mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
@@ -135,16 +135,16 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         #pygsti.tools.print_mx(Gx_depol.todense())
 
         print("Coeffs are:")
-        print(Gx_depol.get_errgen_coeffs())
+        print(Gx_depol.errorgen_coefficients())
         print("Rates are:")
-        print(Gx_depol.get_error_rates())
+        print(Gx_depol.error_rates())
         
-        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','X')],ps_err)
-        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','Y')],ps_err)
-        self.assertAlmostEqual(Gx_depol.get_error_rates()[('S','Z')],ps_err)
-        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','X')],expected_coeff)
-        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','Y')],expected_coeff)
-        self.assertAlmostEqual(Gx_depol.get_errgen_coeffs()[('S','Z')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.error_rates()[('S','X')],ps_err)
+        self.assertAlmostEqual(Gx_depol.error_rates()[('S','Y')],ps_err)
+        self.assertAlmostEqual(Gx_depol.error_rates()[('S','Z')],ps_err)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','X')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','Y')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','Z')],expected_coeff)
 
     def test_setting_lindblad_hamiltonian_error_rates(self):
         mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
@@ -152,14 +152,14 @@ class AdvancedParameterizationTestCase(BaseTestCase):
 
         #Test 3 different ways of setting rotation angles.
         Gx_rot.rotate( (0.2,0.0,0) )
-        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','X')], 0.2)
-        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','X')], 0.2)
+        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','X')], 0.2)
+        self.assertAlmostEqual(Gx_rot.error_rates()[('H','X')], 0.2)
         Gx_rot.set_error_rates({('H','Y'): 0.1})
-        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','Y')], 0.1)
-        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','Y')], 0.1)
-        Gx_rot.set_errgen_coeffs({('H','Z'): 0.3})
-        self.assertAlmostEqual(Gx_rot.get_errgen_coeffs()[('H','Z')], 0.3)
-        self.assertAlmostEqual(Gx_rot.get_error_rates()[('H','Z')], 0.3)
+        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','Y')], 0.1)
+        self.assertAlmostEqual(Gx_rot.error_rates()[('H','Y')], 0.1)
+        Gx_rot.set_errorgen_coefficients({('H','Z'): 0.3})
+        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','Z')], 0.3)
+        self.assertAlmostEqual(Gx_rot.error_rates()[('H','Z')], 0.3)
         
 
 if __name__ == '__main__':

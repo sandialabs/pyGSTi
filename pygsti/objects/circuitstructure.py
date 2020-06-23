@@ -126,7 +126,7 @@ class CircuitPlaquette(object):
         return CircuitPlaquette(self.base, self.rows, self.cols,
                                 new_elements, None, new_fidpairs)
 
-    def get_all_strs(self):
+    def all_strs(self):
         """
         Return a list of all the circuits contained in this plaquette
 
@@ -354,7 +354,7 @@ class CircuitStructure(object):
         return [y for y in self.yvals() if any([len(self.get_plaquette(x, y)) > 0
                                                 for x in self.xvals()])]
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this CircuitStructure.
 
@@ -732,7 +732,7 @@ class LsGermsStructure(CircuitStructure):
                                 len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this circuit structure.
 
@@ -1180,7 +1180,7 @@ class LsGermsSerialStructure(CircuitStructure):
                                 self.nMinorCols, elements,
                                 self.aliases, fidpairs[:])
 
-    def plaquette_rows_cols(self):
+    def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this LsGermsStructure.
 

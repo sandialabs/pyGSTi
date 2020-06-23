@@ -127,7 +127,7 @@ def frobeniusdist(a, b):
     return _mt.frobeniusnorm(a - b)
 
 
-def frobeniusdist2(a, b):
+def frobeniusdist_squared(a, b):
     """
     Returns the square of the frobenius distance between gate or density matrices.
 
@@ -148,7 +148,7 @@ def frobeniusdist2(a, b):
     float
         The resulting frobenius distance.
     """
-    return _mt.frobeniusnorm2(a - b)
+    return _mt.frobeniusnorm_squared(a - b)
 
 
 def residuals(a, b):
@@ -250,7 +250,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         Only returned if `return_x = True`.  Encodes the state rho, such that
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
-    mx_basis = _bt.build_basis_for_matrix(a, mx_basis)
+    mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
     #currently cvxpy is only needed for this function, so don't import until here
 
@@ -736,7 +736,7 @@ def fidelity_upper_bound(operation_mx):
     #print "DEBUG:  evecs = \n",closestU_evecs
 
 
-def get_povm_map(model, povmlbl):
+def compute_povm_map(model, povmlbl):
     """
     Constructs a gate-like quantity for the POVM within `model`.
 
@@ -760,7 +760,7 @@ def get_povm_map(model, povmlbl):
     numpy.ndarray
         The matrix of the "POVM map" in the `model.basis` basis.
     """
-    povmVectors = [v.todense()[:, None] for v in model.povms[povmlbl].values()]
+    povmVectors = [v.to_dense()[:, None] for v in model.povms[povmlbl].values()]
     if isinstance(model.basis, _DirectSumBasis):  # HACK - need to get this to work with general bases
         blkDims = [int(_np.sqrt(comp.dim)) for comp in model.basis.component_bases]
     else:
@@ -776,7 +776,7 @@ def get_povm_map(model, povmlbl):
     for i in range(nV):
         Sk_embedding_in_std[:, i] = _flat_mut_blks(i, i, blkDims)
 
-    std_to_basis = model.basis.reverse_transform_matrix("std")  # _bt.transform_matrix("std", model.basis, blkDims)
+    std_to_basis = model.basis.reverse_transform_matrix("std")  # _bt.create_transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim, model.dim))
 
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
@@ -801,8 +801,8 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(model, povmlbl)
-    target_povm_mx = get_povm_map(target_model, povmlbl)
+    povm_mx = compute_povm_map(model, povmlbl)
+    target_povm_mx = compute_povm_map(target_model, povmlbl)
     return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
 
 
@@ -825,8 +825,8 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(model, povmlbl)
-    target_povm_mx = get_povm_map(target_model, povmlbl)
+    povm_mx = compute_povm_map(model, povmlbl)
+    target_povm_mx = compute_povm_map(target_model, povmlbl)
     return jtracedist(povm_mx, target_povm_mx, target_model.basis)
 
 
@@ -849,8 +849,8 @@ def povm_diamonddist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(model, povmlbl)
-    target_povm_mx = get_povm_map(target_model, povmlbl)
+    povm_mx = compute_povm_map(model, povmlbl)
+    target_povm_mx = compute_povm_map(target_model, povmlbl)
     return diamonddist(povm_mx, target_povm_mx, target_model.basis)
 
 
@@ -1445,7 +1445,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     return lindbladMxs
 
 
-def std_errgen_projections(errgen, projection_type, projection_basis,
+def std_errorgen_projections(errgen, projection_type, projection_basis,
                            mx_basis="gm", return_generators=False,
                            return_scale_fctr=False):
     """
@@ -1503,11 +1503,11 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     """
 
     if isinstance(mx_basis, _Basis):
-        errgen_std = _bt.change_basis(errgen, mx_basis, mx_basis.equivalent('std'))
+        errgen_std = _bt.change_basis(errgen, mx_basis, mx_basis.create_equivalent('std'))
 
         #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mx_basis.equivalent('std'),
-                                       mx_basis.simple_equivalent('std'))
+        errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mx_basis.create_equivalent('std'),
+                                       mx_basis.create_simple_equivalent('std'))
     else:
         errgen_std = _bt.change_basis(errgen, mx_basis, "std")
 
@@ -1775,7 +1775,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
     return hamLindbladTerms, otherLindbladTerms
 
 
-def lindblad_errgen_projections(errgen, ham_basis,
+def lindblad_errorgen_projections(errgen, ham_basis,
                                 other_basis, mx_basis="gm",
                                 normalize=True, return_generators=False,
                                 other_mode="all", sparse=False):
@@ -1921,7 +1921,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Hdag = H.copy().transpose().conjugate()
 
             #Do linear least squares: this is what takes the bulk of the time
-            if _mt.safenorm(errgen_std_flat) < 1e-8:  # protect against singular RHS
+            if _mt.safe_norm(errgen_std_flat) < 1e-8:  # protect against singular RHS
                 hamProjs = _np.zeros(bsH - 1, 'd')
             else:
                 hamProjs = _spsl.spsolve(Hdag.dot(H), Hdag.dot(errgen_std_flat))
@@ -1961,7 +1961,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             Odag = O.copy().transpose().conjugate()  # TODO: maybe conjugate copies data?
 
             #Do linear least squares: this is what takes the bulk of the time
-            if _mt.safenorm(errgen_std_flat) < 1e-8:  # protect against singular RHS
+            if _mt.safe_norm(errgen_std_flat) < 1e-8:  # protect against singular RHS
                 if other_mode == "diagonal": otherProjs = _np.zeros(bsO - 1, 'd')
                 elif other_mode == "diag_affine": otherProjs = _np.zeros((2, bsO - 1), 'd')
                 else: otherProjs = _np.zeros((bsO - 1, bsO - 1), 'd')
@@ -2076,7 +2076,7 @@ def projections_to_lindblad_terms(ham_projs, other_projs, ham_basis, other_basis
         def set_basis_el(blbl, bel):
             """ Sets an elment of basisdict, checking for consistency """
             if blbl in basisdict:
-                assert(_mt.safenorm(basisdict[blbl] - bel) < 1e-8), "Ambiguous basis el label %s" % blbl
+                assert(_mt.safe_norm(basisdict[blbl] - bel) < 1e-8), "Ambiguous basis el label %s" % blbl
             else:
                 basisdict[blbl] = bel
     else:
@@ -2752,14 +2752,14 @@ def project_model(model, target_model,
 
     for gl, errgen in zip(opLabels, errgens):
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
-            hamProj, hamGens = std_errgen_projections(
+            hamProj, hamGens = std_errorgen_projections(
                 errgen, "hamiltonian", proj_basis_name, basis, True)
             #ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
             ham_error_gen = _np.tensordot(hamProj, hamGens, (0, 0))
             ham_error_gen = _bt.change_basis(ham_error_gen, "std", basis)
 
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
-            stoProj, stoGens = std_errgen_projections(
+            stoProj, stoGens = std_errorgen_projections(
                 errgen, "stochastic", proj_basis_name, basis, True)
             #sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
             sto_error_gen = _np.tensordot(stoProj, stoGens, (0, 0))
@@ -2767,7 +2767,7 @@ def project_model(model, target_model,
 
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
             HProj, OProj, HGens, OGens = \
-                lindblad_errgen_projections(
+                lindblad_errorgen_projections(
                     errgen, proj_basis_name, proj_basis_name, basis, normalize=False,
                     return_generators=True)
             #Note: return values *can* be None if an empty/None basis is given
@@ -2823,12 +2823,12 @@ def project_model(model, target_model,
         #    ham_error_gen, targetOp, gen_type) #+sto_error_gen_cp
 
     #DEBUG!!!
-    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(model))
-    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsDict['LND']))
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(model))
+    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']))
 
     #Check for CPTP where expected
-    #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
-    #assert(_tools.sum_of_negative_choi_evals(gsDict['LND']) < 1e-6)
+    #assert(_tools.sum_of_negative_choi_eigenvalues(gsHSCP) < 1e-6)
+    #assert(_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']) < 1e-6)
 
     #Collect and return requrested results:
     ret_gs = [gsDict[p] for p in projectiontypes]
@@ -2836,7 +2836,7 @@ def project_model(model, target_model,
     return ret_gs, ret_Nps
 
 
-def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False):
+def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False):
     """
     Returns a gauge transformation that maps `gate_mx` into a matrix that is co-diagonal with `target_gate_mx`.
 
@@ -2996,7 +2996,7 @@ def get_a_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False):
         assert(_np.allclose(evals_tgt, evals_tilde))
 
         #Update Utgt so that Utgt * inv_Uop is close to the identity
-        kite = _mt.get_kite(evals_tgt)  # evals are grouped by standard_diag, so this works
+        kite = _mt.compute_kite(evals_tgt)  # evals are grouped by standard_diag, so this works
         D_prior_to_proj = _np.dot(_np.linalg.inv(Utgt), Uop)
         #print("D prior to projection to ",kite," kite:"); _mt.print_mx(D_prior_to_proj)
         D = _mt.project_onto_kite(D_prior_to_proj, kite)
@@ -3123,8 +3123,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.todense()
-        Ugauge = get_a_best_case_gauge_transform(gate_mx, tgt_gate.todense())
+        gate_mx = gate.to_dense()
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense())
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))
@@ -3213,7 +3213,7 @@ def split_lindblad_paramtype(typ):
     return bTyp, evotype
 
 
-def e_label_to_outcome(povm_and_effect_lbl):
+def effect_label_to_outcome(povm_and_effect_lbl):
     """
     Extract the outcome label from a "simplified" effect label.
 
@@ -3245,7 +3245,7 @@ def e_label_to_outcome(povm_and_effect_lbl):
         return effect_lbl  # effect label alone *is* the outcome
 
 
-def e_label_to_povm(povm_and_effect_lbl):
+def effect_label_to_povm(povm_and_effect_lbl):
     """
     Extract the POVM label from a "simplified" effect label.
 

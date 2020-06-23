@@ -14,10 +14,11 @@ import sys
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from pygsti.construction import modelconstruction, nqnoiseconstruction
 
 #from .nqubitconstruction import *
 
-#Mimics a function that used to be in pyGSTi, replaced with build_cloudnoise_model_from_hops_and_weights
+#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=False,
@@ -26,7 +27,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.build_cloudnoise_model_from_hops_and_weights(
+    return pc.create_cloudnoise_model_from_hops_and_weights(
         nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight, sparse,
@@ -74,7 +75,7 @@ class NQubitTestCase(BaseTestCase):
                                       roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -82,7 +83,7 @@ class NQubitTestCase(BaseTestCase):
         #RUN to SAVE list & dataset
         if regenerate_references():
             pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
-            ds = pygsti.construction.generate_fake_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
+            ds = pygsti.construction.simulate_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
             pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
@@ -101,7 +102,7 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_xycnot_cloudnoise_sequences(
+        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -151,12 +152,12 @@ class NQubitTestCase(BaseTestCase):
         #    for tup in expList_tups:
         #        if tup[1] == L: lst.append( tup[0] )
         #    lsgstLists.append(lst[:]) # append *running* list
-        lsgstLists = gss.truncate(maxLengths) # can just use gss as input to pygsti.do_long_sequence_gst_base
+        lsgstLists = gss.truncate(maxLengths) # can just use gss as input to pygsti.run_long_sequence_gst_base
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                          sim_type="map", parameterization="H+S", sparse=True)
-        results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
+        results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gauge_opt_params=False,
                                                    advanced_options={'tolerance': 1e-1}, verbosity=4)
 
@@ -184,7 +185,7 @@ class NQubitTestCase(BaseTestCase):
         #    for tup in expList_tups:
         #        if tup[1] == L: lst.append( tup[0] )
         #    lsgstLists.append(lst[:]) # append *running* list
-        lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
+        lsgstLists = gss # can just use gss as input to pygsti.run_long_sequence_gst_base
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
@@ -197,11 +198,11 @@ class NQubitTestCase(BaseTestCase):
             mdl_to_optimize.bulk_probs(gss.allstrs) #lsgstLists[-1]
             pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
 
-        #Just load precomputed cache (we test do_long_sequence_gst_base here, not cache computation)
+        #Just load precomputed cache (we test run_long_sequence_gst_base here, not cache computation)
         calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
         mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
 
-        results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
+        results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gauge_opt_params=False,
                                                    advanced_options={'tolerance': 1e-3}, verbosity=4)
 
@@ -233,23 +234,23 @@ class NQubitTestCase(BaseTestCase):
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
               (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
-        op_labels = target_model.get_primitive_op_labels()
+        op_labels = target_model.primitive_op_labels()
         line_labels = tuple(range(nQubits))
         fids1Q = std1Q_XY.fiducials
         fiducials = []
         for i in range(nQubits):
-            fiducials.extend( pygsti.construction.manipulate_circuit_list(
+            fiducials.extend( pygsti.construction.manipulate_circuits(
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ], line_labels=line_labels) )
         print(len(fiducials), "Fiducials")
         prep_fiducials = meas_fiducials = fiducials
         #TODO: add fiducials for 2Q pairs (edges on graph)
 
-        germs = pygsti.construction.circuit_list([ (gl,) for gl in op_labels ], line_labels=line_labels)
+        germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ], line_labels=line_labels)
         maxLs = [1]
-        expList = pygsti.construction.make_lsgst_experiment_list(mdl_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
+        expList = pygsti.construction.create_lsgst_circuits(mdl_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
         self.assertTrue( Circuit((),line_labels) in expList)
 
-        ds = pygsti.construction.generate_fake_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
+        ds = pygsti.construction.simulate_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
         print("Created Dataset with %d strings" % len(ds))
 
         logL = pygsti.tools.logl(mdl_datagen, ds, expList)
@@ -257,7 +258,7 @@ class NQubitTestCase(BaseTestCase):
         twoDeltaLogL = 2*(max_logL-logL)
         chi2 = pygsti.tools.chi2(mdl_datagen, ds, expList)
 
-        dof = ds.get_degrees_of_freedom()
+        dof = ds.degrees_of_freedom()
         nParams = mdl_datagen.num_params()
         print("Datagen 2DeltaLogL = 2(%g-%g) = %g" % (logL,max_logL,twoDeltaLogL))
         print("Datagen chi2 = ",chi2)
@@ -267,7 +268,7 @@ class NQubitTestCase(BaseTestCase):
         #print("EXIT"); exit()
         return
 
-        results = pygsti.do_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
+        results = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
                                               advanced_options={'max_iterations': 2}) #keep this short; don't care if it doesn't converge.
         print("DONE!")
 
@@ -279,7 +280,7 @@ class NQubitTestCase(BaseTestCase):
         basis1Q = pygsti.obj.Basis.cast("pp",4)
         basisNQ = pygsti.obj.Basis.cast("pp",4**nQubits)
         for i in range(nQubits):
-            effects = [ (l,pygsti.construction.basis_build_vector(l, basis1Q)) for l in ["0","1"] ]
+            effects = [ (l,modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
             factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
         povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
         print(list(povm.keys()))
@@ -292,10 +293,10 @@ class NQubitTestCase(BaseTestCase):
         print("Post adding noise:"); print(povm)
 
         mdl = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
-        prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
+        prepFactors = [ pygsti.obj.TPSPAMVec(modelconstruction._basis_create_spam_vector("0", basis1Q))
                         for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
-        # OR one big prep: mdl.preps['rho0'] = pygsti.construction.basis_build_vector("0", basisNQ)
+        # OR one big prep: mdl.preps['rho0'] = modelconstruction._basis_create_spam_vector("0", basisNQ)
 
         print("Before adding to model:")
         print(" povm.gpindices = ",povm.gpindices, "parent is None?", bool(povm.parent is None))

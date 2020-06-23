@@ -12,9 +12,9 @@ class RPEToolsFuncBase(object):
         super(RPEToolsFuncBase, self).setUp()
         self.target = stdXY.target_model()
         self.target.operations['Gi'] = std.target_model().operations['Gi']  # need a Gi gate...
-        self.stringListD = rpc.make_rpe_angle_string_list_dict(2, self.config)
+        self.stringListD = rpc.create_rpe_angle_circuits_dict(2, self.config)
         self.mdl_depolXZ = self.target.depolarize(op_noise=0.1, spam_noise=0.1, seed=_SEED)
-        self.ds = pc.generate_fake_data(self.mdl_depolXZ, self.stringListD['totalStrList'],
+        self.ds = pc.simulate_data(self.mdl_depolXZ, self.stringListD['totalStrList'],
                                         n_samples=1000, sample_error='binomial', seed=_SEED)
 
     def test_extract_rotation_hat(self):
@@ -41,7 +41,7 @@ class RPEToolsFuncBase(object):
         self.assertAlmostEqual(k2Eps, -1.1780972451)
 
     def test_est_angle_list(self):
-        epslist = tools.est_angle_list(
+        epslist = tools.estimate_angles(
             self.ds, self.stringListD['epsilon', 'sin'],
             self.stringListD['epsilon', 'cos'], angle_name="epsilon",
             rpeconfig_inst=self.config
@@ -49,17 +49,17 @@ class RPEToolsFuncBase(object):
         # TODO assert correctness
 
     def test_est_theta_list(self):
-        epslist = tools.est_angle_list(
+        epslist = tools.estimate_angles(
             self.ds, self.stringListD['epsilon', 'sin'],
             self.stringListD['epsilon', 'cos'], angle_name="epsilon",
             rpeconfig_inst=self.config
         )
-        tlist, dummy = tools.est_theta_list(
+        tlist, dummy = tools.estimate_thetas(
             self.ds, self.stringListD['theta', 'sin'], self.stringListD['theta', 'cos'],
             epslist, return_phi_fun_list=True, rpeconfig_inst=self.config
         )
         # TODO assert correctness
-        tlist = tools.est_theta_list(
+        tlist = tools.estimate_thetas(
             self.ds, self.stringListD['theta', 'sin'], self.stringListD['theta', 'cos'],
             epslist, return_phi_fun_list=False, rpeconfig_inst=self.config
         )

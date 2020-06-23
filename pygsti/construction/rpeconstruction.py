@@ -57,14 +57,14 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
     """
 
     if with_id:
-        outputModel = _setc.build_explicit_model(
+        outputModel = _setc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gz'],
             ["I(Q0)", "X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
     else:
-        outputModel = _setc.build_explicit_model(
+        outputModel = _setc.create_explicit_model(
             [('Q0',)], ['Gx', 'Gz'],
             ["X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -72,7 +72,7 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     if y_rot != 0:
-        modelAux1 = _setc.build_explicit_model(
+        modelAux1 = _setc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gy', 'Gz'],
             ["I(Q0)", "Y(%s,Q0)" % y_rot, "Z(pi/2,Q0)"],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -296,7 +296,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
 
-    Is a thin wrapper for pygsti.construction.generate_fake_data, changing
+    Is a thin wrapper for pygsti.construction.simulate_data, changing
     default behavior of sample_error, and taking a dictionary of circuits
     as input.
 
@@ -348,7 +348,7 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
     DataSet
         A static data set filled with counts for the specified circuits.
     """
-    return _dsc.generate_fake_data(model_or_dataset,
+    return _dsc.simulate_data(model_or_dataset,
                                    string_list_d['totalStrList'],
                                    n_samples, sample_error=sample_error, seed=seed)
 
@@ -366,13 +366,13 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     #percentAlphaError = 100*_np.abs((_np.pi/2-alpha_true)/alpha_true)
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilon_true)/epsilon_true)
 
-    simModel = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
+    simModel = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
                                           ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)", "Z(" + str(alpha_true) + ",Q0)"],
                                           prep_labels=["rho0"], prep_expressions=["0"],
                                           effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                           spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    modelAux1 = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
+    modelAux1 = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
                                            ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
                                            prep_labels=["rho0"], prep_expressions=["0"],
                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
@@ -400,7 +400,7 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     PhiFunErrorArray = _np.zeros([jMax, log2k_max + 1], dtype='object')
 
     for j in range(jMax):
-        simDS = _dsc.generate_fake_data(
+        simDS = _dsc.simulate_data(
             simModel, alphaCosStrList + alphaSinStrList + epsilonCosStrList
             + epsilonSinStrList + thetaCosStrList + thetaSinStrList,
             n, sample_error='binomial', seed=j)
@@ -408,11 +408,11 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
         epsilonErrorList = []
         thetaErrorList = []
         PhiFunErrorList = []
-        alphaHatList = _tools.rpe.est_angle_list(simDS, alphaSinStrList,
+        alphaHatList = _tools.rpe.estimate_angles(simDS, alphaSinStrList,
                                                  alphaCosStrList, 'alpha')
-        epsilonHatList = _tools.rpe.est_angle_list(simDS, epsilonSinStrList,
+        epsilonHatList = _tools.rpe.estimate_angles(simDS, epsilonSinStrList,
                                                    epsilonCosStrList, 'epsilon')
-        thetaHatList, PhiFunList = _tools.rpe.est_theta_list(simDS, thetaSinStrList,
+        thetaHatList, PhiFunList = _tools.rpe.estimate_thetas(simDS, thetaSinStrList,
                                                              thetaCosStrList, epsilonHatList,
                                                              return_phi_fun_list=True)
         for alphaTemp1 in alphaHatList:

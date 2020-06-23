@@ -28,7 +28,7 @@ X = _np.matrix([[0, 1], [1, 0]])
 Y = _np.matrix([[0, -1j], [1j, 0]])
 
 
-def x_2qubit(theta):
+def _x_2qubit(theta):
     """
     Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)
 
@@ -45,7 +45,7 @@ def x_2qubit(theta):
     return _np.kron(x, x)
 
 
-def y_2qubit(theta):
+def _y_2qubit(theta):
     """
     Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)
 
@@ -62,7 +62,7 @@ def y_2qubit(theta):
     return _np.kron(y, y)
 
 
-def ms2qubit(theta, phi):
+def _ms_2qubit(theta, phi):
     """
     Returns Molmer-Sorensen gate for two qubits
 
@@ -123,7 +123,7 @@ def to_qutrit_space(input_mat):
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
 
-def ms_3(theta, phi):
+def _ms_qutrit(theta, phi):
     """
     Returns Qutrit Molmer-Sorenson unitary on the qutrit space
 
@@ -139,10 +139,10 @@ def ms_3(theta, phi):
     -------
     numpy.ndarray
     """
-    return to_qutrit_space(ms2qubit(theta, phi))
+    return to_qutrit_space(_ms_2qubit(theta, phi))
 
 
-def xx_3(theta):
+def _xx_qutrit(theta):
     """
     Returns Qutrit XX unitary
 
@@ -155,10 +155,10 @@ def xx_3(theta):
     -------
     numpy.ndarray
     """
-    return to_qutrit_space(x_2qubit(theta))
+    return to_qutrit_space(_x_2qubit(theta))
 
 
-def yy_3(theta):
+def _yy_qutrit(theta):
     """
     Returns Qutrit YY unitary
 
@@ -171,7 +171,7 @@ def yy_3(theta):
     -------
     numpy.ndarray
     """
-    return to_qutrit_space(y_2qubit(theta))
+    return to_qutrit_space(_y_2qubit(theta))
 
 
 def _random_rot(scale, arr_type=_np.array, seed=None):
@@ -182,7 +182,7 @@ def _random_rot(scale, arr_type=_np.array, seed=None):
     return arr_type(randU)
 
 
-def make_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
+def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
                       ms_global=_np.pi / 2, ms_local=0,
                       similarity=False, seed=None, basis='qt'):
     """
@@ -239,9 +239,9 @@ def make_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
 
     #Define gates as unitary ops on Hilbert space
     gateImx = arrType(identity3)
-    gateXmx = arrType(xx_3(x_angle))
-    gateYmx = arrType(yy_3(y_angle))
-    gateMmx = arrType(ms_3(ms_global, ms_local))
+    gateXmx = arrType(_xx_qutrit(x_angle))
+    gateYmx = arrType(_yy_qutrit(y_angle))
+    gateMmx = arrType(_ms_qutrit(ms_global, ms_local))
 
     #Now introduce unitary noise.
 

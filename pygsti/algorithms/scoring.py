@@ -107,7 +107,7 @@ class CompositeScore():
             self.major, self.minor, self.N)
 
 
-def composite_rcl_fn(candidate_scores, alpha):
+def filter_composite_rcl(candidate_scores, alpha):
     """
     Create a restricted candidate list (RCL) based on CompositeScore objects.
 

@@ -19,7 +19,7 @@ from .multidataset import MultiDataSet as _MultiDataSet
 from .hypothesistest import HypothesisTest as _HypothesisTest
 
 
-def xlogy(x, y):
+def _xlogy(x, y):
     """
     Returns x*log(y).
     """
@@ -29,9 +29,9 @@ def xlogy(x, y):
         return x * _np.log(y)
 
 
-def likelihood(p_list, n_list):
+def _likelihood(p_list, n_list):
     """
-    The likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
+    The _likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
     """
     output = 1.
     for i, pVal in enumerate(p_list):
@@ -39,24 +39,24 @@ def likelihood(p_list, n_list):
     return output
 
 
-def loglikelihood(p_list, n_list):
+def _loglikelihood(p_list, n_list):
     """
-    The log of the likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
+    The log of the _likelihood for probabilities `p_list` of a die, given `n_list` counts for each outcome.
     """
     output = 0.
     for i, pVal in enumerate(p_list):
-        output += xlogy(n_list[i], pVal)
+        output += _xlogy(n_list[i], pVal)
     return output
 
 # Only used by the rectify datasets function, which is commented out,
 # so this is also commented out.
 # def loglikelihoodRatioObj(alpha,n_list_list,dof):
-#     return _np.abs(dof - loglikelihood_ratio(alpha*n_list_list))
+#     return _np.abs(dof - _loglikelihood_ratio(alpha*n_list_list))
 
 
-def loglikelihood_ratio(n_list_list):
+def _loglikelihood_ratio(n_list_list):
     """
-    log(likelihood ratio) between one-context and multiple-context models.
+    log(_likelihood ratio) between one-context and multiple-context models.
 
     Calculates the log-likelood ratio between the null hypothesis
     that a die has *the same* probabilities in multiple "contexts" and
@@ -75,16 +75,16 @@ def loglikelihood_ratio(n_list_list):
     """
     nListC = _np.sum(n_list_list, axis=0)
     pListC = nListC / _np.float(_np.sum(nListC))
-    lC = loglikelihood(pListC, nListC)
+    lC = _loglikelihood(pListC, nListC)
     li_list = []
     for nList in n_list_list:
         pList = _np.array(nList) / _np.float(_np.sum(nList))
-        li_list.append(loglikelihood(pList, nList))
+        li_list.append(_loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
 
 
-def jensen_shannon_divergence(n_list_list):
+def _jensen_shannon_divergence(n_list_list):
     """
     Calculates the Jensen-Shannon divergence (JSD) between one-context and multiple-context models.
 
@@ -104,12 +104,12 @@ def jensen_shannon_divergence(n_list_list):
         The observed JSD for this data.
     """
     total_counts = _np.sum(_np.array(n_list_list))
-    return loglikelihood_ratio(n_list_list) / (2 * total_counts)
+    return _loglikelihood_ratio(n_list_list) / (2 * total_counts)
 
 
-def pval(llrval, dof):
+def _pval(llrval, dof):
     """
-    The p-value of a log-likelihood ratio (LLR).
+    The p-value of a log-_likelihood ratio (LLR).
 
     This compares a nested null hypothsis and a larger alternative hypothesis.
 
@@ -137,9 +137,9 @@ def pval(llrval, dof):
     return 1 - _stats.chi2.cdf(llrval, dof)
 
 
-def llr_to_signed_nsigma(llrval, dof):
+def _llr_to_signed_nsigma(llrval, dof):
     """
-    Finds the signed number of standard deviations for the input log-likelihood ratio (LLR).
+    Finds the signed number of standard deviations for the input log-_likelihood ratio (LLR).
 
     This is given by
 
@@ -169,7 +169,7 @@ def llr_to_signed_nsigma(llrval, dof):
     return (llrval - dof) / _np.sqrt(2 * dof)
 
 
-def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
+def _is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     """
     Checks if `circuit` does contains any gates from `op_exclusions`.
 
@@ -192,7 +192,7 @@ def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     return True
 
 
-def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
+def _is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     """
     Checks if `circuit` contains *any* of the gates from `op_inclusions`.
 
@@ -219,13 +219,13 @@ def is_circuit_allowed_by_inclusion(op_inclusions, circuit):
     return False
 
 
-def compute_llr_threshold(significance, dof):
+def _compute_llr_threshold(significance, dof):
     """
-    Compute a log-likelihood-ratio threshold.
+    Compute a log-_likelihood-ratio threshold.
 
     Given a p-value threshold, *below* which a pvalue
     is considered statistically significant, it returns
-    the corresponding log-likelihood ratio threshold, *above*
+    the corresponding log-_likelihood ratio threshold, *above*
     which a LLR is considered statically significant. For a single
     hypothesis test, the input pvalue should be the desired "significance"
     level of the test (as a value between 0 and 1). For multiple hypothesis
@@ -255,7 +255,7 @@ def compute_llr_threshold(significance, dof):
     return _scipy.stats.chi2.isf(significance, dof)
 
 
-def tvd(n_list_list):
+def _tvd(n_list_list):
     """
     Calculates the TVD between two contexts.
 
@@ -288,15 +288,15 @@ class DataComparator():
     """
     A comparison between multiple datasets, presumably taken in different contexts.
 
-    This object can be used to implement all of the "context dependence detection" methods described
+    This object can be used to run all of the "context dependence detection" methods described
     in "Probing context-dependent errors in quantum processors", by Rudinger et al.
     (See that paper's supplemental material for explicit demonstrations of this object.)
 
-    This object stores the p-values and log-likelihood ratio values from a consistency comparison between
+    This object stores the p-values and log-_likelihood ratio values from a consistency comparison between
     two or more datasets, and provides methods to:
 
         - Perform a hypothesis test to decide which sequences contain statistically significant variation.
-        - Plot p-value histograms and log-likelihood ratio box plots.
+        - Plot p-value histograms and log-_likelihood ratio box plots.
         - Extract (1) the "statistically significant total variation distance" for a circuit,
           (2) various other quantifications of the "amount" of context dependence, and (3)
           the level of statistical significance at which any context dependence is detected.
@@ -314,7 +314,7 @@ class DataComparator():
 
     circuits : 'all' or list of Circuits, optional (default is 'all')
         If 'all' the comparison is implemented for all Circuits in the DataSets. Otherwise,
-        this should be a list containing all the Circuits to implement the comparison for (although
+        this should be a list containing all the Circuits to run the comparison for (although
         note that some of these Circuits may be ignored with non-default options for the next two
         inputs).
 
@@ -323,7 +323,7 @@ class DataComparator():
         and no comparison will be made for those strings.
 
     op_exclusions : None or list of gates, optional (default is None)
-        If not None, a Circuit will be dropped from the list to implement the comparisons for
+        If not None, a Circuit will be dropped from the list to run the comparisons for
         if it doesn't include *some* gate from this list (or is the empty circuit).
 
     ds_names : None or list, optional (default is None)
@@ -426,14 +426,14 @@ class DataComparator():
         if op_exclusions is not None:
             circuits_exc_temp = []
             for circuit in circuits:
-                if is_circuit_allowed_by_exclusion(op_exclusions, circuit):
+                if _is_circuit_allowed_by_exclusion(op_exclusions, circuit):
                     circuits_exc_temp.append(circuit)
             circuits = list(circuits_exc_temp)
 
         if op_inclusions is not None:
             circuits_inc_temp = []
             for circuit in circuits:
-                if is_circuit_allowed_by_inclusion(op_inclusions, circuit):
+                if _is_circuit_allowed_by_inclusion(op_inclusions, circuit):
                     circuits_inc_temp.append(circuit)
             circuits = list(circuits_inc_temp)
 
@@ -450,11 +450,11 @@ class DataComparator():
             datalineList = [ds[circuit] for ds in dsList]
             nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList])
             total_counts.append(_np.sum(nListList))
-            llrs[circuit] = loglikelihood_ratio(nListList)
-            jsds[circuit] = jensen_shannon_divergence(nListList)
-            pVals[circuit] = pval(llrs[circuit], dof)
+            llrs[circuit] = _loglikelihood_ratio(nListList)
+            jsds[circuit] = _jensen_shannon_divergence(nListList)
+            pVals[circuit] = _pval(llrs[circuit], dof)
             if len(dataset_list_or_multidataset) == 2:
-                tvds[circuit] = tvd(nListList)
+                tvds[circuit] = _tvd(nListList)
 
         self.dataset_list_or_multidataset = dataset_list_or_multidataset
         self.pVals = pVals
@@ -478,24 +478,24 @@ class DataComparator():
             self.fixed_totalcount_data = True
             self.counts_per_sequence = int(total_counts[0])
 
-        self.aggregate_llr = _np.sum(list(self.llrs.values()))
-        self.aggregate_llr_threshold = None
-        self.aggregate_pVal = pval(self.aggregate_llr, self.num_strs * self.dof)
+        self._aggregate_llr = _np.sum(list(self.llrs.values()))
+        self._aggregate_llr_threshold = None
+        self.aggregate_pVal = _pval(self._aggregate_llr, self.num_strs * self.dof)
         self.aggregate_pVal_threshold = None
 
         # Convert the aggregate LLR to a signed standard deviations.
-        self.aggregate_nsigma = llr_to_signed_nsigma(self.aggregate_llr, self.num_strs * self.dof)
-        self.aggregate_nsigma_threshold = None
+        self._aggregate_nsigma = _llr_to_signed_nsigma(self._aggregate_llr, self.num_strs * self.dof)
+        self._aggregate_nsigma_threshold = None
 
         # All attributes to be populated in methods that can be called from .get methods, so
         # we can raise a meaningful warning if they haven't been calculated yet.
         self.sstvds = None
         self.pVal_pseudothreshold = None
-        self.llr_pseudothreshold = None
+        self._llr_pseudothreshold = None
         self.pVal_pseudothreshold = None
-        self.jsd_pseudothreshold = None
+        self._jsd_pseudothreshold = None
 
-    def implement(self, significance=0.05, per_sequence_correction='Hochberg',
+    def run(self, significance=0.05, per_sequence_correction='Hochberg',
                   aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
         Runs statistical hypothesis testing.
@@ -609,25 +609,25 @@ class DataComparator():
         extended_pVals_dict = _copy.copy(self.pVals)
         extended_pVals_dict['aggregate'] = self.aggregate_pVal
         hypotest.add_pvalues(extended_pVals_dict)
-        hypotest.implement()
+        hypotest.run()
         self.results = hypotest
 
         if aggregate_test_weighting == 0:
-            self.aggregate_llr_threshold = _np.inf
-            self.aggregate_nsigma_threshold = _np.inf
+            self._aggregate_llr_threshold = _np.inf
+            self._aggregate_nsigma_threshold = _np.inf
             self.aggregate_pVal_threshold = 0.
         else:
-            self.aggregate_llr_threshold = compute_llr_threshold(
+            self._aggregate_llr_threshold = _compute_llr_threshold(
                 aggregate_test_weighting * significance, self.num_strs * self.dof)
-            self.aggregate_nsigma_threshold = llr_to_signed_nsigma(
-                self.aggregate_llr_threshold, self.num_strs * self.dof)
+            self._aggregate_nsigma_threshold = _llr_to_signed_nsigma(
+                self._aggregate_llr_threshold, self.num_strs * self.dof)
             self.aggregate_pVal_threshold = aggregate_test_weighting * significance
 
         self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[circuits]
-        self.llr_pseudothreshold = compute_llr_threshold(self.pVal_pseudothreshold, self.dof)
+        self._llr_pseudothreshold = _compute_llr_threshold(self.pVal_pseudothreshold, self.dof)
 
         if self.fixed_totalcount_data:
-            self.jsd_pseudothreshold = self.llr_pseudothreshold / self.counts_per_sequence
+            self._jsd_pseudothreshold = self._llr_pseudothreshold / self.counts_per_sequence
 
         temp_hypothesis_rejected_dict = _copy.copy(hypotest.hypothesis_rejected)
         self.inconsistent_datasets_detected = any(list(temp_hypothesis_rejected_dict.values()))
@@ -651,15 +651,15 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
-                print("    - The aggregate log-likelihood ratio test is "
-                      "significant at {0:.2f} standard deviations.".format(self.aggregate_nsigma))
-                print("    - The aggregate log-likelihood ratio test "
-                      "standard deviations signficance threshold is {0:.2f}".format(self.aggregate_nsigma_threshold))
+                print("    - The aggregate log-_likelihood ratio test is "
+                      "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
+                print("    - The aggregate log-_likelihood ratio test "
+                      "standard deviations signficance threshold is {0:.2f}".format(self._aggregate_nsigma_threshold))
                 print(
                     "    - The number of sequences with data that is "
                     "inconsistent is {0}".format(self.number_of_significant_sequences))
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
-                    max_SSTVD_gs, max_SSTVD = self.get_maximum_sstvd()
+                    max_SSTVD_gs, max_SSTVD = self.maximum_sstvd()
                     print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
                     if verbosity >= 2:
                         print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
@@ -669,7 +669,7 @@ class DataComparator():
 
         return
 
-    def get_tvd(self, circuit):
+    def tvd(self, circuit):
         """
         Returns the observed total variation distacnce (TVD) for the specified circuit.
 
@@ -678,7 +678,7 @@ class DataComparator():
         definition of this observed TVD.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_jsd(), get_sstvd() and get_ssjsd()).
+        jsd(), sstvd() and ssjsd()).
 
         Parameters
         ----------
@@ -695,7 +695,7 @@ class DataComparator():
 
         return self.tvds[circuit]
 
-    def get_sstvd(self, circuit):
+    def sstvd(self, circuit):
         """
         Returns the "statistically significant total variation distacnce" (SSTVD) for the specified circuit.
 
@@ -705,7 +705,7 @@ class DataComparator():
         "Probing context-dependent errors in quantum processors", by Rudinger et al., for more information.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_jsd(), get_tvd() and get_ssjsd()).
+        jsd(), _tvd() and ssjsd()).
 
         Parameters
         ----------
@@ -719,15 +719,15 @@ class DataComparator():
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")
-        assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .implement() method first!"
+        assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .run() method first!"
 
         return self.sstvds.get(circuit, None)
 
-    def get_maximum_sstvd(self):
+    def maximum_sstvd(self):
         """
         Returns the maximum, over circuits, of the "statistically significant total variation distance" (SSTVD).
 
-        This is only possible if the comparison is between two sets of data. See the .get_sstvd()
+        This is only possible if the comparison is between two sets of data. See the .sstvd()
         method for information on SSTVD.
 
         Returns
@@ -737,7 +737,7 @@ class DataComparator():
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")
-        assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .implement() method first!"
+        assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .run() method first!"
 
         if len(self.sstvds) == 0:
             return None, None
@@ -748,9 +748,9 @@ class DataComparator():
 
             return max_sstvd_gs, max_sstvd
 
-    def get_pvalue(self, circuit):
+    def pvalue(self, circuit):
         """
-        Returns the pvalue for the log-likelihood ratio test for the specified circuit.
+        Returns the pvalue for the log-_likelihood ratio test for the specified circuit.
 
         Parameters
         ----------
@@ -764,7 +764,7 @@ class DataComparator():
         """
         return self.pVals[circuit]
 
-    def get_pvalue_pseudothreshold(self):
+    def pvalue_pseudothreshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence p-values.
 
@@ -780,12 +780,12 @@ class DataComparator():
             The statistical significance pseudo-threshold for the per-sequence p-value.
         """
         assert(self.pVal_pseudothreshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
+            "This has not yet been calculated! Run the .run() method first!"
         return self.pVal_pseudothreshold
 
-    def get_llr(self, circuit):
+    def llr(self, circuit):
         """
-        Returns the log-likelihood ratio (LLR) for the input circuit.
+        Returns the log-_likelihood ratio (LLR) for the input circuit.
 
         This is the quantity defined in Eq (4) of "Probing context-dependent
         errors in quantum processors", by Rudinger et al.
@@ -802,9 +802,9 @@ class DataComparator():
         """
         return self.llrs[circuit]
 
-    def get_llr_pseudothreshold(self):
+    def llr_pseudothreshold(self):
         """
-        Returns the statistical significance pseudo-threshold for the per-sequence log-likelihood ratio (LLR).
+        Returns the statistical significance pseudo-threshold for the per-sequence log-_likelihood ratio (LLR).
 
         This results has been multi-test-adjusted.
 
@@ -818,11 +818,11 @@ class DataComparator():
         float
             The statistical significance pseudo-threshold for per-sequence LLR.
         """
-        assert(self.llr_pseudothreshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
-        return self.llr_pseudothreshold
+        assert(self._llr_pseudothreshold is not None), \
+            "This has not yet been calculated! Run the .run() method first!"
+        return self._llr_pseudothreshold
 
-    def get_jsd(self, circuit):
+    def jsd(self, circuit):
         """
         Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for the specified circuit.
 
@@ -832,7 +832,7 @@ class DataComparator():
         Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_tvd(), get_sstvd() and get_ssjsd()).
+        _tvd(), sstvd() and ssjsd()).
 
         Parameters
         ----------
@@ -846,12 +846,12 @@ class DataComparator():
         """
         return self.jsds[circuit]
 
-    def get_jsd_pseudothreshold(self):
+    def jsd_pseudothreshold(self):
         """
         The statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD) between "contexts".
 
         This is a rescaling of the pseudo-threshold for the LLR, returned by the method
-        .get_llr_pseudothreshold(); see that method for more details. This threshold is
+        .llr_pseudothreshold(); see that method for more details. This threshold is
         also given by Eq (17) in "Probing context-dependent errors in quantum processors",
         by Rudinger et al.
 
@@ -865,21 +865,21 @@ class DataComparator():
         """
         assert(self.fixed_totalcount_data), \
             "The JSD only has a pseudo-threshold when there is the same number of total counts per sequence!"
-        assert(self.jsd_pseudothreshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
-        return self.jsd_pseudothreshold
+        assert(self._jsd_pseudothreshold is not None), \
+            "This has not yet been calculated! Run the .run() method first!"
+        return self._jsd_pseudothreshold
 
-    def get_ssjsd(self, circuit):
+    def ssjsd(self, circuit):
         """
         Returns the statistically significant Jensen-Shannon divergence" (SSJSD) between "contexts" for `circuit`.
 
-        This is the JSD of the circuit (see .get_jsd()), if the circuit has been found to
+        This is the JSD of the circuit (see .jsd()), if the circuit has been found to
         be context dependent, and otherwise it is None. This quantity is the JSD version
         of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum
         processors", by Rudinger et al.
 
         This is a quantification for the "amount" of context dependence for this circuit (see also,
-        get_tvd(), get_sstvd() and get_ssjsd()).
+        _tvd(), sstvd() and ssjsd()).
 
         Parameters
         ----------
@@ -891,16 +891,16 @@ class DataComparator():
         float
             The JSD of the specified circuit.
         """
-        assert(self.llr_pseudothreshold is not None), \
-            "The hypothsis testing has not been implemented yet! Run the .implement() method first!"
+        assert(self._llr_pseudothreshold is not None), \
+            "The hypothsis testing has not been implemented yet! Run the .run() method first!"
         if self.results.hypothesis_rejected[circuit]:
             return self.jsds[circuit]
         else:
             return None
 
-    def get_aggregate_llr(self):
+    def aggregate_llr(self):
         """
-        Returns the "aggregate" log-likelihood ratio (LLR).
+        Returns the "aggregate" log-_likelihood ratio (LLR).
 
         This values compares the null hypothesis of no context dependence in *any*
         sequence with the full model of arbitrary context dependence. This is the sum of
@@ -912,13 +912,13 @@ class DataComparator():
         float
             The aggregate LLR.
         """
-        return self.aggregate_llr
+        return self._aggregate_llr
 
-    def get_aggregate_llr_threshold(self):
+    def aggregate_llr_threshold(self):
         """
-        The (multi-test-adjusted) statistical significance threshold for the "aggregate" log-likelihood ratio (LLR).
+        The (multi-test-adjusted) statistical significance threshold for the "aggregate" log-_likelihood ratio (LLR).
 
-        Above this value, the LLR is significant.  See .get_aggregate_llr() for more
+        Above this value, the LLR is significant.  See .aggregate_llr() for more
         details. This quantity is the LLR version of the quantity defined in Eq (14) of
         "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
@@ -927,13 +927,13 @@ class DataComparator():
         float
             The threshold above which the aggregate LLR is statistically significant.
         """
-        assert(self.aggregate_llr_threshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
-        return self.aggregate_llr_threshold
+        assert(self._aggregate_llr_threshold is not None), \
+            "This has not yet been calculated! Run the .run() method first!"
+        return self._aggregate_llr_threshold
 
-    def get_aggregate_pvalue(self):
+    def aggregate_pvalue(self):
         """
-        Returns the p-value for the "aggregate" log-likelihood ratio (LLR).
+        Returns the p-value for the "aggregate" log-_likelihood ratio (LLR).
 
         This compares the null hypothesis of no context dependence in any sequence with
         the full model of arbitrary dependence. This LLR is defined in Eq (11) in "Probing
@@ -941,7 +941,7 @@ class DataComparator():
         converted to a p-value via Wilks' theorem (see discussion therein).
 
         Note that this p-value is often zero to machine precision, when there is context dependence,
-        so a more useful number is often returned by get_aggregate_nsigma() (that quantity is equivalent to
+        so a more useful number is often returned by aggregate_nsigma() (that quantity is equivalent to
         this p-value but expressed on a different scale).
 
         Returns
@@ -951,12 +951,12 @@ class DataComparator():
         """
         return self.aggregate_pVal
 
-    def get_aggregate_pvalue_threshold(self):
+    def aggregate_pvalue_threshold(self):
         """
         The (multi-test-adjusted) statistical significance threshold for the p-value of the "aggregate" LLR.
 
-        Here, LLR refers to the log-likelihood ratio. Below this p-value the LLR would be deemed significant.
-        See the .get_aggregate_pvalue() method for more details.
+        Here, LLR refers to the log-_likelihood ratio. Below this p-value the LLR would be deemed significant.
+        See the .aggregate_pvalue() method for more details.
 
         Returns
         -------
@@ -964,15 +964,15 @@ class DataComparator():
             The statistical significance threshold for the p-value of the "aggregate" LLR.
         """
         assert(self.aggregate_pVal_threshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
+            "This has not yet been calculated! Run the .run() method first!"
         return self.aggregate_pVal_threshold
 
-    def get_aggregate_nsigma(self):
+    def aggregate_nsigma(self):
         """
         The number of standard deviations the "aggregate" LLR is above the context-independent mean.
 
         More specifically, the number of standard deviations above the context-independent
-        mean that the "aggregate" log-likelihood ratio (LLR) is. This quantity is defined
+        mean that the "aggregate" log-_likelihood ratio (LLR) is. This quantity is defined
         in Eq (13) of "Probing context-dependent errors in quantum processors", by
         Rudinger et al.
 
@@ -981,14 +981,14 @@ class DataComparator():
         float
             The number of signed standard deviations of the aggregate LLR .
         """
-        return self.aggregate_nsigma
+        return self._aggregate_nsigma
 
-    def get_aggregate_nsigma_threshold(self):
+    def aggregate_nsigma_threshold(self):
         """
         The significance threshold above which the signed standard deviations of the aggregate LLR is significant.
 
         The (multi-test-adjusted) statistical significance threshold for the signed standard
-        deviations of the the "aggregate" log-likelihood ratio (LLR). See the .get_aggregate_nsigma()
+        deviations of the the "aggregate" log-_likelihood ratio (LLR). See the .aggregate_nsigma()
         method for more details. This quantity is defined in Eq (14) of "Probing context-dependent errors
         in quantum processors", by Rudinger et al.
 
@@ -998,11 +998,11 @@ class DataComparator():
             The statistical significance threshold above which the signed standard deviations
             of the aggregate LLR is significant.
         """
-        assert(self.aggregate_nsigma_threshold is not None), \
-            "This has not yet been calculated! Run the .implement() method first!"
-        return self.aggregate_nsigma_threshold
+        assert(self._aggregate_nsigma_threshold is not None), \
+            "This has not yet been calculated! Run the .run() method first!"
+        return self._aggregate_nsigma_threshold
 
-    def get_worst_circuits(self, number):
+    def worst_circuits(self, number):
         """
         Returns the "worst" circuits that have the smallest p-values.
 

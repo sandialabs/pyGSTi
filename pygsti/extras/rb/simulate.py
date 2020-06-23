@@ -361,11 +361,11 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
         aschpq = {label: str(i) for i, label in enumerate(circuit.line_labels)}
 
         # A list containing the CHP string for each error-free circuit layer.
-        perfect_chpstrings = [''.join([gate_to_chp(gate, aschpq) for gate in circuit.get_layer(i)])
+        perfect_chpstrings = [''.join([gate_to_chp(gate, aschpq) for gate in circuit.layer(i)])
                               for i in range(depth)]
 
         # Find the probability of error in each circuit layer.
-        errorprobs = [errormodel.layer_uniform_pauli_probability(circuit.get_layer(lind), circuit.line_labels)
+        errorprobs = [errormodel.layer_uniform_pauli_probability(circuit.layer(lind), circuit.line_labels)
                       for lind in range(circuit.depth())]
         # Add measurement error at the end
         errorprobs.append(errormodel.readout_uniform_pauli_probability(circuit.line_labels))
@@ -575,12 +575,12 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     n = circuit.number_of_lines()
     depth = circuit.depth()
     sout, pout = _symp.prep_stabilizer_state(n, zvals=None)
-    srep = pspec.models['clifford'].get_clifford_symplectic_reps()
+    srep = pspec.models['clifford'].compute_clifford_symplectic_reps()
     I = _np.identity(2 * n, int)
 
     for l in range(depth):
 
-        layer = circuit.get_layer_with_idles(l, idle_gate_name=idle1q_placeholder)
+        layer = circuit.layer_with_idles(l, idle_gate_name=idle1q_placeholder)
         s, p = _symp.symplectic_rep_of_clifford_layer(layer, n, q_labels=circuit.line_labels, srep_dict=srep)
         # Apply the perfect layer to the current state.
         sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)
@@ -831,7 +831,7 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
             errormodel[gl][:, 0] = _np.ones(n, float)
             errormodel[gl][pspec.qubit_labels.index(q), :] = error_row(idle_errorrate)
 
-    for gate in pspec.models['clifford'].get_primitive_op_labels():
+    for gate in pspec.models['clifford'].primitive_op_labels():
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 
@@ -928,7 +928,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
             errormodel[gl][:, 0] = _np.ones(n, float)
             errormodel[gl][pspec.qubit_labels.index(q), :] = error_row(er)
 
-    for gate in pspec.models['clifford'].get_primitive_op_labels():
+    for gate in pspec.models['clifford'].primitive_op_labels():
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 
@@ -1004,7 +1004,7 @@ def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qub
     n = pspec.number_of_qubits
 
     errormodel = {}
-    for gate in list(pspec.models['clifford'].get_primitive_op_labels()):
+    for gate in list(pspec.models['clifford'].primitive_op_labels()):
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 

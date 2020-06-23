@@ -84,7 +84,7 @@ def evaluate(model_fn, cri=None, verbosity=0):
 
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
-        df, f0 = cri.get_fn_confidence_interval(
+        df, f0 = cri.compute_confidence_interval(
             model_fn, return_fn_val=True,
             verbosity=verbosity)
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
@@ -116,8 +116,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.todense(), rhoVec.todense()); j += 1
-                # todense() gives a 1D array, so no need to transpose EVec
+                ret[i, j] = _np.vdot(EVec.to_dense(), rhoVec.to_dense()); j += 1
+                # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
 
 
@@ -146,7 +146,7 @@ def choi_matrix(gate, mx_basis):
 Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, op_label)
 
 
-def choi_evals(gate, mx_basis):
+def choi_eigenvalues(gate, mx_basis):
     """
     Choi matrix eigenvalues
 
@@ -167,7 +167,7 @@ def choi_evals(gate, mx_basis):
     return _np.array(sorted(choi_eigvals))
 
 
-Choi_evals = _modf.opfn_factory(choi_evals)  # init args == (model, op_label)
+Choi_evals = _modf.opfn_factory(choi_eigenvalues)  # init args == (model, op_label)
 
 
 def choi_trace(gate, mx_basis):
@@ -223,7 +223,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].todense())
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense())
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -361,7 +361,7 @@ Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_fro_diff(model_a, model_b, circuit):
+def circuit_frobenius_diff(model_a, model_b, circuit):
     """
     Frobenius distance btwn productA(circuit) and productB(circuit)
 
@@ -382,10 +382,10 @@ def circuit_fro_diff(model_a, model_b, circuit):
     """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
-    return fro_diff(A, B, model_b.basis)
+    return frobenius_diff(A, B, model_b.basis)
 
 
-Circuit_fro_diff = _modf.modelfn_factory(circuit_fro_diff)
+Circuit_fro_diff = _modf.modelfn_factory(circuit_frobenius_diff)
 # init args == (model_a, model_b, circuit)
 
 
@@ -445,7 +445,7 @@ Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_jt_diff(model_a, model_b, circuit):
+def circuit_jtrace_diff(model_a, model_b, circuit):
     """
     Jamiolkowski trace distance between productA(circuit) and productB(circuit)
 
@@ -466,10 +466,10 @@ def circuit_jt_diff(model_a, model_b, circuit):
     """
     A = model_a.product(circuit)  # "gate"
     B = model_b.product(circuit)  # "target gate"
-    return jt_diff(A, B, model_b.basis)
+    return jtrace_diff(A, B, model_b.basis)
 
 
-Circuit_jt_diff = _modf.modelfn_factory(circuit_jt_diff)
+Circuit_jt_diff = _modf.modelfn_factory(circuit_jtrace_diff)
 # init args == (model_a, model_b, circuit)
 
 if _CVXPY_AVAILABLE:
@@ -803,7 +803,7 @@ POVM_entanglement_infidelity = _modf.povmfn_factory(povm_entanglement_infidelity
 # init args == (model1, model_b, povmlbl)
 
 
-def povm_jt_diff(model_a, model_b, povmlbl):
+def povm_jtrace_diff(model_a, model_b, povmlbl):
     """
     POVM Jamiolkowski trace distance between `model_a` and `model_b`
 
@@ -829,7 +829,7 @@ def povm_jt_diff(model_a, model_b, povmlbl):
     return _tools.povm_jtracedist(model_a, model_b, povmlbl)
 
 
-POVM_jt_diff = _modf.povmfn_factory(povm_jt_diff)
+POVM_jt_diff = _modf.povmfn_factory(povm_jtrace_diff)
 # init args == (model1, model_b, povmlbl)
 
 if _CVXPY_AVAILABLE:
@@ -1007,7 +1007,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].todense())
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense())
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1125,7 +1125,7 @@ Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
 # init args == (model1, model2, op_label)
 
 
-def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def frobenius_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Frobenius distance between a and b
 
@@ -1147,11 +1147,11 @@ def fro_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     return _tools.frobeniusdist(a, b)
 
 
-Fro_diff = _modf.opsfn_factory(fro_diff)
+Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
-def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Jamiolkowski trace distance between a and b
 
@@ -1173,7 +1173,7 @@ def jt_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     return _tools.jtracedist(a, b, mx_basis)
 
 
-Jt_diff = _modf.opsfn_factory(jt_diff)
+Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
 
@@ -1197,7 +1197,7 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].todense()
+            self.B = model_b.operations[oplabel].to_dense()
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1215,7 +1215,7 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].todense(),
+            dm, W = _tools.diamonddist(model.operations[gl].to_dense(),
                                        self.B, model.basis, return_x=True)
             self.W = W
             return 0.5 * dm
@@ -1235,7 +1235,7 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel; mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_model.operations[gl].todense(), mxBasis)
+                nearby_model.operations[gl].to_dense(), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
@@ -1615,7 +1615,7 @@ Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
 # init args == (model1, model2, op_label)
 
 
-def rel_eigvals(a, b, mx_basis):
+def rel_eigenvalues(a, b, mx_basis):
     """
     Eigenvalues of b^{-1} * a
 
@@ -1639,11 +1639,11 @@ def rel_eigvals(a, b, mx_basis):
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_eigvals = _modf.opsfn_factory(rel_eigvals)
+Rel_eigvals = _modf.opsfn_factory(rel_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_tig_eigvals(a, b, mx_basis):
+def rel_log_tig_eigenvalues(a, b, mx_basis):
     """
     Eigenvalues of log(b^{-1} * a)
 
@@ -1666,11 +1666,11 @@ def rel_log_tig_eigvals(a, b, mx_basis):
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigvals)
+Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_gti_eigvals(a, b, mx_basis):
+def rel_log_gti_eigenvalues(a, b, mx_basis):
     """
     Eigenvalues of log(a * b^{-1})
 
@@ -1693,11 +1693,11 @@ def rel_log_gti_eigvals(a, b, mx_basis):
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigvals)
+Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_diff_eigvals(a, b, mx_basis):
+def rel_log_diff_eigenvalues(a, b, mx_basis):
     """
     Eigenvalues of log(a) - log(b)
 
@@ -1720,11 +1720,11 @@ def rel_log_diff_eigvals(a, b, mx_basis):
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
-Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigvals)
+Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigvals TODO
+def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigenvalues TODO
     """
     Eigenvalues of b^{-1} * a
 
@@ -1751,7 +1751,7 @@ Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def errgen_and_projections(errgen, mx_basis):
+def errorgen_and_projections(errgen, mx_basis):
     """
     Project `errgen` on all of the standard sets of error generators.
 
@@ -1774,7 +1774,7 @@ def errgen_and_projections(errgen, mx_basis):
     egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
     proj, scale = \
-        _tools.std_errgen_projections(
+        _tools.std_errorgen_projections(
             errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
     ret['hamiltonian projections'] = proj
     ret['hamiltonian projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
@@ -1782,7 +1782,7 @@ def errgen_and_projections(errgen, mx_basis):
     #sum of squared projections of normalized error generator onto normalized projectors
 
     proj, scale = \
-        _tools.std_errgen_projections(
+        _tools.std_errorgen_projections(
             errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
     ret['stochastic projections'] = proj
     ret['stochastic projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
@@ -1790,7 +1790,7 @@ def errgen_and_projections(errgen, mx_basis):
     #sum of squared projections of normalized error generator onto normalized projectors
 
     proj, scale = \
-        _tools.std_errgen_projections(
+        _tools.std_errorgen_projections(
             errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
     ret['affine projections'] = proj
     ret['affine projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
@@ -1822,7 +1822,7 @@ def log_tig_and_projections(a, b, mx_basis):
         'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logTiG")
-    return errgen_and_projections(errgen, mx_basis)
+    return errorgen_and_projections(errgen, mx_basis)
 
 
 LogTiG_and_projections = _modf.opsfn_factory(log_tig_and_projections)
@@ -1852,7 +1852,7 @@ def log_gti_and_projections(a, b, mx_basis):
         where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logGTi")
-    return errgen_and_projections(errgen, mx_basis)
+    return errorgen_and_projections(errgen, mx_basis)
 
 
 LogGTi_and_projections = _modf.opsfn_factory(log_gti_and_projections)
@@ -1882,7 +1882,7 @@ def log_diff_and_projections(a, b, mx_basis):
         where *X* is 'hamiltonian', 'stochastic', and 'affine'.
     """
     errgen = _tools.error_generator(a, b, mx_basis, "logG-logT")
-    return errgen_and_projections(errgen, mx_basis)
+    return errorgen_and_projections(errgen, mx_basis)
 
 
 LogGmlogT_and_projections = _modf.opsfn_factory(log_diff_and_projections)
@@ -1950,7 +1950,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     def get_projection_vec(errgen):
         proj = []
         for ptype in ("hamiltonian", "stochastic", "affine"):
-            proj.append(_tools.std_errgen_projections(
+            proj.append(_tools.std_errorgen_projections(
                 errgen, ptype, mxBasis, mxBasis)[1:])  # skip [0] == Identity
         return _np.concatenate(proj)
 
@@ -2060,8 +2060,8 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].todense()
-        targetOp = model_b.operations[gl].todense()
+        gate = model_a.operations[gl].to_dense()
+        targetOp = model_b.operations[gl].to_dense()
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -2076,7 +2076,7 @@ def general_decomposition(model_a, model_b):
 
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG) - gate)
 
-        hamProjs, hamGens = _tools.std_errgen_projections(
+        hamProjs, hamGens = _tools.std_errorgen_projections(
             logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
@@ -2224,7 +2224,7 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 # init args == (model1, model2, label, typ)
 
 
-def vec_tr_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def vec_trace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Trace distance between SPAM vectors a and b
 
@@ -2248,7 +2248,7 @@ def vec_tr_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     return _tools.tracedist(rhoMx1, rhoMx2)
 
 
-Vec_tr_diff = _modf.vecsfn_factory(vec_tr_diff)
+Vec_tr_diff = _modf.vecsfn_factory(vec_trace_diff)
 # init args == (model1, model2, label, typ)
 
 

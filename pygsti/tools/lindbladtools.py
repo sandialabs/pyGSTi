@@ -50,7 +50,7 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
         lindbladian = _np.empty((d**2, d**2), dtype=hamiltonian.dtype)
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = _np.sqrt(d) / 2 * (-1j * (_mt.safedot(hamiltonian, rho0) - _mt.safedot(rho0, hamiltonian)))
+        rho1 = _np.sqrt(d) / 2 * (-1j * (_mt.safe_dot(hamiltonian, rho0) - _mt.safe_dot(rho0, hamiltonian)))
         lindbladian[:, i] = _np.real_if_close(rho1.flatten()[:, None] if sparse else rho1.flatten())
         # vectorize rho1 & set as linbladian column
 
@@ -104,7 +104,7 @@ def stochastic_lindbladian(q, sparse=False):
         lindbladian = _np.empty((d**2, d**2), dtype=q.dtype)
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = d * _mt.safedot(q, _mt.safedot(rho0, Qdag))
+        rho1 = d * _mt.safe_dot(q, _mt.safe_dot(rho0, Qdag))
         lindbladian[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
         # vectorize rho1 & set as linbladian column
 
@@ -147,8 +147,8 @@ def affine_lindbladian(q, sparse=False):
         lindbladian = _np.empty((d**2, d**2), dtype=q.dtype)
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = q * _mt.safedot(Id, rho0.flatten())  # get |q>><Id|rho0
-        lindbladian[:, i] = rho1.todense().flatten().T if sparse else rho1.flatten()  # weird that need .T here
+        rho1 = q * _mt.safe_dot(Id, rho0.flatten())  # get |q>><Id|rho0
+        lindbladian[:, i] = rho1.to_dense().flatten().T if sparse else rho1.flatten()  # weird that need .T here
         # vectorize rho1 & set as linbladian column
 
     if sparse: lindbladian = lindbladian.tocsr()
@@ -199,8 +199,8 @@ def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
 
 #    print("BEGIN VERBOSE") #DEBUG!!!
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
-        rho1 = _mt.safedot(Ln, _mt.safedot(rho0, Lm_dag)) - 0.5 * (
-            _mt.safedot(rho0, _mt.safedot(Lm_dag, Ln)) + _mt.safedot(_mt.safedot(Lm_dag, Ln), rho0))
+        rho1 = _mt.safe_dot(Ln, _mt.safe_dot(rho0, Lm_dag)) - 0.5 * (
+            _mt.safe_dot(rho0, _mt.safe_dot(Lm_dag, Ln)) + _mt.safe_dot(_mt.safe_dot(Lm_dag, Ln), rho0))
         rho1 *= d
 #        print("rho0[%d] = \n" % i,rho0)
 #        print("rho1[%d] = \n" % i,rho1)

@@ -2,6 +2,7 @@ import unittest
 import os
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.algorithms import germselection
 from ..testutils import compare_files, temp_files, regenerate_references
 
 import numpy as np
@@ -95,7 +96,8 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                                                     verbosity=3, mem_limit=None)
 
         #Note: can't amplify SPAM params, so don't count them
-        nTotal = pygsti.alg.remove_spam_vectors(target_model).num_nongauge_params()
+
+        nTotal = germselection._remove_spam_vectors(target_model).num_nongauge_params()
         self.assertEqual(nTotal, 34)
 
         print("GFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))

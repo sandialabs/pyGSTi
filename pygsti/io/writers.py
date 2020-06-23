@@ -121,7 +121,7 @@ def write_dataset(filename, dataset, circuit_list=None,
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = dataset.get_outcome_labels()
+    outcomeLabels = dataset.outcome_labels()
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -219,7 +219,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = multidataset.get_outcome_labels()
+    outcomeLabels = multidataset.outcome_labels()
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -335,8 +335,8 @@ def write_model(mdl, filename, title=None):
             elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
             elif isinstance(rhoVec, _objs.LindbladSPAMVec):
                 typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.todense()),
-                         ("ErrgenMx", rhoVec.error_map.todense())]
+                props = [("PureVec", rhoVec.state_vec.to_dense()),
+                         ("ErrgenMx", rhoVec.error_map.to_dense())]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -344,7 +344,7 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.todense())]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense())]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -355,7 +355,7 @@ def write_model(mdl, filename, title=None):
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
             elif isinstance(povm, _objs.LindbladPOVM):
                 povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.todense())]
+                props = [("ErrgenMx", povm.error_map.to_dense())]
                 povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
@@ -381,7 +381,7 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.todense())
+                writeprop(output, "LiouvilleVec", EVec.to_dense())
 
             output.write("END POVM\n\n")
 
@@ -392,9 +392,9 @@ def write_model(mdl, filename, title=None):
             elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
             elif isinstance(gate, _objs.LindbladDenseOp):
                 typ = "CPTP-GATE"
-                props = [("LiouvilleMx", gate.todense())]
+                props = [("LiouvilleMx", gate.to_dense())]
                 if gate.unitary_postfactor is not None:
-                    upost = gate.unitary_postfactor.todense() \
+                    upost = gate.unitary_postfactor.to_dense() \
                         if isinstance(gate.unitary_postfactor, _objs.LinearOperator) \
                         else gate.unitary_postfactor
                     props.append(("RefLiouvilleMx", upost))
@@ -405,7 +405,7 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.todense())]
+            if props is None: props = [("LiouvilleMx", gate.to_dense())]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -432,7 +432,7 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.todense())
+                writeprop(output, "LiouvilleMx", gate.to_dense())
             output.write("END Instrument\n\n")
 
         if mdl.state_space_labels is not None:
@@ -612,13 +612,13 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     DataSet
         The generated data set (also written in place of the template file).
     """
-    from ..construction import generate_fake_data as _generate_fake_data
+    from ..construction import simulate_data as _generate_fake_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
     ds = _generate_fake_data(model, list(ds_template.keys()), n_samples,
                              sample_error, seed, rand_state, alias_dict,
                              collision_action, record_zero_counts, comm,
                              mem_limit, times)
     if fixed_column_mode == "auto":
-        fixed_column_mode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
+        fixed_column_mode = bool(len(ds_template.outcome_labels()) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds

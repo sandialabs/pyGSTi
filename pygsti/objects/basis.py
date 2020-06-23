@@ -426,7 +426,7 @@ class Basis(object):
             else:
                 return _np.array_equal(self.elements, other)
 
-    def transform_matrix(self, to_basis):
+    def create_transform_matrix(self, to_basis):
         """
         Get the matrix that transforms a vector from this basis to `to_basis`.
 
@@ -444,22 +444,22 @@ class Basis(object):
         #Note: construct to_basis as sparse this basis is sparse and
         # if to_basis is not already a Basis object
         if not isinstance(to_basis, Basis):
-            to_basis = self.equivalent(to_basis)
+            to_basis = self.create_equivalent(to_basis)
 
-        #Note same logic as matrixtools.safedot(...)
+        #Note same logic as matrixtools.safe_dot(...)
         if to_basis.sparse:
-            return to_basis.get_from_std().dot(self.get_to_std())
+            return to_basis.from_std_transform_matrix().dot(self.to_std_transform_matrix())
         elif self.sparse:
-            #return _sps.csr_matrix(to_basis.get_from_std()).dot(self.get_to_std())
-            return _np.dot(to_basis.get_from_std(), self.get_to_std().toarray())
+            #return _sps.csr_matrix(to_basis.from_std_transform_matrix()).dot(self.to_std_transform_matrix())
+            return _np.dot(to_basis.from_std_transform_matrix(), self.to_std_transform_matrix().toarray())
         else:
-            return _np.dot(to_basis.get_from_std(), self.get_to_std())
+            return _np.dot(to_basis.from_std_transform_matrix(), self.to_std_transform_matrix())
 
     def reverse_transform_matrix(self, from_basis):
         """
         Get the matrix that transforms a vector from `from_basis` to this basis.
 
-        The reverse of :method:`transform_matrix`.
+        The reverse of :method:`create_transform_matrix`.
 
         Parameters
         ----------
@@ -473,16 +473,16 @@ class Basis(object):
         numpy.ndarray (even if basis is sparse)
         """
         if not isinstance(from_basis, Basis):
-            from_basis = self.equivalent(from_basis)
+            from_basis = self.create_equivalent(from_basis)
 
-        #Note same logic as matrixtools.safedot(...)
+        #Note same logic as matrixtools.safe_dot(...)
         if self.sparse:
-            return self.get_from_std().dot(from_basis.get_to_std())
+            return self.from_std_transform_matrix().dot(from_basis.to_std_transform_matrix())
         elif from_basis.sparse:
-            #return _sps.csr_matrix(to_basis.get_from_std()).dot(self.get_to_std())
-            return _np.dot(self.get_from_std(), from_basis.get_to_std().toarray())
+            #return _sps.csr_matrix(to_basis.from_std_transform_matrix()).dot(self.to_std_transform_matrix())
+            return _np.dot(self.from_std_transform_matrix(), from_basis.to_std_transform_matrix().toarray())
         else:
-            return _np.dot(self.get_from_std(), from_basis.get_to_std())
+            return _np.dot(self.from_std_transform_matrix(), from_basis.to_std_transform_matrix())
 
     @lru_cache(maxsize=128)
     def is_normalized(self):
@@ -507,7 +507,7 @@ class Basis(object):
             raise ValueError("I don't know what normalized means for elndim == %d!" % self.elndim)
 
     @lru_cache(maxsize=128)
-    def get_to_std(self):
+    def to_std_transform_matrix(self):
         """
         Retrieve the matrix that transforms a vector from this basis to the standard basis of this basis's dimension.
 
@@ -528,7 +528,7 @@ class Basis(object):
         return toStd
 
     @lru_cache(maxsize=128)
-    def get_from_std(self):
+    def from_std_transform_matrix(self):
         """
         Retrieve the matrix that transforms vectors from the standard basis to this basis.
 
@@ -541,28 +541,28 @@ class Basis(object):
         """
         if self.sparse:
             if self.is_complete():
-                return _spsl.inv(self.get_to_std().tocsc()).tocsr()
+                return _spsl.inv(self.to_std_transform_matrix().tocsc()).tocsr()
             else:
                 assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.get_to_std()  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix()  # shape (dim,size) - should have indep *cols*
                 Adag = A.getH()        # shape (size, dim)
                 invAdagA = _spsl.inv(Adag.tocsr().dot(A.tocsc())).tocsr()
                 return invAdagA.dot(Adag.tocsc())
         else:
             if self.is_complete():
-                return _inv(self.get_to_std())
+                return _inv(self.to_std_transform_matrix())
             else:
                 assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.get_to_std()  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix()  # shape (dim,size) - should have indep *cols*
                 Adag = A.transpose().conjugate()  # shape (size, dim)
                 return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
     @lru_cache(maxsize=128)
-    def get_to_element_std(self):
+    def to_elementstd_transform_matrix(self):
         """
         Get transformation matrix from this basis to the "element space".
 
@@ -583,11 +583,11 @@ class Basis(object):
         # *is* a standard representation of the vector space this basis or partial-basis
         # acts upon (this is *not* true for direct-sum bases, where the flattened
         # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of get_to_element_std"
-        return self.get_to_std()
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
+        return self.to_std_transform_matrix()
 
     @lru_cache(maxsize=128)
-    def get_from_element_std(self):  # OLD: get_expand_mx(self):
+    def from_elementstd_transform_matrix(self):  # OLD: get_expand_mx(self):
         """
         Get transformation matrix from "element space" to this basis.
 
@@ -605,10 +605,10 @@ class Basis(object):
             number of vectors).
         """
         if self.sparse:
-            raise NotImplementedError("get_from_element_std not implemented for sparse mode")  # (b/c pinv used)
-        return _np.linalg.pinv(self.get_to_element_std())
+            raise NotImplementedError("from_elementstd_transform_matrix not implemented for sparse mode")  # (b/c pinv used)
+        return _np.linalg.pinv(self.to_elementstd_transform_matrix())
 
-    def equivalent(self, builtin_basis_name):
+    def create_equivalent(self, builtin_basis_name):
         """
         Create an equivalent basis with components of type `builtin_basis_name`.
 
@@ -627,14 +627,14 @@ class Basis(object):
         Basis
         """
         #This default implementation assumes that this basis is simple.
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of equivalent()"
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of create_equivalent()"
         return BuiltinBasis(builtin_basis_name, self.dim, sparse=self.sparse)
 
     #TODO: figure out if we actually need the return value from this function to
     # not have any components...  Maybe jamiolkowski.py needs this?  If it's
     # unnecessary, we can update these doc strings and perhaps TensorProdBasis's
     # implementation:
-    def simple_equivalent(self, builtin_basis_name=None):
+    def create_simple_equivalent(self, builtin_basis_name=None):
         """
         Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
 
@@ -658,9 +658,9 @@ class Basis(object):
         Basis
         """
         #This default implementation assumes that this basis is simple.
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of simple_equivalent()"
+        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of create_simple_equivalent()"
         if builtin_basis_name is None: return self.copy()
-        else: return self.equivalent(builtin_basis_name)
+        else: return self.create_equivalent(builtin_basis_name)
 
 
 class LazyBasis(Basis):
@@ -1140,7 +1140,7 @@ class DirectSumBasis(LazyBasis):
         return self._vector_elements
 
     @lru_cache(maxsize=128)
-    def get_to_std(self):
+    def to_std_transform_matrix(self):
         """
         Retrieve the matrix that transforms a vector from this basis to the standard basis of this basis's dimension.
 
@@ -1163,7 +1163,7 @@ class DirectSumBasis(LazyBasis):
         return toStd
 
     @lru_cache(maxsize=128)
-    def get_to_element_std(self):
+    def to_elementstd_transform_matrix(self):
         """
         Get transformation matrix from this basis to the "element space".
 
@@ -1180,7 +1180,7 @@ class DirectSumBasis(LazyBasis):
             elements are 4x4 matrices) and `size` is the size of this basis (its
             number of vectors).
         """
-        assert(not self.sparse), "get_to_element_std not implemented for sparse mode"
+        assert(not self.sparse), "to_elementstd_transform_matrix not implemented for sparse mode"
         expanddim = self.elsize  # == _np.product(self.elshape)
         if self.sparse:
             toSimpleStd = _sps.lil_matrix((expanddim, self.size), dtype='complex')
@@ -1195,7 +1195,7 @@ class DirectSumBasis(LazyBasis):
             toSimpleStd[:, i] = vel
         return toSimpleStd
 
-    def equivalent(self, builtin_basis_name):
+    def create_equivalent(self, builtin_basis_name):
         """
         Create an equivalent basis with components of type `builtin_basis_name`.
 
@@ -1213,10 +1213,10 @@ class DirectSumBasis(LazyBasis):
         -------
         DirectSumBasis
         """
-        equiv_components = [c.equivalent(builtin_basis_name) for c in self.component_bases]
+        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
         return DirectSumBasis(equiv_components)
 
-    def simple_equivalent(self, builtin_basis_name=None):
+    def create_simple_equivalent(self, builtin_basis_name=None):
         """
         Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
 
@@ -1364,7 +1364,7 @@ class TensorProdBasis(LazyBasis):
         if len(self.component_bases) != len(other.component_bases): return False
         return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
-    def equivalent(self, builtin_basis_name):
+    def create_equivalent(self, builtin_basis_name):
         """
         Create an equivalent basis with components of type `builtin_basis_name`.
 
@@ -1382,10 +1382,10 @@ class TensorProdBasis(LazyBasis):
         -------
         TensorProdBasis
         """
-        equiv_components = [c.equivalent(builtin_basis_name) for c in self.component_bases]
+        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
         return TensorProdBasis(equiv_components)
 
-    def simple_equivalent(self, builtin_basis_name=None):
+    def create_simple_equivalent(self, builtin_basis_name=None):
         """
         Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
 
@@ -1557,19 +1557,19 @@ class EmbeddedBasis(LazyBasis):
             from .operation import StaticDenseOp
             from .operation import EmbeddedOp
             sslbls = self.state_space_labels.copy()
-            sslbls.reduce_dims_densitymx_to_state()  # because we're working with basis matrices not gates
+            sslbls.reduce_dims_densitymx_to_state_inplace()  # because we're working with basis matrices not gates
 
             if self.sparse:
                 self._elements = []
                 for spmx in self.embedded_basis.elements:
-                    mxAsOp = StaticDenseOp(spmx.todense(), evotype='statevec')
+                    mxAsOp = StaticDenseOp(spmx.to_dense(), evotype='statevec')
                     self._elements.append(EmbeddedOp(sslbls, self.target_labels,
-                                                     mxAsOp).tosparse())
+                                                     mxAsOp).to_sparse())
             else:
                 self._elements = _np.zeros((self.size,) + self.elshape, 'complex')
                 for i, mx in enumerate(self.embedded_basis.elements):
                     self._elements[i] = EmbeddedOp(sslbls, self.target_labels,
-                                                   StaticDenseOp(mx, evotype='statevec')).todense()
+                                                   StaticDenseOp(mx, evotype='statevec')).to_dense()
         else:
             # we need to perform embedding using vectors rather than matrices - doable, but
             # not needed yet, so defer implementation to later.
@@ -1586,7 +1586,7 @@ class EmbeddedBasis(LazyBasis):
             return False
         return self.embedded_basis == other.embedded_basis
 
-    def equivalent(self, builtin_basis_name):
+    def create_equivalent(self, builtin_basis_name):
         """
         Create an equivalent basis with components of type `builtin_basis_name`.
 
@@ -1604,10 +1604,10 @@ class EmbeddedBasis(LazyBasis):
         -------
         EmbeddedBasis
         """
-        equiv_embedded = self.embedded_basis.equivalent(builtin_basis_name)
+        equiv_embedded = self.embedded_basis.create_equivalent(builtin_basis_name)
         return EmbeddedBasis(equiv_embedded, self.state_space_labels, self.target_labels)
 
-    def simple_equivalent(self, builtin_basis_name=None):
+    def create_simple_equivalent(self, builtin_basis_name=None):
         """
         Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
 

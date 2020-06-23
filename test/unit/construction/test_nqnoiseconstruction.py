@@ -14,7 +14,7 @@ class KCoverageTester(BaseCase):
         n = 10  # nqubits
         k = 4  # number of "labels" needing distribution
         rows = nc.get_kcoverage_template(n, k, verbosity=2)
-        nc.check_kcoverage_template(rows, n, k, verbosity=1)
+        nc._check_kcoverage_template(rows, n, k, verbosity=1)
 
 
 class StdModuleBase(object):
@@ -47,7 +47,7 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
     def test_upgrade_dataset(self):
         #Test upgrade of 2Q dataset
         ds = DataSet(outcome_labels=('00', '01', '10', '11'))
-        ds.get_outcome_labels()
+        ds.outcome_labels()
         ds.add_count_dict(('Gix',), {'00': 90, '10': 10})
         ds.add_count_dict(('Giy',), {'00': 80, '10': 20})
         ds.add_count_dict(('Gxi',), {'00': 55, '10': 45})
@@ -67,7 +67,7 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
 class NQNoiseConstructionTester(BaseCase):
     def test_build_cloud_crosstalk_model(self):
         nQubits = 2
-        ccmdl1 = nc.build_cloud_crosstalk_model(
+        ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
              ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
@@ -78,7 +78,7 @@ class NQNoiseConstructionTester(BaseCase):
         self.assertEqual(ccmdl1.num_params(), 7)
 
         #Using compact notation:
-        ccmdl2 = nc.build_cloud_crosstalk_model(
+        ccmdl2 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {'Gx:0': {('HX'): 0.01, 'SXY:0,1': 0.01},
              'Gcnot:0:1': {'HZZ': 0.02, 'SXX:0,1': 0.02},
@@ -89,7 +89,7 @@ class NQNoiseConstructionTester(BaseCase):
         self.assertEqual(ccmdl2.num_params(), 7)
 
         #also using qubit_labels
-        ccmdl3 = nc.build_cloud_crosstalk_model(
+        ccmdl3 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {'Gx:qb0': {('HX'): 0.01, 'SXY:qb0,qb1': 0.01},
              'Gcnot:qb0:qb1': {'HZZ': 0.02, 'SXX:qb0,qb1': 0.02},
@@ -101,7 +101,7 @@ class NQNoiseConstructionTester(BaseCase):
 
     def test_build_cloud_crosstalk_model_stencils(self):
         nQubits = 2
-        ccmdl1 = nc.build_cloud_crosstalk_model(
+        ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
@@ -110,7 +110,7 @@ class NQNoiseConstructionTester(BaseCase):
         self.assertEqual(ccmdl1.num_params(), 5)
 
         #Using compact notation:
-        ccmdl2 = nc.build_cloud_crosstalk_model(
+        ccmdl2 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {'Gx': {'HX': 0.01, 'SX:@0+left': 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {'HZZ': 0.02, 'SXX:@1+right,@0+left': 0.02},
@@ -121,7 +121,7 @@ class NQNoiseConstructionTester(BaseCase):
     def test_build_cloud_crosstalk_model_indepgates(self):
         #Same as test_cloud_crosstalk_stencils case but set independent_gates=True
         nQubits = 2
-        ccmdl1 = nc.build_cloud_crosstalk_model(
+        ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
             {'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
@@ -138,10 +138,10 @@ class NQNoiseConstructionTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
 
-        ccmdl = nc.build_cloud_crosstalk_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
+        ccmdl = nc.create_cloud_crosstalk_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
                                                {}, nonstd_gate_unitaries={'Ga': fn})
         c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
-        p1 = ccmdl.probs(c)
+        p1 = ccmdl.probabilities(c)
 
         self.assertAlmostEqual(p1['00'], 0.08733219254516078)
         self.assertAlmostEqual(p1['01'], 0.9126678074548386)

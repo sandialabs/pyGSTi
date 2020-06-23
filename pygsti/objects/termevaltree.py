@@ -17,7 +17,7 @@ from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import mpitools as _mpit
 from .evaltree import EvalTree
-from .opcalc import compact_deriv as _compact_deriv, bulk_eval_compact_polys_complex as _bulk_eval_compact_polys_complex
+from .opcalc import compact_deriv as _compact_deriv, bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polys_complex
 
 import time as _time  # DEBUG TIMERS
 
@@ -110,7 +110,7 @@ class TermEvalTree(EvalTree):
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
         # defines a set of paths to use in probability computations.
-        self.pathset = None
+        self._pathset = None
         self.percircuit_p_polys = {}  # keys = circuits, values = (threshold, compact_polys)
 
         self.merged_compact_polys = None
@@ -121,10 +121,10 @@ class TermEvalTree(EvalTree):
         self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = []  # no subtrees yet
-        assert(self.generate_circuit_list() == circuit_list)
+        assert(self.compute_circuits() == circuit_list)
         assert(None not in circuit_list)
 
-    def generate_circuit_list(self, permute=True):
+    def compute_circuits(self, permute=True):
         """
         Generate a list of the final circuits this tree evaluates.
 
@@ -155,11 +155,11 @@ class TermEvalTree(EvalTree):
         circuits = [None] * len(self)
 
         #Build rest of strings
-        for i in self.get_evaluation_order():
+        for i in self.evaluation_order():
             circuits[i] = self[i]
 
         #Permute to get final list:
-        nFinal = self.num_final_strings()
+        nFinal = self.num_final_circuits()
         if self.original_index_lookup is not None and permute:
             finalCircuits = [None] * nFinal
             for iorig, icur in self.original_index_lookup.items():
@@ -206,9 +206,9 @@ class TermEvalTree(EvalTree):
         OrderedDict
             A updated version of el_indices_dict
         """
-        #dbList = self.generate_circuit_list()
+        #dbList = self.compute_circuits()
         tm = _time.time()
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
 
         if (max_sub_tree_size is None and num_sub_trees is None) or \
            (max_sub_tree_size is not None and num_sub_trees is not None):
@@ -221,7 +221,7 @@ class TermEvalTree(EvalTree):
             if num_sub_trees is None or num_sub_trees == 1: return el_indices_dict
 
         self.subTrees = []
-        evalOrder = self.get_evaluation_order()
+        evalOrder = self.evaluation_order()
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time() - tm)); tm = _time.time()
 
@@ -388,7 +388,7 @@ class TermEvalTree(EvalTree):
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_elabels])
             #NEEDED? subTree.recompute_spamtuple_indices(local=False)
 
-            circuits = subTree.generate_circuit_list(permute=False)
+            circuits = subTree.compute_circuits(permute=False)
             subTree.opLabels = self._get_op_labels(
                 {c: elbls for c, elbls in zip(circuits, subTree.simplified_circuit_elabels)})
 
@@ -439,7 +439,7 @@ class TermEvalTree(EvalTree):
         cpy.simplified_circuit_elabels = _copy.deepcopy(self.simplified_circuit_elabels)
         return cpy
 
-    def get_achieved_and_max_sopm(self, calc):
+    def achieved_and_max_sopm(self, calc):
         """
         Compute the achieved and maximum possible sum-of-path-magnitudes.
 
@@ -458,7 +458,7 @@ class TermEvalTree(EvalTree):
         achieved_sopm = []
         max_sopm = []
 
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        for i in self.evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
             # must have selected a set of paths for this to be populated!
             current_threshold, _ = self.percircuit_p_polys[circuit]
@@ -470,7 +470,7 @@ class TermEvalTree(EvalTree):
             achieved, maxx = calc.circuit_achieved_and_max_sopm(rholabel,
                                                                 elabels,
                                                                 opstr,
-                                                                self.pathset.highmag_termrep_cache,
+                                                                self.pathset().highmag_termrep_cache,
                                                                 calc.sos.opcache,
                                                                 current_threshold)
             achieved_sopm.extend(list(achieved))
@@ -479,7 +479,7 @@ class TermEvalTree(EvalTree):
         assert(len(achieved_sopm) == len(max_sopm) == self.num_final_elements())
         return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
 
-    def get_sopm_gaps(self, calc):
+    def sopm_gaps(self, calc):
         """
         Compute the sum-of-path-magnitude gaps.
 
@@ -498,7 +498,7 @@ class TermEvalTree(EvalTree):
         achieved_sopm, max_sopm = self.get_achieved_and_max_sopm_gaps(calc)
         return max_sopm - achieved_sopm
 
-    def get_achieved_and_max_sopm_jacobian(self, calc):
+    def achieved_and_max_sopm_jacobian(self, calc):
         """
         Compute the jacobian of the achieved and maximum possible sum-of-path-magnitudes.
 
@@ -529,7 +529,7 @@ class TermEvalTree(EvalTree):
 
         opcache = calc.sos.opcache
         # uses *linear* evaluation order so we know final indices are sequential
-        for iCircuit in self.get_evaluation_order():
+        for iCircuit in self.evaluation_order():
             circuit = self[iCircuit]
 
             rholabel = circuit[0]
@@ -539,18 +539,18 @@ class TermEvalTree(EvalTree):
             #Get MAX-SOPM for circuit outcomes and thereby the SOPM gap (via MAX - achieved)
             # Here we take d(MAX) (above merged_achievedsopm_compact_polys give d(achieved)).  Since each
             # MAX-SOPM value is a product of max term magnitudes, to get deriv we use the chain rule:
-            partial_ops = [opcache[rholabel] if rholabel in opcache else calc.sos.get_prep(rholabel)]
+            partial_ops = [opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)]
             for glbl in opstr:
-                partial_ops.append(opcache[glbl] if glbl in opcache else calc.sos.get_operation(glbl))
-            Eops = [(opcache[elbl] if elbl in opcache else calc.sos.get_effect(elbl)) for elbl in elabels]
-            partial_op_maxmag_values = [op.get_total_term_magnitude() for op in partial_ops]
-            Eop_maxmag_values = [Eop.get_total_term_magnitude() for Eop in Eops]
+                partial_ops.append(opcache[glbl] if glbl in opcache else calc.sos.operation(glbl))
+            Eops = [(opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)) for elbl in elabels]
+            partial_op_maxmag_values = [op.total_term_magnitude() for op in partial_ops]
+            Eop_maxmag_values = [Eop.total_term_magnitude() for Eop in Eops]
             maxmag_partial_product = _np.product(partial_op_maxmag_values)
             maxmag_products = [maxmag_partial_product * Eop_val for Eop_val in Eop_maxmag_values]
 
             deriv = _np.zeros((len(elabels), calc.Np), 'd')
             for i in range(len(partial_ops)):  # replace i-th element of product with deriv
-                dop_local = partial_ops[i].get_total_term_magnitude_deriv()
+                dop_local = partial_ops[i].total_term_magnitude_deriv()
                 dop_global = _np.zeros(calc.Np, 'd')
                 dop_global[partial_ops[i].gpindices] = dop_local
                 dop_global /= partial_op_maxmag_values[i]
@@ -559,7 +559,7 @@ class TermEvalTree(EvalTree):
                     deriv[j, :] += dop_global * maxmag_products[j]
 
             for j in range(len(elabels)):  # replace final element with appropriate derivative
-                dop_local = Eops[j].get_total_term_magnitude_deriv()
+                dop_local = Eops[j].total_term_magnitude_deriv()
                 dop_global = _np.zeros(calc.Np, 'd')
                 dop_global[Eops[j].gpindices] = dop_local
                 dop_global /= Eop_maxmag_values[j]
@@ -570,7 +570,7 @@ class TermEvalTree(EvalTree):
 
         return d_achieved_mags, d_max_sopms
 
-    def get_sopm_gaps_jacobian(self, calc):
+    def sopm_gaps_jacobian(self, calc):
         """
         Compute the jacobian of the (maximum-possible - achieved) sum-of-path-magnitudes.
 
@@ -584,7 +584,7 @@ class TermEvalTree(EvalTree):
         numpy.ndarray
             The jacobian of the sum-of-path-magnitudes gap.
         """
-        d_achieved_mags, d_max_sopms = self.get_achieved_and_max_sopm_jacobian(calc)
+        d_achieved_mags, d_max_sopms = self.achieved_and_max_sopm_jacobian(calc)
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
 
@@ -625,7 +625,7 @@ class TermEvalTree(EvalTree):
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
 
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        for i in self.evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
             rholabel = circuit[0]
             opstr = circuit[1:]
@@ -655,7 +655,7 @@ class TermEvalTree(EvalTree):
 
         #if comm is None or comm.Get_rank() == 0:
         rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
-        nC = self.num_final_strings()
+        nC = self.num_final_circuits()
         max_npaths = calc.max_paths_per_outcome * self.num_final_elements()
         print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
                "(target=%.4g, #circuits=%d, #failed=%d)") %
@@ -667,7 +667,7 @@ class TermEvalTree(EvalTree):
                                       circuitsetup_cache, tot_npaths,
                                       max_npaths, num_failed)
 
-    def get_paths_set(self):
+    def pathset(self):
         """
         The current path set.
 
@@ -675,7 +675,7 @@ class TermEvalTree(EvalTree):
         -------
         PathSet
         """
-        return self.pathset
+        return self._pathset
 
     def select_paths_set(self, calc, pathset, comm, mem_limit):
         """
@@ -709,15 +709,15 @@ class TermEvalTree(EvalTree):
         # these values determine what is a "high-magnitude" term and the path magnitudes that are
         # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
 
-        self.pathset = pathset
+        self._pathset = pathset
         self.percircuit_p_polys = {}
-        repcache = self.pathset.highmag_termrep_cache
-        circuitsetup_cache = self.pathset.circuitsetup_cache
-        thresholds = self.pathset.thresholds
+        repcache = self.pathset().highmag_termrep_cache
+        circuitsetup_cache = self.pathset().circuitsetup_cache
+        thresholds = self.pathset().thresholds
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
 
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        for i in self.evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
             #print("Computing pruned poly %d" % i)
 
@@ -726,7 +726,7 @@ class TermEvalTree(EvalTree):
             opstr = circuit[1:]
             elabels = self.simplified_circuit_elabels[i]
 
-            raw_polyreps = calc.prs_as_pruned_polyreps(threshold,
+            raw_polyreps = calc._prs_as_pruned_polynomial_reps(threshold,
                                                        rholabel,
                                                        elabels,
                                                        opstr,
@@ -747,7 +747,7 @@ class TermEvalTree(EvalTree):
 
         return
 
-    def cache_p_polys(self, calc, comm):
+    def cache_p_polynomials(self, calc, comm):
         """
         Compute and cache the compact-form polynomials that evaluate to this tree's probabilities.
 
@@ -770,7 +770,7 @@ class TermEvalTree(EvalTree):
         """
         #Otherwise compute poly
         all_compact_polys = []  # holds one compact polynomial per final *element*
-        for i in self.get_evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
+        for i in self.evaluation_order():  # uses *linear* evaluation order so we know final indices are sequential
             circuit = self[i]
 
             if circuit in self.percircuit_p_polys:
@@ -779,7 +779,7 @@ class TermEvalTree(EvalTree):
                 rholabel = circuit[0]
                 opstr = circuit[1:]
                 elabels = self.simplified_circuit_elabels[i]
-                compact_polys = calc.prs_as_compact_polys(rholabel, elabels, opstr, comm)
+                compact_polys = calc._prs_as_compact_polynomials(rholabel, elabels, opstr, comm)
 
             all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
 
@@ -829,7 +829,7 @@ class TermPathSet(object):
         self.max_allowed_paths = maxpaths
         self.num_failures = nfailed  # number of failed *circuits* (not outcomes)
 
-    def get_allowed_path_fraction(self):
+    def allowed_path_fraction(self):
         """
         The fraction of maximal allowed paths that are in this path set.
 

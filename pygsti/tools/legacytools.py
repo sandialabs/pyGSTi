@@ -38,7 +38,7 @@ def warn_deprecated(name, replacement=None):
     _warnings.warn(message)
 
 
-def deprecated_fn(replacement=None):
+def deprecate(replacement=None):
     """
     Decorator for deprecating a function.
 

@@ -159,7 +159,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         """
         return lbl in self.instrumentlbls
 
-    def get_default_prep_lbl(self):
+    def default_prep_label(self):
         """
         Gets the default state prep label.
 
@@ -173,7 +173,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         return self.preplbls[0] \
             if len(self.preplbls) == 1 else None
 
-    def get_default_povm_lbl(self, sslbls):
+    def default_povm_label(self, sslbls):
         """
         Gets the default POVM label.
 
@@ -213,7 +213,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         """
         return len(self.povmlbls) > 0
 
-    def get_effect_labels_for_povm(self, povm_lbl):
+    def effect_labels_for_povm(self, povm_lbl):
         """
         Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
@@ -229,7 +229,7 @@ class BasicSimplifierHelper(SimplifierHelper):
         """
         return self.povm_effect_lbls[povm_lbl]
 
-    def get_member_labels_for_instrument(self, inst_lbl):
+    def member_labels_for_instrument(self, inst_lbl):
         """
         Get the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 
@@ -327,7 +327,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         """
         return lbl in self.instruments
 
-    def get_default_prep_lbl(self):
+    def default_prep_label(self):
         """
         Gets the default state prep label.
 
@@ -341,7 +341,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         return tuple(self.preps.keys())[0] \
             if len(self.preps) == 1 else None
 
-    def get_default_povm_lbl(self, sslbls):
+    def default_povm_label(self, sslbls):
         """
         Gets the default POVM label.
 
@@ -383,7 +383,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         """
         return len(self.povms) > 0
 
-    def get_effect_labels_for_povm(self, povm_lbl):
+    def effect_labels_for_povm(self, povm_lbl):
         """
         Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
@@ -399,7 +399,7 @@ class MemberDictSimplifierHelper(SimplifierHelper):
         """
         return tuple(self.povms[povm_lbl].keys())
 
-    def get_member_labels_for_instrument(self, inst_lbl):
+    def member_labels_for_instrument(self, inst_lbl):
         """
         Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 
@@ -497,7 +497,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         """
         return any([(lbl in idict) for idict in self.instrument_blks.values()])
 
-    def get_default_prep_lbl(self):
+    def default_prep_label(self):
         """
         Gets the default state prep label.
 
@@ -517,7 +517,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         else:
             return None
 
-    def get_default_povm_lbl(self, sslbls):
+    def default_povm_label(self, sslbls):
         """
         Gets the default POVM label.
 
@@ -566,7 +566,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
         """
         return any([(len(povmdict) > 0) for povmdict in self.povm_blks.values()])
 
-    def get_effect_labels_for_povm(self, povm_lbl):
+    def effect_labels_for_povm(self, povm_lbl):
         """
         Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
 
@@ -588,7 +588,7 @@ class MemberDictDictSimplifierHelper(SimplifierHelper):
 
         raise KeyError("No POVM labeled %s!" % str(povm_lbl))
 
-    def get_member_labels_for_instrument(self, inst_lbl):
+    def member_labels_for_instrument(self, inst_lbl):
         """
         Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
 

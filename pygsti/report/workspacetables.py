@@ -158,7 +158,7 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Brackets')
                 elif display_as == "boxes":
                     rhoMx_real = rhoMx.hermitian_to_real()
-                    v = rhoMx_real.get_value()
+                    v = rhoMx_real.value()
                     fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                              box_labels=True, prec='compacthp',
                                              mx_basis=None)  # no basis labels
@@ -180,14 +180,14 @@ class SpamTable(WorkspaceTable):
                 rowFormatters.append('Normal')
 
                 if confidence_region_info is not None:
-                    intervalVec = confidence_region_info.get_profile_likelihood_confidence_intervals(lbl)[:, None]
-                    if intervalVec.shape[0] == models[-1].get_dimension() - 1:
+                    intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
+                    if intervalVec.shape[0] == models[-1].dimension() - 1:
                         #TP constrained, so pad with zero top row
                         intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
                     rowData.append(intervalVec); rowFormatters.append('Normal')
 
             #Note: no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow(rowData, rowFormatters)
+            table.add_row(rowData, rowFormatters)
 
         for povmlbl in povmLabels:
             for lbl in models[0].povms[povmlbl].keys():
@@ -204,7 +204,7 @@ class SpamTable(WorkspaceTable):
                         rowFormatters.append('Brackets')
                     elif display_as == "boxes":
                         EMx_real = EMx.hermitian_to_real()
-                        v = EMx_real.get_value()
+                        v = EMx_real.value()
                         fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                                  box_labels=True, prec='compacthp',
                                                  mx_basis=None)  # no basis labels
@@ -226,13 +226,13 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Normal')
 
                     if confidence_region_info is not None:
-                        intervalVec = confidence_region_info.get_profile_likelihood_confidence_intervals(povmlbl)[
+                        intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(povmlbl)[
                             :, None]  # for all povm params
                         intervalVec = intervalVec[models[-1].povms[povmlbl][lbl].gpindices]  # specific to this effect
                         rowData.append(intervalVec); rowFormatters.append('Normal')
 
                 #Note: no dependence on confidence region (yet) when HS vector is not shown...
-                table.addrow(rowData, rowFormatters)
+                table.add_row(rowData, rowFormatters)
 
         table.finish()
         return table
@@ -307,7 +307,7 @@ class SpamParametersTable(WorkspaceTable):
             cri = confidence_region_info if (confidence_region_info
                                              and confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
-            DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
+            DPs, DPEBs = spamDotProdsQty.value_and_errorbar()
             assert(DPs.shape[1] == len(effectLbls)), \
                 "Models must have the same number of POVMs & effects"
 
@@ -321,7 +321,7 @@ class SpamParametersTable(WorkspaceTable):
                         rowData.append((DPs[ii, jj], None))
                     else:
                         rowData.append((DPs[ii, jj], DPEBs[ii, jj]))
-                table.addrow(rowData, formatters)
+                table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -392,7 +392,7 @@ class GatesTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].get_primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -436,7 +436,7 @@ class GatesTable(WorkspaceTable):
                     row_data.append(op)
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, op.todense(),
+                    fig = _wp.GateMatrixPlot(self.ws, op.to_dense(),
                                              colorbar=False,
                                              mx_basis=basis)
 
@@ -446,23 +446,23 @@ class GatesTable(WorkspaceTable):
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
             if confidence_region_info is not None:
-                intervalVec = confidence_region_info.get_profile_likelihood_confidence_intervals(
+                intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
                     lbl)[:, None]  # TODO: won't work for instruments
                 if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].get_dimension()
+                    op_dim = models[-1].dimension()
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim, op_dim)
                 elif isinstance(per_model_ops[-1], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].get_dimension()
+                    op_dim = models[-1].dimension()
                     basis = models[-1].basis
                     intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
                                                   intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
                 else:
                     # we don't know how best to reshape interval matrix for gate, so
                     # use derivative
-                    op_dim = models[-1].get_dimension()
+                    op_dim = models[-1].dimension()
                     basis = models[-1].basis
                     op_deriv = per_model_ops[-1].deriv_wrt_params()
                     intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
@@ -482,7 +482,7 @@ class GatesTable(WorkspaceTable):
                 else:
                     assert(False)  # pragma: no cover
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -554,7 +554,7 @@ class ChoiTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].get_primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
@@ -562,7 +562,7 @@ class ChoiTable(WorkspaceTable):
 
         qtysList = []
         for model in models:
-            opLabels = model.get_primitive_op_labels()  # operation labels
+            opLabels = model.primitive_op_labels()  # operation labels
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(model, gl)) for gl in opLabels]
@@ -623,7 +623,7 @@ class ChoiTable(WorkspaceTable):
 
                 elif disp == "barplot":
                     for model, (_, evals) in zip(models, qtysList):
-                        evs, evsEB = evals[i].get_value_and_err_bar()
+                        evs, evsEB = evals[i].value_and_errorbar()
                         fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                         row_data.append(fig)
                         row_formatters.append('Figure')
@@ -631,7 +631,7 @@ class ChoiTable(WorkspaceTable):
                 elif disp == "boxplot":
                     for model, (choiMxs, _) in zip(models, qtysList):
                         choiMx_real = choiMxs[i].hermitian_to_real()
-                        choiMx, EB = choiMx_real.get_value_and_err_bar()
+                        choiMx, EB = choiMx_real.value_and_errorbar()
                         fig = _wp.GateMatrixPlot(self.ws, choiMx,
                                                  colorbar=False,
                                                  mx_basis=model.basis,
@@ -639,7 +639,7 @@ class ChoiTable(WorkspaceTable):
                         row_data.append(fig)
                         row_formatters.append('Figure')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
         table.finish()
         return table
 
@@ -703,7 +703,7 @@ class GaugeRobustModelTable(WorkspaceTable):
     def _create(self, model, target_model, display_as, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.get_primitive_op_labels()  # use labels of 1st model
+        opLabels = model.primitive_op_labels()  # use labels of 1st model
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -716,10 +716,10 @@ class GaugeRobustModelTable(WorkspaceTable):
             #U0inv = _np.linalg.inv(U0)
             #Uinv = _np.linalg.inv(U)
 
-            _, U, U0, ev0 = _tools.get_a_best_case_gauge_transform(G, G0, return_all=True)
+            _, U, U0, ev0 = _tools.compute_best_case_gauge_transform(G, G0, return_all=True)
             U0inv = _np.linalg.inv(U0)
             Uinv = _np.linalg.inv(U)
-            kite = _tools.get_kite(ev0)
+            kite = _tools.compute_kite(ev0)
 
             F = _tools.find_zero_communtant_connection(U, Uinv, U0, U0inv, kite)  # Uinv * F * U0 is block diag
             Finv = _np.linalg.inv(F)
@@ -742,8 +742,8 @@ class GaugeRobustModelTable(WorkspaceTable):
         op_decomps = {}
         for gl in opLabels:
             try:
-                op_decomps[gl] = get_gig_decomp(model.operations[gl].todense(),
-                                                target_model.operations[gl].todense())
+                op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(),
+                                                target_model.operations[gl].to_dense())
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
                 _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
@@ -798,7 +798,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                     row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
                     row_formatters.append('Normal')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -887,7 +887,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
     def _create(self, model, target_model, metric, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.get_primitive_op_labels()
+        opLabels = model.primitive_op_labels()
 
         colHeadings = [''] + ['%s' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -923,13 +923,13 @@ class GaugeRobustMetricTable(WorkspaceTable):
         mdl_in_best_gauge = []
         target_mdl_in_best_gauge = []
         for lbl in opLabels:
-            gate_mx = orig_model.operations[lbl].todense()
-            target_gate_mx = target_model.operations[lbl].todense()
-            Ugauge = _tools.get_a_best_case_gauge_transform(gate_mx, target_gate_mx)
+            gate_mx = orig_model.operations[lbl].to_dense()
+            target_gate_mx = target_model.operations[lbl].to_dense()
+            Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
             Ugg = _objs.FullGaugeGroupElement(_np.linalg.inv(Ugauge))  # transforms gates as Ugauge * gate * Ugauge_inv
 
             mdl = orig_model.copy()
-            mdl.transform(Ugg)
+            mdl.transform_inplace(Ugg)
 
             #DEBUG statements for trying to figure out why we get negative off-diagonals so often.
             #print("----- ",lbl,"--------")
@@ -952,8 +952,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
             mdl_in_best_gauge.append(mdl)
 
             target_mdl = orig_target.copy()
-            target_mdl.transform(Ugg)
-            target_mdl.transform(Ugg_addl)  # ADDITIONAL GOPT
+            target_mdl.transform_inplace(Ugg)
+            target_mdl.transform_inplace(Ugg_addl)  # ADDITIONAL GOPT
             target_mdl_in_best_gauge.append(target_mdl)
 
         #FUTURE: instruments too?
@@ -988,7 +988,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
                 row_data.append(el)
                 row_formatters.append('Normal')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -1058,21 +1058,21 @@ class ModelVsTargetTable(WorkspaceTable):
         #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better
         #for this.
         #pAGsI = _ev(_reportables.Average_gateset_infidelity(model, target_model), confidence_region_info)
-        #table.addrow(("Avg. primitive model infidelity", pAGsI), (None, 'Normal') )
+        #table.add_row(("Avg. primitive model infidelity", pAGsI), (None, 'Normal') )
 
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
-        table.addrow(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
+        table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
         if clifford_compilation:
-            clifford_model = _cnst.build_explicit_alias_model(model, clifford_compilation)
-            clifford_targetModel = _cnst.build_explicit_alias_model(target_model, clifford_compilation)
+            clifford_model = _cnst.create_explicit_alias_model(model, clifford_compilation)
+            clifford_targetModel = _cnst.create_explicit_alias_model(target_model, clifford_compilation)
 
             ##For clifford versions we don't have a confidence region - so no error bars
             #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
-            #table.addrow(("Avg. clifford model infidelity", AGsI), (None, 'Normal') )
+            #table.add_row(("Avg. clifford model infidelity", AGsI), (None, 'Normal') )
 
             RBnum = _ev(_reportables.Predicted_rb_number(clifford_model, clifford_targetModel))
-            table.addrow(("Predicted Clifford RB number", RBnum), (None, 'Normal'))
+            table.add_row(("Predicted Clifford RB number", RBnum), (None, 'Normal'))
 
         table.finish()
         return table
@@ -1122,7 +1122,7 @@ class GatesVsTargetTable(WorkspaceTable):
         automatically discarded so they are not displayed twice.
 
     wildcard: PrimitiveOpsWildcardBudget
-        A wildcard budget with a `get_op_budget` method that is used to
+        A wildcard budget with a `budget_for` method that is used to
         fill in the "unmodeled" error column when it is requested.
     """
 
@@ -1167,7 +1167,7 @@ class GatesVsTargetTable(WorkspaceTable):
             automatically discarded so they are not displayed twice.
 
         wildcard: PrimitiveOpsWildcardBudget
-            A wildcard budget with a `get_op_budget` method that is used to
+            A wildcard budget with a `budget_for` method that is used to
             fill in the "unmodeled" error column when it is requested.
 
         Returns
@@ -1181,7 +1181,7 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, model, target_model, confidence_region_info,
                 display, virtual_ops, wildcard):
 
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
         instLabels = list(model.instruments.keys())  # requires an explicit model!
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -1216,7 +1216,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 if disp == "unmodeled":  # a special case for now
                     if wildcard:
                         row_data.append(_objs.reportableqty.ReportableQty(
-                            wildcard.get_op_budget(gl)))
+                            wildcard.budget_for(gl)))
                     continue  # Note: don't append anything if 'not wildcard'
 
                 #import time as _time #DEBUG
@@ -1230,7 +1230,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)
 
-            table.addrow(row_data, formatters)
+            table.add_row(row_data, formatters)
 
         #Iterate over instruments
         for il in instLabels:
@@ -1245,7 +1245,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 if disp == "unmodeled":  # a special case for now
                     if wildcard:
                         row_data.append(_objs.reportableqty.ReportableQty(
-                            wildcard.get_op_budget(il)))
+                            wildcard.budget_for(il)))
                     continue  # Note: don't append anything if 'not wildcard'
 
                 if disp == "inf":
@@ -1261,15 +1261,15 @@ class GatesVsTargetTable(WorkspaceTable):
                     composite_top = _np.zeros((inst.dim * nComps, inst.dim * nComps), 'd')
                     for i, clbl in enumerate(inst.keys()):
                         a, b = i * inst.dim, (i + 1) * inst.dim
-                        composite_op[a:b, a:b] = inst[clbl].todense()
-                        composite_top[a:b, a:b] = tinst[clbl].todense()
+                        composite_op[a:b, a:b] = inst[clbl].to_dense()
+                        composite_top[a:b, a:b] = tinst[clbl].to_dense()
                         qty = _reportables.half_diamond_norm(composite_op, composite_top, tpbasis)
                     row_data.append(_objs.reportableqty.ReportableQty(qty))
 
                 else:
                     row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
 
-            table.addrow(row_data, formatters)
+            table.add_row(row_data, formatters)
 
         table.finish()
         return table
@@ -1339,7 +1339,7 @@ class SpamVsTargetTable(WorkspaceTable):
         prepDiamondDists = [_objs.reportableqty.ReportableQty(_np.nan)] * len(prepLabels)
         for rowData in zip(prepLabels, prepInfidelities, prepTraceDists,
                            prepDiamondDists):
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         formatters = ['Normal'] + ['Normal'] * (len(colHeadings) - 1)
         povmInfidelities = [_ev(_reportables.POVM_entanglement_infidelity(
@@ -1354,7 +1354,7 @@ class SpamVsTargetTable(WorkspaceTable):
 
         for rowData in zip(povmLabels, povmInfidelities, povmTraceDists,
                            povmDiamondDists):
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -1443,7 +1443,7 @@ class ErrgenTable(WorkspaceTable):
     def _create(self, model, target_model,
                 confidence_region_info, display, display_as, gen_type):
 
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
         basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
@@ -1506,20 +1506,20 @@ class ErrgenTable(WorkspaceTable):
             else: raise ValueError("Invalid generator type: %s" % gen_type)
             errgenAndProjs[gl] = info
 
-            errgen = info['error generator'].get_value()
+            errgen = info['error generator'].value()
             absMax = _np.max(_np.abs(errgen))
             add_max(errgensM, absMax)
 
             if "H" in display:
-                absMax = _np.max(_np.abs(info['hamiltonian projections'].get_value()))
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].value()))
                 add_max(hamProjsM, absMax)
 
             if "S" in display:
-                absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
+                absMax = _np.max(_np.abs(info['stochastic projections'].value()))
                 add_max(stoProjsM, absMax)
 
             if "A" in display:
-                absMax = _np.max(_np.abs(info['affine projections'].get_value()))
+                absMax = _np.max(_np.abs(info['affine projections'].value()))
                 add_max(affProjsM, absMax)
 
         #Do plotting
@@ -1531,7 +1531,7 @@ class ErrgenTable(WorkspaceTable):
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        errgen, EB = info['error generator'].get_value_and_err_bar()
+                        errgen, EB = info['error generator'].value_and_errorbar()
                         m, M = get_min_max(errgensM, _np.max(_np.abs(errgen)))
                         errgen_fig = _wp.GateMatrixPlot(self.ws, errgen, m, M,
                                                         basis, eb_matrix=EB)
@@ -1543,8 +1543,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['hamiltonian projection power'].get_value()
-                        hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
+                        T = "Power %.2g" % info['hamiltonian projection power'].value()
+                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar()
                         m, M = get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis, m, M,
@@ -1557,8 +1557,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['stochastic projection power'].get_value()
-                        stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
+                        T = "Power %.2g" % info['stochastic projection power'].value()
+                        stoProjs, EB = info['stochastic projections'].value_and_errorbar()
                         m, M = get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis, m, M,
@@ -1571,8 +1571,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "A":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['affine projection power'].get_value()
-                        affProjs, EB = info['affine projections'].get_value_and_err_bar()
+                        T = "Power %.2g" % info['affine projection power'].value()
+                        affProjs, EB = info['affine projections'].value_and_errorbar()
                         m, M = get_min_max(affProjsM, _np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, affProjs, basis, m, M,
@@ -1583,7 +1583,7 @@ class ErrgenTable(WorkspaceTable):
                         row_data.append(info['affine projections'])
                         row_formatters.append('Brackets')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -1671,8 +1671,8 @@ class GaugeRobustErrgenTable(WorkspaceTable):
             for i in range(1, maxPower):
                 if len(s**i) > 1 and _np.linalg.norm(target_model.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
-        #syntheticIdleStrs = _cnst.circuit_list([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
-        #syntheticIdleStrs = _cnst.circuit_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
+        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
         print("Using synthetic idles: \n", '\n'.join([str(opstr) for opstr in syntheticIdleStrs]))
 
         gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(
@@ -1681,7 +1681,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         for linear_combo_lbl, val in gaugeRobust_info.items():
             row_data = [linear_combo_lbl, val]
             row_formatters = [None, 'Normal']
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -1763,7 +1763,7 @@ class NQubitErrgenTable(WorkspaceTable):
                                                 display, display_as)
 
     def _create(self, model, confidence_region_info, display, display_as):
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
 
         #basis = model.basis
         #basisPrefix = ""
@@ -1825,7 +1825,7 @@ class NQubitErrgenTable(WorkspaceTable):
                 if not params.issubset(displayed_params):
                     displayed_params.update(params)
 
-                    Ldict, basis = gate.get_errgen_coeffs(return_basis=True)
+                    Ldict, basis = gate.errorgen_coefficients(return_basis=True)
                     sparse = basis.sparse
 
                     #Try to find good labels for these basis elements
@@ -1927,7 +1927,7 @@ class NQubitErrgenTable(WorkspaceTable):
                         row_data.append(affCoeffs)
                         row_formatters.append('Brackets')
 
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -1977,7 +1977,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
 
     def _create(self, model, target_model, confidence_region_info):
 
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
 
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters = (None, 'Conversion')
@@ -1991,7 +1991,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
 
         for gl, angle in zip(opLabels, anglesList):
             rowData = [gl] + [angle]
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -2046,7 +2046,7 @@ class GateDecompTable(WorkspaceTable):
                                               target_model, confidence_region_info)
 
     def _create(self, model, target_model, confidence_region_info):
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
 
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
             + tuple(["Axis angle w/%s" % str(gl) for gl in opLabels])
@@ -2067,18 +2067,18 @@ class GateDecompTable(WorkspaceTable):
 
         for gl in opLabels:
             gl = str(gl)  # Label -> str for decomp-dict keys
-            axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
+            axis, axisEB = decomp[gl + ' axis'].value_and_errorbar()
             axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0, 1.0,
                                              box_labels=True, eb_matrix=axisEB)
-            decomp[gl + ' hamiltonian eigenvalues'].scale(1.0 / _np.pi)  # scale evals to units of pi
+            decomp[gl + ' hamiltonian eigenvalues'].scale_inplace(1.0 / _np.pi)  # scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
                        decomp[gl + ' angle'], axisFig,
                        decomp[gl + ' log inexactness']]
 
             for gl_other in opLabels:
                 gl_other = str(gl_other)
-                rotnAngle = decomp[gl + ' angle'].get_value()
-                rotnAngle_other = decomp[gl_other + ' angle'].get_value()
+                rotnAngle = decomp[gl + ' angle'].value()
+                rotnAngle_other = decomp[gl_other + ' angle'].value()
 
                 if gl_other == gl:
                     rowData.append("")
@@ -2087,7 +2087,7 @@ class GateDecompTable(WorkspaceTable):
                 else:
                     rowData.append(decomp[gl + ',' + gl_other + ' axis angle'])
 
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -2135,7 +2135,7 @@ class OldGateDecompTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info):
 
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
         colHeadings = ('Gate', 'Eigenvalues', 'Fixed pt', 'Rotn. axis', 'Diag. decay', 'Off-diag. decay')
         formatters = [None] * 6
 
@@ -2152,12 +2152,12 @@ class OldGateDecompTable(WorkspaceTable):
 
         for decomp, gl in zip(decomps, opLabels):
             evals = _ev(_reportables.GateEigenvalues(model, gl))
-            decomp, decompEB = decomp.get_value_and_err_bar()  # OLD
+            decomp, decompEB = decomp.value_and_errorbar()  # OLD
 
             rowData = [gl, evals] + [decomp.get(x, 'X') for x in decompNames[0:2]] + \
                 [(decomp.get(x, 'X'), decompEB) for x in decompNames[2:4]]
 
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -2213,7 +2213,7 @@ class OldRotationAxisTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info, show_axis_angle_err_bars):
 
-        opLabels = model.get_primitive_op_labels()
+        opLabels = model.primitive_op_labels()
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "OldRotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
@@ -2235,15 +2235,15 @@ class OldRotationAxisTable(WorkspaceTable):
 
         rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(model),
                                 confidence_region_info)
-        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.get_value_and_err_bar()
+        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.value_and_errorbar()
 
         for i, gl in enumerate(opLabels):
-            decomp, decompEB = decomps[i].get_value_and_err_bar()  # OLD
+            decomp, decompEB = decomps[i].value_and_errorbar()  # OLD
             rotnAngle = decomp.get('pi rotations', 'X')
 
             angles_btwn_rotn_axes = []
             for j, gl_other in enumerate(opLabels):
-                decomp_other, _ = decomps[j].get_value_and_err_bar()  # OLD
+                decomp_other, _ = decomps[j].value_and_errorbar()  # OLD
                 rotnAngle_other = decomp_other.get('pi rotations', 'X')
 
                 if gl_other == gl:
@@ -2263,7 +2263,7 @@ class OldRotationAxisTable(WorkspaceTable):
                 rowData = [gl, (rotnAngle, None)] + angles_btwn_rotn_axes
             else:
                 rowData = [gl, (rotnAngle, decompEB.get('pi rotations', 'X'))] + angles_btwn_rotn_axes
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -2374,7 +2374,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidence_region_info, display,
                 virtual_ops):
 
-        opLabels = model.get_primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels()  # operation labels
         assert(isinstance(model, _objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -2474,7 +2474,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 #TODO: move this to a reportable qty to get error bars?
 
                 if isinstance(gl, _objs.Label) or isinstance(gl, str):
-                    target_evals = _np.linalg.eigvals(target_model.operations[gl].todense())  # no error bars
+                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense())  # no error bars
                 else:
                     target_evals = _np.linalg.eigvals(target_model.product(gl))  # no error bars
 
@@ -2487,12 +2487,12 @@ class GateEigenvalueTable(WorkspaceTable):
                             model, target_model, gl), confidence_region_info)
 
                 # permute target eigenvalues according to min-weight matching
-                _, pairs = _tools.minweight_match(evals.get_value(), target_evals, lambda x, y: abs(x - y))
+                _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
                 matched_target_evals = target_evals.copy()
                 for i, j in pairs:
                     matched_target_evals[i] = target_evals[j]
                 target_evals = matched_target_evals
-                target_evals = target_evals.reshape(evals.value.shape)
+                target_evals = target_evals.reshape(evals.value().shape)
                 # b/c evals have shape (x,1) and targets (x,),
                 # which causes problems when we try to subtract them
 
@@ -2560,7 +2560,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                 elif disp == "polar":
-                    evals_val = evals.get_value()
+                    evals_val = evals.value()
                     if target_model is None:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2572,12 +2572,12 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and target_model is not None:
-                    rel_evals_val = rel_evals.get_value()
+                    rel_evals_val = rel_evals.value()
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws, [rel_evals_val], ["red"], ["rel"], center_text=str(gl))
                     row_data.append(fig)
                     row_formatters.append('Figure')
-            table.addrow(row_data, row_formatters)
+            table.add_row(row_data, row_formatters)
 
         #Iterate over instruments
         for il, inst in model.instruments.items():
@@ -2589,20 +2589,20 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.todense()))
+                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.to_dense()))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
-                    target_evals = _np.linalg.eigvals(tcomp.todense())  # no error bars
+                    target_evals = _np.linalg.eigvals(tcomp.to_dense())  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching
-                    _, pairs = _tools.minweight_match(evals.get_value(), target_evals, lambda x, y: abs(x - y))
+                    _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
                     matched_target_evals = target_evals.copy()
                     for i, j in pairs:
                         matched_target_evals[i] = target_evals[j]
                     target_evals = matched_target_evals
-                    target_evals = target_evals.reshape(evals.value.shape)
+                    target_evals = target_evals.reshape(evals.value().shape)
                     # b/c evals have shape (x,1) and targets (x,),
                     # which causes problems when we try to subtract them
 
@@ -2657,7 +2657,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                     elif disp == "polar":
-                        evals_val = evals.get_value()
+                        evals_val = evals.value()
                         if target_model is None:
                             fig = _wp.PolarEigenvaluePlot(
                                 self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2673,7 +2673,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
                         row_formatters.append('Figure')
 
-                table.addrow(row_data, row_formatters)
+                table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -2724,17 +2724,17 @@ class DataSetOverviewTable(WorkspaceTable):
         maxN = round(max([row.total for row in dataset.values()]))
         cntStr = "[%d,%d]" % (minN, maxN) if (minN != maxN) else "%d" % round(minN)
 
-        table.addrow(("Number of strings", str(len(dataset))), (None, None))
-        table.addrow(("Gate labels", ", ".join([str(gl) for gl in dataset.get_gate_labels()])), (None, None))
-        table.addrow(("Outcome labels", ", ".join(map(str, dataset.get_outcome_labels()))), (None, None))
-        table.addrow(("Counts per string", cntStr), (None, None))
+        table.add_row(("Number of strings", str(len(dataset))), (None, None))
+        table.add_row(("Gate labels", ", ".join([str(gl) for gl in dataset.gate_labels()])), (None, None))
+        table.add_row(("Outcome labels", ", ".join(map(str, dataset.outcome_labels()))), (None, None))
+        table.add_row(("Counts per string", cntStr), (None, None))
 
         if max_length_list is not None:
-            table.addrow(("Max. Lengths", ", ".join(map(str, max_length_list))), (None, None))
+            table.add_row(("Max. Lengths", ", ".join(map(str, max_length_list))), (None, None))
         if hasattr(dataset, 'comment') and dataset.comment is not None:
             commentLines = dataset.comment.split('\n')
             for i, commentLine in enumerate(commentLines, start=1):
-                table.addrow(("User comment %d" % i, commentLine), (None, 'Verbatim'))
+                table.add_row(("User comment %d" % i, commentLine), (None, 'Verbatim'))
 
         table.finish()
         return table
@@ -2890,7 +2890,7 @@ class FitComparisonTable(WorkspaceTable):
                 _ph.rated_n_sigma, dataset, mdl, circuit_list,
                 objfn_builder, Np, wildcard, return_all=True,
                 comm=comm, cache=CACHE)  # self.ws.smartCache derived?
-            table.addrow((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
+            table.add_row((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
                          (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 
         table.finish()
@@ -2997,7 +2997,7 @@ class CircuitTable(WorkspaceTable):
                         rowData.append(gsList[l])
                     else:
                         rowData.append(None)  # empty string
-            table.addrow(rowData, formatters)
+            table.add_row(rowData, formatters)
 
         table.finish()
         return table
@@ -3198,7 +3198,7 @@ class GatesSingleMetricTable(WorkspaceTable):
                         qty = _reportables.evaluate_opfn_by_name(
                             metric, mdl, gsTarget, gl, confidence_region_info)
                     row_data.append(qty)
-                table.addrow(row_data, row_formatters)
+                table.add_row(row_data, row_formatters)
         else:
             for rowtitle, gsList, tgsList in zip(rowtitles, models, target_models):
                 row_data = [rowtitle]
@@ -3209,7 +3209,7 @@ class GatesSingleMetricTable(WorkspaceTable):
                         qty = _reportables.evaluate_opfn_by_name(
                             metric, mdl, gsTarget, op_label, confidence_region_info)
                     row_data.append(qty)
-                table.addrow(row_data, row_formatters)
+                table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
@@ -3327,7 +3327,7 @@ class StandardErrgenTable(WorkspaceTable):
                 rowData.append(fig)
                 rowFormatters.append('Figure')
 
-            table.addrow(rowData, rowFormatters)
+            table.add_row(rowData, rowFormatters)
 
         table.finish()
         return table
@@ -3382,22 +3382,22 @@ class GaugeOptParamsTable(WorkspaceTable):
         for i, goargs in enumerate(goargs_list):
             pre = ("%d: " % i) if len(goargs_list) > 1 else ""
             if 'method' in goargs:
-                table.addrow(("%sMethod" % pre, str(goargs['method'])), (None, None))
+                table.add_row(("%sMethod" % pre, str(goargs['method'])), (None, None))
             if 'cptp_penalty_factor' in goargs and goargs['cptp_penalty_factor'] != 0:
-                table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None, None))
+                table.add_row(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None, None))
             if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:
-                table.addrow(("%sSPAM penalty factor" % pre, str(goargs['spam_penalty_factor'])), (None, None))
+                table.add_row(("%sSPAM penalty factor" % pre, str(goargs['spam_penalty_factor'])), (None, None))
             if 'gates_metric' in goargs:
-                table.addrow(("%sMetric for gate-to-target" % pre, str(goargs['gates_metric'])), (None, None))
+                table.add_row(("%sMetric for gate-to-target" % pre, str(goargs['gates_metric'])), (None, None))
             if 'spam_metric' in goargs:
-                table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spam_metric'])), (None, None))
+                table.add_row(("%sMetric for SPAM-to-target" % pre, str(goargs['spam_metric'])), (None, None))
             if 'item_weights' in goargs:
                 if goargs['item_weights']:
-                    table.addrow(
+                    table.add_row(
                         ("%sItem weights" % pre,
                          ", ".join([("%s=%.2g" % (k, v)) for k, v in goargs['item_weights'].items()])), (None, None))
             if 'gauge_group' in goargs:
-                table.addrow(("%sGauge group" % pre, goargs['gauge_group'].name), (None, None))
+                table.add_row(("%sGauge group" % pre, goargs['gauge_group'].name), (None, None))
 
         table.finish()
         return table
@@ -3467,7 +3467,7 @@ class MetadataTable(WorkspaceTable):
                                 del val[-1]['targetModel']  # don't print this!
             else:
                 val = params_dict[key]
-            table.addrow((key, str(val)), (None, 'Verbatim'))
+            table.add_row((key, str(val)), (None, 'Verbatim'))
 
         if isinstance(self, _objs.ExplicitOpModel):
             for lbl, vec in model.preps.items():
@@ -3476,14 +3476,14 @@ class MetadataTable(WorkspaceTable):
                 elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
                 elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                 else: paramTyp = "unknown"  # pragma: no cover
-                table.addrow((lbl + " parameterization", paramTyp), (None, 'Verbatim'))
+                table.add_row((lbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
             for povmlbl, povm in model.povms.items():
                 if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
                 elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
                 elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
                 else: paramTyp = "unknown"  # pragma: no cover
-                table.addrow((povmlbl + " parameterization", paramTyp), (None, 'Verbatim'))
+                table.add_row((povmlbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
                 for lbl, vec in povm.items():
                     if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
@@ -3491,7 +3491,7 @@ class MetadataTable(WorkspaceTable):
                     elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
                     elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                     else: paramTyp = "unknown"  # pragma: no cover
-                    table.addrow(("> " + lbl + " parameterization", paramTyp), (None, 'Verbatim'))
+                    table.add_row(("> " + lbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
             for gl, gate in model.operations.items():
                 if isinstance(gate, _objs.StaticDenseOp): paramTyp = "static"
@@ -3504,7 +3504,7 @@ class MetadataTable(WorkspaceTable):
                     if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
                     paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
                 else: paramTyp = "unknown"  # pragma: no cover
-                table.addrow((gl + " parameterization", paramTyp), (None, 'Verbatim'))
+                table.add_row((gl + " parameterization", paramTyp), (None, 'Verbatim'))
 
         table.finish()
         return table
@@ -3564,29 +3564,29 @@ class SoftwareEnvTable(WorkspaceTable):
 
         #Python package information
         from .._version import __version__ as pygsti_version
-        table.addrow(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
+        table.add_row(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
 
         packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy',
                     'nose', 'PIL', 'psutil']
         for pkg in packages:
-            table.addrow((pkg, get_version(pkg)), (None, 'Verbatim'))
+            table.add_row((pkg, get_version(pkg)), (None, 'Verbatim'))
 
         #Python information
-        table.addrow(("Python version", str(platform.python_version())), (None, 'Verbatim'))
-        table.addrow(("Python type", str(platform.python_implementation())), (None, 'Verbatim'))
-        table.addrow(("Python compiler", str(platform.python_compiler())), (None, 'Verbatim'))
-        table.addrow(("Python build", str(platform.python_build())), (None, 'Verbatim'))
-        table.addrow(("Python branch", str(platform.python_branch())), (None, 'Verbatim'))
-        table.addrow(("Python revision", str(platform.python_revision())), (None, 'Verbatim'))
+        table.add_row(("Python version", str(platform.python_version())), (None, 'Verbatim'))
+        table.add_row(("Python type", str(platform.python_implementation())), (None, 'Verbatim'))
+        table.add_row(("Python compiler", str(platform.python_compiler())), (None, 'Verbatim'))
+        table.add_row(("Python build", str(platform.python_build())), (None, 'Verbatim'))
+        table.add_row(("Python branch", str(platform.python_branch())), (None, 'Verbatim'))
+        table.add_row(("Python revision", str(platform.python_revision())), (None, 'Verbatim'))
 
         #Platform information
         (system, _, release, version, machine, processor) = platform.uname()
-        table.addrow(("Platform summary", str(platform.platform())), (None, 'Verbatim'))
-        table.addrow(("System", str(system)), (None, 'Verbatim'))
-        table.addrow(("Sys Release", str(release)), (None, 'Verbatim'))
-        table.addrow(("Sys Version", str(version)), (None, 'Verbatim'))
-        table.addrow(("Machine", str(machine)), (None, 'Verbatim'))
-        table.addrow(("Processor", str(processor)), (None, 'Verbatim'))
+        table.add_row(("Platform summary", str(platform.platform())), (None, 'Verbatim'))
+        table.add_row(("System", str(system)), (None, 'Verbatim'))
+        table.add_row(("Sys Release", str(release)), (None, 'Verbatim'))
+        table.add_row(("Sys Version", str(version)), (None, 'Verbatim'))
+        table.add_row(("Machine", str(machine)), (None, 'Verbatim'))
+        table.add_row(("Processor", str(processor)), (None, 'Verbatim'))
 
         table.finish()
         return table
@@ -3643,7 +3643,7 @@ class ProfilerTable(WorkspaceTable):
                 raise ValueError("Invalid 'sort_by' argument: %s" % sort_by)
 
             for nm in timerNames:
-                table.addrow((nm, profiler.timers[nm]), (None, None))
+                table.add_row((nm, profiler.timers[nm]), (None, None))
 
         table.finish()
         return table
@@ -3682,8 +3682,8 @@ class WildcardBudgetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
 
         if budget is not None:
-            for nm, (desc, val) in budget.get_descriptive_dict().items():
-                table.addrow((nm, desc, val), (None, None, None))
+            for nm, (desc, val) in budget.description().items():
+                table.add_row((nm, desc, val), (None, None, None))
 
         table.finish()
         return table
@@ -3718,6 +3718,6 @@ class ExampleTable(WorkspaceTable):
                                          "pp", eb_matrix=example_ebmx)
 
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
-        table.addrow(("Pi", _np.pi, example_fig), ('Normal', 'Normal', 'Figure'))
+        table.add_row(("Pi", _np.pi, example_fig), ('Normal', 'Normal', 'Figure'))
         table.finish()
         return table

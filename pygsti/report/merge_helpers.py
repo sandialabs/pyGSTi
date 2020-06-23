@@ -29,7 +29,7 @@ except ImportError:
     _Undefined = ()
 
 
-def read_contents(filename):
+def _read_contents(filename):
     """
     Read the contents from `filename` as a string.
 
@@ -110,10 +110,10 @@ def insert_resource(connected, online_url, offline_filename,
 
             if offline_filename.endswith("js"):
                 return '<script type="text/javascript">\n' + \
-                    read_contents(absname) + "</script>\n"
+                    _read_contents(absname) + "</script>\n"
 
             elif offline_filename.endswith("css"):
-                return '<style>\n' + read_contents(absname) + "</style>\n"
+                return '<style>\n' + _read_contents(absname) + "</style>\n"
 
             else:
                 raise ValueError("Unknown resource type for %s" % offline_filename)
@@ -172,7 +172,7 @@ def rsync_offline_dir(output_dir):
                     #print("COPYING to %s" % destnm)
 
 
-def read_and_preprocess_template(template_filename, toggles):
+def load_and_preprocess_template(template_filename, toggles):
     """
     Load a HTML template from a file and perform an preprocessing.
 
@@ -191,7 +191,7 @@ def read_and_preprocess_template(template_filename, toggles):
     -------
     str
     """
-    template = read_contents(template_filename)
+    template = _read_contents(template_filename)
 
     if toggles is None:
         toggles = {}
@@ -278,7 +278,7 @@ def clear_dir(path):
             _os.remove(full_fn)
 
 
-def make_empty_dir(dirname):
+def create_empty_dir(dirname):
     """
     Ensure that `dirname` names an empty directory
 
@@ -360,7 +360,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
         With the same keys as `qtys` and values which contain the objects
         rendered as strings.
     """
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
 
     #render quantities as HTML
     qtys_html = _collections.defaultdict(lambda: "OMITTED")
@@ -393,7 +393,7 @@ def render_as_latex(qtys, render_options, verbosity):
         With the same keys as `qtys` and values which contain the objects
         rendered as strings.
     """
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     from .workspace import Switchboard as _Switchboard
 
     #render quantities as Latex
@@ -809,7 +809,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
     None
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.create_printer(verbosity)
     template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                       "templates", template_filename)
     output_dir = _os.path.dirname(output_filename)

@@ -130,7 +130,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #
 #    probs_precomp_dict : dict, optional
 #        A dictionary of precomputed probabilities.  Keys are circuits
-#        and values are prob-dictionaries (as returned from Model.probs)
+#        and values are prob-dictionaries (as returned from Model.probabilities)
 #        corresponding to each circuit.
 #
 #    Returns
@@ -176,7 +176,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #
 #    probs_precomp_dict : dict, optional
 #        A dictionary of precomputed probabilities.  Keys are circuits
-#        and values are prob-dictionaries (as returned from Model.probs)
+#        and values are prob-dictionaries (as returned from Model.probabilities)
 #        corresponding to each circuit.
 #
 #    Returns
@@ -226,7 +226,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #
 #    probs_precomp_dict : dict, optional
 #        A dictionary of precomputed probabilities.  Keys are circuits
-#        and values are prob-dictionaries (as returned from Model.probs)
+#        and values are prob-dictionaries (as returned from Model.probabilities)
 #        corresponding to each circuit.
 #
 #
@@ -247,7 +247,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
 #    for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
 #            gsplaq.iter_simplified(), gsplaq_ds.iter_simplified()):
-#        logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+#        logLs = _tools.two_delta_logl_term(cnts[elIndices_ds], probs[elIndices],
 #                                        freqs[elIndices_ds], min_prob_clip)
 #        ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
 #    return ret
@@ -274,7 +274,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #
 #    probs_precomp_dict : dict, optional
 #        A dictionary of precomputed probabilities.  Keys are circuits
-#        and values are prob-dictionaries (as returned from Model.probs)
+#        and values are prob-dictionaries (as returned from Model.probabilities)
 #        corresponding to each circuit.
 #
 #
@@ -299,7 +299,7 @@ from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 #    return ret
 
 
-def small_eigval_err_rate(sigma, direct_gst_models):
+def small_eigenvalue_err_rate(sigma, direct_gst_models):
     """
     Compute per-gate error rate.
 
@@ -459,7 +459,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 #    if wildcard:
 #        freqs = _np.empty(evt.num_final_elements(), 'd')
 #        #ds_circuit_list = _tools.find_replace_tuple_list(circuitList, op_label_aliases)
-#        ds_circuit_list = _tools.apply_aliases_to_circuit_list(circuitList, op_label_aliases)
+#        ds_circuit_list = _tools.apply_aliases_to_circuits(circuitList, op_label_aliases)
 #        for (i, opStr) in enumerate(ds_circuit_list):
 #            cnts = dataset[opStr].counts; total = sum(cnts.values())
 #            freqs[lookup[i]] = [cnts.get(x, 0) / total for x in outcomes_lookup[i]]
@@ -468,7 +468,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 #        wildcard.update_probs(probs_in, bulk_probs, freqs, circuitList, lookup)
 #
 #    probs_dict = \
-#        {circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
+#        {circuitList[i]: bulk_probs.take(_tools.to_array(lookup[i]))
 #         for i in range(len(circuitList))}
 #    return probs_dict
 
@@ -595,7 +595,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #        ret = _np.empty((plaq_ds.rows, plaq_ds.cols), 'd')
 #        for (i, j, opstr, elIndices, _), (_, _, _, elIndices_ds, _) in zip(
 #                plaq_pr.iter_simplified(), plaq_ds.iter_simplified()):
-#            logLs = _tools.two_delta_loglfn(cnts[elIndices_ds], probs[elIndices],
+#            logLs = _tools.two_delta_logl_term(cnts[elIndices_ds], probs[elIndices],
 #                                            freqs[elIndices_ds], min_prob_clip)
 #            ret[i, j] = sum(logLs)  # sum all elements for each (i,j) pair
 #        return ret
@@ -808,21 +808,21 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         returned when `return_all==True`.
     """
     if isinstance(objfn_builder, str):
-        objfn_builder = _objfns.ObjectiveFunctionBuilder.simple(objfn_builder)
+        objfn_builder = _objfns.ObjectiveFunctionBuilder.create_from(objfn_builder)
 
     objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache)
     if wildcard:
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
-    fitqty = objfn.get_chi2k_distributed_qty(objfn.fn())
+    fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 
     aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
-    ds_gstrs = _tools.apply_aliases_to_circuit_list(circuit_list, aliases)
+    ds_gstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
     if hasattr(model, 'num_nongauge_params'):
         np = model.num_nongauge_params()
     else:
         np = model.num_params()
-    Ns = dataset.get_degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
+    Ns = dataset.degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitqty - k) / _np.sqrt(2 * k)
     if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))

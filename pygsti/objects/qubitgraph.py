@@ -290,7 +290,7 @@ class QubitGraph(object):
     def __len__(self):
         return len(self._nodeinds)
 
-    def get_node_names(self):
+    def node_names(self):
         """
         All the node labels of this graph.
 
@@ -582,7 +582,7 @@ class QubitGraph(object):
             All sets of `n` connected qubits.
         """
         connectedqubits = []
-        for combo in _itertools.combinations(self.get_node_names(), n):
+        for combo in _itertools.combinations(self.node_names(), n):
             if self.subgraph(list(combo)).are_glob_connected(combo):
                 connectedqubits.append(combo)
 
@@ -755,7 +755,7 @@ class QubitGraph(object):
 
         This matrix is indexed by the integer-index of each node label (as
         specified to __init__).  The list of index-ordered node labels is given
-        by :method:`get_node_names`.
+        by :method:`node_names`.
 
         Returns
         -------
@@ -772,7 +772,7 @@ class QubitGraph(object):
 
         This matrix is indexed by the integer-index of each node label (as
         specified to __init__).  The list of index-ordered node labels is given
-        by :method:`get_node_names`.
+        by :method:`node_names`.
 
         Returns
         -------
@@ -839,7 +839,7 @@ class QubitGraph(object):
         -------
         int or str
         """
-        if relative_nodelabel in self.get_node_names():
+        if relative_nodelabel in self.node_names():
             return relative_nodelabel  # relative_nodelabel is a valid absolute node label
         elif isinstance(relative_nodelabel, str) and relative_nodelabel.startswith("@"):
             # @<target_index> or @<target_index>+<direction>

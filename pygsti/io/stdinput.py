@@ -26,7 +26,7 @@ from .. import tools as _tools
 from . import CircuitParser as _CircuitParser
 
 
-def get_display_progress_fn(show_progress):
+def _create_display_progress_fn(show_progress):
     """
     Create and return a progress-displaying function.
 
@@ -351,7 +351,7 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        display_progress = get_display_progress_fn(show_progress)
+        display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
         looking_for = "circuit_line"; current_item = {}
 
@@ -372,6 +372,8 @@ class StdInputParser(object):
                                 % (filename, i_line, comment))
             return commentDict
 
+        last_circuit = last_commentDict = None
+
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
@@ -382,6 +384,20 @@ class StdInputParser(object):
                     dataline, comment = line[:i], line[i + 1:]
                 else:
                     dataline, comment = line, ""
+
+                if looking_for == "circuit_data_or_line":
+                    # Special confusing case:  lines that just have a circuit could be either the beginning of a
+                    # long-format (with times, reps, etc, lines) block OR could just be a circuit that doesn't have
+                    # any count data.  This case figures out which one based on the line that follows.
+                    if len(dataline) == 0 or dataline.split()[0] in ('times:', 'outcomes:', 'repetitions:', 'aux:'):
+                        looking_for = "circuit_data"  # blank lines shoudl process acumulated data
+                    else:
+                        # previous blank line was just a circuit without any data (*not* the beginning of a timestamped
+                        # section), so add it with zero counts (if we don't ignore it), and look for next circuit.
+                        looking_for = "circuit_line"
+                        if ignore_zero_count_lines is False and last_circuit is not None:
+                            dataset.add_count_dict(last_circuit, {}, aux=last_commentDict,
+                                                   record_zero_counts=record_zero_counts, update_ol=False)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
@@ -427,7 +443,8 @@ class StdInputParser(object):
                                                update_ol=False)  # for performance - to this once at the end.
                     else:
                         current_item['circuit'] = circuit
-                        looking_for = "circuit_data"
+                        looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
+                        last_circuit, last_commentDict = circuit, commentDict  # for circuit_data_or_line processing
 
                 elif looking_for == "circuit_data":
                     if len(line) == 0:
@@ -502,7 +519,7 @@ class StdInputParser(object):
         if 'BAD' in col_values:
             return  # indicates entire row is known to be bad (no counts)
 
-        #Note: can use set_unsafe here because count_dict is a OutcomeLabelDict and
+        #Note: can use setitem_unsafe here because count_dict is a OutcomeLabelDict and
         # by construction (see str_to_outcome in _extract_labels_from_col_labels) the
         # outcome labels in fill_info are *always* tuples.
         if fill_info is not None:
@@ -515,7 +532,7 @@ class StdInputParser(object):
                                    "could this be a frequency?" % iCol)
                 assert(not isinstance(col_values[iCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                count_dict.set_unsafe(outcomeLabel, col_values[iCol])
+                count_dict.setitem_unsafe(outcomeLabel, col_values[iCol])
 
             for outcomeLabel, iCol, iTotCol in freqCols:
                 if col_values[iCol] == '--' or col_values[iTotCol] == '--': continue  # skip blank sentinels
@@ -524,14 +541,14 @@ class StdInputParser(object):
                                    "could this be a count?" % iCol)
                 assert(not isinstance(col_values[iTotCol], tuple)), \
                     "Expanded-format count not allowed with column-key header"
-                count_dict.set_unsafe(outcomeLabel, col_values[iCol] * col_values[iTotCol])
+                count_dict.setitem_unsafe(outcomeLabel, col_values[iCol] * col_values[iTotCol])
 
             if impliedCountTotCol1Q[1] >= 0:
                 impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
                 if impliedOutcomeLabel == ('0',):
-                    count_dict.set_unsafe(('0',), col_values[impliedCountTotCol] - count_dict[('1',)])
+                    count_dict.setitem_unsafe(('0',), col_values[impliedCountTotCol] - count_dict[('1',)])
                 else:
-                    count_dict.set_unsafe(('1',), col_values[impliedCountTotCol] - count_dict[('0',)])
+                    count_dict.setitem_unsafe(('1',), col_values[impliedCountTotCol] - count_dict[('0',)])
 
         else:  # assume col_values is a list of (outcomeLabel, count) tuples
             for tup in col_values:
@@ -539,7 +556,7 @@ class StdInputParser(object):
                     ("Outcome labels must be specified with"
                      "count data when there's no column-key header")
                 assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-                count_dict.set_unsafe(tup[0], tup[1])
+                count_dict.setitem_unsafe(tup[0], tup[1])
         return count_dict
 
     def parse_multidatafile(self, filename, show_progress=True,
@@ -620,7 +637,7 @@ class StdInputParser(object):
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0), 1)
 
-        display_progress = get_display_progress_fn(show_progress)
+        display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
 
@@ -826,7 +843,7 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        display_progress = get_display_progress_fn(show_progress)
+        display_progress = _create_display_progress_fn(show_progress)
 
         with open(filename, 'r') as f:
             for (iLine, line) in enumerate(f):
@@ -866,7 +883,7 @@ def _eval_row_list(rows, b_complex):
                      'complex' if b_complex else 'd')
 
 
-def read_model(filename):
+def parse_model(filename):
     """
     Parse a model file into a Model object.
 

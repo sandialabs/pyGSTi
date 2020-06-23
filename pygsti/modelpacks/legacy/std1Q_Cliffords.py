@@ -40,7 +40,7 @@ expressions = ["I(Q0)", "X(pi/2,Q0):Y(pi/2,Q0)", "Y(-pi/2,Q0):X(-pi/2,Q0)",
                "X(pi,Q0):Y(-pi/2,Q0)", "Y(pi,Q0):X(pi/2,Q0)", "X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                "Y(pi/2,Q0)", "Y(pi,Q0):X(-pi/2,Q0)", "X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-_target_model = _setc.build_explicit_model([('Q0',)], gates, expressions)
+_target_model = _setc.create_explicit_model([('Q0',)], gates, expressions)
 
 _gscache = {("full", "auto"): _target_model}
 

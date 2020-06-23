@@ -5,11 +5,12 @@ from ..util import BaseCase
 
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.construction import build_operation
+from pygsti.construction.modelconstruction import _create_operation
 import pygsti.tools.basistools as bt
 from pygsti.objects import ExplicitOpModel, Basis
 
 from pygsti.tools import jamiolkowski as j
+
 
 class JamiolkowskiBasisTester(BaseCase):
     def setUp(self):
@@ -27,7 +28,7 @@ class JamiolkowskiBasisTester(BaseCase):
         self.stateSpaceLabels = [('Qhappy',), ('Lsad',)]
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
-        self.testGate = build_operation(self.stateSpaceDims,
+        self.testGate = _create_operation(self.stateSpaceDims,
                                         self.stateSpaceLabels,
                                         "LX(pi,0,2)",
                                         "std")
@@ -91,16 +92,16 @@ class JamiolkowskiOpsTester(BaseCase):
         self.mxPP = bt.change_basis(self.mxGM, self.gm, self.pp)
 
     def test_sum_of_negative_choi_evals(self):
-        sumOfNeg = j.sum_of_negative_choi_evals(std1Q.target_model())
+        sumOfNeg = j.sum_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertAlmostEqual(sumOfNeg, 0.0)
 
-        sumOfNegWt = j.sum_of_negative_choi_evals(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5})
+        sumOfNegWt = j.sum_of_negative_choi_eigenvalues(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5})
         # TODO assert correctness
 
-        sumsOfNeg = j.sums_of_negative_choi_evals(std1Q.target_model())
+        sumsOfNeg = j.sums_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3, 'd'))  # 3 gates in std.target_model()
 
-        magsOfNeg = j.mags_of_negative_choi_evals(std1Q.target_model())
+        magsOfNeg = j.magnitudes_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12, 'd'))  # 3 gates * 4 evals each = 12
 
     def test_fast_jamiolkowski_iso(self):

@@ -26,7 +26,7 @@ class InstrumentMethodBase(object):
                       [0, 1, 0, 0],
                       [0, 0, 0, 1],
                       [0, 0, 1, 0]], 'd'))
-        self.instrument.transform(T)
+        self.instrument.transform_inplace(T)
         # TODO assert correctness
 
     def test_simplify_operations(self):

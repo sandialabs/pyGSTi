@@ -66,12 +66,12 @@ class MultiDataSetMethodBase(object):
             self._assert_datasets_equal(a, b)
 
     def test_get_outcome_labels(self):
-        labels = self.mds.get_outcome_labels()
+        labels = self.mds.outcome_labels()
         # TODO assert correctness
 
     def test_get_datasets_aggregate(self):
         keyset = self.mds.keys()
-        sumDS = self.mds.get_datasets_aggregate(*keyset)
+        sumDS = self.mds.datasets_aggregate(*keyset)
         # TODO assert correctness
 
     def test_to_string(self):
@@ -89,7 +89,7 @@ class MultiDataSetMethodBase(object):
 
     def test_get_datasets_aggregate_raises_on_unknown_name(self):
         with self.assertRaises(ValueError):
-            self.mds.get_datasets_aggregate('ds1', 'foobar')
+            self.mds.datasets_aggregate('ds1', 'foobar')
 
     def test_add_dataset_raises_on_gate_mismatch(self):
         ds = DataSet(outcome_labels=['0', '1'])  # different operation sequences

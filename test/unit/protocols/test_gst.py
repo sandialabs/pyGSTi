@@ -7,7 +7,7 @@ from pygsti.objects.objectivefns import PoissonPicDeltaLogLFunction
 from pygsti.protocols import gst
 from pygsti.protocols.protocol import ProtocolData, Protocol
 from pygsti.protocols.estimate import Estimate
-from pygsti.construction import generate_fake_data, make_lsgst_experiment_list
+from pygsti.construction import simulate_data, create_lsgst_circuits
 from pygsti.tools import two_delta_logl_nsigma, two_delta_logl
 from pygsti.optimize.customlm import CustomLMOptimizer
 
@@ -22,11 +22,11 @@ class GSTUtilTester(BaseCase):
         mdl_target = smq1Q_XYI.target_model()
         mdl_datagen = mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
-        ds = generate_fake_data(mdl_datagen, gst_design.all_circuits_needing_data, 1000, seed=2020)
+        ds = simulate_data(mdl_datagen, gst_design.all_circuits_needing_data, 1000, seed=2020)
         data = ProtocolData(gst_design, ds)
         cls.results = gst.ModelEstimateResults(data, Protocol("test-protocol"))
         cls.results.add_estimate(
-            Estimate.gst_init(
+            Estimate.create_gst_estimate(
                 cls.results, mdl_target, mdl_target,
                 [mdl_datagen] * len(gst_design.circuit_lists), parameters={'objective': 'logl'}),
             estimate_key="test-estimate"
@@ -71,7 +71,7 @@ class GSTUtilTester(BaseCase):
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))
         res = self.results.copy()
-        gst.add_badfit_estimates(res, 'test-estimate', badfit_opts, builder, opt)
+        gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, builder, opt)
         estimate_names = set(res.estimates.keys())
         self.assertEqual(estimate_names, set(['test-estimate',
                                               'test-estimate.robust', 'test-estimate.Robust',
@@ -81,7 +81,7 @@ class GSTUtilTester(BaseCase):
     def test_add_gauge_opt(self):
         res = self.results.copy()
         unreliable = ()
-        gst.add_gauge_opt(res, 'test-estimate', 'stdgaugeopt', self.target_model, self.target_model, unreliable)
+        gst._add_gauge_opt(res, 'test-estimate', 'stdgaugeopt', self.target_model, self.target_model, unreliable)
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].models)
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].goparameters)
 
@@ -111,11 +111,11 @@ class GSTInitialModelTester(BaseCase):
         pass  # TODO
 
     def test_create_from(self):
-        im = gst.GSTInitialModel.create_from(None)  # default is to use the target
-        im2 = gst.GSTInitialModel.create_from(im)
+        im = gst.GSTInitialModel.cast(None)  # default is to use the target
+        im2 = gst.GSTInitialModel.cast(im)
         self.assertTrue(im2 is im)
 
-        im3 = gst.GSTInitialModel.create_from(self.target_model)
+        im3 = gst.GSTInitialModel.cast(self.target_model)
         self.assertEqual(im3.starting_point, "User-supplied-Model")
 
     def test_get_model_target(self):
@@ -144,10 +144,10 @@ class GSTInitialModelTester(BaseCase):
     def test_get_model_lgst(self):
         #LGST
         datagen_model = self.target_model.depolarize(op_noise=0.1)
-        lgst_circuits = make_lsgst_experiment_list(self.target_model,
+        lgst_circuits = create_lsgst_circuits(self.target_model,
                                                    smq1Q_XYI.prep_fiducials(),
                                                    smq1Q_XYI.meas_fiducials(), [], [1])
-        ds = generate_fake_data(datagen_model, lgst_circuits, 1000, sample_error='none')  # no error for reproducibility
+        ds = simulate_data(datagen_model, lgst_circuits, 1000, sample_error='none')  # no error for reproducibility
 
         im1 = gst.GSTInitialModel(self.target_model, "LGST")
         mdl1 = im1.get_model(self.target_model, self.target_model, lgst_circuits, ds, None, None)
@@ -165,11 +165,11 @@ class GSTBadFitOptionsTester(BaseCase):
     """
 
     def test_create_from(self):
-        bfo = gst.GSTBadFitOptions.create_from(None)
-        bfo2 = gst.GSTBadFitOptions.create_from(bfo)
+        bfo = gst.GSTBadFitOptions.cast(None)
+        bfo2 = gst.GSTBadFitOptions.cast(bfo)
         self.assertTrue(bfo2 is bfo)
 
-        bfo3 = gst.GSTBadFitOptions.create_from({'threshold': 3.0, 'actions': ('wildcard',)})
+        bfo3 = gst.GSTBadFitOptions.cast({'threshold': 3.0, 'actions': ('wildcard',)})
         self.assertEqual(bfo3.threshold, 3.0)
         self.assertEqual(bfo3.actions, ('wildcard',))
 
@@ -180,28 +180,28 @@ class GSTObjFnBuildersTester(BaseCase):
     """
 
     def test_create_from(self):
-        builders0 = gst.GSTObjFnBuilders.create_from(None)
-        builders = gst.GSTObjFnBuilders.create_from(builders0)
+        builders0 = gst.GSTObjFnBuilders.cast(None)
+        builders = gst.GSTObjFnBuilders.cast(builders0)
         self.assertTrue(builders is builders0)
 
-        builders = gst.GSTObjFnBuilders.create_from([('A', 'B'), ('C', 'D')])  # pass args as tuple
+        builders = gst.GSTObjFnBuilders.cast([('A', 'B'), ('C', 'D')])  # pass args as tuple
         self.assertEqual(builders.iteration_builders, ('A', 'B'))
         self.assertEqual(builders.final_builders, ('C', 'D'))
 
     def test_init_simple(self):
-        builders = gst.GSTObjFnBuilders.init_simple()
+        builders = gst.GSTObjFnBuilders.create_from()
         self.assertEqual(len(builders.iteration_builders), 1)
         self.assertEqual(len(builders.final_builders), 1)
 
-        builders = gst.GSTObjFnBuilders.init_simple('logl', always_perform_mle=True)
+        builders = gst.GSTObjFnBuilders.create_from('logl', always_perform_mle=True)
         self.assertEqual(len(builders.iteration_builders), 2)
         self.assertEqual(len(builders.final_builders), 0)
 
-        builders = gst.GSTObjFnBuilders.init_simple('logl', always_perform_mle=True, only_perform_mle=True)
+        builders = gst.GSTObjFnBuilders.create_from('logl', always_perform_mle=True, only_perform_mle=True)
         self.assertEqual(len(builders.iteration_builders), 1)
         self.assertEqual(len(builders.final_builders), 0)
 
-        builders = gst.GSTObjFnBuilders.init_simple('logl', freq_weighted_chi2=True)
+        builders = gst.GSTObjFnBuilders.create_from('logl', freq_weighted_chi2=True)
         self.assertEqual(builders.iteration_builders[0].cls_to_build, FreqWeightedChi2Function)
 
 
@@ -213,7 +213,7 @@ class BaseProtocolData(object):
         cls.mdl_target = smq1Q_XYI.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
-        ds = generate_fake_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 1000, sample_error='none')
+        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 1000, sample_error='none')
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
 
@@ -307,7 +307,7 @@ class StandardGSTTester(BaseProtocolData, BaseCase):
 #        raise NotImplementedError()  # TODO: test dataset
 #
 #    def test_as_nameddict(self):
-#        raise NotImplementedError()  # TODO: test as_nameddict
+#        raise NotImplementedError()  # TODO: test to_nameddict
 #
 #    def test_add_estimates(self):
 #        raise NotImplementedError()  # TODO: test add_estimates

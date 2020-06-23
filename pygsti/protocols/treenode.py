@@ -81,7 +81,7 @@ class TreeNode(object):
             #if meta_subdir:
             submeta_dir = subobj_dir / meta_subdir
             if submeta_dir.exists():  # It's ok if not all possible sub-nodes exist
-                self._vals[nm] = _io.cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self,
+                self._vals[nm] = _io.metadir._cls_from_meta_json(submeta_dir).from_dir(subobj_dir, parent=self,
                                                                               name=nm, **kwargs)
             #else:  # if meta_subdir is None, we default to the same class as self
             #    self._vals[nm] = self.__class__.from_dir(subobj_dir, parent=self, name=nm)
@@ -115,7 +115,7 @@ class TreeNode(object):
     def _create_childval(self, key):
         raise NotImplementedError("Derived class needs to implement _create_childval to create valid key: %s" % key)
 
-    def get_tree_paths(self):
+    def underlying_tree_paths(self):
         """
         Dictionary paths leading to data objects/nodes beneath this one.
 
@@ -127,7 +127,7 @@ class TreeNode(object):
         """
         paths = [()]  # path to self
         for child_name, child_node in self.items():
-            paths.extend([(child_name,) + pth for pth in child_node.get_tree_paths()])
+            paths.extend([(child_name,) + pth for pth in child_node.underlying_tree_paths()])
         return paths
 
     def view(self, keys_to_keep):
@@ -149,7 +149,7 @@ class TreeNode(object):
         view._vals = {k: self[k] for k in keys_to_keep}
         return view
 
-    def filter_paths(self, paths, paths_are_sorted=False):
+    def prune_tree(self, paths, paths_are_sorted=False):
         """
         Prune the tree rooted here to include only the given paths, discarding all other leaves & branches.
 
@@ -177,14 +177,14 @@ class TreeNode(object):
         children_to_keep = {}
         while i < npaths:
             assert(len(sorted_paths[i]) > 0), \
-                "Cannot select a TreeNode *and* some/all of its elements using filter_paths!"
+                "Cannot select a TreeNode *and* some/all of its elements using prune_tree!"
             ky = sorted_paths[i][0]
 
             paths_starting_with_ky = []
             while i < npaths and sorted_paths[i][0] == ky:
                 paths_starting_with_ky.append(sorted_paths[i][1:])
                 i += 1
-            children_to_keep[ky] = self[ky].filter_paths(paths_starting_with_ky, True)
+            children_to_keep[ky] = self[ky].prune_tree(paths_starting_with_ky, True)
 
         #assert(len(children_to_keep) > 0)
         view = _copy.deepcopy(self)  # copies type of this tree node
@@ -214,7 +214,7 @@ class TreeNode(object):
         # #  write_subdir_json = True  # True only for the "master" type that defines the directory keys ('edesign')
         # self.write_children(dirname, write_subdir_json)
 
-    def write_children(self, dirname, write_subdir_json=True):
+    def _write_children(self, dirname, write_subdir_json=True):
         """
         Writes this node's children to directories beneath `dirname`.
 
