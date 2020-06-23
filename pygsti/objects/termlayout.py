@@ -30,12 +30,12 @@ class _TermCOPALayoutAtom(_DistributableAtom):
     def __init__(self, unique_complete_circuits, ds_circuits, group, model_shlp, dataset,
                  offset, elindex_outcome_tuples):
 
-        expanded_circuit_outcomes_by_orig = _collections.OrderedDict()
+        expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
             d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
-            expanded_circuit_outcomes_by_orig[i] = d
+            expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 
         self.expanded_circuits = list(expanded_circuit_outcomes.keys())  # a list of SeparatePOVMCircuits
@@ -44,7 +44,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         all_rholabels = set()
         all_oplabels = set()
         all_elabels = set()
-        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.values():
+        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.values():
             for sep_povm_c in expanded_circuit_outcomes:
                 all_rholabels.add(sep_povm_c.circuit_without_povm[0])
                 all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
@@ -62,7 +62,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
 
         #Assign element indices, "global" indices starting at `offset`
         local_offset = 0
-        for orig_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_orig.items():
+        for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
             for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
                 elindices = list(range(local_offset, local_offset + len(outcomes)))
@@ -130,7 +130,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         groups = [set(sub_array) for sub_array in _np.array_split(range(len(unique_complete_circuits)), ngroups)]
 
         atoms = []
-        elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
+        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
 
         offset = 0
         for group in groups:
