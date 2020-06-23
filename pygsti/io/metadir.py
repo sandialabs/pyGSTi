@@ -133,7 +133,7 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     def should_skip_loading(path):
         return quick_load and (path.stat().st_size >= max_size)
 
-    with open(root_dir / 'meta.json', 'r') as f:
+    with open(str(root_dir / 'meta.json'), 'r') as f:
         meta = _json.load(f)
 
         #Convert lists => tuples, as we prefer immutable tuples
@@ -196,10 +196,10 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
             elif typ == 'text-circuit-list':
                 val = _load.load_circuit_list(pth)
             elif typ == 'json':
-                with open(pth, 'r') as f:
+                with open(str(pth), 'r') as f:
                     val = _json.load(f)
             elif typ == 'pickle':
-                with open(pth, 'rb') as f:
+                with open(str(pth), 'rb') as f:
                     val = _pickle.load(f)
             else:
                 raise ValueError("Invalid aux-file type: %s" % typ)
@@ -304,17 +304,17 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
             elif typ == 'text-circuit-list':
                 _write.write_circuit_list(pth, val)
             elif typ == 'json':
-                with open(pth, 'w') as f:
+                with open(str(pth), 'w') as f:
                     _json.dump(val, f)
             elif typ == 'pickle':
-                with open(pth, 'wb') as f:
+                with open(str(pth), 'wb') as f:
                     _pickle.dump(val, f)
             elif typ in ('none', 'reset'):
                 pass
             else:
                 raise ValueError("Invalid aux-file type: %s" % typ)
 
-    with open(root_dir / 'meta.json', 'w') as f:
+    with open(str(root_dir / 'meta.json'), 'w') as f:
         _json.dump(meta, f)
 
 
@@ -331,7 +331,7 @@ def _cls_from_meta_json(dirname):
     -------
     class
     """
-    with open(_pathlib.Path(dirname) / 'meta.json', 'r') as f:
+    with open(str(_pathlib.Path(dirname) / 'meta.json'), 'r') as f:
         meta = _json.load(f)
     return _class_for_name(meta['type'])  # class of object to create
 
@@ -356,7 +356,7 @@ def _obj_to_meta_json(obj, dirname):
     None
     """
     meta = {'type': _full_class_name(obj)}
-    with open(_pathlib.Path(dirname) / 'meta.json', 'w') as f:
+    with open(str(_pathlib.Path(dirname) / 'meta.json'), 'w') as f:
         _json.dump(meta, f)
 
 
@@ -424,10 +424,10 @@ def _read_json_or_pkl_files_to_dict(dirname):
     ret = {}
     for pth in dirname.iterdir():
         if pth.suffix == '.json':
-            with open(pth, 'r') as f:
+            with open(str(pth), 'r') as f:
                 val = _json.load(f)
         elif pth.suffix == '.pkl':
-            with open(pth, 'rb') as f:
+            with open(str(pth), 'rb') as f:
                 val = _pickle.load(f)
         else:
             continue  # ignore cache file times we don't understand
@@ -466,5 +466,5 @@ def write_dict_to_json_or_pkl_files(d, dirname):
         #        _json.dump(val, f)
         #except:
         #try to remove partial json file??
-        with open(dirname / (key + '.pkl'), 'wb') as f:
+        with open(str(dirname / (key + '.pkl')), 'wb') as f:
             _pickle.dump(val, f)
