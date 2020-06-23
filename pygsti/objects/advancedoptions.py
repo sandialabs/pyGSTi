@@ -79,7 +79,7 @@ class GSTAdvancedOptions(AdvancedOptions):
         'cptp_penalty_factor',
         'depolarize_start',
         'distribute_method',
-        'estimate_label'
+        'estimate_label',
         'extra_lm_opts',
         'finitediff_iterations',
         'germ_length_limits',

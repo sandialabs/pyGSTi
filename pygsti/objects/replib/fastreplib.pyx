@@ -418,7 +418,7 @@ cdef class DMStateRep: #(StateRep):
         reducefix = 1 if self.base.flags.writeable else 2
         return (DMStateRep, (self.base, reducefix))
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     @property
@@ -568,14 +568,13 @@ cdef class DMOpRep:
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = DMStateRep(np.ascontiguousarray(v,'d'))
-            return self.acton(in_state).todense()
+            return self.acton(in_state).to_dense()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = DMStateRep(np.ascontiguousarray(v,'d'))
             return self.adjoint_acton(in_state).todense()
         dim = self.c_op._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
-
 
 
 cdef class DMOpRepDense(DMOpRep):
@@ -827,7 +826,7 @@ cdef class SVStateRep: #(StateRep):
     def dim(self):
         return self.c_state._dim
 
-    def todense(self):
+    def to_dense(self):
         return self.base
 
     def __dealloc__(self):

@@ -322,7 +322,7 @@ def compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
 
 
 
-def prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
+def prs_as_polynomials(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
                  int stabilizer_evo):
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
@@ -561,7 +561,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                     rhoVecR = factor.post_ops[j].acton(rhoVecR)
                 rightSaved[i] = rhoVecR
 
-                coeff = mult_polys(coeff, factor_coeff_lists[i][b[i]],
+                coeff = mult_polynomials(coeff, factor_coeff_lists[i][b[i]],
                                    max_poly_vars, max_poly_order)
                 coeffSaved[i] = coeff
 
@@ -594,12 +594,12 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
                 pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
 
-            result = mult_polys(coeff, factor_coeff_lists[last_index][b[last_index]],
+            result = mult_polynomials(coeff, factor_coeff_lists[last_index][b[last_index]],
                                max_poly_vars, max_poly_order)
             scale_poly(result, (pLeft * pRight) )
             final_factor_indx = b[last_index]
             Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-            add_polys_inplace(deref(prps)[Ei], result)
+            add_polynomials_inplace(deref(prps)[Ei], result)
 
             #assert(debug < 100) #DEBUG
 
@@ -635,7 +635,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             #checkpolys(coeff, coeff_check)
 
             for i in range(1,nFactorLists):
-                coeff = mult_polys(coeff, factor_coeff_lists[i][b[i]],
+                coeff = mult_polynomials(coeff, factor_coeff_lists[i][b[i]],
                                    max_poly_vars, max_poly_order)
 
                 #CHECK POLY MATH
@@ -712,7 +712,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             #if prps_chk[Ei] is None:  prps_chk[Ei] = res
             #else:                    prps_chk[Ei] += res
 
-            add_polys_inplace(deref(prps)[Ei], result)
+            add_polynomials_inplace(deref(prps)[Ei], result)
 
             #CHECK POLY MATH
             #print "\n---------- PRPS Check ----------",Ei
@@ -732,7 +732,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
         #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
 
-cdef unordered_map[int, complex] mult_polys(unordered_map[int, complex]& poly1,
+cdef unordered_map[int, complex] mult_polynomials(unordered_map[int, complex]& poly1,
                                             unordered_map[int, complex]& poly2,
                                             int max_poly_vars, int max_poly_order):
     cdef unordered_map[int, complex].iterator it1, it2
@@ -755,7 +755,7 @@ cdef unordered_map[int, complex] mult_polys(unordered_map[int, complex]& poly1,
     return result
 
 
-cdef void add_polys_inplace(unordered_map[int, complex]& poly1,
+cdef void add_polynomials_inplace(unordered_map[int, complex]& poly1,
                             unordered_map[int, complex]& poly2):
     """ poly1 += poly2 """
     cdef unordered_map[int, complex].iterator it2, itk
@@ -814,7 +814,7 @@ cdef mult_vinds_ints(int i1, int i2, int max_num_vars, int max_order):
     stdsort(vinds1.begin(),vinds1.end())
     return vinds_to_int(vinds1, max_num_vars, max_order)
 
-def checkpolys(unordered_map[int,complex] coeff, coeff_check):
+def check_polynomials(unordered_map[int,complex] coeff, coeff_check):
     cdef int mismatch = 0
     cdef unordered_map[int,complex].iterator it = coeff.begin()
     while it != coeff.end():

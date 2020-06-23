@@ -1,4 +1,4 @@
-from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, run_notebook
+from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, _make_test
 from nose.plugins.attrib import attr
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -34,8 +34,4 @@ def test_tutorials():
 
         # Emit a test for each notebook
         for nb_path in notebooks_in_path(_TUTORIALS_ROOT):
-            rel_path = nb_path.relative_to(_TUTORIALS_ROOT)
-            workdir = tmp_path / rel_path.parent
-            workdir.mkdir(parents=True, exist_ok=True)
-            description = "Running notebook {}".format(rel_path)
-            yield attr(description=description)(run_notebook), nb_path, workdir
+            yield _make_test(nb_path, tmp_path, _TUTORIALS_ROOT)

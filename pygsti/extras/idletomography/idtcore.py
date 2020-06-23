@@ -18,6 +18,7 @@ from ... import construction as _cnst
 from ... import objects as _objs
 from ... import tools as _tools
 from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ...construction import modelconstruction as _modelconstruction
 
 from . import pauliobjs as _pobjs
 from . import idttools as _idttools
@@ -607,8 +608,12 @@ def determine_paulidicts(model):
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _objs.BuiltinBasis('pp', 4)
-    Gx = _cnst._basis_create_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").to_dense()
-    Gy = _cnst._basis_create_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").to_dense()
+    Gx = _modelconstruction._basis_create_operation(
+        [('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static"
+    ).to_dense()
+    Gy = _modelconstruction._basis_create_operation(
+        [('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static"
+    ).to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}

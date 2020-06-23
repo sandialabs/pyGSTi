@@ -3393,11 +3393,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         for i, _ in enumerate(dslabels):
             for j, _ in enumerate(dslabels[i + 1:], start=i + 1):
                 dsc = dsc_dict.get((i, j), dsc_dict.get((j, i), None))
-                val = dsc.aggregate_nsigma if (dsc is not None) else None
+                val = dsc.aggregate_nsigma() if (dsc is not None) else None
                 nSigmaMx[i, j] = nSigmaMx[j, i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
-                val = dsc.aggregate_llr if (dsc is not None) else None
+                val = dsc.aggregate_llr() if (dsc is not None) else None
                 logLMx[i, j] = logLMx[j, i] = val
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
 

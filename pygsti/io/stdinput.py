@@ -372,6 +372,8 @@ class StdInputParser(object):
                                 % (filename, i_line, comment))
             return commentDict
 
+        last_circuit = last_commentDict = None
+
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
@@ -382,6 +384,20 @@ class StdInputParser(object):
                     dataline, comment = line[:i], line[i + 1:]
                 else:
                     dataline, comment = line, ""
+
+                if looking_for == "circuit_data_or_line":
+                    # Special confusing case:  lines that just have a circuit could be either the beginning of a
+                    # long-format (with times, reps, etc, lines) block OR could just be a circuit that doesn't have
+                    # any count data.  This case figures out which one based on the line that follows.
+                    if len(dataline) == 0 or dataline.split()[0] in ('times:', 'outcomes:', 'repetitions:', 'aux:'):
+                        looking_for = "circuit_data"  # blank lines shoudl process acumulated data
+                    else:
+                        # previous blank line was just a circuit without any data (*not* the beginning of a timestamped
+                        # section), so add it with zero counts (if we don't ignore it), and look for next circuit.
+                        looking_for = "circuit_line"
+                        if ignore_zero_count_lines is False and last_circuit is not None:
+                            dataset.add_count_dict(last_circuit, {}, aux=last_commentDict,
+                                                   record_zero_counts=record_zero_counts, update_ol=False)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
@@ -427,7 +443,8 @@ class StdInputParser(object):
                                                update_ol=False)  # for performance - to this once at the end.
                     else:
                         current_item['circuit'] = circuit
-                        looking_for = "circuit_data"
+                        looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
+                        last_circuit, last_commentDict = circuit, commentDict  # for circuit_data_or_line processing
 
                 elif looking_for == "circuit_data":
                     if len(line) == 0:
