@@ -14,6 +14,7 @@ import sys
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from pygsti.construction import modelconstruction, nqnoiseconstruction
 
 #from .nqubitconstruction import *
 
@@ -74,7 +75,7 @@ class NQubitTestCase(BaseTestCase):
                                       roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction._create_xycnot_cloudnoise_circuits(
+        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -101,7 +102,7 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction._create_xycnot_cloudnoise_circuits(
+        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -279,7 +280,7 @@ class NQubitTestCase(BaseTestCase):
         basis1Q = pygsti.obj.Basis.cast("pp",4)
         basisNQ = pygsti.obj.Basis.cast("pp",4**nQubits)
         for i in range(nQubits):
-            effects = [ (l,pygsti.construction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
+            effects = [ (l,modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
             factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
         povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
         print(list(povm.keys()))
@@ -292,10 +293,10 @@ class NQubitTestCase(BaseTestCase):
         print("Post adding noise:"); print(povm)
 
         mdl = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
-        prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction._basis_create_spam_vector("0", basis1Q))
+        prepFactors = [ pygsti.obj.TPSPAMVec(modelconstruction._basis_create_spam_vector("0", basis1Q))
                         for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
-        # OR one big prep: mdl.preps['rho0'] = pygsti.construction._basis_create_spam_vector("0", basisNQ)
+        # OR one big prep: mdl.preps['rho0'] = modelconstruction._basis_create_spam_vector("0", basisNQ)
 
         print("Before adding to model:")
         print(" povm.gpindices = ",povm.gpindices, "parent is None?", bool(povm.parent is None))

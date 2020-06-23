@@ -2603,7 +2603,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     for i, j in pairs:
                         matched_target_evals[i] = target_evals[j]
                     target_evals = matched_target_evals
-                    target_evals = target_evals.reshape(evals.value.shape)
+                    target_evals = target_evals.reshape(evals.value().shape)
                     # b/c evals have shape (x,1) and targets (x,),
                     # which causes problems when we try to subtract them
 

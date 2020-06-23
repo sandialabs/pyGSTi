@@ -64,22 +64,22 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
         #Assign element indices, starting at `offset`
         # now that we know how many of each spamtuple there are, assign final element indices.
-        initial_offset = offset
+        local_offset = 0
         self.indices_by_spamtuple = {}  # values are (element_indices, tree_indices) tuples.
         for spam_tuple, tree_indices in tree_indices_by_spamtuple.items():
-            self.indices_by_spamtuple[spam_tuple] = (slice(offset, offset + len(tree_indices)),
+            self.indices_by_spamtuple[spam_tuple] = (slice(local_offset, local_offset + len(tree_indices)),
                                                      _slct.list_to_slice(tree_indices, array_ok=True))
-            offset += len(tree_indices)
+            local_offset += len(tree_indices)
             #TODO: allow tree_indices to be None or a slice?
 
-        element_slice = slice(initial_offset, offset)
-        num_elements = offset - initial_offset
+        element_slice = slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
+        num_elements = local_offset
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), _slct.to_array(tree_indices)):
                 outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
                 outcome, orig_i = outcome_by_spamtuple[spam_tuple]
-                elindex_outcome_tuples[orig_i].append((elindex, outcome))
+                elindex_outcome_tuples[orig_i].append((offset + elindex, outcome))  # put *global* element indices here
 
         super().__init__(element_slice, num_elements)
 

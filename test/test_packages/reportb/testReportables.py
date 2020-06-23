@@ -24,7 +24,7 @@ class TestReportables(BaseTestCase):
         self.assertAlmostEqual(rptbl._project_to_valid_prob(0.5), 0.5)
 
         nan_qty = rptbl.evaluate(None) # none function -> nan qty
-        self.assertTrue( np.isnan(nan_qty.value) )
+        self.assertTrue( np.isnan(nan_qty.value()) )
 
         #deprecated:
         rptbl.decomposition( std.target_model().operations['Gx'] )

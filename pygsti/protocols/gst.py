@@ -1964,7 +1964,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
     #even if this is is exposed differently.
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None):
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
         """
         Initialize a new ModelEstimateResults object from `dirname` / results / `name`.
 
@@ -1984,11 +1984,16 @@ class ModelEstimateResults(_proto.ProtocolResults):
             is already loaded, it can be passed in here.  Otherwise leave this
             as None and it will be loaded.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
         Returns
         -------
         ModelEstimateResults
         """
-        ret = super().from_dir(dirname, name, preloaded_data)  # loads members, but doesn't create parent "links"
+        ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members, but doesn't create parent "links"
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
         return ret

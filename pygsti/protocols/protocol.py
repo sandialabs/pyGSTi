@@ -1278,10 +1278,7 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                # Note: setting with_times and ignore_zero_count_lines allows proper loading of circuits without data,
-                #  but we may want to update this in the future so we can load time-dependent data.
-                dataset = _io.load_dataset(dataset_files[0], with_times=False, ignore_zero_count_lines=False,
-                                           verbosity=0)
+                dataset = _io.load_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
             else:
                 dataset = {pth.stem: _io.load_dataset(pth, with_times=False, ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
@@ -1291,7 +1288,7 @@ class ProtocolData(_TreeNode):
                 #dataset = _objs.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
-        cache = _io._read_json_or_pkl_files_to_dict(data_dir / 'cache')
+        cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
         ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
@@ -1440,7 +1437,7 @@ class ProtocolData(_TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _io._obj_to_meta_json(self, data_dir)
+        _io.metadir._obj_to_meta_json(self, data_dir)
 
         if parent is None:
             self.edesign.write(dirname)  # otherwise assume parent has already written edesign
@@ -1856,7 +1853,7 @@ class ProtocolResultsDir(_TreeNode):
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
-                    results[pth.name] = _io._cls_from_meta_json(pth).from_dir(
+                    results[pth.name] = _io.metadir._cls_from_meta_json(pth).from_dir(
                         dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
@@ -1941,7 +1938,7 @@ class ProtocolResultsDir(_TreeNode):
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _io._obj_to_meta_json(self, results_dir)
+        _io.metadir._obj_to_meta_json(self, results_dir)
 
         #write the results
         for name, results in self.for_protocol.items():
