@@ -251,11 +251,11 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
 
 
 def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, germs, max_lengths,
-                     fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
-                     keep_fraction=1, keep_seed=None, include_lgst=True,
-                     op_label_aliases=None, sequence_rules=None,
-                     dscheck=None, action_if_missing="raise", germ_length_limits=None,
-                     verbosity=0):
+                               fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                               keep_fraction=1, keep_seed=None, include_lgst=True,
+                               op_label_aliases=None, sequence_rules=None,
+                               dscheck=None, action_if_missing="raise", germ_length_limits=None,
+                               verbosity=0):
     """
     Create a set of long-sequence GST circuit lists (including structure).
 
@@ -488,14 +488,14 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     line_labels = germs[0].line_labels if len(germs) > 0 \
         else (prep_fiducials + meas_fiducials)[0].line_labels   # if an empty germ list, base line_labels off fiducials
 
-    empty_germ = _Circuit((), line_labels, stringrep="{}")
+    empty_germ = _Circuit((), line_labels)  # , stringrep="{}@(%s)" % ','.join(map(str, line_labels)))
     if include_lgst and empty_germ not in germs: germs = [empty_germ] + germs
 
     if nest:
         #keep track of running quantities used to build circuit structures
         running_plaquette_keys = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
         running_plaquettes = {}
-        running_unindexed = {}
+        running_unindexed = []
         running_maxLens = []
 
     lsgst_structs = []  # list of circuit structures to return
@@ -626,9 +626,9 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
 
 def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
-                               max_length_list, fid_pairs=None,
-                               trunc_scheme="whole germ powers", keep_fraction=1,
-                               keep_seed=None, include_lgst=True):
+                          max_length_list, fid_pairs=None,
+                          trunc_scheme="whole germ powers", keep_fraction=1,
+                          keep_seed=None, include_lgst=True):
     """
     List all the circuits (i.e. experiments) required for long-sequence GST (LSGST).
 
@@ -704,8 +704,8 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
     """
     nest = True  # => the final list contains all of the strings
     return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list,
-                            max_length_list, fid_pairs, trunc_scheme, nest,
-                            keep_fraction, keep_seed, include_lgst)[-1]
+                                      max_length_list, fid_pairs, trunc_scheme, nest,
+                                      keep_fraction, keep_seed, include_lgst)[-1]
 
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')

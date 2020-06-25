@@ -615,6 +615,16 @@ class Circuit(object):
         else:
             return self._str
 
+    @property
+    def layerstr(self):
+        """ Just the string representation of the circuit layers (no '@<line_labels>' suffix) """
+        return self._labels_lines_str()[0]
+
+    @property
+    def linesstr(self):
+        """ Just the string representation of the circuit's line labels (the '@<line_labels>' suffix) """
+        return self._labels_lines_str()[1]
+
     def _labels_lines_str(self):
         """ Split the string representation up into layer-labels & line-labels parts """
         if '@' in self.str:

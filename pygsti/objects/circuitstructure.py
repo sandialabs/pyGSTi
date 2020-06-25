@@ -57,7 +57,7 @@ v        indices and :class:`Circuit` values.
 
     @property
     def circuits(self):
-        return self.elements.values()
+        yield from self.elements.values()
 
     def __iter__(self):
         """
@@ -199,7 +199,7 @@ v        indices and :class:`Circuit` values.
 
     def element_label(self, irow, icol):
         c = self.elements.get((irow, icol), None)
-        return f"{c.str}" if (c is not None) else ""
+        return f"{c.layerstr}" if (c is not None) else ""
 
 
 class FiducialPairPlaquette(CircuitPlaquette):
@@ -330,14 +330,14 @@ class FiducialPairPlaquette(CircuitPlaquette):
         return FiducialPairPlaquette(self.base, self.fidpairs, self.num_rows, self.num_cols, aliases)
 
     def summary_label(self):
-        return "{}" if len(self.base) == 0 else f"{self.base.str}"
+        return "{}" if len(self.base) == 0 else f"{self.base.layerstr}"
 
     def element_label(self, irow, icol):
         prep, meas = self.fidpairs.get((irow, icol), (None, None))
         if prep is None or meas is None:
             return ""
         else:
-            return f"{prep.str} + " + self.summary_label() + f" + {meas.str}"
+            return f"{prep.layerstr} + " + self.summary_label() + f" + {meas.layerstr}"
 
 
 class GermFiducialPairPlaquette(FiducialPairPlaquette):
@@ -472,7 +472,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         if len(self.germ) == 0 or self.power == 0:
             return "{}"
         else:
-            return f"({self.germ.str})<sup>{self.power}</sup>"
+            return f"({self.germ.layerstr})<sup>{self.power}</sup>"
 
 
 class PlaquetteGridCircuitStructure(_BulkCircuitList):
@@ -510,7 +510,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
             name = circuits_or_structure.name
         else:
             op_label_aliases = weights_dict = name = None
-            
+
         return cls({}, [], [], circuits_or_structure,
                    op_label_aliases, weights_dict, name)
 
@@ -531,13 +531,18 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         self._additional_circuits = tuple(sorted(additional))
 
         circuits = sorted(circuits)
-        circuit_weights = _np.array([circuit_weights_dict.get(c, 0.0) for c in circuits], 'd')
+        circuit_weights = None if (circuit_weights_dict is None) else \
+            _np.array([circuit_weights_dict.get(c, 0.0) for c in circuits], 'd')
         super().__init__(circuits, op_label_aliases, circuit_weights, name)
+
+    @property
+    def plaquettes(self):
+        return self._plaquettes
 
     def iter_plaquettes(self):
         yield from self._plaquettes.items()
 
-    def plaquette(self, x, y):
+    def plaquette(self, x, y, empty_if_missing=False):
         """
         The plaquette at `(x,y)`.
 
@@ -549,10 +554,17 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         y : various
             y-value (not index)
 
+        empty_if_missing : bool, optional
+            Whether an empty (0-element) plaquette
+            should be returned when the requested `(x,y)` is
+            missing.
+
         Returns
         -------
         CircuitPlaquette
         """
+        if empty_if_missing and (x, y) not in self._plaquettes:
+            return CircuitPlaquette([], 0, 0)  # an empty plaquette
         return self._plaquettes[(x, y)]
 
     @property
@@ -564,7 +576,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         -------
         list
         """
-        return [x for x in self.xs if any([len(self.plaquette(x, y)) > 0
+        return [x for x in self.xs if any([len(self.plaquette(x, y, True)) > 0
                                            for y in self.ys])]
 
     @property
@@ -576,7 +588,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         -------
         list
         """
-        return [y for y in self.ys if any([len(self.plaquette(x, y)) > 0
+        return [y for y in self.ys if any([len(self.plaquette(x, y, True)) > 0
                                            for x in self.xs])]
 
     def truncate(self, xs_to_keep=None, ys_to_keep=None, circuits_to_keep=None):

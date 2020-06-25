@@ -475,7 +475,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
 #@smart_cached
 def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
-    subMxs = [[sub_mx_creation_fn(gss.get_plaquette(x, y), x, y, sub_mx_creation_fn_extra_arg)
+    subMxs = [[sub_mx_creation_fn(gss.plaquette(x, y, True), x, y, sub_mx_creation_fn_extra_arg)
                for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs

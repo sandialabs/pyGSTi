@@ -30,6 +30,7 @@ import plotly
 import plotly.graph_objs as go
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -50,7 +51,7 @@ else:
 #from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
-                  prec=0, hover_label_fn=None, hover_labels=None):
+                   prec=0, hover_label_fn=None, hover_labels=None):
     """
     Create a color box plot.
 
@@ -674,7 +675,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     gstrs = set()  # to eliminate duplicate strings
     for ix, x in enumerate(g.used_xs):
         for iy, y in enumerate(g.used_ys):
-            plaq = g.get_plaquette(x, y)
+            plaq = g.plaquette(x, y, True)
             if sum_up:
                 if plaq.base not in gstrs:
                     tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
