@@ -11,7 +11,6 @@ Circuit list for bulk computation
 #***************************************************************************************************
 import uuid as _uuid
 
-from .circuitstructure import LsGermsStructure as _LsGermsStructure
 from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
 
@@ -81,7 +80,6 @@ class BulkCircuitList(list):
         name : str, optional
             An optional name for this list, used for status messages.
         """
-        #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
         super().__init__(map(_Circuit.cast, circuits))
         self.op_label_aliases = op_label_aliases
         self.circuit_weights = circuit_weights

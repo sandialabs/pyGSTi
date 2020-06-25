@@ -44,7 +44,7 @@ from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from ..objects.label import Label as _Lbl
 from ..objects.polynomial import Polynomial as _Polynomial
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.ciruitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
 from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
@@ -2413,9 +2413,9 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     Returns
     -------
-    LsGermsSerialStructure
+    PlaquetteGridCircuitStructure
         An object holding a structured (using germ and fiducial sub-sequences)
-        list of sequences.
+        list of circuits.
     """
     #Same as cloudnoise but no hopping. -- should max_idle_weight == 0?
     return create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
@@ -2591,9 +2591,9 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     Returns
     -------
-    LsGermsSerialStructure
+    PlaquetteGridCircuitStructure
         An object holding a structured (using germ and fiducial sub-sequences)
-        list of sequences.
+        list of circuits.
     """
 
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
@@ -2755,9 +2755,9 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     Returns
     -------
-    LsGermsSerialStructure
+    PlaquetteGridCircuitStructure
         An object holding a structured (using germ and fiducial sub-sequences)
-        list of sequences.
+        list of circuits.
     """
 
     #The algorithm here takes the following basic structure:

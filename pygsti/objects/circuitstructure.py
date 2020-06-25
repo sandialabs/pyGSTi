@@ -180,7 +180,7 @@ v        indices and :class:`Circuit` values.
         if circuits_to_keep is None:
             return plaq.copy()
 
-        elements = {(i, j): c for (i, j), c in self.elements.items() if c in circuits_to_keep]
+        elements = {(i, j): c for (i, j), c in self.elements.items() if c in circuits_to_keep}
         return CircuitPlaquette(elements, None, None, self.op_label_aliases)
 
     def copy(self):
@@ -266,7 +266,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         CircuitPlaquette
         """
         P = processor_fn
-        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()]
+        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()}
         return FiducialPairPlaquette(P(self.base), updated_fidpairs, self.num_rows, self.num_cols, updated_aliases)
 
     def expand_aliases(self, ds_filter=None):
@@ -334,8 +334,10 @@ class FiducialPairPlaquette(CircuitPlaquette):
 
     def element_label(self, irow, icol):
         prep, meas = self.fidpairs.get((irow, icol), (None, None))
-        if prep is None or meas is None return ""
-        return f"{prep.str} + " + self.summary_label() + f" + {meas.str}"
+        if prep is None or meas is None:
+            return ""
+        else:
+            return f"{prep.str} + " + self.summary_label() + f" + {meas.str}"
 
 
 class GermFiducialPairPlaquette(FiducialPairPlaquette):
@@ -399,7 +401,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         CircuitPlaquette
         """
         P = processor_fn
-        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()]
+        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()}
         return GermFiducialPairPlaquette(P(self.germ), self.power, updated_fidpairs,
                                          self.num_rows, self.num_cols, updated_aliases)
 
@@ -446,7 +448,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         GermFiducialPairPlaquette
         """
         if circuits_to_keep is None:
-            return plaq.copy()
+            return self.copy()
 
         fidpairs = {}
         for (i, j), c in self.elements.items():
@@ -483,7 +485,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
     """
 
     @classmethod
-    def cast(self, circuits_or_structure):
+    def cast(cls, circuits_or_structure):
         """
         Convert (if needed) an object into a circuit structure.
 
@@ -509,8 +511,8 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         else:
             op_label_aliases = weights_dict = name = None
             
-        return PlaquetteGridCircuitStructure({}, [], [], circuits_or_structure,
-                                             op_label_aliases, weights_dict, name)
+        return cls({}, [], [], circuits_or_structure,
+                   op_label_aliases, weights_dict, name)
 
     def __init__(self, plaquettes, x_values, y_values, additional_circuits=None,
                  op_label_aliases=None, circuit_weights_dict=None, name=None):
@@ -991,7 +993,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
 #
 #        elements = [(j, i, self.prep_fiducials[i] + base_circuit + self.meas_fiducials[j])
 #                    for i, j in fidpairs]  # note preps are *cols* not rows
-#        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs]  # circuits, not indices
+#        real_fidpairs = [(self.prep_fiducials[i], self.meas_fiducials[j]) for i, j in fidpairs] # circuits, not indices
 #
 #        return CircuitPlaquette(base_circuit, len(self.meas_fiducials),
 #                                len(self.prep_fiducials), elements,

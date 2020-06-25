@@ -22,7 +22,7 @@ from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _Confid
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
-from ..objects.ciruitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])

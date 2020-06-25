@@ -69,9 +69,8 @@ from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
 from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel
-from .circuitstructure import CircuitStructure
-from .circuitstructure import LsGermsStructure
-from .circuitstructure import LsGermsSerialStructure
+from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, GermFiducialPairPlaquette
+from .circuitstructure import PlaquetteGridCircuitStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
@@ -106,7 +105,7 @@ from .objectivefns import ObjectiveFunctionBuilder, \
 
 from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
 
-from .results import Results
+#from .results import Results  # REMOVE
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter

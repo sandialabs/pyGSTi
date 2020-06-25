@@ -3093,7 +3093,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
     ys : list
         List of Y-values (converted to strings).
 
-    circuits_by_y_then_x : list of lists of LsGermsStructure objects
+    circuits_by_y_then_x : list of lists of PlaquetteGridCircuitStructure objects
         Specifies the circuits used at each Y and X value, indexed as
         `circuits_by_y_then_x[iY][iX]`, where `iX` and `iY`
         are X and Y indices, respectively.
@@ -3143,7 +3143,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
         xs, ys : list
             List of X-values and Y-values (converted to strings).
 
-        circuits_by_y_then_x : list of lists of LsGermsStructure objects
+        circuits_by_y_then_x : list of lists of PlaquetteGridCircuitStructure objects
             Specifies the circuits used at each Y and X value, indexed as
             `circuits_by_y_then_x[iY][iX]`, where `iX` and `iY`
             are X and Y indices, respectively.

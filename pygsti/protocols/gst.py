@@ -34,7 +34,7 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from pygsti.protocols.estimate import Estimate as _Estimate
-from ..objects.ciruitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList

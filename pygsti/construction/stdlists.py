@@ -18,7 +18,7 @@ from ..tools.legacytools import deprecate as _deprecated_fn
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
 from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..objects import OpModel as _OpModel
+from ..objects.model import OpModel as _OpModel
 from ..objects import Circuit as _Circuit
 from ..objects import BulkCircuitList as _BulkCircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -26,9 +26,9 @@ from . import circuitconstruction as _gsc
 
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                         fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
-                         keep_fraction=1, keep_seed=None, include_lgst=True,
-                         germ_length_limits=None):
+                            fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                            keep_fraction=1, keep_seed=None, include_lgst=True,
+                            germ_length_limits=None):
     """
     Create a set of circuit lists for LSGST based on germs and max-lengths.
 
@@ -386,7 +386,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
     Returns
     -------
-    list of LsGermsStructure objects
+    list of PlaquetteGridCircuitStructure objects
         The i-th object corresponds to a circuit list containing repeated
         germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
