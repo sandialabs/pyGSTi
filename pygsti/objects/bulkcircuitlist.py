@@ -15,7 +15,7 @@ from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
 
 
-class BulkCircuitList(list):
+class BulkCircuitList(object):
     """
     A list of :class:`Circuit` objects and associated metadata.
 
@@ -80,11 +80,21 @@ class BulkCircuitList(list):
         name : str, optional
             An optional name for this list, used for status messages.
         """
-        super().__init__(map(_Circuit.cast, circuits))
+        self._circuits = tuple(map(_Circuit.cast, circuits))  # *static* container - can't add/append
         self.op_label_aliases = op_label_aliases
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
         self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+
+    # Mimic list / tuple
+    def __len__(self):
+        return len(self._circuits)
+
+    def __getitem__(self, index):
+        return self._circuits[index]
+
+    def __iter__(self):
+        yield from self._circuits
 
     def apply_aliases(self):
         """
@@ -95,7 +105,7 @@ class BulkCircuitList(list):
         list
             A list of :class:`Circuit`s.
         """
-        return _lt.apply_aliases_to_circuits(self[:], self.op_label_aliases)
+        return _lt.apply_aliases_to_circuits(self._circuits, self.op_label_aliases)
 
     def __hash__(self):
         if self.uuid is not None:
