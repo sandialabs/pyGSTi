@@ -178,7 +178,7 @@ v        indices and :class:`Circuit` values.
         CircuitPlaquette
         """
         if circuits_to_keep is None:
-            return plaq.copy()
+            return self.copy()
 
         elements = {(i, j): c for (i, j), c in self.elements.items() if c in circuits_to_keep}
         return CircuitPlaquette(elements, None, None, self.op_label_aliases)
@@ -310,7 +310,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         FiducialPairPlaquette
         """
         if circuits_to_keep is None:
-            return plaq.copy()
+            return self.copy()
 
         fidpairs = {}
         for (i, j), c in self.elements.items():
@@ -514,14 +514,15 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         return cls({}, [], [], circuits_or_structure,
                    op_label_aliases, weights_dict, name)
 
-    def __init__(self, plaquettes, x_values, y_values, additional_circuits=None,
-                 op_label_aliases=None, circuit_weights_dict=None, name=None):
+    def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel,
+                 additional_circuits=None, op_label_aliases=None,
+                 circuit_weights_dict=None, name=None):
         # plaquettes is a dict of plaquettes whose keys are tuples of length 2
         self._plaquettes = plaquettes
         self.xs = x_values
         self.ys = y_values
-        self.xlabel = "L"    # TODO - allow customization?
-        self.ylabel = "germ" # TODO - allow customization?
+        self.xlabel = xlabel
+        self.ylabel = ylabel
 
         circuits = set()
         for plaq in plaquettes.values():
@@ -622,8 +623,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             if (self.circuit_weights is not None) else None
         additional = list(filter(lambda c: c in circuits_to_keep, self._additional_circuits)) \
             if (circuits_to_keep is not None) else self._additional_circuits
-        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, additional, self.op_label_aliases,
-                                             circuit_weights_dict, self.name)
+        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
+                                             self.op_label_aliases, circuit_weights_dict, self.name)
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -658,7 +659,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
         circuit_weights_dict = {P(c): weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
-        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, additional,
+        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
                                              updated_aliases, circuit_weights_dict, self.name)
 
     def copy(self):
@@ -671,6 +672,6 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         """
         circuit_weights_dict = {c: weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
-        return PlaquetteGridCircuitStructure(self._plaquettes.copy(), self.xs[:], self.ys[:],
-                                             self._additional_circuits, self.op_label_aliases,
+        return PlaquetteGridCircuitStructure(self._plaquettes.copy(), self.xs[:], self.ys[:], self.xlabel,
+                                             self.ylabel, self._additional_circuits, self.op_label_aliases,
                                              circuit_weights_dict, self.name)

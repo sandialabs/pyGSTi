@@ -55,8 +55,8 @@ RANK_TOL = 1e-9
 
 @_deprecated_fn("This function is overly specific and will be removed soon.")
 def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=1, maxhops=0,
-                                    extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
-                                    independent_1q_gates=True, zz_only=False, verbosity=0):
+                                     extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
+                                     independent_1q_gates=True, zz_only=False, verbosity=0):
     """
     Compute the number of parameters in a particular :class:`CloudNoiseModel`.
 
@@ -2910,7 +2910,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
             assert((L, idle_op_str) not in plaquettes), "L-values should be different!"
             plaquettes[(L, idle_op_str)] = _GermFiducialPairPlaquette(idle_op_str, power, fidpairs, None, None)
 
-        return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, name=None)
+        return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
 
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
@@ -3308,7 +3308,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
             power = _gsc.repeat_count_with_max_length(serial_germ, L)
             plaquettes[(L, germ)] = _GermFiducialPairPlaquette(germ, power, fidpairs, None, None)
 
-    return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, name=None)
+    return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
 
 
 def _get_kcoverage_template_k2(n):

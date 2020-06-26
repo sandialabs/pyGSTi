@@ -507,7 +507,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         # Then we won't add LGST circuits during first iteration of loop below, so add them now
         unindexed = filter_ds(lgst_list, dscheck, missing_lgst)
         lsgst_structs.append(
-            _PlaquetteGridCircuitStructure({}, [], germs, unindexed, op_label_aliases,
+            _PlaquetteGridCircuitStructure({}, [], germs, "L", "germ", unindexed, op_label_aliases,
                                            circuit_weights_dict=None, name=None))
 
     for i, maxLen in enumerate(max_lengths):
@@ -588,7 +588,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({pkey[base]: plaq for base, plaq in plaquettes.items()},
-                                           maxLens, germs, unindexed, op_label_aliases,
+                                           maxLens, germs, "L", "germ", unindexed, op_label_aliases,
                                            circuit_weights_dict=None, name=None))
         tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
 
