@@ -24,7 +24,7 @@ from .. import construction as _pc
 from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects.computationcache import ComputationCache as _ComputationCache
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..optimize.customlm import Optimizer as _Optimizer
@@ -745,7 +745,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
-            if isinstance(circuitsToEstimate, _BulkCircuitList) and circuitsToEstimate.name:
+            if isinstance(circuitsToEstimate, _CircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
 
             printer.show_progress(i, nIters, verbose_messages=extraMessages,

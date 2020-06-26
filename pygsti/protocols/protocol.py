@@ -631,7 +631,7 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _objs.BulkCircuitList) else 'text-circuit-list'
+        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _objs.CircuitList) else 'text-circuit-list'
         self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
                               'default_protocols': 'dict-of-protocolobjs'}
@@ -869,13 +869,13 @@ class CircuitListsDesign(ExperimentDesign):
             nested = True  # (by this construction)
 
         if all_circuits_needing_data is not None:
-            all_circuits = all_circuits_needing_data  # (ok if this is a BulkCircuitList)
+            all_circuits = all_circuits_needing_data  # (ok if this is a CircuitList)
         elif nested and len(circuit_lists) > 0:
-            all_circuits = circuit_lists[-1]  # (ok if this is a BulkCircuitList)
+            all_circuits = circuit_lists[-1]  # (ok if this is a CircuitList)
         else:
             all_circuits = []
             for lst in circuit_lists:
-                all_circuits.extend(lst)  # Note: this should work even for type(lst) == BulkCircuitList
+                all_circuits.extend(lst)  # Note: this should work even for type(lst) == CircuitList
             if remove_duplicates:
                 _lt.remove_duplicates_in_place(all_circuits)
 
@@ -884,7 +884,7 @@ class CircuitListsDesign(ExperimentDesign):
 
         super().__init__(all_circuits, qubit_labels)
         self.auxfile_types['circuit_lists'] = 'pickle' \
-            if any([isinstance(lst, _objs.BulkCircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
+            if any([isinstance(lst, _objs.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
     def truncate(self, list_indices_to_keep):
         """

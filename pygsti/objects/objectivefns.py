@@ -20,7 +20,7 @@ from .. import optimize as _opt, tools as _tools
 from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
 #from .computationcache import ComputationCache as _ComputationCache
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 #REMOVE:
@@ -37,7 +37,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     Takes a number of common parameters and automates the creation of
     intermediate objects like a :class:`ResourceAllocation` and
-    :class:`BulkCircuitList`.
+    :class:`CircuitList`.
 
     Parameters
     ----------
@@ -83,7 +83,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
             circuits = list(dataset.keys())
 
         if op_label_aliases:
-            circuits = _BulkCircuitList(circuits, op_label_aliases)
+            circuits = _CircuitList(circuits, op_label_aliases)
 
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
@@ -823,7 +823,7 @@ class ModelDatasetCircuitsStore(object):
 
         circuit_list = circuits if (circuits is not None) else list(dataset.keys())
         bulk_circuit_list = circuit_list if isinstance(
-            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+            circuit_list, _CircuitList) else _CircuitList(circuit_list)
         self.circuits = bulk_circuit_list
 
         #The model's forward simulator gets to determine how the circuit outcome
@@ -1038,7 +1038,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -1088,7 +1088,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         #circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
         #bulk_circuit_list = circuit_list if isinstance(
-        #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+        #    circuit_list, _CircuitList) else _CircuitList(circuit_list)
         #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
         #self.ds_circuits = _tools.apply_aliases_to_circuits(self.circuits,
@@ -3949,7 +3949,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4800,7 +4800,7 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4857,7 +4857,7 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4918,7 +4918,7 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4975,7 +4975,7 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5033,7 +5033,7 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5090,7 +5090,7 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5150,7 +5150,7 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5207,7 +5207,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 

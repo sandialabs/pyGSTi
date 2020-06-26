@@ -30,7 +30,7 @@ from pygsti.protocols.estimate import Estimate as _Estimate
 from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 
@@ -183,14 +183,14 @@ class ModelTest(_proto.Protocol):
             circuit_lists = data.edesign.circuit_lists
         except:
             circuit_lists = [data.edesign.all_circuits_needing_data]
-        aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _BulkCircuitList) else None
+        aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _CircuitList) else None
         ds = data.dataset
 
         if self.oplabel_aliases:  # override any other aliases with ones specifically given
             aliases = self.oplabel_aliases
 
-        bulk_circuit_lists = [_BulkCircuitList(lst, aliases, self.circuit_weights)
-                              if not isinstance(lst, _BulkCircuitList) else lst
+        bulk_circuit_lists = [_CircuitList(lst, aliases, self.circuit_weights)
+                              if not isinstance(lst, _CircuitList) else lst
                               for lst in circuit_lists]
         objfn_vals = []
         chi2k_distributed_vals = []

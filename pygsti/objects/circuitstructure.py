@@ -15,7 +15,7 @@ import copy as _copy
 import itertools as _itertools
 from ..tools import listtools as _lt
 from .circuit import Circuit as _Circuit
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 
 
 class CircuitPlaquette(object):
@@ -475,7 +475,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
             return f"({self.germ.layerstr})<sup>{self.power}</sup>"
 
 
-class PlaquetteGridCircuitStructure(_BulkCircuitList):
+class PlaquetteGridCircuitStructure(_CircuitList):
     """
     Encapsulates a set of circuits, along with an associated structure.
 
@@ -491,10 +491,10 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
 
         Parameters
         ----------
-        circuits_or_structure : list or BulkCircuitList
+        circuits_or_structure : list or CircuitList
             The object to convert.  If a :class:`PlaquetteGridCircuitStructure`,
             then the object is simply returned.  Lists of circuits (including
-            :class:`BulkCircuitList`s are converted to structures having no
+            :class:`CircuitList`s are converted to structures having no
             plaquettes.
 
         Returns
@@ -504,7 +504,7 @@ class PlaquetteGridCircuitStructure(_BulkCircuitList):
         if isinstance(circuits_or_structure, PlaquetteGridCircuitStructure):
             return circuits_or_structure
 
-        if isinstance(circuits_or_structure, _BulkCircuitList):
+        if isinstance(circuits_or_structure, _CircuitList):
             op_label_aliases = circuits_or_structure.op_label_aliases
             weights_dict = {c: wt for c, wt in zip(circuits_or_structure, circuits_or_structure.circuit_weights)}
             name = circuits_or_structure.name

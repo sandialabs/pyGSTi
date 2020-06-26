@@ -95,7 +95,7 @@ from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
 from .labeldicts import StateSpaceLabels
 
-from .bulkcircuitlist import BulkCircuitList
+from .circuitlist import CircuitList
 from .resourceallocation import ResourceAllocation
 from .objectivefns import ObjectiveFunctionBuilder, \
     ObjectiveFunction, RawChi2Function, RawChiAlphaFunction, RawFreqWeightedChi2Function, \

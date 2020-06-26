@@ -46,7 +46,7 @@ from . import explicitcalc as _explicitcalc
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from .label import Label as _Label
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .layerrules import LayerRules as _LayerRules
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 

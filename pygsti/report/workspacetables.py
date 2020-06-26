@@ -2754,7 +2754,7 @@ class FitComparisonTable(WorkspaceTable):
         List of X-values. Typically these are the maximum lengths or
         exponents used to index the different iterations of GST.
 
-    circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+    circuits_by_x : list of (CircuitLists or lists of Circuits)
         Specifies the set of circuits used at each X.
 
     model_by_x : list of Models
@@ -2799,7 +2799,7 @@ class FitComparisonTable(WorkspaceTable):
             List of X-values. Typically these are the maximum lengths or
             exponents used to index the different iterations of GST.
 
-        circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+        circuits_by_x : list of (CircuitLists or lists of Circuits)
             Specifies the set of circuits used at each X.
 
         model_by_x : list of Models

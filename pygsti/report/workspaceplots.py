@@ -28,7 +28,7 @@ from . import colormaps as _colormaps
 from . import plothelpers as _ph
 import plotly
 import plotly.graph_objs as go
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
@@ -1383,7 +1383,7 @@ class ColorBoxPlot(WorkspacePlot):
         Specifies the type of plot. "errorate" requires that
         `direct_gst_models` be set.
 
-    circuit_list : BulkCircuitList or list of Circuits
+    circuit_list : CircuitList or list of Circuits
         Specifies the set of circuits, usually along with their structure, e.g.
         fiducials, germs, and maximum lengths.
 
@@ -1494,7 +1494,7 @@ class ColorBoxPlot(WorkspacePlot):
             Specifies the type of plot. "errorate" requires that
             `direct_gst_models` be set.
 
-        circuit_list : BulkCircuitList or list of Circuits
+        circuit_list : CircuitList or list of Circuits
             Specifies the set of circuits, usually along with their structure, e.g.
             fiducials, germs, and maximum lengths.
 
@@ -2891,7 +2891,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         exponents used to index the different iterations of GST, but they
         can also be strings.
 
-    circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+    circuits_by_x : list of (CircuitLists or lists of Circuits)
         Specifies the set of circuits used at each x-value.
 
     model_by_x : list of Models
@@ -2942,7 +2942,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             exponents used to index the different iterations of GST, but they
             can also be strings.
 
-        circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+        circuits_by_x : list of (CircuitLists or lists of Circuits)
             Specifies the set of circuits used at each x-value.
 
         model_by_x : list of Models

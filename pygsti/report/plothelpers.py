@@ -17,7 +17,7 @@ from .. import tools as _tools
 from .. import objects as _objs
 from ..objects import objectivefns as _objfns
 from ..objects.smartcache import smart_cached
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 
 #TODO REMOVE
 #def total_count_matrix(gsplaq, dataset):
@@ -758,9 +758,9 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
     model : Model
         The model (model).
 
-    circuit_list : BulkCircuitList or list of Circuits
+    circuit_list : CircuitList or list of Circuits
         The circuits to use when computing the model violation.  A
-        :class:`BulkCircuitList` object may be given to include additional information
+        :class:`CircuitList` object may be given to include additional information
         (e.g. aliases) along with the list of circuits.
 
     objfn_builder : ObjectiveFunctionBuilder
@@ -810,7 +810,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
     fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 
-    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
+    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
     ds_gstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
     if hasattr(model, 'num_nongauge_params'):

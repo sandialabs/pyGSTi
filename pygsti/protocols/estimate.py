@@ -21,7 +21,7 @@ from ..objects import objectivefns as _objfns
 from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #Class for holding confidence region factory keys
@@ -565,7 +565,7 @@ class Estimate(object):
         objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
         objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
         fitqty = objfn.chi2k_distributed_qty(objfn.fn())
-        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
+        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
         ds_dof = ds.degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset

@@ -20,7 +20,7 @@ from ..objects.circuitstructure import FiducialPairPlaquette as _FiducialPairPla
 from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
 from ..objects.model import OpModel as _OpModel
 from ..objects import Circuit as _Circuit
-from ..objects import BulkCircuitList as _BulkCircuitList
+from ..objects import CircuitList as _CircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 

@@ -39,7 +39,7 @@ from . import section as _section
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #maybe import these from drivers.longsequence so they stay synced?
@@ -483,7 +483,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
                 continue  # automatic creation failed -> skip
 
         circuits_final = results.circuit_lists['final']
-        if not isinstance(circuits_final, _BulkCircuitList): continue
+        if not isinstance(circuits_final, _CircuitList): continue
 
         circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits_final)
         if GiStr not in circuit_struct.ys: continue

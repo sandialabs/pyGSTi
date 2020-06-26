@@ -1,5 +1,5 @@
 """
-Circuit list for bulk computation
+Defines the CircuitList class, for holding meta-data alongside a list or tuple of Circuits.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,9 +15,9 @@ from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
 
 
-class BulkCircuitList(object):
+class CircuitList(object):
     """
-    A list of :class:`Circuit` objects and associated metadata.
+    A unmutable list (a tuple) of :class:`Circuit` objects and associated metadata.
 
     Parameters
     ----------
@@ -40,26 +40,26 @@ class BulkCircuitList(object):
     """
 
     @classmethod
-    def cast(self, circuits):
+    def cast(cls, circuits):
         """
-        Convert (if needed) an object into a :class:`BulkCircuitList`.
+        Convert (if needed) an object into a :class:`CircuitList`.
 
         Parameters
         ----------
-        circuits : list or BulkCircuitList
+        circuits : list or CircuitList
             The object to convert.
 
         Returns
         -------
-        BulkCircuitList
+        CircuitList
         """
-        if isinstance(circuits, BulkCircuitList):
+        if isinstance(circuits, CircuitList):
             return circuits
-        return BulkCircuitList(circuits)
+        return cls(circuits)
 
     def __init__(self, circuits, op_label_aliases=None, circuit_weights=None, name=None):
         """
-        Create a BulkCircuitList.
+        Create a CircuitList.
 
         Parameters
         ----------

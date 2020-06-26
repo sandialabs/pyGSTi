@@ -37,7 +37,7 @@ from pygsti.protocols.estimate import Estimate as _Estimate
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
@@ -691,13 +691,13 @@ class GateSetTomography(_proto.Protocol):
 
         circuit_lists = data.edesign.circuit_lists
         first_list = data.edesign.circuit_lists[0]  # for LGST
-        aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _BulkCircuitList) else None
+        aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _CircuitList) else None
         ds = data.dataset
 
         if self.oplabel_aliases:  # override any other aliases with ones specifically given
             aliases = self.oplabel_aliases
 
-        bulk_circuit_lists = [_BulkCircuitList(lst, aliases, self.circuit_weights)
+        bulk_circuit_lists = [_CircuitList(lst, aliases, self.circuit_weights)
                               for lst in circuit_lists]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
@@ -860,7 +860,7 @@ class LinearGateSetTomography(_proto.Protocol):
             circuit_list = edesign.circuit_lists[0]
         else:
             circuit_list = edesign.all_circuits_needing_data  # Never reached, since design must be a StandardGSTDesign!
-        circuit_list = _BulkCircuitList.cast(circuit_list)
+        circuit_list = _CircuitList.cast(circuit_list)
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
@@ -1932,7 +1932,7 @@ def _reoptimize_with_weights(mdc_store, circuit_weights_dict, objfn_builder, opt
     printer = _objs.VerbosityPrinter.create_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
     circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
-    bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
+    bulk_circuit_list = _CircuitList(circuit_list, circuit_weights=circuit_weights)
     opt_result, mdl_reopt = _alg.run_gst_fit_simple(ds, mdc_store.model, bulk_circuit_list, optimizer, objfn_builder,
                                                     resource_alloc, printer - 1)
     return mdl_reopt
@@ -2010,7 +2010,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         if init_circuits:
             edesign = self.data.edesign
             if isinstance(edesign, _proto.CircuitListsDesign):
-                circuit_lists['iteration'] = [_BulkCircuitList.cast(cl) for cl in edesign.circuit_lists]
+                circuit_lists['iteration'] = [_CircuitList.cast(cl) for cl in edesign.circuit_lists]
 
                 #Set "Ls and germs" info if available
                 if isinstance(edesign, StandardGSTDesign):
@@ -2020,7 +2020,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
             else:
                 #Single iteration
-                circuit_lists['iteration'] = [_BulkCircuitList.cast(edesign.all_circuits_needing_data)]
+                circuit_lists['iteration'] = [_CircuitList.cast(edesign.all_circuits_needing_data)]
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 
