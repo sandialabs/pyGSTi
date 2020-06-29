@@ -353,13 +353,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         verbosity : int, optional
             Level of detail to print to stdout.
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        self.comm = resource_alloc.comm
-        self.profiler = resource_alloc.profiler
-        self.mem_limit = resource_alloc.mem_limit
-        self.distribute_method = resource_alloc.distribute_method
-
-        self.printer = _VerbosityPrinter.create_printer(verbosity, self.comm)
+        self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        self.printer = _VerbosityPrinter.create_printer(verbosity, self.resource_alloc.comm)
         self.name = name if (name is not None) else self.__class__.__name__
         self.description = description if (description is not None) else "_objfn"
 
@@ -4466,7 +4461,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.firsts is not None:
             self._update_lsvec_for_omitted_probs(lsvec, self.probs)
 
-        self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("LS OBJECTIVE", tm)
         assert(lsvec.shape == (self.nelements + self.ex,))
         return lsvec
 
@@ -4503,7 +4498,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.firsts is not None:
             self._update_terms_for_omitted_probs(terms, self.probs)
 
-        self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("TERMS OBJECTIVE", tm)
         assert(terms.shape == (self.nelements + self.ex,))
         return terms
 
@@ -4578,7 +4573,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.profiler.add_time("JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
 
     def dterms(self, paramvec=None):
@@ -4633,7 +4628,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.profiler.add_time("JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
 
     def hessian_brute(self, paramvec=None):
@@ -5444,7 +5439,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
                                     self.resource_alloc)
-        self.raw_objfn.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
@@ -5476,7 +5471,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
                                      None, self.resource_alloc)
 
-        self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
 
 
@@ -5604,7 +5599,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         v = _np.sqrt(v)
         v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
-        self.raw_objfn.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless prob_clip_interval is set within [0,1].
 
@@ -5652,7 +5647,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         dlogl_factor = (0.5 / v)
         dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
-        self.raw_objfn.profiler.add_time("do_mlgst: JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
 
 
