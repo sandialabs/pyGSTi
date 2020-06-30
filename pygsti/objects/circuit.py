@@ -137,20 +137,25 @@ def _accumulate_explicit_sslbls(obj):
     return ret
 
 
-def _op_seq_to_str(seq, line_labels):
+def _op_seq_str_suffix(line_labels, occurrence_id):
+    """ The suffix (after the first "@") of a circuit's string rep"""
+    if occurrence_id is None:
+        return "" if line_labels is None or line_labels == ('*',) else \
+            "@(" + ','.join(map(str, line_labels)) + ")"
+    else:
+        return "@()@" + str(occurrence_id) if (line_labels is None or line_labels == ('*',)) \
+            else "@(" + ','.join(map(str, line_labels)) + ")@" + str(occurrence_id)
+
+
+def _op_seq_to_str(seq, line_labels, occurrence_id):
     """ Used for creating default string representations. """
     if len(seq) == 0:  # special case of empty operation sequence (for speed)
-        if line_labels is None or line_labels == ('*',): return "{}"
-        else: return "{}@(" + ','.join(map(str, line_labels)) + ")"
+        return "{}" + _op_seq_str_suffix(line_labels, occurrence_id)
 
     def process_lists(el): return el if not isinstance(el, list) else \
         ('[%s]' % ''.join(map(str, el)) if (len(el) != 1) else str(el[0]))
-
-    if line_labels is None or line_labels == ('*',):
-        return ''.join(map(str, map(process_lists, seq)))
-    else:
-        return ''.join(map(str, map(process_lists, seq))) \
-            + "@(" + ','.join(map(str, line_labels)) + ")"
+    
+    return ''.join(map(str, map(process_lists, seq))) + _op_seq_str_suffix(line_labels, occurrence_id)
 
 
 def to_label(x):
@@ -250,6 +255,14 @@ class Circuit(object):
         massive exponents (e.g. "Gx^8192") it may improve performance to
         set `expand_subcircuits=False`.
 
+    occurrence : hashable, optional
+        A value to set as the "occurrence id" for this circuit.  This
+        value doesn't affect the circuit an any way except by affecting
+        it's hashing and equivalence testing.  Circuits with different
+        occurrence ids are *not* equivalent.  Occurrence values effectively
+        allow multiple copies of the same ciruit to be stored in a
+        dictionary or :class:`DataSet`.
+
     Attributes
     ----------
     default_expand_subcircuits : bool
@@ -308,7 +321,8 @@ class Circuit(object):
             return cls(tup)
 
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True, expand_subcircuits="default"):
+                 stringrep=None, name='', check=True, expand_subcircuits="default",
+                 occurrence=None):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -381,11 +395,19 @@ class Circuit(object):
             comparison (e.g. so "GxGx" == "Gx^2"), but in cases when you have
             massive exponents (e.g. "Gx^8192") it may improve performance to
             set `expand_subcircuits=False`.
+
+        occurrence : hashable, optional
+            A value to set as the "occurrence id" for this circuit.  This
+            value doesn't affect the circuit an any way except by affecting
+            it's hashing and equivalence testing.  Circuits with different
+            occurrence ids are *not* equivalent.  Occurrence values effectively
+            allow multiple copies of the same ciruit to be stored in a
+            dictionary or :class:`DataSet`.
         """
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if isinstance(layer_labels, str):
             cparser = _CircuitParser(); cparser.lookup = None
-            layer_labels, chk_labels = cparser.parse(layer_labels)
+            layer_labels, chk_labels, chk_occurrence = cparser.parse(layer_labels)
             if chk_labels is not None:
                 if line_labels == 'auto':
                     line_labels = chk_labels
@@ -393,6 +415,13 @@ class Circuit(object):
                     raise ValueError(("Error intializing Circuit: "
                                       " `line_labels` and line labels in `layer_labels` do not match: %s != %s")
                                      % (line_labels, chk_labels))
+            if chk_occurrence is not None:
+                if occurrence is None:  # Also acts as "auto"
+                    occurrence = chk_occurrence
+                elif occurrence != chk_occurrence:
+                    raise ValueError(("Error intializing Circuit: "
+                                      " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
+                                     % (occurrence, chk_occurrence))
 
         if expand_subcircuits == "default":
             expand_subcircuits = Circuit.default_expand_subcircuits
@@ -481,7 +510,7 @@ class Circuit(object):
                       for layer_lbl in layer_labels]
 
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
-        self._bare_init(labels, my_line_labels, editable, name, stringrep)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence)
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
@@ -502,14 +531,15 @@ class Circuit(object):
         #    self._static = not editable
 
     @classmethod
-    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None):
+    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None):
         ret = cls.__new__(cls)
-        ret._bare_init(labels, line_labels, editable, name, stringrep)
+        ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence)
         return ret
 
-    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None):
+    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None):
         self._labels = labels
         self._line_labels = line_labels
+        self._occurrence_id = occurrence
         self._static = not editable
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
@@ -522,6 +552,10 @@ class Circuit(object):
         """
         Construct and return this entire circuit as a :class:`CircuitLabel`.
 
+        Note: occurrence-id information is not stored in a circuit label, so
+        circuits that differ only in their `occurence_id` will return circuit
+        labels that are equal.
+
         Parameters
         ----------
         nreps : int, optional
@@ -532,6 +566,7 @@ class Circuit(object):
         -------
         CircuitLabel
         """
+        #Note: self._occurrence_id is NOT a held by a CircuitLabel (this seems reasonable)
         eff_line_labels = None if self._line_labels == ('*',) else self._line_labels  # special case
         return _CircuitLabel(self._name, self._labels, eff_line_labels, nreps)
 
@@ -571,6 +606,23 @@ class Circuit(object):
         return self._name
 
     @property
+    def occurrence(self):
+        """
+        The occurrence id of this circuit.
+        """
+        return self._occurrence_id
+
+    @occurrence.setter
+    def occurrence(self, value):
+        """
+        The occurrence id of this circuit.
+        """
+        assert(not self._static), \
+            ("Cannot edit a read-only circuit!  "
+             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
+        self._occurrence_id = value
+
+    @property
     def layertup(self):
         """
         This Circuit's layers as a standard Python tuple of layer Labels.
@@ -593,10 +645,15 @@ class Circuit(object):
         -------
         tuple
         """
-        if self._line_labels in (('*',), ()):  # No line labels
-            return self.layertup
+        if self._occurrence_id is None:
+            if self._line_labels in (('*',), ()):  # No line labels
+                return self.layertup
+            else:
+                return self.layertup + ('@',) + self._line_labels
         else:
-            return self.layertup + ('@',) + self._line_labels
+            linelbl_tup = () if self._line_labels in (('*',), ()) else self._line_labels
+            return self.layertup + ('@',) + linelbl_tup + ('@', self._occurrence_id)
+            # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
     @property
     def str(self):
@@ -608,7 +665,7 @@ class Circuit(object):
         str
         """
         if self._str is None:
-            generated_str = _op_seq_to_str(self._labels, self.line_labels)  # lazy generation
+            generated_str = _op_seq_to_str(self._labels, self.line_labels, self._occurrence_id)  # lazy generation
             if self._static:  # if we're read-only then cache the string one and for all,
                 self._str = generated_str  # otherwise keep generating it as needed (unless it's set by the user?)
             return generated_str
@@ -683,7 +740,7 @@ class Circuit(object):
     def __add__(self, x):
         if not isinstance(x, Circuit):
             raise ValueError("Can only add Circuits objects to other Circuit objects")
-        if self.str is None or x.str is None:
+        if self._str is None or x._str is None:
             s = None
         else:
             mystr, _ = self._labels_lines_str()
@@ -696,8 +753,7 @@ class Circuit(object):
         editable = not self._static or not x._static
         added_labels = tuple([l for l in x.line_labels if l not in self.line_labels])
         new_line_labels = self.line_labels + added_labels
-        if new_line_labels != ('*',):
-            s += "@(" + ','.join(map(str, new_line_labels)) + ")"  # matches to _op_seq_to_str in circuit.py!
+        s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
         return Circuit(self.layertup + x.layertup, new_line_labels,
                        None, editable, s, check=False)
 
@@ -775,7 +831,8 @@ class Circuit(object):
         Circuit
         """
         if editable == "auto": editable = not self._static
-        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False)
+        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False,
+                       occurrence=self.occurrence)
 
     def clear(self):
         """
@@ -1508,7 +1565,7 @@ class Circuit(object):
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
                 serial_lbls.append(c)
-        return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False)
+        return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -1592,7 +1649,7 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
-        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
+        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def expand_subcircuits(self):
         """
@@ -1903,7 +1960,7 @@ class Circuit(object):
             return cpy
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([lbl.replace_name(old_gatename, new_gatename)
-                            for lbl in self._labels], self.line_labels)
+                            for lbl in self._labels], self.line_labels, occurrence=self.occurrence)
 
     def replace_layer(self, old_layer, new_layer):
         """
@@ -1927,10 +1984,12 @@ class Circuit(object):
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
             return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
-                                            for lbl in cpy._labels]), self.line_labels, editable=False)
+                                            for lbl in cpy._labels]), self.line_labels, editable=False,
+                                     occurrence=self.occurrence)
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit(tuple([new_layer if lbl == old_layer else lbl
-                                  for lbl in self._labels]), self.line_labels, editable=False)
+                                  for lbl in self._labels]), self.line_labels, editable=False,
+                           occurrence=self.occurrence)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -1959,7 +2018,7 @@ class Circuit(object):
                 while label in layers:
                     i = layers.index(label)
                     layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False)
+            return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
 
         else:  # static case: so self._labels is a tuple of Labels
             if not alias_dict: return self  # no copy needed b/c static
@@ -1969,7 +2028,7 @@ class Circuit(object):
                 while label in layers:
                     i = layers.index(label)
                     layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False)
+            return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
@@ -2178,7 +2237,7 @@ class Circuit(object):
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func, self.line_labels))
         return Circuit([l.map_state_space_labels(mapper_func) for l in self.layertup],
-                       mapped_line_labels, None, not self._static)
+                       mapped_line_labels, None, not self._static, occurrence=self.occurrence)
 
     def reorder_lines(self, order):
         """
@@ -3648,6 +3707,7 @@ class CompressedCircuit(object):
             circuit.layertup, min_len_to_compress, max_period_to_look_for)
         self._str = circuit.str
         self._line_labels = circuit.line_labels
+        self._occurrence_id = circuit.occurrence
 
     def __getstate__(self):
         return self.__dict__
@@ -3673,7 +3733,8 @@ class CompressedCircuit(object):
         Circuit
         """
         tup = CompressedCircuit.expand_op_label_tuple(self._tup)
-        return Circuit(tup, self._line_labels, editable=False, stringrep=self._str, check=False)
+        return Circuit(tup, self._line_labels, editable=False, stringrep=self._str,
+                       check=False, occurrence=self._occurrence_id)
 
     @staticmethod
     def _get_num_periods(circuit, period_len):

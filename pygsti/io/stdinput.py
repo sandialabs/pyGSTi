@@ -100,10 +100,10 @@ class StdInputParser(object):
             Representing the circuit.
         """
         self._circuit_parser.lookup = lookup
-        circuit_tuple, circuit_labels = self._circuit_parser.parse(s, create_subcircuits)
+        circuit_tuple, circuit_labels, occurrence_id = self._circuit_parser.parse(s, create_subcircuits)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return circuit_tuple, circuit_labels
+        return circuit_tuple, circuit_labels, occurrence_id
 
     def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True):
         """
@@ -170,8 +170,8 @@ class StdInputParser(object):
             if nCounts == len(parts):
                 raise ValueError("No circuit column found -- all columns look like data")
 
-        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup, create_subcircuits)
-        return circuitTuple, circuitStr, circuitLabels, counts
+        circuitTuple, circuitLabels, occurrence_id = self.parse_circuit(circuitStr, lookup, create_subcircuits)
+        return circuitTuple, circuitStr, circuitLabels, occurrence_id, counts
 
     def parse_dictline(self, s):
         """
@@ -190,6 +190,10 @@ class StdInputParser(object):
             The circuit as a tuple of operation labels.
         circuitStr : string
             The circuit as represented as a string in the dictline.
+        circuitLineLabels : tuple
+            The line labels of the cirucit.
+        occurrence : object
+            Circuit's occurrence id, or `None` if there is none.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
@@ -197,8 +201,8 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple, circuitLineLabels = self._circuit_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels
+        circuitTuple, circuitLineLabels, occurrence_id = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id
 
     def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
         """
@@ -231,14 +235,15 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                layer_lbls, line_lbls = self.parse_circuit(line)
+                layer_lbls, line_lbls, occurrence_id = self.parse_circuit(line)
                 if line_lbls is None:
                     line_lbls = line_labels  # default to the passed-in argument
                     nlines = num_lines
                 else: nlines = None  # b/c we've got a valid line_lbls
 
                 circuit_list.append(_objs.Circuit(layer_lbls, stringrep=line.strip(),
-                                                  line_labels=line_lbls, num_lines=nlines, check=False))
+                                                  line_labels=line_lbls, num_lines=nlines,
+                                                  check=False, occurrence=occurrence_id))
         return circuit_list
 
     def parse_dictfile(self, filename):
@@ -260,9 +265,10 @@ class StdInputParser(object):
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                label, tup, s, lineLbls = self.parse_dictline(line)
+                label, tup, s, lineLbls, occurrence_id = self.parse_dictline(line)
                 if lineLbls is None: lineLbls = "auto"
-                lookupDict[label] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls, check=False)
+                lookupDict[label] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls,
+                                                  check=False, occurrence=occurrence_id)
         return lookupDict
 
     def parse_datafile(self, filename, show_progress=True,
@@ -402,7 +408,7 @@ class StdInputParser(object):
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
                     try:
-                        circuitTuple, circuitStr, circuitLbls, valueList = \
+                        circuitTuple, circuitStr, circuitLbls, occurrence_id, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols,
                                                 create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
@@ -413,7 +419,8 @@ class StdInputParser(object):
 
                     if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
                     circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                            line_labels=circuitLbls, expand_subcircuits=False, check=False)
+                                            line_labels=circuitLbls, expand_subcircuits=False,
+                                            check=False, occurrence=occurrence_id)
                     #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
 
                     if with_times is True and len(valueList) > 0:
@@ -654,7 +661,7 @@ class StdInputParser(object):
                 if len(dataline) == 0: continue
 
                 try:
-                    circuitTuple, circuitStr, circuitLbls, valueList = \
+                    circuitTuple, circuitStr, circuitLbls, occurrence_id, valueList = \
                         self.parse_dataline(dataline, lookupDict, nDataCols,
                                             create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
@@ -675,7 +682,7 @@ class StdInputParser(object):
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels aren't given find them automatically
                 opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                      check=False, expand_subcircuits=False)  # , lookup=lookupDict)
+                                      check=False, expand_subcircuits=False, occurrence=occurrence_id)  # , lookup=lookupDict)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  # supresses warnings
                 self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)
@@ -855,10 +862,11 @@ class StdInputParser(object):
                     parts = line.split()
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
-                    circuitTuple, circuitLbls = self.parse_circuit(circuitStr, lookupDict)
+                    circuitTuple, circuitLbls, occurrence_id = self.parse_circuit(circuitStr, lookupDict)
                     # maybe allow a default line_labels to be passed in later?
                     if circuitLbls is None: circuitLbls = "auto"
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False)
+                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
+                                            check=False, occurrence=occurrence_id)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
