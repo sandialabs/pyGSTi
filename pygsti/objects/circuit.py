@@ -594,6 +594,7 @@ class Circuit(object):
             else:
                 self.delete_lines(tuple(removed_not_idling))
         self._line_labels = tuple(value)
+        self._str = None  # regenerate string rep (it may have updated)
 
     @property
     def name(self):
@@ -617,10 +618,8 @@ class Circuit(object):
         """
         The occurrence id of this circuit.
         """
-        assert(not self._static), \
-            ("Cannot edit a read-only circuit!  "
-             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
         self._occurrence_id = value
+        self._str = None  # regenerate string rep (it may have updated)
 
     @property
     def layertup(self):

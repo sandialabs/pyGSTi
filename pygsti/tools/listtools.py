@@ -90,7 +90,7 @@ def compute_occurrence_indices(lst):
     A 0-based list of integers specifying which occurrence, i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
-    returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This is useful
+    returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This may be useful
     when working with `DataSet` objects that have `collisionAction`
     set to "keepseparate".
 

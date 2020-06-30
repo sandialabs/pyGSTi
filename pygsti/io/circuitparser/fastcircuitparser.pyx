@@ -61,6 +61,7 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
             occurrence_id = None
     else:
         labels = None
+        occurrence_id = None
 
     result = []
     code = code.replace(u'*',u'')  # multiplication is implicit (no need for '*' ops)
