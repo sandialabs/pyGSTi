@@ -1649,21 +1649,29 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             (final_product[i] = scaleValues[i] * prods[i]).
         """
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        scaleVals = _np.empty(layout.num_elements, 'd')
-        Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
 
-        def compute_products(layout_atom, sub_resource_alloc):
-            elInds = layout_atom.element_slice
-            prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)  # use scratch?
-            _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
-            _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
+        if len(layout.atoms) == 1:
+            #Special case when there's just a single atom, to conserve memory
+            layout_atom = layout.atoms[0]
+            prodCache, scaleCache = self._compute_product_cache(layout_atom, resource_alloc.comm)
+            scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
+            Gs = layout_atom.nonscratch_cache_view(prodCache, axis=0)  # need layout_atom.element_slice?
+        else:
+            scaleVals = _np.empty(layout.num_elements, 'd')
+            Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
 
-        atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+            def compute_products(layout_atom, sub_resource_alloc):
+                elInds = layout_atom.element_slice
+                prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)
+                _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
+                _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
 
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
+            atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+
+            #collect/gather results
+            all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
 
         if scale:
             return Gs, scaleVals
@@ -1735,30 +1743,40 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #TODO: just allow slices as argument: wrt_filter -> wrtSlice?
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        if return_prods:
-            scaleVals = _np.empty(layout.num_elements, 'd')
-            Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
-        dGs = _np.empty((layout.num_elements, nDerivCols, self.model.dim, self.model.dim), 'd')
 
-        def compute_products(layout_atom, sub_resource_alloc):
-            elInds = layout_atom.element_slice
-            prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)  # use scratch?
+        if len(layout.atoms) == 1:
+            #Special case when there's just a single atom, to conserve memory
+            layout_atom = layout.atoms[0]
+            prodCache, scaleCache = self._compute_product_cache(layout_atom, resource_alloc.comm)
             dProdCache = self._compute_dproduct_cache(layout_atom, prodCache, scaleCache,
-                                                      sub_resource_alloc.comm, wrtSlice)  # use scratch?
-
+                                                      resource_alloc.comm, wrtSlice)
+            scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
+            Gs = layout_atom.nonscratch_cache_view(prodCache, axis=0)  # need layout_atom.element_slice?
+            dGs = layout_atom.nonscratch_cache_view(dProdCache, axis=0)  # need layout_atom.element_slice?
+        else:
             if return_prods:
-                _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
-                _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
-            _fas(dGs, [elInds], layout_atom.nonscratch_cache_view(dProdCache, axis=0))
+                scaleVals = _np.empty(layout.num_elements, 'd')
+                Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
+            dGs = _np.empty((layout.num_elements, nDerivCols, self.model.dim, self.model.dim), 'd')
 
-        atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+            def compute_products(layout_atom, sub_resource_alloc):
+                elInds = layout_atom.element_slice
+                prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)
+                dProdCache = self._compute_dproduct_cache(layout_atom, prodCache, scaleCache,
+                                                          sub_resource_alloc.comm, wrtSlice)
+                if return_prods:
+                    _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
+                    _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
+                _fas(dGs, [elInds], layout_atom.nonscratch_cache_view(dProdCache, axis=0))
 
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        if return_prods:
-            _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
-            _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, dGs, [], 0, resource_alloc.comm)
+            atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+
+            #collect/gather results
+            all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+            if return_prods:
+                _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
+                _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, dGs, [], 0, resource_alloc.comm)
 
         if return_prods:
             if not scale:
