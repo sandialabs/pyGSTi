@@ -838,7 +838,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         eval_tree = layout_atom.tree
         cacheSize = len(eval_tree)
-        prodCache = _np.zeros((cacheSize, dim, dim))
+        prodCache = _np.zeros((cacheSize, dim, dim), 'd')
         scaleCache = _np.zeros(cacheSize, 'd')
 
         for iDest, iRight, iLeft in eval_tree:
@@ -1615,3 +1615,179 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 hGs[tree_indices], scaleVals[tree_indices], param_slice1, param_slice2))
 
         _np.seterr(**old_err)
+
+    def bulk_product(self, layout, scale=False, resource_alloc=None):
+        """
+        Compute the products of many circuits at once.
+
+        Parameters
+        ----------
+        layout : MatrixCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
+
+        eval_tree : EvalTree
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
+            to compute the bulk operation on.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        prods : numpy array
+            Array of shape S x G x G, where:
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
+        scaleValues : numpy array
+            Only returned when scale == True. A length-S array specifying
+            the scaling that needs to be applied to the resulting products
+            (final_product[i] = scaleValues[i] * prods[i]).
+        """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        scaleVals = _np.empty(layout.num_elements, 'd')
+        Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
+
+        def compute_products(layout_atom, sub_resource_alloc):
+            elInds = layout_atom.element_slice
+            prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)  # use scratch?
+            _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
+            _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
+
+        atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+
+        #collect/gather results
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
+
+        if scale:
+            return Gs, scaleVals
+        else:
+            old_err = _np.seterr(over='ignore')
+            Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+            _np.seterr(**old_err)
+            return Gs
+
+    def bulk_dproduct(self, layout, flat=False, return_prods=False,
+                      scale=False, resource_alloc=None, wrt_filter=None):
+        """
+        Compute the derivative of a many operation sequences at once.
+        Parameters
+        ----------
+        layout : MatrixCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
+
+        flat : bool, optional
+            Affects the shape of the returned derivative array (see below).
+
+        return_prods : bool, optional
+            when set to True, additionally return the probabilities.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which gate parameters
+            to include in the derivative.  Each element is an index into an
+            array of gate parameters ordered by concatenating each gate's
+            parameters (in the order specified by the model).  This argument
+            is used internally for distributing derivative calculations across
+            multiple processors.
+
+        Returns
+        -------
+        derivs : numpy array
+            * if flat == False, an array of shape S x M x G x G, where:
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
+              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+              of the i-th operation sequence product with respect to the j-th model
+              parameter.
+            * if flat == True, an array of shape S*N x M where:
+              - N == the number of entries in a single flattened gate (ordering same as numpy.flatten),
+              - S,M == as above,
+              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
+              the (i / G^2)-th flattened operation sequence product  with respect to
+              the j-th model parameter.
+        products : numpy array
+            Only returned when return_prods == True.  An array of shape
+            S x G x G; products[i] is the i-th operation sequence product.
+        scaleVals : numpy array
+            Only returned when scale == True.  An array of shape S such that
+            scaleVals[i] contains the multiplicative scaling needed for
+            the derivatives and/or products for the i-th operation sequence.
+        """
+        nCircuits = layout.num_circuits
+        nDerivCols = self.model.num_params() if (wrt_filter is None) else _slct.length(wrt_filter)
+
+        wrtSlice = _slct.list_to_slice(wrt_filter) if (wrt_filter is not None) else None
+        #TODO: just allow slices as argument: wrt_filter -> wrtSlice?
+
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        if return_prods:
+            scaleVals = _np.empty(layout.num_elements, 'd')
+            Gs = _np.empty((layout.num_elements, self.model.dim, self.model.dim), 'd')
+        dGs = _np.empty((layout.num_elements, nDerivCols, self.model.dim, self.model.dim), 'd')
+
+        def compute_products(layout_atom, sub_resource_alloc):
+            elInds = layout_atom.element_slice
+            prodCache, scaleCache = self._compute_product_cache(layout_atom, sub_resource_alloc.comm)  # use scratch?
+            dProdCache = self._compute_dproduct_cache(layout_atom, prodCache, scaleCache,
+                                                      sub_resource_alloc.comm, wrtSlice)  # use scratch?
+
+            if return_prods:
+                _fas(scaleVals, [elInds], self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache)))
+                _fas(Gs, [elInds], layout_atom.nonscratch_cache_view(prodCache, axis=0))
+            _fas(dGs, [elInds], layout_atom.nonscratch_cache_view(dProdCache, axis=0))
+
+        atomOwners = self._compute_on_atoms(layout, compute_products, resource_alloc)
+
+        #collect/gather results
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        if return_prods:
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, Gs, [], 0, resource_alloc.comm)
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, scaleVals, [], 0, resource_alloc.comm)
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, dGs, [], 0, resource_alloc.comm)
+
+        if return_prods:
+            if not scale:
+                old_err = _np.seterr(over='ignore', invalid='ignore')
+                Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+                # may overflow or get nans (invalid), but ok
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 3) * scaleVals, 0, 3)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs[_np.isnan(dGs)] = 0
+                _np.seterr(**old_err)
+
+            if flat:
+                # cols = deriv cols, rows = flattened everything else
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
+                    (nDerivCols, nCircuits * self.model.dim**2)), 0, 1)
+
+            return (dGs, Gs, scaleVals) if scale else (dGs, Gs)
+
+        else:
+            if not scale:
+                old_err = _np.seterr(over='ignore', invalid='ignore')
+                # may overflow or get nans (invalid), but ok
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 3) * scaleVals, 0, 3)
+                # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
+                dGs[_np.isnan(dGs)] = 0
+                _np.seterr(**old_err)
+
+            if flat:
+                # cols = deriv cols, rows = flattened everything else
+                dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
+                    (nDerivCols, nCircuits * self.model.dim**2)), 0, 1)
+            return (dGs, scaleVals) if scale else dGs
