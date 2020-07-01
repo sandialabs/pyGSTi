@@ -740,15 +740,21 @@ class Circuit(object):
     def __eq__(self, x):
         if x is None: return False
         if isinstance(x, Circuit):
-            return self.tup == x.tup
+            return self.tup.__eq__(x.tup)
         else:
-            return self.tup == tuple(x)
+            return self.layertup == tuple(x)  # equality with non-circuits is just based on *labels*
 
     def __lt__(self, x):
-        return self.tup.__lt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__lt__(x.tup)
+        else:
+            return self.layertup < tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def __gt__(self, x):
-        return self.tup.__gt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__gt__(x.tup)
+        else:
+            return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def number_of_lines(self):
         """
