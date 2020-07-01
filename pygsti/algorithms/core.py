@@ -355,7 +355,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel.sim = guess_model_for_gauge.sim
+            lgstModel.sim = guess_model_for_gauge.sim.copy()
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim

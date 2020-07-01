@@ -920,7 +920,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
-                eval_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
+                layout_atom, prod_cache, scale_cache, None, myDerivColSlice, profiler)
             # pass None as comm, *not* mySubComm, since we can't do any
             #  further parallelization
 
@@ -1046,7 +1046,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     #  #don't compute anything on "extra", i.e. rank != 0, cpus
 
                 hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
-                    eval_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2[:, myDeriv2ColSlice],
+                    layout_atom, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2[:, myDeriv2ColSlice],
                     scale_cache, None, myHessianSlice1, myHessianSlice2)
                 # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
 
@@ -1057,7 +1057,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             else:
                 #compute "Deriv1" row-derivatives distribution only; don't use column distribution
                 hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
-                    eval_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
+                    layout_atom, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
                     scale_cache, None, myHessianSlice1, wrt_slice2)
                 # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
 

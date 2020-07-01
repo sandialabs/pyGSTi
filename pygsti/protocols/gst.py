@@ -733,7 +733,7 @@ class GateSetTomography(_proto.Protocol):
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, final_store.model, data.edesign.target_model,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store, data.edesign.target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, parameters['final_objfn_builder'], self.optimizer,
                                         resource_alloc, printer)
@@ -894,18 +894,22 @@ class LinearGateSetTomography(_proto.Protocol):
         mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
                                  op_labels, svd_truncate_to=target_model.dim,
                                  op_label_aliases=aliases, verbosity=printer)
+        final_store = _objs.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
+                                                      array_types=('p', 'dp'), verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
+        parameters['final_objfn_store'] = final_store
+        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()  # just set this as default logl objective
 
         ret = ModelEstimateResults(data, self)
-        estimate = _Estimate(ret, {'target': target_model, 'lgst': mdl_lgst,
+        estimate = _Estimate(ret, {'target': target_model, 'seed': target_model, 'lgst': mdl_lgst, 
                                    'iteration estimates': [mdl_lgst],
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lgst, data.edesign.target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store, data.edesign.target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
                                         None, None, resource_alloc, printer)
 
@@ -1327,11 +1331,12 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
     return ds
 
 
-def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
+def _add_gaugeopt_and_badfit(results, estlbl, mdc_store, target_model, gaugeopt_suite, gaugeopt_target,
                              unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
     tref = _time.time()
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
+    model_to_gaugeopt = mdc_store.model
 
     #Do final gauge optimization to *final* iteration result only
     if gaugeopt_suite:

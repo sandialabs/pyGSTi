@@ -89,11 +89,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                                    + " than derivative columns(%d)!" % Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
+                blk_resource_alloc = _ResourceAllocation(comm=blkComm)
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
                     self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], paramSlice, atom,
-                                                 paramSlice, sub_resource_alloc)
+                                                 paramSlice, blk_resource_alloc)
 
                 #gather results
                 _mpit.gather_slices(blocks, blkOwners, array_to_fill, [atom.element_slice],
@@ -337,7 +338,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
                     deriv_fill_fn(deriv_array_to_fill, elInds, paramSlice, num_outcomes, atom,
-                                  dataset_rows, paramSlice, mySubComm)
+                                  dataset_rows, paramSlice, blkComm)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
