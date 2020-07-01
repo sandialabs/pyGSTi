@@ -863,6 +863,10 @@ class ModelDatasetCircuitsStore(object):
         self.nparams = self.model.num_params()
         self.nelements = len(self.layout)
 
+    @property
+    def opBasis(self):
+        return self.model.basis
+
     def num_data_params(self):
         """
         The number of degrees of freedom in the data used by this objective function.
@@ -1499,7 +1503,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         my_atom_indices, atom_owners, my_subcomm = self.layout.distribute(self.resource_alloc.comm)
 
         nparams = self.model.num_params()
-        blk_size1, blk_size2 = self.wrt_block_size, self.wrt_block_size2
+        blk_size1, blk_size2 = self.layout.additional_dimension_blk_sizes
         row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
         col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
 
@@ -1515,7 +1519,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #Loop over atoms
         for atom_index in my_atom_indices:
             atom = self.layout.atoms[atom_index]
-            sub_nelements = atom.num_element
+            sub_nelements = atom.num_elements
 
             # Create views into pre-allocated memory
             probs = probs_mem[0:sub_nelements]
@@ -5955,7 +5959,7 @@ class LogLWildcardFunction(ObjectiveFunction):
                                           self.logl_objfn.layout,
                                           self.wildcard_budget_precomp)
 
-        counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.N, self.logl_objfn.freqs
+        counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.total_counts, self.logl_objfn.freqs
         return self.logl_objfn.raw_objfn.lsvec(self.probs, counts, N, freqs)
 
     def dlsvec(self, wvec):

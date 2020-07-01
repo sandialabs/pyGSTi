@@ -158,13 +158,12 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 expGerm=expGerm, pp=pre_povm_tuples, order=('f0', 'f1', 'pp'))
 
-            evTree, blkSz, _, lookup, _ = target_model.bulk_evaltree_from_resources(
-                lst, mem_limit=mem_limit, distribute_method="deriv",
-                subcalls=['bulk_fill_dprobs'], verbosity=0)
+            layout = target_model.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
+                                                    array_types=('dp',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty((evTree.num_final_elements(), target_model.num_params()), 'd')
-            target_model.bulk_fill_dprobs(dP, evTree, wrt_block_size=blkSz)  # num_els x num_params
+            dP = _np.empty((layout.num_elements, target_model.num_params()), 'd')
+            target_model.sim.bulk_fill_dprobs(dP, layout)  # num_els x num_params
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final circuit of evTree)
@@ -172,9 +171,9 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
                     # "original" indices into lst for k-th fiducial pair
-                    elArray = _slct.to_array(lookup[o]) + st
+                    elArray = _slct.to_array(layout.indices_for_index(o)) + st
                     elIndicesForPair[k].extend(list(elArray))
-            st += evTree.num_final_elements()  # b/c we'll concatenate tree's elements later
+            st += layout.num_elements  # b/c we'll concatenate tree's elements later
 
         return _np.concatenate(dPall, axis=0), elIndicesForPair
         #indexed by [iElement, iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
@@ -389,7 +388,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
-            germMx = gsGerm.product(germ)
+            germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
@@ -409,19 +408,18 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 germ=_objs.Circuit(("Ggerm",)), pp=pre_povm_tuples,
                 order=('f0', 'f1', 'pp'))
 
-            evTree, blkSz, _, lookup, _ = gsGerm.bulk_evaltree_from_resources(
-                lst, mem_limit=mem_limit, distribute_method="deriv",
-                subcalls=['bulk_fill_dprobs'], verbosity=0)
+            layout = gsGerm.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
+                                              array_types=('dp',), verbosity=0)
 
             elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
             nPrepPOVM = len(pre_povm_tuples)
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
                     # "original" indices into lst for k-th fiducial pair
-                    elIndicesForPair[k].extend(list(_slct.indices(lookup[o])))
+                    elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
-            dPall = _np.empty((evTree.num_final_elements(), gsGerm.num_params()), 'd')
-            gsGerm.bulk_fill_dprobs(dPall, evTree, wrt_block_size=blkSz)  # num_els x num_params
+            dPall = _np.empty((layout.num_elements, gsGerm.num_params()), 'd')
+            gsGerm.sim.bulk_fill_dprobs(dPall, layout)  # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -584,18 +582,14 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
             expGerm = _gsc.repeat_with_max_length(germ, length)  # could pass exponent and set to germ**exp here
             pairList = fid_pairs[germ] if isinstance(fid_pairs, dict) else fid_pairs
             circuits += _gsc.create_circuits("pp[0]+p[0]+expGerm+p[1]+pp[1]",
-                                                 p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
-                                                 pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
+                                             p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
+                                             pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
-        evTree, wrtSize, _, _, _ = target_model.bulk_evaltree_from_resources(
-            circuits, mem_limit=mem_limit, distribute_method="deriv",
-            subcalls=['bulk_fill_dprobs'], verbosity=0)
-
-        dP = _np.empty((evTree.num_final_elements(), nModelParams))
-        #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|Circuit|AM>)/d(iGatesetParam)
-
-        target_model.bulk_fill_dprobs(dP, evTree, wrt_block_size=wrtSize)
+        layout = target_model.sim.create_layout(circuits, resource_alloc={'mem_limit': mem_limit},
+                                                array_types=('dp',), verbosity=0)
+        dP = _np.empty((layout.num_elements, nModelParams))
+        target_model.sim.bulk_fill_dprobs(dP, layout)
         return dP
 
     def get_number_amplified(m0, m1, len0, len1):

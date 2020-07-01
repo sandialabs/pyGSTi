@@ -1598,7 +1598,8 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
-        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
+        # return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
+        return Circuit(tuple(parallel_lbls), self.line_labels, editable=False)
 
     def expand_subcircuits(self):
         """

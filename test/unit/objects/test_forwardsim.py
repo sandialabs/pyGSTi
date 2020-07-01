@@ -1,3 +1,5 @@
+# XXX rewrite or remove
+
 import numpy as np
 from unittest import mock
 
@@ -44,7 +46,6 @@ class AbstractForwardSimTester(BaseCase):
 class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
-        # XXX can this be constructed directly instead of taking it from a model instance?  EGN: yet, but maybe painful - see model's ._fwdsim()
         ExplicitOpModel._strict = False
         cls.model = pc.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -52,7 +53,7 @@ class ForwardSimBase(object):
         )
 
     def setUp(self):
-        self.fwdsim = self.model._fwdsim()
+        self.fwdsim = self.model.sim
         self.evt, self.lookup, _ = self.model.bulk_evaltree([('Gx',), ('Gx', 'Gx')])
         self.nP = self.model.num_params()
         self.nEls = self.evt.num_final_elements()

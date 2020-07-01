@@ -352,10 +352,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             new_effects.append((effectLabel, new_vec))
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
 
-            #Also convey default gauge group & calc class from guess_model_for_gauge
+            #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel._calcClass = guess_model_for_gauge._calcClass
+            lgstModel.sim = guess_model_for_gauge.sim.copy()
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -785,7 +785,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
             else:
                 models.append(mdc_store.model.copy())
-                
+
             optimums.append(opt_result)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))

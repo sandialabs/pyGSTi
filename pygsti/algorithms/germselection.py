@@ -26,7 +26,7 @@ FLOATSIZE = 8  # in bytes: TODO: a better way
 
 
 def find_germs(target_model, randomize=True, randomization_strength=1e-2,
-                   num_gs_copies=5, seed=None, candidate_germ_counts=None,
+               num_gs_copies=5, seed=None, candidate_germ_counts=None,
                    candidate_seed=None, force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, mem_limit=None, comm=None,
                    profiler=None, verbosity=1):
@@ -928,7 +928,7 @@ def _twirled_deriv(model, circuit, eps=1e-6):
     prod = model.product(circuit)
 
     # flattened_op_dim x vec_model_dim
-    dProd = model.dproduct(circuit, flat=True)
+    dProd = model.sim.dproduct(circuit, flat=True)
 
     # flattened_op_dim x flattened_op_dim
     twirler = _super_op_for_perfect_twirl(prod, eps)
@@ -974,26 +974,19 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
-    evalTree, lookup, _ = model.bulk_evaltree(circuits)
-    dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
+    resource_alloc = _objs.ResourceAllocation(comm=comm)
+    dProds, prods = model.sim.bulk_dproduct(circuits, flat=True, return_prods=True, resource_alloc=resource_alloc)
     op_dim = model.dim
     fd = op_dim**2  # flattened gate dimension
+    nCircuits = len(circuits)
 
-    nOrigStrs = len(circuits)
-
-    ret = _np.empty((nOrigStrs, fd, dProds.shape[1]), 'complex')
-    for iOrig in range(nOrigStrs):
-        iArray = _slct.to_array(lookup[iOrig])
-        assert(iArray.size == 1), ("Simplified lookup table should have length-1"
-                                   " element slices!  Maybe you're using a"
-                                   " Model without SPAM elements removed?")
-        i = iArray[0]  # get evalTree-final index (within dProds or prods)
-
+    ret = _np.empty((nCircuits, fd, dProds.shape[1]), 'complex')
+    for i in range(nCircuits):
         # flattened_op_dim x flattened_op_dim
         twirler = _super_op_for_perfect_twirl(prods[i], eps)
 
         # flattened_op_dim x vec_model_dim
-        ret[iOrig] = _np.dot(twirler, dProds[i * fd:(i + 1) * fd])
+        ret[i] = _np.dot(twirler, dProds[i * fd:(i + 1) * fd])
 
     if check:
         for i, circuit in enumerate(circuits):
@@ -1008,7 +1001,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
 
 def test_germ_set_finitel(model, germs_to_test, length, weights=None,
-                           return_spectrum=False, tol=1e-6):
+                          return_spectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1056,17 +1049,8 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
     germToPowL = [germ * length for germ in germs_to_test]
 
     op_dim = model.dim
-    evt, lookup, _ = model.bulk_evaltree(germToPowL)
-
-    # shape (nGerms*flattened_op_dim, vec_model_dim)
-    dprods = model.bulk_dproduct(evt, flat=True)
-    dprods.shape = (evt.num_final_circuits(), op_dim**2, dprods.shape[1])
-    prod_inds = [_slct.to_array(lookup[i]) for i in range(nGerms)]
-    assert(all([len(x) == 1 for x in prod_inds])), \
-        ("Simplified lookup table should have length-1"
-         " element slices!  Maybe you're using a"
-         " Model without SPAM elements removed?")
-    dprods = _np.take(dprods, _np.concatenate(prod_inds), axis=0)
+    dprods = model.sim.bulk_dproduct(germToPowL, flat=True)  # shape (nGerms*flattened_op_dim, vec_model_dim)
+    dprods.shape = (nGerms, op_dim**2, dprods.shape[1])
     # shape (nGerms, flattened_op_dim, vec_model_dim
 
     germLengths = _np.array([len(germ) for germ in germs_to_test], 'd')
@@ -1085,7 +1069,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
-                        return_spectrum=False, threshold=1e6, check=False):
+                       return_spectrum=False, threshold=1e6, check=False):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 

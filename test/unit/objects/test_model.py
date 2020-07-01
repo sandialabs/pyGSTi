@@ -1,3 +1,5 @@
+# XXX rewrite/refactor forward-simulator tests
+
 import numpy as np
 import pickle
 from contextlib import contextmanager
@@ -6,7 +8,7 @@ import functools
 from ..util import BaseCase, needs_cvxpy
 
 from pygsti.objects import ExplicitOpModel, Instrument, LinearOperator, \
-    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim
+    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim, mapforwardsim
 from pygsti.tools import indices
 import pygsti.construction as pc
 import pygsti.objects.model as m
@@ -637,7 +639,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
-        self.model.set_simtype('map')
+        self.model.sim = mapforwardsim.MapForwardSimulator(self.model)
 
     def test_bulk_evaltree(self):
         # Test tree construction
