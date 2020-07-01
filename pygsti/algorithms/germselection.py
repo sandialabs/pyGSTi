@@ -928,7 +928,7 @@ def _twirled_deriv(model, circuit, eps=1e-6):
     prod = model.product(circuit)
 
     # flattened_op_dim x vec_model_dim
-    dProd = model.dproduct(circuit, flat=True)
+    dProd = model.sim.dproduct(circuit, flat=True)
 
     # flattened_op_dim x flattened_op_dim
     twirler = _super_op_for_perfect_twirl(prod, eps)
@@ -974,6 +974,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
+    # XXX model.bulk_evaltree has been removed
     evalTree, lookup, _ = model.bulk_evaltree(circuits)
     dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
     op_dim = model.dim
@@ -1056,6 +1057,8 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
     germToPowL = [germ * length for germ in germs_to_test]
 
     op_dim = model.dim
+
+    # XXX model.bulk_evaltree has been removed
     evt, lookup, _ = model.bulk_evaltree(germToPowL)
 
     # shape (nGerms*flattened_op_dim, vec_model_dim)

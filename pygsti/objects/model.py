@@ -831,7 +831,7 @@ class OpModel(Model):
             is always returned and errors are never raised, since in this
             case one usually doesn't expect to use the Model to compute
             probabilities (e.g. in germ selection).
-    
+
         Returns
         -------
         prepLabel : str or None

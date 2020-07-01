@@ -2346,6 +2346,8 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         final_indices = [dest_indices[j] for j in layout_atom.elindices_by_expcircuit[iDest]]
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
         model = fwdsim.model  # just for faster inner loop performance
+
+        # XXX model._layerop_cache is never defined?
         opcache = fwdsim.model._layerop_cache  # use knowledge of internals for faster innerloop performance
 
         n = len(datarow_reps) # == len(datarow.time)
@@ -3032,7 +3034,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
         for i in foat_indices:
             repcel.foat_indices.push_back(<INT>i)
         repcache[rholabel] = repcel
-        
+
     rho_term_reps = repcel.reps
     rho_foat_indices = repcel.foat_indices
 
@@ -3058,7 +3060,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
             repcel.e_indices.push_back(<INT>i)
             if(is_foat): repcel.foat_indices.push_back(<INT>j)
         repcache[elabels] = repcel
-        
+
     E_term_reps = repcel.reps
     e_indices = repcel.e_indices
     E_foat_indices = repcel.foat_indices

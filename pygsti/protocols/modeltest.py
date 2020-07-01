@@ -218,6 +218,6 @@ class ModelTest(_proto.Protocol):
         if target_model is not None:
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters), estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdc_store, target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, mdc_store.model, target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
                                         self.objfn_builders[-1], None, resource_alloc, printer)

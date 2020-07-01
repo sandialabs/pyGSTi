@@ -733,7 +733,7 @@ class GateSetTomography(_proto.Protocol):
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, final_store, data.edesign.target_model,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store.model, data.edesign.target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, parameters['final_objfn_builder'], self.optimizer,
                                         resource_alloc, printer)
@@ -1327,12 +1327,11 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
     return ds
 
 
-def _add_gaugeopt_and_badfit(results, estlbl, mdc_store, target_model, gaugeopt_suite, gaugeopt_target,
+def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
                              unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
     tref = _time.time()
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
-    model_to_gaugeopt = mdc_store.model
 
     #Do final gauge optimization to *final* iteration result only
     if gaugeopt_suite:

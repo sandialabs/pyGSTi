@@ -158,6 +158,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 expGerm=expGerm, pp=pre_povm_tuples, order=('f0', 'f1', 'pp'))
 
+            # XXX model.bulk_evaltree_from_resources has been removed
             evTree, blkSz, _, lookup, _ = target_model.bulk_evaltree_from_resources(
                 lst, mem_limit=mem_limit, distribute_method="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
@@ -389,7 +390,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
-            germMx = gsGerm.product(germ)
+            germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
@@ -409,6 +410,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 germ=_objs.Circuit(("Ggerm",)), pp=pre_povm_tuples,
                 order=('f0', 'f1', 'pp'))
 
+            # XXX model.bulk_evaltree_from_resources has been removed
             evTree, blkSz, _, lookup, _ = gsGerm.bulk_evaltree_from_resources(
                 lst, mem_limit=mem_limit, distribute_method="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
@@ -584,10 +586,11 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
             expGerm = _gsc.repeat_with_max_length(germ, length)  # could pass exponent and set to germ**exp here
             pairList = fid_pairs[germ] if isinstance(fid_pairs, dict) else fid_pairs
             circuits += _gsc.create_circuits("pp[0]+p[0]+expGerm+p[1]+pp[1]",
-                                                 p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
-                                                 pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
+                                             p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
+                                             pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
+        # XXX model.bulk_evaltree_from_resources has been removed
         evTree, wrtSize, _, _, _ = target_model.bulk_evaltree_from_resources(
             circuits, mem_limit=mem_limit, distribute_method="deriv",
             subcalls=['bulk_fill_dprobs'], verbosity=0)
