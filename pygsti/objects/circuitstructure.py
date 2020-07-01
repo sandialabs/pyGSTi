@@ -13,6 +13,7 @@ Defines the CircuitStructure class and supporting functionality.
 import numpy as _np
 import copy as _copy
 import itertools as _itertools
+import collections as _collections
 from ..tools import listtools as _lt
 from .circuit import Circuit as _Circuit
 from .circuitlist import CircuitList as _CircuitList
@@ -26,7 +27,7 @@ class CircuitPlaquette(object):
     ----------
     elements : dict
         A dictionary with `(i,j)` keys, where `i` and `j` are row and column
-v        indices and :class:`Circuit` values.
+        indices and :class:`Circuit` values.
 
     num_rows : int, optional
         The number of rows in this plaquette.  If None, then this is set to one
@@ -45,7 +46,7 @@ v        indices and :class:`Circuit` values.
         """
         Create a new CircuitPlaquette.
         """
-        self.elements = elements.copy()
+        self.elements = _collections.OrderedDict(elements)
         self.op_label_aliases = op_label_aliases
 
         if num_rows is None:
@@ -326,7 +327,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         -------
         FiducialPairPlaquette
         """
-        aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) else None
+        aliases = _copy.deepcopy(self.op_label_aliases) if (self.op_label_aliases is not None) else None
         return FiducialPairPlaquette(self.base, self.fidpairs, self.num_rows, self.num_cols, aliases)
 
     def summary_label(self):
@@ -464,8 +465,8 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         -------
         GermFiducialPairPlaquette
         """
-        aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) else None
-        return GermFiducialPairPlaquette(self.germ, self.power, self.fidpairs[:], self.num_rows, self.num_cols,
+        aliases = _copy.deepcopy(self.op_label_aliases) if (self.op_label_aliases is not None) else None
+        return GermFiducialPairPlaquette(self.germ, self.power, self.fidpairs.copy(), self.num_rows, self.num_cols,
                                          aliases)
 
     def summary_label(self):
@@ -524,14 +525,19 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         self.xlabel = xlabel
         self.ylabel = ylabel
 
-        circuits = set()
+        circuits = _collections.OrderedDict()  # use as an ordered *set* (values all == None)
         for plaq in plaquettes.values():
-            circuits.update(plaq.circuits)
-        additional = set(additional_circuits) - circuits
-        circuits = circuits.union(additional)
-        self._additional_circuits = tuple(sorted(additional))
+            circuits.update([(c, None) for c in plaq.circuits])
 
-        circuits = sorted(circuits)
+        if additional_circuits is None:
+            additional_circuits = []
+        additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+        circuits.update(additional)
+
+        # ordered-sets => tuples
+        self._additional_circuits = tuple(additional.keys())  
+        circuits = tuple(circuits.keys())
+
         circuit_weights = None if (circuit_weights_dict is None) else \
             _np.array([circuit_weights_dict.get(c, 0.0) for c in circuits], 'd')
         super().__init__(circuits, op_label_aliases, circuit_weights, name)
@@ -625,6 +631,36 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             if (circuits_to_keep is not None) else self._additional_circuits
         return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
                                              self.op_label_aliases, circuit_weights_dict, self.name)
+
+    def nested_truncations(self, axis='x'):
+        """
+        Get the nested truncations of this circuit structure along an axis.
+
+        When `axis == 'x'`, a list of truncations (of this structure)
+        that keep an incrementally larger set of all the x-values.  E.g.,
+        if the x-values are `[1,2,4]`, truncations to `[1]`, `[1,2]`,
+        and `[1,2,4]` (no truncation) would be returned.
+
+        Setting `axis =='y'` gives the same behavior except using
+        the y-values.
+
+        Parameters
+        ----------
+        axis : {'x', 'y'}
+            Which axis to truncate along (see above).
+
+        Returns
+        -------
+        list
+            A list of :class:`PlaquetteGridCircuitStructure` objects
+            (truncations of this object).
+        """
+        if axis == 'x':
+            return [self.truncate(xs_to_keep=self.xs[0:i + 1]) for i in range(len(self.xs))]
+        elif axis == 'y':
+            return [self.truncate(ys_to_keep=self.ys[0:i + 1]) for i in range(len(self.ys))]
+        else:
+            raise ValueError(f"Invalid `axis` argument: {axis} - must be 'x' or 'y'!")
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
