@@ -163,7 +163,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             #FUTURE: assert that no instruments are allowed?
 
             dP = _np.empty((layout.num_elements, target_model.num_params()), 'd')
-            target_model.bulk_fill_dprobs(dP, layout)  # num_els x num_params
+            target_model.sim.bulk_fill_dprobs(dP, layout)  # num_els x num_params
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final circuit of evTree)
@@ -416,10 +416,10 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
                     # "original" indices into lst for k-th fiducial pair
-                    elIndicesForPair[k].extend(list(_slct.indices(layout.indices_for_index(o))))
+                    elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
             dPall = _np.empty((layout.num_elements, gsGerm.num_params()), 'd')
-            gsGerm.bulk_fill_dprobs(dPall, layout)  # num_els x num_params
+            gsGerm.sim.bulk_fill_dprobs(dPall, layout)  # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -589,7 +589,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         layout = target_model.sim.create_layout(circuits, resource_alloc={'mem_limit': mem_limit},
                                                 array_types=('dp',), verbosity=0)
         dP = _np.empty((layout.num_elements, nModelParams))
-        target_model.bulk_fill_dprobs(dP, layout)
+        target_model.sim.bulk_fill_dprobs(dP, layout)
         return dP
 
     def get_number_amplified(m0, m1, len0, len1):
