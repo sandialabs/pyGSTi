@@ -26,7 +26,7 @@ FLOATSIZE = 8  # in bytes: TODO: a better way
 
 
 def find_germs(target_model, randomize=True, randomization_strength=1e-2,
-                   num_gs_copies=5, seed=None, candidate_germ_counts=None,
+               num_gs_copies=5, seed=None, candidate_germ_counts=None,
                    candidate_seed=None, force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, mem_limit=None, comm=None,
                    profiler=None, verbosity=1):
@@ -974,9 +974,9 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
-    # XXX model.bulk_evaltree has been removed
-    evalTree, lookup, _ = model.bulk_evaltree(circuits)
-    dProds, prods = model.bulk_dproduct(evalTree, flat=True, return_prods=True, comm=comm)
+    resource_alloc = _objs.ResourceAllocation(comm=comm)    
+    layout = model.sim.create_layout(circuits, array_types=('dp',), verbosity=0)
+    dProds, prods = model.sim.bulk_dproduct(layout, flat=True, return_prods=True, resource_alloc=resource_alloc)
     op_dim = model.dim
     fd = op_dim**2  # flattened gate dimension
 
@@ -984,7 +984,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
     ret = _np.empty((nOrigStrs, fd, dProds.shape[1]), 'complex')
     for iOrig in range(nOrigStrs):
-        iArray = _slct.to_array(lookup[iOrig])
+        iArray = _slct.to_array(layout.indices_for_index(iOrig))
         assert(iArray.size == 1), ("Simplified lookup table should have length-1"
                                    " element slices!  Maybe you're using a"
                                    " Model without SPAM elements removed?")
@@ -1009,7 +1009,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
 
 
 def test_germ_set_finitel(model, germs_to_test, length, weights=None,
-                           return_spectrum=False, tol=1e-6):
+                          return_spectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1056,15 +1056,12 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
     nGerms = len(germs_to_test)
     germToPowL = [germ * length for germ in germs_to_test]
 
+    layout = model.sim.create_layout(germToPowL, array_types=('dp',), verbosity=0)
+
     op_dim = model.dim
-
-    # XXX model.bulk_evaltree has been removed
-    evt, lookup, _ = model.bulk_evaltree(germToPowL)
-
-    # shape (nGerms*flattened_op_dim, vec_model_dim)
-    dprods = model.bulk_dproduct(evt, flat=True)
-    dprods.shape = (evt.num_final_circuits(), op_dim**2, dprods.shape[1])
-    prod_inds = [_slct.to_array(lookup[i]) for i in range(nGerms)]
+    dprods = model.sim.bulk_dproduct(layout, flat=True)  # shape (nGerms*flattened_op_dim, vec_model_dim)
+    dprods.shape = (layout.num_circuits, op_dim**2, dprods.shape[1])
+    prod_inds = [_slct.to_array(layout.indices_for_index(i)) for i in range(nGerms)]
     assert(all([len(x) == 1 for x in prod_inds])), \
         ("Simplified lookup table should have length-1"
          " element slices!  Maybe you're using a"
@@ -1088,7 +1085,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
-                        return_spectrum=False, threshold=1e6, check=False):
+                       return_spectrum=False, threshold=1e6, check=False):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
