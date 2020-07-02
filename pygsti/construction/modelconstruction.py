@@ -83,7 +83,7 @@ def _basis_create_spam_vector(vec_expr, basis):
     std_basis = basis.create_equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix(), vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix, vecInSimpleStdBasis.flatten())
     # translates the density matrx / SPAMVec to the std basis with our desired block structure
 
     #TODO REMOVE

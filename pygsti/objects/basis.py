@@ -448,12 +448,12 @@ class Basis(object):
 
         #Note same logic as matrixtools.safe_dot(...)
         if to_basis.sparse:
-            return to_basis.from_std_transform_matrix().dot(self.to_std_transform_matrix())
+            return to_basis.from_std_transform_matrix.dot(self.to_std_transform_matrix)
         elif self.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix()).dot(self.to_std_transform_matrix())
-            return _np.dot(to_basis.from_std_transform_matrix(), self.to_std_transform_matrix().toarray())
+            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
+            return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix.toarray())
         else:
-            return _np.dot(to_basis.from_std_transform_matrix(), self.to_std_transform_matrix())
+            return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix)
 
     def reverse_transform_matrix(self, from_basis):
         """
@@ -477,12 +477,12 @@ class Basis(object):
 
         #Note same logic as matrixtools.safe_dot(...)
         if self.sparse:
-            return self.from_std_transform_matrix().dot(from_basis.to_std_transform_matrix())
+            return self.from_std_transform_matrix.dot(from_basis.to_std_transform_matrix)
         elif from_basis.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix()).dot(self.to_std_transform_matrix())
-            return _np.dot(self.from_std_transform_matrix(), from_basis.to_std_transform_matrix().toarray())
+            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
+            return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix.toarray())
         else:
-            return _np.dot(self.from_std_transform_matrix(), from_basis.to_std_transform_matrix())
+            return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix)
 
     @lru_cache(maxsize=128)
     def is_normalized(self):
@@ -506,6 +506,7 @@ class Basis(object):
         else:
             raise ValueError("I don't know what normalized means for elndim == %d!" % self.elndim)
 
+    @property
     @lru_cache(maxsize=128)
     def to_std_transform_matrix(self):
         """
@@ -527,6 +528,7 @@ class Basis(object):
             toStd[:, i] = vel
         return toStd
 
+    @property
     @lru_cache(maxsize=128)
     def from_std_transform_matrix(self):
         """
@@ -541,26 +543,27 @@ class Basis(object):
         """
         if self.sparse:
             if self.is_complete():
-                return _spsl.inv(self.to_std_transform_matrix().tocsc()).tocsr()
+                return _spsl.inv(self.to_std_transform_matrix.tocsc()).tocsr()
             else:
                 assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.to_std_transform_matrix()  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
                 Adag = A.getH()        # shape (size, dim)
                 invAdagA = _spsl.inv(Adag.tocsr().dot(A.tocsc())).tocsr()
                 return invAdagA.dot(Adag.tocsc())
         else:
             if self.is_complete():
-                return _inv(self.to_std_transform_matrix())
+                return _inv(self.to_std_transform_matrix)
             else:
                 assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.to_std_transform_matrix()  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
                 Adag = A.transpose().conjugate()  # shape (size, dim)
                 return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
+    @property
     @lru_cache(maxsize=128)
     def to_elementstd_transform_matrix(self):
         """
@@ -584,8 +587,9 @@ class Basis(object):
         # acts upon (this is *not* true for direct-sum bases, where the flattened
         # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
         assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
-        return self.to_std_transform_matrix()
+        return self.to_std_transform_matrix
 
+    @property
     @lru_cache(maxsize=128)
     def from_elementstd_transform_matrix(self):  # OLD: get_expand_mx(self):
         """
@@ -606,7 +610,7 @@ class Basis(object):
         """
         if self.sparse:
             raise NotImplementedError("from_elementstd_transform_matrix not implemented for sparse mode")  # (b/c pinv used)
-        return _np.linalg.pinv(self.to_elementstd_transform_matrix())
+        return _np.linalg.pinv(self.to_elementstd_transform_matrix)
 
     def create_equivalent(self, builtin_basis_name):
         """
@@ -1139,6 +1143,7 @@ class DirectSumBasis(LazyBasis):
             self._lazy_build_vector_elements()
         return self._vector_elements
 
+    @property
     @lru_cache(maxsize=128)
     def to_std_transform_matrix(self):
         """
@@ -1162,6 +1167,7 @@ class DirectSumBasis(LazyBasis):
             toStd[:, i] = vel
         return toStd
 
+    @property
     @lru_cache(maxsize=128)
     def to_elementstd_transform_matrix(self):
         """
