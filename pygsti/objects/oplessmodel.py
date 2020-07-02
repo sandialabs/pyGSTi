@@ -954,8 +954,8 @@ class ErrorRatesModel(SuccessFailModel):
         if not isinstance(circuit, _Circuit):
             circuit = _Circuit.from_tuple(circuit)
 
-        depth = circuit.depth()
-        width = circuit.width()
+        depth = circuit.depth
+        width = circuit.width
         g_inds = self._gate_error_rate_indices
         r_inds = self._readout_error_rate_indices
 
@@ -1377,7 +1377,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     #     if not isinstance(circuit, _Circuit):
     #         circuit = _Circuit.from_tuple(circuit)
 
-    #     depth = circuit.depth()
+    #     depth = circuit.depth
     #     width = circuit.width()
     #     pvec = self._paramvec
     #     g_inds = self._gate_error_rate_indices

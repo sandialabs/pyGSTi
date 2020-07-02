@@ -11,15 +11,15 @@ class CircuitTester(BaseCase):
     def test_construct_from_empty(self):
         # Test initializing a circuit from an empty circuit.
         c = circuit.Circuit(num_lines=5)
-        self.assertEqual(c.depth(), 0)
-        self.assertEqual(c.size(), 0)
-        self.assertEqual(c.number_of_lines(), 5)
+        self.assertEqual(c.depth, 0)
+        self.assertEqual(c.size, 0)
+        self.assertEqual(c.number_of_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
         c = circuit.Circuit(layer_labels=[], num_lines=5)
-        self.assertEqual(c.depth(), 0)
-        self.assertEqual(c.size(), 0)
-        self.assertEqual(c.number_of_lines(), 5)
+        self.assertEqual(c.depth, 0)
+        self.assertEqual(c.size, 0)
+        self.assertEqual(c.number_of_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
     def test_construct_from_label(self):
@@ -29,9 +29,9 @@ class CircuitTester(BaseCase):
         labels = [Label('Gi', 'Q0'), Label('Gp', 'Q8')]
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'])
         # Not parallelized by default, so will be depth 2.
-        self.assertEqual(c.depth(), 2)
-        self.assertEqual(c.size(), 2)
-        self.assertEqual(c.number_of_lines(), 4)
+        self.assertEqual(c.depth, 2)
+        self.assertEqual(c.size, 2)
+        self.assertEqual(c.number_of_lines, 4)
         self.assertEqual(c.line_labels, ('Q0', 'Q1', 'Q8', 'Q12'))
 
     def test_construct_from_label_parallelized(self):
@@ -39,8 +39,8 @@ class CircuitTester(BaseCase):
         labels = [Label('Gi', 'Q0'), Label('Gp', 'Q8')]
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8'])
         c = c.parallelize()
-        self.assertEqual(c.depth(), 1)
-        self.assertEqual(c.size(), 2)
+        self.assertEqual(c.depth, 1)
+        self.assertEqual(c.size, 2)
 
     def test_construction_label_conversion(self):
         # XXX what is tested here that is not covered by other tests?  EGN: this is more of a use case for when this input is a *nested* tuple.
@@ -53,14 +53,14 @@ class CircuitTester(BaseCase):
         # Now repeat the read-in with no parallelize, but a list of lists of oplabels
         labels = [[Label('Gi', 'Q0'), Label('Gp', 'Q8')], [Label('Gh', 'Q1'), Label('Gp', 'Q12')]]
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'])
-        self.assertLess(0, c.depth())
+        self.assertLess(0, c.depth)
 
     def test_construct_from_label_without_qubit_labels(self):
         # Check we can read-in a circuit that has no qubit labels: enforces them to be on
         # all of the lines.
         labels = circuit.Circuit(None, stringrep="Gx^2GyGxGi")
         c = circuit.Circuit(layer_labels=labels, num_lines=1)
-        self.assertEqual(c.depth(), 5)
+        self.assertEqual(c.depth, 5)
 
     def test_construct_from_label_editable(self):
         # Check that we can create a circuit from a string and that we end up with
@@ -69,8 +69,8 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'], editable=True)
         c2 = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'], editable=False)
         self.assertEqual(c.tup, c2.tup)
-        self.assertEqual(c.depth(), 5)
-        self.assertEqual(c.size(), 8)
+        self.assertEqual(c.depth, 5)
+        self.assertEqual(c.size, 8)
 
     def test_construct_from_circuit(self):
         # Check we can init from another circuit
@@ -156,8 +156,8 @@ class CircuitTester(BaseCase):
 
         tup = ('Gi', ('', (0, 1), 2, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3)
         self.assertEqual(c, tup)
-        self.assertEqual(c.num_layers(), 3)
-        self.assertEqual(c.depth(), 6)
+        self.assertEqual(c.num_layers, 3)
+        self.assertEqual(c.depth, 6)
         # Qubit 0 ---|Gi|-||([Gx:0Gx:1]Gy:1)^2||-| |---
         # Qubit 1 ---|Gi|-||([Gx:0Gx:1]Gy:1)^2||-| |---
         # Qubit 2 ---|Gi|-|                    |-| |---
@@ -166,8 +166,8 @@ class CircuitTester(BaseCase):
         c = c1.copy()
         c[1, 0:2] = c2  # special behavior: c2 is converted to a label to cram it into a single layer
         self.assertEqual(c, ('Gi', ('', (0, 1), 1, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3))
-        self.assertEqual(c.num_layers(), 3)
-        self.assertEqual(c.depth(), 4)
+        self.assertEqual(c.num_layers, 3)
+        self.assertEqual(c.depth, 4)
 
         # Qubit 0 ---|Gi|-||([Gx:0Gx:1]Gy:1)||-| |---
         # Qubit 1 ---|Gi|-||([Gx:0Gx:1]Gy:1)||-| |---
@@ -177,8 +177,8 @@ class CircuitTester(BaseCase):
         c = c1.copy()
         c[(1, 2), 0:2] = c2  # writes into described block
         self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
-        self.assertEqual(c.num_layers(), 3)
-        self.assertEqual(c.depth(), 3)
+        self.assertEqual(c.num_layers, 3)
+        self.assertEqual(c.depth, 3)
         # Qubit 0 ---|Gi|-|Gx|-|  |---
         # Qubit 1 ---|Gi|-|Gx|-|Gy|---
         # Qubit 2 ---|Gi|-|  |-|  |---
@@ -187,8 +187,8 @@ class CircuitTester(BaseCase):
         c = c1.copy()
         c[(1, 2), 0:2] = c2.to_label().components  # same as above, but more roundabout
         self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
-        self.assertEqual(c.num_layers(), 3)
-        self.assertEqual(c.depth(), 3)
+        self.assertEqual(c.num_layers, 3)
+        self.assertEqual(c.depth, 3)
 
     def test_empty_tuple_makes_idle_layer(self):
         c = circuit.Circuit(['Gi', Label(())])
@@ -227,24 +227,24 @@ class CircuitMethodTester(BaseCase):
         # Test inserting a gate when the relevant qubits aren't
         # idling at that layer
         self.c.insert_labels_into_layers([Label('Gx', 'Q0')], 2)
-        self.assertEqual(self.c.size(), 9)
-        self.assertEqual(self.c.depth(), 6)
+        self.assertEqual(self.c.size, 9)
+        self.assertEqual(self.c.depth, 6)
         self.assertEqual(self.c[2, 'Q0'], Label('Gx', 'Q0'))
 
     def test_insert_labels_into_layers_with_idle_qubits(self):
         # Test inserting a gate when the relevant qubits are
         # idling at that layer -- depth shouldn't increase
         self.c[2, 'Q1'] = Label('Gx', 'Q1')
-        self.assertEqual(self.c.size(), 8)
-        self.assertEqual(self.c.depth(), 5)
+        self.assertEqual(self.c.size, 8)
+        self.assertEqual(self.c.depth, 5)
         self.assertEqual(self.c[2, 'Q1'], Label('Gx', 'Q1'))
 
     def test_insert_layer(self):
         # Test layer insertion
         layer = [Label('Gx', 'Q1'), ]
         self.c.insert_layer(layer, 1)
-        self.assertEqual(self.c.size(), 9)
-        self.assertEqual(self.c.depth(), 6)
+        self.assertEqual(self.c.size, 9)
+        self.assertEqual(self.c.depth, 6)
         self.assertEqual(self.c[1], Label('Gx', 'Q1'))
         self.c.insert_layer([], 1)
         self.assertTrue(len(self.c[1, ('Q0', 'Q1')].components) == 0)
@@ -260,12 +260,12 @@ class CircuitMethodTester(BaseCase):
         # Test replacing a layer with a layer.
         newlayer = [Label('Gx', 'Q0')]
         self.c[1] = newlayer
-        self.assertEqual(self.c.depth(), 5)
+        self.assertEqual(self.c.depth, 5)
 
     def test_replace_layer_with_circuit(self):
         # Test replacing a layer with a circuit
         self.c.replace_layer_with_circuit(self.c.copy(), 1)
-        self.assertEqual(self.c.depth(), 2 * 5 - 1)
+        self.assertEqual(self.c.depth, 2 * 5 - 1)
 
     def test_delete_layers(self):
         # Test layer deletion
@@ -287,14 +287,14 @@ class CircuitMethodTester(BaseCase):
         c2 = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1', 'Q2', 'Q3'])
         self.c.insert_circuit(c2, 0)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines(), 2)
+        self.assertEqual(self.c.number_of_lines, 2)
 
     def test_insert_circuit_with_qubit_subset(self):
         # Test inserting a circuit that is on *less* qubits.
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ])
         self.c.insert_circuit(c2, 1)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines(), 2)
+        self.assertEqual(self.c.number_of_lines, 2)
 
     def test_append_circuit(self):
         # Test appending
@@ -312,7 +312,7 @@ class CircuitMethodTester(BaseCase):
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
         self.c.tensor_circuit(c2)
-        self.assertEqual(self.c.depth(), max(self.c.depth(), c2.depth()))
+        self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
         self.assertEqual(self.c[:, 'Q2'], c2[:, 'Q2'])
 
     def test_tensor_circuit_with_shorter(self):
@@ -320,14 +320,14 @@ class CircuitMethodTester(BaseCase):
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
         self.c.tensor_circuit(c2, line_order=['Q1', 'Q3', 'Q0', 'Q2'])
-        self.assertEqual(self.c.depth(), max(self.c.depth(), c2.depth()))
+        self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
     def test_tensor_circuit_with_longer(self):
         # Test tensoring circuits where the inserted circuit is shorter
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3Gy:Q2")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
         self.c.tensor_circuit(c2)
-        self.assertEqual(self.c.depth(), max(self.c.depth(), c2.depth()))
+        self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
     def test_replace_gatename_inplace(self):
         # Test changing a gate name
@@ -375,10 +375,10 @@ class CircuitMethodTester(BaseCase):
         # Test deleting and inserting idling wires.
         self.c._append_idling_lines(['Q2'])
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
-        self.assertEqual(self.c.number_of_lines(), 3)
+        self.assertEqual(self.c.number_of_lines, 3)
         self.c.delete_idling_lines()
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines(), 2)
+        self.assertEqual(self.c.number_of_lines, 2)
 
     def test_circuit_reverse(self):
         # Test circuit reverse.
@@ -394,10 +394,10 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(c.two_q_gate_count(), 2)
 
     def test_multiQgate_count(self):
-        self.assertEqual(self.c.num_multiq_gates(), 0)
+        self.assertEqual(self.c.num_multiq_gates, 0)
         labels = circuit.Circuit(None, stringrep="[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1")
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q2'])
-        self.assertEqual(c.num_multiq_gates(), 3)
+        self.assertEqual(c.num_multiq_gates, 3)
 
     def test_to_string(self):
         s = str(self.c)
@@ -410,11 +410,11 @@ class CircuitMethodTester(BaseCase):
         labels = circuit.Circuit(ls)
         c = circuit.Circuit(layer_labels=labels, num_lines=4, editable=True)
         c.compress_depth_inplace(verbosity=0)
-        self.assertEqual(c.depth(), 7)
+        self.assertEqual(c.depth, 7)
         # Get a dictionary that relates H, P gates etc.
         oneQrelations = symplectic.one_q_clifford_symplectic_group_relations()
         c.compress_depth_inplace(one_q_gate_relations=oneQrelations)
-        self.assertEqual(c.depth(), 3)
+        self.assertEqual(c.depth, 3)
 
     @unittest.skip("unused (remove?)")
     def test_predicted_error_probability(self):
@@ -504,9 +504,9 @@ class CircuitOperationTester(BaseCase):
 
     def test_clear(self):
         c = self.s1.copy(editable=True)
-        self.assertEqual(c.size(), 2)
+        self.assertEqual(c.size, 2)
         c.clear()
-        self.assertEqual(c.size(), 0)
+        self.assertEqual(c.size, 0)
 
 
 class CompressedCircuitTester(BaseCase):

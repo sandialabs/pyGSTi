@@ -46,7 +46,7 @@ def _create_standard_costfunction(name):
             return circuit.two_q_gate_count()
     elif name == 'depth':
         def costfunction(circuit, junk):  # Junk input as no processorspec is needed here.
-            return circuit.depth()
+            return circuit.depth
 
     # This allows for '2QGC:x:depth:y' strings
     elif name[:4] == '2QGC':
@@ -59,7 +59,7 @@ def _create_standard_costfunction(name):
         except: raise ValueError("This `costfunction` string is not a valid option!")
 
         def costfunction(circuit, junk):  # Junk input as no processorspec is needed here.
-            return twoQGCfactor * circuit.two_q_gate_count() + depthfactor * circuit.depth()
+            return twoQGCfactor * circuit.two_q_gate_count() + depthfactor * circuit.depth
 
     else: raise ValueError("This `costfunction` string is not a valid option!")
     return costfunction
@@ -424,7 +424,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     # If we want to Pauli randomize the circuits, we insert a random compiled Pauli layer between every layer.
     if paulirandomize:
         paulilist = ['I', 'X', 'Y', 'Z']
-        d = circuit.depth()
+        d = circuit.depth
         for i in range(0, d + 1):
             # Different labelling depending on qubit_labels and pspec.
             if pspec is None:
@@ -2075,7 +2075,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
 
     if paulirandomize:
         paulilist = ['I', 'X', 'Y', 'Z']
-        d = circuit.depth()
+        d = circuit.depth
         for i in range(1, d + 1):
             pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], qubit_labels[k])
                                               for k in range(n)],
@@ -2246,7 +2246,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
 
     if paulirandomize:
         paulilist = ['I', 'X', 'Y', 'Z']
-        d = circuit.depth()
+        d = circuit.depth
         for i in range(0, d):
             pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], qubit_labels[k])
                                               for k in range(n)],
@@ -2955,8 +2955,8 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     circuit.insert_layer(Pall_layer, 0)
     circuit.insert_layer(Hall_layer, 0)
     # circuit ends the the some Ps layer followed by the some Hs layer.
-    if len(Psome_layer) > 0: circuit.insert_layer(Psome_layer, circuit.depth())
-    if len(Hsome_layer) > 0: circuit.insert_layer(Hsome_layer, circuit.depth())
+    if len(Psome_layer) > 0: circuit.insert_layer(Psome_layer, circuit.depth)
+    if len(Hsome_layer) > 0: circuit.insert_layer(Hsome_layer, circuit.depth)
 
     # This pre-circuit is necessary for working out what Pauli's need to be pre/post fixed to `circuit` to generate
     # the requested stabilizer state.

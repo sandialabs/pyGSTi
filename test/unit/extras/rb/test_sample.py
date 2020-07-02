@@ -171,11 +171,11 @@ class RBSampleTester(BaseCase):
         co2Qgates = [[], [[C01, C23], [C01, ]]]
 
         circuit = sample.random_circuit(self.pspec_1, length=100, sampler='Qelimination')
-        self.assertEqual(circuit.depth(), 100)
+        self.assertEqual(circuit.depth, 100)
 
         circuit = sample.random_circuit(self.pspec_2, length=100, sampler='Qelimination',
                                         samplerargs=[0.1, ], addlocal=True)
-        self.assertEqual(circuit.depth(), 201)
+        self.assertEqual(circuit.depth, 201)
         self.assertLessEqual(len(circuit.get_layer(0)), self.pspec_2.number_of_qubits)
 
         circuit = sample.random_circuit(self.pspec_1, length=100, sampler='pairingQs')
@@ -195,10 +195,10 @@ class RBSampleTester(BaseCase):
             samplerargs=[co2Qgates, [0.1, 0.2], 0.1], addlocal=True,
             lsargs=[['Gx', ]]
         )
-        self.assertEqual(circuit.depth(), 201)
+        self.assertEqual(circuit.depth, 201)
 
         circuit = sample.random_circuit(self.pspec_1, length=5, sampler='local')
-        self.assertEqual(circuit.depth(), 5)
+        self.assertEqual(circuit.depth, 5)
 
         circuit = sample.random_circuit(self.pspec_1, length=5, sampler='local', samplerargs=[['Gx']])
         self.assertEqual(circuit[0, 'Q0'].name, 'Gx')

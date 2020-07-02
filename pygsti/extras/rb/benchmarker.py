@@ -692,7 +692,7 @@ class Benchmarker(object):
                                 if auxtype == 'twoQgate_count':
                                     auxdata = circ.two_q_gate_count()
                                 elif auxtype == 'depth':
-                                    auxdata = circ.depth()
+                                    auxdata = circ.depth
                                 elif auxtype == 'target':
                                     auxdata = target
                                 elif auxtype == 'circuit_index':

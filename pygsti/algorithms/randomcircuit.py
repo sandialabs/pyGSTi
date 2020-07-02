@@ -2137,7 +2137,7 @@ def sample_pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=Fa
     pauli_circuit = pauli_circuit.copy(editable=True)
     pauli_circuit.change_gate_library(pspec.compilations['absolute'])
     if keepidle:
-        if pauli_circuit.depth() == 0:
+        if pauli_circuit.depth == 0:
             pauli_circuit.insert_layer([_lbl.Label(())], 0)
 
     pauli_circuit.done_editing()

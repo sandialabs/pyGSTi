@@ -354,8 +354,8 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
             circuit.delete_layers(-1)
             circuit.delete_lines('*')
 
-        n = circuit.number_of_lines()
-        depth = circuit.depth()
+        n = circuit.number_of_lines
+        depth = circuit.depth
 
         # Set up the CHP qubit labels: could be different CHP labels for each circuit.
         aschpq = {label: str(i) for i, label in enumerate(circuit.line_labels)}
@@ -366,7 +366,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
 
         # Find the probability of error in each circuit layer.
         errorprobs = [errormodel.layer_uniform_pauli_probability(circuit.layer(lind), circuit.line_labels)
-                      for lind in range(circuit.depth())]
+                      for lind in range(circuit.depth)]
         # Add measurement error at the end
         errorprobs.append(errormodel.readout_uniform_pauli_probability(circuit.line_labels))
 
@@ -501,7 +501,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
     dict
         A dictionary of simulated measurement outcome counts.
     """
-    n = circuit.number_of_lines()
+    n = circuit.number_of_lines
     #TODO REMOVE
     #if circuit.identity != idle_name:
     #    circuit.replace_gatename(circuit.identity,idle_name)
@@ -572,8 +572,8 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
         A tuple of values that are 0 or 1, corresponding to the results of a z-measurement on all the qubits.
         The ordering of this tuple corresponds to the ordering of the wires in the circuit.
     """
-    n = circuit.number_of_lines()
-    depth = circuit.depth()
+    n = circuit.number_of_lines
+    depth = circuit.depth
     sout, pout = _symp.prep_stabilizer_state(n, zvals=None)
     srep = pspec.models['clifford'].compute_clifford_symplectic_reps()
     I = _np.identity(2 * n, int)
@@ -741,7 +741,7 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, qubit_subset=Non
             # Add the number of success counts to the list
 #            scounts.append(outcome.get(idealout,0))
             scounts.append(outcome.get(''.join(str(idealbit) for idealbit in idealout), 0))
-            cdepths.append(c.depth())
+            cdepths.append(c.depth)
             c2Qgcounts.append(c.two_q_gate_count())
 
             # Write the data to file in each round.

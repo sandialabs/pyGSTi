@@ -609,7 +609,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting1:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != source_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != source_qubit])
 
                                 source_setting1_seq = key_copy
                                 break
@@ -618,7 +618,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting2:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != source_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != source_qubit])
 
                                 source_setting2_seq = key_copy
                                 break
@@ -627,7 +627,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != dest_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != dest_qubit])
 
                                 dest_seq = key_copy
                                 break

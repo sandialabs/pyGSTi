@@ -137,6 +137,7 @@ class Label(object):
             if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else: return LabelTup.init(name, state_space_labels, time)
 
+    @property
     def depth(self):
         """
         The depth of this label, viewed as a sub-circuit.
@@ -839,12 +840,13 @@ class LabelTupTup(Label, tuple):
         """
         return False
 
+    @property
     def depth(self):
         """
         The depth of this label, viewed as a sub-circuit.
         """
         if len(self.components) == 0: return 1  # still depth 1 even if empty
-        return max([x.depth() for x in self.components])
+        return max([x.depth for x in self.components])
 
     def expand_subcircuits(self):
         """
@@ -868,7 +870,7 @@ class LabelTupTup(Label, tuple):
         #for i,x in enumerate(expanded_comps):
         #    print(i,": ",x)
 
-        for i in range(self.depth()):  # depth == # of layers when expanded
+        for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
                 if i < len(expanded_comp):
@@ -1136,11 +1138,12 @@ class CircuitLabel(Label, tuple):
         """
         return True  # still true - even though can have components!
 
+    @property
     def depth(self):
         """
         The depth of this label, viewed as a sub-circuit.
         """
-        return sum([x.depth() for x in self.components]) * self.reps
+        return sum([x.depth for x in self.components]) * self.reps
 
     def expand_subcircuits(self):
         """
@@ -1676,12 +1679,13 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         return False
 
+    @property
     def depth(self):
         """
         The depth of this label, viewed as a sub-circuit.
         """
         if len(self.components) == 0: return 1  # still depth 1 even if empty
-        return max([x.depth() for x in self.components])
+        return max([x.depth for x in self.components])
 
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
