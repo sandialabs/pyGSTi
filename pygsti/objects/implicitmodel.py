@@ -185,6 +185,8 @@ class ImplicitOpModel(_mdl.OpModel):
                                               None, sim_type)
         self._shlp = simplifier_helper_class(self)
 
+    # XXX why not just expose these as instance variables?
+    @property
     def primitive_prep_labels(self):
         """
         Return the primitive state preparation labels of this model
@@ -195,7 +197,8 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         return self._primitive_prep_labels
 
-    def set_primitive_prep_labels(self, lbls):
+    @primitive_prep_labels.setter
+    def primitive_prep_labels(self, lbls):
         """
         Set the primitive state preparation labels of this model.
 
@@ -210,6 +213,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_prep_labels = tuple(lbls)
 
+    @property
     def primitive_povm_labels(self):
         """
         Return the primitive POVM labels of this model.
@@ -220,7 +224,8 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         return self._primitive_povm_labels
 
-    def set_primitive_povm_labels(self, lbls):
+    @primitive_povm_labels.setter
+    def primitive_povm_labels(self, lbls):
         """
         Set the primitive POVM labels of this model.
 
@@ -235,6 +240,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_povm_labels = tuple(lbls)
 
+    @property
     def primitive_op_labels(self):
         """
         Return the primitive operation labels of this model.
@@ -245,7 +251,8 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         return self._primitive_op_labels
 
-    def set_primitive_op_labels(self, lbls):
+    @primitive_op_labels.setter
+    def primitive_op_labels(self, lbls):
         """
         Set the primitive operation labels of this model
 
@@ -260,6 +267,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         self._primitive_op_labels = tuple(lbls)
 
+    @property
     def primitive_instrument_labels(self):
         """
         Return the primitive instrument labels of this model
@@ -270,7 +278,8 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         return self._primitive_instrument_labels
 
-    def set_primitive_instrument_labels(self, lbls):
+    @primitive_instrument_labels.setter
+    def primitive_instrument_labels(self, lbls):
         """
         Set the primitive instrument labels of this model
 
@@ -379,7 +388,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         srep_dict = {}
 
-        for gl in self.primitive_op_labels():
+        for gl in self.primitive_op_labels:
             gate = self.operation_blks['layers'][gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 

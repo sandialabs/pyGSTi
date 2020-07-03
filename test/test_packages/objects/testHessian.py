@@ -154,10 +154,10 @@ class TestHessianMethods(BaseTestCase):
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        mdl_dummy = cfctry.get_model() # test method
+        mdl_dummy = cfctry.get_model # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -204,7 +204,7 @@ class TestHessianMethods(BaseTestCase):
         #self.assertTrue( cfctryLR.can_construct_views() )
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
 
-        mdl_dummy = cfctryLR.get_model() # test method
+        mdl_dummy = cfctryLR.get_model # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 
@@ -378,7 +378,7 @@ class TestHessianMethods(BaseTestCase):
 
         cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
 
         cfctry.project_hessian('std')
         ci_std = cfctry.view( 95.0, 'normal', 'std')

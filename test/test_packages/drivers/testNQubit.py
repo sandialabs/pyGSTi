@@ -234,7 +234,7 @@ class NQubitTestCase(BaseTestCase):
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
               (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
-        op_labels = target_model.primitive_op_labels()
+        op_labels = target_model.primitive_op_labels
         line_labels = tuple(range(nQubits))
         fids1Q = std1Q_XY.fiducials
         fiducials = []

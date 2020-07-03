@@ -62,12 +62,12 @@ class ReportableQtyBase(object):
         # TODO assert correctness
 
     def test_has_eb(self):
-        self.assertFalse(self.q.has_errorbar())
+        self.assertFalse(self.q.has_errorbar)
 
     def test_accessors(self):
-        self.q.value()
-        self.q.errorbar()
-        self.q.value_and_errorbar()
+        self.q.value
+        self.q.errorbar
+        self.q.value_and_errorbar
         # TODO assert correctness
 
 
@@ -76,7 +76,7 @@ class ReportableQtyErrorbarBase(ReportableQtyBase):
         self.q = rq.ReportableQty(self.val, self.eb)
 
     def test_has_eb(self):
-        self.assertTrue(self.q.has_errorbar())
+        self.assertTrue(self.q.has_errorbar)
 
 
 class BasicReportableQtyData(object):

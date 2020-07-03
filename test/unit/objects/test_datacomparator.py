@@ -39,20 +39,20 @@ class DataComparatorTester(BaseCase):
         # XXX do these need unit tests?  EGN: maybe not - could ask Kenny
         mdl = self.DS_0.keys()[10]
         comparator.jsd(mdl)
-        comparator.jsd_pseudothreshold()
+        comparator.jsd_pseudothreshold
         comparator.llr(mdl)
-        comparator.llr_pseudothreshold()
+        comparator.llr_pseudothreshold
         comparator.ssjsd(mdl)
         comparator.sstvd(mdl)
         comparator.tvd(mdl)
-        comparator.aggregate_llr()
-        comparator.aggregate_llr_threshold()
-        comparator.aggregate_nsigma()
-        comparator.aggregate_pvalue()
-        comparator.aggregate_pvalue_threshold()
-        comparator.maximum_sstvd()
+        comparator.aggregate_llr
+        comparator.aggregate_llr_threshold
+        comparator.aggregate_nsigma
+        comparator.aggregate_pvalue
+        comparator.aggregate_pvalue_threshold
+        comparator.maximum_sstvd
         comparator.pvalue(mdl)
-        comparator.pvalue_pseudothreshold()
+        comparator.pvalue_pseudothreshold
         comparator.worst_circuits(10)
         # TODO assert correctness for all of the above
 

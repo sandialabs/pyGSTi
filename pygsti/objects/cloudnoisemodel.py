@@ -942,15 +942,16 @@ class CloudNoiseModel(_ImplicitOpModel):
         #else:
         #    raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
 
-        self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
+        self.primitive_op_labels = primitive_ops
+        self.primitive_prep_labels = self.prep_blks['layers'].keys()
+        self.primitive_povm_labels = self.povm_blks['layers'].keys()
         #(no instruments)
 
         printer.log("DONE! - created Model with dim=%d and op-blks=" % self.dim)
         for op_blk_lbl, op_blk in self.operation_blks.items():
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
 
+    @property
     def get_clouds(self):
         """
         Returns the set of cloud-sets used when creating sequences which amplify the parameters of this model.
@@ -1087,7 +1088,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse=False, sim_type="mat
     printer.log("*** Creating global idle ***")
 
     termops = []  # gates or error generators to compose
-    qubit_labels = qubit_graph.node_names()
+    qubit_labels = qubit_graph.node_names
     qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
     ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 
@@ -1220,7 +1221,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     #  one for each specified error term
 
     loc_noise_termops = []  # list of gates to compose
-    qubit_labels = qubit_graph.node_names()
+    qubit_labels = qubit_graph.node_names
     qubit_dim = 4  # cloud noise models always use density matrices, so not '2' here
     ssAllQ = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels))
 

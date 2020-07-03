@@ -259,7 +259,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
             else:
                 return model.copy()
 
-    x0 = gauge_group.initial_params()  # gauge group picks a good initial el
+    x0 = gauge_group.initial_params  # gauge group picks a good initial el
     gaugeGroupEl = gauge_group.compute_element(x0)  # re-used element for evals
 
     def _call_objective_fn(gauge_group_el_vec, oob_check=False):
@@ -464,8 +464,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
             my_jacMx = jacMx[:, myDerivColSlice]  # just the columns I'm responsible for
 
             # S, and S_inv are shape (d,d)
-            #S       = gauge_group_el.transform_matrix()
-            S_inv = gauge_group_el.transform_matrix_inverse()
+            #S       = gauge_group_el.transform_matrix
+            S_inv = gauge_group_el.transform_matrix_inverse
             dS = gauge_group_el.deriv_wrt_params(wrtIndices)  # shape (d*d),n
             dS.shape = (d, d, n)  # call it (d1,d2,n)
             dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -730,8 +730,8 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     # S, and S_inv are shape (d,d)
     d, N = mdl_pre.dim, gauge_group_el.num_params()
     n = N if (wrt_filter is None) else len(wrt_filter)
-    #S       = gauge_group_el.transform_matrix()
-    S_inv = gauge_group_el.transform_matrix_inverse()
+    #S       = gauge_group_el.transform_matrix
+    S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -802,7 +802,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     # S, and S_inv are shape (d,d)
     d, N = mdl_pre.dim, gauge_group_el.num_params()
     n = N if (wrt_filter is None) else len(wrt_filter)
-    S_inv = gauge_group_el.transform_matrix_inverse()
+    S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)

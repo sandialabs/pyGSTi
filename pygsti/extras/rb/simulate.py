@@ -831,7 +831,7 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
             errormodel[gl][:, 0] = _np.ones(n, float)
             errormodel[gl][pspec.qubit_labels.index(q), :] = error_row(idle_errorrate)
 
-    for gate in pspec.models['clifford'].primitive_op_labels():
+    for gate in pspec.models['clifford'].primitive_op_labels:
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 
@@ -928,7 +928,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
             errormodel[gl][:, 0] = _np.ones(n, float)
             errormodel[gl][pspec.qubit_labels.index(q), :] = error_row(er)
 
-    for gate in pspec.models['clifford'].primitive_op_labels():
+    for gate in pspec.models['clifford'].primitive_op_labels:
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 
@@ -1004,7 +1004,7 @@ def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qub
     n = pspec.number_of_qubits
 
     errormodel = {}
-    for gate in list(pspec.models['clifford'].primitive_op_labels()):
+    for gate in list(pspec.models['clifford'].primitive_op_labels):
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 

@@ -889,7 +889,7 @@ class LinearGateSetTomography(_proto.Protocol):
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
-                                op_labels, svd_truncate_to=target_model.dimension(),
+                                op_labels, svd_truncate_to=target_model.dim,
                                 op_label_aliases=aliases, verbosity=printer)
 
         parameters = _collections.OrderedDict()
@@ -1679,7 +1679,7 @@ def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cach
     fitqty = _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
-    expected = (len(ds.outcome_labels()) - 1)  # == "k"
+    expected = (len(ds.outcome_labels) - 1)  # == "k"
     dof_per_box = expected; nboxes = len(circuit_list)
     pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
 
@@ -1778,7 +1778,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels() + model.primitive_instrument_labels(),
+    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
                                               add_spam=badfit_options.get('wildcard_budget_includes_spam', True),
                                               start_budget=0.0)
 

@@ -3116,13 +3116,13 @@ def SV_find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repca
     cdef vector[INT] npaths = vector[INT](numEs)
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude
     for glbl in circuit:
         op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
-        max_partial_sopm *= op.total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude() - pathmagnitude_gap  # absolute gap
-        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.effect(elbl).total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
+        target_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude - pathmagnitude_gap  # absolute gap
+        #target_sum_of_pathmags[i] = max_partial_sopm * calc.sos.effect(elbl).total_term_magnitude * (1.0 - pathmagnitude_gap)  # relative gap
 
     cdef double threshold = sv_find_best_pathmagnitude_threshold(
         cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
@@ -3842,13 +3842,13 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude()
+    cdef double max_partial_sopm = (opcache[rholabel] if rholabel in opcache else calc.sos.prep(rholabel)).total_term_magnitude
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
         op = opcache[glbl] if glbl in opcache else calc.sos.operation(glbl)
-        max_partial_sopm *= op.total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * (opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)).total_term_magnitude
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))

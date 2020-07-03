@@ -1381,7 +1381,7 @@ class PolynomialRep(dict):
                 k = newpoly._vinds_to_int(inds)
                 if k in newpoly: newpoly[k] += v1 * v2
                 else: newpoly[k] = v1 * v2
-        assert(newpoly.degree() <= self.degree() + x.degree())
+        assert(newpoly.degree <= self.degree + x.degree)
         return newpoly
 
     def scale(self, x):
@@ -2224,9 +2224,9 @@ def SV_circuit_achieved_and_max_sopm(calc, rholabel, elabels, circuit, repcache,
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
     ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
     nPaths = _np.zeros(len(elabels), int)
@@ -2338,9 +2338,9 @@ def _find_best_pathmagnitude_threshold(calc, rholabel, elabels, circuit, repcach
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
     ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2544,7 +2544,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, calc, rholabel, elabel
 
     #max_degrees = []
     #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #    max_degrees.append(max([f.coeff.degree for f in factors]))
     #print("Max degrees = ",max_degrees)
     #for Ei,prp in enumerate(prps):
     #    print(Ei,":", prp.debug_report())
@@ -2742,9 +2742,9 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
     ops = [calc.sos.prep(rholabel)] + [calc.sos.operation(glbl) for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * calc.sos.effect(elbl).total_term_magnitude for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2866,7 +2866,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, opcache, co
 
     #max_degrees = []
     #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #    max_degrees.append(max([f.coeff.degree for f in factors]))
     #print("Max degrees = ",max_degrees)
     #for Ei,prp in enumerate(prps):
     #    print(Ei,":", prp.debug_report())

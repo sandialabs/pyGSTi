@@ -302,7 +302,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         An M by N matrix where M is the number of operation elements and
         N is the number of operation parameters.
     """
-    dim = operation.dimension()
+    dim = operation.dim
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params()), operation.dtype)
@@ -722,7 +722,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         #DEBUG TODO REMOVE
         #chk1 = sum([t[1].magnitude for t in sorted_terms])
-        #chk2 = self.total_term_magnitude()
+        #chk2 = self.total_term_magnitude
         #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order,
         #      " minmag=",min_term_mag)
         #print("  sum of magnitudes =",chk1, " <?= ", chk2)
@@ -953,8 +953,8 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        Smx = s.transform_matrix()
-        Si = s.transform_matrix_inverse()
+        Smx = s.transform_matrix
+        Si = s.transform_matrix_inverse
         self.set_dense(_np.dot(Si, _np.dot(self.to_dense(), Smx)))
 
     def depolarize(self, amount):
@@ -2775,6 +2775,7 @@ class StochasticNoiseOp(LinearOperator):
         else:
             return global_param_terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -2793,6 +2794,7 @@ class StochasticNoiseOp(LinearOperator):
         rates = self._params_to_rates(self.to_vector())
         return _np.sum(_np.abs(rates))
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -3929,6 +3931,7 @@ class LindbladOp(LinearOperator):
             terms.append(term)
         return terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -3946,11 +3949,12 @@ class LindbladOp(LinearOperator):
         # (unitary postfactor has weight == 1.0 so doesn't enter)
         #TODO REMOVE:
         #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
-        #egttm = self.errorgen.total_term_magnitude()
+        #egttm = self.errorgen.total_term_magnitude
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.total_term_magnitude())
+        return _np.exp(self.errorgen.total_term_magnitude)
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -3963,7 +3967,7 @@ class LindbladOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        return _np.exp(self.errorgen.total_term_magnitude()) * self.errorgen.total_term_magnitude_deriv()
+        return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
     def num_params(self):
         """
@@ -4217,8 +4221,8 @@ class LindbladOp(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
             #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
@@ -4269,8 +4273,8 @@ class LindbladOp(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
 
             #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
@@ -5132,6 +5136,7 @@ class ComposedOp(LinearOperator):
         #coeffs_as_compact_polys = (vtape, ctape)
         #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -5149,8 +5154,9 @@ class ComposedOp(LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
-        return _np.product([f.total_term_magnitude() for f in self.factorops])
+        return _np.product([f.total_term_magnitude for f in self.factorops])
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -5163,13 +5169,13 @@ class ComposedOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        opmags = [f.total_term_magnitude() for f in self.factorops]
+        opmags = [f.total_term_magnitude for f in self.factorops]
         product = _np.product(opmags)
         ret = _np.zeros(self.num_params(), 'd')
         for opmag, f in zip(opmags, self.factorops):
             f_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, f.gpindices)
-            local_deriv = product / opmag * f.total_term_magnitude_deriv()
+            local_deriv = product / opmag * f.total_term_magnitude_deriv
             ret[f_local_inds] += local_deriv
         return ret
 
@@ -6035,6 +6041,7 @@ class EmbeddedOp(LinearOperator):
         return [t.embed(sslbls, self.targetLabels)
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_poly_vars, min_term_mag)]
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -6062,8 +6069,9 @@ class EmbeddedOp(LinearOperator):
         #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return self.embedded_op.total_term_magnitude()
+        return self.embedded_op.total_term_magnitude
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -6076,7 +6084,7 @@ class EmbeddedOp(LinearOperator):
         numpy array
             An array of length self.num_params()
         """
-        return self.embedded_op.total_term_magnitude_deriv()
+        return self.embedded_op.total_term_magnitude_deriv
 
     def num_params(self):
         """
@@ -7036,6 +7044,7 @@ class ComposedErrorgen(LinearOperator):
         #     *[eg.get_taylor_order_terms(order, max_poly_vars, return_coeff_polys) for eg in self.factors]
         # ))
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -7072,8 +7081,9 @@ class ComposedErrorgen(LinearOperator):
         #print("ComposedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return sum([eg.total_term_magnitude() for eg in self.factors])
+        return sum([eg.total_term_magnitude for eg in self.factors])
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -7090,7 +7100,7 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             eg_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            ret[eg_local_inds] += eg.total_term_magnitude_deriv()
+            ret[eg_local_inds] += eg.total_term_magnitude_deriv
         return ret
 
     def num_params(self):
@@ -8450,6 +8460,7 @@ class LindbladErrorgen(LinearOperator):
     #    poly_terms = self.get_taylor_order_terms(order)
     #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -8468,6 +8479,7 @@ class LindbladErrorgen(LinearOperator):
         vtape, ctape = self.Lterm_coeffs
         return _abs_sum_bulk_eval_compact_polys_complex(vtape, ctape, self.to_vector(), len(self.Lterms))
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -8776,8 +8788,8 @@ class LindbladErrorgen(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
 
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
@@ -8825,8 +8837,8 @@ class LindbladErrorgen(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
             err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
 
             #just act on postfactor and Lindbladian exponent:

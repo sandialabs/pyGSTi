@@ -293,11 +293,11 @@ def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=Tru
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcome_labels=new_outcomes)
     merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-    if not set(dataset.outcome_labels()).issubset(merge_dict_old_outcomes):
+    if not set(dataset.outcome_labels).issubset(merge_dict_old_outcomes):
         raise ValueError(
             "`label_merge_dict` must account for all the outcomes in original dataset."
             " It's missing directives for:\n%s" %
-            '\n'.join(set(map(str, dataset.outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+            '\n'.join(set(map(str, dataset.outcome_labels)) - set(map(str, merge_dict_old_outcomes)))
         )
 
     # New code that works for time-series data.
@@ -480,7 +480,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
         sindices_to_keep = sectors_to_keep
 
     #ds_merged = dataset.aggregate_outcomes(_create_merge_dict(sindices_to_keep,
-    #                                                     dataset.outcome_labels()),
+    #                                                     dataset.outcome_labels),
     #                                   record_zero_counts=record_zero_counts)
     ds_merged = dataset.aggregate_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
 
@@ -514,7 +514,7 @@ def trim_to_constant_numtimesteps(ds):
     trimmedds = ds.copy_nonstatic()
     numtimes = []
     for circuit in ds.keys():
-        numtimes.append(ds[circuit].number_of_times())
+        numtimes.append(ds[circuit].number_of_times)
     minnumtimes = min(numtimes)
 
     for circuit in ds.keys():
@@ -552,7 +552,7 @@ def _subsample_timeseries_data(ds, step):
     """
     subsampled_ds = ds.copy_nonstatic()
     for circ in ds.keys():
-        times, odicts = ds[circ].timeseries_for_outcomes()
+        times, odicts = ds[circ].timeseries_for_outcomes
         newtimes = []
         newseries = []
         for i in range(len(times)):

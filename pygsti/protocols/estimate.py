@@ -424,7 +424,7 @@ class Estimate(object):
             CRFkey(from_model_label, circuits_label), None)
 
         assert(crf is not None), "Initial confidence region factory doesn't exist!"
-        assert(crf.has_hessian()), "Initial factory must contain a computed Hessian!"
+        assert(crf.has_hessian), "Initial factory must contain a computed Hessian!"
 
         #Update hessian by TMx = d(diffs in current go'd model)/d(diffs in ref model)
         tmx = _np.empty((final_model.num_params(), ref_model.num_params()), 'd')
@@ -496,12 +496,12 @@ class Estimate(object):
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-            nrows, ncols = gss.num_plaquette_rows_cols()
+            nrows, ncols = gss.num_plaquette_rows_cols
 
             sub_mxs = []
-            for y in gss.used_yvals():
+            for y in gss.used_yvals:
                 sub_mxs.append([])
-                for x in gss.used_xvals():
+                for x in gss.used_xvals:
                     scaling_mx = _np.nan * _np.ones((nrows, ncols), 'd')
                     plaq = gss.get_plaquette(x, y).expand_aliases()
                     if len(plaq) > 0:
@@ -524,9 +524,9 @@ class Estimate(object):
 
             if return_submxs:  # then need to create subMxs with all 1's
                 sub_mxs = []
-                for y in gss.used_yvals():
+                for y in gss.used_yvals:
                     sub_mxs.append([])
-                    for x in gss.used_xvals():
+                    for x in gss.used_xvals:
                         plaq = gss.get_plaquette(x, y)
                         scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
                         for i, j, opstr in plaq:

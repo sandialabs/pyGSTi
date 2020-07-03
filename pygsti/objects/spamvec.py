@@ -250,7 +250,7 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
         An M by N matrix where M is the number of gate elements and
         N is the number of gate parameters.
     """
-    dim = spamvec.dimension()
+    dim = spamvec.dim
     spamvec2 = spamvec.copy()
     p = spamvec.to_vector()
     fd_deriv = _np.empty((dim, spamvec.num_params()), 'd')  # assume real (?)
@@ -748,10 +748,10 @@ class SPAMVec(_modelmember.ModelMember):
         None
         """
         if typ == 'prep':
-            Si = s.transform_matrix_inverse()
+            Si = s.transform_matrix_inverse
             self.set_dense(_np.dot(Si, self.to_dense()))
         elif typ == 'effect':
-            Smx = s.transform_matrix()
+            Smx = s.transform_matrix
             self.set_dense(_np.dot(_np.transpose(Smx), self.to_dense()))
             #Evec^T --> ( Evec^T * s )^T
         else:
@@ -3466,6 +3466,7 @@ class LindbladSPAMVec(SPAMVec):
                  for t in err_terms]  # t ops occur *after* stateTerm's
         return terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this SPAM vector's terms.
@@ -3480,8 +3481,9 @@ class LindbladSPAMVec(SPAMVec):
         float
         """
         # return (sum of absvals of *all* term coeffs)
-        return self.error_map.total_term_magnitude()  # error map is only part with terms
+        return self.error_map.total_term_magnitude  # error map is only part with terms
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this SPAM vector's terms.
@@ -3494,7 +3496,7 @@ class LindbladSPAMVec(SPAMVec):
         numpy array
             An array of length self.num_params()
         """
-        return self.error_map.total_term_magnitude_deriv()
+        return self.error_map.total_term_magnitude_deriv
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

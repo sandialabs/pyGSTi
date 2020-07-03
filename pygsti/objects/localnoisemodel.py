@@ -849,9 +849,9 @@ class LocalNoiseModel(_ImplicitOpModel):
                 "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, n_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
 
-        self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
+        self.primitive_op_labels = primitive_ops
+        self.primitive_prep_labels = self.prep_blks['layers'].keys()
+        self.primitive_povm_labels = self.povm_blks['layers'].keys()
         #(no instruments)
 
 

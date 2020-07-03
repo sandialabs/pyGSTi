@@ -458,7 +458,7 @@ class LogLWildcardFunctionTester(ObjectiveFunctionData, BaseCase):
         logl_fn = _objfns.PoissonPicDeltaLogLFunction(self.model, self.dataset, self.circuits)
         logl_fn.fn()  # evaluate so internals are initialized
 
-        wcbudget = _PrimitiveOpsWildcardBudget(self.model.primitive_op_labels())
+        wcbudget = _PrimitiveOpsWildcardBudget(self.model.primitive_op_labels)
         self.pt = wcbudget.to_vector().copy()
         self.objfn = _objfns.LogLWildcardFunction(logl_fn, None, wcbudget)
 

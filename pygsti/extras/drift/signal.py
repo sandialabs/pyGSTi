@@ -500,14 +500,14 @@ def compute_auto_frequencies(ds, transform='dct'):
     # time-step over circuits
     if isinstance(ds, _obj.MultiDataSet):
         dskey = list(ds.keys())[0]
-        timestep = ds[dskey].meantimestep()
+        timestep = ds[dskey].meantimestep
         rw = ds[dskey][list(ds[dskey].keys())[0]]
     elif isinstance(ds, _obj.DataSet):
-        timestep = ds.meantimestep()
+        timestep = ds.meantimestep
         rw = ds[list(ds.keys())[0]]
     else:
         raise ValueError("Input data must be a DataSet or MultiDataSet!")
-    numtimes = rw.number_of_times()
+    numtimes = rw.number_of_times
     freqs = frequencies_from_timestep(timestep, numtimes)
     freqslist = [freqs, ]
     # This pointers list should have keys based that are indices, as required by the stabilityanalyzer object.

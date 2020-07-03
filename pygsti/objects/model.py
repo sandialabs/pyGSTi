@@ -830,7 +830,7 @@ class OpModel(Model):
         """
         self._evotype = evotype
         self.set_state_space(state_space_labels, basis)
-        #sets self._state_space_labels, self._basis, self._dim
+        #sets self._state_space_labels, self._basis
 
         self.set_simtype(sim_type)
         #sets self._calcClass, self._sim_type, self._sim_args
@@ -956,7 +956,7 @@ class OpModel(Model):
                 sim_type = "termorder"
                 kwargs = {'max_order': 1}
             else:
-                d = self._dim if (self._dim is not None) else 0
+                d = self.dim if self.dim is not None else 0
                 sim_type = "matrix" if d <= 16 else "map"
                 kwargs = {}
 
@@ -1037,10 +1037,6 @@ class OpModel(Model):
             self._state_space_labels = _ld.StateSpaceLabels(lbls, evotype=self._evotype)
         self.basis = basis  # invokes basis setter to set self._basis
 
-        #Operator dimension of this Model
-        self._dim = self.state_space_labels.dim
-        #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
-
     @property
     def dim(self):
         """
@@ -1055,22 +1051,7 @@ class OpModel(Model):
         int
             model dimension
         """
-        return self._dim
-
-    #TODO REMOVE - use dim property
-    def dimension(self):
-        """
-        Get the dimension of the model.
-
-        This equals d when the gate matrices have shape d x d and spam vectors
-        have shape d x 1.  Equivalent to model.dim.
-
-        Returns
-        -------
-        int
-            model dimension
-        """
-        return self._dim
+        return self.state_space_labels.dim
 
     ####################################################
     ## Parameter vector maintenance
@@ -1355,7 +1336,7 @@ class OpModel(Model):
         layer_lizard.set_opcache(self._opcache, self.to_vector())
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
-        return self._calcClass(self._dim, layer_lizard, self._paramvec, **self._sim_args)  # fwdsim class
+        return self._calcClass(self.dim, layer_lizard, self._paramvec, **self._sim_args)  # fwdsim class
 
     def _split_circuit(self, circuit, erroron=('prep', 'povm')):
         """

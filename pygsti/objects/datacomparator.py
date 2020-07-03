@@ -496,7 +496,7 @@ class DataComparator():
         self._jsd_pseudothreshold = None
 
     def run(self, significance=0.05, per_sequence_correction='Hochberg',
-                  aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
+            aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
         Runs statistical hypothesis testing.
 
@@ -659,7 +659,7 @@ class DataComparator():
                     "    - The number of sequences with data that is "
                     "inconsistent is {0}".format(self.number_of_significant_sequences))
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences > 0:
-                    max_SSTVD_gs, max_SSTVD = self.maximum_sstvd()
+                    max_SSTVD_gs, max_SSTVD = self.maximum_sstvd
                     print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD))
                     if verbosity >= 2:
                         print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
@@ -723,6 +723,7 @@ class DataComparator():
 
         return self.sstvds.get(circuit, None)
 
+    @property
     def maximum_sstvd(self):
         """
         Returns the maximum, over circuits, of the "statistically significant total variation distance" (SSTVD).
@@ -764,6 +765,7 @@ class DataComparator():
         """
         return self.pVals[circuit]
 
+    @property
     def pvalue_pseudothreshold(self):
         """
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence p-values.
@@ -802,6 +804,7 @@ class DataComparator():
         """
         return self.llrs[circuit]
 
+    @property
     def llr_pseudothreshold(self):
         """
         Returns the statistical significance pseudo-threshold for the per-sequence log-_likelihood ratio (LLR).
@@ -846,12 +849,13 @@ class DataComparator():
         """
         return self.jsds[circuit]
 
+    @property
     def jsd_pseudothreshold(self):
         """
         The statistical significance pseudo-threshold for the Jensen-Shannon divergence (JSD) between "contexts".
 
         This is a rescaling of the pseudo-threshold for the LLR, returned by the method
-        .llr_pseudothreshold(); see that method for more details. This threshold is
+        .llr_pseudothreshold; see that method for more details. This threshold is
         also given by Eq (17) in "Probing context-dependent errors in quantum processors",
         by Rudinger et al.
 
@@ -898,6 +902,7 @@ class DataComparator():
         else:
             return None
 
+    @property
     def aggregate_llr(self):
         """
         Returns the "aggregate" log-_likelihood ratio (LLR).
@@ -914,11 +919,12 @@ class DataComparator():
         """
         return self._aggregate_llr
 
+    @property
     def aggregate_llr_threshold(self):
         """
         The (multi-test-adjusted) statistical significance threshold for the "aggregate" log-_likelihood ratio (LLR).
 
-        Above this value, the LLR is significant.  See .aggregate_llr() for more
+        Above this value, the LLR is significant.  See .aggregate_llr for more
         details. This quantity is the LLR version of the quantity defined in Eq (14) of
         "Probing context-dependent errors in quantum processors", by Rudinger et al.
 
@@ -931,6 +937,7 @@ class DataComparator():
             "This has not yet been calculated! Run the .run() method first!"
         return self._aggregate_llr_threshold
 
+    @property
     def aggregate_pvalue(self):
         """
         Returns the p-value for the "aggregate" log-_likelihood ratio (LLR).
@@ -951,12 +958,13 @@ class DataComparator():
         """
         return self.aggregate_pVal
 
+    @property
     def aggregate_pvalue_threshold(self):
         """
         The (multi-test-adjusted) statistical significance threshold for the p-value of the "aggregate" LLR.
 
         Here, LLR refers to the log-_likelihood ratio. Below this p-value the LLR would be deemed significant.
-        See the .aggregate_pvalue() method for more details.
+        See the .aggregate_pvalue method for more details.
 
         Returns
         -------
@@ -967,6 +975,7 @@ class DataComparator():
             "This has not yet been calculated! Run the .run() method first!"
         return self.aggregate_pVal_threshold
 
+    @property
     def aggregate_nsigma(self):
         """
         The number of standard deviations the "aggregate" LLR is above the context-independent mean.
@@ -983,12 +992,13 @@ class DataComparator():
         """
         return self._aggregate_nsigma
 
+    @property
     def aggregate_nsigma_threshold(self):
         """
         The significance threshold above which the signed standard deviations of the aggregate LLR is significant.
 
         The (multi-test-adjusted) statistical significance threshold for the signed standard
-        deviations of the the "aggregate" log-_likelihood ratio (LLR). See the .aggregate_nsigma()
+        deviations of the the "aggregate" log-_likelihood ratio (LLR). See the .aggregate_nsigma
         method for more details. This quantity is defined in Eq (14) of "Probing context-dependent errors
         in quantum processors", by Rudinger et al.
 

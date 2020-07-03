@@ -126,6 +126,7 @@ class CircuitPlaquette(object):
         return CircuitPlaquette(self.base, self.rows, self.cols,
                                 new_elements, None, new_fidpairs)
 
+    @property
     def all_strs(self):
         """
         Return a list of all the circuits contained in this plaquette
@@ -259,6 +260,7 @@ class CircuitStructure(object):
         if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 
+    @property
     def xvals(self):
         """
         Returns a list of the x-values
@@ -269,6 +271,7 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
+    @property
     def yvals(self):
         """
         Returns a list of the y-values
@@ -279,6 +282,7 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
+    @property
     def minor_xvals(self):
         """
         Returns a list of the minor x-values
@@ -289,6 +293,7 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
+    @property
     def minor_yvals(self):
         """
         Returns a list of the minor y-values
@@ -332,6 +337,7 @@ class CircuitStructure(object):
         """
         raise NotImplementedError("Derived class must implement this.")
 
+    @property
     def used_xvals(self):
         """
         Lists the x-values which have at least one non-empty plaquette
@@ -340,9 +346,10 @@ class CircuitStructure(object):
         -------
         list
         """
-        return [x for x in self.xvals() if any([len(self.get_plaquette(x, y)) > 0
-                                                for y in self.yvals()])]
+        return [x for x in self.xvals if any([len(self.get_plaquette(x, y)) > 0
+                                              for y in self.yvals])]
 
+    @property
     def used_yvals(self):
         """
         Lists the y-values which have at least one non-empty plaquette
@@ -351,9 +358,10 @@ class CircuitStructure(object):
         -------
         list
         """
-        return [y for y in self.yvals() if any([len(self.get_plaquette(x, y)) > 0
-                                                for x in self.xvals()])]
+        return [y for y in self.yvals if any([len(self.get_plaquette(x, y)) > 0
+                                              for x in self.xvals])]
 
+    @property
     def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this CircuitStructure.
@@ -362,9 +370,10 @@ class CircuitStructure(object):
         -------
         rows, cols : int
         """
-        return len(self.minor_yvals()), len(self.minor_xvals())
+        return len(self.minor_yvals), len(self.minor_xvals)
 
-    def get_basestrings(self):
+    @property
+    def basestrings(self):
         """
         Lists the base strings (without duplicates) of all the plaquettes
 
@@ -373,8 +382,8 @@ class CircuitStructure(object):
         list
         """
         baseStrs = set()
-        for x in self.xvals():
-            for y in self.yvals():
+        for x in self.xvals:
+            for y in self.yvals:
                 p = self.get_plaquette(x, y)
                 if p is not None and p.base is not None:
                     baseStrs.add(p.base)
@@ -460,6 +469,7 @@ class LsGermsStructure(CircuitStructure):
         return self.allstrs[key]
 
     #Base class access in terms of generic x,y coordinates
+    @property
     def xvals(self):
         """
         Returns a list of the x-values
@@ -470,6 +480,7 @@ class LsGermsStructure(CircuitStructure):
         """
         return self.Ls
 
+    @property
     def yvals(self):
         """
         Returns a list of the y-values
@@ -480,6 +491,7 @@ class LsGermsStructure(CircuitStructure):
         """
         return self.germs
 
+    @property
     def minor_xvals(self):
         """
         Returns a list of the minor x-values
@@ -490,6 +502,7 @@ class LsGermsStructure(CircuitStructure):
         """
         return self.prep_fiducials
 
+    @property
     def minor_yvals(self):
         """
         Returns a list of the minor y-values
@@ -732,6 +745,7 @@ class LsGermsStructure(CircuitStructure):
                                 len(self.prep_fiducials), elements,
                                 self.aliases, real_fidpairs)
 
+    @property
     def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this circuit structure.
@@ -900,6 +914,7 @@ class LsGermsSerialStructure(CircuitStructure):
         super(LsGermsSerialStructure, self).__init__()
 
     #Base class access in terms of generic x,y coordinates
+    @property
     def xvals(self):
         """
         Returns a list of the x-values
@@ -910,6 +925,7 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         return self.Ls
 
+    @property
     def yvals(self):
         """
         Returns a list of the y-values
@@ -920,6 +936,7 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         return self.germs
 
+    @property
     def minor_xvals(self):
         """
         Returns a list of the minor x-values (0-based integers)
@@ -930,6 +947,7 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         return list(range(self.nMinorCols))
 
+    @property
     def minor_yvals(self):
         """
         Returns a list of the minor y-values (0-based integers)
@@ -1180,6 +1198,7 @@ class LsGermsSerialStructure(CircuitStructure):
                                 self.nMinorCols, elements,
                                 self.aliases, fidpairs[:])
 
+    @property
     def num_plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of this LsGermsStructure.

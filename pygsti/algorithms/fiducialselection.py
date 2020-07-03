@@ -92,7 +92,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
 
     if omit_identity:
         # we assume identity gate is always the identity mx regardless of basis
-        Identity = _np.identity(target_model.dimension(), 'd')
+        Identity = _np.identity(target_model.dim, 'd')
 
         for gate in fidOps:
             if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
@@ -254,7 +254,7 @@ def create_prep_mxs(mdl, prep_fid_list):
         of this list is equal to the number of state preparations in `mdl`.
     """
 
-    dimRho = mdl.dimension()
+    dimRho = mdl.dim
     #numRho = len(mdl.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
@@ -290,7 +290,7 @@ def create_meas_mxs(mdl, meas_fid_list):
         of this list is equal to the number of POVM effects in `mdl`.
     """
 
-    dimE = mdl.dimension()
+    dimE = mdl.dim
     numFid = len(meas_fid_list)
     outputMatList = []
     for povm in mdl.povms.values():
@@ -357,7 +357,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
         The eigenvalues of the square of the absolute value of the score
         matrix.
     """
-    # dimRho = model.dimension()
+    # dimRho = model.dim
     if prep_or_meas == 'prep':
         fidArrayList = create_prep_mxs(model, fid_list)
     elif prep_or_meas == 'meas':
@@ -655,7 +655,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
 
     nFids = len(fid_list)
 
-    dimRho = model.dimension()
+    dimRho = model.dim
 
     printer.log("Starting fiducial set optimization. Lower score is better.",
                 1)
@@ -991,7 +991,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
     def final_score_fn(fid_list): return compute_composite_fiducial_score(
         fid_list=fid_list, **final_compute_kwargs)
 
-    dimRho = model.dimension()
+    dimRho = model.dim
     feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
 
     def rcl_fn(x): return _scoring.filter_composite_rcl(x, alpha)

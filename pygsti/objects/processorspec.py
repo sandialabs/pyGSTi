@@ -284,7 +284,7 @@ class ProcessorSpec(object):
             # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not
             # Clifford gates then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits, self.number_of_qubits), dtype=bool)
-            for oplabel in self.models['clifford'].primitive_op_labels():
+            for oplabel in self.models['clifford'].primitive_op_labels:
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
                 if oplabel.number_of_qubits is None: continue  # skip "global" gates in connectivity consideration?
@@ -298,7 +298,7 @@ class ProcessorSpec(object):
         if 'clifford' in self.models:
             # Compute the operation labels that act on an entire set of qubits
             self.clifford_ops_on_qubits = _collections.defaultdict(list)
-            for gl in self.models['clifford'].primitive_op_labels():
+            for gl in self.models['clifford'].primitive_op_labels:
                 if gl.qubits is None: continue  # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
                     self.clifford_ops_on_qubits[p].append(gl)
@@ -332,7 +332,7 @@ class ProcessorSpec(object):
         """
         edgelist = []
 
-        for oplabel in self.models['clifford'].primitive_op_labels():
+        for oplabel in self.models['clifford'].primitive_op_labels:
             # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
             # something we may need to do at some point.
             if oplabel.number_of_qubits == 2:

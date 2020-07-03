@@ -196,6 +196,7 @@ class _DataSetRow(object):
         """
         raise ValueError("outcomes property is read-only")
 
+    @property
     def expanded_ol(self):
         """
         This row's sequence of outcome labels, with repetition counts expanded.
@@ -214,6 +215,7 @@ class _DataSetRow(object):
             return ol
         else: return self.outcomes
 
+    @property
     def expanded_oli(self):
         """
         This row's sequence of outcome label indices, with repetition counts expanded.
@@ -232,6 +234,7 @@ class _DataSetRow(object):
             return _np.array(inds, dtype=self.dataset.oliType)
         else: return self.oli.copy()
 
+    @property
     def expanded_times(self):
         """
         This row's sequence of time stamps, with repetition counts expanded.
@@ -250,6 +253,7 @@ class _DataSetRow(object):
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
 
+    @property
     def times(self):
         """
         A list containing the unique data collection times at which there is at least one measurement result.
@@ -267,6 +271,7 @@ class _DataSetRow(object):
 
         return times
 
+    @property
     def timeseries_for_outcomes(self):
         """
         Row data in a time-series format.
@@ -286,7 +291,7 @@ class _DataSetRow(object):
         """
         times = []
         last_time = None
-        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.outcome_labels()}
+        seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.outcome_labels}
 
         #REMOVED: (though this gives slightly different behavior)
         #for outcome_label in self.outcomes:
@@ -308,7 +313,7 @@ class _DataSetRow(object):
         #time_bins_borders.append(len(self.time))
         #nTimes = len(time_bins_borders) - 1
         #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.outcome_labels()}
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.outcome_labels}
         #
         #for i in range(nTimes):
         #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
@@ -365,6 +370,7 @@ class _DataSetRow(object):
 
         return times, series
 
+    @property
     def reps_timeseries(self):
         """
         The number of measurement results at each data collection time.
@@ -395,6 +401,7 @@ class _DataSetRow(object):
 
             return times, reps
 
+    @property
     def number_of_times(self):
         """
         Returns the number of data collection times.
@@ -403,8 +410,9 @@ class _DataSetRow(object):
         -------
         int
         """
-        return len(self.times())
+        return len(self.times)
 
+    @property
     def has_constant_totalcounts(self):
         """
         True if the numbers of counts is the same at all data collection times. Otherwise False.
@@ -413,12 +421,13 @@ class _DataSetRow(object):
         -------
         bool
         """
-        times, reps = self.reps_timeseries()
+        times, reps = self.reps_timeseries
         firstrep = reps[0]
         fixedtotalcounts = all([firstrep == i for i in reps])
 
         return fixedtotalcounts
 
+    @property
     def totalcounts_per_timestep(self):
         """
         The number of total counts per time-step, when this is constant.
@@ -430,11 +439,12 @@ class _DataSetRow(object):
         -------
         int
         """
-        times, reps = self.reps_timeseries()
+        times, reps = self.reps_timeseries
         firstrep = reps[0]
         assert(all([firstrep == i for i in reps])), "The total counts is not the same at all time steps!"
         return firstrep
 
+    @property
     def meantimestep(self):
         """
         The mean time-step.
@@ -445,7 +455,7 @@ class _DataSetRow(object):
         -------
         float
         """
-        times = _np.array(self.times())
+        times = _np.array(self.times)
         assert(len(times) >= 2), "Mean time-step is ill-defined when there is not multiple data times!"
 
         return _np.mean(_np.diff(times))
@@ -487,7 +497,7 @@ class _DataSetRow(object):
                     # if outcome label isn't in counts but *is* in the dataset's
                     # outcome labels then return 0 (~= return self.allcounts[...])
                     key = _ld.OutcomeLabelDict.to_outcome(index_or_outcome_label)
-                    if key in self.dataset.outcome_labels(): return 0
+                    if key in self.dataset.outcome_labels: return 0
                     raise KeyError("%s is not an index, timestamp, or outcome label!"
                                    % str(index_or_outcome_label))
 
@@ -1288,6 +1298,7 @@ class DataSet(object):
         """
         return _DataSetValueIterator(self)
 
+    @property
     def outcome_labels(self):
         """
         Get a list of *all* the outcome labels contained in this DataSet.
@@ -1688,11 +1699,11 @@ class DataSet(object):
                             for key, val in label_merge_dict.items()}
 
         merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
-        if not set(self.outcome_labels()).issubset(merge_dict_old_outcomes):
+        if not set(self.outcome_labels).issubset(merge_dict_old_outcomes):
             raise ValueError(
                 "`label_merge_dict` must account for all the outcomes in original dataset."
                 " It's missing directives for:\n%s" %
-                '\n'.join(set(map(str, self.outcome_labels())) - set(map(str, merge_dict_old_outcomes)))
+                '\n'.join(set(map(str, self.outcome_labels)) - set(map(str, merge_dict_old_outcomes)))
             )
 
         new_outcomes = sorted(list(label_merge_dict.keys()))
@@ -1945,6 +1956,7 @@ class DataSet(object):
         for circuit, dsRow in other_data_set.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
+    @property
     def meantimestep(self):
         """
         The mean time-step, averaged over the time-step for each circuit and over circuits.
@@ -1955,10 +1967,11 @@ class DataSet(object):
         """
         timesteps = []
         for key in self.keys():
-            timesteps.append(self[key].meantimestep())
+            timesteps.append(self[key].meantimestep)
 
         return _np.mean(timesteps)
 
+    @property
     def has_constant_totalcounts_pertime(self):
         """
         True if the data for every circuit has the same number of total counts at every data collection time.
@@ -1975,16 +1988,17 @@ class DataSet(object):
         for key in self.keys():
             numtotalcountspertime = None
             dsrow = self[key]
-            if not dsrow.has_constant_totalcounts():
+            if not dsrow.has_constant_totalcounts:
                 return False
             if numtotalcountspertime is None:
-                numtotalcountspertime = dsrow.totalcounts_per_timestep()
+                numtotalcountspertime = dsrow.totalcounts_per_timestep
             else:
-                if numtotalcountspertime != dsrow.totalcounts_per_timestep():
+                if numtotalcountspertime != dsrow.totalcounts_per_timestep:
                     return False
 
         return True
 
+    @property
     def totalcounts_pertime(self):
         """
         Total counts per time, if this is constant over times and circuits.
@@ -1995,12 +2009,13 @@ class DataSet(object):
         -------
         float or int
         """
-        self.has_constant_totalcounts_pertime()
+        self.has_constant_totalcounts_pertime
         key = list(self.keys())[0]
-        totalcountspertime = self[key].totalcounts_per_timestep()
+        totalcountspertime = self[key].totalcounts_per_timestep
 
         return totalcountspertime
 
+    @property
     def has_constant_totalcounts(self):
         """
         `True` if the data for every circuit has the same number of total counts.
@@ -2017,6 +2032,7 @@ class DataSet(object):
 
         return fixedtotalcounts
 
+    @property
     def has_trivial_timedependence(self):
         """
         `True` if all the data in this DataSet occurs at time 0.
@@ -2048,7 +2064,7 @@ class DataSet(object):
         str
         """
         if mode == "auto":
-            mode = "time-independent" if self.has_trivial_timedependence() else "time-dependent"
+            mode = "time-independent" if self.has_trivial_timedependence else "time-dependent"
 
         assert(mode in ('time-dependent', 'time-independent')), "Invalid `mode` argument: %s" % mode
 
@@ -2361,7 +2377,7 @@ class DataSet(object):
         if self.bStatic:
             return self  # doesn't need to be copied since data can't change
         else:
-            copyOfMe = DataSet(outcome_labels=self.outcome_labels(),
+            copyOfMe = DataSet(outcome_labels=self.outcome_labels,
                                collision_action=self.collisionAction)
             copyOfMe.cirIndex = _copy.deepcopy(self.cirIndex)
             copyOfMe.oliData = [el.copy() for el in self.oliData]
@@ -2386,7 +2402,7 @@ class DataSet(object):
         DataSet
         """
         if self.bStatic:
-            copyOfMe = DataSet(outcome_labels=self.outcome_labels(),
+            copyOfMe = DataSet(outcome_labels=self.outcome_labels,
                                collision_action=self.collisionAction)
             copyOfMe.cirIndex = _OrderedDict([(opstr, i) for i, opstr in enumerate(self.cirIndex.keys())])
             copyOfMe.oliData = []

@@ -11,19 +11,19 @@ class AbstractCircuitStructureTester(BaseCase):
 
     def test_xvals(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.xvals()
+            self.gss.xvals
 
     def test_yvals(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.yvals()
+            self.gss.yvals
 
     def test_minor_xvals(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.minor_xvals()
+            self.gss.minor_xvals
 
     def test_minor_yvals(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.minor_yvals()
+            self.gss.minor_yvals
 
     def test_create_plaquette(self):
         with self.assertRaises(NotImplementedError):
@@ -35,7 +35,7 @@ class AbstractCircuitStructureTester(BaseCase):
 
     def test_plaquette_rows_cols(self):
         with self.assertRaises(NotImplementedError):
-            self.gss.num_plaquette_rows_cols()
+            self.gss.num_plaquette_rows_cols
 
 
 class LSGermsStructureTester(AbstractCircuitStructureTester):

@@ -59,7 +59,7 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     if generation_method not in ['nonparametric', 'parametric']:
         raise ValueError("generation_method must be 'parametric' or 'nonparametric'!")
     if outcome_labels is None:
-        outcome_labels = input_data_set.outcome_labels()
+        outcome_labels = input_data_set.outcome_labels
 
     rndm = seed if isinstance(seed, _np.random.RandomState) \
         else _np.random.RandomState(seed)
@@ -79,7 +79,7 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
         possibleOutcomeLabels = [(eLbl,) for eLbl in input_model.povms[firstPOVMLbl].keys()]
         assert(all([ol in possibleOutcomeLabels for ol in outcome_labels]))
 
-    possibleOutcomeLabels = input_data_set.outcome_labels()
+    possibleOutcomeLabels = input_data_set.outcome_labels
     assert(all([ol in possibleOutcomeLabels for ol in outcome_labels]))
 
     #create new dataset

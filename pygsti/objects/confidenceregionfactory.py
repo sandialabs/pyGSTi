@@ -167,6 +167,7 @@ class ConfidenceRegionFactory(object):
         """
         self.parent = parent
 
+    @property
     def has_hessian(self):
         """
         Returns whether or not the Hessian has already been computed.
@@ -203,6 +204,7 @@ class ConfidenceRegionFactory(object):
         except:
             return False
 
+    @property
     def get_model(self):
         """
         Retrieve the associated model.
@@ -437,7 +439,7 @@ class ConfidenceRegionFactory(object):
         }
 
         #Count everything as non-gauge? TODO BETTER
-        self.nNonGaugeParams = self.get_model().num_params()
+        self.nNonGaugeParams = self.get_model.num_params()
         self.nGaugeParams = 0
 
     def view(self, confidence_level, region_type='normal',
@@ -783,7 +785,8 @@ class ConfidenceRegionFactoryView(object):
             del self.mlgst_params['comm']  # one *cannot* pickle Comm objects
         return to_pickle
 
-    def get_errobar_type(self):
+    @property
+    def errorbar_type(self):
         """
         Return the type of error bars this view will generate, either "standard" or "non-markovian".
 

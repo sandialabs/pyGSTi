@@ -194,6 +194,7 @@ class ExplicitOpModel(_mdl.OpModel):
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
         self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
 
+    @property
     def primitive_prep_labels(self):
         """
         Return the primitive state preparation labels of this model
@@ -204,7 +205,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return tuple(self.preps.keys())
 
-    def set_primitive_prep_labels(self, lbls):
+    @primitive_prep_labels.setter
+    def primitive_prep_labels(self, lbls):
         """
         Set the primitive state preparation labels of this model
 
@@ -217,9 +219,11 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         None
         """
+        # XXX perhaps we simply shouldn't define this setter? (likewise for other primitive label setters)
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
+    @property
     def primitive_povm_labels(self):
         """
         Return the primitive POVM labels of this model
@@ -230,7 +234,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return tuple(self.povms.keys())
 
-    def set_primitive_povm_labels(self, lbls):
+    @primitive_povm_labels.setter
+    def primitive_povm_labels(self, lbls):
         """
         Set the primitive POVM labels of this model
 
@@ -246,6 +251,7 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.povms dict)."))
 
+    @property
     def primitive_op_labels(self):
         """
         Return the primitive operation labels of this model.
@@ -256,7 +262,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return tuple(self.operations.keys())
 
-    def set_primitive_op_labels(self, lbls):
+    @primitive_op_labels.setter
+    def primitive_op_labels(self, lbls):
         """
         Set the primitive operation labels of this model.
 
@@ -272,6 +279,7 @@ class ExplicitOpModel(_mdl.OpModel):
         raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
                           "(they're determined by the keys of the model.operations dict)."))
 
+    @property
     def primitive_instrument_labels(self):
         """
         Return the primitive instrument labels of this model.
@@ -282,7 +290,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return tuple(self.instruments.keys())
 
-    def set_primitive_instrument_labels(self, lbls):
+    @primitive_instrument_labels.setter
+    def primitive_instrument_labels(self, lbls):
         """
         Set the primitive instrument labels of this model.
 
@@ -1258,7 +1267,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for k in range(1, operationMx.shape[1]):
                 penalty += abs(operationMx[0, k])**2
 
-        op_dim = self.dimension()
+        op_dim = self.dim
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
             penalty += abs(rhoVec[0, 0] - firstEl)**2
@@ -1504,7 +1513,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the rotated Model
         """
         newModel = self.copy()  # start by just copying model
-        dim = self.dimension()
+        dim = self.dim
         myBasis = self.basis
 
         if max_rotate is not None:
@@ -1570,7 +1579,7 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             rndm = rand_state
 
-        op_dim = self.dimension()
+        op_dim = self.dim
         unitary_dim = int(round(_np.sqrt(op_dim)))
         assert(unitary_dim**2 == op_dim), \
             "Model dimension must be a perfect square, %d is not" % op_dim
@@ -1617,7 +1626,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the increased-dimension Model
         """
 
-        curDim = self.dimension()
+        curDim = self.dim
         assert(new_dimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1688,7 +1697,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the decreased-dimension Model
         """
-        curDim = self.dimension()
+        curDim = self.dim
         assert(new_dimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:

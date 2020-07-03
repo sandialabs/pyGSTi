@@ -59,7 +59,7 @@ class LabelTestCase(BaseTestCase):
             extra_weight_1_hops=0, extra_gate_weight=1, sparse=True,
             sim_type="map", parameterization="H+S")
         # mdl[('Gx',0)].factorops  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
-        self.assertEqual( set(mdl.primitive_op_labels()), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
+        self.assertEqual( set(mdl.primitive_op_labels), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
 
         #But we can *compute* with circuits containing parallel labels...
         parallelLbl = L( [('Gx',0),('Gy',1)] )

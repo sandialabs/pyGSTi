@@ -702,7 +702,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):
@@ -822,7 +822,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0, n)]
     for i in range(0, len(gates_available)):
         for q in range(0, n):
@@ -979,7 +979,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):

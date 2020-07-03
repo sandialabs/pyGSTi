@@ -587,10 +587,10 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xvals()
-    yvals = g.used_yvals()
-    inner_xvals = g.minor_xvals()
-    inner_yvals = g.minor_yvals()
+    xvals = g.used_xvals
+    yvals = g.used_yvals
+    inner_xvals = g.minor_xvals
+    inner_yvals = g.minor_yvals
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
@@ -650,8 +650,8 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
         hover_info = hover_label_fn  # _summable_color_boxplot can handle this
 
     return _summable_color_boxplot(sub_mxs,
-                            g.used_xvals(), g.used_yvals(),
-                            g.minor_xvals(), g.minor_yvals(),
+                            g.used_xvals, g.used_yvals,
+                            g.minor_xvals, g.minor_yvals,
                             "L", "germ", "rho", "E<sub>i</sub>", colormap,
                             colorbar, box_labels, prec, hover_info,
                             sum_up, invert, scale, bgcolor)  # "$\\rho_i$","$\\E_i$"
@@ -705,10 +705,10 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xvals()
-    yvals = g.used_yvals()
-    inner_xvals = g.minor_xvals()
-    inner_yvals = g.minor_yvals()
+    xvals = g.used_xvals
+    yvals = g.used_yvals
+    inner_xvals = g.minor_xvals
+    inner_yvals = g.minor_yvals
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
@@ -766,8 +766,8 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
 
     xs = []; ys = []; texts = []
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xvals()):
-        for iy, y in enumerate(g.used_yvals()):
+    for ix, x in enumerate(g.used_xvals):
+        for iy, y in enumerate(g.used_yvals):
             plaq = g.get_plaquette(x, y)
             if sum_up:
                 if plaq.base not in gstrs:
@@ -864,8 +864,8 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
     ys = []  # artificially add minval so
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xvals()):
-        for iy, y in enumerate(g.used_yvals()):
+    for ix, x in enumerate(g.used_xvals):
+        for iy, y in enumerate(g.used_yvals):
             plaq = g.get_plaquette(x, y)
             #TODO: if sum_up then need to sum before appending...
             for iiy, iix, opstr in plaq:
@@ -1798,7 +1798,7 @@ class ColorBoxPlot(WorkspacePlot):
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = dscomparator.llr_pseudothreshold()
+                linlog_trans = dscomparator.llr_pseudothreshold
                 ytitle = "2 log(L ratio)"
                 mx_fn = _mx_fn_dscmp  # use a *global* function so cache can tell it's the same
                 extra_arg = dscomparator
@@ -1908,7 +1908,7 @@ class ColorBoxPlot(WorkspacePlot):
                     _warnings.warn("No dataset specified: using DOF-per-element == 1")
                     element_dof = 1
                 else:
-                    #element_dof = len(dataset.outcome_labels()) - 1
+                    #element_dof = len(dataset.outcome_labels) - 1
                     #Instead of the above, which doesn't work well when there are circuits with different
                     # outcomes, the line below just takes the average degrees of freedom per circuit
                     element_dof = dataset.degrees_of_freedom(circuit_list) / len(circuit_list)
@@ -1936,8 +1936,8 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
                     max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(circuit_struct.used_xvals()))
-                                   for iy in range(len(circuit_struct.used_yvals()))])
+                                   for ix in range(len(circuit_struct.used_xvals))
+                                   for iy in range(len(circuit_struct.used_yvals))])
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -2028,8 +2028,8 @@ def _mx_fn_from_elements(plaq, x, y, extra):
 
 
 def _mx_fn_blank(plaq, x, y, gss):
-    return _np.nan * _np.zeros((len(gss.minor_yvals()),
-                                len(gss.minor_xvals())), 'd')
+    return _np.nan * _np.zeros((len(gss.minor_yvals),
+                                len(gss.minor_xvals)), 'd')
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
@@ -3390,11 +3390,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         for i, _ in enumerate(dslabels):
             for j, _ in enumerate(dslabels[i + 1:], start=i + 1):
                 dsc = dsc_dict.get((i, j), dsc_dict.get((j, i), None))
-                val = dsc.aggregate_nsigma() if (dsc is not None) else None
+                val = dsc.aggregate_nsigma if (dsc is not None) else None
                 nSigmaMx[i, j] = nSigmaMx[j, i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
-                val = dsc.aggregate_llr() if (dsc is not None) else None
+                val = dsc.aggregate_llr if (dsc is not None) else None
                 logLMx[i, j] = logLMx[j, i] = val
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
 

@@ -617,7 +617,7 @@ def determine_paulidicts(model):
 
     #try to find 1-qubit pi/2 rotations
     found = {}
-    for gl in model.primitive_op_labels():
+    for gl in model.primitive_op_labels:
         if isinstance(model, _objs.ExplicitOpModel):
             gate = model.operations[gl]
         else:

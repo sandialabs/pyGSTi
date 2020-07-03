@@ -96,17 +96,10 @@ class OplessModel(_Model):
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.simtype = "opless"
         self.basis = None
-        self.dim = 0
 
-    def dimension(self):
-        """
-        The dimension of this model.
-
-        Returns
-        -------
-        int
-        """
-        return self.dim
+    @property
+    def dim(self):
+        return 0
 
     def compute_num_outcomes(self, circuit):  # needed for sparse data detection
         """

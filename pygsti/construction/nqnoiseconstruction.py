@@ -423,7 +423,7 @@ def create_cloudnoise_model_from_hops_and_weights(
     if return_clouds:
         #FUTURE - just return cloud *keys*? (operation label values are never used
         # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.get_clouds()
+        return mdl, mdl.get_clouds
     else:
         return mdl
 
@@ -620,13 +620,13 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
         if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
             lbls, _ = cparser.parse(k)
             assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
-            assert(all([sslbl in qubitGraph.node_names() for sslbl in lbls[0].sslbls])), \
+            assert(all([sslbl in qubitGraph.node_names for sslbl in lbls[0].sslbls])), \
                 "One or more invalid qubit names in: %s" % k
             del error_rates[k]
             error_rates[lbls[0]] = v
         elif isinstance(k, _Lbl):
             if k.sslbls is not None:
-                assert(all([sslbl in qubitGraph.node_names() for sslbl in k.sslbls])), \
+                assert(all([sslbl in qubitGraph.node_names for sslbl in k.sslbls])), \
                     "One or more invalid qubit names in the label: %s" % str(k)
 
     def _parameterization_from_errgendict(errs):
@@ -2110,7 +2110,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
 
     # collect gates that only act on core_qubits.
     oplabel_list = []; full_core_list = []
-    for gl in model.primitive_op_labels():
+    for gl in model.primitive_op_labels:
         if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)
         if set(gl.sslbls).issubset(core_qubits):
             oplabel_list.append(gl)
@@ -2784,7 +2784,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     else:
         qubitGraph = _objs.QubitGraph.common_graph(n_qubits, geometry, directed=False)
         printer.log("Created qubit graph:\n" + str(qubitGraph))
-    all_qubit_labels = qubitGraph.node_names()
+    all_qubit_labels = qubitGraph.node_names
 
     model = _CloudNoiseModel.from_hops_and_weights(
         n_qubits, tuple(gatedict.keys()), None, gatedict,
@@ -2793,7 +2793,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         extra_gate_weight, sparse, verbosity=printer - 5,
         sim_type="termorder", parameterization=ptermstype,
         errcomp_type="gates")
-    clouds = model.get_clouds()
+    clouds = model.get_clouds
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
     #print("DB: CLOUDS = ",clouds)
@@ -2893,7 +2893,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
-    weights = set([len(gl.sslbls) for gl in model.primitive_op_labels() if (gl.sslbls is not None)])
+    weights = set([len(gl.sslbls) for gl in model.primitive_op_labels if (gl.sslbls is not None)])
     for gateWt in sorted(list(weights)):
         maxSyntheticIdleWt = (gateWt + extra_gate_weight) + (gateWt - 1)  # gate-error-wt + spreading potential
         maxSyntheticIdleWt = min(maxSyntheticIdleWt, n_qubits)
@@ -2951,7 +2951,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         # OK b/c model.num_params() called above
         Gi_params = set(_slct.to_array(model.operation_blks['layers']['globalIdle'].gpindices))
         pure_op_labels = []
-        for gl in model.primitive_op_labels():  # take this as the set of "base"/"serial" operations
+        for gl in model.primitive_op_labels:  # take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)
             if set(gl.sslbls) == set(core_qubits):
                 pure_op_labels.append(gl)

@@ -314,7 +314,7 @@ class TestWorkspace(ReportBaseCase):
         #        effectStrs=effectStrs,
         #        prep_labels=list(self.mdl.preps.keys()),
         #        effect_labels=self.mdl.get_effect_labels() )
-        baseStrs = self.gss.circuit_structure.get_basestrings()
+        baseStrs = self.gss.circuit_structure.basestrings
         directModels = dx.direct_mlgst_models(
             baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
         plts.append( w.ColorBoxPlot(["chi2","logl","blank"], self.gss.circuit_structure,

@@ -158,7 +158,7 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Brackets')
                 elif display_as == "boxes":
                     rhoMx_real = rhoMx.hermitian_to_real()
-                    v = rhoMx_real.value()
+                    v = rhoMx_real.value
                     fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                              box_labels=True, prec='compacthp',
                                              mx_basis=None)  # no basis labels
@@ -181,7 +181,7 @@ class SpamTable(WorkspaceTable):
 
                 if confidence_region_info is not None:
                     intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
-                    if intervalVec.shape[0] == models[-1].dimension() - 1:
+                    if intervalVec.shape[0] == models[-1].dim - 1:
                         #TP constrained, so pad with zero top row
                         intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
                     rowData.append(intervalVec); rowFormatters.append('Normal')
@@ -204,7 +204,7 @@ class SpamTable(WorkspaceTable):
                         rowFormatters.append('Brackets')
                     elif display_as == "boxes":
                         EMx_real = EMx.hermitian_to_real()
-                        v = EMx_real.value()
+                        v = EMx_real.value
                         fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                                  box_labels=True, prec='compacthp',
                                                  mx_basis=None)  # no basis labels
@@ -307,7 +307,7 @@ class SpamParametersTable(WorkspaceTable):
             cri = confidence_region_info if (confidence_region_info
                                              and confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
-            DPs, DPEBs = spamDotProdsQty.value_and_errorbar()
+            DPs, DPEBs = spamDotProdsQty.value_and_errorbar
             assert(DPs.shape[1] == len(effectLbls)), \
                 "Models must have the same number of POVMs & effects"
 
@@ -392,7 +392,7 @@ class GatesTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -450,19 +450,19 @@ class GatesTable(WorkspaceTable):
                     lbl)[:, None]  # TODO: won't work for instruments
                 if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim, op_dim)
                 elif isinstance(per_model_ops[-1], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
                                                   intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
                 else:
                     # we don't know how best to reshape interval matrix for gate, so
                     # use derivative
-                    op_dim = models[-1].dimension()
+                    op_dim = models[-1].dim
                     basis = models[-1].basis
                     op_deriv = per_model_ops[-1].deriv_wrt_params()
                     intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
@@ -554,7 +554,7 @@ class ChoiTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = models[0].primitive_op_labels()  # use labels of 1st model
+        opLabels = models[0].primitive_op_labels  # use labels of 1st model
         assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
@@ -562,7 +562,7 @@ class ChoiTable(WorkspaceTable):
 
         qtysList = []
         for model in models:
-            opLabels = model.primitive_op_labels()  # operation labels
+            opLabels = model.primitive_op_labels  # operation labels
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(model, gl)) for gl in opLabels]
@@ -623,7 +623,7 @@ class ChoiTable(WorkspaceTable):
 
                 elif disp == "barplot":
                     for model, (_, evals) in zip(models, qtysList):
-                        evs, evsEB = evals[i].value_and_errorbar()
+                        evs, evsEB = evals[i].value_and_errorbar
                         fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                         row_data.append(fig)
                         row_formatters.append('Figure')
@@ -631,7 +631,7 @@ class ChoiTable(WorkspaceTable):
                 elif disp == "boxplot":
                     for model, (choiMxs, _) in zip(models, qtysList):
                         choiMx_real = choiMxs[i].hermitian_to_real()
-                        choiMx, EB = choiMx_real.value_and_errorbar()
+                        choiMx, EB = choiMx_real.value_and_errorbar
                         fig = _wp.GateMatrixPlot(self.ws, choiMx,
                                                  colorbar=False,
                                                  mx_basis=model.basis,
@@ -703,7 +703,7 @@ class GaugeRobustModelTable(WorkspaceTable):
     def _create(self, model, target_model, display_as, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.primitive_op_labels()  # use labels of 1st model
+        opLabels = model.primitive_op_labels  # use labels of 1st model
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -887,7 +887,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
     def _create(self, model, target_model, metric, confidence_region_info):
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
-        opLabels = model.primitive_op_labels()
+        opLabels = model.primitive_op_labels
 
         colHeadings = [''] + ['%s' % str(lbl) for lbl in opLabels]
         formatters = [None] * len(colHeadings)
@@ -1181,7 +1181,7 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, model, target_model, confidence_region_info,
                 display, virtual_ops, wildcard):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         instLabels = list(model.instruments.keys())  # requires an explicit model!
         assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
@@ -1443,7 +1443,7 @@ class ErrgenTable(WorkspaceTable):
     def _create(self, model, target_model,
                 confidence_region_info, display, display_as, gen_type):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
@@ -1506,20 +1506,20 @@ class ErrgenTable(WorkspaceTable):
             else: raise ValueError("Invalid generator type: %s" % gen_type)
             errgenAndProjs[gl] = info
 
-            errgen = info['error generator'].value()
+            errgen = info['error generator'].value
             absMax = _np.max(_np.abs(errgen))
             add_max(errgensM, absMax)
 
             if "H" in display:
-                absMax = _np.max(_np.abs(info['hamiltonian projections'].value()))
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].value))
                 add_max(hamProjsM, absMax)
 
             if "S" in display:
-                absMax = _np.max(_np.abs(info['stochastic projections'].value()))
+                absMax = _np.max(_np.abs(info['stochastic projections'].value))
                 add_max(stoProjsM, absMax)
 
             if "A" in display:
-                absMax = _np.max(_np.abs(info['affine projections'].value()))
+                absMax = _np.max(_np.abs(info['affine projections'].value))
                 add_max(affProjsM, absMax)
 
         #Do plotting
@@ -1531,7 +1531,7 @@ class ErrgenTable(WorkspaceTable):
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        errgen, EB = info['error generator'].value_and_errorbar()
+                        errgen, EB = info['error generator'].value_and_errorbar
                         m, M = get_min_max(errgensM, _np.max(_np.abs(errgen)))
                         errgen_fig = _wp.GateMatrixPlot(self.ws, errgen, m, M,
                                                         basis, eb_matrix=EB)
@@ -1543,8 +1543,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['hamiltonian projection power'].value()
-                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['hamiltonian projection power'].value
+                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar
                         m, M = get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis, m, M,
@@ -1557,8 +1557,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['stochastic projection power'].value()
-                        stoProjs, EB = info['stochastic projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['stochastic projection power'].value
+                        stoProjs, EB = info['stochastic projections'].value_and_errorbar
                         m, M = get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis, m, M,
@@ -1571,8 +1571,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "A":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['affine projection power'].value()
-                        affProjs, EB = info['affine projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['affine projection power'].value
+                        affProjs, EB = info['affine projections'].value_and_errorbar
                         m, M = get_min_max(affProjsM, _np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, affProjs, basis, m, M,
@@ -1763,7 +1763,7 @@ class NQubitErrgenTable(WorkspaceTable):
                                                 display, display_as)
 
     def _create(self, model, confidence_region_info, display, display_as):
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         #basis = model.basis
         #basisPrefix = ""
@@ -1977,7 +1977,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
 
     def _create(self, model, target_model, confidence_region_info):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters = (None, 'Conversion')
@@ -2046,7 +2046,7 @@ class GateDecompTable(WorkspaceTable):
                                               target_model, confidence_region_info)
 
     def _create(self, model, target_model, confidence_region_info):
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
 
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
             + tuple(["Axis angle w/%s" % str(gl) for gl in opLabels])
@@ -2067,7 +2067,7 @@ class GateDecompTable(WorkspaceTable):
 
         for gl in opLabels:
             gl = str(gl)  # Label -> str for decomp-dict keys
-            axis, axisEB = decomp[gl + ' axis'].value_and_errorbar()
+            axis, axisEB = decomp[gl + ' axis'].value_and_errorbar
             axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0, 1.0,
                                              box_labels=True, eb_matrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale_inplace(1.0 / _np.pi)  # scale evals to units of pi
@@ -2077,8 +2077,8 @@ class GateDecompTable(WorkspaceTable):
 
             for gl_other in opLabels:
                 gl_other = str(gl_other)
-                rotnAngle = decomp[gl + ' angle'].value()
-                rotnAngle_other = decomp[gl_other + ' angle'].value()
+                rotnAngle = decomp[gl + ' angle'].value
+                rotnAngle_other = decomp[gl_other + ' angle'].value
 
                 if gl_other == gl:
                     rowData.append("")
@@ -2135,7 +2135,7 @@ class OldGateDecompTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         colHeadings = ('Gate', 'Eigenvalues', 'Fixed pt', 'Rotn. axis', 'Diag. decay', 'Off-diag. decay')
         formatters = [None] * 6
 
@@ -2152,7 +2152,7 @@ class OldGateDecompTable(WorkspaceTable):
 
         for decomp, gl in zip(decomps, opLabels):
             evals = _ev(_reportables.GateEigenvalues(model, gl))
-            decomp, decompEB = decomp.value_and_errorbar()  # OLD
+            decomp, decompEB = decomp.value_and_errorbar  # OLD
 
             rowData = [gl, evals] + [decomp.get(x, 'X') for x in decompNames[0:2]] + \
                 [(decomp.get(x, 'X'), decompEB) for x in decompNames[2:4]]
@@ -2213,7 +2213,7 @@ class OldRotationAxisTable(WorkspaceTable):
 
     def _create(self, model, confidence_region_info, show_axis_angle_err_bars):
 
-        opLabels = model.primitive_op_labels()
+        opLabels = model.primitive_op_labels
 
         assert(isinstance(model, _objs.ExplicitOpModel)), "OldRotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
@@ -2235,15 +2235,15 @@ class OldRotationAxisTable(WorkspaceTable):
 
         rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(model),
                                 confidence_region_info)
-        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.value_and_errorbar()
+        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.value_and_errorbar
 
         for i, gl in enumerate(opLabels):
-            decomp, decompEB = decomps[i].value_and_errorbar()  # OLD
+            decomp, decompEB = decomps[i].value_and_errorbar  # OLD
             rotnAngle = decomp.get('pi rotations', 'X')
 
             angles_btwn_rotn_axes = []
             for j, gl_other in enumerate(opLabels):
-                decomp_other, _ = decomps[j].value_and_errorbar()  # OLD
+                decomp_other, _ = decomps[j].value_and_errorbar  # OLD
                 rotnAngle_other = decomp_other.get('pi rotations', 'X')
 
                 if gl_other == gl:
@@ -2374,7 +2374,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidence_region_info, display,
                 virtual_ops):
 
-        opLabels = model.primitive_op_labels()  # operation labels
+        opLabels = model.primitive_op_labels  # operation labels
         assert(isinstance(model, _objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -2487,12 +2487,12 @@ class GateEigenvalueTable(WorkspaceTable):
                             model, target_model, gl), confidence_region_info)
 
                 # permute target eigenvalues according to min-weight matching
-                _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
+                _, pairs = _tools.minweight_match(evals.value, target_evals, lambda x, y: abs(x - y))
                 matched_target_evals = target_evals.copy()
                 for i, j in pairs:
                     matched_target_evals[i] = target_evals[j]
                 target_evals = matched_target_evals
-                target_evals = target_evals.reshape(evals.value().shape)
+                target_evals = target_evals.reshape(evals.value.shape)
                 # b/c evals have shape (x,1) and targets (x,),
                 # which causes problems when we try to subtract them
 
@@ -2560,7 +2560,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                 elif disp == "polar":
-                    evals_val = evals.value()
+                    evals_val = evals.value
                     if target_model is None:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2572,7 +2572,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and target_model is not None:
-                    rel_evals_val = rel_evals.value()
+                    rel_evals_val = rel_evals.value
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws, [rel_evals_val], ["red"], ["rel"], center_text=str(gl))
                     row_data.append(fig)
@@ -2597,12 +2597,12 @@ class GateEigenvalueTable(WorkspaceTable):
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching
-                    _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
+                    _, pairs = _tools.minweight_match(evals.value, target_evals, lambda x, y: abs(x - y))
                     matched_target_evals = target_evals.copy()
                     for i, j in pairs:
                         matched_target_evals[i] = target_evals[j]
                     target_evals = matched_target_evals
-                    target_evals = target_evals.reshape(evals.value().shape)
+                    target_evals = target_evals.reshape(evals.value.shape)
                     # b/c evals have shape (x,1) and targets (x,),
                     # which causes problems when we try to subtract them
 
@@ -2657,7 +2657,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                     elif disp == "polar":
-                        evals_val = evals.value()
+                        evals_val = evals.value
                         if target_model is None:
                             fig = _wp.PolarEigenvaluePlot(
                                 self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2726,7 +2726,7 @@ class DataSetOverviewTable(WorkspaceTable):
 
         table.add_row(("Number of strings", str(len(dataset))), (None, None))
         table.add_row(("Gate labels", ", ".join([str(gl) for gl in dataset.gate_labels()])), (None, None))
-        table.add_row(("Outcome labels", ", ".join(map(str, dataset.outcome_labels()))), (None, None))
+        table.add_row(("Outcome labels", ", ".join(map(str, dataset.outcome_labels))), (None, None))
         table.add_row(("Counts per string", cntStr), (None, None))
 
         if max_length_list is not None:
@@ -3682,7 +3682,7 @@ class WildcardBudgetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
 
         if budget is not None:
-            for nm, (desc, val) in budget.description().items():
+            for nm, (desc, val) in budget.description.items():
                 table.add_row((nm, desc, val), (None, None, None))
 
         table.finish()

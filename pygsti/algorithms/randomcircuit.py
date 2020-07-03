@@ -138,7 +138,7 @@ def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=
         else:
             twoQpopulate = False
 
-        operationlist = pspec.models[modelname].primitive_op_labels()
+        operationlist = pspec.models[modelname].primitive_op_labels
         for gate in operationlist:
             if oneQpopulate:
                 if (gate.number_of_qubits == 1) and (gate.name not in one_q_gate_names):
@@ -333,7 +333,7 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         oneQgates_available = _copy.copy(one_q_gates)
     # If one_q_gates is not specified, extract this list from the ProcessorSpec
     else:
-        oneQgates_available = list(pspec.models[modelname].primitive_op_labels())
+        oneQgates_available = list(pspec.models[modelname].primitive_op_labels)
         d = len(oneQgates_available)
         for i in range(0, d):
             # If it's not a 1-qubit gate, we delete it.
@@ -348,7 +348,7 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         twoQgates_available = _copy.copy(two_q_gates)
     # If two_q_gates is not specified, extract this list from the ProcessorSpec
     else:
-        twoQgates_available = list(pspec.models[modelname].primitive_op_labels())
+        twoQgates_available = list(pspec.models[modelname].primitive_op_labels)
         d = len(twoQgates_available)
         for i in range(0, d):
             # If it's not a 2-qubit gate, we delete it.
@@ -588,7 +588,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
             if modelname == 'clifford':
                 possibleops = pspec.clifford_ops_on_qubits[(qubit,)]
             else:
-                possibleops = pspec.models[modelname].primitive_op_labels()
+                possibleops = pspec.models[modelname].primitive_op_labels
                 l = len(possibleops)
                 for j in range(0, l):
                     if possibleops[l - j].number_of_qubits != 1:
@@ -2490,18 +2490,18 @@ def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random
         assert (generated_group is not None), "Generated group needs to be specified!"
         if model_to_group_labels is None:
             model_to_group_labels = {}
-            for gate in model.primitive_op_labels():
+            for gate in model.primitive_op_labels:
                 assert(gate in generated_group.labels), "model labels are not in \
                 the generated group! Specify a model_to_group_labels dictionary."
                 model_to_group_labels = {'gate': 'gate'}
         else:
-            for gate in model.primitive_op_labels():
+            for gate in model.primitive_op_labels:
                 assert(gate in model_to_group_labels.keys()), "model to group labels \
                 are invalid!"
                 assert(model_to_group_labels[gate] in generated_group.labels), "model to group labels \
                 are invalid!"
 
-        opLabels = model.primitive_op_labels()
+        opLabels = model.primitive_op_labels
         rndm_indices = rndm.randint(0, len(opLabels), m)
         if interleaved:
             interleaved_index = opLabels.index(interleaved)
@@ -2540,7 +2540,7 @@ def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random
 
     if not inverse:
         if model:
-            opLabels = model.primitive_op_labels()
+            opLabels = model.primitive_op_labels
             rndm_indices = rndm.randint(0, len(opLabels), m)
             if interleaved:
                 interleaved_index = opLabels.index(interleaved)

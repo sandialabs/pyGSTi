@@ -572,7 +572,7 @@ class _BasePOVM(POVM):
             # so just check that the transform preserves the identity.
             TOL = 1e-6
             identityVec = self[self.complement_label].identity.to_dense().reshape((-1, 1))
-            SmxT = _np.transpose(s.transform_matrix())
+            SmxT = _np.transpose(s.transform_matrix)
             assert(_np.linalg.norm(identityVec - _np.dot(SmxT, identityVec)) < TOL),\
                 ("Cannot transform complement effect in a way that doesn't"
                  " preserve the identity!")

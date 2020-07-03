@@ -265,7 +265,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
     if guess_model_for_gauge is not None:
-        guessTrunc = guess_model_for_gauge.dimension()  # the truncation to apply to it's B matrix
+        guessTrunc = guess_model_for_gauge.dim  # the truncation to apply to it's B matrix
         # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
         assert(guessTrunc <= trunc)
 
@@ -435,7 +435,7 @@ def _construct_a(effect_fiducials, mdl):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
         mdl, [], effect_fiducials)
 
-    dim = mdl.dimension()
+    dim = mdl.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
 
@@ -458,7 +458,7 @@ def _construct_a(effect_fiducials, mdl):
 
 def _construct_b(prep_fiducials, mdl):
     n = len(prep_fiducials)
-    dim = mdl.dimension()
+    dim = mdl.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
 

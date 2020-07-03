@@ -543,14 +543,14 @@ class TermEvalTree(EvalTree):
             for glbl in opstr:
                 partial_ops.append(opcache[glbl] if glbl in opcache else calc.sos.operation(glbl))
             Eops = [(opcache[elbl] if elbl in opcache else calc.sos.effect(elbl)) for elbl in elabels]
-            partial_op_maxmag_values = [op.total_term_magnitude() for op in partial_ops]
-            Eop_maxmag_values = [Eop.total_term_magnitude() for Eop in Eops]
+            partial_op_maxmag_values = [op.total_term_magnitude for op in partial_ops]
+            Eop_maxmag_values = [Eop.total_term_magnitude for Eop in Eops]
             maxmag_partial_product = _np.product(partial_op_maxmag_values)
             maxmag_products = [maxmag_partial_product * Eop_val for Eop_val in Eop_maxmag_values]
 
             deriv = _np.zeros((len(elabels), calc.Np), 'd')
             for i in range(len(partial_ops)):  # replace i-th element of product with deriv
-                dop_local = partial_ops[i].total_term_magnitude_deriv()
+                dop_local = partial_ops[i].total_term_magnitude_deriv
                 dop_global = _np.zeros(calc.Np, 'd')
                 dop_global[partial_ops[i].gpindices] = dop_local
                 dop_global /= partial_op_maxmag_values[i]
@@ -559,7 +559,7 @@ class TermEvalTree(EvalTree):
                     deriv[j, :] += dop_global * maxmag_products[j]
 
             for j in range(len(elabels)):  # replace final element with appropriate derivative
-                dop_local = Eops[j].total_term_magnitude_deriv()
+                dop_local = Eops[j].total_term_magnitude_deriv
                 dop_global = _np.zeros(calc.Np, 'd')
                 dop_global[Eops[j].gpindices] = dop_local
                 dop_global /= Eop_maxmag_values[j]

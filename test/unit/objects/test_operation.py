@@ -26,7 +26,7 @@ class OpBase(object):
         self.assertEqual(type(gate_copy), type(self.gate))
 
     def test_get_dimension(self):
-        self.assertEqual(self.gate.dimension(), 4)
+        self.assertEqual(self.gate.dim, 4)
 
     def test_vector_conversion(self):
         v = self.gate.to_vector()

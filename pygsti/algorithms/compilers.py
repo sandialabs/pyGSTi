@@ -1570,7 +1570,7 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     # Find the correct qubit graph to take into account.
     if qubit_labels is None: qubitgraph = pspec.qubitgraph
     else: qubitgraph = pspec.qubitgraph.subgraph(qubit_labels)
-    nodenames = qubitgraph.node_names()
+    nodenames = qubitgraph.node_names
 
     # Find the distances and the shortest path predecessor matrix for this set of qubits.
     # The indexing here is w.r.t. the order of nodenames.
@@ -1818,7 +1818,7 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
         qindex = allqubits.index(q)
         # A qubit graph over the remaining qubits
         rQsgraph = qubitgraph.subgraph(remaining_qubits)
-        rQsgraph_llist = list(rQsgraph.node_names())
+        rQsgraph_llist = list(rQsgraph.node_names)
         q_rQSgraph_index = rQsgraph_llist.index(q)
 
         # The distances from this qubit to the other qubits.
