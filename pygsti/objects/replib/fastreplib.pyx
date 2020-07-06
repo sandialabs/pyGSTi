@@ -1373,7 +1373,7 @@ cdef class PolynomialRep:
                 new_indx = 0; m=1
                 #REMOVE print "begin indx ",indx
                 while indx != 0:
-                    nxt = indx / divisor
+                    nxt = indx // divisor
                     i = indx - nxt * divisor
                     indx = nxt
                     #REMOVE print indx, " -> nxt=", nxt, " i=",i
@@ -1437,7 +1437,7 @@ cdef class PolynomialRep:
             while(vit != i_vec.end()):
                 indx = deref(vit)
                 while indx != 0:
-                    nxt = indx / divisor
+                    nxt = indx // divisor
                     i = indx - nxt * divisor
                     i_tup.append(i-1)
                     indx = nxt

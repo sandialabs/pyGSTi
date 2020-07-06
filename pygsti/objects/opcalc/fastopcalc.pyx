@@ -43,8 +43,8 @@ def test_map(s):
     my_map2[2]=10.0
     my_map2[3]=20.0
 
-    print my_map[1],my_map[2]
-    print my_map2[1], my_map2[2],my_map2[3]
+    print(my_map[1], my_map[2])
+    print(my_map2[1], my_map2[2], my_map2[3])
     print("HELLO!!!")
 
     #try to update map
@@ -56,8 +56,8 @@ def test_map(s):
     #Print map
     it = my_map.begin()
     while it != my_map.end():
-        print deref(it).first
-        print deref(it).second
+        print(deref(it).first)
+        print(deref(it).second)
         inc(it)
 #    for x in my_map:
 #        print x.first
@@ -824,12 +824,12 @@ def check_polynomials(unordered_map[int,complex] coeff, coeff_check):
         else:
             mismatch = 1; break
 
-    print "MISMATCH = ", mismatch
-    print"coeff="
+    print("MISMATCH = ", mismatch)
+    print("coeff=")
     it = coeff.begin()
     while it != coeff.end():
-        print deref(it); inc(it)
-    print "coeff_check=",coeff_check
+        print(deref(it)); inc(it)
+    print("coeff_check=",coeff_check)
     #    assert(0),"Mismatch!"
 
 cdef vector[vector[unordered_map[int, complex] ]] extract_term_coeffs(python_terms, int max_order, int& max_poly_vars, int& max_poly_order):
