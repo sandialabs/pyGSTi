@@ -116,7 +116,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
                           resource_alloc, wrt_filter1, wrt_filter2):
         myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
         sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
-        Np = self.model.num_params()
 
         if wrt_filter1 is not None:
             assert(layout.additional_dimension_blk_sizes[0] is None)  # Can't specify both wrt_filter and wrt_block_size
@@ -132,82 +131,15 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         for iAtom in myAtomIndices:
             atom = layout.atoms[iAtom]
-            if pr_array_to_fill is not None:
-                self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, sub_resource_alloc)
 
             #Set wrt_block_size to use available processors if it isn't specified
             blkSize1 = self._set_param_block_size(wrt_filter1, layout.additional_dimension_blk_sizes[0], mySubComm)
             blkSize2 = self._set_param_block_size(wrt_filter2, layout.additional_dimension_blk_sizes[1], mySubComm)
 
-            if blkSize1 is None and blkSize2 is None:  # wrt_filter1 & wrt_filter2 dictate block
-                #Compute all requested derivative columns at once
-                if deriv1_array_to_fill is not None:
-                    self._bulk_fill_dprobs_block(deriv1_array_to_fill[atom.element_slice, :], None, atom,
-                                                 wrtSlice1, sub_resource_alloc)
-                if deriv2_array_to_fill is not None:
-                    if deriv1_array_to_fill is not None and wrtSlice1 == wrtSlice2:
-                        deriv2_array_to_fill[atom.element_slice, :] = deriv1_array_to_fill[atom.element_slice, :]
-                    else:
-                        self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], None, atom,
-                                                     wrtSlice2, sub_resource_alloc)
-
-                self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :, :], None, None, atom,
-                                             wrtSlice1, wrtSlice2, sub_resource_alloc)
-
-            else:  # Divide columns into blocks of at most blkSize
-                assert(wrt_filter1 is None and wrt_filter2 is None)  # cannot specify both wrt_filter and blkSize
-                nBlks1 = int(_np.ceil(Np / blkSize1))
-                nBlks2 = int(_np.ceil(Np / blkSize2))
-                # num blocks required to achieve desired average size == blkSize1 or blkSize2
-                blocks1 = _mpit.slice_up_range(Np, nBlks1)
-                blocks2 = _mpit.slice_up_range(Np, nBlks2)
-
-                #distribute derivative computation across blocks
-                myBlk1Indices, blk1Owners, blk1Comm = \
-                    _mpit.distribute_indices(list(range(nBlks1)), mySubComm)
-                blk1_resource_alloc = _ResourceAllocation(comm=blk1Comm)
-
-                myBlk2Indices, blk2Owners, blk2Comm = \
-                    _mpit.distribute_indices(list(range(nBlks2)), blk1Comm)
-                blk2_resource_alloc = _ResourceAllocation(comm=blk2Comm)
-
-                if blk2Comm is not None:
-                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than hessian elements(%d)!" % (Np**2)
-                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
-
-                #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
-                # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                derivArToFill = deriv1_array_to_fill if (deriv1_array_to_fill is not None) else deriv2_array_to_fill
-
-                for iBlk1 in myBlk1Indices:
-                    paramSlice1 = blocks1[iBlk1]
-                    if derivArToFill is not None:
-                        self._bulk_fill_dprobs_block(derivArToFill[atom.element_slice, :], paramSlice1, atom,
-                                                     paramSlice1, blk1_resource_alloc)
-
-                    for iBlk2 in myBlk2Indices:
-                        paramSlice2 = blocks2[iBlk2]
-                        self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :], paramSlice1, paramSlice2,
-                                                     atom, paramSlice1, paramSlice2, blk2_resource_alloc)
-
-                    #gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, array_to_fill, [atom.element_slice, blocks1[iBlk1]],
-                                        2, blk1Comm, layout.gather_mem_limit)
-
-                #gather row results; gather axis 1 of mx_to_fill[felInds], dim=(ks,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, array_to_fill, [atom.element_slice],
-                                    1, mySubComm, layout.gather_mem_limit)
-                if derivArToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, derivArToFill, [atom.element_slice],
-                                        1, mySubComm, layout.gather_mem_limit)
-
-                #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
-                # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                if deriv1_array_to_fill is not None:
-                    deriv1_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
-                if deriv2_array_to_fill is not None:
-                    deriv2_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
+            self._bulk_fill_hprobs_singleatom(array_to_fill, atom,
+                                              pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
+                                              sub_resource_alloc, wrtSlice1, wrtSlice2, blkSize1, blkSize2,
+                                              layout.gather_mem_limit)
 
         #collect/gather results
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
@@ -223,6 +155,107 @@ class DistributableForwardSimulator(_ForwardSimulator):
         if pr_array_to_fill is not None:
             _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
                                 resource_alloc.comm, layout.gather_mem_limit)
+
+    def _bulk_fill_hprobs_singleatom(self, array_to_fill, atom,
+                                     pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
+                                     resource_alloc, wrt_slice1, wrt_slice2, wrt_blksize1, wrt_blksize2,
+                                     gather_mem_limit):
+        Np = self.model.num_params()
+        if pr_array_to_fill is not None:
+            self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, resource_alloc)
+
+        if wrt_blksize1 is None and wrt_blksize2 is None:  # wrt_filter1 & wrt_filter2 dictate block
+            #Compute all requested derivative columns at once
+            if deriv1_array_to_fill is not None:
+                self._bulk_fill_dprobs_block(deriv1_array_to_fill[atom.element_slice, :], None, atom,
+                                             wrt_slice1, resource_alloc)
+            if deriv2_array_to_fill is not None:
+                if deriv1_array_to_fill is not None and wrt_slice1 == wrt_slice2:
+                    deriv2_array_to_fill[atom.element_slice, :] = deriv1_array_to_fill[atom.element_slice, :]
+                else:
+                    self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], None, atom,
+                                                 wrt_slice2, resource_alloc)
+
+            self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :, :], None, None, atom,
+                                         wrt_slice1, wrt_slice2, resource_alloc)
+
+        else:  # Divide columns into blocks of at most blkSize
+            assert(wrt_slice1 is None and wrt_slice2 is None)  # cannot specify both wrt_slice and wrt_blksize
+            nBlks1 = int(_np.ceil(Np / wrt_blksize1))
+            nBlks2 = int(_np.ceil(Np / wrt_blksize2))
+            # num blocks required to achieve desired average size == blkSize1 or blkSize2
+            blocks1 = _mpit.slice_up_range(Np, nBlks1)
+            blocks2 = _mpit.slice_up_range(Np, nBlks2)
+
+            #distribute derivative computation across blocks
+            myBlk1Indices, blk1Owners, blk1Comm = \
+                _mpit.distribute_indices(list(range(nBlks1)), resource_alloc.comm)
+            blk1_resource_alloc = _ResourceAllocation(comm=blk1Comm)
+
+            myBlk2Indices, blk2Owners, blk2Comm = \
+                _mpit.distribute_indices(list(range(nBlks2)), blk1Comm)
+            blk2_resource_alloc = _ResourceAllocation(comm=blk2Comm)
+
+            if blk2Comm is not None:
+                _warnings.warn("Note: more CPUs(%d)" % resource_alloc.comm.Get_size()
+                               + " than hessian elements(%d)!" % (Np**2)
+                               + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
+
+            #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
+            # will always be the same whenever they're desired (they'll both cover the entire range of params)
+            derivArToFill = deriv1_array_to_fill if (deriv1_array_to_fill is not None) else deriv2_array_to_fill
+
+            for iBlk1 in myBlk1Indices:
+                paramSlice1 = blocks1[iBlk1]
+                if derivArToFill is not None:
+                    self._bulk_fill_dprobs_block(derivArToFill[atom.element_slice, :], paramSlice1, atom,
+                                                 paramSlice1, blk1_resource_alloc)
+
+                for iBlk2 in myBlk2Indices:
+                    paramSlice2 = blocks2[iBlk2]
+                    self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :], paramSlice1, paramSlice2,
+                                                 atom, paramSlice1, paramSlice2, blk2_resource_alloc)
+
+                #gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
+                _mpit.gather_slices(blocks2, blk2Owners, array_to_fill, [atom.element_slice, blocks1[iBlk1]],
+                                    2, blk1Comm, gather_mem_limit)
+
+            #gather row results; gather axis 1 of mx_to_fill[felInds], dim=(ks,M,M)
+            _mpit.gather_slices(blocks1, blk1Owners, array_to_fill, [atom.element_slice],
+                                1, resource_alloc.comm, gather_mem_limit)
+            if derivArToFill is not None:
+                _mpit.gather_slices(blocks1, blk1Owners, derivArToFill, [atom.element_slice],
+                                    1, resource_alloc.comm, gather_mem_limit)
+
+            #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
+            # will always be the same whenever they're desired (they'll both cover the entire range of params)
+            if deriv1_array_to_fill is not None:
+                deriv1_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
+            if deriv2_array_to_fill is not None:
+                deriv2_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
+
+    def _bulk_hprobs_by_block_singleatom(self, atom, wrt_slices_list, return_dprobs_12, resource_alloc,
+                                         gather_mem_limit):
+
+        nElements = atom.num_elements
+        for wrtSlice1, wrtSlice2 in wrt_slices_list:
+
+            if return_dprobs_12:
+                dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
+                dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+            else:
+                dprobs1 = dprobs2 = None
+            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
+                                _slct.length(wrtSlice2)), 'd')
+            
+            self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, resource_alloc,
+                                              wrtSlice1, wrtSlice2, None, None, gather_mem_limit)
+
+            if return_dprobs_12:
+                dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
+                yield wrtSlice1, wrtSlice2, hprobs, dprobs12
+            else:
+                yield wrtSlice1, wrtSlice2, hprobs
 
     def _bulk_fill_timedep_deriv(self, layout, dataset, ds_circuits, num_total_outcomes,
                                  deriv_array_to_fill, deriv_fill_fn, array_to_fill=None, fill_fn=None,
