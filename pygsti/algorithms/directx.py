@@ -633,7 +633,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
                                                 verbosity=verbosity)
 
     focused_lsgst.operations[circuit_label] = _objs.FullDenseOp(
-        focused_lsgst.product(circuit_to_estimate))  # add desired string as a separate labeled gate
+        focused_lsgst.sim.product(circuit_to_estimate))  # add desired string as a separate labeled gate
     return focused_lsgst
 
 

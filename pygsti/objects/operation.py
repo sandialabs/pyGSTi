@@ -7974,8 +7974,8 @@ class LindbladErrorgen(LinearOperator):
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
                     otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
-                                              inplace=True, check=True) for mx in otherGens]
-                    for mx in hamGens: mx.sort_indices()
+                                               inplace=True, check=True) for mx in otherGens]
+                    for mx in otherGens: mx.sort_indices()
                     # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)

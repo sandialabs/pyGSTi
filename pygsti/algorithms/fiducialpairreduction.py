@@ -39,7 +39,7 @@ def _random_combination(indices_tuple, r):
 
 
 def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials, germs,
-                                   test_lengths=(256, 2048), pre_povm_tuples="first", tol=0.75,
+                                   test_lengths=(256, 2048), prep_povm_tuples="first", tol=0.75,
                                    search_mode="sequential", n_random=100, seed=None,
                                    verbosity=0, test_pair_list=None, mem_limit=None,
                                    minimum_pairs=1):
@@ -83,7 +83,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         A tuple of integers specifying the germ-power lengths to use when
         checking for amplificational completeness.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -135,12 +135,12 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     #like)
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
-    pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+    prep_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+                       for prepLbl, povmLbl in prep_povm_tuples]
 
     def get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
@@ -156,7 +156,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             expGerm = _gsc.repeat_with_max_length(germ, length)  # could pass exponent and set to germ**exp here
             lst = _gsc.create_circuits(
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-                expGerm=expGerm, pp=pre_povm_tuples, order=('f0', 'f1', 'pp'))
+                expGerm=expGerm, pp=prep_povm_tuples, order=('f0', 'f1', 'pp'))
 
             layout = target_model.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
                                                     array_types=('dp',), verbosity=0)
@@ -167,7 +167,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final circuit of evTree)
-            nPrepPOVM = len(pre_povm_tuples)
+            nPrepPOVM = len(prep_povm_tuples)
             for k in range(len(prep_fiducials) * len(meas_fiducials)):
                 for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
                     # "original" indices into lst for k-th fiducial pair

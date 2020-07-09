@@ -2347,8 +2347,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         elbl_to_final_index = {elbl_index: final_index for elbl_index, final_index in zip(elbl_indices, final_indices)}
         model = fwdsim.model  # just for faster inner loop performance
 
-        # XXX model._layerop_cache is never defined?
-        opcache = fwdsim.model._layerop_cache  # use knowledge of internals for faster innerloop performance
+        #opcache = fwdsim.model._opcaches['layers']  # use knowledge of internals for faster innerloop performance
 
         n = len(datarow_reps) # == len(datarow.time)
         kinit = 0
