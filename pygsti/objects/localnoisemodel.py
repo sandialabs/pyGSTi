@@ -435,19 +435,22 @@ class LocalNoiseModel(_ImplicitOpModel):
             # parameterization should be a type amenable to Lindblad
             # create lindblad SPAM ops w/max_weight == 1 & errcomp_type = 'gates' (HARDCODED for now)
             from . import cloudnoisemodel as _cnm
-            maxSpamWeight = 1; sparse = False; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
+            maxSpamWeight = 1; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
+            sparse_lindblad_basis = False; sparse_lindblad_reps = False  # HARDCODED
             if qubit_labels is None:
                 qubit_labels = tuple(range(n_qubits))
             qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, "line", qubit_labels=qubit_labels)
             # geometry doesn't matter while maxSpamWeight==1
 
             prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
-            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, simulator,
-                                                        parameterization, errcomp_type, verbosity)
+            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
+                                                        sparse_lindblad_reps, simulator, parameterization,
+                                                        errcomp_type, verbosity)
             prep_layers['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
 
-            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, simulator,
-                                                        parameterization, errcomp_type, verbosity)
+            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
+                                                        sparse_lindblad_reps, simulator, parameterization,
+                                                        errcomp_type, verbosity)
             povm_layers['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
         #OLD: when had a 'spamdict' arg: else:

@@ -194,8 +194,9 @@ def create_cloudnoise_model_from_hops_and_weights(
         n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
         availability=None, qubit_labels=None, geometry="line",
         max_idle_weight=1, max_spam_weight=1, maxhops=0,
-        extra_weight_1_hops=0, extra_gate_weight=0, sparse=False,
-        rough_noise=None, simulator="auto", parameterization="H+S",
+        extra_weight_1_hops=0, extra_gate_weight=0,
+        rough_noise=None, sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+        simulator="auto", parameterization="H+S",
         spamtype="lindblad", add_idle_noise_to_all_gates=True,
         errcomp_type="gates", independent_clouds=True,
         return_clouds=False, verbosity=0):  # , debug=False):
@@ -325,21 +326,24 @@ def create_cloudnoise_model_from_hops_and_weights(
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    sparse : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates are sparse or not.  (This is determied by whether
-        they are constructed using sparse basis matrices.)  When sparse, these
-        Lindblad gates take up less memory, but their action is slightly slower.
-        Usually it's fine to leave this as the default (False), except when
-        considering particularly high-weight terms (b/c then the Lindblad gates
-        are higher dimensional and sparsity has a significant impact).
-
     rough_noise : tuple or numpy.ndarray, optional
         If not None, noise to place on the gates, the state prep and the povm.
         This can either be a `(seed,strength)` 2-tuple, or a long enough numpy
         array (longer than what is needed is OK).  These values specify random
         `gate.from_vector` initialization for the model, and as such applies an
         often unstructured and unmeaningful type of noise.
+
+    sparse_lindblad_basis : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
+
+    sparse_lindblad_reps : bool, optional
+        Whether created Lindblad operations use sparse (more memory efficient but
+        slower action) or dense representations.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
@@ -405,10 +409,11 @@ def create_cloudnoise_model_from_hops_and_weights(
         n_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
         availability, qubit_labels, geometry,
         max_idle_weight, max_spam_weight, maxhops,
-        extra_weight_1_hops, extra_gate_weight, sparse,
+        extra_weight_1_hops, extra_gate_weight,
         simulator, parameterization, spamtype,
         add_idle_noise_to_all_gates, errcomp_type,
-        independent_clouds, verbosity)
+        independent_clouds, sparse_lindblad_basis,
+        sparse_lindblad_reps, verbosity)
 
     #Insert noise on everything using rough_noise (really shouldn't be used!)
     if rough_noise is not None:
@@ -433,8 +438,9 @@ def create_cloudnoise_model_from_hops_and_weights(
 
 def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
                                  availability=None, qubit_labels=None, geometry="line", parameterization='auto',
-                                 evotype="auto", simulator="auto", independent_gates=False, sparse=True,
-                                 errcomp_type="errorgens", add_idle_noise_to_all_gates=True, verbosity=0):
+                                 evotype="auto", simulator="auto", independent_gates=False, sparse_lindblad_basis=False,
+                                 sparse_lindblad_reps=False, errcomp_type="errorgens", add_idle_noise_to_all_gates=True,
+                                 verbosity=0):
     """
     Create a n-qubit model that may contain crosstalk errors.
 
@@ -548,9 +554,17 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
         noise.  If True, then gates with the same name acting on different
         qubits may have different noise.
 
-    sparse : bool, optional
+    sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates have sparse representations or not.
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
+
+    sparse_lindblad_reps : bool, optional
+        Whether created Lindblad operations use sparse (more memory efficient but
+        slower action) or dense representations.
 
     errcomp_type : {"gates","errorgens"}
         How errors are composed when creating layer operations in the returned
@@ -758,7 +772,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
             elif isinstance(errs, float):  # depolarization, action on only target qubits
                 sslbls = tuple(range(target_nQubits)) if return_what == "stencil" else target_labels
                 # Note: we use relative target indices in a stencil
-                basis = _BuiltinBasis('pp', 4**target_nQubits)  # assume we always use Pauli basis?
+                basis = _BuiltinBasis('pp', 4**target_nQubits, sparse=sparse_lindblad_basis)  # assume we always use Pauli basis?
                 distinct_errorqubits[sslbls] = _collections.OrderedDict()
                 perPauliRate = errs / len(basis.labels)
                 for bl in basis.labels:
@@ -770,7 +784,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
             for error_sslbls, local_errs_for_these_sslbls in distinct_errorqubits.items():
                 local_nQubits = len(error_sslbls)  # weight of this group of errors which act on the same qubits
                 local_dim = 4**local_nQubits
-                basis = _BuiltinBasis('pp', local_dim)  # assume we're always given basis els in a Pauli basis?
+                basis = _BuiltinBasis('pp', local_dim, sparse=sparse_lindblad_basis)  # assume we're always given els in a Pauli basis?
 
                 #Sanity check to catch user errors that would be hard to interpret if they get caught further down
                 for nm in local_errs_for_these_sslbls:
@@ -802,7 +816,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.LindbladOp(None, errgen, dense_rep=not sparse)
+            return _op.LindbladOp(None, errgen, dense_rep=sparse_lindblad_reps)
         else:
             return errgen
 
@@ -886,7 +900,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
                             global_idle_layer, prep_layers, povm_layers,
                             build_cloudnoise_fn, build_cloudkey_fn,
                             simulator, evotype, errcomp_type,
-                            add_idle_noise_to_all_gates, sparse, printer)
+                            add_idle_noise_to_all_gates, sparse_lindblad_reps, printer)
 
 
 # -----------------------------------------------------------------------------------
@@ -2210,12 +2224,11 @@ def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edg
 
     sparse : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates are sparse or not.  (This is determied by whether
-        they are constructed using sparse basis matrices.)  When sparse, these
-        Lindblad gates take up less memory, but their action is slightly slower.
-        Usually it's fine to leave this as the default (False), except when
-        considering particularly high-weight terms (b/c then the Lindblad gates
-        are higher dimensional and sparsity has a significant impact).
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
 
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.
@@ -2274,15 +2287,16 @@ def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edg
     return create_cloudnoise_circuits(n_qubits, max_lengths, singleQfiducials,
                                        gatedict, availability, geometry, max_idle_weight, maxhops,
                                        extra_weight_1_hops, extra_gate_weight, paramroot,
-                                       sparse, verbosity, cache, idle_only,
+                                       sparse, True, verbosity, cache, idle_only,
                                        idt_pauli_dicts, algorithm, comm=comm)
 
 
 def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
-                                         gate_names, nonstd_gate_unitaries=None,
-                                         availability=None, geometry="line",
-                                         paramroot="H+S", sparse=False, verbosity=0, cache=None, idle_only=False,
-                                         idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
+                                        gate_names, nonstd_gate_unitaries=None,
+                                        availability=None, geometry="line",
+                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                        verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None, algorithm="greedy",
+                                        idle_op_str=((),), comm=None):
     """
     Find a set of circuits that amplifies all the parameters of a local noise model.
 
@@ -2371,9 +2385,17 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
         The "root" (no trailing " terms", etc.) parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
-    sparse : bool, optional
+    sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates have sparse representations or not.
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
+
+    sparse_lindblad_reps : bool, optional
+        Whether created Lindblad operations use sparse (more memory efficient but
+        slower action) or dense representations.
 
     verbosity : int, optional
         The level of detail printed to stdout.  0 means silent.
@@ -2418,22 +2440,26 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
     """
     #Same as cloudnoise but no hopping. -- should max_idle_weight == 0?
     return create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
-                                                gate_names, nonstd_gate_unitaries,
-                                                availability, geometry,
-                                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0,
-                                                extra_gate_weight=0,
-                                                paramroot=paramroot, sparse=sparse, verbosity=verbosity,
-                                                cache=cache, idle_only=idle_only,
-                                                idt_pauli_dicts=idt_pauli_dicts, algorithm=algorithm,
-                                                idle_op_str=idle_op_str, comm=comm)
+                                               gate_names, nonstd_gate_unitaries,
+                                               availability, geometry,
+                                               max_idle_weight=1, maxhops=0, extra_weight_1_hops=0,
+                                               extra_gate_weight=0,
+                                               paramroot=paramroot,
+                                               sparse_lindblad_basis=sparse_lindblad_basis,
+                                               sparse_lindblad_reps=sparse_lindblad_reps,
+                                               verbosity=verbosity,
+                                               cache=cache, idle_only=idle_only,
+                                               idt_pauli_dicts=idt_pauli_dicts, algorithm=algorithm,
+                                               idle_op_str=idle_op_str, comm=comm)
 
 
 def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
-                                         gate_names, nonstd_gate_unitaries=None,
-                                         availability=None, geometry="line",
-                                         max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
-                                         paramroot="H+S", sparse=False, verbosity=0, cache=None, idle_only=False,
-                                         idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
+                                        gate_names, nonstd_gate_unitaries=None,
+                                        availability=None, geometry="line",
+                                        max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
+                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                        verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None,
+                                        algorithm="greedy", idle_op_str=((),), comm=None):
     """
     Finds a set of circuits that amplifies all the parameters of a cloud-noise model.
 
@@ -2544,14 +2570,17 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
         The "root" (no trailing " terms", etc.) parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
-    sparse : bool, optional
+    sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates are sparse or not.  (This is determied by whether
-        they are constructed using sparse basis matrices.)  When sparse, these
-        Lindblad gates take up less memory, but their action is slightly slower.
-        Usually it's fine to leave this as the default (False), except when
-        considering particularly high-weight terms (b/c then the Lindblad gates
-        are higher dimensional and sparsity has a significant impact).
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
+
+    sparse_lindblad_reps : bool, optional
+        Whether created Lindblad operations use sparse (more memory efficient but
+        slower action) or dense representations.
 
     verbosity : int, optional
         The level of detail printed to stdout.  0 means silent.
@@ -2608,17 +2637,18 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
         # assume evotype is a densitymx or term type
 
     return create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
-                                       gatedict, availability, geometry, max_idle_weight, maxhops,
-                                       extra_weight_1_hops, extra_gate_weight, paramroot,
-                                       sparse, verbosity, cache, idle_only,
-                                       idt_pauli_dicts, algorithm, idle_op_str, comm)
+                                      gatedict, availability, geometry, max_idle_weight, maxhops,
+                                      extra_weight_1_hops, extra_gate_weight, paramroot,
+                                      sparse_lindblad_basis, sparse_lindblad_reps, verbosity, cache,
+                                      idle_only, idt_pauli_dicts, algorithm, idle_op_str, comm)
 
 
 def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
-                                gatedict, availability, geometry, max_idle_weight=1, maxhops=0,
-                                extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
-                                sparse=False, verbosity=0, cache=None, idle_only=False,
-                                idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
+                               gatedict, availability, geometry, max_idle_weight=1, maxhops=0,
+                               extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
+                               sparse_lindblad_basis=False, sparse_lindblad_reps=False, verbosity=0,
+                               cache=None, idle_only=False, idt_pauli_dicts=None, algorithm="greedy",
+                               idle_op_str=((),), comm=None):
     """
     Finds a set of circuits that amplify all the parameters of a clould-noise model.
 
@@ -2708,14 +2738,17 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         amplified.  Note this is only the "root", e.g. you shouldn't pass
         "H+S terms" here, since the latter is implied by "H+S" when necessary.
 
-    sparse : bool, optional
+    sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates are sparse or not.  (This is determied by whether
-        they are constructed using sparse basis matrices.)  When sparse, these
-        Lindblad gates take up less memory, but their action is slightly slower.
-        Usually it's fine to leave this as the default (False), except when
-        considering particularly high-weight terms (b/c then the Lindblad gates
-        are higher dimensional and sparsity has a significant impact).
+        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        Lindblad gates - especially those with high-weight action or errors - take
+        less memory, but their simulation is slightly slower.  Usually it's fine to
+        leave this as the default (False), except when considering unusually
+        high-weight errors.
+
+    sparse_lindblad_reps : bool, optional
+        Whether created Lindblad operations use sparse (more memory efficient but
+        slower action) or dense representations.
 
     verbosity : int, optional
         The level of detail printed to stdout.  0 means silent.
@@ -2807,11 +2840,13 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     model = _CloudNoiseModel.from_hops_and_weights(
         n_qubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
-        max_idle_weight, 0, maxhops, extra_weight_1_hops,
-        extra_gate_weight, sparse, verbosity=printer - 5,
+        max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
+        verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
         parameterization=ptermstype,
-        errcomp_type="gates")
+        errcomp_type="gates",
+        sparse_lindblad_basis=sparse_lindblad_basis,
+        sparse_lindblad_reps=sparse_lindblad_reps)
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
@@ -2827,8 +2862,11 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     ideal_model = _CloudNoiseModel.from_hops_and_weights(
         n_qubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
-        0, 0, 0, 0, 0, False, verbosity=printer - 5,
-        simulator=_MapFSim(), parameterization=paramroot, errcomp_type="gates")
+        0, 0, 0, 0, 0,
+        verbosity=printer - 5,
+        simulator=_MapFSim(),
+        parameterization=paramroot,
+        errcomp_type="gates")
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params()
@@ -2845,8 +2883,10 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     idle_model = _CloudNoiseModel.from_hops_and_weights(
         max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
-        extra_gate_weight, sparse, verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor-order", max_order=1), parameterization=ptermstype, errcomp_type="gates")
+        extra_gate_weight, verbosity=printer - 5,
+        simulator=_TermFSim(mode="taylor-order", max_order=1), parameterization=ptermstype, errcomp_type="gates",
+        sparse_lindblad_basis=sparse_lindblad_basis,
+        sparse_lindblad_reps=sparse_lindblad_reps)
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
@@ -2924,9 +2964,11 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
                 sidle_model = _CloudNoiseModel.from_hops_and_weights(
                     syntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
-                    extra_gate_weight, sparse, verbosity=printer - 5,
+                    extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    parameterization=ptermstype, errcomp_type="gates")
+                    parameterization=ptermstype, errcomp_type="gates",
+                    sparse_lindblad_basis=sparse_lindblad_basis,
+                    sparse_lindblad_reps=sparse_lindblad_reps)
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
