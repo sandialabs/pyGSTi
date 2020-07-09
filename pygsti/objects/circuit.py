@@ -939,7 +939,7 @@ class Circuit(object):
                 if (strict and sslbls.issubset(lines)) or \
                    (not strict and len(sslbls.intersection(lines)) >= 0):
                     ret_layer.append(l)
-            ret.append(ret_layer)
+            ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
         if nonint_layers:
             if not strict: lines = "auto"  # since we may have included lbls on other lines
@@ -1582,8 +1582,9 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
-        # return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
-        return Circuit(tuple(parallel_lbls), self.line_labels, editable=False)
+        # Convert elements of `parallel_lbls` into Labels (needed b/c we use _fastinit below)
+        parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
+        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
 
     def expand_subcircuits(self):
         """
@@ -1940,27 +1941,15 @@ class Circuit(object):
         -------
         Circuit
         """
-        if not self._static:
-            #Could to this in both cases, but is slow for large static circuits
-            cpy = self.copy(editable=False)  # convert our layers to Labels
-            if not alias_dict: return cpy
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = cpy._labels
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False)
-
-        else:  # static case: so self._labels is a tuple of Labels
-            if not alias_dict: return self  # no copy needed b/c static
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = self._labels  # a *tuple*
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False)
+        static_self = self if self._static else self.copy(editable=False)  # convert our layers to Labels
+        if not alias_dict: return static_self
+        assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+        layers = static_self._labels  # a *tuple*
+        for label, c in alias_dict.items():
+            while label in layers:
+                i = layers.index(label)
+                layers = layers[:i] + c._labels + layers[i + 1:]
+        return Circuit._fastinit(layers, self.line_labels, editable=False)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
