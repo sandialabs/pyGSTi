@@ -223,7 +223,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
     def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                                 layout, param_indices1, param_indices2, comm):
+                                 layout_atom, param_indices1, param_indices2, comm):
 
         """
         Helper function for populating hessian values by block.
@@ -231,9 +231,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         eps = 1e-4  # hardcoded?
 
         if param_indices1 is None:
-            param_indices1 = list(range(self.Np))
+            param_indices1 = list(range(self.model.num_params()))
         if param_indices2 is None:
-            param_indices2 = list(range(self.Np))
+            param_indices2 = list(range(self.model.num_params()))
         if dest_param_indices1 is None:
             dest_param_indices1 = list(range(_slct.length(param_indices1)))
         if dest_param_indices2 is None:
@@ -253,21 +253,22 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # final index within mx_to_fill (fpoffset = final parameter offset)
         iParamToFinal = {i: dest_param_indices1[st + ii] for ii, i in enumerate(my_param_indices)}
 
-        nEls = len(layout)
+        nEls = layout_atom.num_elements
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs = _np.empty((nEls, nP2), 'd')
         dprobs2 = _np.empty((nEls, nP2), 'd')
-        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout, param_indices2, comm)
+        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, comm)
 
-        orig_vec = self.to_vector().copy()
-        for i in range(self.Np):
+        orig_vec = self.model.to_vector().copy()
+        for i in range(self.model.num_params()):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec, close=True)
-                replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout, param_indices2, subComm)
+                self.model.from_vector(vec, close=True)
+                replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout_atom,
+                                               param_indices2, subComm)
                 _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
-        self.from_vector(orig_vec)
+        self.model.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
         _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)

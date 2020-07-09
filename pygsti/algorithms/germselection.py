@@ -925,7 +925,7 @@ def _twirled_deriv(model, circuit, eps=1e-6):
     numpy array
         An array of shape (op_dim^2, num_model_params)
     """
-    prod = model.product(circuit)
+    prod = model.sim.product(circuit)
 
     # flattened_op_dim x vec_model_dim
     dProd = model.sim.dproduct(circuit, flat=True)

@@ -101,8 +101,11 @@ class EvalTree(list):
                     if bFinal:
                         if iCur != k:  # then we have a duplicate final operation sequence
                             iEmptyStr = evalDict.get(None, None)
-                            assert(iEmptyStr is not None)  # duplicate final strs require
-                            # the empty string to be included in the tree too!
+                            if iEmptyStr is None:  # then we need to add the empty string
+                                # duplicate final strs require the empty string to be included in the tree
+                                iEmptyStr = next_scratch_index; next_scratch_index += 1
+                                evalDict[None] = iEmptyStr
+                                eval_tree.append((iEmptyStr, None, None))  # iLeft = iRight = None => no-op
                             #assert(self[k] is None)  # make sure we haven't put anything here yet
                             eval_tree.append((k, iCur, iEmptyStr))
                             #self[k] = (iCur, iEmptyStr)  # compute the duplicate using by

@@ -1499,7 +1499,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # so adding the additional ability to parallelize over
         # subtrees would just add unnecessary complication.
 
-        #get distribution across subtrees (groups if needed)
+        #get distribution across subtrees (groups if needed) -- assumes a DistributableCOPALayout
         my_atom_indices, atom_owners, my_subcomm = self.layout.distribute(self.resource_alloc.comm)
 
         nparams = self.model.num_params()
@@ -1532,7 +1532,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
             #compute probs separately
             sub_resource_alloc = _ResourceAllocation(comm=my_subcomm)
-            self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
+            #self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
+            self.model.sim._bulk_fill_probs_block(probs, atom, sub_resource_alloc)  # need to reach into internals!
             if prob_clip_interval is not None:
                 _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
 
@@ -1548,12 +1549,13 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             loc_iblks, blk_owners, blk_comm = \
                 _mpit.distribute_indices(list(range(len(slicetup_list))), my_subcomm)
             my_slicetup_list = [slicetup_list[i] for i in loc_iblks]
+            blk_resource_alloc = _ResourceAllocation(comm=blk_comm)
 
             subtree_hessian = _np.zeros((nparams, nparams), 'd')
 
             k, kmax = 0, len(my_slicetup_list)
-            for (slice1, slice2, hprobs, dprobs12) in self.model.sim.bulk_hprobs_by_block(
-                    atom, my_slicetup_list, True, blk_comm):
+            for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
+                    atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
                 rank = self.raw_objfn.comm.Get_rank() if (self.raw_objfn.comm is not None) else 0
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):

@@ -129,7 +129,7 @@ class BootstrapUtilityTester(BootstrapBase):
     def test_bootstrap_utilities(self):
         #Test utility functions -- just make sure they run for now...
         def gsFn(mdl):
-            return mdl.dimension()
+            return mdl.dim
 
         tp_target = std.target_model()
         tp_target.set_all_parameterizations("TP")
