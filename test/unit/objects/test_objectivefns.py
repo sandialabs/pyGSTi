@@ -39,7 +39,7 @@ class ObjectiveFunctionUtilTester(ObjectiveFunctionData, BaseCase):
 
         #Test with circuits=None
         fn = _objfns._objfn(_objfns.PoissonPicDeltaLogLFunction, self.model, self.dataset, None)
-        self.assertEqual(list(fn.circuits_to_use), list(self.dataset.keys()))
+        self.assertEqual(list(fn.circuits), list(self.dataset.keys()))
 
         #Test with aliases
         fn = _objfns._objfn(_objfns.PoissonPicDeltaLogLFunction, self.alias_model, self.dataset,
