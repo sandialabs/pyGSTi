@@ -223,7 +223,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.germs = germs
         self.maxlengths = max_lengths
         self.germ_length_limits = germ_length_limits
-        self.includeLGST = include_lgst
+        self.include_lgst = include_lgst
         self.aliases = op_label_aliases
         self.sequence_rules = sequence_rules
 
@@ -241,7 +241,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         lists = _construction.create_lsgst_circuit_lists(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
-            self.fpr_keep_fraction, self.fpr_keep_seed, self.includeLGST,
+            self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
             self.aliases, self.sequence_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
@@ -255,6 +255,36 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.auxfile_types['fiducial_pairs'] = 'pickle'
         if add_default_protocol:
             self.add_default_protocol(StandardGST(name='StdGST'))
+
+    def copy_with_maxlengths(self, max_lengths, dscheck=None, action_if_missing='raise', verbosity=0):
+        """
+        Copies this GST experiment design to one with the same data except a different set of maximum lengths.
+
+        Parameters
+        ----------
+        max_lengths_to_keep : list
+            A list of the maximum lengths that should be present in the
+            returned experiment design.
+
+        dscheck : DataSet, optional
+            A data set which filters the circuits used for GST. When a standard-GST
+            circuit is missing from this `DataSet`, action is taken according to
+            `action_if_missing`.
+
+        action_if_missing : {"raise","drop"}, optional
+            The action to take when a desired circuit is missing from
+            `dscheck` (only relevant when `dscheck` is not None).  "raise" causes
+            a ValueError to be raised; "drop" causes the missing sequences to be
+            dropped from the returned set.
+
+        -------
+        StandardGSTDesign
+        """
+        return StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
+                                 self.germs, max_lengths, self.germ_length_limits, self.fiducial_pairs,
+                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                 self.sequence_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
+                                 verbosity, add_default_protocol=False)
 
 
 class GSTInitialModel(object):
@@ -314,27 +344,23 @@ class GSTInitialModel(object):
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
-    def get_model(self, target_model, gaugeopt_target, lgst_list, dataset, qubit_labels, comm):
+    def get_model(self, edesign, gaugeopt_target, dataset, comm):
         """
         Retrieve the starting-point :class:`Model` used to seed a long-sequence GST run.
 
         Parameters
         ----------
-        target_model : Model
-           The target model (for use when `starting_point == "target"` and for LGST).
+        edesign : ExperimentDesign
+            The experiment design containing the circuits being used, the qubit labels,
+            and (possibly) a target model (for use when `starting_point == "target"`) and
+            fiducial circuits (for LGST).
 
         gaugeopt_target : Model
             The gauge-optimization target, i.e. distance to this model is the objective function
             within the post-LGST gauge-optimization step.
 
-        lgst_list : list
-            A list of LGST circuits used to determine if LGST is possible (when `starting_point == "LGST-if-possible"`).
-
         dataset : DataSet
             Data used to execute LGST when needed.
-
-        qubit_labels : tuple
-            The qubit labels (also needed for LGST).
 
         comm : mpi4py.MPI.Comm
             A MPI communicator to divide workload amoung multiple processors.
@@ -343,6 +369,9 @@ class GSTInitialModel(object):
         -------
         Model
         """
+
+        target_model = edesign.target_model if isinstance(edesign, HasTargetModel) else None
+
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
@@ -352,18 +381,22 @@ class GSTInitialModel(object):
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
             mdl_start = self.model if (self.model is not None) else target_model
+            if mdl_start is None:
+                raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
+                                  " design with a target model"))
+
             lgst = LGST(mdl_start,
                         gaugeopt_suite={'lgst_gaugeopt': {'tol': self.lgst_gaugeopt_tol}},
                         gaugeopt_target=gaugeopt_target, badfit_options=None, name="LGST")
 
             try:  # see if LGST can be run on this data
-                if lgst_list:
-                    lgst_data = _proto.ProtocolData(GateSetTomographyDesign(mdl_start, [lgst_list], None, qubit_labels),
-                                                    dataset)
-                    lgst.check_if_runnable(lgst_data)
-                    starting_pt = "LGST"
+                if isinstance(edesign, StandardGSTDesign) and len(edesign.maxlengths) > 0:
+                    lgst_design = edesign.copy_with_maxlengths([edesign.maxlengths[0]], dataset, 'drop')
                 else:
-                    raise ValueError("Experiment design must contain circuit structures in order to run LGST")
+                    lgst_design = edesign  # just use the whole edesign
+                lgst_data = _proto.ProtocolData(lgst_design, dataset)
+                lgst.check_if_runnable(lgst_data)
+                starting_pt = "LGST"
             except ValueError as e:
                 if starting_pt == "LGST": raise e  # error if we *can't* run LGST
 
@@ -383,6 +416,9 @@ class GSTInitialModel(object):
             mdl_start = target_model
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
+
+        if mdl_start is None:
+            raise ValueError("Could not create or obtain an initial model!")
 
         #Post-processing mdl_start : done only on root proc in case there is any nondeterminism.
         if comm is None or comm.Get_rank() == 0:
@@ -701,9 +737,7 @@ class GateSetTomography(_proto.Protocol):
                               for lst in circuit_lists]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
-
-        mdl_start = self.initial_model.get_model(data.edesign.target_model, self.gaugeopt_target,
-                                                 first_list, data.dataset, data.edesign.qubit_labels, comm)
+        mdl_start = self.initial_model.get_model(data.edesign, self.gaugeopt_target, data.dataset, comm)
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -816,6 +850,12 @@ class LinearGateSetTomography(_proto.Protocol):
         """
         edesign = data.edesign
 
+        if not isinstance(edesign, StandardGSTDesign):
+            raise ValueError("LGST must be given a `StandardGSTDesign` experiment design (for fiducial circuits)!")
+
+        if len(edesign.circuit_lists) != 1:
+            raise ValueError("There must be at exactly one circuit list in the input experiment design!")
+
         target_model = self.target_model if (self.target_model is not None) else edesign.target_model
         if isinstance(target_model, _objs.ExplicitOpModel):
             if not all([(isinstance(g, _objs.FullDenseOp)
@@ -824,12 +864,6 @@ class LinearGateSetTomography(_proto.Protocol):
                 raise ValueError("LGST can only be applied to explicit models with dense operators")
         else:
             raise ValueError("LGST can only be applied to explicit models with dense operators")
-
-        if not isinstance(edesign, StandardGSTDesign):
-            raise ValueError("LGST must be given an experiment design with a fiducial circuits!")
-        
-        if len(edesign.circuit_lists) != 1:
-            raise ValueError("There should only be one circuit list in the input exp-design!")
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -1584,7 +1618,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
             try:
                 badfit_options = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
                                   'wildcard_smart_init': badfit_options.wildcard_smart_init}
-                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
+                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer + 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
             except NotImplementedError as e:
