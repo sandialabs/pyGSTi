@@ -54,10 +54,12 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     @classmethod
     def _compute_unique_circuits(cls, circuits):
         first_copy = _collections.OrderedDict(); to_unique = {}
+        nUnique = 0
         for i, c in enumerate(circuits):
             if not isinstance(c, _Circuit): c = _Circuit(c)  # ensure all returned circuits are Circuits
             if c not in first_copy:
-                first_copy[c] = to_unique[i] = i
+                first_copy[c] = to_unique[i] = nUnique
+                nUnique += 1
             else:
                 to_unique[i] = first_copy[c]
         unique_circuits = list(first_copy.keys())  # unique_circuits is in same order as in `circuits`
