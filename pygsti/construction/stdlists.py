@@ -242,12 +242,11 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
     """
     Deprecated function.
     """
-    bulk_circuit_lists = create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                                          fid_pairs, trunc_scheme, nest,
-                                          keep_fraction, keep_seed, include_lgst,
-                                          op_label_aliases, sequence_rules,
-                                          dscheck, action_if_missing, germ_length_limits, verbosity)
-    return [bcl.circuit_structure for bcl in bulk_circuit_lists]
+    return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                                      fid_pairs, trunc_scheme, nest,
+                                      keep_fraction, keep_seed, include_lgst,
+                                      op_label_aliases, sequence_rules,
+                                      dscheck, action_if_missing, germ_length_limits, verbosity)
 
 
 def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, germs, max_lengths,
@@ -399,7 +398,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         for opstr in circuits:
             trans_opstr = _gsc.translate_circuit(opstr, op_label_aliases)
             if trans_opstr not in ds:
-                missing_list.append(opstr)
+                missing_lgst.append(opstr)
             else:
                 filtered_circuits.append(opstr)
         return filtered_circuits
@@ -535,8 +534,6 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 add_to_plaquettes(pkey, plaquettes, empty_germ, maxLen, empty_germ, 1,
                                   allPossiblePairs, dscheck, missing_list)
                 unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
-                #missing_lgst = cs.add_unindexed(lgst_list, dscheck)  # only adds those not already present  #REMOVE
-                #assert(('Gx','Gi0','Gi0') not in cs.allstrs) # DEBUG
 
             #Typical case of germs repeated to maxLen using r_fn
             for ii, germ in enumerate(germs):
@@ -602,9 +599,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     % (len(dscheck), tot_circuits, len(missing_list)), 2)
     if len(missing_list) > 0 or len(missing_lgst) > 0:
         MAX = 10  # Maximum missing-seq messages to display
-        missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
-                        for tup in missing_list[0:MAX + 1]] + \
-                       ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX + 1]]
+        missing_msgs = [("Prep: %s, Germ: %s, L: %d, Meas: %s, Circuit: %s" % tup) for tup in missing_list[0:MAX + 1]] \
+            + ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX + 1]]
         if len(missing_list) > MAX or len(missing_lgst) > MAX:
             missing_msgs.append(" ... (more missing circuits not show) ... ")
         printer.log("The following circuits were missing from the dataset:", 4)

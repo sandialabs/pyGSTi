@@ -507,7 +507,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
         if isinstance(circuits_or_structure, _CircuitList):
             op_label_aliases = circuits_or_structure.op_label_aliases
-            weights_dict = {c: wt for c, wt in zip(circuits_or_structure, circuits_or_structure.circuit_weights)}
+            weights_dict = {c: wt for c, wt in zip(circuits_or_structure, circuits_or_structure.circuit_weights)} \
+                if (circuits_or_structure.circuit_weights is not None) else None
             name = circuits_or_structure.name
         else:
             op_label_aliases = weights_dict = name = None

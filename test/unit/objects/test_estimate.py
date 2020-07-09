@@ -7,7 +7,7 @@ from . import fixtures as pkg
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.protocols.gst import ModelEstimateResults
 from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
-from pygsti.objects import BulkCircuitList
+from pygsti.objects import CircuitList
 from pygsti.protocols import estimate
 
 
@@ -18,7 +18,7 @@ class EstimateBase(object):
         cls.model = pkg.mdl_lsgst_go
         cls.maxLengthList = pkg.maxLengthList
 
-        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+        edesign = CircuitListsDesign([CircuitList(circuit_struct)
                                       for circuit_struct in pkg.lsgstStructs])
         data = ProtocolData(edesign, pkg.dataset)
         cls.res = ModelEstimateResults(data, Protocol("test-protocol"))

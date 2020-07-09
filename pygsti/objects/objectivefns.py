@@ -1556,7 +1556,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             k, kmax = 0, len(my_slicetup_list)
             for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
                     atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
-                rank = self.raw_objfn.comm.Get_rank() if (self.raw_objfn.comm is not None) else 0
+                rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
                     isub = my_atom_indices.index(atom_index)
