@@ -113,6 +113,13 @@ class CircuitList(object):
         else:
             raise TypeError('Use digest hash')
 
+    def __eq__(self, other):
+        #Compare with non-CircuitLists as lists
+        if isinstance(other, CircuitList):
+            return self.uuid == other.uuid
+        else:
+            return self._circuits == other
+
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
         if 'uuid' not in state_dict:  # backward compatibility
