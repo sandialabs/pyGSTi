@@ -507,7 +507,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         unindexed = filter_ds(lgst_list, dscheck, missing_lgst)
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({}, [], germs, "L", "germ", unindexed, op_label_aliases,
-                                           circuit_weights_dict=None, name=None))
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
 
     for i, maxLen in enumerate(max_lengths):
 
@@ -524,13 +524,12 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = []
 
         if maxLen == 0:
-            #Special LGST case
-            unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))
+            # Special LGST case
+            unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
         else:
             if include_lgst and i == 0:  # first maxlen, so add LGST seqs as empty germ
+                #Add LGST circuits as an empty-germ plaquette (and as unindexed circuits to include everything)
                 #Note: no FPR on LGST strings
-                #plaquettes[(maxLen, empty_germ)] = create_plaquette(empty_germ, maxLen, empty_germ,
-                #                                                    allPossiblePairs, dscheck, missing_list)
                 add_to_plaquettes(pkey, plaquettes, empty_germ, maxLen, empty_germ, 1,
                                   allPossiblePairs, dscheck, missing_list)
                 unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
@@ -586,7 +585,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({pkey[base]: plaq for base, plaq in plaquettes.items()},
                                            maxLens, germs, "L", "germ", unindexed, op_label_aliases,
-                                           circuit_weights_dict=None, name=None))
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
         tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
 
     if nest:  # then totStrs computation about overcounts -- just take string count of final stage

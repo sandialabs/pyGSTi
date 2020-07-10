@@ -518,7 +518,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
     def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel,
                  additional_circuits=None, op_label_aliases=None,
-                 circuit_weights_dict=None, name=None):
+                 circuit_weights_dict=None, additional_circuits_location='start', name=None):
         # plaquettes is a dict of plaquettes whose keys are tuples of length 2
         self._plaquettes = plaquettes
         self.xs = x_values
@@ -526,14 +526,22 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         self.xlabel = xlabel
         self.ylabel = ylabel
 
+        assert(additional_circuits_location in ('start', 'end'))
+
         circuits = _collections.OrderedDict()  # use as an ordered *set* (values all == None)
+        if additional_circuits is None:
+            additional_circuits = []
+
+        if additional_circuits_location == 'start':
+            additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+            circuits.update(additional)
+
         for plaq in plaquettes.values():
             circuits.update([(c, None) for c in plaq.circuits])
 
-        if additional_circuits is None:
-            additional_circuits = []
-        additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
-        circuits.update(additional)
+        if additional_circuits_location == 'end':
+            additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+            circuits.update(additional)
 
         # ordered-sets => tuples
         self._additional_circuits = tuple(additional.keys())  
