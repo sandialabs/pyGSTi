@@ -1,3 +1,5 @@
+# XXX rewrite/refactor forward-simulator tests
+
 import numpy as np
 import pickle
 from contextlib import contextmanager
@@ -6,7 +8,7 @@ import functools
 from ..util import BaseCase, needs_cvxpy
 
 from pygsti.objects import ExplicitOpModel, Instrument, LinearOperator, \
-    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim
+    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim, mapforwardsim
 from pygsti.tools import indices
 import pygsti.construction as pc
 import pygsti.objects.model as m
@@ -228,9 +230,9 @@ class GeneralMethodBase(object):
             self.model.effects  # can only use this property when there's a *single* POVM
 
         with self.assertRaises(ValueError):
-            prep, gates, povm = self.model._split_circuit(Circuit(('rho0', 'Gx')))
+            prep, gates, povm = self.model.split_circuit(Circuit(('rho0', 'Gx')))
         with self.assertRaises(ValueError):
-            prep, gates, povm = self.model._split_circuit(Circuit(('Gx', 'Mdefault')))
+            prep, gates, povm = self.model.split_circuit(Circuit(('Gx', 'Mdefault')))
 
     def test_set_gate_raises_on_bad_dimension(self):
         with self.assertRaises(ValueError):
@@ -243,28 +245,28 @@ class ThresholdMethodBase(object):
     def test_product(self):
         circuit = ('Gx', 'Gy')
         p1 = np.dot(self.model['Gy'], self.model['Gx'])
-        p2 = self.model.product(circuit, scale=False)
-        p3, scale = self.model.product(circuit, scale=True)
+        p2 = self.model.sim.product(circuit, scale=False)
+        p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
         p1 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
-        p2 = self.model.product(circuit, scale=False)
-        p3, scale = self.model.product(circuit, scale=True)
+        p2 = self.model.sim.product(circuit, scale=False)
+        p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
     def test_bulk_product(self):
         gatestring1 = ('Gx', 'Gy')
         gatestring2 = ('Gx', 'Gy', 'Gy')
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree([gatestring1, gatestring2])
+        circuits = [gatestring1, gatestring2]
 
         p1 = np.dot(self.model['Gy'], self.model['Gx'])
         p2 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
 
-        bulk_prods = self.model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, scale=True)
+        bulk_prods = self.model.sim.bulk_product(circuits)
+        bulk_prods_scaled, scaleVals = self.model.sim.bulk_product(circuits, scale=True)
         bulk_prods2 = scaleVals[:, None, None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[0], p1)
         self.assertArraysAlmostEqual(bulk_prods[1], p2)
@@ -273,33 +275,34 @@ class ThresholdMethodBase(object):
 
     def test_dproduct(self):
         circuit = ('Gx', 'Gy')
-        dp = self.model.dproduct(circuit)
-        dp_flat = self.model.dproduct(circuit, flat=True)
+        dp = self.model.sim.dproduct(circuit)
+        dp_flat = self.model.sim.dproduct(circuit, flat=True)
         # TODO assert correctness for all of the above
 
     def test_bulk_dproduct(self):
         gatestring1 = ('Gx', 'Gy')
         gatestring2 = ('Gx', 'Gy', 'Gy')
-        evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
-        dp = self.model.bulk_dproduct(evt)
-        dp_flat = self.model.bulk_dproduct(evt, flat=True)
-        dp_scaled, scaleVals = self.model.bulk_dproduct(evt, scale=True)
+        circuits = [gatestring1, gatestring2]
+        dp = self.model.sim.bulk_dproduct(circuits)
+        dp_flat = self.model.sim.bulk_dproduct(circuits, flat=True)
+        dp_scaled, scaleVals = self.model.sim.bulk_dproduct(circuits, scale=True)
         # TODO assert correctness for all of the above
 
     def test_hproduct(self):
         circuit = ('Gx', 'Gy')
-        hp = self.model.hproduct(circuit)
-        hp_flat = self.model.hproduct(circuit, flat=True)
+        hp = self.model.sim.hproduct(circuit)
+        hp_flat = self.model.sim.hproduct(circuit, flat=True)
         # TODO assert correctness for all of the above
 
-    def test_bulk_hproduct(self):
-        gatestring1 = ('Gx', 'Gy')
-        gatestring2 = ('Gx', 'Gy', 'Gy')
-        evt, lookup, _ = self.model.bulk_evaltree([gatestring1, gatestring2])
-        hp = self.model.bulk_hproduct(evt)
-        hp_flat = self.model.bulk_hproduct(evt, flat=True)
-        hp_scaled, scaleVals = self.model.bulk_hproduct(evt, scale=True)
-        # TODO assert correctness for all of the above
+    #REMOVED from fwdsim (unused)
+    #def test_bulk_hproduct(self):
+    #    gatestring1 = ('Gx', 'Gy')
+    #    gatestring2 = ('Gx', 'Gy', 'Gy')
+    #    circuits = [gatestring1, gatestring2]
+    #    hp = self.model.sim.bulk_hproduct(circuits)
+    #    hp_flat = self.model.sim.bulk_hproduct(circuits, flat=True)
+    #    hp_scaled, scaleVals = self.model.sim.bulk_hproduct(circuits, scale=True)
+    #    # TODO assert correctness for all of the above
 
 
 class SimMethodBase(object):
@@ -338,30 +341,17 @@ class SimMethodBase(object):
         self.assertAlmostEqual(1.0 - expected, actual_p1)
 
     def test_dprobs(self):
-        dprobs = self.model.dprobs(self.gatestring1)
-        dprobs2 = self.model.dprobs(self.gatestring1, return_pr=True)
-        self.assertArraysAlmostEqual(dprobs[('0',)], dprobs2[('0',)][0])
-        self.assertArraysAlmostEqual(dprobs[('1',)], dprobs2[('1',)][0])
+        dprobs = self.model.sim.dprobs(self.gatestring1)
         # TODO assert correctness
 
     def test_hprobs(self):
         # TODO optimize
-        hprobs = self.model.hprobs(self.gatestring1)
-        # XXX is this necessary?  EGN: maybe testing so many cases is overkill?
-        # Cover combinations of arguments
-        variants = [
-            self.model.hprobs(self.gatestring1, return_pr=True),
-            self.model.hprobs(self.gatestring1, return_deriv=True),
-            self.model.hprobs(self.gatestring1, return_pr=True, return_deriv=True)
-        ]
-        for hprobs2 in variants:
-            self.assertArraysAlmostEqual(hprobs[('0',)], hprobs2[('0',)][0])
-            self.assertArraysAlmostEqual(hprobs[('1',)], hprobs2[('1',)][0])
+        hprobs = self.model.sim.hprobs(self.gatestring1)
         # TODO assert correctness
 
     def test_bulk_probs(self):
         with self.assertNoWarns():
-            bulk_probs = self.model.bulk_probs([self.gatestring1, self.gatestring2], check=True)
+            bulk_probs = self.model.sim.bulk_probs([self.gatestring1, self.gatestring2])
 
         expected_1 = self._expected_probs[self.gatestring1]
         expected_2 = self._expected_probs[self.gatestring2]
@@ -371,23 +361,26 @@ class SimMethodBase(object):
         self.assertAlmostEqual(1.0 - expected_2, bulk_probs[self.gatestring2][('1',)])
 
     def test_bulk_fill_probs(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        nElements = layout.num_elements
         probs_to_fill = np.empty(nElements, 'd')
 
         with self.assertNoWarns():
-            self.model.bulk_fill_probs(probs_to_fill, evt, check=True)
+            self.model.sim.bulk_fill_probs(probs_to_fill, layout)
 
         expected_1 = self._expected_probs[self.gatestring1]
         expected_2 = self._expected_probs[self.gatestring2]
-        actual_1 = probs_to_fill[lookup[0]]
-        actual_2 = probs_to_fill[lookup[1]]
-        self.assertAlmostEqual(expected_1, actual_1[0])
-        self.assertAlmostEqual(expected_2, actual_2[0])
-        self.assertAlmostEqual(1 - expected_1, actual_1[1])
-        self.assertAlmostEqual(1 - expected_2, actual_2[1])
+        actual_1 = probs_to_fill[layout.indices_for_index(0)]
+        actual_2 = probs_to_fill[layout.indices_for_index(1)]
+        zero_outcome_index1 = layout.outcomes_for_index(0).index(('0',))
+        zero_outcome_index2 = layout.outcomes_for_index(1).index(('0',))
+        self.assertAlmostEqual(expected_1, actual_1[zero_outcome_index1])
+        self.assertAlmostEqual(expected_2, actual_2[zero_outcome_index2])
+        self.assertAlmostEqual(1 - expected_1, actual_1[1-zero_outcome_index1])
+        self.assertAlmostEqual(1 - expected_2, actual_2[1-zero_outcome_index2])
 
     def test_bulk_fill_probs_with_split_tree(self):
+        self.skipTest("Need a way to manually create 'split' layouts")
         # XXX is this correct?  EGN: looks right to me.
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
@@ -408,121 +401,123 @@ class SimMethodBase(object):
 
     def test_bulk_dprobs(self):
         with self.assertNoWarns():
-            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], return_pr=False)
+            bulk_dprobs = self.model.sim.bulk_dprobs([self.gatestring1, self.gatestring2])
         # TODO assert correctness
 
         with self.assertNoWarns():
-            bulk_dprobs = self.model.bulk_dprobs([self.gatestring1, self.gatestring2], return_pr=True)
+            bulk_dprobs = self.model.sim.bulk_dprobs([self.gatestring1, self.gatestring2])
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        nElements = layout.num_elements
         nParams = self.model.num_params()
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
         with self.assertNoWarns():
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+            self.model.sim.bulk_fill_dprobs(dprobs_to_fill, layout)
         # TODO assert correctness
 
         probs_to_fill = np.empty(nElements, 'd')
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, pr_mx_to_fill=probs_to_fill, check=True)
+            self.model.sim.bulk_fill_dprobs(dprobs_to_fill, layout, pr_array_to_fill=probs_to_fill)
         # TODO assert correctness
 
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-            nElements = evt.num_final_elements()
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            nElements = layout.num_elements
             nParams = self.model.num_params()
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+            self.model.sim.bulk_fill_dprobs(dprobs_to_fill, layout)
             # TODO assert correctness
 
     def test_bulk_fill_dprobs_with_split_tree(self):
+        self.skipTest("Need a way to manually create 'split' layouts")
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
         nParams = self.model.num_params()
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt, check=True)
+            self.model.bulk_fill_dprobs(dprobs_to_fill, evt)
         # TODO assert correctness
 
     def test_bulk_hprobs(self):
         # call normally
         with self.assertNoWarns():
-            bulk_hprobs = self.model.bulk_hprobs(
-                [self.gatestring1, self.gatestring2], return_pr=False, return_deriv=False)
+            bulk_hprobs = self.model.sim.bulk_hprobs([self.gatestring1, self.gatestring2])
         # TODO assert correctness
 
-        # with probabilities
-        with self.assertNoWarns():
-            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=True, return_deriv=False)
-        # TODO assert correctness
-
-        # with derivative probabilities
-        with self.assertNoWarns():
-            bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=False, return_deriv=True)
-        # TODO assert correctness
+        #hprobs no longer has return_pr and return_deriv args - just call respective functions.
+        ## with probabilities
+        #with self.assertNoWarns():
+        #    bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=True, return_deriv=False)
+        ## TODO assert correctness
+        #
+        ## with derivative probabilities
+        #with self.assertNoWarns():
+        #    bulk_hprobs = self.model.bulk_hprobs([self.gatestring1, self.gatestring2], return_pr=False, return_deriv=True)
+        ## TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        nElements = layout.num_elements
         nParams = self.model.num_params()
 
         # call normally
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
         # TODO assert correctness
 
         # also fill probabilities
         probs_to_fill = np.empty(nElements, 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, pr_mx_to_fill=probs_to_fill, check=True)
+            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, pr_array_to_fill=probs_to_fill)
         # TODO assert correctness
 
         #also fill derivative probabilities
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, deriv_mx_to_fill=dprobs_to_fill, check=True)
+            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, deriv1_array_to_fill=dprobs_to_fill)
         # TODO assert correctness
 
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-            nElements = evt.num_final_elements()
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            nElements = layout.num_elements
             nParams = self.model.num_params()
             hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
 
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
             # TODO assert correctness
 
     def test_bulk_fill_hprobs_with_split_tree(self):
+        self.skipTest("Need a way to manually create 'split' layouts")
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
         nParams = self.model.num_params()
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt, check=True)
+            self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
         # TODO assert correctness
 
     def test_bulk_hprobs_by_block(self):
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
         nP = self.model.num_params()
 
         hcols = []
         d12cols = []
         slicesList = [(slice(0, nP), slice(i, i + 1)) for i in range(nP)]
-        for s1, s2, hprobs_col, dprobs12_col in self.model.bulk_hprobs_by_block(
-                evt, slicesList, True):
+        for s1, s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+                layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
         all_hcols = np.concatenate(hcols, axis=2)  # axes = (spam+circuit, derivParam1, derivParam2)
@@ -542,11 +537,15 @@ class SimMethodBase(object):
              ('Gx', 'Gy', 'Gy'),
              ('Gy', 'Gy', 'Gy'),
              ('Gy', 'Gx', 'Gx')])
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
-        with self.assertWarns(Warning):
-            self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
-            #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
+
+        layout = self.model.sim.create_layout(circuits)
+
+        #TODO: test different forced splittings, once this is possible to do...
+        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
+        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
+        #with self.assertWarns(Warning):
+        #    self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
+        #    #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
 
 
 class StandardMethodBase(GeneralMethodBase, SimMethodBase, ThresholdMethodBase):
@@ -637,7 +636,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
-        self.model.set_simtype('map')
+        self.model.sim = mapforwardsim.MapForwardSimulator(self.model)
 
     def test_bulk_evaltree(self):
         # Test tree construction
@@ -652,11 +651,15 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
              ('Gx', 'Gy', 'Gy'),
              ('Gy', 'Gy', 'Gy'),
              ('Gy', 'Gx', 'Gx')])
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
-        evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
-        with self.assertNoWarns():
-            self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
-            #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
+
+        layout = self.model.sim.create_layout(circuits)
+
+        #TODO: test different forced splittings, once this is possible to do...
+        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
+        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
+        #with self.assertNoWarns():
+        #    self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
+        #    #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
 
 
 class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase):

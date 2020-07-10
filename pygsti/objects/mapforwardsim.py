@@ -128,7 +128,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                     if array_type == "p": mem += cache_size * d * bytes_per_element
                     elif array_type == "dp": mem += 2 * cache_size * d * bytes_per_element
                     elif array_type == "hp": mem += cache_size * d * wrtblk2_size * bytes_per_element
-                    else: raise ValueError(f"Invalid array type: {array_type}")
+                    else: raise ValueError("Invalid array type: %s" % array_type)
                 return mem
 
             def cache_mem_estimate(nc, np1, np2, n_comms):
@@ -148,7 +148,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
 
             #Increase nc in amounts of Ng (so nc % Ng == 0).  Start with approximation, then switch to slow mode.
             while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit:
@@ -158,7 +160,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 if nc > num_circuits: nc = num_circuits
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
             while cmem > cache_mem_limit:
                 nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng, log=True)
                 if(_next >= cmem): raise MemoryError("Not enough memory: splitting unproductive")
@@ -184,9 +188,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-                     f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-                     f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        #printer.log((f"Created map-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
+        #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
+        #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        printer.log(("Created map-sim layout for %d circuits over %d processors:\n"
+                     " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
+                     " %s parameters divided into %s blocks of ~%s params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
@@ -223,7 +231,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
     def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                                 layout, param_indices1, param_indices2, comm):
+                                 layout_atom, param_indices1, param_indices2, comm):
 
         """
         Helper function for populating hessian values by block.
@@ -231,9 +239,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         eps = 1e-4  # hardcoded?
 
         if param_indices1 is None:
-            param_indices1 = list(range(self.Np))
+            param_indices1 = list(range(self.model.num_params()))
         if param_indices2 is None:
-            param_indices2 = list(range(self.Np))
+            param_indices2 = list(range(self.model.num_params()))
         if dest_param_indices1 is None:
             dest_param_indices1 = list(range(_slct.length(param_indices1)))
         if dest_param_indices2 is None:
@@ -253,21 +261,22 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # final index within mx_to_fill (fpoffset = final parameter offset)
         iParamToFinal = {i: dest_param_indices1[st + ii] for ii, i in enumerate(my_param_indices)}
 
-        nEls = len(layout)
+        nEls = layout_atom.num_elements
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs = _np.empty((nEls, nP2), 'd')
         dprobs2 = _np.empty((nEls, nP2), 'd')
-        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout, param_indices2, comm)
+        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, comm)
 
-        orig_vec = self.to_vector().copy()
-        for i in range(self.Np):
+        orig_vec = self.model.to_vector().copy()
+        for i in range(self.model.num_params()):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec, close=True)
-                replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout, param_indices2, subComm)
+                self.model.from_vector(vec, close=True)
+                replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout_atom,
+                                               param_indices2, subComm)
                 _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
-        self.from_vector(orig_vec)
+        self.model.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
         _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)

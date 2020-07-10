@@ -190,6 +190,10 @@ class ForwardSimulator(object):
             resource_alloc = _ResourceAllocation.cast(None)
             self._bulk_fill_probs_at_times(probs_array, copa_layout, [time], resource_alloc)
 
+        if _np.any(_np.isnan(probs_array)):
+            to_print = str(circuit) if len(circuit) < 10 else str(circuit[0:10]) + " ... (len %d)" % len(circuit)
+            _warnings.warn("pr(%s) == nan" % to_print)
+
         probs = _ld.OutcomeLabelDict()
         elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
         for element_index, outcome in zip(_slct.indices(elindices), outcomes):
@@ -210,7 +214,7 @@ class ForwardSimulator(object):
     def hprobs(self, circuit, clip_to=None):
         copa_layout = self.create_layout([circuit])
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
-        self.bulk_fill_dprobs(hprobs_array, copa_layout, clip_to)
+        self.bulk_fill_hprobs(hprobs_array, copa_layout, clip_to)
 
         hprobs = _ld.OutcomeLabelDict()
         elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
@@ -327,7 +331,7 @@ class ForwardSimulator(object):
         return ret
 
     def bulk_dprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
-                    wrt_filter=None, wrt_block_size=None):
+                    wrt_filter=None):
         """
         Construct a dictionary containing the probability derivatives for an entire list of circuits.
 
@@ -352,16 +356,7 @@ class ForwardSimulator(object):
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
-
-        wrt_block_size : int or float, optional
-            The maximum average number of derivative columns to compute values
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
+            processors and to control memory usage.
 
         Returns
         -------
@@ -377,7 +372,7 @@ class ForwardSimulator(object):
 
         #Note: don't use smartc for now.
         vdp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
-        self.bulk_fill_dprobs(vdp, copa_layout, clip_to, resource_alloc, wrt_filter, wrt_block_size)
+        self.bulk_fill_dprobs(vdp, copa_layout, clip_to, resource_alloc, wrt_filter)
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_circuits():
@@ -386,7 +381,7 @@ class ForwardSimulator(object):
         return ret
 
     def bulk_hprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
-                    wrt_filter1=None, wrt_filter2=None, wrt_block_size1=None, wrt_block_size2=None):
+                    wrt_filter1=None, wrt_filter2=None):
         """
         Construct a dictionary containing the probability Hessians for an entire list of circuits.
 
@@ -415,22 +410,6 @@ class ForwardSimulator(object):
             If not None, a list of integers specifying which model parameters
             to differentiate with respect to in the second (col) derivative operations.
 
-        wrt_block_size1: int or float, optional
-            The maximum number of 1st (row) derivatives to compute
-            values for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of `wrt_block_size1` and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the `wrt_filter1` is not None.
-            Set this to non-None to reduce amount of intermediate memory required.
-
-        wrt_block_size2 : int or float, optional
-            The maximum number of 2nd (col) derivatives to compute
-            values for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of `wrt_block_size2` and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the `wrt_filter2` is not None.
-            Set this to non-None to reduce amount of intermediate memory required.
-
         Returns
         -------
         hprobs : dictionary
@@ -444,9 +423,9 @@ class ForwardSimulator(object):
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         #Note: don't use smartc for now.
-        vhp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
+        vhp = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
         self.bulk_fill_hprobs(vhp, copa_layout, clip_to, resource_alloc,
-                              wrt_filter1, wrt_filter1, wrt_block_size1, wrt_block_size2)
+                              wrt_filter1, wrt_filter1)
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_circuits():
@@ -537,8 +516,7 @@ o
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
+            processors and to control memory usage.
 
         Returns
         -------
@@ -640,6 +618,7 @@ o
         -------
         None
         """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         return self._bulk_fill_hprobs(array_to_fill, layout, pr_array_to_fill,
                                       deriv1_array_to_fill, deriv2_array_to_fill,
                                       resource_alloc, wrt_filter1, wrt_filter2)
@@ -649,8 +628,13 @@ o
                           resource_alloc, wrt_filter1, wrt_filter2):
         if wrt_filter1 is not None:
             wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
+        else:
+            wrtSlice1 = None
+
         if wrt_filter2 is not None:
             wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
+        else:
+            wrtSlice2 = None
 
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)

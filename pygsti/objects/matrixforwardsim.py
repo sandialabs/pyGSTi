@@ -27,6 +27,7 @@ from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .evaltree import EvalTree as _EvalTree
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -817,7 +818,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         return MatrixForwardSimulator(self.model)
 
-    def _compute_product_cache(self, layout_atom, comm=None):
+    def _compute_product_cache(self, layout_atom_tree, comm=None):
         """
         Computes an array of operation sequence products (process matrices).
 
@@ -836,9 +837,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         # ------------------------------------------------------------------
 
-        eval_tree = layout_atom.tree
+        eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
-        prodCache = _np.zeros((cacheSize, dim, dim))
+        prodCache = _np.zeros((cacheSize, dim, dim), 'd')
         scaleCache = _np.zeros(cacheSize, 'd')
 
         for iDest, iRight, iLeft in eval_tree:
@@ -876,7 +877,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return prodCache, scaleCache
 
-    def _compute_dproduct_cache(self, layout_atom, prod_cache, scale_cache,
+    def _compute_dproduct_cache(self, layout_atom_tree, prod_cache, scale_cache,
                                 comm=None, wrt_slice=None, profiler=None):
         """
         Computes a tree of product derivatives in a linear cache space. Will
@@ -888,7 +889,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         nDerivCols = self.model.num_params() if (wrt_slice is None) \
             else _slct.length(wrt_slice)
         deriv_shape = (nDerivCols, dim, dim)
-        eval_tree = layout_atom.tree
+        eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
         # ------------------------------------------------------------------
@@ -920,7 +921,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
-                eval_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
+                layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
             # pass None as comm, *not* mySubComm, since we can't do any
             #  further parallelization
 
@@ -976,7 +977,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return dProdCache
 
-    def _compute_hproduct_cache(self, layout_atom, prod_cache, d_prod_cache1,
+    def _compute_hproduct_cache(self, layout_atom_tree, prod_cache, d_prod_cache1,
                                 d_prod_cache2, scale_cache, comm=None,
                                 wrt_slice1=None, wrt_slice2=None):
         """
@@ -992,7 +993,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         assert(wrt_slice1 is None or _slct.length(wrt_slice1) == nDerivCols1)
         assert(wrt_slice2 is None or _slct.length(wrt_slice2) == nDerivCols2)
         hessn_shape = (nDerivCols1, nDerivCols2, dim, dim)
-        eval_tree = layout_atom.tree
+        eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
         # ------------------------------------------------------------------
@@ -1046,8 +1047,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     #  #don't compute anything on "extra", i.e. rank != 0, cpus
 
                 hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
-                    eval_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2[:, myDeriv2ColSlice],
-                    scale_cache, None, myHessianSlice1, myHessianSlice2)
+                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
+                    d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
                 # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
 
                 _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
@@ -1057,7 +1058,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             else:
                 #compute "Deriv1" row-derivatives distribution only; don't use column distribution
                 hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
-                    eval_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
+                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
                     scale_cache, None, myHessianSlice1, wrt_slice2)
                 # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
 
@@ -1221,7 +1222,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     if array_type == "p": mem += cache_size * (d2 + 2) * bytes_per_element  # +2 for scale cache
                     elif array_type == "dp": mem += cache_size * d2 * wrtblk1_size * bytes_per_element
                     elif array_type == "hp": mem += cache_size * d2 * wrtblk1_size * wrtblk2_size * bytes_per_element
-                    else: raise ValueError(f"Invalid array type: {array_type}")
+                    else: raise ValueError("Invalid array type: %s" % array_type)
                 return mem
 
             def cache_mem_estimate(nc, np1, np2, n_comms):
@@ -1241,7 +1242,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
+
 
             #Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
             ok = False
@@ -1264,11 +1268,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if not ok:
                 while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit: nc += Ng
                 cmem = cache_mem_estimate(nc, np1, np2, Ng)
-                printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+                #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+                printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                            (nc, np1, np2, Ng, (final_mem + cmem) * C))
+
                 while cmem > cache_mem_limit:
                     nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng)
-                    printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
-                                 f" {(final_mem + _next) * C}GB"))
+                    #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
+                    #             f" {(final_mem + _next) * C}GB"))
+                    printer.log(" mem(%d atoms, %d,% param-grps, %d proc-grps) = %.2fGB" %
+                                (nc, np1, np2, Ng, (final_mem + _next) * C))
+
                     if _next >= cmem:  # special failsafe
                         raise MemoryError("Not enough memory: splitting unproductive")
                     cmem = _next
@@ -1286,9 +1296,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-                     f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-                     f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        #printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
+        #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
+        #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
+                     " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
+                     " %s parameters divided into %s blocks of ~%s params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
@@ -1552,7 +1566,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         scaleVals = Gs = prodCache = scaleCache = None
 
         #Fill cache info
-        prodCache, scaleCache = self._compute_product_cache(layout_atom, resource_alloc.comm)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
 
         #use cached data to final values
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1570,8 +1584,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
-        prodCache, scaleCache = self._compute_product_cache(layout_atom, resource_alloc.comm)
-        dProdCache = self._compute_dproduct_cache(layout_atom, prodCache, scaleCache,
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
+        dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                                   resource_alloc.comm, param_slice)
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1588,11 +1602,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
-        prodCache, scaleCache = self._compute_product_cache(layout_atom, resource_alloc.comm)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
         dProdCache1 = self._compute_dproduct_cache(
-            layout_atom, prodCache, scaleCache, resource_alloc.comm, param_slice1)
+            layout_atom.tree, prodCache, scaleCache, resource_alloc.comm, param_slice1)
         dProdCache2 = dProdCache1 if (param_slice1 == param_slice2) else \
-            self._compute_dproduct_cache(layout_atom, prodCache, scaleCache,
+            self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                          resource_alloc.comm, param_slice2)
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1601,7 +1615,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         dGs2 = layout_atom.nonscratch_cache_view(dProdCache2, axis=0)
         #( n_circuits, nDerivColsX, dim, dim )
 
-        hProdCache = self._compute_hproduct_cache(layout_atom, prodCache, dProdCache1,
+        hProdCache = self._compute_hproduct_cache(layout_atom.tree, prodCache, dProdCache1,
                                                   dProdCache2, scaleCache, resource_alloc.comm,
                                                   param_slice1, param_slice2)
         hGs = layout_atom.nonscratch_cache_view(hProdCache, axis=0)
@@ -1615,3 +1629,144 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 hGs[tree_indices], scaleVals[tree_indices], param_slice1, param_slice2))
 
         _np.seterr(**old_err)
+
+    def bulk_product(self, circuits, scale=False, resource_alloc=None):
+        """
+        Compute the products of many circuits at once.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The circuits to compute products for.  These should *not* have any preparation or
+            measurement layers.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        prods : numpy array
+            Array of shape S x G x G, where:
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
+        scaleValues : numpy array
+            Only returned when scale == True. A length-S array specifying
+            the scaling that needs to be applied to the resulting products
+            (final_product[i] = scaleValues[i] * prods[i]).
+        """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        nCircuits = len(circuits)
+
+        eval_tree = _EvalTree.create(circuits)
+        prodCache, scaleCache = self._compute_product_cache(eval_tree, resource_alloc.comm)
+
+        # EvalTree evaluates a "cache" which can contain additional (intermediate) elements
+        scaleVals = self._scale_exp(scaleCache[0:nCircuits])
+        Gs = prodCache[0:nCircuits]
+
+        if scale:
+            return Gs, scaleVals
+        else:
+            old_err = _np.seterr(over='ignore')
+            Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+            _np.seterr(**old_err)
+            return Gs
+
+    def bulk_dproduct(self, circuits, flat=False, return_prods=False,
+                      scale=False, resource_alloc=None, wrt_filter=None):
+        """
+        Compute the derivative of a many operation sequences at once.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The circuits to compute products for.  These should *not* have any preparation or
+            measurement layers.
+
+        flat : bool, optional
+            Affects the shape of the returned derivative array (see below).
+
+        return_prods : bool, optional
+            when set to True, additionally return the probabilities.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which gate parameters
+            to include in the derivative.  Each element is an index into an
+            array of gate parameters ordered by concatenating each gate's
+            parameters (in the order specified by the model).  This argument
+            is used internally for distributing derivative calculations across
+            multiple processors.
+
+        Returns
+        -------
+        derivs : numpy array
+            * if flat == False, an array of shape S x M x G x G, where:
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
+              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+              of the i-th operation sequence product with respect to the j-th model
+              parameter.
+            * if flat == True, an array of shape S*N x M where:
+              - N == the number of entries in a single flattened gate (ordering same as numpy.flatten),
+              - S,M == as above,
+              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
+              the (i / G^2)-th flattened operation sequence product  with respect to
+              the j-th model parameter.
+        products : numpy array
+            Only returned when return_prods == True.  An array of shape
+            S x G x G; products[i] is the i-th operation sequence product.
+        scaleVals : numpy array
+            Only returned when scale == True.  An array of shape S such that
+            scaleVals[i] contains the multiplicative scaling needed for
+            the derivatives and/or products for the i-th operation sequence.
+        """
+        nCircuits = len(circuits)
+        nDerivCols = self.model.num_params() if (wrt_filter is None) else _slct.length(wrt_filter)
+
+        wrtSlice = _slct.list_to_slice(wrt_filter) if (wrt_filter is not None) else None
+        #TODO: just allow slices as argument: wrt_filter -> wrtSlice?
+
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+
+        eval_tree = _EvalTree.create(circuits)
+        prodCache, scaleCache = self._compute_product_cache(eval_tree, resource_alloc.comm)
+        dProdCache = self._compute_dproduct_cache(eval_tree, prodCache, scaleCache,
+                                                  resource_alloc.comm, wrtSlice)
+
+        # EvalTree evaluates a "cache" which can contain additional (intermediate) elements
+        scaleVals = self._scale_exp(scaleCache[0:nCircuits])
+        Gs = prodCache[0:nCircuits]
+        dGs = dProdCache[0:nCircuits]
+
+        if not scale:
+            old_err = _np.seterr(over='ignore', invalid='ignore')
+            if return_prods:
+                Gs = _np.swapaxes(_np.swapaxes(Gs, 0, 2) * scaleVals, 0, 2)  # may overflow, but ok
+
+            # may overflow or get nans (invalid), but ok
+            dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 3) * scaleVals, 0, 3)
+            # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
+            dGs[_np.isnan(dGs)] = 0
+            _np.seterr(**old_err)
+            
+        if flat:
+            # cols = deriv cols, rows = flattened everything else
+            dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
+                (nDerivCols, nCircuits * self.model.dim**2)), 0, 1)
+
+        if return_prods:
+            return (dGs, Gs, scaleVals) if scale else (dGs, Gs)
+        else:
+            return (dGs, scaleVals) if scale else dGs

@@ -160,6 +160,8 @@ class ComputationCache(object):
         comm = resource_alloc.comm if resource_alloc else None
         mlim = resource_alloc.mem_limit if resource_alloc else None
         distribute_method = resource_alloc.distribute_method
+
+        # XXX model.bulk_evaltree_from_resources has been removed
         self.eval_tree, self.wrt_block_size, self.wrt_block_size2, self.lookup, self.outcomes_lookup = \
             model.bulk_evaltree_from_resources(circuits_to_use, comm, mlim, distribute_method,
                                                subcalls, dataset, verbosity)

@@ -795,15 +795,21 @@ class Circuit(object):
     def __eq__(self, x):
         if x is None: return False
         if isinstance(x, Circuit):
-            return self.tup == x.tup
+            return self.tup.__eq__(x.tup)
         else:
-            return self.tup == tuple(x)
+            return self.layertup == tuple(x)  # equality with non-circuits is just based on *labels*
 
     def __lt__(self, x):
-        return self.tup.__lt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__lt__(x.tup)
+        else:
+            return self.layertup < tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def __gt__(self, x):
-        return self.tup.__gt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__gt__(x.tup)
+        else:
+            return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def number_of_lines(self):
         """
@@ -1005,7 +1011,7 @@ class Circuit(object):
                 if (strict and sslbls.issubset(lines)) or \
                    (not strict and len(sslbls.intersection(lines)) >= 0):
                     ret_layer.append(l)
-            ret.append(ret_layer)
+            ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
         if nonint_layers:
             if not strict: lines = "auto"  # since we may have included lbls on other lines
@@ -1648,6 +1654,8 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
+        # Convert elements of `parallel_lbls` into Labels (needed b/c we use _fastinit below)
+        parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def expand_subcircuits(self):
@@ -2007,27 +2015,15 @@ class Circuit(object):
         -------
         Circuit
         """
-        if not self._static:
-            #Could to this in both cases, but is slow for large static circuits
-            cpy = self.copy(editable=False)  # convert our layers to Labels
-            if not alias_dict: return cpy
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = cpy._labels
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
-
-        else:  # static case: so self._labels is a tuple of Labels
-            if not alias_dict: return self  # no copy needed b/c static
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = self._labels  # a *tuple*
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
+        static_self = self if self._static else self.copy(editable=False)  # convert our layers to Labels
+        if not alias_dict: return static_self
+        assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+        layers = static_self._labels  # a *tuple*
+        for label, c in alias_dict.items():
+            while label in layers:
+                i = layers.index(label)
+                layers = layers[:i] + c._labels + layers[i + 1:]
+        return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """

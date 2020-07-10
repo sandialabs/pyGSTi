@@ -105,7 +105,7 @@ class GSTInitialModelTester(BaseCase):
     """
 
     def setUp(self):
-        self.target_model = smq1Q_XYI.target_model()
+        self.edesign = smq1Q_XYI.get_gst_experiment_design(max_max_length=2)
 
     def tearDown(self):
         pass  # TODO
@@ -115,45 +115,42 @@ class GSTInitialModelTester(BaseCase):
         im2 = gst.GSTInitialModel.cast(im)
         self.assertTrue(im2 is im)
 
-        im3 = gst.GSTInitialModel.cast(self.target_model)
+        im3 = gst.GSTInitialModel.cast(self.edesign.target_model)
         self.assertEqual(im3.starting_point, "User-supplied-Model")
 
     def test_get_model_target(self):
         #Default
         im = gst.GSTInitialModel()  # default is to use the target
-        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
-        self.assertTrue(mdl is self.target_model)
+        self.assertTrue(mdl is self.edesign.target_model)
 
     def test_get_model_custom(self):
         #Custom model
-        custom_model = self.target_model.rotate(max_rotate=0.05, seed=1234)
+        custom_model = self.edesign.target_model.rotate(max_rotate=0.05, seed=1234)
         im = gst.GSTInitialModel(custom_model)  # default is to use the target
-        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
         self.assertTrue(mdl is custom_model)
 
     def test_get_model_depolarized(self):
         #Depolarized start
-        depol_model = self.target_model.depolarize(op_noise=0.1)
+        depol_model = self.edesign.target_model.depolarize(op_noise=0.1)
         im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
-        mdl = im.get_model(self.target_model, self.target_model, None, None, None, None)
+        mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
         self.assertTrue(depol_model.frobeniusdist(mdl) < 1e-6)
 
     def test_get_model_lgst(self):
         #LGST
-        datagen_model = self.target_model.depolarize(op_noise=0.1)
-        lgst_circuits = create_lsgst_circuits(self.target_model,
-                                                   smq1Q_XYI.prep_fiducials(),
-                                                   smq1Q_XYI.meas_fiducials(), [], [1])
-        ds = simulate_data(datagen_model, lgst_circuits, 1000, sample_error='none')  # no error for reproducibility
+        datagen_model = self.edesign.target_model.depolarize(op_noise=0.1)
+        ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
-        im1 = gst.GSTInitialModel(self.target_model, "LGST")
-        mdl1 = im1.get_model(self.target_model, self.target_model, lgst_circuits, ds, None, None)
+        im1 = gst.GSTInitialModel(self.edesign.target_model, "LGST")
+        mdl1 = im1.get_model(self.edesign, None, ds, None)
 
-        im2 = gst.GSTInitialModel(self.target_model, "LGST-if-possible")
-        mdl2 = im2.get_model(self.target_model, self.target_model, lgst_circuits, ds, None, None)
+        im2 = gst.GSTInitialModel(self.edesign.target_model, "LGST-if-possible")
+        mdl2 = im2.get_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)
         #TODO: would like some gauge-inv metric between mdl? and datagen_model to be ~0 (FUTURE)
@@ -238,22 +235,13 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
 
     def test_check_if_runnable(self):
         proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testGST")
-
-        with self.assertRaises(ValueError):
-            proto.check_if_runnable(self.gst_data)  # data should only have 1 circuit list
-
-        lgst_data = ProtocolData(gst.GateSetTomographyDesign(self.mdl_target.copy(), [self.gst_design.circuit_lists[0]],
-                                                             qubit_labels=self.gst_design.qubit_labels),
-                                 self.gst_data.dataset)
+        lgst_data = ProtocolData(self.gst_data.edesign.copy_with_maxlengths([1]), self.gst_data.dataset)
         proto.check_if_runnable(lgst_data)  # throws an error if there's a problem
 
     def test_run(self):
         proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testLGST")
 
-        lgst_data = ProtocolData(gst.GateSetTomographyDesign(self.mdl_target.copy(), [self.gst_design.circuit_lists[0]],
-                                                             qubit_labels=self.gst_design.qubit_labels),
-                                 self.gst_data.dataset)
-
+        lgst_data = ProtocolData(self.gst_data.edesign.copy_with_maxlengths([1]), self.gst_data.dataset)
         results = proto.run(lgst_data)
 
         mdl_result = results.estimates["testLGST"].models['stdgaugeopt']

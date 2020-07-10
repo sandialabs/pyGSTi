@@ -3,7 +3,7 @@ from ..util import Namespace
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as smq
-from pygsti.objects import Label, Circuit, BulkCircuitList
+from pygsti.objects import Label, Circuit, CircuitList
 
 
 ns = Namespace()
@@ -43,7 +43,7 @@ def perfect_dataset(self):
 @ns.memo
 def alias_circuits(self):
     alias_list = [c.replace_layer(Label(("Gxpi2", 0)), Label(("GA1", 0))) for c in self.circuits]
-    return BulkCircuitList(alias_list, self.aliases)
+    return CircuitList(alias_list, self.aliases)
 
 
 @ns.memo

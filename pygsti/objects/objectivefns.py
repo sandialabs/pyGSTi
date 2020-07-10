@@ -863,6 +863,10 @@ class ModelDatasetCircuitsStore(object):
         self.nparams = self.model.num_params()
         self.nelements = len(self.layout)
 
+    @property
+    def opBasis(self):
+        return self.model.basis
+
     def num_data_params(self):
         """
         The number of degrees of freedom in the data used by this objective function.
@@ -1495,11 +1499,11 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # so adding the additional ability to parallelize over
         # subtrees would just add unnecessary complication.
 
-        #get distribution across subtrees (groups if needed)
+        #get distribution across subtrees (groups if needed) -- assumes a DistributableCOPALayout
         my_atom_indices, atom_owners, my_subcomm = self.layout.distribute(self.resource_alloc.comm)
 
         nparams = self.model.num_params()
-        blk_size1, blk_size2 = self.wrt_block_size, self.wrt_block_size2
+        blk_size1, blk_size2 = self.layout.additional_dimension_blk_sizes
         row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
         col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
 
@@ -1515,7 +1519,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #Loop over atoms
         for atom_index in my_atom_indices:
             atom = self.layout.atoms[atom_index]
-            sub_nelements = atom.num_element
+            sub_nelements = atom.num_elements
 
             # Create views into pre-allocated memory
             probs = probs_mem[0:sub_nelements]
@@ -1528,7 +1532,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
             #compute probs separately
             sub_resource_alloc = _ResourceAllocation(comm=my_subcomm)
-            self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
+            #self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
+            self.model.sim._bulk_fill_probs_block(probs, atom, sub_resource_alloc)  # need to reach into internals!
             if prob_clip_interval is not None:
                 _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
 
@@ -1544,13 +1549,14 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             loc_iblks, blk_owners, blk_comm = \
                 _mpit.distribute_indices(list(range(len(slicetup_list))), my_subcomm)
             my_slicetup_list = [slicetup_list[i] for i in loc_iblks]
+            blk_resource_alloc = _ResourceAllocation(comm=blk_comm)
 
             subtree_hessian = _np.zeros((nparams, nparams), 'd')
 
             k, kmax = 0, len(my_slicetup_list)
-            for (slice1, slice2, hprobs, dprobs12) in self.model.sim.bulk_hprobs_by_block(
-                    atom, my_slicetup_list, True, blk_comm):
-                rank = self.raw_objfn.comm.Get_rank() if (self.raw_objfn.comm is not None) else 0
+            for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
+                    atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
+                rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
                     isub = my_atom_indices.index(atom_index)
@@ -5955,7 +5961,7 @@ class LogLWildcardFunction(ObjectiveFunction):
                                           self.logl_objfn.layout,
                                           self.wildcard_budget_precomp)
 
-        counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.N, self.logl_objfn.freqs
+        counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.total_counts, self.logl_objfn.freqs
         return self.logl_objfn.raw_objfn.lsvec(self.probs, counts, N, freqs)
 
     def dlsvec(self, wvec):

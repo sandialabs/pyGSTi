@@ -54,10 +54,12 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     @classmethod
     def _compute_unique_circuits(cls, circuits):
         first_copy = _collections.OrderedDict(); to_unique = {}
+        nUnique = 0
         for i, c in enumerate(circuits):
             if not isinstance(c, _Circuit): c = _Circuit(c)  # ensure all returned circuits are Circuits
             if c not in first_copy:
-                first_copy[c] = to_unique[i] = i
+                first_copy[c] = to_unique[i] = nUnique
+                nUnique += 1
             else:
                 to_unique[i] = first_copy[c]
         unique_circuits = list(first_copy.keys())  # unique_circuits is in same order as in `circuits`
@@ -131,7 +133,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()]))
         assert(self._size == max_element_index + 1), \
-            f"Inconsistency: {self._size} elements but max index is {max_element_index}!"
+            "Inconsistency: %d elements but max index is %d!" % (self._size, max_element_index)
 
         self._outcomes = _collections.OrderedDict()
         self._element_indices = _collections.OrderedDict()
@@ -159,7 +161,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         if array_type == "dp": return alloc_fn((self._size, self._additional_dimensions[0]), dtype=dtype)
         if array_type == "hp": return alloc_fn((self._size, self._additional_dimensions[0],
                                                 self._additional_dimensions[1]), dtype=dtype)
-        raise ValueError(f"Invalid `array_type`: {array_type}")
+        raise ValueError("Invalid `array_type`: %s" % array_type)
 
     def memory_estimate(self, array_type, dtype='d'):
         """
@@ -170,7 +172,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         if array_type == "dp": return self._size * self._additional_dimensions[0] * bytes_per_element
         if array_type == "hp": return self._size * self._additional_dimensions[0] * \
            self._additional_dimensions[1] * bytes_per_element
-        raise ValueError(f"Invalid `array_type`: {array_type}")
+        raise ValueError("Invalid `array_type`: %s" % array_type)
 
     def indices(self, circuit):
         return self._element_indices[self._unique_circuit_index[circuit]]
