@@ -128,7 +128,8 @@ class MapCOPALayout(_DistributableCOPALayout):
         groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity)
 
         atoms = []
-        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
+        elindex_outcome_tuples = _collections.OrderedDict(
+            [(unique_i, list()) for unique_i in range(len(unique_circuits))])
         to_orig = {unique_i: orig_i for orig_i, unique_i in to_unique.items()}  # unique => original indices
 
         offset = 0

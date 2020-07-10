@@ -3612,11 +3612,12 @@ class Circuit(object):
         circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
 
         def create_tree(lst):
-            subs = _collections.defaultdict(list)
+            subs = _collections.OrderedDict()
             for el in lst:
                 if len(el) > 0:
+                    if el[0] not in subs: subs[el[0]] = []
                     subs[el[0]].append(el[1:])
-            return {k: create_tree(sub_lst) for k, sub_lst in subs.items()}
+            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
 
         def add_expanded_circuit_outcomes(cir, running_outcomes, ootree, start):
             """
