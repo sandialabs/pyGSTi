@@ -529,6 +529,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         self.ylabel = ylabel
 
         assert(additional_circuits_location in ('start', 'end'))
+        self._addl_location = additional_circuits_location
 
         circuits = _collections.OrderedDict()  # use as an ordered *set* (values all == None)
         if additional_circuits is None:
@@ -546,7 +547,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             circuits.update(additional)
 
         # ordered-sets => tuples
-        self._additional_circuits = tuple(additional.keys())  
+        self._additional_circuits = tuple(additional.keys())
         circuits = tuple(circuits.keys())
 
         circuit_weights = None if (circuit_weights_dict is None) else \
@@ -641,7 +642,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         additional = list(filter(lambda c: c in circuits_to_keep, self._additional_circuits)) \
             if (circuits_to_keep is not None) else self._additional_circuits
         return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
-                                             self.op_label_aliases, circuit_weights_dict, self.name)
+                                             self.op_label_aliases, circuit_weights_dict,
+                                             self._addl_location, self.name)
 
     def nested_truncations(self, axis='x'):
         """
@@ -708,7 +710,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         circuit_weights_dict = {P(c): weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
         return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
-                                             updated_aliases, circuit_weights_dict, self.name)
+                                             updated_aliases, circuit_weights_dict, self._addl_location, self.name)
 
     def copy(self):
         """
@@ -722,4 +724,4 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             if (self.circuit_weights is not None) else None
         return PlaquetteGridCircuitStructure(self._plaquettes.copy(), self.xs[:], self.ys[:], self.xlabel,
                                              self.ylabel, self._additional_circuits, self.op_label_aliases,
-                                             circuit_weights_dict, self.name)
+                                             circuit_weights_dict, self._addl_location, self.name)
