@@ -78,10 +78,8 @@ class DataSetTester(BaseCase):
         ds.add_count_dict(('Gx', 'Gx'), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 20, '1': 80})
         ds.add_count_dict(('Gx', 'Gx'), {'0': 30, '1': 70})  # a duplicate
-        self.assertEqual(ds.keys(), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', '#1')])
-        self.assertEqual(ds.keys(strip_occurrence_tags=True), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
-        # TODO _set_row test separately
-        ds._set_row(('Gx', 'Gx'), {'0': 5, '1': 95}, occurrence=1)  # test _set_row with occurrence arg
+        self.assertEqual(list(ds.keys()), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
+        self.assertEqual(list(ds.keys())[2].occurrence, 1)
 
     def test_constructor_raises_on_missing_spam_labels(self):
         gstrs = [('Gx',), ('Gx', 'Gy'), ('Gy',)]

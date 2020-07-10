@@ -433,7 +433,7 @@ class Circuit(object):
         if stringrep is not None and (layer_labels is None or check):
             cparser = _CircuitParser()
             cparser.lookup = None  # lookup - functionality removed as it wasn't used
-            chk, chk_labels = cparser.parse(stringrep)  # tuple of Labels
+            chk, chk_labels, chk_occurrence = cparser.parse(stringrep)  # tuple of Labels
             if expand_subcircuits and chk is not None:
                 chk = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(to_label, chk)]))
                 #print("DB: Check Layer labels = ",chk)
@@ -457,6 +457,14 @@ class Circuit(object):
                                       " `line_labels` and `stringrep` do not match: %s != %s (from %s)\n"
                                       "(set `line_labels` to None to infer it from `stringrep`)")
                                      % (line_labels, chk_labels, stringrep))
+
+            if chk_occurrence is not None:
+                if occurrence is None:  # Also acts as "auto"
+                    occurrence = chk_occurrence
+                elif occurrence != chk_occurrence:
+                    raise ValueError(("Error intializing Circuit: "
+                                      " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
+                                     % (occurrence, chk_occurrence))
 
         if layer_labels is None:
             raise ValueError("Must specify `stringrep` when `layer_labels` is None")
@@ -701,7 +709,7 @@ class Circuit(object):
             ("Cannot edit a read-only circuit!  "
              "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
         cparser = _CircuitParser()
-        chk, chk_labels = cparser.parse(value)
+        chk, chk_labels, chk_occurrence = cparser.parse(value)
 
         if not all([my_layer in (chk_lbl, [chk_lbl]) for chk_lbl, my_layer in zip(chk, self._labels)]):
             raise ValueError(("Cannot set .str to %s because it doesn't"
@@ -712,6 +720,12 @@ class Circuit(object):
                 raise ValueError(("Cannot set .str to %s because line labels evaluate to"
                                   " %s which is != this circuit's line labels (%s).") %
                                  (value, chk_labels, str(self.line_labels)))
+        if chk_occurrence is not None:
+            if self._occurrence_id != chk_occurrence:
+                raise ValueError(("Cannot set .str to %s because occurrence evaluates to"
+                                  " %s which is != this circuit's occurrence (%s).") %
+                                 (value, str(chk_occurrence), str(self._occurrence_id)))
+
         self._str = value
 
     def __hash__(self):
@@ -752,7 +766,8 @@ class Circuit(object):
         editable = not self._static or not x._static
         added_labels = tuple([l for l in x.line_labels if l not in self.line_labels])
         new_line_labels = self.line_labels + added_labels
-        s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
+        if s is not None:
+            s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
         return Circuit(self.layertup + x.layertup, new_line_labels,
                        None, editable, s, check=False)
 
