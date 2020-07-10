@@ -162,7 +162,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         nAtoms = len(self.atoms)
         assert(nAtomComms <= nAtoms), "Cannot request more sub-comms ({nAtomComms}) than there are atoms ({nAtoms})!"
 
-        assert(nAtomComms <= nprocs), f"Not enough processors ({nprocs}) to make nAtomComms={nAtomComms}"
+        assert(nAtomComms <= nprocs), "Not enough processors (%d) to make nAtomComms=%d" % (nprocs, nAtomComms)
         mySubCommIndices, subCommOwners, mySubComm = \
             _mpit.distribute_indices(list(range(nAtomComms)), comm)
         assert(len(mySubCommIndices) == 1), "Each rank should be assigned to exactly 1 subComm group"
@@ -210,7 +210,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         nAtoms = len(self.atoms)
         assert(nAtomComms <= nAtoms), "Cannot request more sub-comms ({nAtomComms}) than there are atoms ({nAtoms})!"
 
-        assert(nAtomComms <= nprocs), f"Not enough processors ({nprocs}) to make nAtomComms={nAtomComms}"
+        assert(nAtomComms <= nprocs), "Not enough processors (%d) to make nAtomComms=%d" % (nprocs, nAtomComms)
         for rank in range(nprocs):
             mySubCommIndices, _ = \
                 _mpit.distribute_indices_base(list(range(nAtomComms)), nprocs, rank)

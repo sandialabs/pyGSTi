@@ -128,7 +128,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                     if array_type == "p": mem += cache_size * d * bytes_per_element
                     elif array_type == "dp": mem += 2 * cache_size * d * bytes_per_element
                     elif array_type == "hp": mem += cache_size * d * wrtblk2_size * bytes_per_element
-                    else: raise ValueError(f"Invalid array type: {array_type}")
+                    else: raise ValueError("Invalid array type: %s" % array_type)
                 return mem
 
             def cache_mem_estimate(nc, np1, np2, n_comms):
@@ -148,7 +148,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
 
             #Increase nc in amounts of Ng (so nc % Ng == 0).  Start with approximation, then switch to slow mode.
             while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit:
@@ -158,7 +160,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 if nc > num_circuits: nc = num_circuits
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
             while cmem > cache_mem_limit:
                 nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng, log=True)
                 if(_next >= cmem): raise MemoryError("Not enough memory: splitting unproductive")
@@ -184,9 +188,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-                     f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-                     f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        #printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
+        #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
+        #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
+                     " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
+                     " %d parameters divided into %d blocks of ~%d params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, nparams, np, paramBlkSizes))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.

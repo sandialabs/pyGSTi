@@ -912,8 +912,9 @@ def _get_lindblad_factory(simulator, parameterization, errcomp_type):
             assert(isinstance(simulator, _TermFSim))
             cls = _op.LindbladOp
         else:
-            raise ValueError((f"Cannot create Lindblad gate factory for simtype={type(simulator)}"
-                              f" and parameterization={parameterization}"))
+            raise ValueError(("Cannot create Lindblad gate factory for simtype=%s"
+                              " and parameterization=%s") %
+                             (str(type(simulator)), parameterization))
 
         #Just call cls.from_operation_matrix with appropriate evotype
         def _f(op_matrix,  # unitaryPostfactor=None,
@@ -963,7 +964,8 @@ def _get_static_factory(simulator, evotype):
             # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
 
         return _f
-    raise ValueError(f"Cannot create Static gate factory for simtype={type(simulator)} evotype={evotype}")
+    raise ValueError("Cannot create Static gate factory for simtype=%s evotype=%s" %
+                     (str(type(simulator)), evotype))
 
 
 def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False, sparse_lindblad_reps=False,
@@ -1278,7 +1280,7 @@ class CloudNoiseLayerRules(_LayerRules):
                 assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
                 return caches['povm-layers'][layerlbl]
             else:
-                raise KeyError(f"Could not build povm/effect for {layerlbl}!")
+                raise KeyError("Could not build povm/effect for %s!" % str(layerlbl))
 
     def operation_layer_operator(self, model, layerlbl, caches):
         """
@@ -1346,7 +1348,7 @@ class CloudNoiseLayerRules(_LayerRules):
                     error = Lindblad(None, errorGens[0], dense_rep=dense_lindblad_reps)
                 ops_to_compose.append(error)
         else:
-            raise ValueError(f"Invalid errcomp_type in CloudNoiseLayerRules: {self.errcomp_type}")
+            raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
         ret = Composed(ops_to_compose, dim=model.dim, evotype=model.evotype)
         model._init_virtual_obj(ret)  # so ret's gpindices get set

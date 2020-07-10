@@ -281,7 +281,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         #Do some additional initialization
         if self.model.evotype not in ("svterm", "cterm"):
-            raise ValueError(f"Evolution type {self.model.evotype} is incompatbile with term-based calculations")
+            #raise ValueError(f"Evolution type {self.model.evotype} is incompatbile with term-based calculations")
+            raise ValueError("Evolution type %s is incompatbile with term-based calculations" % self.model.evotype)
 
     def copy(self):
         """

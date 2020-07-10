@@ -920,7 +920,8 @@ class _SimpleCompLayerRules(_LayerRules):
                 assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
                 return caches['povm-layers'][layerlbl]
             else:
-                raise KeyError(f"Could not build povm/effect for {layerlbl}!")
+                #raise KeyError(f"Could not build povm/effect for {layerlbl}!")
+                raise KeyError("Could not build povm/effect for %s!" % str(layerlbl))
 
     def operation_layer_operator(self, model, layerlbl, caches):
         """

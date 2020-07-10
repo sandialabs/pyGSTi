@@ -95,7 +95,7 @@ class ModelPack(_ABC):
             mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
             if parameterization_type == "H+S terms":
                 assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
-                    f"Invalid `simulator` argument for H+S terms: {type(simulator)}!"
+                    "Invalid `simulator` argument for H+S terms: %s!" % str(type(simulator))
                 if simulator == "auto":
                     sim = _TermFSim(mode="taylor", max_order=1)
 
