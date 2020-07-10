@@ -241,9 +241,11 @@ class FiducialPairPlaquette(CircuitPlaquette):
         self.base = base
         if not isinstance(fidpairs, dict):
             cols = num_cols if (num_cols is not None) else int(_np.ceil(_np.sqrt(len(fidpairs))))
-            fidpairs = {(k % cols, k // cols): fidpair for k, fidpair in enumerate(fidpairs)}
+            fidpairs = _collections.OrderedDict(
+                [((k % cols, k // cols), fidpair) for k, fidpair in enumerate(fidpairs)])
         self.fidpairs = fidpairs.copy()
-        super().__init__({(i, j): prep + base + meas for (i, j), (prep, meas) in fidpairs.items()},
+        super().__init__(_collections.OrderedDict([((i, j), prep + base + meas)
+                                                   for (i, j), (prep, meas) in fidpairs.items()]),
                          num_rows, num_cols, op_label_aliases)
 
     def process_circuits(self, processor_fn, updated_aliases=None):
@@ -267,7 +269,8 @@ class FiducialPairPlaquette(CircuitPlaquette):
         CircuitPlaquette
         """
         P = processor_fn
-        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()}
+        updated_fidpairs = _collections.OrderedDict([(coords, (P(prep), P(meas)))
+                                                     for coords, (prep, meas) in self.fidpairs.items()])
         return FiducialPairPlaquette(P(self.base), updated_fidpairs, self.num_rows, self.num_cols, updated_aliases)
 
     def expand_aliases(self, ds_filter=None):
@@ -289,7 +292,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         """
         #find & replace aliased operation labels with their expanded form
         new_base = self.base.replace_layers_with_aliases(self.op_label_aliases)
-        new_fidpairs = {}
+        new_fidpairs = _collections.OrderedDict()
         for coords, (prep, meas) in self.fidpairs.items():
             prep2 = prep.replace_layers_with_aliases(self.op_label_aliases)
             meas2 = meas.replace_layers_with_aliases(self.op_label_aliases)
@@ -313,7 +316,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
-        fidpairs = {}
+        fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
                 fidpairs[(i, j)] = self.fidpairs[(i, j)]
@@ -403,7 +406,8 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         CircuitPlaquette
         """
         P = processor_fn
-        updated_fidpairs = {coords: (P(prep), P(meas)) for coords, (prep, meas) in self.fidpairs.items()}
+        updated_fidpairs = _collections.OrderedDict([(coords, (P(prep), P(meas)))
+                                                     for coords, (prep, meas) in self.fidpairs.items()])
         return GermFiducialPairPlaquette(P(self.germ), self.power, updated_fidpairs,
                                          self.num_rows, self.num_cols, updated_aliases)
 
@@ -427,7 +431,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         #find & replace aliased operation labels with their expanded form
         new_germ = self.germ.replace_layers_with_aliases(self.op_label_aliases)
         new_base = new_germ ** self.power
-        new_fidpairs = {}
+        new_fidpairs = _collections.OrderedDict()
         for coords, (prep, meas) in self.fidpairs.items():
             prep2 = prep.replace_layers_with_aliases(self.op_label_aliases)
             meas2 = meas.replace_layers_with_aliases(self.op_label_aliases)
@@ -452,7 +456,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
-        fidpairs = {}
+        fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
                 fidpairs[(i, j)] = self.fidpairs[(i, j)]
@@ -522,7 +526,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                  additional_circuits=None, op_label_aliases=None,
                  circuit_weights_dict=None, additional_circuits_location='start', name=None):
         # plaquettes is a dict of plaquettes whose keys are tuples of length 2
-        self._plaquettes = plaquettes
+        self._plaquettes = _collections.OrderedDict(plaquettes)
         self.xs = x_values
         self.ys = y_values
         self.xlabel = xlabel
@@ -632,7 +636,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         xs = self.xs if (xs_to_keep is None) else xs_to_keep
         ys = self.ys if (ys_to_keep is None) else ys_to_keep
 
-        plaquettes = {}
+        plaquettes = _collections.OrderedDict()
         for (x, y), plaq in self._plaquettes.items():
             if not ((x in xs) and (y in ys)): continue
             plaquettes[(x, y)] = plaq.truncate(circuits_to_keep)
@@ -698,13 +702,14 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         """
         P = processor_fn  # shorhand
 
-        plaquettes = {k: v.process_circuits(P, updated_aliases) for k, v in self._plaquettes.items()}
+        plaquettes = _collections.OrderedDict([(k, v.process_circuits(P, updated_aliases))
+                                               for k, v in self._plaquettes.items()])
         if len(self.xs) > 0 and isinstance(self.xs[0], _Circuit):
             xs = list(map(P, self.xs))
-            plaquettes = {(P(x), y): v for (x, y), v in plaquettes.items()}
+            plaquettes = _collections.OrderedDict([((P(x), y), v) for (x, y), v in plaquettes.items()])
         if len(self.ys) > 0 and isinstance(self.ys[0], _Circuit):
             ys = list(map(P, self.ys))
-            plaquettes = {(x, P(y)): v for (x, y), v in plaquettes.items()}
+            plaquettes = _collections.OrderedDict([((x, P(y)), v) for (x, y), v in plaquettes.items()])
         additional = list(map(P, self._additional_circuits))
 
         circuit_weights_dict = {P(c): weight for c, weight in zip(self, self.circuit_weights)} \

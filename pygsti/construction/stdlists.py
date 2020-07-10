@@ -13,6 +13,7 @@ Circuit list creation functions using repeated-germs limited by a max-length.
 import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
+import collections as _collections
 from ..tools import listtools as _lt
 from ..tools.legacytools import deprecate as _deprecated_fn
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
@@ -162,9 +163,10 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     else: rndm = None
 
     if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
-        fiducialPairs = {germ: [(prep_strs[i], effect_strs[j])
-                                for (i, j) in fid_pairs[germ]]
-                         for germ in germ_list}
+        fiducialPairs = _collections.OrderedDict(
+            [(germ, [(prep_strs[i], effect_strs[j])
+                     for (i, j) in fid_pairs[germ]])
+             for germ in germ_list])
         fidPairDict = fid_pairs
     else:
         if fid_pairs is not None:  # assume fid_pairs is a list
@@ -420,7 +422,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 for i in reversed(inds_to_remove):
                     del fidpair_indices[i]
 
-        fidpairs = {(j, i): (prep_fiducials[i], meas_fiducials[j]) for i, j in fidpair_indices}
+        fidpairs = _collections.OrderedDict([((j, i), (prep_fiducials[i], meas_fiducials[j]))
+                                             for i, j in fidpair_indices])
 
         if base_circuit not in plaquette_dict:
             pkey_dict[base_circuit] = (maxlen, germ)
@@ -493,7 +496,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     if nest:
         #keep track of running quantities used to build circuit structures
         running_plaquette_keys = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-        running_plaquettes = {}
+        running_plaquettes = _collections.OrderedDict()  # keep consistent ordering in produced circuit list.
         running_unindexed = []
         running_maxLens = []
 
@@ -519,7 +522,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = running_unindexed
         else:  # create a new cs for just this maxLen
             pkey = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-            plaquettes = {}
+            plaquettes = _collections.OrderedDict()
             maxLens = [maxLen]
             unindexed = []
 
@@ -583,7 +586,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = unindexed[:]
 
         lsgst_structs.append(
-            _PlaquetteGridCircuitStructure({pkey[base]: plaq for base, plaq in plaquettes.items()},
+            _PlaquetteGridCircuitStructure(_collections.OrderedDict([(pkey[base], plaq)
+                                                                     for base, plaq in plaquettes.items()]),
                                            maxLens, germs, "L", "germ", unindexed, op_label_aliases,
                                            circuit_weights_dict=None, additional_circuits_location='start', name=None))
         tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
