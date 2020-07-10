@@ -227,7 +227,7 @@ try:
             extra_link_args=["-std=c++11"]
         )
     ]
-    setup_with_extensions(cythonize(ext_modules, exclude_failures=True))
+    setup_with_extensions(cythonize(ext_modules, compiler_directives={'language_level': "3"}, exclude_failures=True))
 except ImportError:
     # Cython or numpy is not available
     warn("Extensions build tools are not available. Installing without Cython extensions...")
