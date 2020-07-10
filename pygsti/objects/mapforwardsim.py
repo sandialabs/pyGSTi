@@ -188,13 +188,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        #printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
+        #printer.log((f"Created map-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
         #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
         #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
-        printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
+        printer.log(("Created map-sim layout for %d circuits over %d processors:\n"
                      " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
-                     " %d parameters divided into %d blocks of ~%d params.") %
-                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, nparams, np, paramBlkSizes))
+                     " %d parameters divided into %d blocks of ~%s params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, nparams, np, str(paramBlkSizes)))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
