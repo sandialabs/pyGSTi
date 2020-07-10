@@ -193,8 +193,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
         printer.log(("Created map-sim layout for %d circuits over %d processors:\n"
                      " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
-                     " %d parameters divided into %d blocks of ~%s params.") %
-                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, nparams, np, str(paramBlkSizes)))
+                     " %s parameters divided into %s blocks of ~%s params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
