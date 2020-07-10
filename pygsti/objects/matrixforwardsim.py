@@ -1222,7 +1222,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     if array_type == "p": mem += cache_size * (d2 + 2) * bytes_per_element  # +2 for scale cache
                     elif array_type == "dp": mem += cache_size * d2 * wrtblk1_size * bytes_per_element
                     elif array_type == "hp": mem += cache_size * d2 * wrtblk1_size * wrtblk2_size * bytes_per_element
-                    else: raise ValueError(f"Invalid array type: {array_type}")
+                    else: raise ValueError("Invalid array type: %s" % array_type)
                 return mem
 
             def cache_mem_estimate(nc, np1, np2, n_comms):
@@ -1242,7 +1242,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 
             cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
+
 
             #Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
             ok = False
@@ -1265,11 +1268,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if not ok:
                 while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit: nc += Ng
                 cmem = cache_mem_estimate(nc, np1, np2, Ng)
-                printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+                #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+                printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
+                            (nc, np1, np2, Ng, (final_mem + cmem) * C))
+
                 while cmem > cache_mem_limit:
                     nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng)
-                    printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
-                                 f" {(final_mem + _next) * C}GB"))
+                    #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
+                    #             f" {(final_mem + _next) * C}GB"))
+                    printer.log(" mem(%d atoms, %d,% param-grps, %d proc-grps) = %.2fGB" %
+                                (nc, np1, np2, Ng, (final_mem + _next) * C))
+
                     if _next >= cmem:  # special failsafe
                         raise MemoryError("Not enough memory: splitting unproductive")
                     cmem = _next
@@ -1287,9 +1296,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-                     f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-                     f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        #printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
+        #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
+        #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
+        printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
+                     " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
+                     " %s parameters divided into %s blocks of ~%s params.") %
+                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
 
         if np1 == 1:  # (paramBlkSize == num_params)
             paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.

@@ -883,11 +883,13 @@ class OpModel(Model):
         if len(circuit) == 0 or not self._is_primitive_prep_layer_lbl(circuit[0]):
             prep_lbl_to_prepend = self._default_primitive_prep_layer_lbl()
             if prep_lbl_to_prepend is None:
-                raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
+                #raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
+                raise ValueError("Missing state prep in %s and there's no default!" % circuit.str)
         if len(circuit) == 0 or not self._is_primitive_povm_layer_lbl(circuit[-1]):
             povm_lbl_to_append = self._default_primitive_povm_layer_lbl(None)
             if povm_lbl_to_append is None:
-                raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
+                #raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
+                raise ValueError("Missing POVM in %s and there's no default!" % circuit.str)
 
         if prep_lbl_to_prepend or povm_lbl_to_append:
             circuit = circuit.copy(editable=True)
@@ -1121,7 +1123,8 @@ class OpModel(Model):
                 try:
                     return fn(self, layerlbl, self._opcaches)
                 except KeyError: pass  # Indicates failure to create op: try next type
-            raise ValueError(f"Cannot create operator for non-primitive circuit layer: {layerlbl}")
+            #raise ValueError(f"Cannot create operator for non-primitive circuit layer: {layerlbl}")
+            raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
 

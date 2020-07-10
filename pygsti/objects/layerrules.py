@@ -103,7 +103,8 @@ class LayerRules(object):
         -------
         POVM or SPAMVec
         """
-        raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
+        #raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
+        raise KeyError("Cannot create operator for non-primitive prep layer: %s" % str(layerlbl))
 
     def povm_layer_operator(self, model, layerlbl, cache):
         """
@@ -118,7 +119,8 @@ class LayerRules(object):
         -------
         POVM or SPAMVec
         """
-        raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
+        #raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
+        raise KeyError("Cannot create operator for non-primitive prep layer: %s" % str(layerlbl))
 
     def operation_layer_operator(self, model, layerlbl, cache):
         """
@@ -133,7 +135,8 @@ class LayerRules(object):
         -------
         LinearOperator
         """
-        raise KeyError(f"Cannot create operator for non-primitive layer: {layerlbl}")
+        #raise KeyError(f"Cannot create operator for non-primitive layer: {layerlbl}")
+        raise KeyError("Cannot create operator for non-primitive layer: %s" % str(layerlbl))
 
 
 #REMOVE
