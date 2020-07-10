@@ -200,7 +200,7 @@ class CircuitPlaquette(object):
 
     def element_label(self, irow, icol):
         c = self.elements.get((irow, icol), None)
-        return f"{c.layerstr}" if (c is not None) else ""
+        return c.layerstr if (c is not None) else ""
 
 
 class FiducialPairPlaquette(CircuitPlaquette):
@@ -331,14 +331,15 @@ class FiducialPairPlaquette(CircuitPlaquette):
         return FiducialPairPlaquette(self.base, self.fidpairs, self.num_rows, self.num_cols, aliases)
 
     def summary_label(self):
-        return "{}" if len(self.base) == 0 else f"{self.base.layerstr}"
+        return "{}" if len(self.base) == 0 else self.base.layerstr
 
     def element_label(self, irow, icol):
         prep, meas = self.fidpairs.get((irow, icol), (None, None))
         if prep is None or meas is None:
             return ""
         else:
-            return f"{prep.layerstr} + " + self.summary_label() + f" + {meas.layerstr}"
+            #return f"{prep.layerstr} + " + self.summary_label() + f" + {meas.layerstr}"
+            return " + ".join(prep.layerstr, self.summary_label(), meas.layerstr)
 
 
 class GermFiducialPairPlaquette(FiducialPairPlaquette):
@@ -473,7 +474,8 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         if len(self.germ) == 0 or self.power == 0:
             return "{}"
         else:
-            return f"({self.germ.layerstr})<sup>{self.power}</sup>"
+            #return f"({self.germ.layerstr})<sup>{self.power}</sup>"
+            return "(%s)<sup>%d</sup>" % (self.germ.layerstr, self.power)
 
 
 class PlaquetteGridCircuitStructure(_CircuitList):
@@ -669,7 +671,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         elif axis == 'y':
             return [self.truncate(ys_to_keep=self.ys[0:i + 1]) for i in range(len(self.ys))]
         else:
-            raise ValueError(f"Invalid `axis` argument: {axis} - must be 'x' or 'y'!")
+            #raise ValueError(f"Invalid `axis` argument: {axis} - must be 'x' or 'y'!")
+            raise ValueError("Invalid `axis` argument: %s - must be 'x' or 'y'!" % str(axis))
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
