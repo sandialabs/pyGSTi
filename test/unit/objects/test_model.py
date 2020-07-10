@@ -372,10 +372,12 @@ class SimMethodBase(object):
         expected_2 = self._expected_probs[self.gatestring2]
         actual_1 = probs_to_fill[layout.indices_for_index(0)]
         actual_2 = probs_to_fill[layout.indices_for_index(1)]
-        self.assertAlmostEqual(expected_1, actual_1[0])
-        self.assertAlmostEqual(expected_2, actual_2[0])
-        self.assertAlmostEqual(1 - expected_1, actual_1[1])
-        self.assertAlmostEqual(1 - expected_2, actual_2[1])
+        zero_outcome_index1 = layout.outcomes_for_index(0).index(('0',))
+        zero_outcome_index2 = layout.outcomes_for_index(1).index(('0',))
+        self.assertAlmostEqual(expected_1, actual_1[zero_outcome_index1])
+        self.assertAlmostEqual(expected_2, actual_2[zero_outcome_index2])
+        self.assertAlmostEqual(1 - expected_1, actual_1[1-zero_outcome_index1])
+        self.assertAlmostEqual(1 - expected_2, actual_2[1-zero_outcome_index2])
 
     def test_bulk_fill_probs_with_split_tree(self):
         self.skipTest("Need a way to manually create 'split' layouts")
