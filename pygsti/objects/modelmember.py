@@ -134,16 +134,6 @@ class ModelMember(ModelChild):
         # last setting of dirty=False
         super(ModelMember, self).__init__(parent)
 
-    def dimension(self):
-        """
-        Return the dimension of this object.
-
-        Returns
-        -------
-        int
-        """
-        return self.dim
-
     @property
     def dirty(self):
         """
@@ -449,7 +439,7 @@ class ModelMember(ModelChild):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this object using a vector of parameters.
 
@@ -462,9 +452,10 @@ class ModelMember(ModelChild):
         close : bool, optional
             Whether `v` is close to the current parameter vector.
 
-        nodirty : bool, optional
-            Whether the member should refrain from setting `self.dirty=True` as
-            a result of this call.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------

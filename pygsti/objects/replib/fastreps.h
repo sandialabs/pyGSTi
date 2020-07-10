@@ -10,13 +10,13 @@ typedef long long INT;
 namespace CReps {
   
   //Polynomial key class - essentially a huge INT for holding many variable indices compactly
-  class PolyVarsIndex {
+  class PolynomialVarsIndex {
     public:
     std::vector<INT> _parts;
-    PolyVarsIndex() {}
-    PolyVarsIndex(INT size) :_parts(size) {}
+    PolynomialVarsIndex() {}
+    PolynomialVarsIndex(INT size) :_parts(size) {}
 
-    bool operator==(PolyVarsIndex i) const {
+    bool operator==(PolynomialVarsIndex i) const {
       std::vector<INT>::const_iterator it, it2;
       if( i._parts.size() != this->_parts.size() ) return false;
       for(it=i._parts.begin(), it2=this->_parts.begin();
@@ -27,7 +27,7 @@ namespace CReps {
       return true;
     }
 
-    bool operator<(PolyVarsIndex i) const {
+    bool operator<(PolynomialVarsIndex i) const {
       std::vector<INT>::const_iterator it, it2;
       if( i._parts.size() != this->_parts.size() )
 	return this->_parts.size() < i._parts.size();
@@ -46,9 +46,9 @@ namespace std {
 
   //struct PolyVarsIndexHasher
   template <>
-  struct hash<CReps::PolyVarsIndex>
+  struct hash<CReps::PolynomialVarsIndex>
   {
-    std::size_t operator()(const CReps::PolyVarsIndex& k) const
+    std::size_t operator()(const CReps::PolynomialVarsIndex& k) const
     {
       using std::size_t;
       using std::hash;
@@ -508,32 +508,32 @@ namespace CReps {
 
   
   //Polynomial class
-  class PolyCRep {
+  class PolynomialCRep {
     public:
-    std::unordered_map<PolyVarsIndex, dcomplex> _coeffs;
+    std::unordered_map<PolynomialVarsIndex, dcomplex> _coeffs;
     INT _max_num_vars;
     INT _vindices_per_int;
-    PolyCRep();
-    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int);
-    PolyCRep(const PolyCRep& other);
-    ~PolyCRep();
-    PolyCRep abs();
-    PolyCRep mult(const PolyCRep& other);
-    PolyCRep abs_mult(const PolyCRep& other);
-    void add_inplace(const PolyCRep& other);
-    void add_abs_inplace(const PolyCRep& other);
+    PolynomialCRep();
+    PolynomialCRep(std::unordered_map<PolynomialVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int);
+    PolynomialCRep(const PolynomialCRep& other);
+    ~PolynomialCRep();
+    PolynomialCRep abs();
+    PolynomialCRep mult(const PolynomialCRep& other);
+    PolynomialCRep abs_mult(const PolynomialCRep& other);
+    void add_inplace(const PolynomialCRep& other);
+    void add_abs_inplace(const PolynomialCRep& other);
     void add_scalar_to_all_coeffs_inplace(dcomplex offset);
     void scale(dcomplex scale);
-    PolyVarsIndex vinds_to_int(std::vector<INT> vinds);
-    std::vector<INT> int_to_vinds(PolyVarsIndex indx);
+    PolynomialVarsIndex vinds_to_int(std::vector<INT> vinds);
+    std::vector<INT> int_to_vinds(PolynomialVarsIndex indx);
     private:
-    PolyVarsIndex mult_vinds_ints(PolyVarsIndex i1, PolyVarsIndex i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
+    PolynomialVarsIndex mult_vinds_ints(PolynomialVarsIndex i1, PolynomialVarsIndex i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
   };
   
   //TERMS
   class SVTermCRep {
     public:
-    PolyCRep* _coeff;
+    PolynomialCRep* _coeff;
     double _magnitude;
     double _logmagnitude;
     SVStateCRep* _pre_state;
@@ -542,13 +542,13 @@ namespace CReps {
     SVStateCRep* _post_state;
     SVEffectCRep* _post_effect;
     std::vector<SVOpCRep*> _post_ops;
-    SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       SVStateCRep* pre_state, SVStateCRep* post_state,
 	       std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops);
-    SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
 	       std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops);
-    SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops);
   };
 
@@ -575,7 +575,7 @@ namespace CReps {
 
   class SBTermCRep {
     public:
-    PolyCRep* _coeff;
+    PolynomialCRep* _coeff;
     double _magnitude;
     double _logmagnitude;
     SBStateCRep* _pre_state;
@@ -584,13 +584,13 @@ namespace CReps {
     SBStateCRep* _post_state;
     SBEffectCRep* _post_effect;
     std::vector<SBOpCRep*> _post_ops;
-    SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       SBStateCRep* pre_state, SBStateCRep* post_state,
 	       std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops);
-    SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
 	       std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops);
-    SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+    SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 	       std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops);
   };
 

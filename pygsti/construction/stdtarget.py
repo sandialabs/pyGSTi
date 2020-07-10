@@ -23,17 +23,18 @@ import itertools as _itertools
 from . import stdlists as _stdlists
 from .. import objects as _objs
 from ..tools import mpitools as _mpit
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 
 
-def _get_cachefile_names(std_module, param_type, sim_type, py_version):
+def _get_cachefile_names(std_module, param_type, simulator, py_version):
     """ Get the standard cache file names for a module """
 
     if param_type == "H+S terms":
         cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                   "caches")
 
-        assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
-        termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
+        assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
+        termOrder = 1 if simulator == "auto" else simulator.max_order
         fn = ("cacheHS%d." % termOrder) + std_module.__name__ + "_v%d" % py_version
         fn = _os.path.join(cachePath, fn)
         return fn + "_keys.pkz", fn + "_vals.npz"
@@ -63,7 +64,7 @@ def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=Fa
     mdl_terms = target_model.copy()
     mdl_terms.set_all_parameterizations("H+S terms")  # CPTP terms?
     my_calc_cache = {}
-    mdl_terms.set_simtype("termorder:%d" % term_order, my_calc_cache)
+    mdl_terms.sim = _TermFSim(mode="taylor", max_order=term_order, cache=my_calc_cache)
 
     comm_method = "scheduler"
     if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
@@ -297,7 +298,7 @@ def _load_calccache(key_fn, val_fn):
     return calc_cache
 
 
-def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
+def _copy_target(std_module, param_type, simulator="auto", gscache=None):
     """
     Returns a copy of `std_module._target_model` in the given parameterization.
 
@@ -311,15 +312,15 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
         The gate and SPAM vector parameterization type. See
         :function:`Model.set_all_parameterizations` for all allowed values.
 
-    sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for model calculations (leave as
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The simulator (or type) to be used for model calculations (leave as
         "auto" if you're not sure what this is).
 
     gscache : dict, optional
         A dictionary for maintaining the results of past calls to
-        `_copy_target`.  Keys are `(param_type,sim_type)` tuples and values
+        `_copy_target`.  Keys are `(param_type, simulator)` tuples and values
         are `Model` objects.  If `gscache` contains the requested
-        `param_type` and `sim_type` then a copy of the cached value is
+        `param_type` and `simulator` then a copy of the cached value is
         returned instead of doing any real work.  Furthermore, if `gscache`
         is not None and a new `Model` is constructed, it will be added
         to the given `gscache` for future use.
@@ -328,32 +329,36 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
     -------
     Model
     """
+    #TODO: to get this working we need to be able to hash forward simulators, which should be done
+    # without regard to the parent model (just, e.g. the max_order, etc. of a TermForwardSimulator).
     if gscache is not None:
-        if (param_type, sim_type) in gscache:
-            return gscache[(param_type, sim_type)].copy()
+        if (param_type, simulator) in gscache:
+            return gscache[(param_type, simulator)].copy()
 
     mdl = std_module._target_model.copy()
-    mdl.set_all_parameterizations(param_type)  # automatically sets sim_type
+    mdl.set_all_parameterizations(param_type)  # automatically sets simulator
     if param_type == "H+S terms":
-        assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
-        simt = "termorder:1" if sim_type == "auto" else sim_type  # don't update sim_type b/c gscache
+        assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
+        # Note: don't update `simulator` variable here as it's used below for setting gscache element.
+        sim = _TermFSim(mode="taylor", max_order=1) if simulator == "auto" else simulator
         py_version = 3 if (_sys.version_info > (3, 0)) else 2
         calc_cache = {}  # the default
 
-        key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt, py_version)
+        key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, py_version)
         if _os.path.exists(key_fn) and _os.path.exists(val_fn):
             calc_cache = _load_calccache(key_fn, val_fn)
         elif py_version == 3:  # python3 will try to load python2 files as a fallback
-            key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt, 2)
+            key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, 2)
             if _os.path.exists(key_fn) and _os.path.exists(val_fn):
                 calc_cache = _load_calccache(key_fn, val_fn)
 
-        mdl.set_simtype(simt, calc_cache)
+        sim.set_cache(calc_cache)  # TODO
+        mdl.sim = sim
     else:
-        if sim_type != "auto":
-            mdl.set_simtype(sim_type)
+        if simulator != "auto":
+            mdl.sim = simulator
 
     if gscache is not None:
-        gscache[(param_type, sim_type)] = mdl
+        gscache[(param_type, simulator)] = mdl
 
     return mdl.copy()

@@ -29,17 +29,18 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
 def run_model_test(model_filename_or_object,
-                  data_filename_or_set, target_model_filename_or_object,
-                  prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                   data_filename_or_set, target_model_filename_or_object,
+                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                   germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                  advanced_options=None, comm=None, mem_limit=None,
-                  output_pkl=None, verbosity=2):
+                   advanced_options=None, comm=None, mem_limit=None,
+                   output_pkl=None, verbosity=2):
     """
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
@@ -785,7 +786,7 @@ def _get_gst_builders(advanced_options):
 
 def _get_optimizer(advanced_options, exp_design):
     advanced_options = advanced_options or {}
-    default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
+    default_fditer = 0 if isinstance(exp_design.target_model.sim, _TermFSim) else 1
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}

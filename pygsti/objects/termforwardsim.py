@@ -23,24 +23,26 @@ from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
-from .termevaltree import TermEvalTree as _TermEvalTree
-from .termevaltree import TermPathSet as _TermPathSet
-from .termevaltree import UnsplitTreeTermPathSet as _UnsplitTreeTermPathSet
-from .termevaltree import SplitTreeTermPathSet as _SplitTreeTermPathSet
-from .forwardsim import ForwardSimulator
+from .termlayout import TermCOPALayout as _TermCOPALayout
+from .forwardsim import ForwardSimulator as _ForwardSimulator
+from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .polynomial import Polynomial as _Polynomial
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import replib
 
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
 #import faulthandler
 #faulthandler.enable()
 
-from .opcalc import compact_deriv as _compact_deriv, safe_bulk_eval_compact_polys as _safe_bulk_eval_compact_polys
+from .opcalc import compact_deriv as _compact_deriv, \
+    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
+    bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 _dummy_profiler = _DummyProfiler()
 
 
-class TermForwardSimulator(ForwardSimulator):
+class TermForwardSimulator(_DistributableForwardSimulator):
     """
     A forward-simulation calculator that uses term-path-integration to compute probabilities.
 
@@ -139,12 +141,13 @@ class TermForwardSimulator(ForwardSimulator):
         the dictionary to be filled with values.
     """
 
-    def __init__(self, dim, layer_op_server, paramvec,  # below here are simtype-specific args
-                 mode, max_order, desired_perr=None, allowed_perr=None,
+    def __init__(self, model=None,  # below here are simtype-specific args
+                 mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
         """
         Construct a new TermForwardSimulator object.
+        TODO: docstring
 
         Parameters
         ----------
@@ -244,6 +247,8 @@ class TermForwardSimulator(ForwardSimulator):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
+        super().__init__(model)
+
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
         assert(perr_heuristic in ("none", "scaled", "meanscaled")), "Invalid perr_heuristic: %s" % perr_heuristic
         self.mode = mode
@@ -255,16 +260,9 @@ class TermForwardSimulator(ForwardSimulator):
         self.desired_pathmagnitude_gap = desired_perr
         self.allowed_perr = allowed_perr  # used to abort optimizations when errors in probs are too high
         self.perr_heuristic = perr_heuristic  # method used to compute expected errors in probs (often heuristic)
-        self.min_term_mag = min_term_mag  # minimum abs(term coeff) to consider
+        self.min_term_mag = min_term_mag if (min_term_mag is not None) \
+            else desired_perr / (10 * max_paths_per_outcome)   # minimum abs(term coeff) to consider
         self.max_paths_per_outcome = max_paths_per_outcome
-
-        self.poly_vindices_per_int = _Polynomial._vindices_per_int(len(paramvec))
-        super(TermForwardSimulator, self).__init__(
-            dim, layer_op_server, paramvec)
-
-        if self.evotype not in ("svterm", "cterm"):
-            raise ValueError(("Evolution type %s is incompatbile with "
-                              "term-based calculations" % self.evotype))
 
         #DEBUG - for profiling cython routines TODO REMOVE (& references)
         #print("DEBUG: termfwdsim: ",self.max_order, self.pathmagnitude_gap, self.min_term_mag)
@@ -277,6 +275,15 @@ class TermForwardSimulator(ForwardSimulator):
         self.path_fraction_threshold = path_fraction_threshold if mode == "pruned" else 0.0
         self.oob_check_interval = oob_check_interval if mode == "pruned" else 0
 
+    @_ForwardSimulator.model.setter
+    def model(self, val):
+        _ForwardSimulator.model.fset(self, val)  # set the base class property (self.model)
+
+        #Do some additional initialization
+        if self.model.evotype not in ("svterm", "cterm"):
+            #raise ValueError(f"Evolution type {self.model.evotype} is incompatbile with term-based calculations")
+            raise ValueError("Evolution type %s is incompatbile with term-based calculations" % self.model.evotype)
+
     def copy(self):
         """
         Return a shallow copy of this TermForwardSimulator.
@@ -285,265 +292,185 @@ class TermForwardSimulator(ForwardSimulator):
         -------
         TermForwardSimulator
         """
-        return TermForwardSimulator(self.dim, self.sos, self.paramvec,
-                                    self.max_order, self.cache)
+        return TermForwardSimulator(self.model, self.mode, self.max_order, self.desired_pathmagnitude_gap,
+                                    self.allowed_perr, self.min_term_mag, self.max_paths_per_outcome,
+                                    self.perr_heuristic, self. max_term_stages, self.path_fraction_threshold,
+                                    self.oob_check_interval, self.cache)
 
-    def _rho_e_from_spam_tuple(self, spam_tuple):
-        assert(len(spam_tuple) == 2)
-        if isinstance(spam_tuple[0], _Label):
-            rholabel, elabel = spam_tuple
-            rho = self.sos.prep(rholabel)
-            E = self.sos.effect(elabel)
-        else:
-            # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
-            #  objects: (prepVec, effectVec)
-            rho, E = spam_tuple
-        return rho, E
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
+                      derivative_dimension=None, verbosity=0):
 
-    def _rho_es_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .to_dense() later """
-        rho = self.sos.prep(rholabel)
-        Es = [self.sos.effect(elabel) for elabel in elabels]
-        #No support for "custom" spamlabel stuff here
-        return rho, Es
+        #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the
+        # memory consumption by using more atoms - every processor still needs to hold the entire
+        # output array (until we get gather=False mode) - so for now, just create a layout with
+        # numAtoms == numProcs.
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        comm = resource_alloc.comm
+        mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
+        nprocs = 1 if comm is None else comm.Get_size()
+        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params()
+        C = 1.0 / (1024.0**3)
 
-    def propagate_state(self, rho, factors, adjoint=False):
-        """
-        State propagation by MapOperator objects which have 'acton' methods.
+        if mem_limit is not None:
+            if mem_limit <= 0:
+                raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
+            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
-        This function could easily be overridden to
-        perform some more sophisticated state propagation
-        (i.e. Monte Carlo) in the future.
+        layout = _TermCOPALayout(circuits, self.model, dataset, None, nprocs, (num_params, num_params), printer)
+        self._prepare_layout(layout, resource_alloc)
+        return layout
 
-        Parameters
-        ----------
-        rho : SPAMVec
-            The spam vector representing the initial state.
+    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+        nEls = layout_atom.num_elements
+        if self.mode == "direct":
+            probs = self._prs_directly(layout_atom, resource_alloc)  # could make into a fill_routine? HERE
+        else:  # "pruned" or "taylor order"
+            polys = layout_atom.merged_compact_polys
+            probs = _bulk_eval_compact_polynomials(
+                polys[0], polys[1], self.model.to_vector(), (nEls,))  # shape (nElements,) -- could make this a *fill*
+        _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
-        factors : list or tuple
-            A list or tuple of operator objects possessing `acton` methods.
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        if param_slice is None: param_slice = slice(0, self.model.num_params())
+        if dest_param_slice is None: dest_param_slice = slice(0, _slct.length(param_slice))
 
-        adjoint : bool, optional
-            Whether to use `adjoint_acton` instead of `acton` to propagate `rho`.
+        if self.mode == "direct":
+            dprobs = self._dprs_directly(layout_atom, param_slice, resource_alloc)
+        else:  # "pruned" or "taylor order"
+            # evaluate derivative of polys
+            nEls = layout_atom.num_elements
+            polys = layout_atom.merged_compact_polys
+            wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
+            dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
+            dprobs = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], self.model.to_vector(), (nEls, len(wrtInds)))
+        _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
 
-        Returns
-        -------
-        SPAMVec
-        """
-        if adjoint:
-            for f in factors:
-                rho = f.adjoint_acton(rho)  # LEXICOGRAPHICAL VS MATRIX ORDER
-        else:
-            for f in factors:
-                rho = f.acton(rho)  # LEXICOGRAPHICAL VS MATRIX ORDER
-        return rho
+    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                                param_slice1, param_slice2, resource_alloc):
+        if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params())
+        if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.model.num_params())
+        if dest_param_slice1 is None: dest_param_slice1 = slice(0, _slct.length(param_slice1))
+        if dest_param_slice2 is None: dest_param_slice2 = slice(0, _slct.length(param_slice2))
 
-    def _prs_directly(self, eval_tree, comm=None, mem_limit=None, reset_wts=True, repcache=None):
-        """
-        Compute probabilities of `eval_tree`'s circuits using "direct" mode.
+        if self.mode == "direct":
+            raise NotImplementedError("hprobs does not support direct path-integral evaluation yet")
+            # hprobs = self.hprs_directly(eval_tree, ...)
+        else:  # "pruned" or "taylor order"
+            # evaluate derivative of polys
+            nEls = layout_atom.num_elements
+            polys = layout_atom.merged_compact_polys
+            wrtInds1 = _np.ascontiguousarray(_slct.indices(param_slice1), _np.int64)
+            wrtInds2 = _np.ascontiguousarray(_slct.indices(param_slice2), _np.int64)
+            dpolys = _compact_deriv(polys[0], polys[1], wrtInds1)
+            hpolys = _compact_deriv(dpolys[0], dpolys[1], wrtInds2)
+            hprobs = _bulk_eval_compact_polynomials(
+                hpolys[0], hpolys[1], self.model.to_vector(), (nEls, len(wrtInds1), len(wrtInds2)))
+        _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice1, dest_param_slice2], hprobs)
 
-        Parameters
-        ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+    #DIRECT FNS - keep these around, but they need to be updated (as do routines in fastreplib.pyx)
+    #def _prs_directly(self, layout_atom, resource_alloc): #comm=None, mem_limit=None, reset_wts=True, repcache=None):
+    #    """
+    #    Compute probabilities of `layout`'s circuits using "direct" mode.
+    #
+    #    Parameters
+    #    ----------
+    #    layout : CircuitOutcomeProbabilityArrayLayout
+    #        The layout.
+    #
+    #    comm : mpi4py.MPI.Comm, optional
+    #        When not None, an MPI communicator for distributing the computation
+    #        across multiple processors.  Distribution is performed over
+    #        subtrees of eval_tree (if it is split).
+    #
+    #    mem_limit : int, optional
+    #        A rough memory limit in bytes.
+    #
+    #    reset_wts : bool, optional
+    #        Whether term magnitudes should be updated based on current term coefficients
+    #        (which are based on the current point in model-parameter space) or not.
+    #
+    #    repcache : dict, optional
+    #        A cache of term representations for increased performance.
+    #    """
+    #    prs = _np.empty(layout_atom.num_elements, 'd')
+    #    #print("Computing prs directly for %d circuits" % len(circuit_list))
+    #    if repcache is None: repcache = {}  # new repcache...
+    #    k = 0   # *linear* evaluation order so we know final indices are just running
+    #    for i in eval_tree.evaluation_order():
+    #        circuit = eval_tree[i]
+    #        #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
+    #        assert(self.evotype == "svterm")  # for now, just do SV case
+    #        fastmode = False  # start with slow mode
+    #        wtTol = 0.1
+    #        rholabel = circuit[0]
+    #        opStr = circuit[1:]
+    #        elabels = eval_tree.simplified_circuit_elabels[i]
+    #        prs[k:k + len(elabels)] = replib.SV_prs_directly(self, rholabel, elabels, opStr,
+    #                                                         repcache, comm, mem_limit, fastmode, wtTol, reset_wts,
+    #                                                         self.times_debug)
+    #        k += len(elabels)
+    #    #print("PRS = ",prs)
+    #    return prs
+    #
+    #def _dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
+    #    """
+    #    Compute probability derivatives of `eval_tree`'s circuits using "direct" mode.
+    #
+    #    Parameters
+    #    ----------
+    #    eval_tree : TermEvalTree
+    #        The evaluation tree.
+    #
+    #    wrt_slice : slice
+    #        A slice specifying which model parameters to differentiate with respect to.
+    #
+    #    comm : mpi4py.MPI.Comm, optional
+    #        When not None, an MPI communicator for distributing the computation
+    #        across multiple processors.  Distribution is performed over
+    #        subtrees of eval_tree (if it is split).
+    #
+    #    mem_limit : int, optional
+    #        A rough memory limit in bytes.
+    #
+    #    reset_wts : bool, optional
+    #        Whether term magnitudes should be updated based on current term coefficients
+    #        (which are based on the current point in model-parameter space) or not.
+    #
+    #    repcache : dict, optional
+    #        A cache of term representations for increased performance.
+    #    """
+    #    #Note: Finite difference derivatives are SLOW!
+    #    if wrt_slice is None:
+    #        wrt_indices = list(range(self.Np))
+    #    elif isinstance(wrt_slice, slice):
+    #        wrt_indices = _slct.indices(wrt_slice)
+    #    else:
+    #        wrt_indices = wrt_slice
+    #
+    #    eps = 1e-6  # HARDCODED
+    #    probs = self._prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
+    #    dprobs = _np.empty((eval_tree.num_final_elements(), len(wrt_indices)), 'd')
+    #    orig_vec = self.to_vector().copy()
+    #    iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
+    #    for i in range(self.Np):
+    #        #print("direct dprobs cache %d of %d" % (i,self.Np))
+    #        if i in iParamToFinal:  # LATER: add MPI support?
+    #            iFinal = iParamToFinal[i]
+    #            vec = orig_vec.copy(); vec[i] += eps
+    #            self.from_vector(vec, close=True)
+    #            dprobs[:, iFinal] = (self._prs_directly(eval_tree,
+    #                                                   comm=None,
+    #                                                   mem_limit=None,
+    #                                                   reset_wts=False,
+    #                                                   repcache=repcache) - probs) / eps
+    #    self.from_vector(orig_vec, close=True)
+    #    return dprobs
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
-
-        mem_limit : int, optional
-            A rough memory limit in bytes.
-
-        reset_wts : bool, optional
-            Whether term magnitudes should be updated based on current term coefficients
-            (which are based on the current point in model-parameter space) or not.
-
-        repcache : dict, optional
-            A cache of term representations for increased performance.
-        """
-        prs = _np.empty(eval_tree.num_final_elements(), 'd')
-        #print("Computing prs directly for %d circuits" % len(circuit_list))
-        if repcache is None: repcache = {}  # new repcache...
-        k = 0   # *linear* evaluation order so we know final indices are just running
-        for i in eval_tree.evaluation_order():
-            circuit = eval_tree[i]
-            #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
-            assert(self.evotype == "svterm")  # for now, just do SV case
-            fastmode = False  # start with slow mode
-            wtTol = 0.1
-            rholabel = circuit[0]
-            opStr = circuit[1:]
-            elabels = eval_tree.simplified_circuit_elabels[i]
-            prs[k:k + len(elabels)] = replib.SV_prs_directly(self, rholabel, elabels, opStr,
-                                                             repcache, comm, mem_limit, fastmode, wtTol, reset_wts,
-                                                             self.times_debug)
-            k += len(elabels)
-        #print("PRS = ",prs)
-        return prs
-
-    def _dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
-        """
-        Compute probability derivatives of `eval_tree`'s circuits using "direct" mode.
-
-        Parameters
-        ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
-
-        wrt_slice : slice
-            A slice specifying which model parameters to differentiate with respect to.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
-
-        mem_limit : int, optional
-            A rough memory limit in bytes.
-
-        reset_wts : bool, optional
-            Whether term magnitudes should be updated based on current term coefficients
-            (which are based on the current point in model-parameter space) or not.
-
-        repcache : dict, optional
-            A cache of term representations for increased performance.
-        """
-        #Note: Finite difference derivatives are SLOW!
-        if wrt_slice is None:
-            wrt_indices = list(range(self.Np))
-        elif isinstance(wrt_slice, slice):
-            wrt_indices = _slct.indices(wrt_slice)
-        else:
-            wrt_indices = wrt_slice
-
-        eps = 1e-6  # HARDCODED
-        probs = self._prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
-        dprobs = _np.empty((eval_tree.num_final_elements(), len(wrt_indices)), 'd')
-        orig_vec = self.to_vector().copy()
-        iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
-        for i in range(self.Np):
-            #print("direct dprobs cache %d of %d" % (i,self.Np))
-            if i in iParamToFinal:  # LATER: add MPI support?
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec, close=True)
-                dprobs[:, iFinal] = (self._prs_directly(eval_tree,
-                                                       comm=None,
-                                                       mem_limit=None,
-                                                       reset_wts=False,
-                                                       repcache=repcache) - probs) / eps
-        self.from_vector(orig_vec, close=True)
-        return dprobs
-
-    def _prs_as_pruned_polynomial_reps(self,
-                               threshold,
-                               rholabel,
-                               elabels,
-                               circuit,
-                               repcache,
-                               opcache,
-                               circuitsetup_cache,
-                               comm=None,
-                               mem_limit=None,
-                               mode="normal"):
-        """
-        Computes polynomial-representations of circuit-outcome probabilities.
-
-        In particular, the circuit-outcomes under consideration share the same state
-        preparation and differ only in their POVM effects.  Employs a truncated or pruned
-        path-integral approach, as opposed to just including everything up to some Taylor
-        order as in :method:`_prs_as_polynomials`.
-
-        Parameters
-        ----------
-        threshold : float
-            The path-magnitude threshold.  Only include (sum) paths whose magnitudes are
-            greater than or equal to this threshold.
-
-        rholabel : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        repcache : dict, optional
-            Dictionaries used to cache operator representations  to speed up future
-            calls to this function that would use the same set of operations.
-
-        opcache : dict, optional
-            Dictionary used to cache operators themselves to speed up future calls
-            to this function that would use the same set of operations.
-
-        circuitsetup_cache : dict
-            A cache holding specialized elements that store and eliminate
-            the need to recompute per-circuit information.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        mode : {"normal", "achieved_sopm"}
-            Controls whether polynomials are actually computed (`"normal"`) or whether only the
-            achieved sum-of-path-magnitudes is computed (`"achieved_sopm"`).  The latter mode is
-            useful when a `threshold` is being tested but not committed to, as computing only the
-            achieved sum-of-path-magnitudes is significantly faster.
-
-        Returns
-        -------
-        list
-           A list of :class:`PolynomialRep` objects.  These polynomial represetations are essentially
-           bare-bones polynomials stored efficiently for performance.  (To get a full
-           :class:`Polynomial` object, use :classmethod:`Polynomial.from_rep`.)
-        """
-        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
-        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
-        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-        #    return [ self.cache[ck] for ck in cache_keys ]
-
-        if mode == "normal":
-            fastmode = 1
-        elif mode == "achieved-sopm":
-            fastmode = 2
-        else:
-            raise ValueError("Invalid mode argument: %s" % mode)
-
-        if repcache is None: repcache = {}
-        circuitsetup_cache = {}
-
-        if self.evotype == "svterm":
-            poly_reps = replib.SV_compute_pruned_path_polynomials_given_threshold(
-                threshold, self, rholabel, elabels, circuit, repcache,
-                opcache, circuitsetup_cache, comm, mem_limit, fastmode)
-            # sopm = "sum of path magnitudes"
-        else:  # "cterm" (stabilizer-based term evolution)
-            raise NotImplementedError("Just need to mimic SV version")
-
-        #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
-        if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
-            prps = None
-        else:
-            prps = poly_reps
-
-        return prps
-
-    def compute_pruned_pathmag_threshold(self,
-                                         rholabel,
-                                         elabels,
-                                         circuit,
-                                         repcache,
-                                         opcache,
-                                         circuitsetup_cache,
-                                         comm=None,
-                                         mem_limit=None,
-                                         threshold_guess=None):
+    ## ----- Find a "minimal" path set (i.e. find thresholds for each circuit -----
+    def _compute_pruned_pathmag_threshold(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                          repcache, circuitsetup_cache,
+                                          resource_alloc, threshold_guess=None):
         """
         Finds a good path-magnitude threshold for `circuit` at the current parameter-space point.
 
@@ -559,24 +486,21 @@ class TermForwardSimulator(ForwardSimulator):
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
         repcache : dict, optional
             Dictionaries used to cache operator representations  to speed up future
             calls to this function that would use the same set of operations.
-
-        opcache : dict, optional
-            Dictionary used to cache operators themselves to speed up future calls
-            to this function that would use the same set of operations.
 
         circuitsetup_cache : dict
             A cache holding specialized elements that store and eliminate
             the need to recompute per-circuit information.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         threshold_guess : float, optional
             A guess estimate of a good path-magnitude threshold.
@@ -600,16 +524,16 @@ class TermForwardSimulator(ForwardSimulator):
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
 
-        if repcache is None: repcache = {}
         if threshold_guess is None: threshold_guess = -1.0  # use negatives to signify "None" in C
-        circuitsetup_cache = {}
+        circuitsetup_cache = {}  # DEBUG REMOVE?
+        #repcache = {}  # DEBUG REMOVE
 
-        if self.evotype == "svterm":
+        if self.model.evotype == "svterm":
             npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_find_best_pathmagnitude_threshold(
-                    self, rholabel, elabels, circuit, repcache, opcache, circuitsetup_cache,
-                    comm, mem_limit, self.desired_pathmagnitude_gap, self.min_term_mag,
-                    self.max_paths_per_outcome, threshold_guess
+                    self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                    resource_alloc.comm, resource_alloc.mem_limit, self.desired_pathmagnitude_gap,
+                    self.min_term_mag, self.max_paths_per_outcome, threshold_guess
                 )
             # sopm = "sum of path magnitudes"
         else:  # "cterm" (stabilizer-based term evolution)
@@ -617,8 +541,112 @@ class TermForwardSimulator(ForwardSimulator):
 
         return npaths, threshold, target_sopm, achieved_sopm
 
-    def circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache,
-                                      opcache, threshold):
+    def _find_minimal_paths_set_block(self, layout_atom, resource_alloc, exit_after_this_many_failures=0):
+        """
+        Find the minimal (smallest) path set that achieves the desired accuracy conditions.
+
+        Parameters
+        ----------
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout containing the circuits to find a path-set for.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        exit_after_this_many_failures : int, optional
+           If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
+           This short-circuits doomed attempts to find a good path set so they don't take too long.
+
+        Returns
+        -------
+        TermPathSetAtom
+        """
+        tot_npaths = 0
+        tot_target_sopm = 0
+        tot_achieved_sopm = 0
+
+        #We're only testing how many failures there are, don't update the "locked in" persistent
+        # set of paths given by layout_atom.percircuit_p_polys and layout_atom.pathset.highmag_termrep_cache
+        # - just use temporary caches:
+        repcache = {}
+        circuitsetup_cache = {}
+
+        thresholds = {}
+        num_failed = 0  # number of circuits which fail to achieve the target sopm
+        failed_circuits = []
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
+
+        for sep_povm_circuit in layout_atom.expanded_circuits:
+            rholabel = sep_povm_circuit.circuit_without_povm[0]
+            opstr = sep_povm_circuit.circuit_without_povm[1:]
+            elabels = sep_povm_circuit.full_effect_labels
+
+            npaths, threshold, target_sopm, achieved_sopm = \
+                self._compute_pruned_pathmag_threshold(rholabel, elabels, opstr, polynomial_vindices_per_int,
+                                                       repcache, circuitsetup_cache,
+                                                       resource_alloc, None)  # add guess?
+            thresholds[sep_povm_circuit] = threshold
+
+            if achieved_sopm < target_sopm:
+                num_failed += 1
+                failed_circuits.append(sep_povm_circuit)  # (circuit,npaths, threshold, target_sopm, achieved_sopm))
+                if exit_after_this_many_failures > 0 and num_failed == exit_after_this_many_failures:
+                    return _AtomicTermPathSet(None, None, None, 0, 0, num_failed)
+
+            tot_npaths += npaths
+            tot_target_sopm += target_sopm
+            tot_achieved_sopm += achieved_sopm
+
+        #if comm is None or comm.Get_rank() == 0:
+        comm = resource_alloc.comm
+        rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+        nC = len(layout_atom.expanded_circuits)
+        max_npaths = self.max_paths_per_outcome * layout_atom.num_elements
+        print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
+               "(target=%.4g, #circuits=%d, #failed=%d)") %
+              (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
+        print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
+              (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
+
+        return _AtomicTermPathSet(thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
+
+    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    def find_minimal_paths_set(self, layout, resource_alloc=None, exit_after_this_many_failures=0):
+        """
+        Find a good, i.e. minimial, path set for the current model-parameter space point.
+
+        Parameters
+        ----------
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        exit_after_this_many_failures : int, optional
+           If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
+           This short-circuits doomed attempts to find a good path set so they don't take too long.
+
+        Returns
+        -------
+        TermPathSet
+        """
+        def compute_path_set(layout_atom, sub_resource_alloc):
+            if self.mode == "pruned":
+                return self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
+                                                          exit_after_this_many_failures)
+            else:
+                return _AtomicTermPathSet(None, None, None, 0, 0, 0)
+
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        local_atom_pathsets = self._run_on_atoms(layout, compute_path_set, resource_alloc)
+        return TermPathSet(local_atom_pathsets, resource_alloc.comm)
+
+    ## ----- Get maximum possible sum-of-path-magnitudes and that which was actually achieved -----
+    def _circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache, threshold):
         """
         Computes the achieved and maximum sum-of-path-magnitudes for `circuit`.
 
@@ -637,10 +665,6 @@ class TermForwardSimulator(ForwardSimulator):
             Dictionaries used to cache operator representations  to speed up future
             calls to this function that would use the same set of operations.
 
-        opcache : dict, optional
-            Dictionary used to cache operators themselves to speed up future calls
-            to this function that would use the same set of operations.
-
         threshold : float
             path-magnitude threshold.  Only sum path magnitudes above or equal to this threshold.
 
@@ -652,441 +676,97 @@ class TermForwardSimulator(ForwardSimulator):
         max_sopm : float
             The maximum possible sum-of-path-magnitudes. (summed over all circuit outcomes)
         """
-        if self.evotype == "svterm":
+        if self.model.evotype == "svterm":
             return replib.SV_circuit_achieved_and_max_sopm(
-                self, rholabel, elabels, circuit, repcache, opcache, threshold, self.min_term_mag)
+                self, rholabel, elabels, circuit, repcache, threshold, self.min_term_mag)
         else:
             raise NotImplementedError("TODO mimic SV case")
 
-    # LATER? , reset_wts=True, repcache=None):
-    def _prs_as_polynomials(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
+    def _achieved_and_max_sopm_block(self, layout_atom):
         """
-        Computes polynomial-representations of circuit-outcome probabilities.
+        Compute the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
 
-        In particular, the circuit-outcomes under consideration share the same state
-        preparation and differ only in their POVM effects.
+        This gives a sense of how accurately the current path set is able
+        to compute probabilities.
 
         Parameters
         ----------
-        rholabel : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        Returns
-        -------
-        list
-            A list of Polynomial objects.
-        """
-        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
-        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
-        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-        #    return [ self.cache[ck] for ck in cache_keys ]
-
-        fastmode = True
-        if self.evotype == "svterm":
-            poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
-        else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, comm, mem_limit, fastmode)
-        prps = [_Polynomial.from_rep(rep) for rep in poly_reps]
-
-        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
-        #if self.cache is not None:
-        #    for ck,poly in zip(cache_keys,prps):
-        #        self.cache[ck] = poly
-        return prps
-
-    def _pr_as_polynomial(self, spam_tuple, circuit, comm=None, mem_limit=None):
-        """
-        Compute probability of a single "outcome" (spam-tuple) for a single circuit.
-
-        Parameters
-        ----------
-        spam_tuple : (rho_label, simplified_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        Returns
-        -------
-        Polynomial
-        """
-        return self._prs_as_polynomials(spam_tuple[0], [spam_tuple[1]], circuit,
-                                 comm, mem_limit)[0]
-
-    def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, comm=None, mem_limit=None):
-        """
-        Compute compact-form polynomials of the outcome probabilities for `circuit`.
-
-        Note that these outcomes are defined as having the same state preparation
-        and different POVM effects.
-
-        Parameters
-        ----------
-        rholabel : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        Returns
-        -------
-        list
-            A list of Polynomial objects.
-        """
-        cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
-        if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-            return [self.cache[ck] for ck in cache_keys]
-
-        raw_prps = self._prs_as_polynomials(rholabel, elabels, circuit, comm, mem_limit)
-        prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
-        # create compact polys w/*complex* coeffs always since we're likely
-        # going to concatenate a bunch of them.
-
-        if self.cache is not None:
-            for ck, poly in zip(cache_keys, prps):
-                self.cache[ck] = poly
-        return prps
-
-    def _prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
-        """
-        Compute the outcome probabilities for `circuit`.
-
-        Note that these outcomes are defined as having the same state preparation
-        and different POVM effects.
-
-        Parameters
-        ----------
-        rholabel : Label
-            The state preparation label.
-
-        elabels : list
-            A list of :class:`Label` objects giving the *simplified* effect labels.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        clip_to : 2-tuple
-            (min,max) to clip returned probability to if not None.
-            Only relevant when pr_mx_to_fill is not None.
-
-        use_scaling : bool, optional
-            Unused.  Present to match function signature of other calculators.
-
-        time : float, optional
-            The *start* time at which `circuit` is evaluated.
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout specifying the circuits and outcomes.
 
         Returns
         -------
         numpy.ndarray
-            An array of floating-point probabilities, corresponding to
-            the elements of `elabels`.
         """
-        assert(time is None), "TermForwardSimulator currently doesn't support time-dependent circuits"
-        cpolys = self._prs_as_compact_polynomials(rholabel, elabels, circuit)
-        vals = [_safe_bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
-                for cpoly in cpolys]
-        ps = _np.array([_np.real_if_close(val) for val in vals])
-        if clip_to is not None: ps = _np.clip(ps, clip_to[0], clip_to[1])
-        return ps
+        achieved_sopm = []
+        max_sopm = []
 
-    def _dpr(self, spam_tuple, circuit, return_pr, clip_to):
+        for sep_povm_circuit in layout_atom.expanded_circuits:
+            # must have selected a set of paths for this to be populated!
+            current_threshold, _ = layout_atom.percircuit_p_polys[sep_povm_circuit]
+
+            rholabel = sep_povm_circuit.circuit_without_povm[0]
+            opstr = sep_povm_circuit.circuit_without_povm[1:]
+            elabels = sep_povm_circuit.full_effect_labels
+
+            achieved, maxx = self._circuit_achieved_and_max_sopm(rholabel, elabels, opstr,
+                                                                 layout_atom.pathset.highmag_termrep_cache,
+                                                                 current_threshold)
+            achieved_sopm.extend(list(achieved))
+            max_sopm.extend(list(maxx))
+
+        assert(len(achieved_sopm) == len(max_sopm) == layout_atom.num_elements)
+        return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
+
+    def bulk_achieved_and_max_sopm(self, layout, resource_alloc=None):
         """
-        Compute the outcome probability derivatives for `circuit`.
+        Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
 
-        Note that these outcomes are defined as having the same state preparation
-        and different POVM effects.  The derivatives are computed as a 1 x M numpy
-        array, where M is the number of model parameters.
+        These values are computed for the current set of paths contained in `eval_tree`.
 
         Parameters
         ----------
-        spam_tuple : (rho_label, simplified_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
 
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        return_pr : bool
-            when set to True, additionally return the probability itself.
-
-        clip_to : 2-tuple
-            (min,max) to clip returned probability to if not None.
-            Only relevant when pr_mx_to_fill is not None.
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         Returns
         -------
-        derivative : numpy array
-            a 1 x M numpy array of derivatives of the probability w.r.t.
-            each model parameter (M is the length of the vectorized model).
+        max_sopm : numpy.ndarray
+            An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
 
-        probability : float
-            only returned if return_pr == True.
+        achieved_sopm : numpy.ndarray
+            An array containing the per-circuit-outcome achieved sum-of-path-magnitudes.
         """
-        dp = _np.empty((1, self.Np), 'd')
+        assert(self.mode == "pruned")
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        max_sopm = _np.empty(layout.num_elements, 'd')
+        achieved_sopm = _np.empty(layout.num_elements, 'd')
 
-        poly = self._pr_as_polynomial(spam_tuple, circuit, comm=None, mem_limit=None)
-        for i in range(self.Np):
-            dpoly_di = poly.deriv(i)
-            dp[0, i] = dpoly_di.evaluate(self.paramvec)
+        def compute_sopm(layout_atom, sub_resource_alloc):
+            elInds = layout_atom.element_slice
+            replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            maxx, achieved = self._achieved_and_max_sopm_block(layout_atom)
+            _fas(max_sopm, [elInds], maxx)
+            _fas(achieved_sopm, [elInds], achieved)
 
-        if return_pr:
-            p = poly.evaluate(self.paramvec)
-            if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
-            return dp, p
-        else: return dp
+        atomOwners = self._compute_on_atoms(layout, compute_sopm, resource_alloc)
 
-    def _hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
+        #collect/gather results
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, max_sopm, [], 0, resource_alloc.comm)
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, achieved_sopm, [], 0, resource_alloc.comm)
+
+        return max_sopm, achieved_sopm
+
+    ## ----- A couple more bulk_* convenience functions that wrap bulk_achieved_and_max_sopm -----
+    def bulk_test_if_paths_are_sufficient(self, layout, probs, resource_alloc=None, verbosity=0):
         """
-        Compute the outcome probability second derivatives for `circuit`.
-
-        Note that these outcomes are defined as having the same state preparation
-        and different POVM effects.  The derivatives are computed as a 1 x M x M array,
-        where M is the number of model parameters.
-
-        Parameters
-        ----------
-        spam_tuple : (rho_label, simplified_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
-
-        circuit : Circuit or tuple
-            A tuple-like object of *simplified* gates (e.g. may include
-            instrument elements like 'Imyinst_0')
-
-        return_pr : bool
-            when set to True, additionally return the probability itself.
-
-        return_deriv : bool
-            when set to True, additionally return the derivative of the
-            probability.
-
-        clip_to : 2-tuple
-            (min,max) to clip returned probability to if not None.
-            Only relevant when pr_mx_to_fill is not None.
-
-        Returns
-        -------
-        hessian : numpy array
-            a 1 x M x M array, where M is the number of model parameters.
-            hessian[0,j,k] is the derivative of the probability w.r.t. the
-            k-th then the j-th model parameter.
-
-        derivative : numpy array
-            only returned if return_deriv == True. A 1 x M numpy array of
-            derivatives of the probability w.r.t. each model parameter.
-
-        probability : float
-            only returned if return_pr == True.
-        """
-        hp = _np.empty((1, self.Np, self.Np), 'd')
-        if return_deriv:
-            dp = _np.empty((1, self.Np), 'd')
-
-        poly = self._pr_as_polynomial(spam_tuple, circuit, comm=None, mem_limit=None)
-        for j in range(self.Np):
-            dpoly_dj = poly.deriv(j)
-            if return_deriv:
-                dp[0, j] = dpoly_dj.evaluate(self.paramvec)
-
-            for i in range(self.Np):
-                dpoly_didj = dpoly_dj.deriv(i)
-                hp[0, i, j] = dpoly_didj.evaluate(self.paramvec)
-
-        if return_pr:
-            p = poly.evaluate(self.paramvec)
-            if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
-
-            if return_deriv: return hp, dp, p
-            else: return hp, p
-        else:
-            if return_deriv: return hp, dp
-            else: return hp
-
-    def default_distribute_method(self):
-        """
-        Return the preferred MPI distribution mode for this calculator.
-
-        Returns
-        -------
-        str
-        """
-        return "circuits"
-
-    def create_evaltree(self, simplified_circuits, num_subtree_comms):
-        """
-        Constructs an EvalTree object appropriate for this calculator.
-
-        Parameters
-        ----------
-        simplified_circuits : list
-            A list of Circuits or tuples of operation labels which specify
-            the circuits to create an evaluation tree out of
-            (most likely because you want to computed their probabilites).
-            These are a "simplified" circuits in that they should only contain
-            "deterministic" elements (no POVM or Instrument labels).
-
-        num_subtree_comms : int
-            The number of processor groups that will be assigned to
-            subtrees of the created tree.  This aids in the tree construction
-            by giving the tree information it needs to distribute itself
-            among the available processors.
-
-        Returns
-        -------
-        TermEvalTree
-        """
-        evTree = _TermEvalTree()
-        evTree.initialize(simplified_circuits, num_subtree_comms)
-        return evTree
-
-    def estimate_memory_usage(self, subcalls, cache_size, num_subtrees,
-                           num_subtree_proc_groups, num_param1_groups,
-                           num_param2_groups, num_final_strs):
-        """
-        Estimate the memory required by a given set of subcalls to computation functions.
-
-        Parameters
-        ----------
-        subcalls : list of strs
-            A list of the names of the subcalls to estimate memory usage for.
-
-        cache_size : int
-            The size of the evaluation tree that will be passed to the
-            functions named by `subcalls`.
-
-        num_subtrees : int
-            The number of subtrees to split the full evaluation tree into.
-
-        num_subtree_proc_groups : int
-            The number of processor groups used to (in parallel) iterate through
-            the subtrees.  It can often be useful to have fewer processor groups
-            then subtrees (even == 1) in order to perform the parallelization
-            over the parameter groups.
-
-        num_param1_groups : int
-            The number of groups to divide the first-derivative parameters into.
-            Computation will be automatically parallelized over these groups.
-
-        num_param2_groups : int
-            The number of groups to divide the second-derivative parameters into.
-            Computation will be automatically parallelized over these groups.
-
-        num_final_strs : int
-            The number of final strings (may be less than or greater than
-            `cache_size`) the tree will hold.
-
-        Returns
-        -------
-        int
-            The memory estimate in bytes.
-        """
-        np1, np2 = num_param1_groups, num_param2_groups
-        FLOATSIZE = 8  # in bytes: TODO: a better way
-
-        wrtLen1 = (self.Np + np1 - 1) // np1  # ceiling(num_params / np1)
-        wrtLen2 = (self.Np + np2 - 1) // np2  # ceiling(num_params / np2)
-
-        mem = 0
-        for fnName in subcalls:
-            if fnName == "bulk_fill_probs":
-                mem += num_final_strs  # pr cache final (* #elabels!)
-
-            elif fnName == "bulk_fill_dprobs":
-                mem += num_final_strs * wrtLen1  # dpr cache final (* #elabels!)
-
-            elif fnName == "bulk_fill_hprobs":
-                mem += num_final_strs * wrtLen1 * wrtLen2  # hpr cache final (* #elabels!)
-
-            else:
-                raise ValueError("Unknown subcall name: %s" % fnName)
-
-        return mem * FLOATSIZE
-
-    def _fill_probs_block(self, mx_to_fill, dest_indices, eval_tree, comm=None, mem_limit=None):
-        nEls = eval_tree.num_final_elements()
-        if self.mode == "direct":
-            probs = self._prs_directly(eval_tree, comm, mem_limit)  # could make into a fill_routine?
-        else:  # "pruned" or "taylor order"
-            polys = eval_tree.merged_compact_polys
-            probs = _safe_bulk_eval_compact_polys(
-                polys[0], polys[1], self.paramvec, (nEls,))  # shape (nElements,) -- could make this a *fill*
-        _fas(mx_to_fill, [dest_indices], probs)
-
-    def _fill_dprobs_block(self, mx_to_fill, dest_indices, dest_param_indices, eval_tree, param_slice, comm=None,
-                           mem_limit=None):
-        if param_slice is None: param_slice = slice(0, self.Np)
-        if dest_param_indices is None: dest_param_indices = slice(0, _slct.length(param_slice))
-
-        if self.mode == "direct":
-            dprobs = self._dprs_directly(eval_tree, param_slice, comm, mem_limit)
-        else:  # "pruned" or "taylor order"
-            # evaluate derivative of polys
-            nEls = eval_tree.num_final_elements()
-            polys = eval_tree.merged_compact_polys
-            wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
-            dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
-            dprobs = _safe_bulk_eval_compact_polys(dpolys[0], dpolys[1], self.paramvec, (nEls, len(wrtInds)))
-        _fas(mx_to_fill, [dest_indices, dest_param_indices], dprobs)
-
-    def _fill_hprobs_block(self, mx_to_fill, dest_indices, dest_param_indices1,
-                           dest_param_indices2, eval_tree, param_slice1, param_slice2,
-                           comm=None, mem_limit=None):
-        if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.Np)
-        if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.Np)
-        if dest_param_indices1 is None: dest_param_indices1 = slice(0, _slct.length(param_slice1))
-        if dest_param_indices2 is None: dest_param_indices2 = slice(0, _slct.length(param_slice2))
-
-        if self.mode == "direct":
-            raise NotImplementedError("hprobs does not support direct path-integral evaluation yet")
-            # hprobs = self.hprs_directly(eval_tree, ...)
-        else:  # "pruned" or "taylor order"
-            # evaluate derivative of polys
-            nEls = eval_tree.num_final_elements()
-            polys = eval_tree.merged_compact_polys
-            wrtInds1 = _np.ascontiguousarray(_slct.indices(param_slice1), _np.int64)
-            wrtInds2 = _np.ascontiguousarray(_slct.indices(param_slice2), _np.int64)
-            dpolys = _compact_deriv(polys[0], polys[1], wrtInds1)
-            hpolys = _compact_deriv(dpolys[0], dpolys[1], wrtInds2)
-            hprobs = _safe_bulk_eval_compact_polys(
-                hpolys[0], hpolys[1], self.paramvec, (nEls, len(wrtInds1), len(wrtInds2)))
-        _fas(mx_to_fill, [dest_indices, dest_param_indices1, dest_param_indices2], hprobs)
-
-    def bulk_test_if_paths_are_sufficient(self, eval_tree, probs, comm, mem_limit, printer):
-        """
-        Determine whether `eval_tree`'s current path set (perhaps heuristically) achieves the desired accuracy.
+        Determine whether `layout`'s current path set (perhaps heuristically) achieves the desired accuracy.
 
         The current path set is determined by the current (per-circuti) path-magnitude thresholds
         (stored in the evaluation tree) and the current parameter-space point (also reflected in
@@ -1094,21 +774,21 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
 
         probs : numpy.ndarray
-            The element array of (approximate) circuit outcome probabilities.
+            The element array of (approximate) circuit outcome probabilities.  This is
+            needed because some heuristics take into account an probability's value when
+            computing an acceptable path-magnitude gap.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        resource_alloc : ResourceAllocation, optional
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        printer : VerbosityPrinter
-            An printer object for displaying messages.
+        verbosity : int or VerbosityPrinter, optional
+            An integer verbosity level or printer object for displaying messages.
 
         Returns
         -------
@@ -1117,9 +797,12 @@ class TermForwardSimulator(ForwardSimulator):
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc.comm)
+
         # # done in bulk_achieved_and_max_sopm
         # replib.SV_refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
-        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(eval_tree, comm, mem_limit)
+        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(layout, resource_alloc)
         # a strict bound on the error in each outcome probability, but often pessimistic
         gaps = max_sopm - achieved_sopm
         assert(_np.all(gaps >= 0))
@@ -1149,61 +832,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         return True
 
-    def bulk_achieved_and_max_sopm(self, eval_tree, comm=None, mem_limit=None):
-        """
-        Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
-
-        These values are computed for the current set of paths contained in `eval_tree`.
-
-        Parameters
-        ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
-
-        Returns
-        -------
-        max_sopm : numpy.ndarray
-            An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
-
-        achieved_sopm : numpy.ndarray
-            An array containing the per-circuit-outcome achieved sum-of-path-magnitudes.
-        """
-
-        assert(self.mode == "pruned")
-        max_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
-        achieved_sopm = _np.empty(eval_tree.num_final_elements(), 'd')
-
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
-
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset().highmag_termrep_cache, self.to_vector())
-            maxx, achieved = evalSubTree.achieved_and_max_sopm(self)
-
-            _fas(max_sopm, [felInds], maxx)
-            _fas(achieved_sopm, [felInds], achieved)
-
-        #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             max_sopm, [], 0, comm)
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             achieved_sopm, [], 0, comm)
-
-        return max_sopm, achieved_sopm
-
-    def bulk_sopm_gaps(self, eval_tree, comm=None, mem_limit=None):
+    def bulk_sopm_gaps(self, layout, resource_alloc=None):
         """
         Compute an element array sum-of-path-magnitude gaps (the difference between maximum and achieved).
 
@@ -1211,44 +840,128 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
+        resource_alloc : ResourceAllocation, optional
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         Returns
         -------
         numpy.ndarray
             An array containing the per-circuit-outcome sum-of-path-magnitude gaps.
         """
-        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(eval_tree, comm, mem_limit)
+        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(layout, resource_alloc)
         gaps = max_sopm - achieved_sopm
         # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
         assert(_np.all(gaps >= -1e-6))
-        gaps = _np.clip(gaps, 0, None)
+        return _np.clip(gaps, 0, None)
 
-        return gaps
+    ## ----- Jacobian of gaps (don't need jacobian of achieved and max SOPM separately) -----
+    def _achieved_and_max_sopm_jacobian_block(self, layout_atom):
+        """
+        Compute the jacobian of the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
 
-    def bulk_sopm_gaps_jacobian(self, eval_tree, comm=None, mem_limit=None):
+        Parameters
+        ----------
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout specifying the circuits and outcomes.
+
+        Returns
+        -------
+        achieved_sopm_jacobian: numpy.ndarray
+            The jacobian of the achieved sum-of-path-magnitudes.
+
+        max_sopm_jacobian: numpy.ndarray
+            The jacobian of the maximum possible sum-of-path-magnitudes.
+        """
+        paramvec = self.model.to_vector()
+        Np = len(paramvec)
+
+        nEls = layout_atom.num_elements
+        polys = layout_atom.merged_achievedsopm_compact_polys
+        dpolys = _compact_deriv(polys[0], polys[1], _np.arange(Np))
+        d_achieved_mags = _bulk_eval_compact_polynomials_complex(
+            dpolys[0], dpolys[1], _np.abs(paramvec), (nEls, Np))
+        assert(_np.linalg.norm(_np.imag(d_achieved_mags)) < 1e-8)
+        d_achieved_mags = d_achieved_mags.real
+        d_achieved_mags[:, (paramvec < 0)] *= -1
+
+        d_max_sopms = _np.empty((nEls, Np), 'd')
+        k = 0  # current element position for loop below
+        
+        for sep_povm_circuit in layout_atom.expanded_circuits:
+            rholabel = sep_povm_circuit.circuit_without_povm[0]
+            opstr = sep_povm_circuit.circuit_without_povm[1:]
+            elabels = sep_povm_circuit.full_effect_labels
+
+            #Get MAX-SOPM for circuit outcomes and thereby the SOPM gap (via MAX - achieved)
+            # Here we take d(MAX) (above merged_achievedsopm_compact_polys give d(achieved)).  Since each
+            # MAX-SOPM value is a product of max term magnitudes, to get deriv we use the chain rule:
+            partial_ops = [self.model.circuit_layer_operator(rholabel, 'prep')]
+            for glbl in opstr:
+                partial_ops.append(self.model.circuit_layer_operator(glbl, 'op'))
+            Eops = [self.model.circuit_layer_operator(elbl, 'povm') for elbl in elabels]
+            partial_op_maxmag_values = [op.total_term_magnitude() for op in partial_ops]
+            Eop_maxmag_values = [Eop.total_term_magnitude() for Eop in Eops]
+            maxmag_partial_product = _np.product(partial_op_maxmag_values)
+            maxmag_products = [maxmag_partial_product * Eop_val for Eop_val in Eop_maxmag_values]
+
+            deriv = _np.zeros((len(elabels), Np), 'd')
+            for i in range(len(partial_ops)):  # replace i-th element of product with deriv
+                dop_local = partial_ops[i].total_term_magnitude_deriv()
+                dop_global = _np.zeros(Np, 'd')
+                dop_global[partial_ops[i].gpindices] = dop_local
+                dop_global /= partial_op_maxmag_values[i]
+
+                for j in range(len(elabels)):
+                    deriv[j, :] += dop_global * maxmag_products[j]
+
+            for j in range(len(elabels)):  # replace final element with appropriate derivative
+                dop_local = Eops[j].total_term_magnitude_deriv()
+                dop_global = _np.zeros(Np, 'd')
+                dop_global[Eops[j].gpindices] = dop_local
+                dop_global /= Eop_maxmag_values[j]
+                deriv[j, :] += dop_global * maxmag_products[j]
+
+            d_max_sopms[k:k + len(elabels), :] = deriv
+            k += len(elabels)
+
+        return d_achieved_mags, d_max_sopms
+
+    def _sopm_gaps_jacobian_block(self, layout_atom):
+        """
+        Compute the jacobian of the (maximum-possible - achieved) sum-of-path-magnitudes for a single layout atom.
+
+        Parameters
+        ----------
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout.
+
+        Returns
+        -------
+        numpy.ndarray
+            The jacobian of the sum-of-path-magnitudes gap.
+        """
+        d_achieved_mags, d_max_sopms = self._achieved_and_max_sopm_jacobian(layout_atom)
+        dgaps = d_max_sopms - d_achieved_mags
+        return dgaps
+
+    def bulk_sopm_gaps_jacobian(self, layout, resource_alloc=None):
         """
         Compute the jacobian of the the output of :method:`bulk_sopm_gaps`.
 
         Parameters
         ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
+        resource_alloc : ResourceAllocation, optional
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         Returns
         -------
@@ -1257,132 +970,351 @@ class TermForwardSimulator(ForwardSimulator):
             of the sum-of-path-magnitude gaps.
         """
         assert(self.mode == "pruned")
-        termgap_penalty_jac = _np.empty((eval_tree.num_final_elements(), self.Np), 'd')
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
+        termgap_penalty_jac = _np.empty((layout.num_elements, self.model.num_params()), 'd')
 
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
+        def compute_gap_jac(layout_atom, sub_resource_alloc):
+            elInds = layout_atom.element_slice
+            replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            gap_jacs = self._sopm_gaps_jacobian_block(layout_atom)
+            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
+            _fas(termgap_penalty_jac, [elInds], gap_jacs)
 
-            replib.SV_refresh_magnitudes_in_repcache(evalSubTree.pathset().highmag_termrep_cache, self.to_vector())
-            #gaps = evalSubTree.get_sopm_gaps_using_current_paths(self)
-            gap_jacs = evalSubTree.sopm_gaps_jacobian(self)
-            # # set deriv to zero where gap would be clipped to 0
-            #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0
-            _fas(termgap_penalty_jac, [felInds], gap_jacs)
+        atomOwners = self._compute_on_atoms(layout, compute_gap_jac, resource_alloc)
 
         #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             termgap_penalty_jac, [], 0, comm)
+        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, termgap_penalty_jac, [], 0, resource_alloc.comm)
 
         return termgap_penalty_jac
 
-    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def find_minimal_paths_set(self, eval_tree, comm=None, mem_limit=None, exit_after_this_many_failures=0):
+    ## ----- Select, or "lock in" a path set, which includes preparing to compute approx. probs using these paths -----
+    def _prs_as_pruned_polynomial_reps(self,
+                                       threshold,
+                                       rholabel,
+                                       elabels,
+                                       circuit,
+                                       polynomial_vindices_per_int,
+                                       repcache,
+                                       circuitsetup_cache,
+                                       resource_alloc,
+                                       mode="normal"):
         """
-        Find a good, i.e. minimial, path set for the current model-parameter space point.
+        Computes polynomial-representations of circuit-outcome probabilities.
+
+        In particular, the circuit-outcomes under consideration share the same state
+        preparation and differ only in their POVM effects.  Employs a truncated or pruned
+        path-integral approach, as opposed to just including everything up to some Taylor
+        order as in :method:`_prs_as_polynomials`.
 
         Parameters
         ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+        threshold : float
+            The path-magnitude threshold.  Only include (sum) paths whose magnitudes are
+            greater than or equal to this threshold.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        rholabel : Label
+            The state preparation label.
 
-        mem_limit : int, optional
-            A memory limit in bytes to impose on the computation.
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
 
-        exit_after_this_many_failures : int, optional
-           If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
-           This short-circuits doomed attempts to find a good path set so they don't take too long.
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
+        repcache : dict, optional
+            Dictionaries used to cache operator representations  to speed up future
+            calls to this function that would use the same set of operations.
+
+        circuitsetup_cache : dict
+            A cache holding specialized elements that store and eliminate
+            the need to recompute per-circuit information.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        mode : {"normal", "achieved_sopm"}
+            Controls whether polynomials are actually computed (`"normal"`) or whether only the
+            achieved sum-of-path-magnitudes is computed (`"achieved_sopm"`).  The latter mode is
+            useful when a `threshold` is being tested but not committed to, as computing only the
+            achieved sum-of-path-magnitudes is significantly faster.
 
         Returns
         -------
-        SplitTreeTermPathSet
+        list
+           A list of :class:`PolynomialRep` objects.  These polynomial represetations are essentially
+           bare-bones polynomials stored efficiently for performance.  (To get a full
+           :class:`Polynomial` object, use :classmethod:`Polynomial.from_rep`.)
         """
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-        local_subtree_pathsets = []  # call this list of TermPathSets for each subtree a "pathset" too
+        #Cache hold *compact* polys now: see _prs_as_compact_polynomials
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
 
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            if self.mode == "pruned":
-                subPathSet = evalSubTree.find_minimal_paths_set(self, mySubComm, mem_limit,
-                                                                exit_after_this_many_failures)
-            else:
-                subPathSet = _UnsplitTreeTermPathSet(evalSubTree, None, None, None, 0, 0, 0)
-            local_subtree_pathsets.append(subPathSet)
+        if mode == "normal":
+            fastmode = 1
+        elif mode == "achieved-sopm":
+            fastmode = 2
+        else:
+            raise ValueError("Invalid mode argument: %s" % mode)
 
-        return _SplitTreeTermPathSet(eval_tree, local_subtree_pathsets, comm)
+        if repcache is None: repcache = {}
+        circuitsetup_cache = {}
 
-    # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def select_paths_set(self, path_set, comm=None, mem_limit=None):
+        if self.model.evotype == "svterm":
+            poly_reps = replib.SV_compute_pruned_path_polynomials_given_threshold(
+                threshold, self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
+                circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+            # sopm = "sum of path magnitudes"
+        else:  # "cterm" (stabilizer-based term evolution)
+            raise NotImplementedError("Just need to mimic SV version")
+
+        #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
+        if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
+            prps = None
+        else:
+            prps = poly_reps
+
+        return prps
+
+    def _select_paths_set_block(self, layout_atom, pathset, resource_alloc):
         """
-        Selects (makes "current") a path set *and* computes polynomials the new set.
+        Selects (makes "current") a path set *and* computes polynomials the new set for a single layout atom.
+
+        This routine updates the information held in `layout_atom`. After this call,
+        `layout_atom.pathset == pathset`.
 
         Parameters
         ----------
-        path_set : PathSet
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout whose path-set is being set.
+
+        pathset : PathSet
             The path set to select.
 
-        comm : mpy4py.MPI.Comm
-            An MPI communicator for dividing the compuational task.
-
-        mem_limit : int
-            Rough memory limit (per processor) in bytes.
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         Returns
         -------
         None
         """
-        evalTree = path_set.tree
-        subtrees = evalTree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
-        for iSubTree, subtree_pathset in zip(mySubTreeIndices, path_set.local_subtree_pathsets):
-            evalSubTree = subtrees[iSubTree]
+        #TODO: update this outdated docstring
+        # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
+        # means we're going to re-compute the high-magnitude terms for each operation (in
+        # self.pathset.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
+        # for each circuit (using the computed high-magnitude terms).  This all occurs for
+        # the particular current value of the parameter vector (found via calc.to_vector());
+        # these values determine what is a "high-magnitude" term and the path magnitudes that are
+        # summed to get the overall sum-of-path-magnitudes for a given circuit outcome.
 
-            if self.mode == "pruned":
-                evalSubTree.select_paths_set(self, subtree_pathset, mySubComm, mem_limit)
-                #This computes (&caches) polys for this path set as well
-            else:
-                evalSubTree.cache_p_polynomials(self, mySubComm)
+        layout_atom.pathset = pathset
+        layout_atom.percircuit_p_polys = {}
+        repcache = layout_atom.pathset.highmag_termrep_cache
+        circuitsetup_cache = layout_atom.pathset.circuitsetup_cache
+        thresholds = layout_atom.pathset.thresholds
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
 
-    def get_current_pathset(self, eval_tree, comm):
+        all_compact_polys = []  # holds one compact polynomial per final *element*
+
+        for sep_povm_circuit in layout_atom.expanded_circuits:
+            #print("Computing pruned-path polynomial for ", sep_povm_circuit)
+            rholabel = sep_povm_circuit.circuit_without_povm[0]
+            opstr = sep_povm_circuit.circuit_without_povm[1:]
+            elabels = sep_povm_circuit.full_effect_labels
+            threshold = thresholds[sep_povm_circuit]
+
+            raw_polyreps = self._prs_as_pruned_polynomial_reps(
+                threshold, rholabel, elabels, opstr, polynomial_vindices_per_int,
+                repcache, circuitsetup_cache, resource_alloc)
+
+            compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
+            layout_atom.percircuit_p_polys[sep_povm_circuit] = (threshold, compact_polys)
+            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+
+        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+        layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
+        return
+
+    def _prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                            resource_alloc, fastmode=True):
         """
-        Returns the current path set (held in eval_tree).
+        Computes polynomial-representations of circuit-outcome probabilities.
 
-        Note that this works even when `eval_tree` is split,
-        and always returns a :class:`SplitTreeTermPathSet`.
+        In particular, the circuit-outcomes under consideration share the same state
+        preparation and differ only in their POVM effects.
 
         Parameters
         ----------
-        eval_tree : TermEvalTree
-            The evaluation tree.
+        rholabel : Label
+            The state preparation label.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
+
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        fastmode : bool, optional
+            Whether to use a faster and slightly more memory-hungry implementation for
+            computing the polynomial terms.  (Usually best to leave this as `True`).
 
         Returns
         -------
-        SplitTreeTermPathSet or None
+        list
+            A list of Polynomial objects.
         """
-        if self.mode == "pruned":
-            subtrees = eval_tree.sub_trees()
-            mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-            local_subtree_pathsets = [subtrees[iSubTree].pathset() for iSubTree in mySubTreeIndices]
-            return _SplitTreeTermPathSet(eval_tree, local_subtree_pathsets, comm)
-        else:
-            return None
+        if self.model.evotype == "svterm":
+            poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                               resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+        else:  # "cterm" (stabilizer-based term evolution)
+            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                                     resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+        return [_Polynomial.from_rep(rep) for rep in poly_reps]
+
+    def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc):
+        """
+        Compute compact-form polynomials of the outcome probabilities for `circuit`.
+
+        Note that these outcomes are defined as having the same state preparation
+        and different POVM effects.
+
+        Parameters
+        ----------
+        rholabel : Label
+            The state preparation label.
+
+        elabels : list
+            A list of :class:`Label` objects giving the *simplified* effect labels.
+
+        circuit : Circuit or tuple
+            A tuple-like object of *simplified* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        list
+            A list of Polynomial objects.
+        """
+        cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+            return [self.cache[ck] for ck in cache_keys]
+
+        raw_prps = self._prs_as_polynomials(rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc)
+        prps = [poly.compact(complex_coeff_tape=True) for poly in raw_prps]
+        # create compact polys w/*complex* coeffs always since we're likely
+        # going to concatenate a bunch of them.
+
+        if self.cache is not None:
+            for ck, poly in zip(cache_keys, prps):
+                self.cache[ck] = poly
+        return prps
+
+    def _cache_p_polynomials(self, layout_atom, resource_alloc, polynomial_vindices_per_int):
+        """
+        Compute and cache the compact-form polynomials that evaluate the probabilities of a single layout atom.
+
+        These polynomials corresponding to all this tree's operation sequences sandwiched
+        between each state preparation and effect.  The result is cached to speed
+        up subsequent calls.
+
+        Parameters
+        ----------
+        layout_atom : _TermCOPALayoutAtom
+            The probability array layout containing the circuits to compute polynomials for.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
+        Returns
+        -------
+        None
+        """
+        layout_atom.pathset = None  # used for "pruned" mode, but not here
+        layout_atom.percircuit_p_polys = None  # used for "pruned" mode, but not here
+
+        all_compact_polys = []  # holds one compact polynomial per final *element*
+        for sep_povm_circuit in layout_atom.expanded_circuits:
+            rholabel = sep_povm_circuit.circuit_without_povm[0]
+            opstr = sep_povm_circuit.circuit_without_povm[1:]
+            elabels = sep_povm_circuit.full_effect_labels
+            compact_polys = self._prs_as_compact_polynomials(rholabel, elabels, opstr, polynomial_vindices_per_int,
+                                                             resource_alloc)
+            all_compact_polys.extend(compact_polys)  # ok b/c *linear* evaluation order
+
+        tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
+        vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+
+        layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
+    def select_paths_set(self, layout, path_set, resource_alloc):
+        """
+        Selects (makes "current") a path set *and* computes polynomials the new set.
+
+        Parameters
+        ----------
+        layout : TermCOPALayout
+            The layout whose path-set should be set.
+
+        path_set : PathSet
+            The path set to select.
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        None
+        """
+        local_path_sets = list(path_set.local_atom_pathsets) if self.mode == "pruned" else None
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
+
+        def set_pathset_for_atom(layout_atom, sub_resource_alloc):
+            if self.mode == "pruned":
+                sub_pathset = local_path_sets.pop(0)  # take the next path set (assumes same order of calling atoms!)
+                self._select_paths_set_block(layout_atom, sub_pathset, sub_resource_alloc)
+                #This computes (&caches) polys for this path set as well
+            else:
+                self._cache_p_polynomials(layout_atom, sub_resource_alloc, polynomial_vindices_per_int)
+
+        self._run_on_atoms(layout, set_pathset_for_atom, resource_alloc)
+
+    ## ----- Other functions -----
+    def _prepare_layout(self, layout, resource_alloc):
         """
         Performs preparatory work for computing circuit outcome probabilities.
 
@@ -1391,481 +1323,150 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        eval_tree : EvalTree
-            The evaluation tree used to define a list of circuits and hold (cache)
-            any computed quantities.
+        layout : TermCOPALayout
+            The layout to prepare.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of `eval_tree` (if it is split).
-
-        mem_limit : int
-            Rough memory limit (per processor) in bytes.
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
 
         Returns
         -------
         None
         """
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        #eval on each local subtree
-        nTotFailed = 0  # the number of failures to create an accurate-enough polynomial for a given circuit probability
-        #all_failed_circuits = []
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-
+        def find_and_select_pathset(layout_atom, sub_resource_alloc):
             if self.mode == "pruned":
-                #nFailed = evalSubTree.cache_p_pruned_polys(self, mySubComm, mem_limit, self.pathmagnitude_gap,
-                #                                           self.min_term_mag, self.max_paths_per_outcome)
-                pathset = evalSubTree.find_minimal_paths_set(
-                    self, mySubComm, mem_limit, exit_after_this_many_failures=0)  # pruning_thresholds_and_highmag_terms
-                # this sets these as internal cached qtys
-                evalSubTree.select_paths_set(self, pathset, mySubComm, mem_limit)
+                pathset = self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
+                                                             exit_after_this_many_failures=0)
+                self._select_paths_set_block(layout_atom, pathset, sub_resource_alloc)  # "locks in" path set
+                return pathset.num_failures
             else:
-                evalSubTree.cache_p_polynomials(self, mySubComm)
-                pathset = _TermPathSet(evalSubTree, 0, 0, 0)
+                self._cache_p_polynomials(layout_atom, sub_resource_alloc)
+                # (nTotFailed += 0)
 
-            nTotFailed += pathset.num_failures
+        local_nFailures = self._run_on_atoms(layout, find_and_select_pathset, resource_alloc)
 
-        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
-        #assert(nTotFailed == 0), "bulk_prep_probs could not compute polys that met the pathmagnitude gap constraints!"
+        # Get the number of failures to create an accurate-enough polynomial (# of circuit probabilities, i.e. elements)
+        nTotFailed = _mpit.sum_across_procs(sum(local_nFailures), resource_alloc.comm)
         if nTotFailed > 0:
             _warnings.warn(("Unable to find a path set that achieves the desired "
                             "pathmagnitude gap (%d circuits failed)") % nTotFailed)
 
-    def bulk_fill_probs(self, mx_to_fill, eval_tree, clip_to=None, check=False,
-                        comm=None):
+
+class _TermPathSetBase(object):
+    """
+    A set of error-term paths.
+
+    Each such path is comprised of a single "term" (usually a Taylor term of an
+    error-generator expansion) for each gate operation or circuit layer (more
+    generally, each factor within the product that evaluates to the probability).
+
+    A set of paths is specified by giving a path-magnitude threshold for each
+    circuit in a COPA layout.  All paths with magnitude less than this threshold
+    are a part of the path set.  The term magnitudes that determine a path magnitude
+    are held in Term objects resulting from a Model at a particular parameter-space
+    point.  Representations of these term objects (actually just the "high-magnitude" ones,
+    as determined by a different, term-magnitude, threshold) are also held
+    within the path set.
+
+    Parameters
+    ----------
+    npaths : int
+        The number of total paths.
+
+    maxpaths : int
+        The maximum-allowed-paths limit that was in place when this
+        path set was created.
+
+    nfailed : int
+        The number of circuits that failed to meet the desired accuracy
+        (path-magnitude gap) requirements.
+    """
+
+    def __init__(self, npaths, maxpaths, nfailed):
+        self.npaths = npaths
+        self.max_allowed_paths = maxpaths
+        self.num_failures = nfailed  # number of failed *circuits* (not outcomes)
+
+    @property
+    def allowed_path_fraction(self):
         """
-        Compute the outcome probabilities for an entire tree of circuits.
-
-        This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* circuits found in an evaluation
-        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
-        objects is *simplified* into a lists of gate-only sequences along with
-        a mapping of final elements (i.e. probabilities) to gate-only sequence
-        and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
-        must have length equal to the number of final elements (this can be
-        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
-        correspond to which strings and outcomes, you'll need the mappings
-        generated when the original list of `Circuits` was simplified.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated 1D numpy array of length equal to the
-            total number of computed elements (i.e. eval_tree.num_final_elements())
-
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
+        The fraction of maximal allowed paths that are in this path set.
 
         Returns
         -------
-        None
+        float
         """
-
-        #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-
-            felInds = evalSubTree.final_element_indices(eval_tree)
-            self._fill_probs_block(mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
-
-        #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mx_to_fill, [], 0, comm)
-        #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
-
-        if clip_to is not None:
-            _np.clip(mx_to_fill, clip_to[0], clip_to[1], out=mx_to_fill)  # in-place clip
-
-#Will this work?? TODO
-#        if check:
-#            self._check(eval_tree, spam_label_rows, mx_to_fill, clip_to=clip_to)
-
-    def bulk_fill_dprobs(self, mx_to_fill, eval_tree,
-                         pr_mx_to_fill=None, clip_to=None, check=False,
-                         comm=None, wrt_filter=None, wrt_block_size=None,
-                         profiler=None, gather_mem_limit=None):
-        """
-        Compute the outcome probability-derivatives for an entire tree of circuits.
-
-        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `eval_tree`.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated ExM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M is the
-            number of model parameters.
-
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
-
-        pr_mx_to_fill : numpy array, optional
-            when not None, an already-allocated length-E numpy array that is filled
-            with probabilities, just like in bulk_fill_probs(...).
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
-
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
-
-        wrt_block_size : int or float, optional
-            The maximum number of derivative columns to compute *products*
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
-
-        profiler : Profiler, optional
-            A profiler object used for to track timing and memory usage.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
-
-        Returns
-        -------
-        None
-        """
-
-        #print("DB: bulk_fill_dprobs called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        tStart = _time.time()
-        if profiler is None: profiler = _dummy_profiler
-
-        if wrt_filter is not None:
-            assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
-            wrtSlice = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
-        else:
-            wrtSlice = None
-
-        profiler.memory_check("bulk_fill_dprobs: begin (expect ~ %.2fGB)"
-                           % (mx_to_fill.nbytes / (1024.0**3)))
-
-        #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
-            #nEls = evalSubTree.num_final_elements()
-
-            if pr_mx_to_fill is not None:
-                self._fill_probs_block(pr_mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
-
-            #Set wrt_block_size to use available processors if it isn't specified
-            blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, mySubComm)
-
-            if blkSize is None:
-                self._fill_dprobs_block(mx_to_fill, felInds, None, evalSubTree, wrtSlice, mySubComm, mem_limit=None)
-                profiler.memory_check("bulk_fill_dprobs: post fill")
-
-            else:  # Divide columns into blocks of at most blkSize
-                assert(wrt_filter is None)  # cannot specify both wrt_filter and blkSize
-                nBlks = int(_np.ceil(self.Np / blkSize))
-                # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.Np, nBlks)
-
-                #distribute derivative computation across blocks
-                myBlkIndices, blkOwners, blkComm = \
-                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
-                if blkComm is not None:
-                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than derivative columns(%d)!" % self.Np
-                                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-
-                for iBlk in myBlkIndices:
-                    paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
-                    self._fill_dprobs_block(mx_to_fill, felInds, paramSlice, evalSubTree, paramSlice,
-                                            blkComm, mem_limit=None)
-                    profiler.memory_check("bulk_fill_dprobs: post fill blk")
-
-                #gather results
-                tm = _time.time()
-                _mpit.gather_slices(blocks, blkOwners, mx_to_fill, [felInds],
-                                    1, mySubComm, gather_mem_limit)
-                #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
-                profiler.add_time("MPI IPC", tm)
-                profiler.memory_check("bulk_fill_dprobs: post gather blocks")
-
-        #collect/gather results
-        tm = _time.time()
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mx_to_fill, [], 0, comm, gather_mem_limit)
-        #note: pass mx_to_fill, dim=(KS,M), so gather mx_to_fill[felInds] (axis=0)
-
-        if pr_mx_to_fill is not None:
-            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 pr_mx_to_fill, [], 0, comm)
-            #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
-
-        profiler.add_time("MPI IPC", tm)
-        profiler.memory_check("bulk_fill_dprobs: post gather subtrees")
-
-        if clip_to is not None and pr_mx_to_fill is not None:
-            _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
-
-        #TODO: will this work?
-        #if check:
-        #    self._check(eval_tree, spam_label_rows, pr_mx_to_fill, mx_to_fill,
-        #                clip_to=clip_to)
-        profiler.add_time("bulk_fill_dprobs: total", tStart)
-        profiler.add_count("bulk_fill_dprobs count")
-        profiler.memory_check("bulk_fill_dprobs: end")
-        #print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
-        #self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
-        #                     't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
-        #                     'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
-
-    def bulk_fill_hprobs(self, mx_to_fill, eval_tree,
-                         pr_mx_to_fill=None, deriv1_mx_to_fill=None, deriv2_mx_to_fill=None,
-                         clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
-                         wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
-        """
-        Compute the outcome probability-Hessians for an entire tree of circuits.
-
-        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
-        probability-Hessians for each "final element" of `eval_tree`.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated ExMxM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
-
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
-
-        pr_mx_to_fill : numpy array, optional
-            when not None, an already-allocated length-E numpy array that is filled
-            with probabilities, just like in bulk_fill_probs(...).
-
-        deriv1_mx_to_fill : numpy array, optional
-            when not None, an already-allocated ExM numpy array that is filled
-            with probability derivatives, similar to bulk_fill_dprobs(...), but
-            where M is the number of model parameters selected for the 1st
-            differentiation (i.e. by wrt_filter1).
-
-        deriv2_mx_to_fill : numpy array, optional
-            when not None, an already-allocated ExM numpy array that is filled
-            with probability derivatives, similar to bulk_fill_dprobs(...), but
-            where M is the number of model parameters selected for the 2nd
-            differentiation (i.e. by wrt_filter2).
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
-
-        wrt_filter1 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the first (row) derivative operations.
-
-        wrt_filter2 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the second (col) derivative operations.
-
-        wrt_block_size1: int or float, optional
-            The maximum number of 1st (row) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
-
-        wrt_block_size2 : int or float, optional
-            The maximum number of 2nd (col) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
-
-        Returns
-        -------
-        None
-        """
-
-        if wrt_filter1 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
-                "Cannot specify both wrt_filter and wrt_block_size"
-            wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
-        else:
-            wrtSlice1 = None
-
-        if wrt_filter2 is not None:
-            assert(wrt_block_size1 is None and wrt_block_size2 is None), \
-                "Cannot specify both wrt_filter and wrt_block_size"
-            wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
-        else:
-            wrtSlice2 = None
-
-        #get distribution across subtrees (groups if needed)
-        subtrees = eval_tree.sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = eval_tree.distribute(comm)
-
-        if self.mode == "direct":
-            raise NotImplementedError("hprobs does not support direct path-integral evaluation")
-
-        #eval on each local subtree
-        for iSubTree in mySubTreeIndices:
-            evalSubTree = subtrees[iSubTree]
-            felInds = evalSubTree.final_element_indices(eval_tree)
-
-            if pr_mx_to_fill is not None:
-                self._fill_probs_block(pr_mx_to_fill, felInds, evalSubTree, mySubComm, mem_limit=None)
-
-            #Set wrt_block_size to use available processors if it isn't specified
-            blkSize1 = self._set_param_block_size(wrt_filter1, wrt_block_size1, mySubComm)
-            blkSize2 = self._set_param_block_size(wrt_filter2, wrt_block_size2, mySubComm)
-
-            if blkSize1 is None and blkSize2 is None:
-
-                if deriv1_mx_to_fill is not None:
-                    self._fill_dprobs_block(deriv1_mx_to_fill, felInds, None, evalSubTree, wrtSlice1,
-                                            mySubComm, mem_limit=None)
-                if deriv2_mx_to_fill is not None:
-                    if deriv1_mx_to_fill is not None and wrtSlice1 == wrtSlice2:
-                        deriv2_mx_to_fill[felInds, :] = deriv1_mx_to_fill[felInds, :]
-                    else:
-                        self._fill_dprobs_block(deriv2_mx_to_fill, felInds, None, evalSubTree, wrtSlice2,
-                                                mySubComm, mem_limit=None)
-                self.fill_hprobs_block(mx_to_fill, felInds, None, None, eval_tree,
-                                       wrtSlice1, wrtSlice2, mySubComm, mem_limit=None)
-
-            else:  # Divide columns into blocks of at most blkSize
-                assert(wrt_filter1 is None and wrt_filter2 is None)  # cannot specify both wrt_filter and blkSize
-                nBlks1 = int(_np.ceil(self.Np / blkSize1))
-                nBlks2 = int(_np.ceil(self.Np / blkSize2))
-                # num blocks required to achieve desired average size == blkSize1 or blkSize2
-                blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
-                blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
-
-                #distribute derivative computation across blocks
-                myBlk1Indices, blk1Owners, blk1Comm = \
-                    _mpit.distribute_indices(list(range(nBlks1)), mySubComm)
-
-                myBlk2Indices, blk2Owners, blk2Comm = \
-                    _mpit.distribute_indices(list(range(nBlks2)), blk1Comm)
-
-                if blk2Comm is not None:
-                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                                   + " than hessian elements(%d)!" % (self.Np**2)
-                                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
-
-                #in this case, where we've just divided the entire range(self.Np) into blocks, the two deriv mxs
-                # will always be the same whenever they're desired (they'll both cover the entire range of params)
-                derivMxToFill = deriv1_mx_to_fill if (deriv1_mx_to_fill is not None) else deriv2_mx_to_fill  # non-None
-
-                for iBlk1 in myBlk1Indices:
-                    paramSlice1 = blocks1[iBlk1]
-                    if derivMxToFill is not None:
-                        self._fill_dprobs_block(derivMxToFill, felInds, paramSlice1, evalSubTree, paramSlice1,
-                                                blk1Comm, mem_limit=None)
-
-                    for iBlk2 in myBlk2Indices:
-                        paramSlice2 = blocks2[iBlk2]
-                        self.fill_hprobs_block(mx_to_fill, felInds, paramSlice1, paramSlice2, eval_tree,
-                                               paramSlice1, paramSlice2, blk2Comm, mem_limit=None)
-
-                    #gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, mx_to_fill, [felInds, blocks1[iBlk1]],
-                                        2, blk1Comm, gather_mem_limit)
-
-                #gather row results; gather axis 1 of mx_to_fill[felInds], dim=(ks,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, mx_to_fill, [felInds],
-                                    1, mySubComm, gather_mem_limit)
-                if deriv1_mx_to_fill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1_mx_to_fill, [felInds],
-                                        1, mySubComm, gather_mem_limit)
-                if deriv2_mx_to_fill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2_mx_to_fill, [felInds],
-                                        1, blk1Comm, gather_mem_limit)
-                    #Note: deriv2_mx_to_fill gets computed on every inner loop completion
-                    # (to save mem) but isn't gathered until now (but using blk1Comm).
-                    # (just as pr_mx_to_fill is computed fully on each inner loop *iteration*!)
-
-        #collect/gather results
-        subtreeElementIndices = [t.final_element_indices(eval_tree) for t in subtrees]
-        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                             mx_to_fill, [], 0, comm, gather_mem_limit)
-        if deriv1_mx_to_fill is not None:
-            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv1_mx_to_fill, [], 0, comm, gather_mem_limit)
-        if deriv2_mx_to_fill is not None:
-            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 deriv2_mx_to_fill, [], 0, comm, gather_mem_limit)
-        if pr_mx_to_fill is not None:
-            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
-                                 pr_mx_to_fill, [], 0, comm)
-
-        if clip_to is not None and pr_mx_to_fill is not None:
-            _np.clip(pr_mx_to_fill, clip_to[0], clip_to[1], out=pr_mx_to_fill)  # in-place clip
-
-        #TODO: check if this works
-        #if check:
-        #    self._check(eval_tree, spam_label_rows,
-        #                pr_mx_to_fill, deriv1_mx_to_fill, mx_to_fill, clip_to)
+        return self.npaths / self.max_allowed_paths
+
+
+class _AtomicTermPathSet(_TermPathSetBase):
+    """
+    A path set, as specified for each atom of a :class:`TermCOPALayout`.
+
+    Parameters
+    ----------
+    thresholds : dict
+        A dictionary whose keys are circuits and values are path-magnitude thresholds.
+        These thresholds store what
+
+    highmag_termrep_cache : dict
+        A dictionary whose keys are gate or circuit-layer labels and whose values are
+        internally-used "rep-cache" elements that each hold a list of the term representations
+        for that gate having a "high" magnitude (magnitude above some threshold).  This
+        cache is an essential link between the path-magnitude thresholds in `thresholds` and
+        the actual set of paths that are evaluated by processing `layout_atom` (e.g. updating
+        this cache by re-computing term magnitudes at a new parameter-space point will also
+        update the set of paths that are evaluated given the *same* set of `thresholds`).
+
+    circuitsetup_cache : dict
+        A dictionary that caches per-circuit setup information and can be used to
+        speed up multiple calls which use the same circuits.
+
+    npaths : int
+        The number of total paths.
+
+    maxpaths : int
+        The maximum-allowed-paths limit that was in place when this
+        path set was created.
+
+    nfailed : int
+        The number of circuits that failed to meet the desired accuracy
+        (path-magnitude gap) requirements.
+    """
+    def __init__(self, thresholds, highmag_termrep_cache,
+                 circuitsetup_cache, npaths, maxpaths, nfailed):
+        super().__init__(npaths, maxpaths, nfailed)
+        self.thresholds = thresholds
+        self.highmag_termrep_cache = highmag_termrep_cache
+        self.circuitsetup_cache = circuitsetup_cache
+
+
+class TermPathSet(_TermPathSetBase):
+    """
+    A path set for a split :class:`TermEvalTree`.
+
+    Parameters
+    ----------
+    local_atom_pathsets : list
+        A list of path sets for each of the *local* layout atom (i.e. the
+        atoms assigned to the current processor).
+
+    comm : mpi4py.MPI.Comm
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+    """
+    def __init__(self, local_atom_pathsets, comm):
+
+        #Get local-atom totals
+        nTotPaths = sum([sps.npaths for sps in local_atom_pathsets])
+        nTotFailed = sum([sps.num_failures for sps in local_atom_pathsets])
+        nAllowed = sum([sps.max_allowed_paths for sps in local_atom_pathsets])
+
+        #Get global totals
+        nTotFailed = _mpit.sum_across_procs(nTotFailed, comm)
+        nTotPaths = _mpit.sum_across_procs(nTotPaths, comm)
+        nAllowed = _mpit.sum_across_procs(nAllowed, comm)
+
+        super().__init__(nTotPaths, nAllowed, nTotFailed)
+        self.local_atom_pathsets = local_atom_pathsets

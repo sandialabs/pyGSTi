@@ -1323,7 +1323,7 @@ class DataSet(object):
         return opLabels
 
     def degrees_of_freedom(self, circuit_list=None, method="present_outcomes-1",
-                               aggregate_times=True):
+                           aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for the circuits in `circuit_list`.
 

@@ -16,10 +16,6 @@ pyGSTi Objects Python Package
 #Import Objects at package level
 from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
-from .evaltree import EvalTree
-from .matrixevaltree import MatrixEvalTree
-from .mapevaltree import MapEvalTree
-from .termevaltree import TermEvalTree
 from .operation import LinearOperator
 from .operation import DenseOperator
 from .operation import LinearlyParamDenseOp
@@ -85,6 +81,11 @@ from .stabilizer import StabilizerFrame
 from .qubitgraph import QubitGraph
 from .hypothesistest import HypothesisTest
 
+from .forwardsim import ForwardSimulator
+from .matrixforwardsim import MatrixForwardSimulator
+from .mapforwardsim import MapForwardSimulator
+from .termforwardsim import TermForwardSimulator
+
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
 from .gaugegroup import DiagGaugeGroup, DiagGaugeGroupElement
@@ -95,7 +96,6 @@ from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
 from .labeldicts import StateSpaceLabels
 
-from .computationcache import ComputationCache
 from .bulkcircuitlist import BulkCircuitList
 from .resourceallocation import ResourceAllocation
 from .objectivefns import ObjectiveFunctionBuilder, \
@@ -103,6 +103,8 @@ from .objectivefns import ObjectiveFunctionBuilder, \
     RawPoissonPicDeltaLogLFunction, RawDeltaLogLFunction, RawMaxLogLFunction, RawTVDFunction, \
     Chi2Function, ChiAlphaFunction, FreqWeightedChi2Function, PoissonPicDeltaLogLFunction, DeltaLogLFunction, \
     MaxLogLFunction, TVDFunction, TimeDependentChi2Function, TimeDependentPoissonPicLogLFunction, LogLWildcardFunction
+
+from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
 
 from .results import Results
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params

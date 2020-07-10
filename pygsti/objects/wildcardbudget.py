@@ -156,7 +156,7 @@ class WildcardBudget(object):
                     circuit_budget_matrix[i, self.primOpLookup[component]] += 1.0
         return circuit_budget_matrix
 
-    def slow_update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
+    def slow_update_probs(self, probs_in, probs_out, freqs, layout, precomp=None):
         """
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
@@ -182,19 +182,9 @@ class WildcardBudget(object):
             An array of frequencies corresponding to each of the
             outcome probabilites in `probs_in` or `probs_out`.
 
-        circuits : list
-            A list of :class:`Circuit` objects giving the circuits that
-            `probs_in` contains the outcome probabilities of.  Typically
-            there are multiple outcomes per circuit, so `len(circuits)`
-            is less than `len(probs_in)` - see `el_indices` below.
-
-        el_indices : list or numpy array
-            A list of the element indices corresponding to each circuit in
-            `circuits`.  Thus, `probs_in[el_indices[i]]` must give the
-            probabilities corresponding to `circuits[i]`, and `el_indices[i]`
-            can be any valid index for a numpy array (an integer, a slice,
-            or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
-            the corresponding frequencies.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            The layout for `probs_in`, `probs_out`, and `freqs`, specifying how array
+            indices correspond to circuit outcomes, as well as the list of circuits.
 
         precomp : numpy.ndarray, optional
             A precmputed quantity for speeding up this calculation.
@@ -283,8 +273,8 @@ class WildcardBudget(object):
             freqs[zero_inds] = 1e-8
             #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
-        for i, circ in enumerate(circuits):
-            elInds = el_indices[i]
+        for i, circ in enumerate(layout.circuits):
+            elInds = layout.indices_for_index(i)
             qvec = probs_in[elInds]
             fvec = freqs[elInds]
             W = self.circuit_budget(circ)
@@ -381,7 +371,7 @@ class WildcardBudget(object):
 
         return
 
-    def update_probs(self, probs_in, probs_out, freqs, circuits, el_indices, precomp=None):
+    def update_probs(self, probs_in, probs_out, freqs, layout, precomp=None):
         """
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
@@ -407,19 +397,9 @@ class WildcardBudget(object):
             An array of frequencies corresponding to each of the
             outcome probabilites in `probs_in` or `probs_out`.
 
-        circuits : list
-            A list of :class:`Circuit` objects giving the circuits that
-            `probs_in` contains the outcome probabilities of.  Typically
-            there are multiple outcomes per circuit, so `len(circuits)`
-            is less than `len(probs_in)` - see `el_indices` below.
-
-        el_indices : list or numpy array
-            A list of the element indices corresponding to each circuit in
-            `circuits`.  Thus, `probs_in[el_indices[i]]` must give the
-            probabilities corresponding to `circuits[i]`, and `el_indices[i]`
-            can be any valid index for a numpy array (an integer, a slice,
-            or an integer-array).  Similarly, `freqs[el_indices[i]]` gives
-            the corresponding frequencies.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            The layout for `probs_in`, `probs_out`, and `freqs`, specifying how array
+            indices correspond to circuit outcomes, as well as the list of circuits.
 
         precomp : numpy.ndarray, optional
             A precmputed quantity for speeding up this calculation.
@@ -442,6 +422,7 @@ class WildcardBudget(object):
             freqs[zero_inds] = MIN_FREQ
             #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
+        circuits = layout.circuits
         circuit_budgets = self.circuit_budgets(circuits, precomp)
         tvd_precomp = 0.5 * _np.abs(probs_in - freqs)
         A_precomp = (probs_in > freqs)
@@ -451,7 +432,7 @@ class WildcardBudget(object):
         tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
-            elInds = el_indices[i]
+            elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
 

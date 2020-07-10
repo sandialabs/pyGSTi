@@ -147,7 +147,7 @@ class CircuitPlaquette(object):
     def __len__(self):
         return len(self.elements)
 
-    def elementvec_to_matrix(self, elementvec, elindices_lookup, outcomes_lookup, mergeop="sum"):
+    def elementvec_to_matrix(self, elementvec, layout, mergeop="sum"):
         """
         Form a matrix of values corresponding to this plaquette from an element vector.
 
@@ -162,13 +162,9 @@ class CircuitPlaquette(object):
             values than are needed by this plaquette.  Indices into this array
             are given by `elindices_lookup`.
 
-        elindices_lookup : collections.OrderedDict
-            A dictionary whose keys are circuits and whose values are slices and/or
-            integer-arrays into `elementvec` giving the corresponding elements.
-
-        outcomes_lookup : collections.OrderedDict
-            A dictionary whose keys are circuits and whose values are lists
-            of outcome labels corresponding to the elements for that circuit.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            The layout of `elementvec`, giving the mapping between its elements and
+            circuit outcomes.
 
         mergeop : "sum" or format string, optional
             Dictates how to combine the `elementvec` components corresponding to a single
@@ -184,13 +180,13 @@ class CircuitPlaquette(object):
         if mergeop == "sum":
             ret = _np.nan * _np.ones((self.rows, self.cols), 'd')
             for i, j, opstr in self:
-                ret[i, j] = sum(elementvec[elindices_lookup[opstr]])
+                ret[i, j] = sum(elementvec[layout.indices(opstr)])
         elif '%' in mergeop:
             fmt = mergeop
             ret = _np.nan * _np.ones((self.rows, self.cols), dtype=_np.object)
             for i, j, opstr in self:
                 ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
-                                       (fmt % x) for x in elementvec[elindices_lookup[opstr]]])
+                                       (fmt % x) for x in elementvec[layout.indices(opstr)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
         return ret

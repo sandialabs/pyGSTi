@@ -25,9 +25,9 @@ from pprint import pprint
 
 
 def simulate_data(model_or_dataset, circuit_list, n_samples,
-                       sample_error="multinomial", seed=None, rand_state=None,
-                       alias_dict=None, collision_action="aggregate",
-                       record_zero_counts=True, comm=None, mem_limit=None, times=None):
+                  sample_error="multinomial", seed=None, rand_state=None,
+                  alias_dict=None, collision_action="aggregate",
+                  record_zero_counts=True, comm=None, mem_limit=None, times=None):
     """
     Creates a DataSet using the probabilities obtained from a model.
 
@@ -136,7 +136,7 @@ def simulate_data(model_or_dataset, circuit_list, n_samples,
                                   for s in circuit_list]
         else:
             trans_circuit_list = circuit_list
-        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, mem_limit=mem_limit)
+        all_probs = gsGen.bulk_probabilities(trans_circuit_list, comm=comm, mem_limit=mem_limit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
     if comm is None or comm.Get_rank() == 0:  # only root rank computes

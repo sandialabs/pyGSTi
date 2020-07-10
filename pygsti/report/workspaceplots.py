@@ -29,6 +29,7 @@ from . import plothelpers as _ph
 import plotly
 import plotly.graph_objs as go
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -1570,11 +1571,12 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, circuit_list, dataset, model,
                  sum_up=False, box_labels=False, hover_info=True, invert=False,
                  prec='compact', linlg_pcntle=.05, direct_gst_models=None,
-                 dscomparator=None, stabilityanalyzer=None,
+                 dscomparator=None, stabilityanalyzer=None, mdc_store=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
                  wildcard=None, colorbar=False, bgcolor="white"):
         """
         Create a plot displaying the value of per-circuit quantities.
+        TODO: docstring
 
         Values are shown on a grid of colored boxes, organized according to
         the structure of the circuits (e.g. by germ and "L").
@@ -1678,19 +1680,22 @@ class ColorBoxPlot(WorkspacePlot):
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot, self).__init__(ws, self._create, plottype, circuit_list, dataset, model,
-                                           prec, sum_up, box_labels, hover_info,
-                                           invert, linlg_pcntle,
-                                           direct_gst_models, dscomparator, stabilityanalyzer,
+                                           prec, sum_up, box_labels, hover_info, invert, linlg_pcntle,
+                                           direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
                                            submatrices, typ, scale, comm, wildcard, colorbar, bgcolor)
 
-    def _create(self, plottypes, circuit_list, dataset, model,
-                prec, sum_up, box_labels, hover_info,
-                invert, linlg_pcntle,
-                direct_gst_models, dscomparator, stabilityanalyzer, submatrices,
-                typ, scale, comm, wildcard, colorbar, bgcolor):
+    def _create(self, plottypes, circuit_list, dataset, model, prec, sum_up, box_labels, hover_info,
+                invert, linlg_pcntle, direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
+                submatrices, typ, scale, comm, wildcard, colorbar, bgcolor):
 
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
+
+        if mdc_store is not None:  # then it overrides
+            assert(circuit_list is None and dataset is None and model is None)
+            circuit_list = mdc_store.circuits
+            dataset = mdc_store.dataset
+            model = mdc_store.model
 
         #DEBUG: for checking
         #def _addl_mx_fn_chk(plaq,x,y):
@@ -1722,16 +1727,14 @@ class ColorBoxPlot(WorkspacePlot):
                 ptyp = _objfns.ObjectiveFunctionBuilder.create_from(ptyp)
 
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
+                if mdc_store is None:
+                    mdc_store = _ModelDatasetCircuitStore(model, dataset, circuit_list, array_types=('p',))
+                
                 objfn_builder = ptyp
-                CACHE = None  # use self.ws.smartCache?
-                objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm}, cache=CACHE)
-
-                lookup = {circuit: elindices for circuit, elindices in zip(circuit_list, objfn.lookup.values())}
-                outcomes_lookup = {circuit: outcomes for circuit, outcomes in zip(circuit_list,
-                                                                                  objfn.outcomes_lookup.values())}
-
+                objfn = objfn_builder.build_from_store(mdc_store)
+                
                 if wildcard:
-                    objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
+                    objfn = _objfns.LogLWildcardFunction(objfn, mdc_store.model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
 
                 if isinstance(objfn, (_objfns.PoissonPicDeltaLogLFunction, _objfns.DeltaLogLFunction)):
@@ -1746,13 +1749,13 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
 
                 mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
-                extra_arg = (terms, lookup, outcomes_lookup, "sum")
+                extra_arg = (terms, objfn.layout, "sum")
 
                 # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, outcomes_lookup)
-                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, lookup, outcomes_lookup, "%.5g"))
-                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, lookup, outcomes_lookup, "%.5g"))
-                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, lookup, outcomes_lookup, "%d"))
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
+                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
+                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
+                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
 
             #TODO REMOVE
             #elif ptyp == "logl":
@@ -1889,6 +1892,7 @@ class ColorBoxPlot(WorkspacePlot):
             circuit_struct = circuit_list.circuit_structure if isinstance(circuit_list, _BulkCircuitList) \
                 else _objs.LsGermsSerialStructure.from_list(circuit_list, dataset)  # default struct
 
+            #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
             else:
@@ -1950,17 +1954,17 @@ class ColorBoxPlot(WorkspacePlot):
 
             if typ == "boxes":
                 newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
-                                               colorbar, box_labels, prec,
-                                               hover_info, sum_up, invert,
-                                               scale, bgcolor, addl_hover_info)
+                                                colorbar, box_labels, prec,
+                                                hover_info, sum_up, invert,
+                                                scale, bgcolor, addl_hover_info)
 
             elif typ == "scatter":
                 newfig = _circuit_color_scatterplot(circuit_struct, subMxs, colormap,
-                                                   colorbar, hover_info, sum_up, ytitle,
-                                                   scale, addl_hover_info)
+                                                    colorbar, hover_info, sum_up, ytitle,
+                                                    scale, addl_hover_info)
             elif typ == "histogram":
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
-                                                 ytitle, scale)
+                                                  ytitle, scale)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
 
@@ -2005,7 +2009,7 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], extra[1], extra[2], mergeop=extra[3])
+    return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
 
 
 #TODO REMOVE
@@ -2082,10 +2086,10 @@ def _outcome_to_str(x):  # same function as in writers.py
     else: return ":".join([str(i) for i in x])
 
 
-def _addl_mx_fn_outcomes(plaq, x, y, outcomes_lookup):
+def _addl_mx_fn_outcomes(plaq, x, y, layout):
     slmx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
     for i, j, opstr in plaq:
-        slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in outcomes_lookup[opstr]])
+        slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
 
 
@@ -3097,10 +3101,9 @@ class FitComparisonBarPlot(WorkspacePlot):
             if circuit_list is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
-                CACHE = None  # use self.ws.smartCache?
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuit_list, objfn_builder, Np, wildcard,
-                                                          return_all=True, comm=comm, cache=CACHE)
+                                                          return_all=True, comm=comm)
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"

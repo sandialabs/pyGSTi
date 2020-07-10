@@ -15,6 +15,7 @@ import numpy as _np
 import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
+import collections as _collections
 
 from . import labeldicts as _ld
 from .label import Label as _Label, CircuitLabel as _CircuitLabel
@@ -441,52 +442,46 @@ class Circuit(object):
                     assert(num_lines >= 0), "`num_lines` must be >= 0!"
                     if len(layer_labels) > 0:
                         assert(num_lines > 0), "`num_lines` must be > 0!"
-                    self._line_labels = tuple(range(num_lines))
+                    my_line_labels = tuple(range(num_lines))
                 elif len(layer_labels) > 0 or not editable:
-                    self._line_labels = ('*',)  # special single line-label when no line labels are given
+                    my_line_labels = ('*',)  # special single line-label when no line labels are given
                 else:
-                    self._line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
+                    my_line_labels = ()  # empty *editable* circuits begin with zero line labels (this is ok)
             else:
-                self._line_labels = tuple(sorted(explicit_lbls))
+                my_line_labels = tuple(sorted(explicit_lbls))
         else:
             explicit_lbls = None
-            self._line_labels = tuple(line_labels)
+            my_line_labels = tuple(line_labels)
 
-        if (num_lines is not None) and (num_lines != len(self.line_labels)):
-            if num_lines > len(self.line_labels) and \
-               set(self.line_labels).issubset(set(range(num_lines))):
+        if (num_lines is not None) and (num_lines != len(my_line_labels)):
+            if num_lines > len(my_line_labels) and \
+               set(my_line_labels).issubset(set(range(num_lines))):
                 # special case where we just add missing integer-labeled line(s)
-                self._line_labels = tuple(range(num_lines))
+                my_line_labels = tuple(range(num_lines))
             else:
                 raise ValueError("`num_lines` was expected to be %d but equals %d!" %
-                                 (len(self.line_labels), num_lines))
+                                 (len(my_line_labels), num_lines))
 
         if check:
             if explicit_lbls is None:
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
                 explicit_lbls = _accumulate_explicit_sslbls(layer_labels_objs)
-            if not set(explicit_lbls).issubset(self.line_labels):
+            if not set(explicit_lbls).issubset(my_line_labels):
                 raise ValueError("line labels must contain at least %s" % str(explicit_lbls))
 
-        #Set self._labels, which is either a nested list of simple labels (non-static case)
+        #Set compute self._labels, which is either a nested list of simple labels (non-static case)
         #  or a tuple of Label objects (static case)
         if not editable:
             if layer_labels_objs is None:
                 layer_labels_objs = tuple(map(to_label, layer_labels))
-            self._labels = layer_labels_objs
+            labels = layer_labels_objs
         else:
-            self._labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
-                            for layer_lbl in layer_labels]
+            labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
+                      for layer_lbl in layer_labels]
 
-        #Set self._static, _reps, _name
-        self._static = not editable
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
-        self._name = name  # can be None
-        self._str = stringrep if self._static else None  # can be None (lazy generation)
-        self._times = None  # for FUTURE expansion
-        self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
+        #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep)
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
@@ -505,6 +500,23 @@ class Circuit(object):
         #    self._reps = layer_labels.reps
         #    self._name = name
         #    self._static = not editable
+
+    @classmethod
+    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None):
+        ret = cls.__new__(cls)
+        ret._bare_init(labels, line_labels, editable, name, stringrep)
+        return ret
+
+    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None):
+        self._labels = labels
+        self._line_labels = line_labels
+        self._static = not editable
+        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
+        self._name = name  # can be None
+        self._str = stringrep if self._static else None  # can be None (lazy generation)
+        self._times = None  # for FUTURE expansion
+        self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
 
     def to_label(self, nreps=1):
         """
@@ -557,11 +569,6 @@ class Circuit(object):
         The name is used to name the :class:`CircuitLabel` returned from :method:`to_label`.
         """
         return self._name
-
-    #TODO REMOVE
-    #@property
-    #def reps(self):
-    #    return self._reps
 
     @property
     def layertup(self):
@@ -777,7 +784,7 @@ class Circuit(object):
             layers = list(range(len(self._labels)))
         elif isinstance(layers, slice):
             if layers.start is None and layers.stop is None:
-                layers = ()
+                layers = list(range(len(self._labels)))  # e.g. circuit[:]
             else:
                 layers = _slct.indices(layers, len(self._labels))
         elif not isinstance(layers, (list, tuple)):
@@ -790,7 +797,7 @@ class Circuit(object):
             lines = self.line_labels
         elif isinstance(lines, slice):
             if lines.start is None and lines.stop is None:
-                lines = ()
+                lines = self.line_labels
             else:
                 lines = _slct.indices(lines)
         elif not isinstance(lines, (list, tuple)):
@@ -897,13 +904,20 @@ class Circuit(object):
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
         """
-
         nonint_layers = not isinstance(layers, int)
+
+        #Shortcut for common case when lines == None and when we're only taking a layer slice/index
+        if lines is None:
+            assert(layers is not None)
+            if nonint_layers is False: return self.layertup[layers]
+            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                return Circuit._fastinit(self._labels[layers], self.line_labels, not self._static)
+
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit((), lines, None, not self._static, stringrep=None, check=False) \
-                if nonint_layers else None  # zero-area region
+            return Circuit._fastinit(() if self._static else [],
+                                     lines, not self._static) if nonint_layers else None  # zero-area region
 
         ret = []
         if self._static:
@@ -925,12 +939,12 @@ class Circuit(object):
                 if (strict and sslbls.issubset(lines)) or \
                    (not strict and len(sslbls.intersection(lines)) >= 0):
                     ret_layer.append(l)
-            ret.append(ret_layer)
+            ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
         if nonint_layers:
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
-            return Circuit(ret, lines, None, not self._static, stringrep=None, check=False)
+            return Circuit._fastinit(tuple(ret) if self._static else ret, lines, not self._static)
         else:
             return _Label(ret[0])
 
@@ -1484,7 +1498,7 @@ class Circuit(object):
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
                 serial_lbls.append(c)
-        return Circuit(serial_lbls, self.line_labels, editable=False, check=False)
+        return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -1568,7 +1582,9 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
-        return Circuit(parallel_lbls, self.line_labels, editable=False, check=False)
+        # Convert elements of `parallel_lbls` into Labels (needed b/c we use _fastinit below)
+        parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
+        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False)
 
     def expand_subcircuits(self):
         """
@@ -1902,11 +1918,11 @@ class Circuit(object):
         if not self._static:
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
-            return Circuit([new_layer if lbl == old_layer else lbl
-                            for lbl in cpy._labels], self.line_labels)
+            return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
+                                            for lbl in cpy._labels]), self.line_labels, editable=False)
         else:  # static case: so self._labels is a tuple of Labels
-            return Circuit([new_layer if lbl == old_layer else lbl
-                            for lbl in self._labels], self.line_labels)
+            return Circuit(tuple([new_layer if lbl == old_layer else lbl
+                                  for lbl in self._labels]), self.line_labels, editable=False)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -1925,27 +1941,15 @@ class Circuit(object):
         -------
         Circuit
         """
-        if not self._static:
-            #Could to this in both cases, but is slow for large static circuits
-            cpy = self.copy(editable=False)  # convert our layers to Labels
-            if not alias_dict: return cpy
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = cpy._labels
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit(layers, self.line_labels)
-
-        else:  # static case: so self._labels is a tuple of Labels
-            if not alias_dict: return self  # no copy needed b/c static
-            assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
-            layers = self._labels  # a *tuple*
-            for label, c in alias_dict.items():
-                while label in layers:
-                    i = layers.index(label)
-                    layers = layers[:i] + c._labels + layers[i + 1:]
-            return Circuit(layers, self.line_labels)
+        static_self = self if self._static else self.copy(editable=False)  # convert our layers to Labels
+        if not alias_dict: return static_self
+        assert(all([c._static for c in alias_dict.values()])), "Alias dict values must be *static* circuits!"
+        layers = static_self._labels  # a *tuple*
+        for label, c in alias_dict.items():
+            while label in layers:
+                i = layers.index(label)
+                layers = layers[:i] + c._labels + layers[i + 1:]
+        return Circuit._fastinit(layers, self.line_labels, editable=False)
 
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
@@ -3491,6 +3495,84 @@ class Circuit(object):
             self._static = True
             self._labels = tuple([_Label(layer_lbl) for layer_lbl in self._labels])
 
+    def expand_instruments_and_separate_povm(self, model_shlp, observed_outcomes=None):
+        """
+        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
+
+        Each key of the returned dictionary replaces the instruments in this circuit with a selection
+        of their members.  (The size of the resulting dictionary is the product of the sizes of
+        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
+        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
+        correspond to observed data.  This function is, for the most part, used internally to process
+        a circuit before computing its outcome probabilities.
+
+        Parameters
+        ----------
+        model_shlp : TODO docstring
+
+        Returns
+        -------
+        OrderedDict
+            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to this circuit,
+            one per POVM effect held in the key.
+        """
+        complete_circuit = model_shlp.complete_circuit(self)
+        expanded_circuit_outcomes = _collections.OrderedDict()
+        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
+        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
+
+        def create_tree(lst):
+            subs = _collections.defaultdict(list)
+            for el in lst:
+                if len(el) > 0:
+                    subs[el[0]].append(el[1:])
+            return {k: create_tree(sub_lst) for k, sub_lst in subs.items()}
+
+        def add_expanded_circuit_outcomes(cir, running_outcomes, ootree, start):
+            """
+            """
+            cir = cir if start == 0 else cir[start:]  # for performance, avoid uneeded slicing
+            for k, layer_label in enumerate(cir, start=start):
+                components = layer_label.components
+                instrument_inds = _np.nonzero([model_shlp._is_primitive_instrument_layer_lbl(component)
+                                               for component in components])[0]
+                if instrument_inds.size > 0:
+                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
+                    #  all combinations of their members.
+                    component_lookup = {i: comp for i, comp in enumerate(components)}
+                    instrument_members = [model_shlp.get_member_labels_for_instrument(components[i])
+                                          for i in instrument_inds]  # also components of outcome labels
+                    for selected_instrmt_members in _itertools.product(*instrument_members):
+                        expanded_layer_lbl = component_lookup.copy()
+                        expanded_layer_lbl.update({i: sel for i, sel in zip(instrument_inds, selected_instrmt_members)})
+                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
+
+                        if ootree is not None:
+                            new_ootree = ootree
+                            for sel in selected_instrmt_members:
+                                new_ootree = new_ootree.get(sel, {})
+                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
+                        else:
+                            new_ootree = None
+
+                        add_expanded_circuit_outcomes(cir[0:k] + Circuit((expanded_layer_lbl,)) + cir[k + 1:],
+                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
+                    break
+
+            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
+                assert(cir not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
+                elabels = model_shlp._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
+                    else tuple(ootree.keys())
+                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
+                expanded_circuit_outcomes[SeparatePOVMCircuit(cir, povm_lbl, elabels)] = outcomes
+
+        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
+        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
+
+        add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        return expanded_circuit_outcomes
+
 
 class CompressedCircuit(object):
     """
@@ -3662,3 +3744,38 @@ class CompressedCircuit(object):
         for (period, n) in compressed_op_labels[1:]:
             expandedString += period * n
         return tuple(expandedString)
+
+
+class SeparatePOVMCircuit(object):
+    """
+    Separately holds a POVM-less :class:`Circuit` object, a POVM label, and a list of effect labels.
+
+    This is often used to hold "expanded" circuits whose instrument labels have been replaced with
+    specific instrument members and whose POVMs have simillarly been "expanded" except that we keep
+    the entire expanded POVM together in this one data structure.  (There's no especially good reason
+    for this other than practicality - that since almost *all* circuits end with a POVM, holding each
+    POVM outcome (effect) separately would be very wasteful.
+    """
+    def __init__(self, circuit_without_povm, povm_label, effect_labels):
+        self.circuit_without_povm = circuit_without_povm
+        self.povm_label = povm_label
+        self.effect_labels = effect_labels
+
+    @property
+    def full_effect_labels(self):
+        return [(self.povm_label + "_" + el) for el in self.effect_labels]
+
+    def __len__(self):
+        return len(self.circuit_without_povm)  # don't count POVM in length, so slicing works as expected
+
+    def __getitem__(self, index):
+        return SeparatePOVMCircuit(self.circuit_without_povm[index], self.povm_label, self.effect_labels)
+
+    def __lt__(self, other):  # so we can sort a list of SeparatePOVMCircuits
+        return self.circuit_without_povm < other.circuit_without_povm
+
+    def __str__(self):
+        return "SeparatePOVM(" + self.circuit_without_povm.str + "," \
+            + str(self.povm_label) + "," + str(self.effect_labels) + ")"
+
+    #LATER: add a method for getting the "POVM_effect" labels?

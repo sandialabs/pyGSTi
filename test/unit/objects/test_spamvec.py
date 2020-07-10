@@ -52,7 +52,7 @@ class SpamvecBase(object):
         self.assertEqual(type(vec_copy), type(self.vec))
 
     def test_get_dimension(self):
-        self.assertEqual(self.vec.dimension(), 4)
+        self.assertEqual(self.vec.dim, 4)
 
     def test_set_value_raises_on_bad_size(self):
         with self.assertRaises(ValueError):

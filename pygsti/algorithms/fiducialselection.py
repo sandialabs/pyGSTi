@@ -20,8 +20,8 @@ from . import scoring as _scoring
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
-                       ops_to_omit=None, force_empty=True, max_fid_length=2,
-                       algorithm='grasp', algorithm_kwargs=None, verbosity=1):
+                   ops_to_omit=None, force_empty=True, max_fid_length=2,
+                   algorithm='grasp', algorithm_kwargs=None, verbosity=1):
     """
     Generate prep and measurement fiducials for a given target model.
 
@@ -92,7 +92,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
 
     if omit_identity:
         # we assume identity gate is always the identity mx regardless of basis
-        Identity = _np.identity(target_model.dimension(), 'd')
+        Identity = _np.identity(target_model.dim, 'd')
 
         for gate in fidOps:
             if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
@@ -121,8 +121,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 algorithm_kwargs[key] = default_kwargs[key]
 
         prepFidList = _find_fiducials_integer_slack(model=target_model,
-                                                       prep_or_meas='prep',
-                                                       **algorithm_kwargs)
+                                                    prep_or_meas='prep',
+                                                    **algorithm_kwargs)
         if prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList, 'prep',
@@ -132,8 +132,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = _find_fiducials_integer_slack(model=target_model,
-                                                       prep_or_meas='meas',
-                                                       **algorithm_kwargs)
+                                                    prep_or_meas='meas',
+                                                    **algorithm_kwargs)
         if measFidList is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList, 'meas',
@@ -158,8 +158,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 algorithm_kwargs[key] = default_kwargs[key]
 
         prepFidList = _find_fiducials_grasp(model=target_model,
-                                                  prep_or_meas='prep',
-                                                  **algorithm_kwargs)
+                                            prep_or_meas='prep',
+                                            **algorithm_kwargs)
 
         if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
             prepScore = compute_composite_fiducial_score(
@@ -177,8 +177,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = _find_fiducials_grasp(model=target_model,
-                                                  prep_or_meas='meas',
-                                                  **algorithm_kwargs)
+                                            prep_or_meas='meas',
+                                            **algorithm_kwargs)
 
         if algorithm_kwargs['return_all'] and measFidList[0] is not None:
             measScore = compute_composite_fiducial_score(
@@ -254,14 +254,14 @@ def create_prep_mxs(mdl, prep_fid_list):
         of this list is equal to the number of state preparations in `mdl`.
     """
 
-    dimRho = mdl.dimension()
+    dimRho = mdl.dim
     #numRho = len(mdl.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
     for rho in list(mdl.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
         for i, prepFid in enumerate(prep_fid_list):
-            outputMat[:, i] = _np.dot(mdl.product(prepFid), rho)[:, 0]
+            outputMat[:, i] = _np.dot(mdl.sim.product(prepFid), rho)[:, 0]
         outputMatList.append(outputMat)
     return outputMatList
 
@@ -290,7 +290,7 @@ def create_meas_mxs(mdl, meas_fid_list):
         of this list is equal to the number of POVM effects in `mdl`.
     """
 
-    dimE = mdl.dimension()
+    dimE = mdl.dim
     numFid = len(meas_fid_list)
     outputMatList = []
     for povm in mdl.povms.values():
@@ -298,7 +298,7 @@ def create_meas_mxs(mdl, meas_fid_list):
             if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
-                outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0, :]
+                outputMat[:, i] = _np.dot(E.T, mdl.sim.product(measFid))[0, :]
             outputMatList.append(outputMat)
     return outputMatList
 
@@ -357,7 +357,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
         The eigenvalues of the square of the absolute value of the score
         matrix.
     """
-    # dimRho = model.dimension()
+    # dimRho = model.dim
     if prep_or_meas == 'prep':
         fidArrayList = create_prep_mxs(model, fid_list)
     elif prep_or_meas == 'meas':
@@ -533,13 +533,13 @@ def build_bitvec_mx(n, k):
 
 
 def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
-                                     initial_weights=None, score_func='all',
-                                     max_iter=100, fixed_slack=None,
-                                     slack_frac=None, return_all=False,
-                                     force_empty=True, force_empty_score=1e100,
-                                     fixed_num=None, threshold=1e6,
-                                     # forceMinScore=1e100,
-                                     verbosity=1):
+                                  initial_weights=None, score_func='all',
+                                  max_iter=100, fixed_slack=None,
+                                  slack_frac=None, return_all=False,
+                                  force_empty=True, force_empty_score=1e100,
+                                  fixed_num=None, threshold=1e6,
+                                  # forceMinScore=1e100,
+                                  verbosity=1):
     """
     Find a locally optimal subset of the fiducials in fid_list.
 
@@ -655,7 +655,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
 
     nFids = len(fid_list)
 
-    dimRho = model.dimension()
+    dimRho = model.dim
 
     printer.log("Starting fiducial set optimization. Lower score is better.",
                 1)
@@ -859,10 +859,10 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
 
 
 def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
-                                iterations=5, score_func='all', op_penalty=0.0,
-                                l1_penalty=0.0, return_all=False,
-                                force_empty=True, threshold=1e6, seed=None,
-                                verbosity=0):
+                          iterations=5, score_func='all', op_penalty=0.0,
+                          l1_penalty=0.0, return_all=False,
+                          force_empty=True, threshold=1e6, seed=None,
+                          verbosity=0):
     """
     Use GRASP to find a high-performing set of fiducials.
 
@@ -991,7 +991,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
     def final_score_fn(fid_list): return compute_composite_fiducial_score(
         fid_list=fid_list, **final_compute_kwargs)
 
-    dimRho = model.dimension()
+    dimRho = model.dim
     feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
 
     def rcl_fn(x): return _scoring.filter_composite_rcl(x, alpha)

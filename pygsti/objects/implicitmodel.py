@@ -42,8 +42,6 @@ from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
-from . import simplifierhelper as _sh
-from . import layerlizard as _ll
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import Basis as _Basis
@@ -68,35 +66,17 @@ class ImplicitOpModel(_mdl.OpModel):
         and imposed structure.  If a list or tuple is given, it must be
         of a from that can be passed to `StateSpaceLabels.__init__`.
 
+    layer_rules : LayerRules
+        The "layer rules" used for constructing operators for circuit
+        layers.  This functionality is essential to using this model to
+        simulate ciruits, and is typically supplied by derived classes.
+
     basis : Basis
         The basis used for the state space by dense operator representations.
 
-    primitive_labels : dict, optional
-        A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
-        `"instruments`" giving the primitive-layer labels for each member
-        type.  This information is needed for interfacing with the LGST
-        algorithm and for circuit compiling.
-
-    layer_lizard_class : class, optional
-        The class of the layer lizard to use, which should usually be derived
-        from :class:`ImplicitLayerLizard` and will be created using:
-        `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
-
-    layer_lizard_args : tuple, optional
-        Additional arguments reserved for the custom layer lizard class.
-        These arguments are not passed to the `layer_lizard_class`'s
-        constructor, but are stored in the model's `._lizardArgs` member and
-        may be accessed from within the layer lizard object (which gets a
-        reference to the model upon initialization).
-
-    simplifier_helper_class : class, optional
-        The :class:`SimplifierHelper`-derived type used to provide the
-        mimial interface needed for circuit compiling.  Initalized
-        using `simplifier_helper_class(self)`.
-
-    sim_type : {"auto", "matrix", "map", "termorder:X"}
-        The type of forward simulator this model should use.  `"auto"`
-        tries to determine the best type automatically.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
 
     evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
         The evolution type of this model, describing how states are
@@ -105,12 +85,9 @@ class ImplicitOpModel(_mdl.OpModel):
     """
     def __init__(self,
                  state_space_labels,
+                 layer_rules,
                  basis="pp",
-                 primitive_labels=None,
-                 layer_lizard_class=_ll.ImplicitLayerLizard,
-                 layer_lizard_args=(),
-                 simplifier_helper_class=None,
-                 sim_type="auto",
+                 simulator="auto",
                  evotype="densitymx"):
         """
         Creates a new ImplicitOpModel.  Usually only called from derived
@@ -125,36 +102,18 @@ class ImplicitOpModel(_mdl.OpModel):
             and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
+        layer_rules : LayerRules
+            The "layer rules" used for constructing operators for circuit
+            layers.  This functionality is essential to using this model to
+            simulate ciruits, and is typically supplied by derived classes.
+    
         basis : Basis
             The basis used for the state space by dense operator representations.
-
-        primitive_labels : dict, optional
-            A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
-            `"instruments`" giving the primitive-layer labels for each member
-            type.  This information is needed for interfacing with the LGST
-            algorithm and for circuit compiling.
-
-        layer_lizard_class : class, optional
-            The class of the layer lizard to use, which should usually be derived
-            from :class:`ImplicitLayerLizard` and will be created using:
-            `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
-
-        layer_lizard_args : tuple, optional
-            Additional arguments reserved for the custom layer lizard class.
-            These arguments are not passed to the `layer_lizard_class`'s
-            constructor, but are stored in the model's `._lizardArgs` member and
-            may be accessed from within the layer lizard object (which gets a
-            reference to the model upon initialization).
-
-        simplifier_helper_class : class, optional
-            The :class:`SimplifierHelper`-derived type used to provide the
-            mimial interface needed for circuit compiling.  Initalized
-            using `simplifier_helper_class(self)`.
-
-        sim_type : {"auto", "matrix", "map", "termorder:X"}
-            The type of forward simulator this model should use.  `"auto"`
-            tries to determine the best type automatically.
-
+    
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+    
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
             represented, allowing compatibility checks with (super)operator
@@ -167,123 +126,24 @@ class ImplicitOpModel(_mdl.OpModel):
         self.instrument_blks = _collections.OrderedDict()
         self.factories = _collections.OrderedDict()
 
-        if primitive_labels is None: primitive_labels = {}
-        self._primitive_prep_labels = primitive_labels.get('preps', ())
-        self._primitive_povm_labels = primitive_labels.get('povms', ())
-        self._primitive_op_labels = primitive_labels.get('ops', ())
-        self._primitive_instrument_labels = primitive_labels.get('instruments', ())
-
-        self._lizardClass = layer_lizard_class
-        self._lizardArgs = layer_lizard_args
-
-        if simplifier_helper_class is None:
-            simplifier_helper_class = _sh.ImplicitModelSimplifierHelper
-            # by default, assume *_blk members have keys which match the simple
-            # labels found in the circuits this model can simulate.
-        self.simplifier_helper_class = simplifier_helper_class
         super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
-                                              None, sim_type)
-        self._shlp = simplifier_helper_class(self)
+                                              layer_rules, simulator)
 
-    def primitive_prep_labels(self):
-        """
-        Return the primitive state preparation labels of this model
+    @property
+    def _primitive_prep_label_dict(self):
+        return self.prep_blks['layers']
 
-        Returns
-        -------
-        tuple
-        """
-        return self._primitive_prep_labels
+    @property
+    def _primitive_povm_label_dict(self):
+        return self.povm_blks['layers']
 
-    def set_primitive_prep_labels(self, lbls):
-        """
-        Set the primitive state preparation labels of this model.
+    @property
+    def _primitive_op_label_dict(self):
+        return self.operation_blks['layers']
 
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        self._primitive_prep_labels = tuple(lbls)
-
-    def primitive_povm_labels(self):
-        """
-        Return the primitive POVM labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return self._primitive_povm_labels
-
-    def set_primitive_povm_labels(self, lbls):
-        """
-        Set the primitive POVM labels of this model.
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        self._primitive_povm_labels = tuple(lbls)
-
-    def primitive_op_labels(self):
-        """
-        Return the primitive operation labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return self._primitive_op_labels
-
-    def set_primitive_op_labels(self, lbls):
-        """
-        Set the primitive operation labels of this model
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        self._primitive_op_labels = tuple(lbls)
-
-    def primitive_instrument_labels(self):
-        """
-        Return the primitive instrument labels of this model
-
-        Returns
-        -------
-        tuple
-        """
-        return self._primitive_instrument_labels
-
-    def set_primitive_instrument_labels(self, lbls):
-        """
-        Set the primitive instrument labels of this model
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        self._primitive_instrument_labels = tuple(lbls)
+    @property
+    def _primitive_instrument_label_dict(self):
+        return self.instrument_blks['layers']
 
     #Functions required for base class functionality
 
@@ -295,13 +155,6 @@ class ImplicitOpModel(_mdl.OpModel):
                                                  self.factories.items()):
             for lbl, obj in objdict.items():
                 yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
-
-    def _layer_lizard(self):
-        """ (simplified op server) """
-        self._clean_paramvec()  # just to be safe
-        return self._lizardClass(self.prep_blks, self.operation_blks, self.povm_blks, self.instrument_blks, self)
-        # maybe add a self.factories arg? (but factories aren't really "simplified"...
-        # use self._lizardArgs internally?
 
     def _init_copy(self, copy_into):
         """
@@ -324,7 +177,6 @@ class ImplicitOpModel(_mdl.OpModel):
                                                        for lbl, fdict in self.factories.items()])
 
         copy_into._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
-        copy_into._shlp = self.simplifier_helper_class(copy_into)
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -379,7 +231,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         srep_dict = {}
 
-        for gl in self.primitive_op_labels():
+        for gl in self.primitive_op_labels:
             gate = self.operation_blks['layers'][gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 
@@ -427,3 +279,96 @@ class ImplicitOpModel(_mdl.OpModel):
         s += "\n"
 
         return s
+
+    def _default_privitive_povm_layer_lbl(self, sslbls):
+        """
+        Gets the default POVM label.
+
+        This is often used when a circuit  is specified without an ending POVM layer.
+        Returns `None` if there is no default and one *must* be specified.
+
+        Parameters
+        ----------
+        sslbls : tuple or None
+            The state space labels being measured, and for which a default POVM is desired.
+
+        Returns
+        -------
+        Label or None
+        """
+        if len(self.primitive_povm_labels) == 1:
+            povmName = next(iter(self._primitive_povm_labels)).name
+            if len(self.state_space_labels.labels) == 1 and (self.state_space_labels.labels[0] == sslbls
+                                                             or sslbls == ('*',)):
+                return _Label(povmName)  # because sslbls == all of model's sslbls
+            else:
+                return _Label(povmName, sslbls)
+        else:
+            return None
+
+    def _effect_labels_for_povm(self, povm_lbl):
+        """
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
+
+        Parameters
+        ----------
+        povm_lbl : Label
+            POVM label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the POVM outcomes.
+        """
+        for povmdict in self.povm_blks.values():
+            if povm_lbl in povmdict:
+                return tuple(povmdict[povm_lbl].keys())
+            if isinstance(povm_lbl, _Label) and povm_lbl.name in povmdict:
+                return tuple(_povm.MarginalizedPOVM(povmdict[povm_lbl.name],
+                                                    self.state_space_labels, povm_lbl.sslbls).keys())
+
+        raise KeyError("No POVM labeled %s!" % str(povm_lbl))
+
+    def _member_labels_for_instrument(self, inst_lbl):
+        """
+        Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
+
+        Parameters
+        ----------
+        inst_lbl : Label
+            Instrument label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the instrument members.
+        """
+        for idict in self.instrument_blks.values():
+            if inst_lbl in idict:
+                return tuple(idict[inst_lbl].keys())
+        raise KeyError("No instrument labeled %s!" % inst_lbl)
+
+    def _reinit_opcaches(self):
+        self._opcaches.clear()
+
+        # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
+        simplified_effect_blks = _collections.OrderedDict()
+        for povm_dict_lbl, povmdict in self.povm_blks.items():
+            simplified_effect_blks['povm-' + povm_dict_lbl] = _collections.OrderedDict(
+                [(k, e) for povm_lbl, povm in povmdict.items()
+                 for k, e in povm.simplify_effects(povm_lbl).items()])
+
+        simplified_op_blks = _collections.OrderedDict()
+        for op_dict_lbl in self.operation_blks:
+            simplified_op_blks['op-' + op_dict_lbl] = {}  # create *empty* caches corresponding to op categories
+        for inst_dict_lbl, instdict in self.instrument_blks.items():
+            if 'op-' + inst_dict_lbl not in simplified_op_blks:  # only create when needed
+                simplified_op_blks['op-' + inst_dict_lbl] = _collections.OrderedDict()
+            for inst_lbl, inst in instdict.items():
+                for k, g in inst.simplify_operations(inst_lbl).items():
+                    simplified_op_blks['op-' + inst_dict_lbl][k] = g
+
+        #FUTURE: allow cache "cateogories"?  Now we just flatten the work we did above:
+        self._opcaches.update(simplified_effect_blks)
+        self._opcaches.update(simplified_op_blks)
+        self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed

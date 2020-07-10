@@ -26,6 +26,7 @@ from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects.computationcache import ComputationCache as _ComputationCache
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..optimize.customlm import Optimizer as _Optimizer
 from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 _dummy_profiler = _DummyProfiler()
@@ -66,8 +67,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 
     target_model : Model
         A model used to specify which operation labels should be estimated, a
-        guess for which gauge these estimates should be returned in, and
-        used to simplify circuits.
+        guess for which gauge these estimates should be returned in.
 
     op_labels : list, optional
         A list of which operation labels (or aliases) should be estimated.
@@ -265,7 +265,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
     if guess_model_for_gauge is not None:
-        guessTrunc = guess_model_for_gauge.dimension()  # the truncation to apply to it's B matrix
+        guessTrunc = guess_model_for_gauge.dim  # the truncation to apply to it's B matrix
         # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
         assert(guessTrunc <= trunc)
 
@@ -352,10 +352,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             new_effects.append((effectLabel, new_vec))
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
 
-            #Also convey default gauge group & calc class from guess_model_for_gauge
+            #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel._calcClass = guess_model_for_gauge._calcClass
+            lgstModel.sim = guess_model_for_gauge.sim.copy()
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -371,7 +371,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 def _lgst_matrix_dims(mdl, prep_fiducials, effect_fiducials):
     assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
-    povmLbls = [mdl._split_circuit(s, ('povm',))[2]  # povm_label
+    povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
     povmLens = ([len(mdl.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
@@ -388,10 +388,11 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            raw_dict, outcomes = model.simplify_circuit(opLabelString)
-            assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
-            unique_key = list(raw_dict.keys())[0]
-            assert(len(raw_dict[unique_key]) == povmLen)
+            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            assert(len(expd_circuit_outcomes) == 1), "No instruments are allowed in LGST fiducials!"
+            unique_key = next(iter(expd_circuit_outcomes.keys()))
+            outcomes = expd_circuit_outcomes[unique_key]
+            assert(len(outcomes) == povmLen)
 
             dsRow = dataset[dsStr]
             AB[eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
@@ -416,16 +417,13 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + _objs.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            raw_dict, outcomes = model.simplify_circuit(opLabelString)
+            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
             dsRow = dataset[dsStr]
-            assert(len(raw_dict) == nVariants)
+            assert(len(expd_circuit_outcomes) == nVariants)
 
-            ooff = 0  # outcome offset
-            for k, (raw_str, spamtups) in enumerate(raw_dict.items()):
-                assert(len(spamtups) == povmLen)
-                X[k, eoff:eoff + povmLen, j] = [
-                    dsRow.fraction(ol) for ol in outcomes[ooff:ooff + len(spamtups)]]
-                ooff += len(spamtups)
+            for k, (sep_povm_c, outcomes) in enumerate(expd_circuit_outcomes.items()):
+                assert(len(outcomes) == povmLen)
+                X[k, eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
         eoff += povmLen
 
     return X
@@ -435,7 +433,7 @@ def _construct_a(effect_fiducials, mdl):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
         mdl, [], effect_fiducials)
 
-    dim = mdl.dimension()
+    dim = mdl.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
 
@@ -458,7 +456,7 @@ def _construct_a(effect_fiducials, mdl):
 
 def _construct_b(prep_fiducials, mdl):
     n = len(prep_fiducials)
-    dim = mdl.dimension()
+    dim = mdl.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
 
@@ -545,8 +543,8 @@ def gram_rank_and_eigenvalues(dataset, prep_fiducials, effect_fiducials, target_
 #                 Long sequence GST
 ##################################################################################
 
-def run_gst_fit(dataset, start_model, circuit_list, optimizer, objective_function_builder,
-               resource_alloc, cache, verbosity=0):
+def run_gst_fit_simple(dataset, start_model, circuit_list, optimizer, objective_function_builder,
+                       resource_alloc, verbosity=0):
     """
     Performs core Gate Set Tomography function of model optimization.
 
@@ -596,33 +594,72 @@ def run_gst_fit(dataset, start_model, circuit_list, optimizer, objective_functio
     model : Model
         the best-fit model.
     """
-    resource_alloc = _ResourceAllocation.cast(resource_alloc)
+    mdc_store = _objs.ModelDatasetCircuitsStore(start_model, dataset, circuit_list, resource_alloc,
+                                                array_types=('p', 'dp'), verbosity=verbosity)
+    result, mdc_store = run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity)
+    return result, mdc_store.model
+
+
+def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
+    """
+    Performs core Gate Set Tomography function of model optimization.
+
+    Optimizes the model to the data within `mdc_store` by minimizing the objective function
+    built by `objective_function_builder`.
+
+    Parameters
+    ----------
+    mdc_store : ModelDatasetCircuitsStore
+        An object holding a model, data set, and set of circuits.  This defines the model
+        to be optimized, the data to fit to, and the circuits where predicted vs. observed
+        comparisons should be made.  This object also contains additional information specific
+        to the given model, data set, and circuit list, doubling as a cache for increased performance.
+        This information is also specific to a particular resource allocation, which affects how
+        cached values stored.
+
+    optimizer : Optimizer or dict
+        The optimizer to use, or a dictionary of optimizer parameters
+        from which a default optimizer can be built.
+
+    objective_function_builder : ObjectiveFunctionBuilder
+        Defines the objective function that is optimized.  Can also be anything
+        readily converted to an objective function builder, e.g. `"logl"`.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+    Returns
+    -------
+    result : OptimizerResult
+        the result of the optimization
+    objfn_store : MDCObjectiveFunction
+        the objective function and store containing the best-fit model evaluated at the best-fit point.
+    """
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
-    comm = resource_alloc.comm
-    profiler = resource_alloc.profiler
+    comm = mdc_store.resource_alloc.comm
+    profiler = mdc_store.resource_alloc.profiler
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     tStart = _time.time()
-    mdl = start_model  # .copy()  # to allow caches in start_model to be retained
 
     if comm is not None:
         #assume all models at least have same parameters - so just compare vecs
-        v_cmp = comm.bcast(mdl.to_vector() if (comm.Get_rank() == 0) else None, root=0)
-        if _np.linalg.norm(mdl.to_vector() - v_cmp) > 1e-6:
+        v_cmp = comm.bcast(mdc_store.model.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(mdc_store.model.to_vector() - v_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
     objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
-    objective = objective_function_builder.build(mdl, dataset, circuit_list, resource_alloc, cache, printer)
+    objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
     profiler.add_time("run_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
     #Step 3: solve least squares minimization problem
-    if mdl.simtype in ("termgap", "termorder"):
-        opt_result = _do_term_runopt(objective, optimizer, resource_alloc, printer)
+    if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
+        opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
         #Normal case of just a single "sub-iteration"
-        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, printer)
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
@@ -634,12 +671,12 @@ def run_gst_fit(dataset, start_model, circuit_list, optimizer, objective_functio
     #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
     # but maybe best to just remove minErrVec from return value since this isn't very useful
     # anyway?
-    return opt_result, mdl
+    return opt_result, objective
 
 
 def run_iterative_gst(dataset, start_model, circuit_lists,
-                     optimizer, iteration_objfn_builders, final_objfn_builders,
-                     resource_alloc, verbosity=0):
+                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      resource_alloc, verbosity=0):
     """
     Performs Iterative Gate Set Tomography on the dataset.
 
@@ -686,8 +723,9 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         of the i-th iteration.
     optimums : list of OptimizerResults
         list whose i-th element is the final optimizer result from that iteration.
-    final_cache : ComputationCache
-        The final iteration's computation cache.
+    final_store : MDSObjectiveFunction
+        The final iteration's objective function / store, which encapsulated the final objective
+        function evaluated at the best-fit point (an "evaluated" model-dataSet-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
@@ -699,6 +737,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
+    final_store = None
 
     iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
     final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
@@ -715,13 +754,13 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
-            cache = _ComputationCache()  # store objects for this particular model, dataset, and circuit list
+            mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
+                                                        array_types=('p', 'dp'), verbosity=printer - 1)
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
                 optimizer.fditer = optimizer.first_fditer if (i == 0 and j == 0) else 0
-                opt_result, mdl = run_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
-                                             resource_alloc, cache, printer - 1)
+                opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()
@@ -734,8 +773,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdl = run_gst_fit(dataset, mdl, circuitsToEstimate, optimizer, obj_fn_builder,
-                                                 resource_alloc, cache, printer - 1)
+                    opt_result, mdl = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
 
                 tNxt = _time.time()
@@ -743,17 +781,19 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 tRef = tNxt
 
                 #send final cache back to caller to facilitate more operations on the final (model, circuits, dataset)
-                final_cache = cache
+                final_store = mdc_store
+                models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
+            else:
+                models.append(mdc_store.model.copy())
 
-            models.append(mdl.copy())
             optimums.append(opt_result)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)
-    return models, optimums, final_cache
+    return models, optimums, final_store
 
 
-def _do_runopt(objective, optimizer, resource_alloc, printer):
+def _do_runopt(objective, optimizer, printer):
     """
     Runs the core model-optimization step within a GST routine by optimizing
     `objective` using `optimizer`.
@@ -770,9 +810,6 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
     optimizer : Optimizer
         The optimizer to use.
 
-    resource_alloc : ResourceAllocation
-        The resources allocated to this computation (MPI comm, memory limit, etc).
-
     printer : VerbosityPrinter
         An object for printing output.
 
@@ -781,7 +818,8 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
     OptimizerResult
     """
 
-    mdl = objective.mdl
+    mdl = objective.model
+    resource_alloc = objective.resource_alloc
     profiler = resource_alloc.profiler
 
     #Perform actual optimization
@@ -793,7 +831,7 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
         if hasattr(mdl, 'num_elements'):
             memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
-                * FLOATSIZE  # see Model._buildup_dpg (this is mem for dPG)
+                * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
 
             if resource_alloc.mem_limit is None or 0.1 * resource_alloc.mem_limit < memForNumGaugeParams:
                 try:
@@ -823,7 +861,7 @@ def _do_runopt(objective, optimizer, resource_alloc, printer):
     return opt_result
 
 
-def _do_term_runopt(objective, optimizer, resource_alloc, printer):
+def _do_term_runopt(objective, optimizer, printer):
     """
     Runs the core model-optimization step for models using the
     Taylor-term (path integral) method of computing probabilities.
@@ -841,9 +879,6 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
     optimizer : Optimizer
         The optimizer to use.
 
-    resource_alloc : ResourceAllocation
-        The resources allocated to this computation (MPI comm, memory limit, etc).
-
     printer : VerbosityPrinter
         An object for printing output.
 
@@ -852,21 +887,21 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
     OptimizerResult
     """
 
-    mdl = objective.mdl
-    fwdsim = mdl._fwdsim()
+    mdl = objective.model
+    fwdsim = mdl.sim
 
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
     maxTermStages = fwdsim.max_term_stages
     pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
     oob_check_interval = fwdsim.oob_check_interval
 
-    #assume a path set has already been chosen, as one should have been chosen
-    # when evTree was created.
-    evTree = objective.eval_tree
-    comm, memLimit = resource_alloc.comm, resource_alloc.mem_limit
-    pathSet = fwdsim.get_current_pathset(evTree, comm)
+    #assume a path set has already been chosen, (one should have been chosen when layout was created)
+    layout = objective.layout
+
+    resource_alloc = objective.resource_alloc
+    pathSet = layout.pathset(resource_alloc.comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
-        pathFraction = pathSet.allowed_path_fraction()
+        pathFraction = pathSet.allowed_path_fraction
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
                     (pathSet.num_failures, 100 * pathFraction))
     else:
@@ -879,7 +914,7 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
         optimizer.oob_check_interval = oob_check_interval
         # don't stop early on last iter - do as much as possible.
         optimizer.oob_action = "reject" if bFinalIter else "stop"
-        opt_result = _do_runopt(objective, optimizer, resource_alloc, printer)
+        opt_result = _do_runopt(objective, optimizer, printer)
 
         if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
             if not bFinalIter:
@@ -893,9 +928,9 @@ def _do_term_runopt(objective, optimizer, resource_alloc, printer):
 
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
-            pathSet = mdl._fwdsim().find_minimal_paths_set(evTree, comm, memLimit)
-            mdl._fwdsim().select_paths_set(pathSet, comm, memLimit)
-            pathFraction = pathSet.allowed_path_fraction()
+            pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            mdl.sim.select_paths_set(layout, pathSet, resource_alloc)  # ensure paramvec is updated
+            pathFraction = pathSet.allowed_path_fraction
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
                         (pathSet.num_failures, 100 * pathFraction))

@@ -18,6 +18,7 @@ import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from ..objects.circuit import Circuit as _Circuit
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..construction.circuitconstruction import to_circuits as _circuit_list
 from ..construction.modelconstruction import create_explicit_model as _build_explicit_model
 from ..construction.stdlists import create_lsgst_circuit_lists as _make_lsgst_lists
@@ -62,7 +63,7 @@ class ModelPack(_ABC):
         updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
         return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
 
-    def target_model(self, parameterization_type="full", sim_type="auto", qubit_labels=None):
+    def target_model(self, parameterization_type="full", simulator="auto", qubit_labels=None):
         """
         Returns a copy of the target model in the given parameterization.
 
@@ -72,8 +73,8 @@ class ModelPack(_ABC):
             The gate and SPAM vector parameterization type. See
             :function:`Model.set_all_parameterizations` for all allowed values.
 
-        sim_type : {"auto", "matrix", "map", "termorder" }
-            The simulator type to be used for model calculations (leave as
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The simulator (or type) to be used for model calculations (leave as
             "auto" if you're not sure what this is).
 
         qubit_labels : tuple, optional
@@ -88,42 +89,38 @@ class ModelPack(_ABC):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        if (parameterization_type, sim_type, qubit_labels) not in self._gscache:
+        if (parameterization_type, simulator, qubit_labels) not in self._gscache:
             # cache miss
             mdl = self._target_model(qubit_labels)
-            mdl.set_all_parameterizations(parameterization_type)  # automatically sets sim_type
+            mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
             if parameterization_type == "H+S terms":
-                assert (sim_type == "auto" or sim_type in ("termorder", "termgap", "termdirect")), \
-                    "Invalid `sim_type` argument for H+S terms: %s!" % sim_type
-                if sim_type == "auto":
-                    simt = "termorder"
-                    simt_kwargs = {'max_order': 1}
-                else:
-                    simt = sim_type  # don't update sim_type b/c gscache
-                    simt_kwargs = {'max_order': 1}  # TODO: update so user can specify other args?
+                assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
+                    "Invalid `simulator` argument for H+S terms: %s!" % str(type(simulator))
+                if simulator == "auto":
+                    sim = _TermFSim(mode="taylor", max_order=1)
 
-                key_path, val_path = self._get_cachefile_names(parameterization_type, simt)
+                key_path, val_path = self._get_cachefile_names(parameterization_type, sim)
                 if key_path.exists() and val_path.exists():
-                    simt_kwargs['cache'] = _load_calccache(key_path, val_path)
+                    sim.set_cache(_load_calccache(key_path, val_path))    # TODO
 
-                mdl.set_simtype(simt, **simt_kwargs)
+                mdl.sim = sim
             else:
-                if sim_type != "auto":
-                    mdl.set_simtype(sim_type)
+                if simulator != "auto":
+                    mdl.sim = simulator
 
             # finally cache result
-            self._gscache[(parameterization_type, sim_type, qubit_labels)] = mdl
+            self._gscache[(parameterization_type, simulator, qubit_labels)] = mdl
 
-        return self._gscache[(parameterization_type, sim_type, qubit_labels)].copy()
+        return self._gscache[(parameterization_type, simulator, qubit_labels)].copy()
 
-    def _get_cachefile_names(self, param_type, sim_type):
+    def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """
 
         if param_type == "H+S terms":
             cachePath = _Path(__file__).absolute().parent / "caches"
 
-            assert (sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
-            termOrder = 1 if sim_type == "auto" else int(sim_type.split(":")[1])
+            assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
+            termOrder = 1 if simulator == "auto" else simulator.max_order
             fn = ("cacheHS%d." % termOrder) + self.__module__
             return cachePath / (fn + "_keys.pkz"), cachePath / (fn + "_vals.npz")
         else:

@@ -9,12 +9,13 @@
 #***************************************************************************************************
 
 import numpy as _np
+from functools import partial as _partial
 
 # Has an optimized cython implementation
 from numpy import prod as float_product
 
 
-def bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dtype="auto"):
+def _typed_bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dtype="auto"):
     """
     Evaluate many compact polynomial forms at a given set of variable values.
 
@@ -73,8 +74,8 @@ def bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dtype="aut
 
 
 # These have separate cython implementations but the same python implementation, so we'll simply alias the names
-bulk_eval_compact_polynomials_complex = bulk_eval_compact_polynomials
-
+bulk_eval_compact_polynomials_real = _partial(_typed_bulk_eval_compact_polynomials, dtype='real')
+bulk_eval_compact_polynomials_complex = _partial(_typed_bulk_eval_compact_polynomials, dtype='complex')
 
 def abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, dest_size, **kwargs):
     """Equivalent to np.sum(np.abs(bulk_eval_compact_polynomials_complex(.)))"""

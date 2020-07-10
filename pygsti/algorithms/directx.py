@@ -111,8 +111,8 @@ def model_with_lgst_circuit_estimates(
                 opLabels.append(targetOpLabel)
 
     return _core.run_lgst(dataset, prep_fiducials, meas_fiducials, target_model,
-                         opLabels, aliases, guess_model_for_gauge,
-                         svd_truncate_to, verbosity)
+                          opLabels, aliases, guess_model_for_gauge,
+                          svd_truncate_to, verbosity)
 
 
 def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
@@ -321,9 +321,9 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_lsgst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
-                                       objective_function_builder=obuilder, resource_alloc=None, cache=None,
-                                       verbosity=verbosity)
+    _, direct_lsgst = _core.run_gst_fit_simple(dataset, direct_lgst, bulk_circuits, optimizer=None,
+                                               objective_function_builder=obuilder, resource_alloc=None,
+                                               verbosity=verbosity)
 
     return direct_lsgst
 
@@ -488,9 +488,9 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.PoissonPicDeltaLogLFunction.builder(regularization={'min_prob_clip': min_prob_clip},
                                                          penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
-    _, direct_mlegst = _core.run_gst_fit(dataset, direct_lgst, bulk_circuits, optimizer=None,
-                                        objective_function_builder=obuilder, resource_alloc=None, cache=None,
-                                        verbosity=verbosity)
+    _, direct_mlegst = _core.run_gst_fit_simple(dataset, direct_lgst, bulk_circuits, optimizer=None,
+                                                objective_function_builder=obuilder, resource_alloc=None,
+                                                verbosity=verbosity)
 
     return direct_mlegst
 
@@ -628,12 +628,12 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
     bulk_circuits = _objs.BulkCircuitList(circuits, op_label_aliases)
-    _, focused_lsgst = _core.run_gst_fit(dataset, start_model, bulk_circuits, optimizer=None,
-                                        objective_function_builder=obuilder, resource_alloc=None, cache=None,
-                                        verbosity=verbosity)
+    _, focused_lsgst = _core.run_gst_fit_simple(dataset, start_model, bulk_circuits, optimizer=None,
+                                                objective_function_builder=obuilder, resource_alloc=None,
+                                                verbosity=verbosity)
 
     focused_lsgst.operations[circuit_label] = _objs.FullDenseOp(
-        focused_lsgst.product(circuit_to_estimate))  # add desired string as a separate labeled gate
+        focused_lsgst.sim.product(circuit_to_estimate))  # add desired string as a separate labeled gate
     return focused_lsgst
 
 

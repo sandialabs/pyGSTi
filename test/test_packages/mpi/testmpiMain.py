@@ -767,7 +767,7 @@ def test_MPI_mlgst_forcefn(comm):
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
-    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.run_gst_fit(
+    mdl_lsgst_chk_opts3 = pygsti.algorithms.core.run_gst_fit_simple(
         ds, mdl_lgst_go, lgstStrings, optimizer=None,
         objective_function_builder=pygsti.objects.PoissonPicDeltaLogLFunction.builder(
             name='logl',

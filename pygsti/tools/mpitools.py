@@ -16,6 +16,7 @@ import itertools as _itertools
 from . import slicetools as _slct
 from . import compattools as _compat
 from .matrixtools import _fas, _findx, _findx_shape
+from .matrixtools import prime_factors as _prime_factors
 
 
 def distribute_indices(indices, comm, allow_split_comm=True):
@@ -823,3 +824,37 @@ def sum_across_procs(x, comm):
         return comm.allreduce(x, MPI.SUM)
     else:
         return x
+
+
+def processor_group_size(nprocs, number_of_tasks):
+    """
+    Find the number of groups to divide `nprocs` processors into to tackle `number_of_tasks` tasks.
+
+    When `number_of_tasks` > `nprocs` the smallest integer multiple of `nprocs` is returned that
+    equals or exceeds `number_of_tasks` is returned.
+
+    When `number_of_tasks` < `nprocs` the smallest divisor of `nprocs` that equals or exceeds
+    `number_of_tasks` is returned.
+
+    Parameters
+    ----------
+    nprocs : int
+        The number of processors to divide into groups.
+
+    number_of_tasks : int or float
+        The number of tasks to perform, which can also be seen as the *desired* number of
+        processor groups.  If a floating point value is given the next highest integer is
+        used.
+
+    Returns
+    -------
+    int
+    """
+    if number_of_tasks >= nprocs:
+        return nprocs * int(_np.ceil(1. * number_of_tasks / nprocs))
+    else:
+        fctrs = sorted(_prime_factors(nprocs)); i = 1
+        if int(_np.ceil(number_of_tasks)) in fctrs:
+            return int(_np.ceil(number_of_tasks))  # we got lucky
+        while _np.product(fctrs[0:i]) < number_of_tasks: i += 1
+        return _np.product(fctrs[0:i])

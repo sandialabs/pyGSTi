@@ -708,15 +708,15 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
         del mdl_new.operations[gl]  # remove all gates from mdl_new
 
     for gl, opstr in alias_dict.items():
-        mdl_new.operations[gl] = mdl_primitives.product(opstr)
+        mdl_new.operations[gl] = mdl_primitives.sim.product(opstr)
         #Creates fully parameterized gates by default...
     return mdl_new
 
 
 def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
-                           availability=None, qubit_labels=None, geometry="line", parameterization='static',
-                           evotype="auto", sim_type="auto", on_construction_error='raise',
-                           independent_gates=False, ensure_composed_gates=False, global_idle=None):
+                            availability=None, qubit_labels=None, geometry="line", parameterization='static',
+                            evotype="auto", simulator="auto", on_construction_error='raise',
+                            independent_gates=False, ensure_composed_gates=False, global_idle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
 
@@ -824,8 +824,8 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
         if you give unitary maps instead of superoperators in `gatedict`
         you'll want to set this to `"statevec"`.
 
-    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-        The simulation method used to compute predicted probabilities for the
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The simulator used to compute predicted probabilities for the
         resulting :class:`Model`.  Usually `"auto"` is fine, the default for
         each `evotype` is usually what you want.  Setting this to something
         else is expert-level tuning.
@@ -849,7 +849,7 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        be either :class:`ComposedDenseOp` (with a "matrix" simulator) or
         :class:`ComposedOp` (othewise) objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
@@ -873,14 +873,14 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
     return _LocalNoiseModel.from_parameterization(
         n_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
         availability, qubit_labels, geometry, parameterization, evotype,
-        sim_type, on_construction_error, independent_gates,
+        simulator, on_construction_error, independent_gates,
         ensure_composed_gates, global_idle)
 
 
 def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
-                               availability=None, qubit_labels=None, geometry="line", parameterization='auto',
-                               evotype="auto", sim_type="auto", on_construction_error='raise',
-                               independent_gates=False, ensure_composed_gates=False):
+                                availability=None, qubit_labels=None, geometry="line", parameterization='auto',
+                                evotype="auto", simulator="auto", on_construction_error='raise',
+                                independent_gates=False, ensure_composed_gates=False):
     """
     Create a n-qubit "crosstalk-free" model.
 
@@ -974,8 +974,8 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
     evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.  If "auto" is specified, "densitymx" is used.
 
-    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-        The simulation method used to compute predicted probabilities for the
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The simulator used to compute predicted probabilities for the
         resulting :class:`Model`.  Usually `"auto"` is fine, the default for
         each `evotype` is usually what you want.  Setting this to something
         else is expert-level tuning.
@@ -999,7 +999,7 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        be either :class:`ComposedDenseOp` (with a "matrix" simulator) or
         :class:`ComposedOp` (othewise) objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
@@ -1158,5 +1158,5 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
         povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(n_qubits, evotype)
 
     return _LocalNoiseModel(n_qubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
-                            geometry, evotype, sim_type, on_construction_error,
+                            geometry, evotype, simulator, on_construction_error,
                             independent_gates, ensure_composed_gates, global_idle=idleOp)

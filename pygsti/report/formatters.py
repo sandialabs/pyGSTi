@@ -219,11 +219,11 @@ def html_figure(fig, specs):
     """
     #Create figure inline with 'js' set to only handlers (no further plot init)
     fig.value().set_render_options(switched_item_mode="inline",
-                                 resizable="handlers only",
-                                 click_to_display=specs['click_to_display'],
-                                 link_to=specs['link_to'],
-                                 autosize=specs['autosize'],
-                                 output_dir=specs['output_dir'])
+                                   resizable="handlers only",
+                                   click_to_display=specs['click_to_display'],
+                                   link_to=specs['link_to'],
+                                   autosize=specs['autosize'],
+                                   output_dir=specs['output_dir'])
     render_out = fig.value().render("html")
     return render_out  # a dictionary with 'html' and 'js' keys
 

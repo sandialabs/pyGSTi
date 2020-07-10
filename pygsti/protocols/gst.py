@@ -38,9 +38,10 @@ from ..objects.circuitstructure import LsGermsStructure as _LsGermsStructure
 from ..objects.circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
-from ..objects.computationcache import ComputationCache as _ComputationCache
 from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 
 
 #For results object:
@@ -615,7 +616,7 @@ class GateSetTomography(_proto.Protocol):
             if optimizer is None: optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 mdl = self.initial_model.model
-                optimizer['first_fditer'] = 0 if mdl and mdl.simtype in ("termorder", "termgap") else 1
+                optimizer['first_fditer'] = 0 if mdl and isinstance(mdl.sim, _TermFSim) else 1
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
 
         objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
@@ -708,7 +709,7 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
         #Run Long-sequence GST on data
-        mdl_lsgst_list, optimums_list, final_cache = _alg.run_iterative_gst(
+        mdl_lsgst_list, optimums_list, final_store = _alg.run_iterative_gst(
             ds, mdl_start, bulk_circuit_lists, self.optimizer,
             self.iteration_builders, self.final_builders,
             resource_alloc, printer)
@@ -720,17 +721,19 @@ class GateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
             else self.iteration_builders[-1]
-        parameters['final_cache'] = final_cache  # ComputationCache associated w/final circuit list
+        parameters['final_objfn_store'] = final_store  # Final obj. function evaluated at best-fit point (cache too)
         parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
         #TODO: add qtys abot fit from optimums_list
 
+        # TODO: use final_store more fully - it may contain useful cached quantities for creating
+        # the estimate and gaugeopt/badfit below
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lsgst_list[-1], data.edesign.target_model,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store, data.edesign.target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, parameters['final_objfn_builder'], self.optimizer,
                                         resource_alloc, printer)
@@ -889,20 +892,24 @@ class LinearGateSetTomography(_proto.Protocol):
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.run_lgst(ds, circuit_struct.prep_fiducials, circuit_struct.meas_fiducials, target_model,
-                                op_labels, svd_truncate_to=target_model.dimension(),
-                                op_label_aliases=aliases, verbosity=printer)
+                                 op_labels, svd_truncate_to=target_model.dim,
+                                 op_label_aliases=aliases, verbosity=printer)
+        final_store = _objs.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
+                                                      array_types=('p', 'dp'), verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
+        parameters['final_objfn_store'] = final_store
+        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()  # just set this as default logl objective
 
         ret = ModelEstimateResults(data, self)
-        estimate = _Estimate(ret, {'target': target_model, 'lgst': mdl_lgst,
+        estimate = _Estimate(ret, {'target': target_model, 'seed': target_model, 'lgst': mdl_lgst, 
                                    'iteration estimates': [mdl_lgst],
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdl_lgst, data.edesign.target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, final_store, data.edesign.target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
                                         None, None, resource_alloc, printer)
 
@@ -1324,17 +1331,18 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
     return ds
 
 
-def _add_gaugeopt_and_badfit(results, estlbl, model_to_gaugeopt, target_model, gaugeopt_suite, gaugeopt_target,
+def _add_gaugeopt_and_badfit(results, estlbl, mdc_store, target_model, gaugeopt_suite, gaugeopt_target,
                              unreliable_ops, badfit_options, objfn_builder, optimizer, resource_alloc, printer):
     tref = _time.time()
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
+    model_to_gaugeopt = mdc_store.model
 
     #Do final gauge optimization to *final* iteration result only
     if gaugeopt_suite:
         gaugeopt_target = gaugeopt_target if gaugeopt_target else target_model
         _add_gauge_opt(results, estlbl, gaugeopt_suite, gaugeopt_target,
-                      model_to_gaugeopt, unreliable_ops, comm, printer - 1)
+                       model_to_gaugeopt, unreliable_ops, comm, printer - 1)
     profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
 
     _add_badfit_estimates(results, estlbl, badfit_options, objfn_builder, optimizer, resource_alloc, printer)
@@ -1501,7 +1509,7 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starti
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
-                         resource_alloc=None, verbosity=0):
+                          resource_alloc=None, verbosity=0):
     """
     Add any and all "bad fit" estimates to `results`.
 
@@ -1539,20 +1547,26 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
     if badfit_options is None:
         return  # nothing to do
 
-    comm = resource_alloc.comm if resource_alloc else None
-    mem_limit = resource_alloc.mem_limit if resource_alloc else None
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     base_estimate = results.estimates[base_estimate_label]
+    parameters = base_estimate.parameters
+    mdc_store = parameters.get('final_objfn_store', None)
+    if mdc_store is not None:
+        circuit_list = mdc_store.circuits
+        mdl = mdc_store.model
+        ds = mdc_store.dataset
+        resource_alloc = mdc_store.resource_alloc  # Prefer resource_alloc within mdc_store?
+    else:
+        circuit_list = results.circuit_lists['final']
+        mdl = base_estimate.models['final iteration estimate']
+        ds = results.dataset
+        mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc)
+
+    comm = resource_alloc.comm if resource_alloc else None
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     if badfit_options.threshold is not None and \
        base_estimate.misfit_sigma(use_accurate_np=True, comm=comm) <= badfit_options.threshold:
         return  # fit is good enough - no need to add any estimates
-
-    circuit_list = results.circuit_lists['final']
-    mdl = base_estimate.models['final iteration estimate']
-    cache = base_estimate.parameters.get('final_cache', None)
-    parameters = base_estimate.parameters
-    ds = results.dataset
 
     assert(parameters.get('weights', None) is None), \
         "Cannot perform bad-fit scaling when weights are already given!"
@@ -1569,19 +1583,17 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
         new_final_model = None
 
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
-            new_params['weights'] = _compute_robust_scaling(badfit_typ, mdl, ds, circuit_list,
-                                                       parameters, cache, comm, mem_limit)
+            new_params['weights'] = _compute_robust_scaling(badfit_typ, mdc_store, parameters)
             if badfit_typ in ("Robust", "Robust+") and (optimizer is not None):
-                mdl_reopt = _reoptimize_with_weights(mdl, ds, circuit_list, new_params['weights'],
-                                                    objfn_builder, optimizer, resource_alloc, cache, printer - 1)
+                mdl_reopt = _reoptimize_with_weights(mdc_store, new_params['weights'],
+                                                     objfn_builder, optimizer, printer - 1)
                 new_final_model = mdl_reopt
 
         elif badfit_typ == "wildcard":
             try:
                 badfit_options = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
                                   'wildcard_smart_init': badfit_options.wildcard_smart_init}
-                unmodeled = _compute_wildcard_budget(mdl, ds, circuit_list, parameters, badfit_options,
-                                                cache, comm, mem_limit, printer - 1)
+                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
             except NotImplementedError as e:
@@ -1615,7 +1627,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
             if new_final_model is not None:
                 unreliable_ops = ()  # pass this in?
                 _add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gauge_opt_params},
-                              target_model, new_final_model, unreliable_ops, comm, printer - 1)
+                               target_model, new_final_model, unreliable_ops, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]
@@ -1623,17 +1635,18 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit):
+def _get_fit_qty(mdc_store, parameters):
     # Get by-sequence goodness of fit
     objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-    objfn = objfn_builder.build(model, ds, circuit_list, {'comm': comm}, cache)
+    objfn = objfn_builder.build_from_store(mdc_store)
     fitqty = objfn.chi2k_distributed_qty(objfn.percircuit())
     return fitqty
 
 
-def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cache, comm, mem_limit):
+def _compute_robust_scaling(scale_typ, mdc_store, parameters):
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
+    TODO: update docstring
 
     Parameters
     ----------
@@ -1675,8 +1688,10 @@ def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cach
         scaling factors that should be applied to the data counts for that circuit.
         Omitted circuits should not be scaled.
     """
+    circuit_list = mdc_store.circuits
+    ds = mdc_store.dataset
 
-    fitqty = _get_fit_qty(model, ds, circuit_list, parameters, cache, comm, mem_limit)
+    fitqty = _get_fit_qty(mdc_store, parameters)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
     expected = (len(ds.outcome_labels()) - 1)  # == "k"
@@ -1712,7 +1727,7 @@ def _compute_robust_scaling(scale_typ, model, ds, circuit_list, parameters, cach
     return circuit_weights
 
 
-def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_options, cache, comm, mem_limit, verbosity):
+def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
 
@@ -1735,9 +1750,6 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
         a fit is unsatisfactory.  Contains detailed parameters for wildcard budget
         creation.
 
-    cache : ComputationCache
-        A cache object used to increase performance.
-
     comm : mpi4py.MPI.Comm, optional
         An MPI communicator used to run this computation in parallel.
 
@@ -1751,9 +1763,14 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     -------
     PrimitiveOpsWildcardBudget
     """
+    comm = mdc_store.resource_alloc.comm
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
-    fitqty = _get_fit_qty(model, ds, circuits_to_use, parameters, cache, comm, mem_limit)
+    fitqty = _get_fit_qty(mdc_store, parameters)
     badfit_options = badfit_options or {}
+    circuits_to_use = mdc_store.circuits
+    model = mdc_store.model
+    ds = mdc_store.dataset
+    layout = mdc_store.layout
 
     printer.log("******************* Adding Wildcard Budget **************************")
 
@@ -1761,8 +1778,6 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1                                     # noqa
     # and minimize this for different eta (binary search) to find that largest eta for which the
     # first two terms is are zero.  This Wvec is our keeper.
-    if cache is None:
-        cache = _ComputationCache()  # ensure we have a cache since we need its lookup dict below
 
     ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
@@ -1778,7 +1793,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels() + model.primitive_instrument_labels(),
+    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
                                               add_spam=badfit_options.get('wildcard_budget_includes_spam', True),
                                               start_budget=0.0)
 
@@ -1788,11 +1803,10 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
         wvec = _np.zeros(len(budget.to_vector()), 'd')
     else:
         objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build(model, ds, circuits_to_use, {'comm': comm}, cache)
+        objfn = objfn_builder.build_from_store(mdc_store)
         # assert this is a logl function?
 
-        # Note: evaluate objfn before passing to wildcard fn init so internal probs are init;
-        #  this also ensures that `cache` has a valid eval tree & lookup (used below)
+        # Note: evaluate objfn before passing to wildcard fn init so internal probs are init
         dlogl_percircuit = objfn.percircuit(model.to_vector())
         logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
         num_circuits = len(circuits_to_use)
@@ -1801,7 +1815,7 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
         def _wildcard_objective_firstterms(wv):
             dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
             for i in range(num_circuits):
-                dlogl_percircuit[i] = _np.sum(dlogl_elements[cache.lookup[i]], axis=0)
+                dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
 
             two_dlogl_percircuit = 2 * dlogl_percircuit
             two_dlogl = sum(two_dlogl_percircuit)
@@ -1882,10 +1896,10 @@ def _compute_wildcard_budget(model, ds, circuits_to_use, parameters, badfit_opti
     return budget
 
 
-def _reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objfn_builder, optimizer,
-                            resource_alloc, cache, verbosity):
+def _reoptimize_with_weights(mdc_store, circuit_weights_dict, objfn_builder, optimizer, verbosity):
     """
     Re-optimize a model after data counts have been scaled by circuit weights.
+    TODO: docstring
 
     Parameters
     ----------
@@ -1924,12 +1938,16 @@ def _reoptimize_with_weights(model, ds, circuit_list, circuit_weights_dict, objf
     Model
         The re-optimized model, potentially the *same* object as `model`.
     """
+    ds = mdc_store.dataset
+    circuit_list = mdc_store.circuits
+    resource_alloc = mdc_store.resource_alloc
+
     printer = _objs.VerbosityPrinter.create_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
     circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
     bulk_circuit_list = _BulkCircuitList(circuit_list, circuit_weights=circuit_weights)
-    opt_result, mdl_reopt = _alg.run_gst_fit(ds, model, bulk_circuit_list, optimizer, objfn_builder,
-                                            resource_alloc, cache, printer - 1)
+    opt_result, mdl_reopt = _alg.run_gst_fit_simple(ds, mdc_store.model, bulk_circuit_list, optimizer, objfn_builder,
+                                                    resource_alloc, printer - 1)
     return mdl_reopt
 
 

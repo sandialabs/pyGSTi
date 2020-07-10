@@ -42,12 +42,11 @@ from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
-from . import simplifierhelper as _sh
-from . import layerlizard as _ll
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from .label import Label as _Label
+from .label import Label as _Label, CircuitLabel as _CircuitLabel
+from .layerrules import LayerRules as _LayerRules
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -95,12 +94,12 @@ class ExplicitOpModel(_mdl.OpModel):
         Key prefix for instruments, allowing the model to determing what
         type of object a key corresponds to.
 
-    sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
-        The type of gate sequence / circuit simulation used to compute any
-        requested probabilities, e.g. from :method:`probabilities` or
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
         :method:`bulk_probs`.  The default value of `"auto"` automatically
-        selects the simulation type, and is usually what you want. Allowed
-        values are:
+        selects the simulation type, and is usually what you want. Other
+        special allowed values are:
 
         - "matrix" : op_matrix-op_matrix products are computed and
           cached to get composite gates which can then quickly simulate
@@ -109,8 +108,6 @@ class ExplicitOpModel(_mdl.OpModel):
         - "map" : op_matrix-state_vector products are repeatedly computed
           to simulate circuits.  Slower for a small number of qubits, but
           faster and more memory efficient for higher numbers of qubits (3+).
-        - "termorder", "termgap", "termdirect" : Use Taylor expansions of
-          gates in error rates to compute probabilities approximately.
 
     evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
         The evolution type of this model, describing how states are
@@ -123,7 +120,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def __init__(self, state_space_labels, basis="auto", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="auto",
+                 povm_prefix="M", instrument_prefix="I", simulator="auto",
                  evotype="densitymx"):
         """
         Initialize an ExplictOpModel.
@@ -151,22 +148,10 @@ class ExplicitOpModel(_mdl.OpModel):
             gates, POVM, and instruments respectively.  These prefixes allow
             the Model to determine what type of object a key corresponds to.
 
-        sim_type : {"auto", "matrix", "map", "termorder", "termgap", "termdirect"}
-            The type of gate sequence / circuit simulation used to compute any
-            requested probabilities, e.g. from :method:`probabilities` or
-            :method:`bulk_probs`.  The default value of `"auto"` automatically
-            selects the simulation type, and is usually what you want. Allowed
-            values are:
-
-            - "matrix" : op_matrix-op_matrix products are computed and
-              cached to get composite gates which can then quickly simulate
-              a circuit for any preparation and outcome.  High memory demand;
-              best for a small number of (1 or 2) qubits.
-            - "map" : op_matrix-state_vector products are repeatedly computed
-              to simulate circuits.  Slower for a small number of qubits, but
-              faster and more memory efficient for higher numbers of qubits (3+).
-            - "termorder", "termgap", "termdirect" : Use Taylor expansions of
-              gates in error rates to compute probabilities approximately.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.
 
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
@@ -191,112 +176,23 @@ class ExplicitOpModel(_mdl.OpModel):
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
                 else "sv"  # ( if evotype in ("statevec","stabilizer") )
 
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, None, sim_type)
-        self._shlp = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments, self.state_space_labels)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), simulator)
 
-    def primitive_prep_labels(self):
-        """
-        Return the primitive state preparation labels of this model
+    @property
+    def _primitive_prep_label_dict(self):
+        return self.preps
 
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.preps.keys())
+    @property
+    def _primitive_povm_label_dict(self):
+        return self.povms
 
-    def set_primitive_prep_labels(self, lbls):
-        """
-        Set the primitive state preparation labels of this model
+    @property
+    def _primitive_op_label_dict(self):
+        return self.operations
 
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.operations dict)."))
-
-    def primitive_povm_labels(self):
-        """
-        Return the primitive POVM labels of this model
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.povms.keys())
-
-    def set_primitive_povm_labels(self, lbls):
-        """
-        Set the primitive POVM labels of this model
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels.
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.povms dict)."))
-
-    def primitive_op_labels(self):
-        """
-        Return the primitive operation labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.operations.keys())
-
-    def set_primitive_op_labels(self, lbls):
-        """
-        Set the primitive operation labels of this model.
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.operations dict)."))
-
-    def primitive_instrument_labels(self):
-        """
-        Return the primitive instrument labels of this model.
-
-        Returns
-        -------
-        tuple
-        """
-        return tuple(self.instruments.keys())
-
-    def set_primitive_instrument_labels(self, lbls):
-        """
-        Set the primitive instrument labels of this model.
-
-        Parameters
-        ----------
-        lbls : tuple
-            the labels
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError(("Cannot set the primitive labels of an ExplicitOpModel "
-                          "(they're determined by the keys of the model.instrument dict)."))
+    @property
+    def _primitive_instrument_label_dict(self):
+        return self.instruments
 
     #Functions required for base class functionality
 
@@ -306,11 +202,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.operations.items(),
                                          self.instruments.items()):
             yield (lbl, obj)
-
-    def _layer_lizard(self):
-        """ Return a layer lizard for this model """
-        self._clean_paramvec()  # just to be safe
-        return _ll.ExplicitLayerLizard(self.preps, self.operations, self.povms, self.instruments, self)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
@@ -373,12 +264,10 @@ class ExplicitOpModel(_mdl.OpModel):
         if op_val.dim == self.dim and not force:
             return op_val  # if gate operates on full dimension, no need to embed.
 
-        if self._sim_type == "matrix":
+        if isinstance(self._sim, _matrixfwdsim.MatrixForwardSimulator):
             return _op.EmbeddedDenseOp(self.state_space_labels, op_target_labels, op_val)
-        elif self._sim_type in ("map", "termorder"):
+        else:  # all other types, e.g. "map" and "termorder"
             return _op.EmbeddedOp(self.state_space_labels, op_target_labels, op_val)
-        else:
-            assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
     @property
     def default_gauge_group(self):
@@ -545,27 +434,30 @@ class ExplicitOpModel(_mdl.OpModel):
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
             self._evotype = "statevec"
             self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
-            if self._sim_type not in ("matrix", "map"):
-                self.set_simtype("matrix" if self.dim <= 4 else "map")
+            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
+                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif typ == 'clifford':
             self._evotype = "stabilizer"
-            self.set_simtype("map")
+            self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif _gt.is_valid_lindblad_paramtype(typ):
             baseType, evotype = _gt.split_lindblad_paramtype(typ)
             self._evotype = evotype
             if evotype == "densitymx":
-                if self._sim_type not in ("matrix", "map"):
-                    self.set_simtype("matrix" if self.dim <= 16 else "map")
+                if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                    self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+                        _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
             elif evotype in ("svterm", "cterm"):
-                if self._sim_type != "termorder":
-                    self.set_simtype("termorder", max_order=1)
+                if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
+                    self._sim = _termfwdsim.TermForwardSimulator(self)
 
         else:  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
-            if self._sim_type not in ("matrix", "map"):
-                self.set_simtype("matrix" if self.dim <= 16 else "map")
+            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         basis = self.basis
         if extra is None: extra = {}
@@ -598,9 +490,6 @@ class ExplicitOpModel(_mdl.OpModel):
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
-    #def __getstate__(self):
-    #    #Returns self.__dict__ by default, which is fine
-
     def __setstate__(self, state_dict):
 
         if "gates" in state_dict:
@@ -609,8 +498,6 @@ class ExplicitOpModel(_mdl.OpModel):
             self.operations = state_dict['gates']
             self._state_space_labels = state_dict['stateSpaceLabels']
             self._paramlbls = None
-            self._shlp = _sh.MemberDictSimplifierHelper(
-                state_dict['preps'], state_dict['povms'], state_dict['instruments'], self._state_space_labels)
             del state_dict['gates']
             del state_dict['_autogator']
             del state_dict['auto_idle_gatename']
@@ -627,47 +514,6 @@ class ExplicitOpModel(_mdl.OpModel):
         if 'state_space_labels' in state_dict:
             state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
 
-        #TODO REMOVE
-        #if "effects" in state_dict: #
-        #    #unpickling an OLD-version Model - like a re-__init__
-        #    #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",state_dict.keys())
-        #    default_param = "full"
-        #    self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
-        #    self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
-        #    self.effects_prefix = 'E'
-        #    self.operations = _ld.OrderedMemberDict(self, default_param, "G", "gate")
-        #    self.instruments = _ld.OrderedMemberDict(self, default_param, "I", "instrument")
-        #    self._paramvec = _np.zeros(0, 'd')
-        #    self._rebuild_paramvec()
-        #
-        #    self._dim = state_dict['_dim']
-        #    self._calcClass = state_dict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
-        #    self._evotype = "densitymx"
-        #    self.basis = state_dict.get('basis', _Basis('unknown', None))
-        #    if self.basis.name == "unknown" and '_basisNameAndDim' in state_dict:
-        #        self.basis = _Basis(state_dict['_basisNameAndDim'][0],
-        #                            state_dict['_basisNameAndDim'][1])
-        #
-        #    self._default_gauge_group = state_dict['_default_gauge_group']
-        #
-        #    assert(len(state_dict['preps']) <= 1), "Cannot convert Models with multiple preps!"
-        #    for lbl,gate in state_dict['gates'].items(): self.operations[lbl] = gate
-        #    for lbl,vec in state_dict['preps'].items(): self.preps[lbl] = vec
-        #
-        #    effect_vecs = []; remL = state_dict['_remainderlabel']
-        #    comp_lbl = None
-        #    for sl,(prepLbl,ELbl) in state_dict['spamdefs'].items():
-        #        assert((prepLbl,ELbl) != (remL,remL)), "Cannot convert sum-to-one spamlabel!"
-        #        if ELbl == remL:  comp_lbl = str(sl)
-        #        else: effect_vecs.append( (str(sl), state_dict['effects'][ELbl]) )
-        #    if comp_lbl is not None:
-        #        comp_vec = state_dict['_povm_identity'] - sum([v for sl,v in effect_vecs])
-        #        effect_vecs.append( (comp_lbl, comp_vec) )
-        #        self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
-        #    else:
-        #        self.povms['Mdefault'] = _povm.UnconstrainedPOVM(effect_vecs)
-        #
-        #else:
         self.__dict__.update(state_dict)
 
         if 'uuid' not in state_dict:
@@ -821,283 +667,6 @@ class ExplicitOpModel(_mdl.OpModel):
             instrument.transform_inplace(s)
 
         self._clean_paramvec()  # transform may leave dirty members
-
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: Operator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().product(circuit, scale)
-
-    def dproduct(self, circuit, flat=False):
-        """
-        Compute the derivative of a specified sequence of operation labels.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        Returns
-        -------
-        deriv : numpy array
-            * if flat == False, a M x G x G array, where:
-
-              - M == length of the vectorized model (number of model parameters)
-              - G == the linear dimension of a operation matrix (G x G operation matrices).
-
-              and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
-              with respect to the i-th model parameter.
-
-            * if flat == True, a N x M array, where:
-
-              - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
-              - M == length of the vectorized model (number of model parameters)
-
-              and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th model parameter.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().dproduct(circuit, flat)
-
-    def hproduct(self, circuit, flat=False):
-        """
-        Compute the hessian of a specified sequence of operation labels.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        Returns
-        -------
-        hessian : numpy array
-            * if flat == False, a  M x M x G x G numpy array, where:
-
-              - M == length of the vectorized model (number of model parameters)
-              - G == the linear dimension of a operation matrix (G x G operation matrices).
-
-              and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
-              with respect to the j-th then i-th model parameters.
-
-            * if flat == True, a  N x M x M numpy array, where:
-
-              - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
-              - M == length of the vectorized model (number of model parameters)
-
-              and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
-              product with respect to the k-th then k-th model parameters.
-        """
-        circuit = _cir.Circuit(circuit)  # cast to Circuit
-        return self._fwdsim().hproduct(circuit, flat)
-
-    def bulk_product(self, eval_tree, scale=False, comm=None):
-        """
-        Compute the products of many operation sequences at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  This is done over operation sequences when a
-            *split* eval_tree is given, otherwise no parallelization is performed.
-
-        Returns
-        -------
-        prods : numpy array
-            Array of shape S x G x G, where:
-
-            - S == the number of operation sequences
-            - G == the linear dimension of a operation matrix (G x G operation matrices).
-        scaleValues : numpy array
-            Only returned when scale == True. A length-S array specifying
-            the scaling that needs to be applied to the resulting products
-            (final_product[i] = scaleValues[i] * prods[i]).
-        """
-        return self._fwdsim().bulk_product(eval_tree, scale, comm)
-
-    def bulk_dproduct(self, eval_tree, flat=False, return_prods=False,
-                      scale=False, comm=None):
-        """
-        Compute the derivative of many operation sequences at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        return_prods : bool, optional
-            when set to True, additionally return the products.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first done over the set
-            of parameters being differentiated with respect to.  If there are
-            more processors than model parameters, distribution over a split
-            eval_tree (if given) is possible.
-
-        Returns
-        -------
-        derivs : numpy array
-            * if `flat` is ``False``, an array of shape S x M x G x G, where:
-
-              - S = len(circuit_list)
-              - M = the length of the vectorized model
-              - G = the linear dimension of a operation matrix (G x G operation matrices)
-
-              and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
-              of the i-th operation sequence product with respect to the j-th model
-              parameter.
-
-            * if `flat` is ``True``, an array of shape S*N x M where:
-
-              - N = the number of entries in a single flattened gate (ordering
-                same as numpy.flatten),
-              - S,M = as above,
-
-              and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
-              entry of the ``(i / G^2)``-th flattened operation sequence product  with
-              respect to the j-th model parameter.
-        products : numpy array
-            Only returned when `return_prods` is ``True``.  An array of shape
-            S x G x G; ``products[i]`` is the i-th operation sequence product.
-        scale_vals : numpy array
-            Only returned when `scale` is ``True``.  An array of shape S such
-            that ``scale_vals[i]`` contains the multiplicative scaling needed for
-            the derivatives and/or products for the i-th operation sequence.
-        """
-        return self._fwdsim().bulk_dproduct(eval_tree, flat, return_prods,
-                                            scale, comm)
-
-    def bulk_hproduct(self, eval_tree, flat=False, return_dprods_and_prods=False,
-                      scale=False, comm=None):
-        """
-        Return the Hessian of many operation sequence products at once.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the operation sequences
-            to compute the bulk operation on.
-
-        flat : bool, optional
-            Affects the shape of the returned derivative array (see below).
-
-        return_dprods_and_prods : bool, optional
-            when set to True, additionally return the probabilities and
-            their derivatives.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first done over the
-            set of parameters being differentiated with respect to when the
-            *second* derivative is taken.  If there are more processors than
-            model parameters, distribution over a split eval_tree (if given)
-            is possible.
-
-        Returns
-        -------
-        hessians : numpy array
-            * if flat == False, an  array of shape S x M x M x G x G, where
-
-              - S == len(circuit_list)
-              - M == the length of the vectorized model
-              - G == the linear dimension of a operation matrix (G x G operation matrices)
-
-              and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
-              of the i-th operation sequence product with respect to the k-th then j-th
-              model parameters.
-
-            * if flat == True, an array of shape S*N x M x M where
-
-              - N == the number of entries in a single flattened gate (ordering as numpy.flatten),
-              - S,M == as above,
-
-              and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened operation sequence product with respect to
-              the k-th then j-th model parameters.
-        derivs : numpy array
-            Only returned if return_dprods_and_prods == True.
-
-            * if flat == False, an array of shape S x M x G x G, where
-
-              - S == len(circuit_list)
-              - M == the length of the vectorized model
-              - G == the linear dimension of a operation matrix (G x G operation matrices)
-
-              and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-              of the i-th operation sequence product with respect to the j-th model
-              parameter.
-
-            * if flat == True, an array of shape S*N x M where
-
-              - N == the number of entries in a single flattened gate (ordering is
-                     the same as that used by numpy.flatten),
-              - S,M == as above,
-
-              and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-              the (i / G^2)-th flattened operation sequence product  with respect to
-              the j-th model parameter.
-        products : numpy array
-            Only returned when return_dprods_and_prods == True.  An array of shape
-            S x G x G; products[i] is the i-th operation sequence product.
-        scale_vals : numpy array
-            Only returned when scale == True.  An array of shape S such that
-            scale_vals[i] contains the multiplicative scaling needed for
-            the hessians, derivatives, and/or products for the i-th operation sequence.
-        """
-        ret = self._fwdsim().bulk_hproduct(
-            eval_tree, flat, return_dprods_and_prods, scale, comm)
-        if return_dprods_and_prods:
-            return ret[0:2] + ret[3:]  # remove ret[2] == deriv wrt filter2,
-            # which isn't an input param for Model version
-        else: return ret
 
     def frobeniusdist(self, other_model, transform_mx=None,
                       item_weights=None, normalize=True):
@@ -1258,7 +827,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for k in range(1, operationMx.shape[1]):
                 penalty += abs(operationMx[0, k])**2
 
-        op_dim = self.dimension()
+        op_dim = self.dim
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
             penalty += abs(rhoVec[0, 0] - firstEl)**2
@@ -1339,9 +908,6 @@ class ExplicitOpModel(_mdl.OpModel):
         copy_into.povms = self.povms.copy(copy_into)
         copy_into.operations = self.operations.copy(copy_into)
         copy_into.instruments = self.instruments.copy(copy_into)
-        copy_into._shlp = _sh.MemberDictSimplifierHelper(copy_into.preps, copy_into.povms, copy_into.instruments,
-                                                         self.state_space_labels)
-
         copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):
@@ -1504,7 +1070,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the rotated Model
         """
         newModel = self.copy()  # start by just copying model
-        dim = self.dimension()
+        dim = self.dim
         myBasis = self.basis
 
         if max_rotate is not None:
@@ -1570,7 +1136,7 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             rndm = rand_state
 
-        op_dim = self.dimension()
+        op_dim = self.dim
         unitary_dim = int(round(_np.sqrt(op_dim)))
         assert(unitary_dim**2 == op_dim), \
             "Model dimension must be a perfect square, %d is not" % op_dim
@@ -1617,7 +1183,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the increased-dimension Model
         """
 
-        curDim = self.dimension()
+        curDim = self.dim
         assert(new_dimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1626,7 +1192,7 @@ class ExplicitOpModel(_mdl.OpModel):
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim_type)
+                                    self.instruments._prefix, self._sim.copy())
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1688,7 +1254,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the decreased-dimension Model
         """
-        curDim = self.dimension()
+        curDim = self.dim
         assert(new_dimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1697,7 +1263,7 @@ class ExplicitOpModel(_mdl.OpModel):
                                      name="Unknown")  # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim_type)
+                                    self.instruments._prefix, self._sim.copy())
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -1838,3 +1404,109 @@ class ExplicitOpModel(_mdl.OpModel):
                 [ev.real for ev in _np.linalg.eigvals(
                     _jt.jamiolkowski_iso(gate))]), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
+
+    def _effect_labels_for_povm(self, povm_lbl):
+        """
+        Gets the effect labels corresponding to the possible outcomes of POVM label `povm_lbl`.
+
+        Parameters
+        ----------
+        povm_lbl : Label
+            POVM label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the POVM outcomes.
+        """
+        return tuple(self.povms[povm_lbl].keys())
+
+    def _member_labels_for_instrument(self, inst_lbl):
+        """
+        Gets the member labels corresponding to the possible outcomes of the instrument labeled by `inst_lbl`.
+
+        Parameters
+        ----------
+        inst_lbl : Label
+            Instrument label.
+
+        Returns
+        -------
+        list
+            A list of strings which label the instrument members.
+        """
+        return tuple(self.instruments[inst_lbl].keys())
+
+    def _reinit_opcaches(self):
+        self._opcaches.clear()
+
+        # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
+        simplified_effects = _collections.OrderedDict()
+        for povm_lbl, povm in self.povms.items():
+            for k, e in povm.simplify_effects(povm_lbl).items():
+                simplified_effects[k] = e
+
+        simplified_ops = _collections.OrderedDict()
+        for inst_lbl, inst in self.instruments.items():
+            for k, g in inst.simplify_operations(inst_lbl).items():
+                simplified_ops[k] = g
+
+        self._opcaches['povm-layers'] = simplified_effects
+        self._opcaches['op-layers'] = simplified_ops
+
+
+class ExplicitLayerRules(_LayerRules):
+    """ Rule: layer must appear explicitly as a "primitive op" """
+    def prep_layer_operator(self, model, layerlbl, caches):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        POVM or SPAMVec
+        """
+        # No need for caching preps
+        return model.preps[layerlbl]  # don't cache this - it's not a new operator
+
+    def povm_layer_operator(self, model, layerlbl, caches):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        POVM or SPAMVec
+        """
+        if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
+        return model.povms[layerlbl]  # don't cache this - it's not a new operator
+
+    def operation_layer_operator(self, model, layerlbl, caches):
+        """
+        Create the operator corresponding to `layerlbl`.
+
+        Parameters
+        ----------
+        layerlbl : Label
+            A circuit layer label.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        if layerlbl in caches['op-layers']: return caches['op-layers'][layerlbl]
+        if isinstance(layerlbl, _CircuitLabel):
+            dense = isinstance(model._sim, _matrixfwdsim.MatrixForwardSimulator)  # True => create dense-matrix gates
+            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            caches['op-layers'][layerlbl] = op
+            return op
+        else:
+            return model.operations[layerlbl]
