@@ -17,9 +17,9 @@ from .. import tools as _tools
 from .. import objects as _objs
 from ..objects import objectivefns as _objfns
 from ..objects.smartcache import smart_cached
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
 
-
+#TODO REMOVE
 #def total_count_matrix(gsplaq, dataset):
 #    """
 #    Computes the total count matrix for a base circuit.
@@ -475,8 +475,8 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
 #@smart_cached
 def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
-    subMxs = [[sub_mx_creation_fn(gss.get_plaquette(x, y), x, y, sub_mx_creation_fn_extra_arg)
-               for x in gss.used_xvals()] for y in gss.used_yvals()]
+    subMxs = [[sub_mx_creation_fn(gss.plaquette(x, y, True), x, y, sub_mx_creation_fn_extra_arg)
+               for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
 
@@ -522,7 +522,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #        Direct-X chi^2 values corresponding to circuits where
 #        circuit is sandwiched between the each (effectStr,prepStr) pair.
 #    """
-#    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
+#    if len(gsplaq) > 0:  # skip cases with no strings
 #        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
 #        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
 #        plaq_pr.simplify_circuits(direct_model)
@@ -583,7 +583,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #        Direct-X logL values corresponding to circuits where
 #        circuit is sandwiched between the each (effectStr,prepStr) pair.
 #    """
-#    if len(gsplaq.get_all_strs()) > 0:  # skip cases with no strings
+#    if len(gsplaq) > 0:  # skip cases with no strings
 #        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=direct_model)
 #        plaq_pr = gss.create_plaquette(_objs.Circuit(("GsigmaLbl",)))
 #        plaq_pr.simplify_circuits(direct_model)
@@ -625,7 +625,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         where a base circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    ret = _np.nan * _np.ones((gsplaq.num_rows, gsplaq.num_cols), 'd')
     for i, j, opstr in gsplaq:
         ret[i, j] = dscomparator.llrs[opstr]
     return ret
@@ -658,7 +658,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
         circuits where a base circuit is sandwiched between the each prep-fiducial
         and effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    ret = _np.nan * _np.ones((gsplaq.num_rows, gsplaq.num_cols), 'd')
     stabilityanalyzer = drifttuple[0]
     dictlabel = drifttuple[1]
     assert(dictlabel == ('circuit',)), "Currently can only create these matrices for this single type of test!"
@@ -696,7 +696,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
         circuits correspond to the circuits where a base circuit
         is sandwiched between the each prep-fiducial and effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones((gsplaq.rows, gsplaq.cols), 'd')
+    ret = _np.nan * _np.ones((gsplaq.num_rows, gsplaq.num_cols), 'd')
     stabilityanalyzer = drifttuple[0]
     estimatekey = drifttuple[1]
     estimator = drifttuple[2]
@@ -709,7 +709,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     return ret
 
 
-# future: delete this if we decide not to add this option back in.
+# future: delete this if we decide not to add this option back in. REMOVE
 # @smart_cached
 # def drift_maxpower_matrices(gsplaq, driftresults):
 #     """
@@ -758,9 +758,9 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
     model : Model
         The model (model).
 
-    circuit_list : BulkCircuitList or list of Circuits
+    circuit_list : CircuitList or list of Circuits
         The circuits to use when computing the model violation.  A
-        :class:`BulkCircuitList` object may be given to include additional information
+        :class:`CircuitList` object may be given to include additional information
         (e.g. aliases) along with the list of circuits.
 
     objfn_builder : ObjectiveFunctionBuilder
@@ -810,7 +810,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
     fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 
-    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
+    aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
     ds_gstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
     if hasattr(model, 'num_nongauge_params'):

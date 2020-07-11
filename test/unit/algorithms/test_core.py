@@ -5,7 +5,7 @@ from . import fixtures
 
 import pygsti.construction as pc
 from pygsti.objects import Circuit, Label, Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction, BulkCircuitList
+    PoissonPicDeltaLogLFunction, CircuitList
 from pygsti.algorithms import core
 
 
@@ -171,7 +171,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             ]) for mdl in self.lsgstStrings[0]
         ]
         aliases = {Label('GA1'): Circuit(['Gx'])}
-        aliased_list = BulkCircuitList(aliased_list, aliases)
+        aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
         aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
@@ -227,7 +227,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
     def test_do_iterative_mc2gst_circuit_weights_dict(self):
         def make_weights_array(l, weights_dict):
             return np.array([weights_dict.get(circuit, 1.0) for circuit in l])
-        weighted_lists = [BulkCircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
+        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
                           for lst in self.lsgstStrings]
         mdl_lsgst = core.run_iterative_gst(
             self.ds, self.mdl_clgst, weighted_lists,
@@ -315,7 +315,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             ]) for mdl in self.lsgstStrings[0]
         ]
         aliases = {Label('GA1'): Circuit(['Gx'])}
-        aliased_list = BulkCircuitList(aliased_list, aliases)
+        aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
         aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
@@ -365,7 +365,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     def test_do_iterative_mlgst_circuit_weights_dict(self):
         def make_weights_array(l, weights_dict):
             return np.array([weights_dict.get(circuit, 1.0) for circuit in l])
-        weighted_lists = [BulkCircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
+        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
                           for lst in self.lsgstStrings]
         model = core.run_iterative_gst(
             self.ds, self.mdl_clgst, weighted_lists,

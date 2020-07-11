@@ -12,7 +12,7 @@ Defines the MatrixCOPALayout class.
 
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .distlayout import _DistributableAtom
 from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .evaltree import EvalTree as _EvalTree
@@ -41,14 +41,16 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                     prep_lbl = sep_povm_c.circuit_without_povm[0]
                     exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
                     spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.full_effect_labels]
-                    outcome_by_spamtuple = {st: (outcome, orig_i) for st, outcome in zip(spam_tuples, outcomes)}
+                    outcome_by_spamtuple = _collections.OrderedDict([(st, (outcome, orig_i))
+                                                                     for st, outcome in zip(spam_tuples, outcomes)])
 
                     if exp_nospam_c not in expanded_nospam_circuit_outcomes:
                         expanded_nospam_circuit_outcomes[exp_nospam_c] = outcome_by_spamtuple
                     else:
                         expanded_nospam_circuit_outcomes[exp_nospam_c].update(outcome_by_spamtuple)
 
-        expanded_nospam_circuits = {i: cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
+        expanded_nospam_circuits = _collections.OrderedDict(
+            [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())])
         self.tree = _EvalTree.create(expanded_nospam_circuits)
         self._num_nonscratch_tree_items = len(expanded_nospam_circuits)  # put this in EvalTree?
 
@@ -57,15 +59,16 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         # quantity plus a spam-tuple. We order the final indices so that all the outcomes corresponding to a
         # given spam-tuple are contiguous.
 
-        tree_indices_by_spamtuple = _collections.defaultdict(list)  # "tree" indices index expanded_nospam_circuits
+        tree_indices_by_spamtuple = _collections.OrderedDict()  # "tree" indices index expanded_nospam_circuits
         for i, c in expanded_nospam_circuits.items():
             for spam_tuple in expanded_nospam_circuit_outcomes[c].keys():
+                if spam_tuple not in tree_indices_by_spamtuple: tree_indices_by_spamtuple[spam_tuple] = []
                 tree_indices_by_spamtuple[spam_tuple].append(i)
 
         #Assign element indices, starting at `offset`
         # now that we know how many of each spamtuple there are, assign final element indices.
         local_offset = 0
-        self.indices_by_spamtuple = {}  # values are (element_indices, tree_indices) tuples.
+        self.indices_by_spamtuple = _collections.OrderedDict()  # values are (element_indices, tree_indices) tuples.
         for spam_tuple, tree_indices in tree_indices_by_spamtuple.items():
             self.indices_by_spamtuple[spam_tuple] = (slice(local_offset, local_offset + len(tree_indices)),
                                                      _slct.list_to_slice(tree_indices, array_ok=True))
@@ -166,7 +169,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         # 5. initialize base class with given per-original-circuit element indices.
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
-        aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
+        aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
 
@@ -185,7 +188,8 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
         atoms = []
-        elindex_outcome_tuples = {orig_i: list() for orig_i in range(len(unique_circuits))}
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (orig_i, list()) for orig_i in range(len(unique_circuits))])
 
         offset = 0
         for group in groups:

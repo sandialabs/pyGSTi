@@ -21,7 +21,8 @@ from ..objects import objectivefns as _objfns
 from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -491,19 +492,19 @@ class Estimate(object):
             scale values (see above).
         """
         p = self.parent
-        gss = p.circuit_lists['final'].circuit_structure  # FUTURE: overrideable?
+        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overrideable?
         weights = self.parameters.get("weights", None)
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-            nrows, ncols = gss.num_plaquette_rows_cols()
 
             sub_mxs = []
-            for y in gss.used_yvals():
+            for y in gss.used_ys:
                 sub_mxs.append([])
-                for x in gss.used_xvals():
-                    scaling_mx = _np.nan * _np.ones((nrows, ncols), 'd')
+                for x in gss.used_xs:
                     plaq = gss.get_plaquette(x, y).expand_aliases()
+                    scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
+
                     if len(plaq) > 0:
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = weights.get(opstr, 1.0)
@@ -524,9 +525,9 @@ class Estimate(object):
 
             if return_submxs:  # then need to create subMxs with all 1's
                 sub_mxs = []
-                for y in gss.used_yvals():
+                for y in gss.used_ys:
                     sub_mxs.append([])
-                    for x in gss.used_xvals():
+                    for x in gss.used_xs:
                         plaq = gss.get_plaquette(x, y)
                         scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
                         for i, j, opstr in plaq:
@@ -564,7 +565,7 @@ class Estimate(object):
         objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
         objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
         fitqty = objfn.chi2k_distributed_qty(objfn.fn())
-        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _BulkCircuitList) else None
+        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
         ds_dof = ds.degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset

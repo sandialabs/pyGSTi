@@ -615,6 +615,16 @@ class Circuit(object):
         else:
             return self._str
 
+    @property
+    def layerstr(self):
+        """ Just the string representation of the circuit layers (no '@<line_labels>' suffix) """
+        return self._labels_lines_str()[0]
+
+    @property
+    def linesstr(self):
+        """ Just the string representation of the circuit's line labels (the '@<line_labels>' suffix) """
+        return self._labels_lines_str()[1]
+
     def _labels_lines_str(self):
         """ Split the string representation up into layer-labels & line-labels parts """
         if '@' in self.str:
@@ -730,15 +740,21 @@ class Circuit(object):
     def __eq__(self, x):
         if x is None: return False
         if isinstance(x, Circuit):
-            return self.tup == x.tup
+            return self.tup.__eq__(x.tup)
         else:
-            return self.tup == tuple(x)
+            return self.layertup == tuple(x)  # equality with non-circuits is just based on *labels*
 
     def __lt__(self, x):
-        return self.tup.__lt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__lt__(x.tup)
+        else:
+            return self.layertup < tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def __gt__(self, x):
-        return self.tup.__gt__(tuple(x))
+        if isinstance(x, Circuit):
+            return self.tup.__gt__(x.tup)
+        else:
+            return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def number_of_lines(self):
         """
@@ -3523,11 +3539,12 @@ class Circuit(object):
         circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
 
         def create_tree(lst):
-            subs = _collections.defaultdict(list)
+            subs = _collections.OrderedDict()
             for el in lst:
                 if len(el) > 0:
+                    if el[0] not in subs: subs[el[0]] = []
                     subs[el[0]].append(el[1:])
-            return {k: create_tree(sub_lst) for k, sub_lst in subs.items()}
+            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
 
         def add_expanded_circuit_outcomes(cir, running_outcomes, ootree, start):
             """

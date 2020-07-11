@@ -17,7 +17,7 @@ import copy as _copy
 from functools import reduce as _reduce
 from operator import add as _add
 
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .label import Label as _Label
 from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
@@ -88,7 +88,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
         """
-        circuits = circuits if isinstance(circuits, _BulkCircuitList) else _BulkCircuitList(circuits)
+        circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         unique_circuits, to_unique = cls._compute_unique_circuits(circuits)
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, circuits.op_label_aliases)
@@ -122,7 +122,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
-        self.circuits = circuits if isinstance(circuits, _BulkCircuitList) else _BulkCircuitList(circuits)
+        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         self._unique_circuits = unique_circuits
         self._unique_circuit_index = _collections.OrderedDict(
             [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices

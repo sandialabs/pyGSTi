@@ -320,7 +320,7 @@ def direct_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
 
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
-    bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
+    bulk_circuits = _objs.CircuitList(circuits, aliases)
     _, direct_lsgst = _core.run_gst_fit_simple(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                                objective_function_builder=obuilder, resource_alloc=None,
                                                verbosity=verbosity)
@@ -487,7 +487,7 @@ def direct_mlgst_model(circuit_to_estimate, circuit_label, dataset,
 
     obuilder = _objs.PoissonPicDeltaLogLFunction.builder(regularization={'min_prob_clip': min_prob_clip},
                                                          penalties={'prob_clip_interval': prob_clip_interval})
-    bulk_circuits = _objs.BulkCircuitList(circuits, aliases)
+    bulk_circuits = _objs.CircuitList(circuits, aliases)
     _, direct_mlegst = _core.run_gst_fit_simple(dataset, direct_lgst, bulk_circuits, optimizer=None,
                                                 objective_function_builder=obuilder, resource_alloc=None,
                                                 verbosity=verbosity)
@@ -627,7 +627,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
 
     obuilder = _objs.Chi2Function.builder(regularization={'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                           penalties={'prob_clip_interval': prob_clip_interval})
-    bulk_circuits = _objs.BulkCircuitList(circuits, op_label_aliases)
+    bulk_circuits = _objs.CircuitList(circuits, op_label_aliases)
     _, focused_lsgst = _core.run_gst_fit_simple(dataset, start_model, bulk_circuits, optimizer=None,
                                                 objective_function_builder=obuilder, resource_alloc=None,
                                                 verbosity=verbosity)

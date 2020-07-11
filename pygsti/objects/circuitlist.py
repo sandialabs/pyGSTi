@@ -1,5 +1,5 @@
 """
-Circuit list for bulk computation
+Defines the CircuitList class, for holding meta-data alongside a list or tuple of Circuits.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,21 +9,20 @@ Circuit list for bulk computation
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-from .circuitstructure import LsGermsStructure as _LsGermsStructure
+import uuid as _uuid
+
 from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
 
 
-class BulkCircuitList(list):
+class CircuitList(object):
     """
-    A list of :class:`Circuit` objects and associated metadata.
+    A unmutable list (a tuple) of :class:`Circuit` objects and associated metadata.
 
     Parameters
     ----------
-    circuit_list_or_structure : list or CircuitStructure
+    circuits : list
         The list of circuits that constitutes the primary data held by this object.
-        If this list is obtained by providing a :class:`CircuitStructure`, this
-        object will hold the additional structure information as well.
 
     op_label_aliases : dict, optional
         Dictionary of circuit meta-data whose keys are operation label "aliases"
@@ -39,16 +38,33 @@ class BulkCircuitList(list):
     name : str, optional
         An optional name for this list, used for status messages.
     """
-    def __init__(self, circuit_list_or_structure, op_label_aliases=None, circuit_weights=None, name=None):
+
+    @classmethod
+    def cast(cls, circuits):
         """
-        Create a BulkCircuitList.
+        Convert (if needed) an object into a :class:`CircuitList`.
 
         Parameters
         ----------
-        circuit_list_or_structure : list or CircuitStructure
+        circuits : list or CircuitList
+            The object to convert.
+
+        Returns
+        -------
+        CircuitList
+        """
+        if isinstance(circuits, CircuitList):
+            return circuits
+        return cls(circuits)
+
+    def __init__(self, circuits, op_label_aliases=None, circuit_weights=None, name=None):
+        """
+        Create a CircuitList.
+
+        Parameters
+        ----------
+        circuits : list
             The list of circuits that constitutes the primary data held by this object.
-            If this list is obtained by providing a :class:`CircuitStructure`, this
-            object will hold the additional structure information as well.
 
         op_label_aliases : dict, optional
             Dictionary of circuit meta-data whose keys are operation label "aliases"
@@ -64,20 +80,21 @@ class BulkCircuitList(list):
         name : str, optional
             An optional name for this list, used for status messages.
         """
-        #validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_list_or_structure, (list, tuple)):
-            circuit_list_or_structure = list(map(_Circuit.cast, circuit_list_or_structure))
-            self.circuits_to_use = circuit_list_or_structure
-            self.circuit_structure = _LsGermsStructure([], [], [], [], None)  # create a dummy circuit structure
-            self.circuit_structure.add_unindexed(circuit_list_or_structure)   # which => "no circuit structure"
-        else:  # assume a circuit structure
-            self.circuit_structure = circuit_list_or_structure
-            self.circuits_to_use = self.circuit_structure.allstrs
-
+        self._circuits = tuple(map(_Circuit.cast, circuits))  # *static* container - can't add/append
         self.op_label_aliases = op_label_aliases
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
-        self[:] = self.circuits_to_use  # maybe get rid of self.circuits_to_use in the future...
+        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+
+    # Mimic list / tuple
+    def __len__(self):
+        return len(self._circuits)
+
+    def __getitem__(self, index):
+        return self._circuits[index]
+
+    def __iter__(self):
+        yield from self._circuits
 
     def apply_aliases(self):
         """
@@ -88,5 +105,22 @@ class BulkCircuitList(list):
         list
             A list of :class:`Circuit`s.
         """
-        return _lt.apply_aliases_to_circuits(self[:], self.op_label_aliases)
+        return _lt.apply_aliases_to_circuits(self._circuits, self.op_label_aliases)
 
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
+
+    def __eq__(self, other):
+        #Compare with non-CircuitLists as lists
+        if isinstance(other, CircuitList):
+            return self.uuid == other.uuid
+        else:
+            return self._circuits == other
+
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
+        if 'uuid' not in state_dict:  # backward compatibility
+            self.uuid = _uuid.uuid4()  # create a new uuid

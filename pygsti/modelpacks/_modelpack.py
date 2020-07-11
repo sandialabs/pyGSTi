@@ -372,7 +372,7 @@ class GSTModelPack(ModelPack):
 
     def get_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """
-        Construct a :class:`pygsti.objects.BulkCircuitList` from this modelpack.
+        Construct a :class:`pygsti.objects.CircuitList` from this modelpack.
 
         Parameters
         ----------
@@ -396,7 +396,7 @@ class GSTModelPack(ModelPack):
 
         Returns
         -------
-         : class:`pygsti.objects.BulkCircuitList`
+         : class:`pygsti.objects.CircuitList`
         """
         if fpr:
             fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \

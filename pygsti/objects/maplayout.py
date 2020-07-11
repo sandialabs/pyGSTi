@@ -17,7 +17,7 @@ import copy as _copy
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .distlayout import _DistributableAtom
 from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .prefixtable import PrefixTable as _PrefixTable
@@ -120,7 +120,7 @@ class MapCOPALayout(_DistributableCOPALayout):
                  max_sub_table_size=None, num_sub_tables=None, additional_dimensions=(), verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
-        aliases = circuits.op_label_aliases if isinstance(circuits, _BulkCircuitList) else None
+        aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
         unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
 
@@ -128,7 +128,8 @@ class MapCOPALayout(_DistributableCOPALayout):
         groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity)
 
         atoms = []
-        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
+        elindex_outcome_tuples = _collections.OrderedDict(
+            [(unique_i, list()) for unique_i in range(len(unique_circuits))])
         to_orig = {unique_i: orig_i for orig_i, unique_i in to_unique.items()}  # unique => original indices
 
         offset = 0

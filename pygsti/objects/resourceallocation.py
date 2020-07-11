@@ -81,3 +81,9 @@ class ResourceAllocation(object):
         ResourceAllocation
         """
         return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
+
+    def __getstate__(self):
+        # Can't pickle comm objects
+        to_pickle = self.__dict__.copy()
+        to_pickle['comm'] = None  # will cause all unpickled ResourceAllocations comm=`None`
+        return to_pickle

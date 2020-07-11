@@ -20,7 +20,7 @@ from .. import optimize as _opt, tools as _tools
 from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
 #from .computationcache import ComputationCache as _ComputationCache
-from .bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 #REMOVE:
@@ -37,7 +37,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     Takes a number of common parameters and automates the creation of
     intermediate objects like a :class:`ResourceAllocation` and
-    :class:`BulkCircuitList`.
+    :class:`CircuitList`.
 
     Parameters
     ----------
@@ -83,7 +83,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
             circuits = list(dataset.keys())
 
         if op_label_aliases:
-            circuits = _BulkCircuitList(circuits, op_label_aliases)
+            circuits = _CircuitList(circuits, op_label_aliases)
 
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
@@ -353,13 +353,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         verbosity : int, optional
             Level of detail to print to stdout.
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        self.comm = resource_alloc.comm
-        self.profiler = resource_alloc.profiler
-        self.mem_limit = resource_alloc.mem_limit
-        self.distribute_method = resource_alloc.distribute_method
-
-        self.printer = _VerbosityPrinter.create_printer(verbosity, self.comm)
+        self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        self.printer = _VerbosityPrinter.create_printer(verbosity, self.resource_alloc.comm)
         self.name = name if (name is not None) else self.__class__.__name__
         self.description = description if (description is not None) else "_objfn"
 
@@ -823,7 +818,7 @@ class ModelDatasetCircuitsStore(object):
 
         circuit_list = circuits if (circuits is not None) else list(dataset.keys())
         bulk_circuit_list = circuit_list if isinstance(
-            circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+            circuit_list, _CircuitList) else _CircuitList(circuit_list)
         self.circuits = bulk_circuit_list
 
         #The model's forward simulator gets to determine how the circuit outcome
@@ -1042,7 +1037,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -1092,7 +1087,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         #circuit_list = circuit_list if (circuit_list is not None) else list(dataset.keys())
         #bulk_circuit_list = circuit_list if isinstance(
-        #    circuit_list, _BulkCircuitList) else _BulkCircuitList(circuit_list)
+        #    circuit_list, _CircuitList) else _CircuitList(circuit_list)
         #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
         #self.ds_circuits = _tools.apply_aliases_to_circuits(self.circuits,
@@ -1561,7 +1556,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             k, kmax = 0, len(my_slicetup_list)
             for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
                     atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
-                rank = self.raw_objfn.comm.Get_rank() if (self.raw_objfn.comm is not None) else 0
+                rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
                     isub = my_atom_indices.index(atom_index)
@@ -3955,7 +3950,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4472,7 +4467,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.firsts is not None:
             self._update_lsvec_for_omitted_probs(lsvec, self.probs)
 
-        self.raw_objfn.profiler.add_time("LS OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("LS OBJECTIVE", tm)
         assert(lsvec.shape == (self.nelements + self.ex,))
         return lsvec
 
@@ -4509,7 +4504,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.firsts is not None:
             self._update_terms_for_omitted_probs(terms, self.probs)
 
-        self.raw_objfn.profiler.add_time("TERMS OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("TERMS OBJECTIVE", tm)
         assert(terms.shape == (self.nelements + self.ex,))
         return terms
 
@@ -4584,7 +4579,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.profiler.add_time("JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
 
     def dterms(self, paramvec=None):
@@ -4639,7 +4634,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.profiler.add_time("JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
 
     def hessian_brute(self, paramvec=None):
@@ -4806,7 +4801,7 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4863,7 +4858,7 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4924,7 +4919,7 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4981,7 +4976,7 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5039,7 +5034,7 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5096,7 +5091,7 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5156,7 +5151,7 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5213,7 +5208,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or BulkCircuitList
+    circuit_list : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5450,7 +5445,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
                                     self.resource_alloc)
-        self.raw_objfn.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
@@ -5482,7 +5477,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
                                      None, self.resource_alloc)
 
-        self.raw_objfn.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
 
 
@@ -5610,7 +5605,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         v = _np.sqrt(v)
         v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
-        self.raw_objfn.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
         #      sqrt is well defined unless prob_clip_interval is set within [0,1].
 
@@ -5658,7 +5653,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         dlogl_factor = (0.5 / v)
         dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
-        self.raw_objfn.profiler.add_time("do_mlgst: JACOBIAN", tm)
+        self.raw_objfn.resource_alloc.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac
 
 

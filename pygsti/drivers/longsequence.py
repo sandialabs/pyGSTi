@@ -38,7 +38,7 @@ DEFAULT_BAD_FIT_THRESHOLD = 2.0
 def run_model_test(model_filename_or_object,
                    data_filename_or_set, target_model_filename_or_object,
                    prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                  germs_list_or_filename, max_lengths, gauge_opt_params=None,
+                   germs_list_or_filename, max_lengths, gauge_opt_params=None,
                    advanced_options=None, comm=None, mem_limit=None,
                    output_pkl=None, verbosity=2):
     """
@@ -443,16 +443,16 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
 
 def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
-                              lsgst_lists, gauge_opt_params=None,
-                              advanced_options=None, comm=None, mem_limit=None,
-                              output_pkl=None, verbosity=2):
+                               lsgst_lists, gauge_opt_params=None,
+                               advanced_options=None, comm=None, mem_limit=None,
+                               output_pkl=None, verbosity=2):
     """
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`run_long_sequence_gst` except this function takes
-    `lsgst_lists`, a list of either raw circuit lists or of `LsGermsStruct`
-    gate-string-structure objects to define which gate seqences are used on
-    each GST iteration.
+    `lsgst_lists`, a list of either raw circuit lists or of 
+    :class:`PlaquetteGridCircuitStructure` objects to define which circuits
+    are used on each GST iteration.
 
     Parameters
     ----------
@@ -465,15 +465,15 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         The target model, specified either directly or by the filename of a
         model file (text format).
 
-    lsgst_lists : list of lists or LsGermsStruct(s)
+    lsgst_lists : list of lists or PlaquetteGridCircuitStructure(s)
         An explicit list of either the raw circuit lists to be used in
-        the analysis or of LsGermsStruct objects, which additionally contain
-        the max-L, germ, and fiducial pair structure of a set of circuits.
-        A single LsGermsStruct object can also be given, which is equivalent
-        to passing a list of successive L-value truncations of this object
-        (e.g. if the object has `Ls = [1,2,4]` then this is like passing
-         a list of three LsGermsStructs w/truncations `[1]`, `[1,2]`, and
-         `[1,2,4]`).
+        the analysis or of :class:`PlaquetteGridCircuitStructure` objects,
+        which additionally contain the structure of a set of circuits.
+        A single `PlaquetteGridCircuitStructure` object can also be given,
+        which is equivalent to passing a list of successive L-value truncations
+        of this object (e.g. if the object has `Ls = [1,2,4]` then this is like
+        passing a list of three `PlaquetteGridCircuitStructure` objects w/truncations
+        `[1]`, `[1,2]`, and `[1,2,4]`).
 
     gauge_opt_params : dict, optional
         A dictionary of arguments to :func:`gaugeopt_to_target`, specifying

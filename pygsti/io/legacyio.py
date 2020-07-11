@@ -183,12 +183,13 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         autogator.SimpleCompositionAutoGator = dummy_SimpleCompositionAutoGator
         _sys.modules['pygsti.objects.autogator'] = autogator
 
-        gatestringstructure = _ModuleType("gatestringstructure")
-        gatestringstructure.GatestringPlaquette = _objs.circuitstructure.CircuitPlaquette
-        gatestringstructure.GateStringStructure = _objs.CircuitStructure
-        gatestringstructure.LsGermsStructure = _objs.LsGermsStructure
+        #These have been removed now!
+        #gatestringstructure = _ModuleType("gatestringstructure")
+        #gatestringstructure.GatestringPlaquette = _objs.circuitstructure.CircuitPlaquette
+        #gatestringstructure.GateStringStructure = _objs.CircuitStructure
+        #gatestringstructure.LsGermsStructure = _objs.LsGermsStructure
 
-        _sys.modules['pygsti.objects.gatestringstructure'] = gatestringstructure
+        #_sys.modules['pygsti.objects.gatestringstructure'] = gatestringstructure
 
         _objs.modelmember.ModelMember.__setstate__ = ModelMember_setstate
 
@@ -339,7 +340,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         del _sys.modules['pygsti.objects.gate']
         del _sys.modules['pygsti.objects.gatematrixcalc']
         del _sys.modules['pygsti.objects.autogator']
-        del _sys.modules['pygsti.objects.gatestringstructure']
+        #del _sys.modules['pygsti.objects.gatestringstructure']
 
         del _sys.modules['pygsti.objects.spamvec'].LindbladParameterizedSPAMVec
         del _sys.modules['pygsti.objects.spamvec'].FullyParameterizedSPAMVec
