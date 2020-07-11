@@ -9,7 +9,7 @@ class StdListTester(BaseCase):
     def setUp(self):
         self.opLabels = [Label('Gx'), Label('Gy')]
         self.strs = cc.to_circuits([('Gx',), ('Gy',), ('Gx', 'Gx')])
-        self.germs = cc.to_circuits([('Gx', 'Gy'), ('Gy', 'Gy')])
+        self.germs = cc.to_circuits([('Gx',), ('Gx', 'Gy'), ('Gy', 'Gy')])
         self.testFidPairs = [(0, 1)]
         self.testFidPairsDict = {(Label('Gx'), Label('Gy')): [(0, 0), (0, 1)], (Label('Gy'), Label('Gy')): [(0, 0)]}
         self.ds = DataSet(outcome_labels=['0', '1'])  # a dataset that is missing
@@ -25,6 +25,7 @@ class StdListTester(BaseCase):
             std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers")  # also try a Model as first arg
         self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1]))
+        self.assertEqual(lsgstLists[-1][26]._str, 'GxGx(Gx)^2GxGx')  # ensure that (.)^2 appears in string (*not* expanded)
 
         lsgstLists2 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
