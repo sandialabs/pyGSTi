@@ -39,19 +39,29 @@ from ...objects import label as _lbl
 ctypedef long long INT
 ctypedef unsigned long long UINT
 
+
+def _to_int_or_strip(x):
+    return int(x) if x.strip().isdigit() else x.strip()
+
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls):
     if '@' in code:  # format:  <string>@<line_labels>
-        code, labels = code.split(u'@')
-        labels = labels.strip(u"( )")  # remove opening and closing parenthesis
+        code, *extras = code.split(u'@')
+        labels = extras[0].strip(u"( )")  # remove opening and closing parenthesis
         if len(labels) > 0:
-            def process(x): return int(x) if x.strip().isdigit() else x.strip()
-            labels = tuple(map(process, labels.split(u',')))
+            labels = tuple(map(_to_int_or_strip, labels.split(u',')))
         else:
             labels = ()  # no labels
+
+        if len(extras) > 1:
+            occurrence_id = _to_int_or_strip(extras[1])
+        else:
+            occurrence_id = None
     else:
         labels = None
+        occurrence_id = None
 
     result = []
     code = code.replace(u'*',u'')  # multiplication is implicit (no need for '*' ops)
@@ -67,7 +77,7 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
         result.extend(lbls_list)
         #print "Labels = ",result
 
-    return result, labels
+    return result, labels, occurrence_id
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

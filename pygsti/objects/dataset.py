@@ -49,17 +49,11 @@ class _DataSetKVIterator(object):
     ----------
     dataset : DataSet
         The parent data set.
-
-    strip_occurrence_tags : bool, optional
-        Whether occurence tags should be stripped from circuits.
     """
 
-    def __init__(self, dataset, strip_occurrence_tags=False):
+    def __init__(self, dataset):
         self.dataset = dataset
-        if strip_occurrence_tags:
-            self.gsIter = map(DataSet.strip_occurence_tag, dataset.cirIndex.keys())
-        else:
-            self.gsIter = dataset.cirIndex.__iter__()
+        self.gsIter = dataset.cirIndex.__iter__()
 
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
@@ -858,12 +852,11 @@ class DataSet(object):
 
     collision_action : {"aggregate","overwrite","keepseparate"}
         Specifies how duplicate circuits should be handled.  "aggregate"
-        adds duplicate-sequence counts to the same circuit's data at the
+        adds duplicate-circuit counts to the same circuit's data at the
         next integer timestamp.  "overwrite" only keeps the latest given
-        data for a circuit.  "keepseparate" tags duplicate-sequences by
-        appending a final "#<number>" operation label to the duplicated gate
-        sequence, which can then be accessed via the `_get_row` and `_set_row`
-        functions.
+        data for a circuit.  "keepseparate" tags duplicate-circuits by
+        setting the `.occurrence` ID of added circuits that are already
+        contained in this data set to the next available positive integer.
 
     comment : string, optional
         A user-specified comment string that gets carried around with the
@@ -875,18 +868,6 @@ class DataSet(object):
         Keys should be the circuits in this DataSet and value should
         be Python dictionaries.
     """
-
-    @classmethod
-    def strip_occurence_tag(cls, circuit):
-        """
-        Remove the occurenece tag from a circuit.
-
-        Parameters
-        ----------
-        circuit : Circuit
-            The circuit to act on.
-        """
-        return circuit[:-1] if (len(circuit) > 0 and circuit[-1].name.startswith("#")) else circuit
 
     def __init__(self, oli_data=None, time_data=None, rep_data=None,
                  circuits=None, circuit_indices=None,
@@ -949,12 +930,11 @@ class DataSet(object):
 
         collision_action : {"aggregate","overwrite","keepseparate"}
             Specifies how duplicate circuits should be handled.  "aggregate"
-            adds duplicate-sequence counts to the same circuit's data at the
+            adds duplicate-circuit counts to the same circuit's data at the
             next integer timestamp.  "overwrite" only keeps the latest given
-            data for a circuit.  "keepseparate" tags duplicate-sequences by
-            appending a final "#<number>" operation label to the duplicated gate
-            sequence, which can then be accessed via the `_get_row` and `_set_row`
-            functions.
+            data for a circuit.  "keepseparate" tags duplicate-circuits by
+            setting the `.occurrence` ID of added circuits that are already
+            contained in this data set to the next available positive integer.
 
         comment : string, optional
             A user-specified comment string that gets carried around with the
@@ -1152,35 +1132,24 @@ class DataSet(object):
             circuit = _cir.Circuit(circuit)
         self._remove([self.cirIndex[circuit]])
 
-    def _get_row(self, circuit, occurrence=0):
+    def _get_row(self, circuit):
         """
         Get a row of data from this DataSet.
-
-        This gives the same functionality as [ ] indexing except you can specify
-        the occurrence number separately from the gate sequence.
 
         Parameters
         ----------
         circuit : Circuit or tuple
             The gate sequence to extract data for.
 
-        occurrence : int, optional
-            0-based occurrence index, specifying which occurrence of
-            a repeated gate sequence to extract data for.
-
         Returns
         -------
         _DataSetRow
         """
 
-        #Convert to circuit - needed for occurrence > 0 case and
-        # because name-only Labels still don't hash the same as strings
+        #Convert to circuit 
+        # needed because name-only Labels don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
-        if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit.from_tuple(circuit)
-
-        if occurrence > 0:
-            circuit = circuit + _cir.Circuit(("#%d" % occurrence,))
+        circuit = _cir.Circuit.cast(circuit)
 
         #Note: cirIndex value is either an int (non-static) or a slice (static)
         repData = self.repData[self.cirIndex[circuit]] \
@@ -1190,12 +1159,9 @@ class DataSet(object):
                           self.cnt_cache[circuit] if self.bStatic else None,
                           self.auxInfo[circuit])
 
-    def _set_row(self, circuit, outcome_dict_or_series, occurrence=0):
+    def _set_row(self, circuit, outcome_dict_or_series):
         """
         Set the counts for a row of this DataSet.
-
-        This gives the same functionality as [ ] indexing except you can specify
-        the occurrence number separately from the gate sequence.
 
         Parameters
         ----------
@@ -1208,20 +1174,11 @@ class DataSet(object):
             a 2-tuple: (outcome-label-list, timestamp-list) or a 3-tuple:
             (outcome-label-list, timestamp-list, repetition-count-list).
 
-        occurrence : int, optional
-            0-based occurrence index, specifying which occurrence of
-            a repeated gate sequence to extract data for.
-
         Returns
         -------
         None
         """
-        if not isinstance(circuit, _cir.Circuit):
-            circuit = _cir.Circuit(circuit)
-
-        if occurrence > 0:
-            circuit = _cir.Circuit(circuit) + _cir.Circuit(("#%d" % occurrence,))
-
+        circuit = _cir.Circuit.cast(circuit)
         if isinstance(outcome_dict_or_series, dict):  # a dict of counts
             self.add_count_dict(circuit, outcome_dict_or_series)
 
@@ -1230,18 +1187,9 @@ class DataSet(object):
                 "Must minimally set with (outcome-label-list, time-stamp-list)"
             self.add_raw_series_data(circuit, *outcome_dict_or_series)
 
-    def keys(self, strip_occurrence_tags=False):
+    def keys(self):
         """
         Returns the circuits used as keys of this DataSet.
-
-        Parameters
-        ----------
-        strip_occurrence_tags : bool, optional
-            Only applicable if `collisionAction` has been set to
-            "keepseparate", when this argument is set to True
-            any final "#<number>" elements of (would-be duplicate)
-            circuits are stripped so that the returned list
-            may have *duplicate* entries.
 
         Returns
         -------
@@ -1249,13 +1197,9 @@ class DataSet(object):
             A list of Circuit objects which index the data
             counts within this data set.
         """
-        if strip_occurrence_tags and self.collisionAction == "keepseparate":
-            # Note: assumes keys are Circuits containing Labels
-            return [self.strip_occurence_tag(opstr) for opstr in self.cirIndex.keys()]
-        else:
-            return list(self.cirIndex.keys())
+        yield from self.cirIndex.keys()
 
-    def items(self, strip_occurrence_tags=False):
+    def items(self):
         """
         Iterator over `(circuit, timeSeries)` pairs.
 
@@ -1263,20 +1207,11 @@ class DataSet(object):
         :class:`_DataSetRow` instance, which behaves similarly to a list of spam
         labels whose index corresponds to the time step.
 
-        Parameters
-        ----------
-        strip_occurrence_tags : bool, optional
-            Only applicable if `collisionAction` has been set to
-            "keepseparate", when this argument is set to True
-            any final "#<number>" elements of (would-be duplicate)
-            circuits are stripped so that the returned list
-            may have *duplicate* entries.
-
         Returns
         -------
         _DataSetKVIterator
         """
-        return _DataSetKVIterator(self, strip_occurrence_tags)
+        return _DataSetKVIterator(self)
 
     def values(self):
         """
@@ -1377,17 +1312,25 @@ class DataSet(object):
             nDOF += nOutcomes - 1  # last time stamp
         return nDOF
 
-    def _keepseparate_update_circuit(self, circuit):
+    def _collisionaction_update_circuit(self, circuit):
         if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)  # make sure we have a Circuit
 
-        # if "keepseparate" mode, add tag onto end of circuit
-        if circuit in self.cirIndex and self.collisionAction == "keepseparate":
-            i = 0; tagged_circuit = circuit
-            while tagged_circuit in self.cirIndex:
-                i += 1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,), line_labels=circuit.line_labels)
-            #add data for a new (duplicate) circuit
-            circuit = tagged_circuit
+        # if "keepseparate" mode, set occurrence id existing circuits to next available (positive) integer.
+        if self.collisionAction == "keepseparate":
+            if circuit in self.cirIndex:
+                tagged_circuit = circuit.copy()
+                i = 1; tagged_circuit.occurrence = i
+                while tagged_circuit in self.cirIndex:
+                    i += 1; tagged_circuit.occurrence = i
+                #add data for a new (duplicate) circuit
+                circuit = tagged_circuit
+
+        # in other modes ("overwrite" and "aggregate"), strip off occurrence so duplicates are acted on appropriately
+        elif circuit.occurrence is not None:
+            stripped_circuit = circuit.copy()
+            stripped_circuit.occurrence = None
+            circuit = stripped_circuit
 
         return circuit
 
@@ -1451,9 +1394,7 @@ class DataSet(object):
 
         outcomeLabelList = list(outcomeCounts.keys())
         countList = list(outcomeCounts.values())
-
-        # if "keepseparate" mode, add tag onto end of circuit
-        circuit = self._keepseparate_update_circuit(circuit)
+        circuit = self._collisionaction_update_circuit(circuit)
 
         if self.collisionAction == "aggregate" and circuit in self:
             iNext = int(max(self[circuit].time)) + 1 \
@@ -1525,9 +1466,7 @@ class DataSet(object):
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-
-        # if "keepseparate" mode, add tag onto end of circuit
-        circuit = self._keepseparate_update_circuit(circuit)
+        circuit = self._collisionaction_update_circuit(circuit)
 
         if unsafe:
             tup_outcomeLabelList = outcome_label_list

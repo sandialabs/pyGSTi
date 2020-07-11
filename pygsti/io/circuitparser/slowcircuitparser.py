@@ -11,17 +11,26 @@
 from ...objects import label as _lbl
 
 
+def _to_int_or_strip(x):
+    return int(x) if x.strip().isdigit() else x.strip()
+
+
 def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
-    if '@' in code:  # format:  <string>@<line_labels>
-        code, labels = code.split('@')
-        labels = labels.strip("( )")  # remove opening and closing parenthesis
+    if '@' in code:  # format:  <string>@<line_labels>[@<occurrence_id>]
+        code, *extras = code.split('@')
+        labels = extras[0].strip("( )")  # remove opening and closing parenthesis
         if len(labels) > 0:
-            def process(x): return int(x) if x.strip().isdigit() else x.strip()
-            labels = tuple(map(process, labels.split(',')))
+            labels = tuple(map(_to_int_or_strip, labels.split(',')))
         else:
             labels = ()  # no labels
+
+        if len(extras) > 1:
+            occurrence_id = _to_int_or_strip(extras[1])
+        else:
+            occurrence_id = None
     else:
         labels = None
+        occurrence_id = None
 
     result = []
     code = code.replace('*', '')  # multiplication is implicit (no need for '*' ops)
@@ -32,7 +41,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
         lbls_list, i, segment = _get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls, segment)
         result.extend(lbls_list)
 
-    return result, labels
+    return result, labels, occurrence_id
 
 
 def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment):

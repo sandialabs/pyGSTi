@@ -634,7 +634,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     cparser.lookup = None  # lookup - functionality removed as it wasn't used
     for k, v in orig_error_rates.items():
         if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
-            lbls, _ = cparser.parse(k)
+            lbls, _, _ = cparser.parse(k)
             assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
             assert(all([sslbl in qubitGraph.node_names() for sslbl in lbls[0].sslbls])), \
                 "One or more invalid qubit names in: %s" % k

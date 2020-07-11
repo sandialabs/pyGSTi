@@ -15,8 +15,9 @@ except ImportError:
 def _test_circuit_parser(parser):
 
     def test_parse_circuit(string, expected):
-        results, line_labels = parser.parse_circuit(string, create_subcircuits=True, integerize_sslbls=True)
+        results, line_labels, occurrence = parser.parse_circuit(string, create_subcircuits=True, integerize_sslbls=True)
         assert line_labels is None
+        assert occurrence is None
         flat_results = [lbl for item in results for lbl in item.expand_subcircuits()]
         for result_label, expected_label in zip(flat_results, expected):
             assert result_label == expected_label

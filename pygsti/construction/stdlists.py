@@ -150,6 +150,11 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
                        + " max-length list at 1 now."
                        + "")
 
+    # ensure circuit lists have computed their string reps so addition produces "nice" strings for printing
+    [germ.str for germ in germ_list]
+    [c.str for c in prep_strs]
+    [c.str for c in effect_strs]
+
     if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
@@ -393,6 +398,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
+
+    # ensure circuit lists have computed their string reps so addition produces "nice" strings for printing
+    [germ.str for germ in germs]
+    [c.str for c in prep_fiducials]
+    [c.str for c in meas_fiducials]
 
     def filter_ds(circuits, ds, missing_lgst):
         if ds is None: return circuits[:]

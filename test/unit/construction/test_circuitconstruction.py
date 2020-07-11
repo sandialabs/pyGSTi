@@ -56,6 +56,10 @@ class CircuitConstructionTester(BaseCase):
         fids = cc.to_circuits([('Gf0',), ('Gf1',)])
         germs = cc.to_circuits([('G0',), ('G1a', 'G1b')])
 
+        #Ensure string reps are computed so circuit addition produces nice string reps (that we expect below)
+        [germ.str for germ in germs]
+        [c.str for c in fids]
+
         gateStrings1 = cc.create_circuits("f0+germ*e+f1", f0=fids, f1=fids,
                                               germ=germs, e=2, order=["germ", "f0", "f1"])
         expected1 = ["Gf0(G0)^2Gf0",
