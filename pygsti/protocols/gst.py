@@ -1618,7 +1618,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
             try:
                 badfit_options = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
                                   'wildcard_smart_init': badfit_options.wildcard_smart_init}
-                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer + 1)
+                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
             except NotImplementedError as e:
@@ -1898,10 +1898,16 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(wv)), 2)
             else:
                 callbackf = None
-            soln = _spo.minimize(_wildcard_objective, wvec_init,
-                                 method='Nelder-Mead', callback=callbackf, tol=1e-6)
-            if not soln.success:
-                _warnings.warn("Nelder-Mead optimization failed to converge!")
+
+            #OLD: scipy optimize - proved unreliable
+            #soln = _spo.minimize(_wildcard_objective, wvec_init,
+            #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
+            #if not soln.success:
+            #    _warnings.warn("Nelder-Mead optimization failed to converge!")
+            soln = _opt.minimize(_wildcard_objective, wvec_init, 'supersimplex',
+                                 callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
+                                 min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
+                                 verbosity=printer)
             wvec = soln.x
             firstterms = _wildcard_objective_firstterms(wvec)
             #printer.log("  Firstterms value = %g" % firstTerms)
@@ -1917,7 +1923,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     #print("Wildcard budget found for wvec = ",wvec)
     #print("FINAL Wildcard budget = ", str(budget))
     budget.from_vector(wvec)
-    printer.log(str(budget))
+    printer.log("FINAL wildcard budget = %s" % str(budget))
     return budget
 
 

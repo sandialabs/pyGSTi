@@ -5962,7 +5962,7 @@ class LogLWildcardFunction(ObjectiveFunction):
                                           self.wildcard_budget_precomp)
 
         counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.total_counts, self.logl_objfn.freqs
-        return self.logl_objfn.raw_objfn.lsvec(self.probs, counts, N, freqs)
+        return self.logl_objfn.raw_objfn.lsvec(self.logl_objfn.probs, counts, N, freqs)
 
     def dlsvec(self, wvec):
         """
