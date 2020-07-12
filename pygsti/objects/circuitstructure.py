@@ -342,7 +342,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
             return ""
         else:
             #return f"{prep.layerstr} + " + self.summary_label() + f" + {meas.layerstr}"
-            return " + ".join(prep.layerstr, self.summary_label(), meas.layerstr)
+            return " + ".join((prep.layerstr, self.summary_label(), meas.layerstr))
 
 
 class GermFiducialPairPlaquette(FiducialPairPlaquette):
@@ -587,7 +587,12 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         CircuitPlaquette
         """
         if empty_if_missing and (x, y) not in self._plaquettes:
-            return CircuitPlaquette([], 0, 0)  # an empty plaquette
+            #return CircuitPlaquette([], 0, 0)  # an empty plaquette
+            nrows = ncols = 0
+            if len(self._plaquettes) > 0:  # use number of rows & cols from first plaquette (if exists)
+                first_plaq = next(iter(self._plaquettes.values()))
+                nrows, ncols = first_plaq.num_rows, first_plaq.num_cols
+            return CircuitPlaquette([], nrows, ncols)  # an empty plaquette
         return self._plaquettes[(x, y)]
 
     @property

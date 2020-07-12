@@ -675,7 +675,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     gstrs = set()  # to eliminate duplicate strings
     for ix, x in enumerate(g.used_xs):
         for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y, True)
+            plaq = g.plaquette(x, y, empty_if_missing=True)
             if sum_up:
                 if plaq.base not in gstrs:
                     tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
@@ -773,7 +773,7 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     gstrs = set()  # to eliminate duplicate strings
     for ix, x in enumerate(g.used_xs):
         for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y)
+            plaq = g.plaquette(x, y, empty_if_missing=True)
             #TODO: if sum_up then need to sum before appending...
             for iiy, iix, opstr in plaq:
                 if opstr in gstrs: continue  # skip duplicates
