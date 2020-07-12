@@ -680,7 +680,7 @@ class StdInputParser(object):
 
                 if circuitLbls is None: circuitLbls = "auto"  # if line labels aren't given find them automatically
                 opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                      check=False, expand_subcircuits=False, occurrence=occurrence_id)  # , lookup=lookupDict)
+                                      check=False, expand_subcircuits=False, occurrence=occurrence_id)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  # supresses warnings
                 self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)

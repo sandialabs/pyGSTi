@@ -1146,7 +1146,7 @@ class DataSet(object):
         _DataSetRow
         """
 
-        #Convert to circuit 
+        #Convert to circuit
         # needed because name-only Labels don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         circuit = _cir.Circuit.cast(circuit)
@@ -1155,9 +1155,9 @@ class DataSet(object):
         repData = self.repData[self.cirIndex[circuit]] \
             if (self.repData is not None) else None
         return _DataSetRow(self, self.oliData[self.cirIndex[circuit]],
-                          self.timeData[self.cirIndex[circuit]], repData,
-                          self.cnt_cache[circuit] if self.bStatic else None,
-                          self.auxInfo[circuit])
+                           self.timeData[self.cirIndex[circuit]], repData,
+                           self.cnt_cache[circuit] if self.bStatic else None,
+                           self.auxInfo[circuit])
 
     def _set_row(self, circuit, outcome_dict_or_series):
         """

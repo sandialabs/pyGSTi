@@ -468,14 +468,14 @@ class SmartCache(object):
             savedTimes = self.avg_timedict(self.effectiveTimes)
             saved = sum(savedTimes.values())
             _show_kvs('Effective total saved time:\n',
-                     sorted(savedTimes.items(), key=lambda t: t[1], reverse=True),
-                     printer)
+                      sorted(savedTimes.items(), key=lambda t: t[1], reverse=True),
+                      printer)
 
             overTimes = self.avg_timedict(self.ineffectiveTimes)
             overhead = sum(overTimes.values())
             _show_kvs('Ineffective differences:\n',
-                     sorted(overTimes.items(), key=lambda t: t[1]),
-                     printer)
+                      sorted(overTimes.items(), key=lambda t: t[1]),
+                      printer)
 
         printer.log('overhead    : {}'.format(overhead))
         printer.log('saved       : {}'.format(saved))

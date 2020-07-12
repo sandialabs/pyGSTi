@@ -137,9 +137,9 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         aggregated over outcomes.
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit).percircuit()
+                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit).percircuit()
 
 
 def chi2_jacobian(model, dataset, circuit_list=None,
@@ -196,9 +196,9 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit).jacobian()
+                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit).jacobian()
 
 
 def chi2_hessian(model, dataset, circuit_list=None,
@@ -253,9 +253,9 @@ def chi2_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                        {'prob_clip_interval': prob_clip_interval},
-                        op_label_aliases, mdc_store, comm, mem_limit, enable_hessian=True)
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, mdc_store, comm, mem_limit, enable_hessian=True)
     return obj.hessian()
 
 
@@ -316,9 +316,9 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                        {'prob_clip_interval': prob_clip_interval},
-                        op_label_aliases, mdc_store, comm, mem_limit)
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, mdc_store, comm, mem_limit)
     return obj.approximate_hessian()
 
 
@@ -385,11 +385,11 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     float
     """
     return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
-                         {'pfratio_stitchpt': pfratio_stitchpt,
-                          'pfratio_derivpt': pfratio_derivpt,
-                          'radius': radius},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).fn()
+                          {'pfratio_stitchpt': pfratio_stitchpt,
+                           'pfratio_derivpt': pfratio_derivpt,
+                           'radius': radius},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).fn()
 
 
 def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,

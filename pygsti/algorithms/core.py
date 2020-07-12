@@ -48,7 +48,7 @@ FLOATSIZE = 8  # TODO: better way?
 
 
 def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
-            guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0):
+             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
 

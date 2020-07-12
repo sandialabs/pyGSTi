@@ -95,4 +95,3 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
         #    probs1 = self.probs(c,clip_to,cache)
         #    mx_to_fill[k,j] = (probs1[outcome]-probs0[outcome]) / eps
         #self.from_vector(p)
-

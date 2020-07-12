@@ -226,9 +226,9 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
                 lst += _gsc.create_circuits("f[0]+R(germ,N)+f[1]",
-                                                f=fiducialPairsThisIter,
-                                                germ=germ, N=maxLen,
-                                                R=Rfn, order=('f',))
+                                            f=fiducialPairsThisIter,
+                                            germ=germ, N=maxLen,
+                                            R=Rfn, order=('f',))
         if nest:
             lsgst_list += lst  # add new strings to running list
             lsgst_listOfLists.append(_lt.remove_duplicates(lsgst_list))
@@ -719,8 +719,8 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def create_elgst_lists(op_label_src, germ_list, max_length_list,
-                     trunc_scheme="whole germ powers", nest=True,
-                     include_lgst=True):
+                       trunc_scheme="whole germ powers", nest=True,
+                       include_lgst=True):
     """
     Create a set of circuit lists for eLGST based on germs and max-lengths
 
@@ -826,8 +826,8 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
-                               trunc_scheme="whole germ powers",
-                               include_lgst=True):
+                                 trunc_scheme="whole germ powers",
+                                 include_lgst=True):
     """
     List of all the circuits (i.e. experiments) required for extended LGST (eLGST).
 
@@ -876,8 +876,8 @@ def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     #When nest == True the final list contains all of the strings
     nest = True
     return create_elgst_lists(op_label_src, germ_list,
-                            max_length_list, trunc_scheme, nest,
-                            include_lgst)[-1]
+                              max_length_list, trunc_scheme, nest,
+                              include_lgst)[-1]
 
 
 def _get_trunc_function(trunc_scheme):

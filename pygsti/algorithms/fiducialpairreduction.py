@@ -140,7 +140,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         firstPOVM = list(target_model.povms.keys())[0]
         prep_povm_tuples = [(firstRho, firstPOVM)]
     prep_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in prep_povm_tuples]
+                        for prepLbl, povmLbl in prep_povm_tuples]
 
     def get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>

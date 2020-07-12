@@ -1199,4 +1199,3 @@ def compact_polynomial_list(list_of_polys):
     vtape = _np.concatenate([t[0] for t in tapes])
     ctape = _np.concatenate([t[1] for t in tapes])
     return vtape, ctape
-

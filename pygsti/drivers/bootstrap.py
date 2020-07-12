@@ -19,7 +19,7 @@ from .. import tools as _tools
 
 
 def create_bootstrap_dataset(input_data_set, generation_method, input_model=None,
-                           seed=None, outcome_labels=None, verbosity=1):
+                             seed=None, outcome_labels=None, verbosity=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -104,10 +104,10 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
 
 
 def create_bootstrap_models(num_models, input_data_set, generation_method,
-                          fiducial_prep, fiducial_measure, germs, max_lengths,
-                          input_model=None, target_model=None, start_seed=0,
-                          outcome_labels=None, lsgst_lists=None,
-                          return_data=False, verbosity=2):
+                            fiducial_prep, fiducial_measure, germs, max_lengths,
+                            input_model=None, target_model=None, start_seed=0,
+                            outcome_labels=None, lsgst_lists=None,
+                            return_data=False, verbosity=2):
     """
     Creates a series of "bootstrapped" Models.
 
@@ -205,8 +205,8 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
         print("%d " % run, end='')
         datasetList.append(
             create_bootstrap_dataset(input_data_set, generation_method,
-                                   input_model, start_seed + run,
-                                   outcome_labels)
+                                     input_model, start_seed + run,
+                                     outcome_labels)
         )
 
     modelList = []
@@ -230,8 +230,8 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
 
 
 def gauge_optimize_models(gs_list, target_model,
-                              gate_metric='frobenius', spam_metric='frobenius',
-                              plot=True):
+                          gate_metric='frobenius', spam_metric='frobenius',
+                          plot=True):
     """
     Optimizes the "spam weight" parameter used when gauge optimizing a set of models.
 

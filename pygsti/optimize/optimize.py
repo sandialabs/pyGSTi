@@ -166,8 +166,8 @@ def minimize(fn, x0, method='cg', callback=None,
     return solution
 
 
-def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_outer_iter, min_inner_maxiter, max_inner_maxiter,
-                       callback, printer):
+def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_outer_iter,
+                       min_inner_maxiter, max_inner_maxiter, callback, printer):
     """
     Minimize a function using repeated applications of the simplex algorithm.
 

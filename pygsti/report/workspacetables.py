@@ -742,12 +742,12 @@ class GaugeRobustModelTable(WorkspaceTable):
         M = 0.0  # max abs for colorscale
         op_decomps = {}
         for gl in opLabels:
-            if 1: #try:
+            try:
                 op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(),
                                                 target_model.operations[gl].to_dense())
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
-            #except Exception as e:
-            #    _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
+            except Exception as e:
+                _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
 
         for i, lbl in enumerate(opLabels):
             if lbl not in op_decomps: continue
@@ -966,14 +966,14 @@ class GaugeRobustMetricTable(WorkspaceTable):
                 if i > j:  # leave lower diagonal blank
                     el = _objs.reportableqty.ReportableQty(_np.nan)
                 elif i == j:  # diagonal element
-                    if 1: #try:
+                    try:
                         el = _reportables.evaluate_opfn_by_name(
                             metric, mdl_in_best_gauge[i], target_model, lbl, confidence_region_info)
-                    #except Exception:
-                    #    _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
-                    #    el = _objs.reportableqty.ReportableQty(_np.nan)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
+                        el = _objs.reportableqty.ReportableQty(_np.nan)
                 else:  # off-diagonal element
-                    if 1: #try:
+                    try:
                         el1 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl2,
                             confidence_region_info)
@@ -981,10 +981,10 @@ class GaugeRobustMetricTable(WorkspaceTable):
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
                             confidence_region_info)
                         el = _objs.reportableqty.minimum(el1, el2)
-                    #except Exception:
-                    #    _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
-                    #                   (metric, lbl, lbl2))
-                    #    el = _objs.reportableqty.ReportableQty(_np.nan)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
+                                       (metric, lbl, lbl2))
+                        el = _objs.reportableqty.ReportableQty(_np.nan)
 
                 row_data.append(el)
                 row_formatters.append('Normal')

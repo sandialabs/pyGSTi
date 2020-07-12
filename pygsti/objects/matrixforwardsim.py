@@ -587,7 +587,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #    if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
     #    # To support unitary evolution we need to:
     #    # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
-    #    # - update probability-derivative computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
+    #    # - update probability-deriv. computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
     #    #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
     #    # (TODO in FUTURE)
     #
@@ -1246,7 +1246,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
                         (nc, np1, np2, Ng, (final_mem + cmem) * C))
 
-
             #Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
             ok = False
             if (not ok) and bNp1Matters and np1 < num_params:
@@ -1760,7 +1759,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
             dGs[_np.isnan(dGs)] = 0
             _np.seterr(**old_err)
-            
+
         if flat:
             # cols = deriv cols, rows = flattened everything else
             dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(

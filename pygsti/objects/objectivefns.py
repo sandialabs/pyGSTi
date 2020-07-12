@@ -16,7 +16,8 @@ import itertools as _itertools
 import sys as _sys
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .. import optimize as _opt, tools as _tools
+from .. import optimize as _opt
+from .. import tools as _tools
 from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
 #from .computationcache import ComputationCache as _ComputationCache
@@ -203,7 +204,7 @@ class ObjectiveFunctionBuilder(object):
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
         self.name = name if (name is not None) else cls_to_build.__name__
-        self.description = description if (description is not None) else "_objfn"  # "Sum of Chi^2"  OR "2*Delta(log(L))"
+        self.description = description if (description is not None) else "_objfn"  # "Sum of Chi^2" OR "2*Delta(log(L))"
         self.cls_to_build = cls_to_build
         self.regularization = regularization
         self.penalties = penalties
@@ -5676,7 +5677,6 @@ def _cptp_penalty(mdl, prefactor, op_basis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    from .. import tools as _tools
     return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
         _tools.fast_jamiolkowski_iso_std(gate, op_basis)
     ) for gate in mdl.operations.values()], 'd'))
@@ -5693,7 +5693,6 @@ def _spam_penalty(mdl, prefactor, op_basis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    from .. import tools as _tools
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
@@ -5775,7 +5774,6 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(mdl), n_params).
     """
-    from .. import tools as _tools
     basis_mxs = op_basis.elements  # shape [mdl.dim, dmDim, dmDim]
     ddenmx_dv = demx_dv = basis_mxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
     #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*

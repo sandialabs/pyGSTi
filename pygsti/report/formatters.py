@@ -247,7 +247,7 @@ def latex_figure(fig, specs):
     assert('output_dir' in specs and specs['output_dir']), \
         "Cannot render a figure-containing table as 'latex' without a valid 'output_dir' render option"
     fig.value().set_render_options(output_dir=specs['output_dir'],
-                                 render_includes=specs['render_includes'])
+                                   render_includes=specs['render_includes'])
     render_out = fig.value().render('latex')
     render_out['latex'] = "\\vcenteredhbox{%s}" % render_out['latex']  # wrap std latex output
     return render_out
@@ -275,7 +275,7 @@ def python_figure(fig, specs):
 
     if specs['output_dir'] is not None:  # setting output_dir signals that fig should also be rendered
         fig.value().set_render_options(switched_item_mode="separate files",
-                                     output_dir=specs['output_dir'])
+                                       output_dir=specs['output_dir'])
         fig.value().render('python')  # to a separate python file
 
     return _ReportableQty(render_out['python'][plotDivID]['value'],

@@ -578,7 +578,6 @@ class SuccessFailModel(OplessModel):
 #        return _OutcomeLabelDict([('success', sp), ('fail', _Polynomial({(): 1.0}) - sp)])
 
 
-
 #REMOVE
 #    def dprobs(self, circuit, return_pr=False, clip_to=None, cache=None):
 #        """
@@ -843,7 +842,7 @@ class ErrorRatesModel(SuccessFailModel):
         layers_with_idles = [circuit.layer_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
         inds_to_mult_by_layer = [_np.array([g_inds[self._alias_dict.get(str(gate), str(gate))] for gate in layer], int)
                                  for layer in layers_with_idles]
-        
+
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
@@ -919,7 +918,7 @@ class TwirledLayersModel(ErrorRatesModel):
 
     def _success_dprob(self, circuit, param_slice, cache):
         assert(param_slice is None or _slct.length(param_slice) == len(self._paramvec)), \
-            "No support for derivatives with respect to a subset of model parameters yet!"        
+            "No support for derivatives with respect to a subset of model parameters yet!"
         pvec = self._paramvec**2
         dpvec_dparams = 2 * self._paramvec
 

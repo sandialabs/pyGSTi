@@ -106,14 +106,14 @@ class ImplicitOpModel(_mdl.OpModel):
             The "layer rules" used for constructing operators for circuit
             layers.  This functionality is essential to using this model to
             simulate ciruits, and is typically supplied by derived classes.
-    
+
         basis : Basis
             The basis used for the state space by dense operator representations.
-    
+
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The circuit simulator used to compute any
             requested probabilities, e.g. from :method:`probs` or
-    
+
         evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
             The evolution type of this model, describing how states are
             represented, allowing compatibility checks with (super)operator

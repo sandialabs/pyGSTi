@@ -2749,7 +2749,8 @@ class StochasticNoiseOp(LinearOperator):
             polydict = {(): 1.0}
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
-            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(polydict, mpv), IDENT, IDENT, self._evotype)]
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(polydict, mpv),
+                                                                   IDENT, IDENT, self._evotype)]
 
         elif order == 1:
             loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(pd, mpv), bel, bel, self._evotype)
@@ -3781,13 +3782,13 @@ class LindbladOp(LinearOperator):
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_polynomial_vars
         postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                       self.unitary_postfactor, self._evotype)
+                                                             self.unitary_postfactor, self._evotype)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
         loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_polynomial_vars),
-                                    order, postTerm, self.exp_terms_cache)
+                                             order, postTerm, self.exp_terms_cache)
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
 
         poly_coeffs = [t.coeff for t in loc_terms]
@@ -3844,7 +3845,7 @@ class LindbladOp(LinearOperator):
         # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_polynomial_vars
         postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                       self.unitary_postfactor, self._evotype)
+                                                             self.unitary_postfactor, self._evotype)
         postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
@@ -3911,7 +3912,7 @@ class LindbladOp(LinearOperator):
 
         terms = []
         for term in _term.exponentiate_terms_above_mag(errgen_terms, order,
-                                              postTerm, min_term_mag=min_term_mag):
+                                                       postTerm, min_term_mag=min_term_mag):
             #poly_coeff = term.coeff
             #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
             term.mapvec_indices_inplace(mapvec)  # local -> global indices
@@ -7931,7 +7932,8 @@ class LindbladErrorgen(LinearOperator):
         assert(d * d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.create_transform_matrix(_BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
+        mxBasisToStd = self.matrix_basis.create_transform_matrix(
+            _BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
         # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
             else _np.linalg.inv(mxBasisToStd)
@@ -7954,7 +7956,7 @@ class LindbladErrorgen(LinearOperator):
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
                 hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
-                                        inplace=True, check=True) for mx in hamGens]
+                                         inplace=True, check=True) for mx in hamGens]
                 for mx in hamGens: mx.sort_indices()
                 # for faster addition ops in _construct_errgen_matrix
             else:
@@ -8060,7 +8062,7 @@ class LindbladErrorgen(LinearOperator):
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, evotype))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
-                                                                  IDENT, U.conjugate().T, evotype))
+                                                                        IDENT, U.conjugate().T, evotype))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -8152,8 +8154,9 @@ class LindbladErrorgen(LinearOperator):
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
                     UB = Bscale * B  # UB is unitary
-                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
-                                                                      _np.dot(L, UB), UB, evotype))  # /(d2-1.)
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                        _Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
+                        _np.dot(L, UB), UB, evotype))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -8442,7 +8445,8 @@ class LindbladErrorgen(LinearOperator):
         assert(return_coeff_polys is False)
         if self.Lterms is None:
             Ltermdict, basis = self.LtermdictAndBasis
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype, self.dim, max_polynomial_vars)
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype,
+                                                              self.dim, max_polynomial_vars)
         return self.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
@@ -8489,7 +8493,7 @@ class LindbladErrorgen(LinearOperator):
         coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), (len(self.Lterms),))
         coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
         coeff_deriv_vals = _bulk_eval_compact_polynomials_complex(coeff_deriv_polys[0], coeff_deriv_polys[1],
-                                                            self.to_vector(), (len(self.Lterms), len(wrtInds)))
+                                                                  self.to_vector(), (len(self.Lterms), len(wrtInds)))
         abs_coeff_values = _np.abs(coeff_values)
         abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
         ret = _np.sum(_np.real(coeff_values[:, None] * _np.conj(coeff_deriv_vals))

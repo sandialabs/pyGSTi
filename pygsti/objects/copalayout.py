@@ -212,4 +212,3 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         MatrixCOPALayout
         """
         return _copy.deepcopy(self)  # in the future maybe we need to do something more complicated?
-

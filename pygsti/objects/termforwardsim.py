@@ -891,7 +891,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         d_max_sopms = _np.empty((nEls, Np), 'd')
         k = 0  # current element position for loop below
-        
+
         for sep_povm_circuit in layout_atom.expanded_circuits:
             rholabel = sep_povm_circuit.circuit_without_povm[0]
             opstr = sep_povm_circuit.circuit_without_povm[1:]
@@ -1184,7 +1184,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         """
         if self.model.evotype == "svterm":
             poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                               resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+                                                     resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         else:  # "cterm" (stabilizer-based term evolution)
             poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                                                      resource_alloc.comm, resource_alloc.mem_limit, fastmode)

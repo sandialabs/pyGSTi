@@ -167,8 +167,8 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
 
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
-                         colorbar=False, box_label_size=0, prec=0,
-                         hover_label_fn=None):
+                          colorbar=False, box_label_size=0, prec=0,
+                          hover_label_fn=None):
     """
     Creates a "nested" color box plot.
 
@@ -247,7 +247,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         hoverLabels = None
 
     fig = _color_boxplot(data, colormap, colorbar, box_label_size,
-                        prec, None, hoverLabels)
+                         prec, None, hoverLabels)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
     fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
@@ -702,9 +702,9 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
     #                     marker=dict(size=8,
-    #                                 color=[colormap.interpolate_color(y) for y in ys],
-    #                                 #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
-    #                                 line=dict(width=1)))
+    #                            color=[colormap.interpolate_color(y) for y in ys],
+    #                            #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
+    #                            line=dict(width=1)))
     trace = go.Scatter(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
                                    color=[colormap.interpolate_color(y) for y in ys],
@@ -860,9 +860,9 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
 
 def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_basis_y=None,
-                           xlabel=None, ylabel=None,
-                           box_labels=False, colorbar=None, prec=0, scale=1.0,
-                           eb_matrix=None, title=None):
+                            xlabel=None, ylabel=None,
+                            box_labels=False, colorbar=None, prec=0, scale=1.0,
+                            eb_matrix=None, title=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -948,15 +948,15 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
     thickLineInterval = 4 if (mx_basis is not None and mx_basis.name == "pp") \
         else None  # TODO: separate X and Y thick lines?
     return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
-                                xlabel, ylabel, box_labels, thickLineInterval,
-                                colorbar, colormap, prec, scale,
-                                eb_matrix, title)
+                                 xlabel, ylabel, box_labels, thickLineInterval,
+                                 colorbar, colormap, prec, scale,
+                                 eb_matrix, title)
 
 
 def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
-                         xlabel=None, ylabel=None, box_labels=False,
-                         thick_line_interval=None, colorbar=None, colormap=None,
-                         prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
+                          xlabel=None, ylabel=None, box_labels=False,
+                          thick_line_interval=None, colorbar=None, colormap=None,
+                          prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -1635,10 +1635,10 @@ class ColorBoxPlot(WorkspacePlot):
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 if mdc_store is None:
                     mdc_store = _ModelDatasetCircuitStore(model, dataset, circuit_list, array_types=('p',))
-                
+
                 objfn_builder = ptyp
                 objfn = objfn_builder.build_from_store(mdc_store)
-                
+
                 if wildcard:
                     objfn = _objfns.LogLWildcardFunction(objfn, mdc_store.model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts

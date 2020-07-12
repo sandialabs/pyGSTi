@@ -52,7 +52,7 @@ class Estimate(object):
 
     @classmethod
     def create_gst_estimate(cls, parent, target_model=None, seed_model=None,
-                 models_by_iter=None, parameters=None):
+                            models_by_iter=None, parameters=None):
         """
         Initialize an empty Estimate object.
 
@@ -326,7 +326,7 @@ class Estimate(object):
         return bool(CRFkey(model_label, circuits_label) in self.confidence_region_factories)
 
     def create_confidence_region_factory(self, model_label='final iteration estimate',
-                                      circuits_label='final', create_if_needed=False):
+                                         circuits_label='final', create_if_needed=False):
         """
         Retrieves a confidence region factory for the given model and circuit list labels.
 
@@ -560,7 +560,6 @@ class Estimate(object):
 
         mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
         circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
-        cache = self.parameters.get('final_cache', None)
         ds = self.create_effective_dataset()
         objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
         objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)

@@ -439,7 +439,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
             #Overview of terms when frobenius_transform_target == True).  Note that the objective
             #expressions are identical to the above except for an additional overall minus sign and S <=> S_inv.
-            
+
             # objective: op_term = (gate - S * target_op * S_inv)
             # jac:       d(op_term) = -(dS * target_op * S_inv + S * target_op * -(S_inv * dS * S_inv) )
             #            d(op_term) = (-dS * target_op * S_inv + S * target_op * (S_inv * dS * S_inv) )
@@ -536,7 +536,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                     start += _cptp_penalty_jac_fill(my_jacMx[start:], mdl_pre, mdl_post,
                                                     gauge_group_el, cptp_penalty_factor,
                                                     mdl_pre.basis, wrtIndices)
-    
+
                 if spam_penalty_factor > 0:
                     start += _spam_penalty_jac_fill(my_jacMx[start:], mdl_pre, mdl_post,
                                                     gauge_group_el, spam_penalty_factor,
@@ -563,7 +563,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
             ret = 0
-            
+
             if gates_metric == "frobeniustt" or spam_metric == "frobeniustt":
                 full_target_model = target_model.copy()
                 full_target_model.set_all_parameterizations("full")  # so we can gauge-transform the target model.

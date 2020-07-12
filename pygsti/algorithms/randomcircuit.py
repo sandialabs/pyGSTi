@@ -66,7 +66,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 
 
 def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gate_names='all',
-                                    two_q_gate_names='all', modelname='clifford'):
+                                           two_q_gate_names='all', modelname='clifford'):
     """
     Creates a circuit by randomply placing 2-qubit gates on qubit pairs.
 
@@ -260,7 +260,7 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=
 
 
 def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gates='all',
-                                   two_q_gates='all', modelname='clifford'):
+                                          two_q_gates='all', modelname='clifford'):
     """
     Samples a random circuit layer by eliminating qubits one by one.
 
@@ -443,7 +443,7 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
 
 
 def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_gates_prob='uniform', two_q_prob=1.0,
-                                 one_q_gate_names='all', modelname='clifford'):
+                                        one_q_gate_names='all', modelname='clifford'):
     """
     Samples a random circuit layer using the specified list of "compatible two-qubit gates" (co2_q_gates).
 
@@ -604,7 +604,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
 
 
 def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_names='all', pdist='uniform',
-                                 modelname='clifford'):
+                                        modelname='clifford'):
     """
     Samples a random circuit layer containing only 1-qubit gates.
 
@@ -692,7 +692,8 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
     return sampled_layer
 
 
-def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[]):
+def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[],
+                          addlocal=False, lsargs=[]):
     """
     Samples a random circuit of the specified length (or ~ twice this length).
 
@@ -808,8 +809,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
     return circuit
 
 
-def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False,
-                                lsargs=[]):
+def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[],
+                                       addlocal=False, lsargs=[]):
     """
     Generates a random circuit of the specified length.
 
@@ -899,8 +900,9 @@ def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Q
         qubit_labels = tuple(qubit_labels)
         # Sample a random circuit of "native gates" over this set of qubits, with the
         # specified sampling.
-        subset_circuit = create_random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind], qubit_labels=qubit_labels,
-                                        sampler=sampler, samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
+        subset_circuit = create_random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind],
+                                               qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+                                               addlocal=addlocal, lsargs=lsargs)
         circuit_dict[qubit_labels] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
         s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
@@ -941,10 +943,10 @@ def _get_setting(l, circuitindex, substructure, depths, circuits_per_length, str
     return settingDict
 
 
-def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, structure='1Q', sampler='Qelimination',
-                                            samplerargs=[], addlocal=False, lsargs=[], set_isolated=True,
-                                            setcomplement_isolated=False,
-                                            descriptor='A set of simultaneous random circuits', verbosity=1):
+def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, structure='1Q',
+                                                   sampler='Qelimination', samplerargs=[], addlocal=False,
+                                                   lsargs=[], set_isolated=True, setcomplement_isolated=False,
+                                                   descriptor='A set of simultaneous random circuits', verbosity=1):
     """
     Generates a set of simultaneous random circuits of the specified depths.
 
@@ -1063,7 +1065,8 @@ def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_l
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = sample_simultaneous_random_circuit(pspec, l, structure=structure, sampler=sampler,
-                                                            samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
+                                                                   samplerargs=samplerargs, addlocal=addlocal,
+                                                                   lsargs=lsargs)
 
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l, j] = circuit
@@ -1131,8 +1134,8 @@ def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_l
 
 
 def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, circuits_per_subset, structure='1Q',
-                                                      sampler='Qelimination', samplerargs=[], descriptor='',
-                                                      verbosity=1):
+                                                             sampler='Qelimination', samplerargs=[], descriptor='',
+                                                             verbosity=1):
     """
     Todo
 
@@ -1221,7 +1224,7 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
         for i in range(circuits_per_subset):
             l = allowed_depths[_np.random.randint(len(allowed_depths))]
             circuits[qubit_labels].append(create_random_circuit(pspec, l, qubit_labels=qubit_labels,
-                                                         sampler=sampler, samplerargs=samplerargs))
+                                                                sampler=sampler, samplerargs=samplerargs))
 
     experiment_dict['subset_circuits'] = circuits
 
@@ -1240,8 +1243,8 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
 
 
 def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], addlocal=False,
-                      lsargs=[], randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
-                      compilerargs=[], partitioned=False):
+                             lsargs=[], randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+                             compilerargs=[], partitioned=False):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit.
 
@@ -1362,7 +1365,7 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
     else: n = pspec.number_of_qubits
     # Sample a random circuit of "native gates".
     circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
-                             samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
+                                    samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
     # find the symplectic matrix / phase vector this "native gates" circuit implements.
     s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
 
@@ -1443,8 +1446,8 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
 
 def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[],
-                                   addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
-                                   conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False):
+                                          addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
+                                          conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False):
     """
     Generates a simultaneous "direct randomized benchmarking" (DRB) circuit.
 
@@ -1595,7 +1598,7 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
         # Sample a random circuit of "native gates" over this set of qubits, with the
         # specified sampling.
         subset_circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
-                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
+                                               samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[qubit_labels] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
         s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
@@ -1703,10 +1706,10 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
 
 
 def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, structure='1Q', sampler='Qelimination',
-                                      samplerargs=[], addlocal=False, lsargs=[], randomizeout=False, cliffordtwirl=True,
-                                      conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False,
-                                      set_isolated=True, setcomplement_isolated=False,
-                                      descriptor='A set of simultaneous DRB experiments', verbosity=1):
+                                             samplerargs=[], addlocal=False, lsargs=[], randomizeout=False,
+                                             cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
+                                             partitioned=False, set_isolated=True, setcomplement_isolated=False,
+                                             descriptor='A set of simultaneous DRB experiments', verbosity=1):
     """
     Generates a simultaneous "direct randomized benchmarking" (DRB) experiments (circuits).
 
@@ -1905,12 +1908,13 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
             print('  - Number of circuits sampled = ', end='')
         for j in range(circuits_per_length):
             circuit, idealout = sample_simultaneous_direct_rb_circuit(pspec, l, structure=structure, sampler=sampler,
-                                                               samplerargs=samplerargs, addlocal=addlocal,
-                                                               lsargs=lsargs, randomizeout=randomizeout,
-                                                               cliffordtwirl=cliffordtwirl,
-                                                               conditionaltwirl=conditionaltwirl,
-                                                               citerations=citerations, compilerargs=compilerargs,
-                                                               partitioned=partitioned)
+                                                                      samplerargs=samplerargs, addlocal=addlocal,
+                                                                      lsargs=lsargs, randomizeout=randomizeout,
+                                                                      cliffordtwirl=cliffordtwirl,
+                                                                      conditionaltwirl=conditionaltwirl,
+                                                                      citerations=citerations,
+                                                                      compilerargs=compilerargs,
+                                                                      partitioned=partitioned)
 
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l, j] = circuit
@@ -2192,8 +2196,8 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None):
     return oneQclifford_circuit
 
 
-def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[], localclifford=True,
-                      paulirandomize=True):
+def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[],
+                             localclifford=True, paulirandomize=True):
     """
     Generates a "mirror randomized benchmarking" (MRB) circuit.
 
@@ -2305,7 +2309,7 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
     circuit = create_random_circuit(pspec, random_natives_circuit_length, qubit_labels=qubit_labels,
-                             sampler=sampler, samplerargs=samplerargs)
+                                    sampler=sampler, samplerargs=samplerargs)
     circuit = circuit.copy(editable=True)
     # Copy the circuit, to create the "back" circuit from the "out" circuit.
     circuit_inv = circuit.copy(editable=True)
@@ -2373,8 +2377,8 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
 
 def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=False, interleaved=None,
-                                  group_inverse_only=False, group_prep=False, compilation=None,
-                                  generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
+                                         group_inverse_only=False, group_prep=False, compilation=None,
+                                         generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
     """
     Makes a random 1-qubit RB sequence, with RB over an arbitrary group.
 
@@ -2805,7 +2809,7 @@ def create_random_germpower_circuits(pspec, depths, interacting_qs_density, qubi
 
 
 def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, localclifford=True, paulirandomize=True,
-                                     interacting_qs_density=1 / 8, fixed_versus_depth=False):
+                                            interacting_qs_density=1 / 8, fixed_versus_depth=False):
     """
     length : consistent with RB length.
 
@@ -2855,7 +2859,7 @@ def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, lo
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 
     circuits, aux = create_random_germpower_circuits(pspec, depths, interacting_qs_density=interacting_qs_density,
-                                              qubit_labels=qubit_labels, fixed_versus_depth=fixed_versus_depth)
+                                                     qubit_labels=qubit_labels, fixed_versus_depth=fixed_versus_depth)
 
     if paulirandomize:
         pauli_circuit = sample_pauli_layer_as_compiled_circuit(pspec, qubit_labels=qubit_labels, keepidle=True)
@@ -2892,7 +2896,8 @@ def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, lo
             # If .....
             if not fixed_versus_depth:
                 # Sample a compiled 1Q Cliffords layer
-                oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=qubit_labels)
+                oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec,
+                                                                                           qubit_labels=qubit_labels)
                 # Generate the inverse in the same way as before (note that this will not be the same in some
                 # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
                 # matter much which we do).
@@ -2960,7 +2965,8 @@ def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, lo
 #    outlist = {}
 #    aux = {}
 #    for j in range(circuits_per_length):
-#        circlist[j], outlist[j], aux[j] = create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
+#        circlist[j], outlist[j], aux[j] = create_random_germpower_mirror_circuits(pspec, depths,
+#                                                                           qubit_labels=qubit_labels,
 #                                                                           localclifford=localclifford,
 #                                                                           paulirandomize=paulirandomize,
 #                                                                           interacting_qs_density=samplerargs[0],

@@ -496,7 +496,7 @@ class DataComparator():
         self._jsd_pseudothreshold = None
 
     def run(self, significance=0.05, per_sequence_correction='Hochberg',
-                  aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
+            aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
         Runs statistical hypothesis testing.
 

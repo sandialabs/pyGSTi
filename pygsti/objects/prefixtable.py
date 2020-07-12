@@ -46,7 +46,7 @@ class PrefixTable(object):
         #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
         sorted_circuits_to_evaluate = sorted(list(enumerate(circuits_to_evaluate)), key=lambda x: x[1])
         circuits_to_evaluate_fastlookup = {i: cir for i, cir in enumerate(circuits_to_evaluate)}
-    
+
         if max_cache_size is None or max_cache_size > 0:
             #CACHE assessment pass: figure out what's worth keeping in the cache.
             # In this pass, we cache *everything* and keep track of how many times each
@@ -87,7 +87,7 @@ class PrefixTable(object):
             else:  # no break => no prefix
                 iStart = None
                 remaining = circuit[:]
-    
+
             # if/where this string should get stored in the cache
             if (max_cache_size is None or curCacheSize < max_cache_size) and cache_hits.get(i, 0) > 0:
                 iCache = len(cacheIndices)

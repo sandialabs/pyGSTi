@@ -148,7 +148,7 @@ def run_model_test(model_filename_or_object,
 
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     builder = _objfns.ObjectiveFunctionBuilder.create_from(advanced_options.get('objective', 'logl'),
-                                                      advanced_options.get('use_freq_weighted_chi2', False))
+                                                           advanced_options.get('use_freq_weighted_chi2', False))
     _update_objfn_builders([builder], advanced_options)
 
     #Create the protocol
@@ -169,9 +169,9 @@ def run_model_test(model_filename_or_object,
 
 
 def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
-                  prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                  gauge_opt_params=None, advanced_options=None, comm=None,
-                  mem_limit=None, output_pkl=None, verbosity=2):
+                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                   gauge_opt_params=None, advanced_options=None, comm=None,
+                   mem_limit=None, output_pkl=None, verbosity=2):
     """
     Perform Linear Gate Set Tomography (LGST).
 
@@ -274,10 +274,10 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
 
 
 def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
-                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                         germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                         advanced_options=None, comm=None, mem_limit=None,
-                         output_pkl=None, verbosity=2):
+                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                          germs_list_or_filename, max_lengths, gauge_opt_params=None,
+                          advanced_options=None, comm=None, mem_limit=None,
+                          output_pkl=None, verbosity=2):
     """
     Perform long-sequence GST (LSGST).
 
@@ -450,7 +450,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`run_long_sequence_gst` except this function takes
-    `lsgst_lists`, a list of either raw circuit lists or of 
+    `lsgst_lists`, a list of either raw circuit lists or of
     :class:`PlaquetteGridCircuitStructure` objects to define which circuits
     are used on each GST iteration.
 
@@ -550,11 +550,11 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
 
 
 def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
-                       prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                       germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
-                       gauge_opt_suite='stdgaugeopt',
-                       gauge_opt_target=None, models_to_test=None, comm=None, mem_limit=None,
-                       advanced_options=None, output_pkl=None, verbosity=2):
+                        prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                        germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
+                        gauge_opt_suite='stdgaugeopt',
+                        gauge_opt_target=None, models_to_test=None, comm=None, mem_limit=None,
+                        advanced_options=None, output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using standard practices.
 

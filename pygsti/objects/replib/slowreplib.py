@@ -1655,7 +1655,8 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
     rhoreps = {rholbl: fwdsim.model.circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
     operationreps = {gl: fwdsim.model.circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
-    effectreps = {i: fwdsim.model.circuit_layer_operator(Elbl, 'povm')._rep for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
+    effectreps = {i: fwdsim.model.circuit_layer_operator(Elbl, 'povm')._rep
+                  for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
 
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
@@ -1925,7 +1926,8 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (fwdsim.model.num_params(), fwdsim.model.dim, cache_size, len(layout_atom), layout_atom.num_applies(), _time.time()-tStart)) #DEBUG
+    #      (fwdsim.model.num_params(), fwdsim.model.dim, cache_size, len(layout_atom),
+    #       layout_atom.num_applies(), _time.time()-tStart)) #DEBUG
 
 
 def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
@@ -1998,12 +2000,14 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
 
     op_term_reps = {glbl:
                     [
-                        [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
+                        [t.torep()
+                         for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                         for order in range(fwdsim.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [[t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
+    rho_term_reps = [[t.torep()
+                      for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                      for order in range(fwdsim.max_order + 1)]
 
     E_term_reps = []
@@ -2012,7 +2016,8 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
         cur_term_reps = []  # the term reps for *all* the effect vectors
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
+            term_reps = [t.torep()
+                         for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -2185,16 +2190,20 @@ def SB_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
                                               max_paths, threshold_guess)
 
 
-def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                       repcache, circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                      repcache, circuitsetup_cache, comm, mem_limit, fastmode)
+def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                                       polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                                       comm=None, mem_limit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                                      polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                                      comm, mem_limit, fastmode)
 
 
-def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                       repcache, circuitsetup_cache, comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                      repcache, circuitsetup_cache, comm, mem_limit, fastmode)
+def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                                       polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                                       comm=None, mem_limit=None, fastmode=True):
+    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                                      polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                                      comm, mem_limit, fastmode)
 
 
 def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
@@ -2241,10 +2250,12 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+         for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
     nPaths = _np.zeros(len(elabels), int)
@@ -2352,10 +2363,12 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
         [E_term_reps]
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+         for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
@@ -2389,8 +2402,9 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
     return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
-def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                               repcache, circuitsetup_cache, comm, mem_limit, fastmode):
+def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                               polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                               comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -2748,10 +2762,12 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude() for elbl in elabels], 'd')
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+         for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
     threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(

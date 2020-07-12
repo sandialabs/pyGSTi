@@ -249,7 +249,8 @@ Defines the Results class.
 #                           + " of this Results object!  Usually you don't"
 #                           + " want to do this.")
 #
-#        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.create_gst_estimate(self, target_model, seed_model,
+#        self.estimates[estimate_key] = pygsti.protocols.estimate.Estimate.create_gst_estimate(self, target_model,
+#                                                                                   seed_model,
 #                                                                                   models_by_iter, parameters)
 #
 #        #Set gate sequence related parameters inherited from Results

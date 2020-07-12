@@ -247,7 +247,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 dprobs1 = dprobs2 = None
             hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
                                 _slct.length(wrtSlice2)), 'd')
-            
+
             self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, resource_alloc,
                                               wrtSlice1, wrtSlice2, None, None, gather_mem_limit)
 

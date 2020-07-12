@@ -600,7 +600,7 @@ class SPAMVec(_modelmember.ModelMember):
             else:
                 terms.extend([(taylor_order, t) for t in
                               self.taylor_order_terms_above_mag(taylor_order,
-                                                                    max_polynomial_vars, min_term_mag)])
+                                                                max_polynomial_vars, min_term_mag)])
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -642,7 +642,7 @@ class SPAMVec(_modelmember.ModelMember):
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist_squared(self, other_spam_vec, typ, transform=None,
-                       inv_transform=None):
+                              inv_transform=None):
         """
         Return the squared frobenius difference between this operation and `other_spam_vec`.
 
@@ -673,13 +673,13 @@ class SPAMVec(_modelmember.ModelMember):
                 return _gt.frobeniusdist_squared(vec, other_spam_vec.to_dense())
             else:
                 return _gt.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                          other_spam_vec.to_dense())
+                                                 other_spam_vec.to_dense())
         elif typ == "effect":
             if transform is None:
                 return _gt.frobeniusdist_squared(vec, other_spam_vec.to_dense())
             else:
                 return _gt.frobeniusdist_squared(_np.dot(_np.transpose(transform),
-                                                  vec), other_spam_vec.to_dense())
+                                                         vec), other_spam_vec.to_dense())
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
 
     def residuals(self, other_spam_vec, typ, transform=None, inv_transform=None):
@@ -2845,8 +2845,8 @@ class LindbladSPAMVec(SPAMVec):
 
     @classmethod
     def _from_spamvec_obj(cls, spamvec, typ, param_type="GLND", purevec=None,
-                         proj_basis="pp", mx_basis="pp", truncate=True,
-                         lazy=False):
+                          proj_basis="pp", mx_basis="pp", truncate=True,
+                          lazy=False):
         """
         Creates a LindbladSPAMVec from an existing SPAMVec object and some additional information.
 

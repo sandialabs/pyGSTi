@@ -154,7 +154,7 @@ def _op_seq_to_str(seq, line_labels, occurrence_id):
 
     def process_lists(el): return el if not isinstance(el, list) else \
         ('[%s]' % ''.join(map(str, el)) if (len(el) != 1) else str(el[0]))
-    
+
     return ''.join(map(str, map(process_lists, seq))) + _op_seq_str_suffix(line_labels, occurrence_id)
 
 

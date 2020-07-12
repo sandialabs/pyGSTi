@@ -600,7 +600,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             :method:`bulk_probs`.  The default value of `"auto"` automatically
             selects the simulation type, and is usually what you want. Other
             special allowed values are:
-    
+
             - "matrix" : op_matrix-op_matrix products are computed and
               cached to get composite gates which can then quickly simulate
               a circuit for any preparation and outcome.  High memory demand;

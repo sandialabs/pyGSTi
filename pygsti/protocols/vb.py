@@ -264,11 +264,10 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         ideal_outs = [[] for d in depths]
 
         for j in range(circuits_per_depth):
-            circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=qubit_labels,
-                                                                           localclifford=localclifford,
-                                                                           paulirandomize=paulirandomize,
-                                                                           interactingQs_density=samplerargs[0],
-                                                                           fixed_versus_depth=fixed_versus_depth)
+            circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
+                pspec, depths, qubit_labels=qubit_labels, localclifford=localclifford,
+                paulirandomize=paulirandomize, interactingQs_density=samplerargs[0],
+                fixed_versus_depth=fixed_versus_depth)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])
                 ideal_outs[ind].append(outtemp[ind])
@@ -364,7 +363,7 @@ class SummaryStatistics(_proto.Protocol):
             return ret
 
         return self._compute_dict(data, self.summary_statistics,
-                                 get_summary_values, for_passes='all')
+                                  get_summary_values, for_passes='all')
 
     def _compute_circuit_statistics(self, data):
         """
@@ -428,7 +427,7 @@ class SummaryStatistics(_proto.Protocol):
             return {'success_probabilities': model.probabilities(circ)[('success',)]}
 
         return self._compute_dict(data, ('success_probabilities',),
-                                 get_success_prob, for_passes="none")
+                                  get_success_prob, for_passes="none")
 
     def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
         """

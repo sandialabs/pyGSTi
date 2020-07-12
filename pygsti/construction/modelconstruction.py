@@ -429,14 +429,14 @@ def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm",
     """
     sslbls = _ld.StateSpaceLabels(state_space_labels, state_space_dims)
     return _basis_create_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
-                                 parameterization)
+                                   parameterization)
 
 
 def basis_create_explicit_model(state_space_labels, basis,
-                               op_labels, op_expressions,
-                               prep_labels=('rho0',), prep_expressions=('0',),
-                               effect_labels='standard', effect_expressions='standard',
-                               povm_labels='Mdefault', parameterization="full"):
+                                op_labels, op_expressions,
+                                prep_labels=('rho0',), prep_expressions=('0',),
+                                effect_labels='standard', effect_expressions='standard',
+                                povm_labels='Mdefault', parameterization="full"):
     """
     Build a new Model given lists of operation labels and expressions.
 
@@ -560,7 +560,7 @@ def basis_create_explicit_model(state_space_labels, basis,
 
     for (opLabel, opExpr) in zip(op_labels, op_expressions):
         ret.operations[opLabel] = _basis_create_operation(state_space_labels,
-                                                        opExpr, basis, parameterization)
+                                                          opExpr, basis, parameterization)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
@@ -573,10 +573,10 @@ def basis_create_explicit_model(state_space_labels, basis,
 
 
 def create_explicit_model(state_space_labels,
-                         op_labels, op_expressions,
-                         prep_labels=('rho0',), prep_expressions=('0',),
-                         effect_labels='standard', effect_expressions='standard',
-                         povm_labels='Mdefault', basis="auto", parameterization="full"):
+                          op_labels, op_expressions,
+                          prep_labels=('rho0',), prep_expressions=('0',),
+                          effect_labels='standard', effect_expressions='standard',
+                          povm_labels='Mdefault', basis="auto", parameterization="full"):
     """
     Build a new Model given lists of labels and expressions.
 
@@ -670,11 +670,11 @@ def create_explicit_model(state_space_labels,
         else: basis = "gm"
 
     return basis_create_explicit_model(state_space_labels,
-                                      _Basis.cast(basis, state_space_labels),
-                                      op_labels, op_expressions,
-                                      prep_labels, prep_expressions,
-                                      effect_labels, effect_expressions,
-                                      povm_labels, parameterization=parameterization)
+                                       _Basis.cast(basis, state_space_labels),
+                                       op_labels, op_expressions,
+                                       prep_labels, prep_expressions,
+                                       effect_labels, effect_expressions,
+                                       povm_labels, parameterization=parameterization)
 
 
 def create_explicit_alias_model(mdl_primitives, alias_dict):

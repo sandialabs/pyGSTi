@@ -605,7 +605,7 @@ class Basis(object):
             number of vectors).
         """
         if self.sparse:
-            raise NotImplementedError("from_elementstd_transform_matrix not implemented for sparse mode")  # (b/c pinv used)
+            raise NotImplementedError("from_elementstd_transform_matrix not implemented for sparse mode")  # (need pinv)
         return _np.linalg.pinv(self.to_elementstd_transform_matrix())
 
     def create_equivalent(self, builtin_basis_name):

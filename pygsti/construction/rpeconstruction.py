@@ -349,8 +349,8 @@ def make_rpe_data_set(model_or_dataset, string_list_d, n_samples, sample_error='
         A static data set filled with counts for the specified circuits.
     """
     return _dsc.simulate_data(model_or_dataset,
-                                   string_list_d['totalStrList'],
-                                   n_samples, sample_error=sample_error, seed=seed)
+                              string_list_d['totalStrList'],
+                              n_samples, sample_error=sample_error, seed=seed)
 
 
 def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n, runs):
@@ -367,16 +367,17 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilon_true)/epsilon_true)
 
     simModel = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
-                                          ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)", "Z(" + str(alpha_true) + ",Q0)"],
-                                          prep_labels=["rho0"], prep_expressions=["0"],
-                                          effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
-                                          spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
-
-    modelAux1 = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
-                                           ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
+                                           ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)",
+                                            "Z(" + str(alpha_true) + ",Q0)"],
                                            prep_labels=["rho0"], prep_expressions=["0"],
                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                            spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
+
+    modelAux1 = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
+                                            ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
+                                            prep_labels=["rho0"], prep_expressions=["0"],
+                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
+                                            spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     simModel.operations['Gx'] = _objs.FullDenseOp(
         _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']), simModel.operations['Gx']),
@@ -409,12 +410,12 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
         thetaErrorList = []
         PhiFunErrorList = []
         alphaHatList = _tools.rpe.estimate_angles(simDS, alphaSinStrList,
-                                                 alphaCosStrList, 'alpha')
+                                                  alphaCosStrList, 'alpha')
         epsilonHatList = _tools.rpe.estimate_angles(simDS, epsilonSinStrList,
-                                                   epsilonCosStrList, 'epsilon')
+                                                    epsilonCosStrList, 'epsilon')
         thetaHatList, PhiFunList = _tools.rpe.estimate_thetas(simDS, thetaSinStrList,
-                                                             thetaCosStrList, epsilonHatList,
-                                                             return_phi_fun_list=True)
+                                                              thetaCosStrList, epsilonHatList,
+                                                              return_phi_fun_list=True)
         for alphaTemp1 in alphaHatList:
             alphaErrorList.append(abs(alpha_true - alphaTemp1))
         for epsilonTemp1 in epsilonHatList:

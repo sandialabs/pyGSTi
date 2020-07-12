@@ -726,7 +726,6 @@ class GateSetTomography(_proto.Protocol):
                                              distribute_method=self.distribute_method)
 
         circuit_lists = data.edesign.circuit_lists
-        first_list = data.edesign.circuit_lists[0]  # for LGST
         aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _CircuitList) else None
         ds = data.dataset
 
@@ -910,7 +909,7 @@ class LinearGateSetTomography(_proto.Protocol):
                                              distribute_method="default")
 
         ds = data.dataset
-        
+
         aliases = circuit_list.op_label_aliases if self.oplabel_aliases is None else self.oplabel_aliases
         op_labels = self.oplabels if self.oplabels != "default" else \
             list(target_model.operations.keys()) + list(target_model.instruments.keys())
@@ -926,10 +925,11 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
         parameters['final_objfn_store'] = final_store
-        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()  # just set this as default logl objective
+        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
+        # just set final objective function as default logl objective (for ease of later comparison)
 
         ret = ModelEstimateResults(data, self)
-        estimate = _Estimate(ret, {'target': target_model, 'seed': target_model, 'lgst': mdl_lgst, 
+        estimate = _Estimate(ret, {'target': target_model, 'seed': target_model, 'lgst': mdl_lgst,
                                    'iteration estimates': [mdl_lgst],
                                    'final iteration estimate': mdl_lgst},
                              parameters)
@@ -1448,7 +1448,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, mdc_store, target_model, gaugeopt_
 #                  comm=None, verbosity=0):
 
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
-                  unreliable_ops, comm=None, verbosity=0):
+                   unreliable_ops, comm=None, verbosity=0):
     """
     Add a gauge optimization to an estimate.
 
@@ -1644,7 +1644,8 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
         models_by_iter = mdl_lsgst_list[:] if (new_final_model is None) \
             else mdl_lsgst_list[0:-1] + [new_final_model]
 
-        results.add_estimate(_Estimate.create_gst_estimate(results, target_model, mdl_start, models_by_iter, new_params),
+        results.add_estimate(_Estimate.create_gst_estimate(results, target_model, mdl_start,
+                                                           models_by_iter, new_params),
                              base_estimate_label + "." + badfit_typ)
 
         #Add gauge optimizations to the new estimate
@@ -2037,7 +2038,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         -------
         ModelEstimateResults
         """
-        ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members, but doesn't create parent "links"
+        ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members; doesn't make parent "links"
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
         return ret

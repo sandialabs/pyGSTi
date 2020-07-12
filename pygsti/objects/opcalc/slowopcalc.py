@@ -77,6 +77,7 @@ def _typed_bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dty
 bulk_eval_compact_polynomials_real = _partial(_typed_bulk_eval_compact_polynomials, dtype='real')
 bulk_eval_compact_polynomials_complex = _partial(_typed_bulk_eval_compact_polynomials, dtype='complex')
 
+
 def abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, dest_size, **kwargs):
     """Equivalent to np.sum(np.abs(bulk_eval_compact_polynomials_complex(.)))"""
     return _np.sum(_np.abs(bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, (dest_size,), **kwargs)))
