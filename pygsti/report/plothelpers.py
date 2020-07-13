@@ -807,6 +807,7 @@ def rated_n_sigma(dataset, model, circuit_list, objfn_builder, np=None, wildcard
 
     objfn = objfn_builder.build(model, dataset, circuit_list, {'comm': comm})
     if wildcard:
+        objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
     fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 

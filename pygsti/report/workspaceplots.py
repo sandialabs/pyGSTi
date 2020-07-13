@@ -1640,6 +1640,7 @@ class ColorBoxPlot(WorkspacePlot):
                 objfn = objfn_builder.build_from_store(mdc_store)
 
                 if wildcard:
+                    objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
                     objfn = _objfns.LogLWildcardFunction(objfn, mdc_store.model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
 
@@ -3207,10 +3208,9 @@ class FitComparisonBoxPlot(WorkspacePlot):
                     NsigMx[iY][iX] = _np.nan
                     continue
 
-                CACHE = None
                 Nsig, rating, _, _, _, _ = self._ccompute(
                     _ph.rated_n_sigma, dataset, mdl, circuit_list, objfn_builder,
-                    None, wildcard, return_all=True, comm=comm, cache=CACHE)  # self.ws.smartCache,
+                    None, wildcard, return_all=True, comm=comm)  # self.ws.smartCache,
                 NsigMx[iY][iX] = Nsig
 
         return _matrix_color_boxplot(

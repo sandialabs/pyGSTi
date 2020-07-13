@@ -5881,10 +5881,12 @@ class LogLWildcardFunction(ObjectiveFunction):
         `logl_objective_fn` before evaluating the rest of the objective function.
     """
     def __init__(self, logl_objective_fn, base_pt, wildcard):
+        #TODO: remove base_pt -- it ends up not being needed (?)
         self.logl_objfn = logl_objective_fn
         self.basept = base_pt
         self.wildcard_budget = wildcard
         self.wildcard_budget_precomp = wildcard.precompute_for_same_circuits(self.logl_objfn.circuits)
+        self.description = logl_objective_fn.description + " + wildcard budget"
 
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.probs = self.logl_objfn.probs.copy()
@@ -5892,6 +5894,25 @@ class LogLWildcardFunction(ObjectiveFunction):
     #def _default_evalpt(self):
     #    """The default point to evaluate functions at """
     #    return self.wildcard_budget.to_vector()
+
+    #Mimic the underlying LogL objective
+    def __getattr__(self, attr):
+        return getattr(self.__dict__['logl_objfn'], attr)  # use __dict__ so no chance for recursive __getattr__
+
+    def chi2k_distributed_qty(self, objective_function_value):
+        """
+        Convert a value of this objective function to one that is expected to be chi2_k distributed.
+
+        Parameters
+        ----------
+        objective_function_value : float
+            A value of this objective function, i.e. one returned from `self.fn(...)`.
+
+        Returns
+        -------
+        float
+        """
+        return self.logl_objfn.chi2k_distributed_qty(objective_function_value)
 
     def fn(self, wvec=None):
         """

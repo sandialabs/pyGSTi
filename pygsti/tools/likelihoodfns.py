@@ -270,6 +270,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
+        obj.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
     return obj_max.percircuit() - obj.percircuit()
@@ -752,6 +753,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
+        obj.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
     two_delta_logl = 2 * obj.fn()
@@ -868,6 +870,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
+        obj.percircuit()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
     two_dlogl_percircuit = 2 * obj.percircuit()

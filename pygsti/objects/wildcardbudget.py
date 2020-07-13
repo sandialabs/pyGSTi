@@ -513,6 +513,7 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
+                import bpdb; bpdb.set_trace()
                 assert(False), "TVD should eventually reach zero (I think)!"
 
             #Now A,B,C are fixed to what they need to be for our given W
