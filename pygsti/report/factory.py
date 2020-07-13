@@ -1262,7 +1262,7 @@ def construct_standard_report(results, title="auto",
     if len(results) > 1:
         #check if data sets are comparable (if they have the same sequences)
         arbitrary = next(iter(results.values()))
-        comparable = all([list(v.dataset.keys()) == arbitrary.dataset.keys() for v in results.values()])
+        comparable = all([list(v.dataset.keys()) == list(arbitrary.dataset.keys()) for v in results.values()])
         if comparable:
             flags.add('CompareDatasets')
             sections.append(_section.DataComparisonSection())
