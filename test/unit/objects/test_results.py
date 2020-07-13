@@ -5,7 +5,7 @@ from . import fixtures as pkg
 
 from pygsti.protocols.gst import ModelEstimateResults
 from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
-from pygsti.objects import BulkCircuitList
+from pygsti.objects import CircuitList
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.protocols import estimate
 
@@ -19,7 +19,7 @@ class ResultsBase(object):
         self.gss = pkg.lsgstStructs
 
         # Construct results
-        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+        edesign = CircuitListsDesign([CircuitList(circuit_struct)
                                       for circuit_struct in pkg.lsgstStructs])
         data = ProtocolData(edesign, pkg.dataset)
         self.res = ModelEstimateResults(data, Protocol("test-protocol"))
@@ -71,7 +71,7 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
 
     def test_add_estimate_from_results(self):
         # add_estimates from other results
-        edesign = CircuitListsDesign([BulkCircuitList(circuit_struct)
+        edesign = CircuitListsDesign([CircuitList(circuit_struct)
                                       for circuit_struct in pkg.lsgstStructs])
         data = ProtocolData(edesign, pkg.dataset)
         res2 = ModelEstimateResults(data, Protocol("test-protocol2"))

@@ -19,7 +19,7 @@ from ..tools.legacytools import deprecate as _deprecated_fn
 
 def chi2(model, dataset, circuit_list=None,
          min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
-         op_label_aliases=None, cache=None, comm=None, mem_limit=None):
+         op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
     Computes the total (aggregate) chi^2 for a set of circuits.
 
@@ -56,8 +56,9 @@ def chi2(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -73,14 +74,14 @@ def chi2(model, dataset, circuit_list=None,
         chi^2 value, equal to the sum of chi^2 terms from all specified circuits
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, cache, comm, mem_limit).fn()
+                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, comm, mem_limit, mdc_store).fn()
 
 
 def chi2_per_circuit(model, dataset, circuit_list=None,
                      min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
-                     op_label_aliases=None, cache=None, comm=None, mem_limit=None):
+                     op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
     Computes the per-circuit chi^2 contributions for a set of cirucits.
 
@@ -116,8 +117,9 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -135,14 +137,14 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
         aggregated over outcomes.
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, cache, comm, mem_limit).percircuit()
+                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit).percircuit()
 
 
 def chi2_jacobian(model, dataset, circuit_list=None,
                   min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
-                  op_label_aliases=None, cache=None, comm=None, mem_limit=None):
+                  op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
     Compute the gradient of the chi^2 function computed by :function:`chi2`.
 
@@ -176,8 +178,9 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -193,14 +196,14 @@ def chi2_jacobian(model, dataset, circuit_list=None,
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, cache, comm, mem_limit).jacobian()
+                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit).jacobian()
 
 
 def chi2_hessian(model, dataset, circuit_list=None,
                  min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
-                 op_label_aliases=None, cache=None, comm=None, mem_limit=None):
+                 op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
     Compute the Hessian matrix of the :func:`chi2` function.
 
@@ -231,8 +234,9 @@ def chi2_hessian(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -249,15 +253,15 @@ def chi2_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                        {'prob_clip_interval': prob_clip_interval},
-                        op_label_aliases, cache, comm, mem_limit, enable_hessian=True)
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, mdc_store, comm, mem_limit, enable_hessian=True)
     return obj.hessian()
 
 
 def chi2_approximate_hessian(model, dataset, circuit_list=None,
                              min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
-                             op_label_aliases=None, cache=None, comm=None, mem_limit=None):
+                             op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
     Compute and approximate Hessian matrix of the :func:`chi2` function.
 
@@ -293,8 +297,9 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -311,16 +316,16 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         nModelParams = `model.num_params()`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
-                        {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                        {'prob_clip_interval': prob_clip_interval},
-                        op_label_aliases, cache, comm, mem_limit)
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, mdc_store, comm, mem_limit)
     return obj.approximate_hessian()
 
 
 def chialpha(alpha, model, dataset, circuit_list=None,
              pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
              radius=None, op_label_aliases=None,
-             cache=None, comm=None, mem_limit=None):
+             mdc_store=None, comm=None, mem_limit=None):
     """
     Compute the chi-alpha objective function.
 
@@ -363,8 +368,9 @@ def chialpha(alpha, model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -379,17 +385,17 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     float
     """
     return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
-                         {'pfratio_stitchpt': pfratio_stitchpt,
-                          'pfratio_derivpt': pfratio_derivpt,
-                          'radius': radius},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, cache, comm, mem_limit, alpha=alpha).fn()
+                          {'pfratio_stitchpt': pfratio_stitchpt,
+                           'pfratio_derivpt': pfratio_derivpt,
+                           'radius': radius},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).fn()
 
 
 def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
                          pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
                          radius=None, op_label_aliases=None,
-                         cache=None, comm=None, mem_limit=None):
+                         mdc_store=None, comm=None, mem_limit=None):
     """
     Compute the per-circuit chi-alpha objective function.
 
@@ -432,8 +438,9 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    cache : ComputationCache, optional
-        A cache object used to hold results for the same `model` and `dataset` and `circuit_list`.
+    mdc_store : ModelDatasetCircuitsStore, optional
+        An object that bundles cached quantities along with a given model, dataset, and circuit
+        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -451,11 +458,11 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
         aggregated over outcomes.
     """
     return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
-                         {'pfratio_stitchpt': pfratio_stitchpt,
-                          'pfratio_derivpt': pfratio_derivpt,
-                          'radius': radius},
-                         {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, cache, comm, mem_limit, alpha=alpha).percircuit()
+                          {'pfratio_stitchpt': pfratio_stitchpt,
+                           'pfratio_derivpt': pfratio_derivpt,
+                           'radius': radius},
+                          {'prob_clip_interval': prob_clip_interval},
+                          op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).percircuit()
 
 
 @_deprecated_fn('This function will be removed soon.  Use chi2fn(...) with `p` and `1-p`.')

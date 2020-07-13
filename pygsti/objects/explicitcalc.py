@@ -160,13 +160,13 @@ class ExplicitOpModelCalc(object):
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
                 d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                              'prep', T, Ti)
+                                                     'prep', T, Ti)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
                 d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                              'effect', T, Ti)
+                                                     'effect', T, Ti)
                 nSummands += wt * Evec.dim
 
         else:
@@ -329,12 +329,12 @@ class ExplicitOpModelCalc(object):
             if include_spam:
                 for lbl, rhoV in self.preps.items():
                     d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                             'prep', T, Ti)
+                                                    'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
                     d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                             'effect', T, Ti)
+                                                    'effect', T, Ti)
                     nSummands += Evec.dim
 
         else:
@@ -346,12 +346,12 @@ class ExplicitOpModelCalc(object):
             if include_spam:
                 for lbl, rhoV in self.preps.items():
                     d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                             'prep')
+                                                    'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
                     d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                             'effect')
+                                                    'effect')
                     nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
@@ -398,12 +398,12 @@ class ExplicitOpModelCalc(object):
             if include_spam:
                 for lbl, rhoV in self.preps.items():
                     d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                             'prep', T, Ti)
+                                                    'prep', T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
                     d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                             'effect', T, Ti)
+                                                    'effect', T, Ti)
                     nSummands += Evec.dim
 
         else:
@@ -415,12 +415,12 @@ class ExplicitOpModelCalc(object):
             if include_spam:
                 for lbl, rhoV in self.preps.items():
                     d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                             'prep')
+                                                    'prep')
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
                     d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                             'effect')
+                                                    'effect')
                     nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
@@ -462,7 +462,8 @@ class ExplicitOpModelCalc(object):
         # ** See comments at the beginning of nongauge_projector for explanation **
 
         try:
-            self_operations = _collections.OrderedDict([(lbl, gate.to_dense()) for lbl, gate in self.operations.items()])
+            self_operations = _collections.OrderedDict([(lbl, gate.to_dense())
+                                                        for lbl, gate in self.operations.items()])
             self_preps = _collections.OrderedDict([(lbl, vec.to_dense()[:, None]) for lbl, vec in self.preps.items()])
             self_effects = _collections.OrderedDict([(lbl, vec.to_dense()[:, None])
                                                      for lbl, vec in self.effects.items()])

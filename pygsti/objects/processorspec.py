@@ -20,6 +20,7 @@ from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from .label import Label as _Label
+from .mapforwardsim import MapForwardSimulator as _MapFSim
 from ..tools import optools as _gt
 from ..tools import internalgates as _itgs
 from ..tools import symplectic as _symp
@@ -341,7 +342,7 @@ class ProcessorSpec(object):
 
         return edgelist
 
-    def create_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+    def create_std_model(self, model_name, parameterization='auto', simulator='auto'):
         """
         Creates a commonly-used model for this processor specification.
 
@@ -360,8 +361,8 @@ class ProcessorSpec(object):
             The parameterization of the created model.  Can be any valid parameterization
             type, e.g. `"TP"`, `"CPTP"`, `"H+S"`, etc.
 
-        sim_type : {'matrix', 'map', 'auto'}, optional
-            The simulation type of the built model.
+        simulator : ForwardSimulator or {'matrix', 'map', 'auto'}, optional
+            The forward (circuit) simulator (or type) used by the built model.
 
         Returns
         -------
@@ -369,7 +370,8 @@ class ProcessorSpec(object):
         """
         if model_name == 'clifford':
             assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
-            assert(sim_type in ('auto', 'map')), "Clifford model must use 'map' simulation type"
+            assert(simulator in ('auto', 'map') or isinstance(simulator, _MapFSim)), \
+                "Clifford model must use 'map' simulation type"
             model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits,
                 self.root_gate_names,
@@ -377,7 +379,7 @@ class ProcessorSpec(object):
                 self.availability,
                 self.qubit_labels,
                 parameterization='clifford',
-                sim_type=sim_type,
+                simulator=simulator,
                 on_construction_error='warn',  # *drop* gates that aren't cliffords
                 independent_gates=False,
                 ensure_composed_gates=False)  # change these? add `geometry`?
@@ -390,7 +392,7 @@ class ProcessorSpec(object):
             model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, None, self.availability,
-                self.qubit_labels, parameterization=param, sim_type=sim_type,
+                self.qubit_labels, parameterization=param, simulator=simulator,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
 
         else:  # unknown model name, so require parameterization
@@ -400,12 +402,12 @@ class ProcessorSpec(object):
             model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, None, self.availability,
-                self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
+                self.qubit_labels, parameterization=parameterization, simulator=simulator,
                 independent_gates=False, ensure_composed_gates=False)  # change these? add `geometry`?
 
         return model
 
-    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+    def add_std_model(self, model_name, parameterization='auto', simulator='auto'):
         # Erik future : improve docstring.
         """
         Adds a commonly-used model to this processor specification.
@@ -421,14 +423,14 @@ class ProcessorSpec(object):
             The parameterization of the created model.  Can be any valid parameterization
             type, e.g. `"TP"`, `"CPTP"`, `"H+S"`, etc.
 
-        sim_type : {'matrix', 'map', 'auto'}, optional
+        simulator : ForwardSimulator or {'matrix', 'map', 'auto'}, optional
             The simulation type of the built model.
 
         Returns
         -------
         None
         """
-        self.models[model_name] = self.create_std_model(model_name, parameterization, sim_type)
+        self.models[model_name] = self.create_std_model(model_name, parameterization, simulator)
 
     def add_std_compilations(self, compile_type, one_q_gates, two_q_gates, add_nonlocal_two_q_gates=False, verbosity=0):
         """

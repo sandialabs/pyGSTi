@@ -944,8 +944,8 @@ class StabilityAnalyzer(object):
         return pvalue
 
     def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction={},
-                                 betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
-                                 verbosity=1):
+                                  betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
+                                  verbosity=1):
         """
         Runs instability detection, by performing statistical hypothesis tests on the power spectra generated
         from the time-series data. Before running this method it is necessary to generate power spectra using

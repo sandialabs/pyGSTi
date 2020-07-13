@@ -29,17 +29,18 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
 def run_model_test(model_filename_or_object,
-                  data_filename_or_set, target_model_filename_or_object,
-                  prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                  germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                  advanced_options=None, comm=None, mem_limit=None,
-                  output_pkl=None, verbosity=2):
+                   data_filename_or_set, target_model_filename_or_object,
+                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                   germs_list_or_filename, max_lengths, gauge_opt_params=None,
+                   advanced_options=None, comm=None, mem_limit=None,
+                   output_pkl=None, verbosity=2):
     """
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
@@ -147,7 +148,7 @@ def run_model_test(model_filename_or_object,
 
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     builder = _objfns.ObjectiveFunctionBuilder.create_from(advanced_options.get('objective', 'logl'),
-                                                      advanced_options.get('use_freq_weighted_chi2', False))
+                                                           advanced_options.get('use_freq_weighted_chi2', False))
     _update_objfn_builders([builder], advanced_options)
 
     #Create the protocol
@@ -168,9 +169,9 @@ def run_model_test(model_filename_or_object,
 
 
 def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
-                  prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                  gauge_opt_params=None, advanced_options=None, comm=None,
-                  mem_limit=None, output_pkl=None, verbosity=2):
+                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                   gauge_opt_params=None, advanced_options=None, comm=None,
+                   mem_limit=None, output_pkl=None, verbosity=2):
     """
     Perform Linear Gate Set Tomography (LGST).
 
@@ -273,10 +274,10 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
 
 
 def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
-                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                         germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                         advanced_options=None, comm=None, mem_limit=None,
-                         output_pkl=None, verbosity=2):
+                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                          germs_list_or_filename, max_lengths, gauge_opt_params=None,
+                          advanced_options=None, comm=None, mem_limit=None,
+                          output_pkl=None, verbosity=2):
     """
     Perform long-sequence GST (LSGST).
 
@@ -442,16 +443,16 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
 
 def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
-                              lsgst_lists, gauge_opt_params=None,
-                              advanced_options=None, comm=None, mem_limit=None,
-                              output_pkl=None, verbosity=2):
+                               lsgst_lists, gauge_opt_params=None,
+                               advanced_options=None, comm=None, mem_limit=None,
+                               output_pkl=None, verbosity=2):
     """
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`run_long_sequence_gst` except this function takes
-    `lsgst_lists`, a list of either raw circuit lists or of `LsGermsStruct`
-    gate-string-structure objects to define which gate seqences are used on
-    each GST iteration.
+    `lsgst_lists`, a list of either raw circuit lists or of
+    :class:`PlaquetteGridCircuitStructure` objects to define which circuits
+    are used on each GST iteration.
 
     Parameters
     ----------
@@ -464,15 +465,15 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         The target model, specified either directly or by the filename of a
         model file (text format).
 
-    lsgst_lists : list of lists or LsGermsStruct(s)
+    lsgst_lists : list of lists or PlaquetteGridCircuitStructure(s)
         An explicit list of either the raw circuit lists to be used in
-        the analysis or of LsGermsStruct objects, which additionally contain
-        the max-L, germ, and fiducial pair structure of a set of circuits.
-        A single LsGermsStruct object can also be given, which is equivalent
-        to passing a list of successive L-value truncations of this object
-        (e.g. if the object has `Ls = [1,2,4]` then this is like passing
-         a list of three LsGermsStructs w/truncations `[1]`, `[1,2]`, and
-         `[1,2,4]`).
+        the analysis or of :class:`PlaquetteGridCircuitStructure` objects,
+        which additionally contain the structure of a set of circuits.
+        A single `PlaquetteGridCircuitStructure` object can also be given,
+        which is equivalent to passing a list of successive L-value truncations
+        of this object (e.g. if the object has `Ls = [1,2,4]` then this is like
+        passing a list of three `PlaquetteGridCircuitStructure` objects w/truncations
+        `[1]`, `[1,2]`, and `[1,2,4]`).
 
     gauge_opt_params : dict, optional
         A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
@@ -549,11 +550,11 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
 
 
 def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
-                       prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                       germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
-                       gauge_opt_suite='stdgaugeopt',
-                       gauge_opt_target=None, models_to_test=None, comm=None, mem_limit=None,
-                       advanced_options=None, output_pkl=None, verbosity=2):
+                        prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+                        germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
+                        gauge_opt_suite='stdgaugeopt',
+                        gauge_opt_target=None, models_to_test=None, comm=None, mem_limit=None,
+                        advanced_options=None, output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -785,7 +786,7 @@ def _get_gst_builders(advanced_options):
 
 def _get_optimizer(advanced_options, exp_design):
     advanced_options = advanced_options or {}
-    default_fditer = 0 if exp_design.target_model.simtype in ("termorder", "termgap") else 1
+    default_fditer = 0 if isinstance(exp_design.target_model.sim, _TermFSim) else 1
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}

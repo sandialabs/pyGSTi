@@ -179,7 +179,8 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       op_mx_basis.create_simple_equivalent('std'), op_mx_basis.create_equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'),
+                                       op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
@@ -265,7 +266,8 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       op_mx_basis.create_simple_equivalent('std'), op_mx_basis.create_equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'),
+                                       op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)

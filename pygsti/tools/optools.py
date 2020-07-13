@@ -776,7 +776,8 @@ def compute_povm_map(model, povmlbl):
     for i in range(nV):
         Sk_embedding_in_std[:, i] = _flat_mut_blks(i, i, blkDims)
 
-    std_to_basis = model.basis.reverse_transform_matrix("std")  # _bt.create_transform_matrix("std", model.basis, blkDims)
+    std_to_basis = model.basis.reverse_transform_matrix("std")
+    # OLD: _bt.create_transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim, model.dim))
 
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
@@ -1446,8 +1447,8 @@ def std_error_generators(dim, projection_type, projection_basis):
 
 
 def std_errorgen_projections(errgen, projection_type, projection_basis,
-                           mx_basis="gm", return_generators=False,
-                           return_scale_fctr=False):
+                             mx_basis="gm", return_generators=False,
+                             return_scale_fctr=False):
     """
     Compute the projections of a gate error generator onto generators for a standard set of errors.
 
@@ -1776,9 +1777,9 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
 
 def lindblad_errorgen_projections(errgen, ham_basis,
-                                other_basis, mx_basis="gm",
-                                normalize=True, return_generators=False,
-                                other_mode="all", sparse=False):
+                                  other_basis, mx_basis="gm",
+                                  normalize=True, return_generators=False,
+                                  other_mode="all", sparse=False):
     """
     Compute the projections of an error generator onto generators for the Lindblad-term errors.
 

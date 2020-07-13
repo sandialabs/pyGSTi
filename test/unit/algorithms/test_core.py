@@ -5,7 +5,7 @@ from . import fixtures
 
 import pygsti.construction as pc
 from pygsti.objects import Circuit, Label, Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction, BulkCircuitList
+    PoissonPicDeltaLogLFunction, CircuitList
 from pygsti.algorithms import core
 
 
@@ -105,10 +105,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         self.lsgstStrings = fixtures.lsgstStrings
 
     def test_do_mc2gst(self):
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    optimizer=None, objective_function_builder="chi2",
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            optimizer=None, objective_function_builder="chi2",
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mc2gst_regularize_factor(self):
@@ -118,10 +118,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             regularization={'min_prob_clip_for_weighting': 1e-4},
             penalties={'regularize_factor': 1e-3}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    {'tol': 1e-5}, obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            {'tol': 1e-5}, obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_penalty_factor(self):
@@ -131,10 +131,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             regularization={'min_prob_clip_for_weighting': 1e-4},
             penalties={'cptp_penalty_factor': 1.0}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    {'tol': 1e-5}, obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            {'tol': 1e-5}, obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mc2gst_SPAM_penalty_factor(self):
@@ -144,10 +144,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             regularization={'min_prob_clip_for_weighting': 1e-4},
             penalties={'spam_penalty_factor': 1.0}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    {'tol': 1e-5}, obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            {'tol': 1e-5}, obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_SPAM_penalty_factor(self):
@@ -158,10 +158,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             penalties={'cptp_penalty_factor': 1.0,
                        'spam_penalty_factor': 1.0}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    {'tol': 1e-5}, obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            {'tol': 1e-5}, obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mc2gst_alias_model(self):
@@ -171,16 +171,16 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
             ]) for mdl in self.lsgstStrings[0]
         ]
         aliases = {Label('GA1'): Circuit(['Gx'])}
-        aliased_list = BulkCircuitList(aliased_list, aliases)
+        aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
         aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
         aliased_model.operations.pop('Gx')
 
-        mdl_lsgst = core.run_gst_fit(self.ds, aliased_model, aliased_list,
-                                    {'tol': 1e-5}, "chi2",
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
+                                            {'tol': 1e-5}, "chi2",
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_iterative_mc2gst(self):
@@ -227,7 +227,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
     def test_do_iterative_mc2gst_circuit_weights_dict(self):
         def make_weights_array(l, weights_dict):
             return np.array([weights_dict.get(circuit, 1.0) for circuit in l])
-        weighted_lists = [BulkCircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
+        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
                           for lst in self.lsgstStrings]
         mdl_lsgst = core.run_iterative_gst(
             self.ds, self.mdl_clgst, weighted_lists,
@@ -240,10 +240,10 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
 
     def test_do_mc2gst_raises_on_out_of_memory(self):
         with self.assertRaises(MemoryError):
-            core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                            {'tol': 1e-5}, 'chi2',
-                            resource_alloc={'mem_limit': 0}, cache=None
-            )
+            core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                    {'tol': 1e-5}, 'chi2',
+                                    resource_alloc={'mem_limit': 0}
+                                    )
 
 
 # XXX shouldn't this code be reused?
@@ -254,10 +254,10 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         self.lsgstStrings = fixtures.lsgstStrings
 
     def test_do_mlgst(self):
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    optimizer=None, objective_function_builder="logl",
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            optimizer=None, objective_function_builder="logl",
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mlgst_CPTP_penalty_factor(self):
@@ -268,10 +268,10 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             penalties={'cptp_penalty_factor': 1.0,
                        'prob_clip_interval': (-1e2, 1e2)}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mlgst_SPAM_penalty_factor(self):
@@ -282,10 +282,10 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             penalties={'spam_penalty_factor': 1.0,
                        'prob_clip_interval': (-1e2, 1e2)}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mlgst_CPTP_SPAM_penalty_factor(self):
@@ -302,10 +302,10 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
                        'spam_penalty_factor': 1.0,
                        'prob_clip_interval': (-1e2, 1e2)}
         )
-        mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                    optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                            optimizer={'tol': 1e-5}, objective_function_builder=obj_builder,
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_mlgst_alias_model(self):
@@ -315,16 +315,16 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             ]) for mdl in self.lsgstStrings[0]
         ]
         aliases = {Label('GA1'): Circuit(['Gx'])}
-        aliased_list = BulkCircuitList(aliased_list, aliases)
+        aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
         aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
         aliased_model.operations.pop('Gx')
 
-        mdl_lsgst = core.run_gst_fit(self.ds, aliased_model, aliased_list,
-                                    {'tol': 1e-5}, "logl",
-                                    resource_alloc=None, cache=None
-        )
+        mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
+                                            {'tol': 1e-5}, "logl",
+                                            resource_alloc=None
+                                            )
         # TODO assert correctness
 
     def test_do_iterative_mlgst(self):
@@ -365,7 +365,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     def test_do_iterative_mlgst_circuit_weights_dict(self):
         def make_weights_array(l, weights_dict):
             return np.array([weights_dict.get(circuit, 1.0) for circuit in l])
-        weighted_lists = [BulkCircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
+        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
                           for lst in self.lsgstStrings]
         model = core.run_iterative_gst(
             self.ds, self.mdl_clgst, weighted_lists,
@@ -388,10 +388,10 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
 
     def test_do_mlgst_raises_on_out_of_memory(self):
         with self.assertRaises(MemoryError):
-            mdl_lsgst = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                        optimizer=None, objective_function_builder="logl",
-                                        resource_alloc={'mem_limit': 0}, cache=None
-            )
+            mdl_lsgst = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                                optimizer=None, objective_function_builder="logl",
+                                                resource_alloc={'mem_limit': 0}
+                                                )
 
     # XXX if this function needs explicit coverage, it should be public!
     def test_do_mlgst_base_forcefn_grad(self):
@@ -403,8 +403,8 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             penalties={'forcefn_grad': forcefn_grad,
                        'prob_clip_interval': (-1e2, 1e2)}
         )
-        model = core.run_gst_fit(self.ds, self.mdl_clgst, self.lsgstStrings[0],
-                                optimizer=None, objective_function_builder=obj_builder,
-                                resource_alloc=None, cache=None
-        )
+        model = core.run_gst_fit_simple(self.ds, self.mdl_clgst, self.lsgstStrings[0],
+                                        optimizer=None, objective_function_builder=obj_builder,
+                                        resource_alloc=None
+                                        )
         # TODO assert correctness

@@ -256,10 +256,10 @@ class CompilationLibrary(_collections.OrderedDict):
             return self[oplabel]  # don't re-compute unless we're told to
 
         circuit = self._create_local_compilation_of(oplabel,
-                                                      unitary=unitary,
-                                                      srep=srep,
-                                                      max_iterations=max_iterations,
-                                                      verbosity=verbosity)
+                                                    unitary=unitary,
+                                                    srep=srep,
+                                                    max_iterations=max_iterations,
+                                                    verbosity=verbosity)
         return circuit
 
     def add_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):

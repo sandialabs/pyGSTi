@@ -290,8 +290,8 @@ class Report:
 
             circuits_final = results.circuit_lists['final']
             circuits_per_iter = results.circuit_lists['iteration']  # All L-values
-            if isinstance(circuits_final, pygsti.objects.BulkCircuitList):
-                Ls = circuits_final.circuit_structure.Ls
+            if isinstance(circuits_final, pygsti.objects.PlaquetteGridCircuitStructure):
+                Ls = circuits_final.xs
 
             prep_fiducials = results.circuit_lists['prep fiducials']
             meas_fiducials = results.circuit_lists['meas fiducials']

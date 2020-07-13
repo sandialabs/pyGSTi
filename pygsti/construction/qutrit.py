@@ -183,8 +183,8 @@ def _random_rot(scale, arr_type=_np.array, seed=None):
 
 
 def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
-                      ms_global=_np.pi / 2, ms_local=0,
-                      similarity=False, seed=None, basis='qt'):
+                        ms_global=_np.pi / 2, ms_local=0,
+                        similarity=False, seed=None, basis='qt'):
     """
     Constructs a standard qutrit :class:`Model`.
 

@@ -22,6 +22,7 @@ from .reportables import evaluate as _ev
 from ..objects.label import Label as _Lbl
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects import objectivefns as _objfns
+from ..objects import MatrixForwardSimulator as _MatrixFSim
 from ..algorithms import gaugeopt as _gopt
 
 from .table import ReportTable as _ReportTable
@@ -1063,7 +1064,7 @@ class ModelVsTargetTable(WorkspaceTable):
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
-        if clifford_compilation:
+        if clifford_compilation and isinstance(model.sim, _MatrixFSim):
             clifford_model = _cnst.create_explicit_alias_model(model, clifford_compilation)
             clifford_targetModel = _cnst.create_explicit_alias_model(target_model, clifford_compilation)
 
@@ -1669,7 +1670,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         baseStrs = _cnst.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1, maxPower):
-                if len(s**i) > 1 and _np.linalg.norm(target_model.product(s**i) - Id) < 1e-6:
+                if len(s**i) > 1 and _np.linalg.norm(target_model.sim.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
         #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
         #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
@@ -2476,7 +2477,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 if isinstance(gl, _objs.Label) or isinstance(gl, str):
                     target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense())  # no error bars
                 else:
-                    target_evals = _np.linalg.eigvals(target_model.product(gl))  # no error bars
+                    target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
                     if isinstance(gl, _objs.Label) or isinstance(gl, str):
@@ -2753,7 +2754,7 @@ class FitComparisonTable(WorkspaceTable):
         List of X-values. Typically these are the maximum lengths or
         exponents used to index the different iterations of GST.
 
-    circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+    circuits_by_x : list of (CircuitLists or lists of Circuits)
         Specifies the set of circuits used at each X.
 
     model_by_x : list of Models
@@ -2798,7 +2799,7 @@ class FitComparisonTable(WorkspaceTable):
             List of X-values. Typically these are the maximum lengths or
             exponents used to index the different iterations of GST.
 
-        circuits_by_x : list of (BulkCircuitList or lists of Circuits)
+        circuits_by_x : list of (CircuitLists or lists of Circuits)
             Specifies the set of circuits used at each X.
 
         model_by_x : list of Models
@@ -2884,14 +2885,13 @@ class FitComparisonTable(WorkspaceTable):
                     'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
 
-        CACHE = None
         for X, mdl, circuit_list, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
                 _ph.rated_n_sigma, dataset, mdl, circuit_list,
                 objfn_builder, Np, wildcard, return_all=True,
-                comm=comm, cache=CACHE)  # self.ws.smartCache derived?
+                comm=comm)  # self.ws.smartCache derived?
             table.add_row((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
-                         (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
+                          (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 
         table.finish()
         return table

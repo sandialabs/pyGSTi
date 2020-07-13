@@ -41,9 +41,8 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
 
     collision_action : {"aggregate", "keepseparate"}
         Specifies how duplicate circuits should be handled.  "aggregate"
-        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-        sequence data with by appending a final "#<number>" operation label to the
-        duplicated gate sequence.
+        adds duplicate-circuit counts, whereas "keepseparate" tags duplicate
+        circuits by setting their `.occurrence` IDs to sequential positive integers.
 
     record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
@@ -140,9 +139,8 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
 
     collision_action : {"aggregate", "keepseparate"}
         Specifies how duplicate circuits should be handled.  "aggregate"
-        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-        sequence data with by appending a final "#<number>" operation label to the
-        duplicated gate sequence.
+        adds duplicate-circuit counts, whereas "keepseparate" tags duplicate
+        circuits by setting their `.occurrence` IDs to sequential positive integers.
 
     record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned

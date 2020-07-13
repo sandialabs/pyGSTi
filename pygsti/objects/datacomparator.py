@@ -399,8 +399,8 @@ class DataComparator():
             if not _np.all(olIndexListBool):
                 raise ValueError('Outcomes labels and order must be the same across datasets.')
             if circuits == 'all':
-                circuitList = dsList[0].keys()
-                circuitsListBool = [ds.keys() == circuitList for ds in dsList]
+                circuitList = list(dsList[0].keys())
+                circuitsListBool = [list(ds.keys()) == circuitList for ds in dsList]
                 if not _np.all(circuitsListBool):
                     raise ValueError(
                         'If circuits="all" is used, then datasets must contain identical circuits. (They do not.)')
@@ -409,7 +409,7 @@ class DataComparator():
         elif isinstance(dataset_list_or_multidataset, _MultiDataSet):
             dsList = [dataset_list_or_multidataset[key] for key in dataset_list_or_multidataset.keys()]
             if circuits == 'all':
-                circuits = dsList[0].keys()
+                circuits = list(dsList[0].keys())
             if ds_names is None:
                 ds_names = list(dataset_list_or_multidataset.keys())
 

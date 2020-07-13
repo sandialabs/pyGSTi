@@ -228,7 +228,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -243,10 +243,10 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this POVM should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -520,7 +520,7 @@ class _BasePOVM(POVM):
             v[effect.gpindices] = effect.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -535,10 +535,10 @@ class _BasePOVM(POVM):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this POVM should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -546,7 +546,7 @@ class _BasePOVM(POVM):
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.from_vector(v[effect.gpindices], close, nodirty)
+            effect.from_vector(v[effect.gpindices], close, dirty_value)
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 
@@ -855,7 +855,7 @@ class TensorProdPOVM(POVM):
             v[povm.gpindices] = povm.to_vector()
         return v
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -870,17 +870,17 @@ class TensorProdPOVM(POVM):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this POVM should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
         for povm in self.factorPOVMs:
-            povm.from_vector(v[povm.gpindices], close, nodirty)
+            povm.from_vector(v[povm.gpindices], close, dirty_value)
 
     def depolarize(self, amount):
         """
@@ -1337,7 +1337,7 @@ class LindbladPOVM(POVM):
         # Recall self.base_povm.num_params() == 0
         return self.error_map.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize this POVM using a vector of its parameters.
 
@@ -1352,17 +1352,17 @@ class LindbladPOVM(POVM):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this POVM should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this POVM's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
         # Recall self.base_povm.num_params() == 0
-        self.error_map.from_vector(v, close, nodirty)
+        self.error_map.from_vector(v, close, dirty_value)
 
     def transform_inplace(self, s):
         """

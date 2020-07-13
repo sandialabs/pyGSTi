@@ -33,8 +33,8 @@ except ImportError:
     from .slowopcalc import *
 
 
-def safe_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
-    """Typechecking wrapper for :function:`bulk_eval_compact_polynomials`.
+def bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape):
+    """Typechecking wrapper for real- and complex-specific routines..
 
     The underlying method has two implementations: one for real-valued
     `ctape`, and one for complex-valued. This wrapper will dynamically
@@ -49,5 +49,5 @@ def safe_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if im_norm > 1e-6:
             print("WARNING: norm(Im part) = {:g}".format(im_norm))
     else:
-        ret = bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape)
+        ret = bulk_eval_compact_polynomials_real(vtape, ctape, paramvec, dest_shape)
     return _np.real(ret)

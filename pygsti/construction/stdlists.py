@@ -13,20 +13,23 @@ Circuit list creation functions using repeated-germs limited by a max-length.
 import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
+import collections as _collections
 from ..tools import listtools as _lt
 from ..tools.legacytools import deprecate as _deprecated_fn
-from ..objects import LsGermsStructure as _LsGermsStructure
-from ..objects import Model as _Model
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..objects.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
+from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from ..objects.model import OpModel as _OpModel
 from ..objects import Circuit as _Circuit
-from ..objects import BulkCircuitList as _BulkCircuitList
+from ..objects import CircuitList as _CircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                         fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
-                         keep_fraction=1, keep_seed=None, include_lgst=True,
-                         germ_length_limits=None):
+                            fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                            keep_fraction=1, keep_seed=None, include_lgst=True,
+                            germ_length_limits=None):
     """
     Create a set of circuit lists for LSGST based on germs and max-lengths.
 
@@ -147,7 +150,12 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
                        + " max-length list at 1 now."
                        + "")
 
-    if isinstance(op_label_src, _Model):
+    # ensure circuit lists have computed their string reps so addition produces "nice" strings for printing
+    [germ.str for germ in germ_list]
+    [c.str for c in prep_strs]
+    [c.str for c in effect_strs]
+
+    if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
@@ -160,9 +168,10 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     else: rndm = None
 
     if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
-        fiducialPairs = {germ: [(prep_strs[i], effect_strs[j])
-                                for (i, j) in fid_pairs[germ]]
-                         for germ in germ_list}
+        fiducialPairs = _collections.OrderedDict(
+            [(germ, [(prep_strs[i], effect_strs[j])
+                     for (i, j) in fid_pairs[germ]])
+             for germ in germ_list])
         fidPairDict = fid_pairs
     else:
         if fid_pairs is not None:  # assume fid_pairs is a list
@@ -217,9 +226,9 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
                 lst += _gsc.create_circuits("f[0]+R(germ,N)+f[1]",
-                                                f=fiducialPairsThisIter,
-                                                germ=germ, N=maxLen,
-                                                R=Rfn, order=('f',))
+                                            f=fiducialPairsThisIter,
+                                            germ=germ, N=maxLen,
+                                            R=Rfn, order=('f',))
         if nest:
             lsgst_list += lst  # add new strings to running list
             lsgst_listOfLists.append(_lt.remove_duplicates(lsgst_list))
@@ -240,20 +249,19 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
     """
     Deprecated function.
     """
-    bulk_circuit_lists = create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                                          fid_pairs, trunc_scheme, nest,
-                                          keep_fraction, keep_seed, include_lgst,
-                                          op_label_aliases, sequence_rules,
-                                          dscheck, action_if_missing, germ_length_limits, verbosity)
-    return [bcl.circuit_structure for bcl in bulk_circuit_lists]
+    return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
+                                      fid_pairs, trunc_scheme, nest,
+                                      keep_fraction, keep_seed, include_lgst,
+                                      op_label_aliases, sequence_rules,
+                                      dscheck, action_if_missing, germ_length_limits, verbosity)
 
 
-def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
-                     fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
-                     keep_fraction=1, keep_seed=None, include_lgst=True,
-                     op_label_aliases=None, sequence_rules=None,
-                     dscheck=None, action_if_missing="raise", germ_length_limits=None,
-                     verbosity=0):
+def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, germs, max_lengths,
+                               fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
+                               keep_fraction=1, keep_seed=None, include_lgst=True,
+                               op_label_aliases=None, sequence_rules=None,
+                               dscheck=None, action_if_missing="raise", germ_length_limits=None,
+                               verbosity=0):
     """
     Create a set of long-sequence GST circuit lists (including structure).
 
@@ -264,13 +272,13 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
     circuits is created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
-      prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
+      prep_fiducial + pygsti.construction.repeat_with_max_length(germ,L) + meas_fiducial
 
     Case: trunc_scheme == 'truncated germ powers':
-      prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
+      prep_fiducial + pygsti.construction.repeat_and_truncate(germ,L) + meas_fiducial
 
     Case: trunc_scheme == 'length as exponent':
-      prepStr + germ^L + effectStr
+      prep_fiducial + germ^L + meas_fiducial
 
     If nest == True, the above set is iteratively *added* (w/duplicates
     removed) to the current circuit structure to form a final structure for
@@ -281,24 +289,24 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
     Parameters
     ----------
     op_label_src : list or Model
-        List of operation labels to determine needed LGST strings.  If a Model,
+        List of operation labels to determine needed LGST circuits.  If a Model,
         then the model's gate and instrument labels are used. Only
         relevant when `include_lgst == True`.
 
-    prep_strs : list of Circuits
+    prep_fiducials : list of Circuits
         List of the preparation fiducial circuits, which follow state
         preparation.
 
-    effect_strs : list of Circuits
+    effect_fiducials : list of Circuits
         List of the measurement fiducial circuits, which precede
         measurement.
 
-    germ_list : list of Circuits
+    germs : list of Circuits
         List of the germ circuits.
 
-    max_length_list : list of ints
+    max_lengths : list of ints
         List of maximum lengths. A zero value in this list has special
-        meaning, and corresponds to the LGST sequences.
+        meaning, and corresponds to the LGST circuits.
 
     fid_pairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
@@ -347,7 +355,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
         If true, then the starting list (only applicable when
         `nest == True`) is the list of LGST strings rather than the
         empty list.  This means that when `nest == True`, the LGST
-        sequences will be included in all the lists.
+        circuits will be included in all the lists.
 
     op_label_aliases : dictionary, optional
         Dictionary whose keys are operation label "aliases" and whose values are tuples
@@ -363,18 +371,18 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
 
     dscheck : DataSet, optional
         A data set which is checked for each of the generated circuits. When
-        a generated sequence is missing from this `DataSet`, action is taken
+        a generated circuit is missing from this `DataSet`, action is taken
         according to `action_if_missing`.
 
     action_if_missing : {"raise","drop"}, optional
-        The action to take when a generated gate sequence is missing from
+        The action to take when a generated circuit is missing from
         `dscheck` (only relevant when `dscheck` is not None).  "raise" causes
-        a ValueError to be raised; "drop" causes the missing sequences to be
+        a ValueError to be raised; "drop" causes the missing circuits to be
         dropped from the returned set.
 
     germ_length_limits : dict, optional
         A dictionary limiting the max-length values used for specific germs.
-        Keys are germ sequences and values are integers.  For example, if
+        Keys are germ circuits and values are integers.  For example, if
         this argument is `{('Gx',): 4}` and `max_length_list = [1,2,4,8,16]`,
         then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
         and 4 (whereas other germs use all the values in `max_length_list`).
@@ -384,37 +392,98 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
 
     Returns
     -------
-    list of LsGermsStructure objects
+    list of PlaquetteGridCircuitStructure objects
         The i-th object corresponds to a circuit list containing repeated
         germs limited to length max_length_list[i].  If nest == True, then
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
 
+    # ensure circuit lists have computed their string reps so addition produces "nice" strings for printing
+    [germ.str for germ in germs]
+    [c.str for c in prep_fiducials]
+    [c.str for c in meas_fiducials]
+
+    def filter_ds(circuits, ds, missing_lgst):
+        if ds is None: return circuits[:]
+        filtered_circuits = []
+        for opstr in circuits:
+            trans_opstr = _gsc.translate_circuit(opstr, op_label_aliases)
+            if trans_opstr not in ds:
+                missing_lgst.append(opstr)
+            else:
+                filtered_circuits.append(opstr)
+        return filtered_circuits
+
+    def add_to_plaquettes(pkey_dict, plaquette_dict, base_circuit, maxlen, germ, power,
+                          fidpair_indices, ds, missing_list):
+        """ Only create a new plaquette for a new base circuit; otherwise add to existing """
+        if ds is not None:
+            inds_to_remove = []
+            for k, (i, j) in enumerate(fidpair_indices):
+                el = prep_fiducials[i] + base_circuit + meas_fiducials[j]
+                trans_el = _gsc.translate_circuit(el, op_label_aliases)
+                if trans_el not in ds:
+                    missing_list.append((prep_fiducials[i], germ, maxlen, meas_fiducials[j], el))
+                    inds_to_remove.append(k)
+
+            if len(inds_to_remove) > 0:
+                fidpair_indices = fidpair_indices[:]  # copy
+                for i in reversed(inds_to_remove):
+                    del fidpair_indices[i]
+
+        fidpairs = _collections.OrderedDict([((j, i), (prep_fiducials[i], meas_fiducials[j]))
+                                             for i, j in fidpair_indices])
+
+        if base_circuit not in plaquette_dict:
+            pkey_dict[base_circuit] = (maxlen, germ)
+            if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
+                plaq = _FiducialPairPlaquette(base_circuit, fidpairs, len(meas_fiducials), len(prep_fiducials),
+                                              op_label_aliases)
+            else:
+                plaq = _GermFiducialPairPlaquette(germ, power, fidpairs, len(meas_fiducials), len(prep_fiducials),
+                                                  op_label_aliases)
+            plaquette_dict[base_circuit] = plaq
+        else:
+            #Add to existing plaquette (assume we don't need to change number of rows/cols of plaquette)
+            existing_plaq = plaquette_dict[base_circuit]
+            existing_circuits = set(existing_plaq.circuits)
+            new_fidpairs = existing_plaq.fidpairs.copy()
+            for (j, i), (prep, meas) in fidpairs.items():
+                if prep + base_circuit + meas not in existing_circuits:
+                    new_fidpairs[(j, i)] = (prep, meas)
+            if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
+                plaquette_dict[base_circuit] = _FiducialPairPlaquette(base_circuit, new_fidpairs, len(meas_fiducials),
+                                                                      len(prep_fiducials), op_label_aliases)
+            else:
+                plaquette_dict[base_circuit] = _GermFiducialPairPlaquette(germ, power, new_fidpairs,
+                                                                          len(meas_fiducials), len(prep_fiducials),
+                                                                          op_label_aliases)
+
     printer = _VerbosityPrinter.create_printer(verbosity)
     if germ_length_limits is None: germ_length_limits = {}
 
-    if nest and include_lgst and len(max_length_list) > 0 and max_length_list[0] == 0:
+    if nest and include_lgst and len(max_lengths) > 0 and max_lengths[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
-                       + " to ensure the inclusion of LGST sequences has been"
+                       + " to ensure the inclusion of LGST circuits has been"
                        + " replaced by the `include_lgst` parameter which"
                        + " defaults to `True`.  Thus, in most cases, you can"
                        + " simply remove the leading 0 and start your"
                        + " max-length list at 1 now."
                        + "")
 
-    if isinstance(op_label_src, _Model):
+    if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
-    lgst_list = _gsc.create_lgst_circuits(prep_strs, effect_strs, opLabels)
+    lgst_list = _gsc.create_lgst_circuits(prep_fiducials, meas_fiducials, opLabels)
 
-    allPossiblePairs = list(_itertools.product(range(len(prep_strs)),
-                                               range(len(effect_strs))))
+    allPossiblePairs = list(_itertools.product(range(len(prep_fiducials)),
+                                               range(len(meas_fiducials))))
 
     if keep_fraction < 1.0:
         rndm = _rndm.RandomState(keep_seed)  # ok if seed is None
-        nPairs = len(prep_strs) * len(effect_strs)
+        nPairs = len(prep_fiducials) * len(meas_fiducials)
         nPairsToKeep = int(round(float(keep_fraction) * nPairs))
     else: rndm = None
 
@@ -422,72 +491,80 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
         fidPairDict = fid_pairs  # assume a dict of per-germ pairs
     else:
         if fid_pairs is not None:  # assume fid_pairs is a list
-            fidPairDict = {germ: fid_pairs for germ in germ_list}
+            fidPairDict = {germ: fid_pairs for germ in germs}
         else:
             fidPairDict = None
 
     truncFn = _get_trunc_function(trunc_scheme)
 
-    line_labels = germ_list[0].line_labels if len(germ_list) > 0 \
-        else (prep_strs + effect_strs)[0].line_labels   # if an empty germ list, base line_labels off of fiducials
+    line_labels = germs[0].line_labels if len(germs) > 0 \
+        else (prep_fiducials + meas_fiducials)[0].line_labels   # if an empty germ list, base line_labels off fiducials
 
-    empty_germ = _Circuit((), line_labels, stringrep="{}")
-    if include_lgst: germ_list = [empty_germ] + germ_list
+    empty_germ = _Circuit((), line_labels)  # , stringrep="{}@(%s)" % ','.join(map(str, line_labels)))
+    if include_lgst and empty_germ not in germs: germs = [empty_germ] + germs
 
-    #running structure of all strings so far (LGST strings or empty)
-    running_cs = _LsGermsStructure([], germ_list, prep_strs,
-                                   effect_strs, op_label_aliases,
-                                   sequence_rules)
+    if nest:
+        #keep track of running quantities used to build circuit structures
+        running_plaquette_keys = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
+        running_plaquettes = _collections.OrderedDict()  # keep consistent ordering in produced circuit list.
+        running_unindexed = []
+        running_maxLens = []
 
-    missing_lgst = []
+    lsgst_structs = []  # list of circuit structures to return
+    missing_list = []  # keep track of missing data if dscheck is given
+    missing_lgst = []  # keep track of missing LGST circuits separately (for better error msgs)
+    tot_circuits = 0
 
-    if include_lgst and len(max_length_list) == 0:
-        #Add *all* LGST sequences as unstructured if we don't add them below
-        missing_lgst = running_cs.add_unindexed(lgst_list, dscheck)
+    if include_lgst and len(max_lengths) == 0:
+        # Then we won't add LGST circuits during first iteration of loop below, so add them now
+        unindexed = filter_ds(lgst_list, dscheck, missing_lgst)
+        lsgst_structs.append(
+            _PlaquetteGridCircuitStructure({}, [], germs, "L", "germ", unindexed, op_label_aliases,
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
 
-    lsgst_listOfStructs = []  # list of circuit structures to return
-    missing_list = []
-    totStrs = len(running_cs.allstrs)
-    #import time as _time; t0=_time.time() # DEBUG
+    for i, maxLen in enumerate(max_lengths):
 
-    for i, maxLen in enumerate(max_length_list):
-        #print("Maxlen = ",maxLen, " %.2fs" % (_time.time()-t0)) # DEBUG - and remove import time above
-        if nest:  # add to running_cs and copy at end
-            cs = running_cs  # don't copy (yet)
-            cs.Ls.append(maxLen)
+        if nest:  # add to running_* variables and pinch off a copy later on
+            running_maxLens.append(maxLen)
+            pkey = running_plaquette_keys
+            plaquettes = running_plaquettes
+            maxLens = running_maxLens
+            unindexed = running_unindexed
         else:  # create a new cs for just this maxLen
-            cs = _LsGermsStructure([maxLen], germ_list, prep_strs,
-                                   effect_strs, op_label_aliases,
-                                   sequence_rules)
+            pkey = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
+            plaquettes = _collections.OrderedDict()
+            maxLens = [maxLen]
+            unindexed = []
+
         if maxLen == 0:
-            #Special LGST case
-            missing_lgst = cs.add_unindexed(lgst_list, dscheck)
+            # Special LGST case
+            unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
         else:
             if include_lgst and i == 0:  # first maxlen, so add LGST seqs as empty germ
+                #Add LGST circuits as an empty-germ plaquette (and as unindexed circuits to include everything)
                 #Note: no FPR on LGST strings
-                missing_list.extend(cs.add_plaquette(empty_germ, maxLen, empty_germ,
-                                                     allPossiblePairs, dscheck))
-                missing_lgst = cs.add_unindexed(lgst_list, dscheck)  # only adds those not already present
-                #assert(('Gx','Gi0','Gi0') not in cs.allstrs) # DEBUG
+                add_to_plaquettes(pkey, plaquettes, empty_germ, maxLen, empty_germ, 1,
+                                  allPossiblePairs, dscheck, missing_list)
+                unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
 
             #Typical case of germs repeated to maxLen using r_fn
-            for ii, germ in enumerate(germ_list):
+            for ii, germ in enumerate(germs):
                 if germ == empty_germ: continue  # handled specially above
                 if maxLen > germ_length_limits.get(germ, 1e100): continue
                 germ_power = truncFn(germ, maxLen)
+                power = len(germ_power) // len(germ)  # this *could* be the germ power
+                if germ_power != germ * power:
+                    power = None  # Signals there is no well-defined power
 
                 if rndm is None:
-                    if fidPairDict is not None:
-                        fiducialPairsThisIter = fidPairDict.get(
-                            germ, allPossiblePairs)
-                    else:
-                        fiducialPairsThisIter = allPossiblePairs
+                    fiducialPairsThisIter = fidPairDict.get(germ, allPossiblePairs) \
+                        if fidPairDict is not None else allPossiblePairs
 
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict.get(germ, allPossiblePairs)
                     remainingPairs = [(i, j)
-                                      for i in range(len(prep_strs))
-                                      for j in range(len(effect_strs))
+                                      for i in range(len(prep_fiducials))
+                                      for j in range(len(meas_fiducials))
                                       if (i, j) not in pair_indx_tups]
                     nPairsRemaining = len(remainingPairs)
                     nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
@@ -506,30 +583,40 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
                         [allPossiblePairs[k] for k in
                          sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
-                missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
-                                                     fiducialPairsThisIter, dscheck))
+                add_to_plaquettes(pkey, plaquettes, germ_power, maxLen, germ, power,
+                                  fiducialPairsThisIter, dscheck, missing_list)
+                #REMOVE
+                #missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
+                #                                     fiducialPairsThisIter, dscheck))
 
-        if nest: cs = cs.copy()  # pinch off a copy of running_cs
-        cs.done_adding_strings()
-        lsgst_listOfStructs.append(cs)
-        totStrs += len(cs.allstrs)  # only relevant for non-nested case
+        if nest:
+            # pinch off a copy of variables that were left as the running variables above
+            maxLens = maxLens[:]
+            plaquettes = plaquettes.copy()
+            unindexed = unindexed[:]
+
+        lsgst_structs.append(
+            _PlaquetteGridCircuitStructure(_collections.OrderedDict([(pkey[base], plaq)
+                                                                     for base, plaq in plaquettes.items()]),
+                                           maxLens, germs, "L", "germ", unindexed, op_label_aliases,
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
+        tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
 
     if nest:  # then totStrs computation about overcounts -- just take string count of final stage
-        totStrs = len(running_cs.allstrs)
+        tot_circuits = len(lsgst_structs[-1]) if len(lsgst_structs) > 0 else 0
 
     printer.log("--- Circuit Creation ---", 1)
-    printer.log(" %d sequences created" % totStrs, 2)
+    printer.log(" %d circuits created" % tot_circuits, 2)
     if dscheck:
-        printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
-                    % (len(dscheck), totStrs, len(missing_list)), 2)
+        printer.log(" Dataset has %d entries: %d utilized, %d requested circuits were missing"
+                    % (len(dscheck), tot_circuits, len(missing_list)), 2)
     if len(missing_list) > 0 or len(missing_lgst) > 0:
         MAX = 10  # Maximum missing-seq messages to display
-        missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
-                        for tup in missing_list[0:MAX + 1]] + \
-                       ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX + 1]]
+        missing_msgs = [("Prep: %s, Germ: %s, L: %d, Meas: %s, Circuit: %s" % tup) for tup in missing_list[0:MAX + 1]] \
+            + ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX + 1]]
         if len(missing_list) > MAX or len(missing_lgst) > MAX:
-            missing_msgs.append(" ... (more missing sequences not show) ... ")
-        printer.log("The following sequences were missing from the dataset:", 4)
+            missing_msgs.append(" ... (more missing circuits not show) ... ")
+        printer.log("The following circuits were missing from the dataset:", 4)
         printer.log("\n".join(missing_msgs), 4)
         if action_if_missing == "raise":
             raise ValueError("Missing data! %d missing circuits" % len(missing_msgs))
@@ -538,21 +625,19 @@ def create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list, 
         else:
             raise ValueError("Invalid `action_if_missing` argument: %s" % action_if_missing)
 
-    for i, struct in enumerate(lsgst_listOfStructs):
+    for i, struct in enumerate(lsgst_structs):
         if nest:
-            assert(struct.Ls == max_length_list[0:i + 1])  # Make sure lengths are correct!
+            assert(struct.xs == max_lengths[0:i + 1])  # Make sure lengths are correct!
         else:
-            assert(struct.Ls == max_length_list[i:i + 1])  # Make sure lengths are correct!
+            assert(struct.xs == max_lengths[i:i + 1])  # Make sure lengths are correct!
 
-    #Turn circuit structures into BulkCircuitList objects
-    bulk_circuit_lists = [_BulkCircuitList(cs, op_label_aliases) for cs in lsgst_listOfStructs]
-    return bulk_circuit_lists
+    return lsgst_structs
 
 
 def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
-                               max_length_list, fid_pairs=None,
-                               trunc_scheme="whole germ powers", keep_fraction=1,
-                               keep_seed=None, include_lgst=True):
+                          max_length_list, fid_pairs=None,
+                          trunc_scheme="whole germ powers", keep_fraction=1,
+                          keep_seed=None, include_lgst=True):
     """
     List all the circuits (i.e. experiments) required for long-sequence GST (LSGST).
 
@@ -628,14 +713,14 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
     """
     nest = True  # => the final list contains all of the strings
     return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list,
-                            max_length_list, fid_pairs, trunc_scheme, nest,
-                            keep_fraction, keep_seed, include_lgst)[-1]
+                                      max_length_list, fid_pairs, trunc_scheme, nest,
+                                      keep_fraction, keep_seed, include_lgst)[-1]
 
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def create_elgst_lists(op_label_src, germ_list, max_length_list,
-                     trunc_scheme="whole germ powers", nest=True,
-                     include_lgst=True):
+                       trunc_scheme="whole germ powers", nest=True,
+                       include_lgst=True):
     """
     Create a set of circuit lists for eLGST based on germs and max-lengths
 
@@ -709,7 +794,7 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
-    if isinstance(op_label_src, _Model):
+    if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
@@ -741,8 +826,8 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
 
 @_deprecated_fn('ELGST is not longer implemented in pyGSTi.')
 def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
-                               trunc_scheme="whole germ powers",
-                               include_lgst=True):
+                                 trunc_scheme="whole germ powers",
+                                 include_lgst=True):
     """
     List of all the circuits (i.e. experiments) required for extended LGST (eLGST).
 
@@ -791,8 +876,8 @@ def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     #When nest == True the final list contains all of the strings
     nest = True
     return create_elgst_lists(op_label_src, germ_list,
-                            max_length_list, trunc_scheme, nest,
-                            include_lgst)[-1]
+                              max_length_list, trunc_scheme, nest,
+                              include_lgst)[-1]
 
 
 def _get_trunc_function(trunc_scheme):

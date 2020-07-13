@@ -300,7 +300,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
                 c, iout = _rc.create_clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
-                                                  citerations=citerations, compilerargs=compilerargs)
+                                                         citerations=citerations, compilerargs=compilerargs)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
                 if verbosity > 0: print(j + 1, end=',')
@@ -1013,8 +1013,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
                 c, iout = _rc.create_mirror_rb_circuit(pspec, l, qubit_labels=qubit_labels, sampler=sampler,
-                                                samplerargs=samplerargs, localclifford=localclifford,
-                                                paulirandomize=paulirandomize)
+                                                       samplerargs=samplerargs, localclifford=localclifford,
+                                                       paulirandomize=paulirandomize)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
             circuit_lists.append(circuits_at_depth)

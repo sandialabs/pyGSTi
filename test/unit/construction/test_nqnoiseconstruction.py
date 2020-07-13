@@ -77,6 +77,19 @@ class NQNoiseConstructionTester(BaseCase):
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
         self.assertEqual(ccmdl1.num_params(), 7)
 
+        #Using sparse=True and a map-based simulator
+        ccmdl1 = nc.create_cloud_crosstalk_model(
+            nQubits, ('Gx', 'Gy', 'Gcnot'),
+            {('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
+             ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
+             'idle': {('S', 'XX:qb0,qb1'): 0.01},
+             'prep': {('S', 'XX:qb0,qb1'): 0.01},
+             'povm': {('S', 'XX:qb0,qb1'): 0.01}
+             }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+            simulator="map", sparse_lindblad_basis=True, sparse_lindblad_reps=True)
+        self.assertEqual(ccmdl1.num_params(), 7)
+
+
         #Using compact notation:
         ccmdl2 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
@@ -139,7 +152,7 @@ class NQNoiseConstructionTester(BaseCase):
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
 
         ccmdl = nc.create_cloud_crosstalk_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
-                                               {}, nonstd_gate_unitaries={'Ga': fn})
+                                                {}, nonstd_gate_unitaries={'Ga': fn})
         c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p1 = ccmdl.probabilities(c)
 

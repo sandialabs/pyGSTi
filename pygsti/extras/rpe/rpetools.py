@@ -88,7 +88,7 @@ def extract_rotation_hat(xhat, yhat, k, nx, ny, angle_name="epsilon",
 
 
 def estimate_angles(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon",
-                   length_list=None, rpeconfig_inst=None):
+                    length_list=None, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
@@ -178,7 +178,7 @@ def _sin_phi2(theta, phi, epsilon, rpeconfig_inst=None):
 
 
 def estimate_thetas(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
-                   return_phi_fun_list=False, rpeconfig_inst=None):
+                    return_phi_fun_list=False, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
     along with already-made estimates of epsilon, return a list of theta
@@ -411,16 +411,16 @@ def analyze_rpe_data(input_dataset, true_or_target_model, string_list_d, rpeconf
     thetaErrorList = []
 #    PhiFunErrorList = []
     alphaHatList = estimate_angles(input_dataset,
-                                  alphaSinStrList,
-                                  alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
+                                   alphaSinStrList,
+                                   alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
     epsilonHatList = estimate_angles(input_dataset,
-                                    epsilonSinStrList,
-                                    epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
+                                     epsilonSinStrList,
+                                     epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
     thetaHatList, PhiFunErrorList = estimate_thetas(input_dataset,
-                                                   thetaSinStrList,
-                                                   thetaCosStrList,
-                                                   epsilonHatList, rpeconfig_inst=rpeconfig_inst,
-                                                   return_phi_fun_list=True)
+                                                    thetaSinStrList,
+                                                    thetaCosStrList,
+                                                    epsilonHatList, rpeconfig_inst=rpeconfig_inst,
+                                                    return_phi_fun_list=True)
     for alphaTemp1 in alphaHatList:
         alphaErrorList.append(abs(alphaTrue - alphaTemp1))
     for epsilonTemp1 in epsilonHatList:

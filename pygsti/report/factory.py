@@ -39,7 +39,8 @@ from . import section as _section
 from .notebook import Notebook as _Notebook
 from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
-from ..objects.bulkcircuitlist import BulkCircuitList as _BulkCircuitList
+from ..objects.circuitlist import CircuitList as _CircuitList
+from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -204,8 +205,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     for results in results_dict.values():
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
-        loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
-            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
+        loc_Ls = results.circuit_lists['final'].xs \
+            if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
@@ -281,10 +282,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
         results = results_dict[dslbl]
 
         prep_fiducials = results.circuit_lists.get('prep fiducials', None) \
-            or results.circuit_lists['final'].circuit_structure.prep_fiducials
+            or results.data.edesign.prep_fiducials
         meas_fiducials = results.circuit_lists.get('meas fiducials', None) \
-            or results.circuit_lists['final'].circuit_structure.meas_fiducials
-        germs = results.circuit_lists.get('germs', None) or results.circuit_lists['final'].circuit_structure.germs
+            or results.data.edesign.meas_fiducials
+        germs = results.circuit_lists.get('germs', None) or results.data.edesign.germs
         switchBd.ds[d] = results.dataset
         switchBd.prep_fiducials[d] = prep_fiducials
         switchBd.meas_fiducials[d] = meas_fiducials
@@ -293,8 +294,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
         switchBd.circuits_final[d] = results.circuit_lists['final']
 
-        loc_Ls = results.circuit_lists['final'].circuit_structure.Ls \
-            if isinstance(results.circuit_lists['final'], _BulkCircuitList) else [0]
+        loc_Ls = results.circuit_lists['final'].xs \
+            if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
 
         for iL, L in enumerate(swLs):  # allow different results to have different Ls
             if L in loc_Ls:
@@ -482,10 +483,10 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
                 continue  # automatic creation failed -> skip
 
         circuits_final = results.circuit_lists['final']
-        if not isinstance(circuits_final, _BulkCircuitList): continue
+        if not isinstance(circuits_final, _CircuitList): continue
 
-        circuit_struct = circuits_final.circuit_structure
-        if GiStr not in circuit_struct.germs: continue
+        circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits_final)
+        if GiStr not in circuit_struct.ys: continue
 
         try:  # to get a dimension -> nQubits
             estLabels = list(results.estimates.keys())
@@ -497,9 +498,9 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
             continue  # skip if we can't get dimension
 
-        maxLengths = circuit_struct.Ls
+        maxLengths = circuit_struct.xs
         # just use "L0" (first maxLength) - all should have same fidpairs
-        plaq = circuit_struct.get_plaquette(maxLengths[0], GiStr)
+        plaq = circuit_struct.plaquette(maxLengths[0], GiStr)
         pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
@@ -1261,7 +1262,7 @@ def construct_standard_report(results, title="auto",
     if len(results) > 1:
         #check if data sets are comparable (if they have the same sequences)
         arbitrary = next(iter(results.values()))
-        comparable = all([list(v.dataset.keys()) == arbitrary.dataset.keys() for v in results.values()])
+        comparable = all([list(v.dataset.keys()) == list(arbitrary.dataset.keys()) for v in results.values()])
         if comparable:
             flags.add('CompareDatasets')
             sections.append(_section.DataComparisonSection())

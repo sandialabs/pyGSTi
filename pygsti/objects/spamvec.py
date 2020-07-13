@@ -34,7 +34,7 @@ from . import term as _term
 from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
 from . import replib
-from .opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polys_complex
+from .opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 try:
     from ..tools import fastcalc as _fastcalc
@@ -472,7 +472,7 @@ class SPAMVec(_modelmember.ModelMember):
 #        else:
 #            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
-    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -494,7 +494,7 @@ class SPAMVec(_modelmember.ModelMember):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
@@ -516,7 +516,7 @@ class SPAMVec(_modelmember.ModelMember):
         raise NotImplementedError("taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
-    def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_poly_vars=100):
+    def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_polynomial_vars=100):
         """
         Get terms with magnitude above `min_term_mag`.
 
@@ -548,7 +548,7 @@ class SPAMVec(_modelmember.ModelMember):
             the maximum Taylor-order to consider when checking whether term-
             magnitudes exceed `min_term_mag`.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         Returns
@@ -574,8 +574,8 @@ class SPAMVec(_modelmember.ModelMember):
             MAX_CACHED_TERM_ORDER = 1
             if taylor_order <= MAX_CACHED_TERM_ORDER:
                 #print("order ",taylor_order," : ",len(terms), "terms")
-                terms_at_order, cpolys = self.taylor_order_terms(taylor_order, max_poly_vars, True)
-                coeffs = _bulk_eval_compact_polys_complex(
+                terms_at_order, cpolys = self.taylor_order_terms(taylor_order, max_polynomial_vars, True)
+                coeffs = _bulk_eval_compact_polynomials_complex(
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 mags = _np.abs(coeffs)
                 last_len = len(terms)
@@ -600,7 +600,7 @@ class SPAMVec(_modelmember.ModelMember):
             else:
                 terms.extend([(taylor_order, t) for t in
                               self.taylor_order_terms_above_mag(taylor_order,
-                                                                    max_poly_vars, min_term_mag)])
+                                                                max_polynomial_vars, min_term_mag)])
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -610,7 +610,7 @@ class SPAMVec(_modelmember.ModelMember):
         first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
         return [t[1] for t in sorted_terms], first_order_indices
 
-    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
 
@@ -624,7 +624,7 @@ class SPAMVec(_modelmember.ModelMember):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         min_term_mag : float
@@ -635,14 +635,14 @@ class SPAMVec(_modelmember.ModelMember):
         list
         """
         v = self.to_vector()
-        terms_at_order, cpolys = self.taylor_order_terms(order, max_poly_vars, True)
-        coeffs = _bulk_eval_compact_polys_complex(
+        terms_at_order, cpolys = self.taylor_order_terms(order, max_polynomial_vars, True)
+        coeffs = _bulk_eval_compact_polynomials_complex(
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
     def frobeniusdist_squared(self, other_spam_vec, typ, transform=None,
-                       inv_transform=None):
+                              inv_transform=None):
         """
         Return the squared frobenius difference between this operation and `other_spam_vec`.
 
@@ -673,13 +673,13 @@ class SPAMVec(_modelmember.ModelMember):
                 return _gt.frobeniusdist_squared(vec, other_spam_vec.to_dense())
             else:
                 return _gt.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                          other_spam_vec.to_dense())
+                                                 other_spam_vec.to_dense())
         elif typ == "effect":
             if transform is None:
                 return _gt.frobeniusdist_squared(vec, other_spam_vec.to_dense())
             else:
                 return _gt.frobeniusdist_squared(_np.dot(_np.transpose(transform),
-                                                  vec), other_spam_vec.to_dense())
+                                                         vec), other_spam_vec.to_dense())
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
 
     def residuals(self, other_spam_vec, typ, transform=None, inv_transform=None):
@@ -808,7 +808,7 @@ class SPAMVec(_modelmember.ModelMember):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -823,10 +823,10 @@ class SPAMVec(_modelmember.ModelMember):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1249,7 +1249,7 @@ class FullSPAMVec(DenseSPAMVec):
         else:
             return self._base_1d
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1264,10 +1264,10 @@ class FullSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1277,7 +1277,7 @@ class FullSPAMVec(DenseSPAMVec):
             self._base_1d[:] = v[0:self.dim] + 1j * v[self.dim:]
         else:
             self._base_1d[:] = v
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1420,7 +1420,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         return self._base_1d[1:]  # .real in case of complex matrices?
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1435,10 +1435,10 @@ class TPSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1446,7 +1446,7 @@ class TPSPAMVec(DenseSPAMVec):
         """
         assert(_np.isclose(self._base_1d[0], (self.dim)**-0.25))
         self._base_1d[1:] = v
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1565,7 +1565,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         raise ValueError(("ComplementSPAMVec.to_vector() should never be called"
                           " - use TPPOVM.to_vector() instead"))
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1580,10 +1580,10 @@ class ComplementSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1593,7 +1593,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
         self._construct_vector()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1834,7 +1834,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         """
         return self.params
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -1849,10 +1849,10 @@ class CPTPSPAMVec(DenseSPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -1861,7 +1861,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         assert(len(v) == self.num_params())
         self.params[:] = v[:]
         self._construct_vector()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -2257,7 +2257,7 @@ class TensorProdSPAMVec(SPAMVec):
     #    else:  # self._evotype in ("svterm","cterm")
     #        raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
 
-    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2279,7 +2279,7 @@ class TensorProdSPAMVec(SPAMVec):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
@@ -2305,10 +2305,10 @@ class TensorProdSPAMVec(SPAMVec):
 
         for p in _lt.partition_into(order, len(self.factors)):
             if self._prep_or_effect == "prep":
-                factor_lists = [self.factors[i].taylor_order_terms(pi, max_poly_vars) for i, pi in enumerate(p)]
+                factor_lists = [self.factors[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
             else:
                 factorPOVMs = self.factors
-                factor_lists = [factorPOVMs[i][Elbl].taylor_order_terms(pi, max_poly_vars)
+                factor_lists = [factorPOVMs[i][Elbl].taylor_order_terms(pi, max_polynomial_vars)
                                 for i, (pi, Elbl) in enumerate(zip(p, self.effectLbls))]
 
             # When possible, create COLLAPSED factor_lists so each factor has just a single
@@ -2391,7 +2391,7 @@ class TensorProdSPAMVec(SPAMVec):
                               " TensorProdSPAMVecs (instead it should be called"
                               " on the POVM)"))
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2406,10 +2406,10 @@ class TensorProdSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
@@ -2417,7 +2417,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
-                sv.from_vector(v[sv.gpindices], close, nodirty)  # factors hold local indices
+                sv.from_vector(v[sv.gpindices], close, dirty_value)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]
                   for i, povm in enumerate(self.factors)]):
@@ -2426,7 +2426,7 @@ class TensorProdSPAMVec(SPAMVec):
             for povm in self.factors:
                 local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
-                povm.from_vector(v[local_inds], close, nodirty)
+                povm.from_vector(v[local_inds], close, dirty_value)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -2635,7 +2635,7 @@ class PureStateSPAMVec(SPAMVec):
         dmVec_std = _gt.state_to_dmvec(self.pure_state_vec.to_dense())
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
-    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2657,7 +2657,7 @@ class PureStateSPAMVec(SPAMVec):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
@@ -2682,7 +2682,7 @@ class PureStateSPAMVec(SPAMVec):
 
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
             purevec = self.pure_state_vec
-            coeff = _Polynomial({(): 1.0}, max_poly_vars)
+            coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             if self._prep_or_effect == "prep":
                 terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, purevec, purevec, self._evotype)]
             else:
@@ -2752,7 +2752,7 @@ class PureStateSPAMVec(SPAMVec):
         """
         return self.pure_state_vec.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -2767,16 +2767,16 @@ class PureStateSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.pure_state_vec.from_vector(v, close, nodirty)
+        self.pure_state_vec.from_vector(v, close, dirty_value)
         #Update dense rep if one is created (TODO)
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -2845,8 +2845,8 @@ class LindbladSPAMVec(SPAMVec):
 
     @classmethod
     def _from_spamvec_obj(cls, spamvec, typ, param_type="GLND", purevec=None,
-                         proj_basis="pp", mx_basis="pp", truncate=True,
-                         lazy=False):
+                          proj_basis="pp", mx_basis="pp", truncate=True,
+                          lazy=False):
         """
         Creates a LindbladSPAMVec from an existing SPAMVec object and some additional information.
 
@@ -3353,7 +3353,7 @@ class LindbladSPAMVec(SPAMVec):
     #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
     #                         (self._evotype, self.__class__.__name__))
 
-    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -3375,7 +3375,7 @@ class LindbladSPAMVec(SPAMVec):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
@@ -3398,9 +3398,9 @@ class LindbladSPAMVec(SPAMVec):
                 raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None), "LindbladSPAMVec must be added to a Model before use!"
 
-            state_terms = self.state_vec.taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
+            state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
-            err_terms, cpolys = self.error_map.taylor_order_terms(order, max_poly_vars, True)
+            err_terms, cpolys = self.error_map.taylor_order_terms(order, max_polynomial_vars, True)
             if self._prep_or_effect == "prep":
                 terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
             else:  # "effect"
@@ -3422,7 +3422,7 @@ class LindbladSPAMVec(SPAMVec):
         else:
             return self.terms[order]
 
-    def taylor_order_terms_above_mag(self, order, max_poly_vars, min_term_mag):
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
 
@@ -3436,7 +3436,7 @@ class LindbladSPAMVec(SPAMVec):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         min_term_mag : float
@@ -3446,13 +3446,13 @@ class LindbladSPAMVec(SPAMVec):
         -------
         list
         """
-        state_terms = self.state_vec.taylor_order_terms(0, max_poly_vars); assert(len(state_terms) == 1)
+        state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
         stateTerm = state_terms[0]
         stateTerm = stateTerm.copy_with_magnitude(1.0)
         #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
 
         err_terms = self.error_map.taylor_order_terms_above_mag(
-            order, max_poly_vars, min_term_mag / stateTerm.magnitude)
+            order, max_polynomial_vars, min_term_mag / stateTerm.magnitude)
 
         #This gives the appropriate logic, but *both* prep or effect results in *same* expression, so just run it:
         #if self._prep_or_effect == "prep":
@@ -3592,7 +3592,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return self.error_map.to_vector()
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -3607,18 +3607,18 @@ class LindbladSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------
         None
         """
-        self.error_map.from_vector(v, close, nodirty)
+        self.error_map.from_vector(v, close, dirty_value)
         self._update_rep()
-        if not nodirty: self.dirty = True
+        self.dirty = dirty_value
 
     def transform_inplace(self, s, typ):
         """
@@ -4076,7 +4076,7 @@ class ComputationalSPAMVec(SPAMVec):
     #    else:
     #        raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
-    def taylor_order_terms(self, order, max_poly_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -4098,7 +4098,7 @@ class ComputationalSPAMVec(SPAMVec):
         order : int
             The order of terms to get.
 
-        max_poly_vars : int, optional
+        max_polynomial_vars : int, optional
             maximum number of variables the created polynomials can have.
 
         return_coeff_polys : bool
@@ -4123,7 +4123,7 @@ class ComputationalSPAMVec(SPAMVec):
                 purevec = ComputationalSPAMVec(self._zvals, "stabilizer", self._prep_or_effect)
             else: raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
 
-            coeff = _Polynomial({(): 1.0}, max_poly_vars)
+            coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             if self._prep_or_effect == "prep":
                 terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, purevec, purevec, self._evotype)]
             else:
@@ -4164,7 +4164,7 @@ class ComputationalSPAMVec(SPAMVec):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the SPAM vector using a 1D array of parameters.
 
@@ -4179,10 +4179,10 @@ class ComputationalSPAMVec(SPAMVec):
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
-        nodirty : bool, optional
-            Whether this SPAM vector should refrain from setting it's dirty
-            flag as a result of this call.  `False` is the safe option, as
-            this call potentially changes this SPAM vector's parameters.
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
 
         Returns
         -------

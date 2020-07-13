@@ -837,7 +837,7 @@ class ConfidenceRegionFactoryView(object):
                              + "profile likelihood confidence intervals")
 
     def compute_confidence_interval(self, fn_obj, eps=1e-7,
-                                   return_fn_val=False, verbosity=0):
+                                    return_fn_val=False, verbosity=0):
         """
         Compute the confidence interval for an arbitrary function.
 

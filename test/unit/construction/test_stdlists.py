@@ -9,7 +9,7 @@ class StdListTester(BaseCase):
     def setUp(self):
         self.opLabels = [Label('Gx'), Label('Gy')]
         self.strs = cc.to_circuits([('Gx',), ('Gy',), ('Gx', 'Gx')])
-        self.germs = cc.to_circuits([('Gx', 'Gy'), ('Gy', 'Gy')])
+        self.germs = cc.to_circuits([('Gx',), ('Gx', 'Gy'), ('Gy', 'Gy')])
         self.testFidPairs = [(0, 1)]
         self.testFidPairsDict = {(Label('Gx'), Label('Gy')): [(0, 0), (0, 1)], (Label('Gy'), Label('Gy')): [(0, 0)]}
         self.ds = DataSet(outcome_labels=['0', '1'])  # a dataset that is missing
@@ -24,7 +24,8 @@ class StdListTester(BaseCase):
         lsgstStructs = stdlists.make_lsgst_structs(
             std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers")  # also try a Model as first arg
-        self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1].allstrs))
+        self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1]))
+        self.assertEqual(lsgstLists[-1][26]._str, 'GxGx(Gx)^2GxGx')  # ensure that (.)^2 appears in string (*not* expanded)
 
         lsgstLists2 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
@@ -32,7 +33,7 @@ class StdListTester(BaseCase):
         lsgstStructs2 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="truncated germ powers")
-        self.assertEqual(set(lsgstLists2[-1]), set(lsgstStructs2[-1].allstrs))
+        self.assertEqual(set(lsgstLists2[-1]), set(lsgstStructs2[-1]))
 
         lsgstLists3 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
@@ -40,7 +41,7 @@ class StdListTester(BaseCase):
         lsgstStructs3 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="length as exponent")
-        self.assertEqual(set(lsgstLists3[-1]), set(lsgstStructs3[-1].allstrs))
+        self.assertEqual(set(lsgstLists3[-1]), set(lsgstStructs3[-1]))
 
         maxLens = [1, 2]
         lsgstLists4 = stdlists.create_lsgst_circuit_lists(
@@ -49,7 +50,7 @@ class StdListTester(BaseCase):
         lsgstStructs4 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers", nest=False)
-        self.assertEqual(set(lsgstLists4[-1]), set(lsgstStructs4[-1].allstrs))
+        self.assertEqual(set(lsgstLists4[-1]), set(lsgstStructs4[-1]))
 
         lsgstLists5 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairs,
@@ -57,7 +58,7 @@ class StdListTester(BaseCase):
         lsgstStructs5 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairs,
             trunc_scheme="whole germ powers")
-        self.assertEqual(set(lsgstLists5[-1]), set(lsgstStructs5[-1].allstrs))
+        self.assertEqual(set(lsgstLists5[-1]), set(lsgstStructs5[-1]))
 
         lsgstLists6 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairsDict,
@@ -65,7 +66,7 @@ class StdListTester(BaseCase):
         lsgstStructs6 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairsDict,
             trunc_scheme="whole germ powers")
-        self.assertEqual(set(lsgstLists6[-1]), set(lsgstStructs6[-1].allstrs))
+        self.assertEqual(set(lsgstLists6[-1]), set(lsgstStructs6[-1]))
 
         lsgstLists7 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
@@ -73,7 +74,7 @@ class StdListTester(BaseCase):
         lsgstStructs7 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers", keep_fraction=0.5, keep_seed=1234)
-        self.assertEqual(set(lsgstLists7[-1]), set(lsgstStructs7[-1].allstrs))
+        self.assertEqual(set(lsgstLists7[-1]), set(lsgstStructs7[-1]))
 
         lsgstLists8 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairs,
@@ -81,12 +82,12 @@ class StdListTester(BaseCase):
         lsgstStructs8 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairs,
             trunc_scheme="whole germ powers", keep_fraction=0.7, keep_seed=1234)
-        self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1].allstrs))
+        self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1]))
         # TODO assert correctness
 
         # empty max-lengths ==> no output
         lsgstStructs9 = stdlists.make_lsgst_structs(
-            self.opLabels, self.strs, self.strs, self.germs, [])
+            self.opLabels, self.strs, self.strs, self.germs, [], include_lgst=False)
         self.assertEqual(len(lsgstStructs9), 0)
 
         # checks against datasets
@@ -94,7 +95,7 @@ class StdListTester(BaseCase):
         lsgstStructs10 = stdlists.make_lsgst_structs(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, dscheck=self.ds,
             action_if_missing="drop", verbosity=4)
-        self.assertEqual([Circuit(('Gx',))], lsgstStructs10[-1].allstrs)
+        self.assertEqual([Circuit(('Gx',))], list(lsgstStructs10[-1]))
 
     def test_lsgst_experiment_list(self):
         maxLens = [1, 2]

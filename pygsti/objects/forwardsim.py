@@ -14,16 +14,19 @@ import numpy as _np
 import numpy.linalg as _nla
 import collections as _collections
 import itertools as _itertools
+import warnings as _warnings
 
 from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
-from .profiler import DummyProfiler as _DummyProfiler
+from ..tools import mpitools as _mpit
 from . import spamvec as _sv
 from . import operation as _op
 from . import labeldicts as _ld
-
-_dummy_profiler = _DummyProfiler()
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from .circuit import Circuit as _Circuit
 
 
 class ForwardSimulator(object):
@@ -49,8 +52,9 @@ class ForwardSimulator(object):
         The current parameter vector of the Model.
     """
 
-    def __init__(self, dim, layer_op_server, paramvec):
+    def __init__(self, model=None):
         """
+        TODO: docstring
         Construct a new ForwardSimulator object.
 
         Parameters
@@ -64,8 +68,12 @@ class ForwardSimulator(object):
         paramvec : numpy.ndarray
             The current parameter vector of the Model.
         """
-        self.dim = dim
-        self.sos = layer_op_server
+        #self.dim = model.dim
+        self._model = model
+
+        #self.paramvec = paramvec
+        #self.Np = len(paramvec)
+        #self.evotype = layer_op_server.evotype()
 
         #Conversion of labels -> integers for speed & C-compatibility
         #self.operation_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
@@ -76,60 +84,64 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-        self.paramvec = paramvec
-        self.Np = len(paramvec)
-        self.evotype = layer_op_server.evotype()
+    @property
+    def model(self):
+        return self._model
 
-    def to_vector(self):
-        """
-        Returns the parameter vector of the associated Model.
+    @model.setter
+    def model(self, val):
+        self._model = val
 
-        Returns
-        -------
-        numpy array
-            The vectorized model parameters.
-        """
-        return self.paramvec
-
-    def from_vector(self, v, close=False, nodirty=False):
-        """
-        The inverse of to_vector.
-
-        Initializes the Model-like members of this
-        calculator based on `v`. Used for computing finite-difference derivatives.
-
-        Parameters
-        ----------
-        v : numpy.ndarray
-            The parameter vector.
-
-        close : bool, optional
-            Set to `True` if `v` is close to the current parameter vector.
-            This can make some operations more efficient.
-
-        nodirty : bool, optional
-            If True, the framework for marking and detecting when operations
-            have changed and a Model's parameter-vector needs to be updated
-            is disabled.  Disabling this will increases the speed of the call.
-
-        Returns
-        -------
-        None
-        """
-        #Note: this *will* initialize the parent Model's objects too,
-        # since only references to preps, effects, and gates are held
-        # by the calculator class.  ORDER is important, as elements of
-        # POVMs and Instruments rely on a fixed from_vector ordering
-        # of their simplified effects/gates.
-        self.paramvec = v.copy()  # now self.paramvec is *not* the same as the Model's paramvec
-        self.sos.from_vector(v, close, nodirty)  # so don't always want ", nodirty=True)" - we
-        # need to set dirty flags so *parent* will re-init it's paramvec...
-
-        #Re-init reps for computation
-        #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
-        #self.operationreps = { lbl:g.torep() for lbl,g in gates.items() }
-        #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
-        #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
+    #def to_vector(self):
+    #    """
+    #    Returns the parameter vector of the associated Model.
+    #
+    #    Returns
+    #    -------
+    #    numpy array
+    #        The vectorized model parameters.
+    #    """
+    #    return self.paramvec
+    #
+    #def from_vector(self, v, close=False, nodirty=False):
+    #    """
+    #    The inverse of to_vector.
+    #
+    #    Initializes the Model-like members of this
+    #    calculator based on `v`. Used for computing finite-difference derivatives.
+    #
+    #    Parameters
+    #    ----------
+    #    v : numpy.ndarray
+    #        The parameter vector.
+    #
+    #    close : bool, optional
+    #        Set to `True` if `v` is close to the current parameter vector.
+    #        This can make some operations more efficient.
+    #
+    #    nodirty : bool, optional
+    #        If True, the framework for marking and detecting when operations
+    #        have changed and a Model's parameter-vector needs to be updated
+    #        is disabled.  Disabling this will increases the speed of the call.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    #Note: this *will* initialize the parent Model's objects too,
+    #    # since only references to preps, effects, and gates are held
+    #    # by the calculator class.  ORDER is important, as elements of
+    #    # POVMs and Instruments rely on a fixed from_vector ordering
+    #    # of their simplified effects/gates.
+    #    self.paramvec = v.copy()  # now self.paramvec is *not* the same as the Model's paramvec
+    #    self.sos.from_vector(v, close, nodirty)  # so don't always want ", nodirty=True)" - we
+    #    # need to set dirty flags so *parent* will re-init it's paramvec...
+    #
+    #    #Re-init reps for computation
+    #    #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
+    #    #self.operationreps = { lbl:g.torep() for lbl,g in gates.items() }
+    #    #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
+    #    #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
     #UNUSED - REMOVE?
     #def propagate(self, state, simplified_circuit, time=None):
@@ -138,148 +150,153 @@ class ForwardSimulator(object):
     #    """
     #    raise NotImplementedError()  # TODO - create an interface for running circuits
 
-    def probs(self, simplified_circuit, clip_to=None, time=None):
+    def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
+                                                         resource_alloc):
+        # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
+        # derivatives of each specified circuit outcome probability.
+        raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
+
+    def probs(self, circuit, outcomes=None, time=None):
         """
         Construct a dictionary containing the outcome probabilities of `simplified_circuit`
+        #TODO: docstrings: simplified_circuit => circuit in routines **below**, similar to this one.
 
         Parameters
         ----------
-        simplified_circuit : Circuit or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
-            This is a "simplified" circuit in that it should not contain any
-            POVM or Instrument labels (but can have effect or Instrument-member
-            labels).
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip probabilities to if not None.
+        outcomes : list or tuple
+            A sequence of outcomes, which can themselves be either tuples
+            (to include intermediate measurements) or simple strings, e.g. `'010'`.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
 
         Returns
         -------
-        probs : dictionary
-            A dictionary such that
-            probs[SL] = pr(SL,circuit,clip_to)
-            for each spam label (string) SL.
+        probs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to probabilities.
         """
-        probs = _ld.OutcomeLabelDict()
-        raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0  # outcome index
+        copa_layout = self.create_layout([circuit])
+        probs_array = _np.empty(copa_layout.num_elements, 'd')
+        if time is None:
+            self.bulk_fill_probs(probs_array, copa_layout)
+        else:
+            resource_alloc = _ResourceAllocation.cast(None)
+            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time], resource_alloc)
 
-        for raw_circuit, elabels in raw_dict.items():
-            # evaluate spamTuples w/same rholabel together
-            for pval in self._prs(raw_circuit[0], elabels, raw_circuit[1:], clip_to, False, time):
-                probs[outcomeLbls[iOut]] = pval; iOut += 1
+        if _np.any(_np.isnan(probs_array)):
+            to_print = str(circuit) if len(circuit) < 10 else str(circuit[0:10]) + " ... (len %d)" % len(circuit)
+            _warnings.warn("pr(%s) == nan" % to_print)
+
+        probs = _ld.OutcomeLabelDict()
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
+            probs[outcome] = probs_array[element_index]
         return probs
 
-    def dprobs(self, simplified_circuit, return_pr=False, clip_to=None):
-        """
-        Construct a dictionary containing the outcome-probability derivatives of `simplified_circuit`.
+    def dprobs(self, circuit, clip_to=None):
+        copa_layout = self.create_layout([circuit])
+        dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
+        self.bulk_fill_dprobs(dprobs_array, copa_layout, clip_to)
 
-        Parameters
-        ----------
-        simplified_circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the circuit.
-            This is a "simplified" circuit in that it should not contain any
-            POVM or Instrument labels (but can have effect or Instrument-member
-            labels).
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
-
-        Returns
-        -------
-        dprobs : dictionary
-            A dictionary such that
-            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,clip_to)
-            for each spam label (string) SL.
-        """
-        dprobs = {}
-        raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0  # outcome index
-        for raw_circuit, elabels in raw_dict.items():
-            for elabel in elabels:
-                dprobs[outcomeLbls[iOut]] = self._dpr(
-                    (raw_circuit[0], elabel), raw_circuit[1:], return_pr, clip_to)
-                iOut += 1
+        dprobs = _ld.OutcomeLabelDict()
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
+            dprobs[outcome] = dprobs_array[element_index]
         return dprobs
 
-    def hprobs(self, simplified_circuit, return_pr=False, return_deriv=False, clip_to=None):
+    def hprobs(self, circuit, clip_to=None):
+        copa_layout = self.create_layout([circuit])
+        hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
+        self.bulk_fill_hprobs(hprobs_array, copa_layout, clip_to)
+
+        hprobs = _ld.OutcomeLabelDict()
+        elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
+        for element_index, outcome in zip(_slct.indices(elindices), outcomes):
+            hprobs[outcome] = hprobs_array[element_index]
+        return hprobs
+
+    # ---------------------------------------------------------------------------
+    # BULK operations -----------------------------------------------------------
+    # ---------------------------------------------------------------------------
+
+    def create_layout(self, circuits, dataset=None, resource_alloc=None,
+                      array_types=(), derivative_dimensions=None, verbosity=0):
         """
-        Construct a dictionary containing the outcome-probability 2nd derivatives of `simplified_circuit`.
+        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
 
         Parameters
         ----------
-        simplified_circuit : Circuit or tuple of operation labels
-            The sequence of operation labels specifying the circuit.
-            This is a "simplified" circuit in that it should not contain any
-            POVM or Instrument labels (but can have effect or Instrument-member
-            labels).
+        circuits : list
+            The circuits whose outcome probabilities should be computed.
 
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
 
-        return_deriv : bool, optional
-            when set to True, additionally return the derivatives of the
-            probabilities.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
 
         Returns
         -------
-        hprobs : dictionary
-            A dictionary such that
-            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,return_pr,return_deriv,clip_to)
-            for each spam label (string) SL.
+        CircuitOutcomeProbabilityArrayLayout
         """
-        hprobs = {}
-        raw_dict, outcomeLbls = simplified_circuit
-        iOut = 0  # outcome index
-        for raw_circuit, elabels in raw_dict.items():
-            for elabel in elabels:
-                hprobs[outcomeLbls[iOut]] = self._hpr(
-                    (raw_circuit[0], elabel), raw_circuit[1:], return_pr, return_deriv, clip_to)
-                iOut += 1
-        return hprobs
+        #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
+        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions)
 
-    def bulk_probs(self, circuits, eval_tree, el_indices, outcomes,
-                   clip_to=None, check=False, comm=None, smartc=None):
+    #TODO UPDATE
+    #def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
+    #    """
+    #    Performs initial computation needed for bulk_fill_probs and related calls.
+    #
+    #    For example, as computing probability polynomials. This is usually coupled with
+    #    the creation of an evaluation tree, but is separated from it because this
+    #    "preparation" may use `comm` to distribute a computationally intensive task.
+    #
+    #    Parameters
+    #    ----------
+    #    eval_tree : EvalTree
+    #        The evaluation tree used to define a list of circuits and hold (cache)
+    #        any computed quantities.
+    #
+    #    comm : mpi4py.MPI.Comm, optional
+    #        When not None, an MPI communicator for distributing the computation
+    #        across multiple processors.  Distribution is performed over
+    #        subtrees of `eval_tree` (if it is split).
+    #
+    #    mem_limit : int
+    #        Rough memory limit in bytes.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    pass  # default is to have no pre-computed quantities (but not an error to call this fn)
+
+    def bulk_probs(self, circuits, clip_to=None, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original circuits.
-
-        eval_tree : EvalTree
-            An evalution tree corresponding to `circuits`.
-
-        el_indices : dict
-            A dictionary of indices for each original circuit.
-
-        outcomes : dict
-            A dictionary of outcome labels (string or tuple) for each original
-            circuit.
+            The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
+            object containing pre-computed quantities that make this function run faster.
 
         clip_to : 2-tuple, optional
             (min,max) to clip return value if not None.
 
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         smartc : SmartCache, optional
             A cache object to cache & use previously cached values inside this
@@ -288,156 +305,102 @@ class ForwardSimulator(object):
         Returns
         -------
         probs : dictionary
-            A dictionary such that `probs[opstr]` is an ordered dictionary of
-            outcome probabilities whose keys are (tuples of) outcome labels.
+            A dictionary such that `probs[circuit]` is an ordered dictionary of
+            outcome probabilities whose keys are outcome labels.
         """
-        vp = _np.empty(eval_tree.num_final_elements(), 'd')
-        if smartc:
-            smartc.cached_compute(self.bulk_fill_probs, vp, eval_tree,
-                                  clip_to, check, comm, _filledarrays=(0,))
+        if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
+            copa_layout = circuits
         else:
-            self.bulk_fill_probs(vp, eval_tree, clip_to, check, comm)
+            circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+
+        vp = _np.empty(copa_layout.num_elements, 'd')
+        if smartc:
+            smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
+                                  resource_alloc, _filledarrays=(0,))
+        else:
+            self.bulk_fill_probs(vp, copa_layout, resource_alloc)
+
+        if clip_to is not None:
+            vp = _np.clip(vp, clip_to[0], clip_to[1])
 
         ret = _collections.OrderedDict()
-        for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(el_indices[i]) \
-                if isinstance(el_indices[i], slice) else el_indices[i]
-            ret[opstr] = _ld.OutcomeLabelDict(
-                [(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+        for elInds, c, outcomes in copa_layout.iter_circuits():
+            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+            ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
 
-    def bulk_dprobs(self, circuits, eval_tree, el_indices, outcomes,
-                    return_pr=False, clip_to=None,
-                    check=False, comm=None,
-                    wrt_filter=None, wrt_block_size=None):
+    def bulk_dprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
+                    wrt_filter=None):
         """
-        Construct a dictionary containing the probability-derivatives for an entire list of circuits.
+        Construct a dictionary containing the probability derivatives for an entire list of circuits.
 
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original circuits.
-
-        eval_tree : EvalTree
-            An evalution tree corresponding to `circuits`.
-
-        el_indices : dict
-            A dictionary of indices for each original circuit.
-
-        outcomes : dict
-            A dictionary of outcome labels (string or tuple) for each original
-            circuit.
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
+            The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
+            object containing pre-computed quantities that make this function run faster.
 
         clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
+            (min,max) to clip return value if not None.
 
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
 
         wrt_filter : list of ints, optional
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
-
-        wrt_block_size : int or float, optional
-            The maximum average number of derivative columns to compute *products*
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
+            processors and to control memory usage.
 
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(dp, p)` tuples whose keys are (tuples of) outcome labels,
-            where `p` is the corresponding probability, and `dp` is an array
-            containing the derivative of `p` with respect to each parameter.
-            If `return_pr` is False, then `p` is not included in the tuples
-            (so values are just `dp`).
+            A dictionary such that `dprobs[circuit]` is an ordered dictionary of
+            derivative arrays (one element per differentiated parameter) whose
+            keys are outcome labels
         """
-        nElements = eval_tree.num_final_elements()
-        nDerivCols = self.Np
+        if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
+            copa_layout = circuits
+        else:
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        vdp = _np.empty((nElements, nDerivCols), 'd')
-        vp = _np.empty(nElements, 'd') if return_pr else None
-
-        self.bulk_fill_dprobs(vdp, eval_tree,
-                              vp, clip_to, check, comm,
-                              wrt_filter, wrt_block_size)
+        #Note: don't use smartc for now.
+        vdp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
+        self.bulk_fill_dprobs(vdp, copa_layout, clip_to, resource_alloc, wrt_filter)
 
         ret = _collections.OrderedDict()
-        for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(el_indices[i]) \
-                if isinstance(el_indices[i], slice) else el_indices[i]
-            if return_pr:
-                ret[opstr] = _ld.OutcomeLabelDict(
-                    [(outLbl, (vdp[ei], vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
-            else:
-                ret[opstr] = _ld.OutcomeLabelDict(
-                    [(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+        for elInds, c, outcomes in copa_layout.iter_circuits():
+            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+            ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
 
-    def bulk_hprobs(self, circuits, eval_tree, el_indices, outcomes,
-                    return_pr=False, return_deriv=False, clip_to=None,
-                    check=False, comm=None,
-                    wrt_filter1=None, wrt_filter2=None,
-                    wrt_block_size1=None, wrt_block_size2=None):
+    def bulk_hprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
+                    wrt_filter1=None, wrt_filter2=None):
         """
-        Construct a dictionary containing the probability-Hessians for an entire list of circuits.
+        Construct a dictionary containing the probability Hessians for an entire list of circuits.
 
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (non-simplified) original circuits.
-
-        eval_tree : EvalTree
-            An evalution tree corresponding to `circuits`.
-
-        el_indices : dict
-            A dictionary of indices for each original circuit.
-
-        outcomes : dict
-            A dictionary of outcome labels (string or tuple) for each original
-            circuit.
-
-        return_pr : bool, optional
-            when set to True, additionally return the probabilities.
-
-        return_deriv : bool, optional
-            when set to True, additionally return the probability derivatives.
+            The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
+            object containing pre-computed quantities that make this function run faster.
 
         clip_to : 2-tuple, optional
-            (min,max) to clip returned probability to if not None.
-            Only relevant when return_pr == True.
+            (min,max) to clip return value if not None.
 
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
 
         wrt_filter1 : list of ints, optional
             If not None, a list of integers specifying which model parameters
@@ -446,304 +409,202 @@ class ForwardSimulator(object):
         wrt_filter2 : list of ints, optional
             If not None, a list of integers specifying which model parameters
             to differentiate with respect to in the second (col) derivative operations.
-
-        wrt_block_size1: int or float, optional
-            The maximum number of 1st (row) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
-
-        wrt_block_size2 : int or float, optional
-            The maximum number of 2nd (col) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
 
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(hp, dp, p)` tuples whose keys are (tuples of) outcome labels,
-            where `p` is the corresponding probability, `dp` is an array
-            containing the derivative of `p` with respect to each parameter,
-            and `hp` is a 2D array containing the Hessian of `p` with respect
-            to each parameter.  If `return_pr` is False, then `p` is not
-            included in the tuples.  If `return_deriv` if False, then `dp` is
-            not included in the tuples (if both are false then values are
-            just `hp`, and not a tuple).
+            A dictionary such that `hprobs[circuit]` is an ordered dictionary of
+            Hessian arrays (a square matrix with one row/column per differentiated
+            parameter) whose keys are outcome labels
         """
-        nElements = eval_tree.num_final_elements()
-        nDerivCols1 = self.Np if (wrt_filter1 is None) \
-            else len(wrt_filter1)
-        nDerivCols2 = self.Np if (wrt_filter2 is None) \
-            else len(wrt_filter2)
+        if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
+            copa_layout = circuits
+        else:
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        vhp = _np.empty((nElements, nDerivCols1, nDerivCols2), 'd')
-        vdp1 = _np.empty((nElements, self.Np), 'd') \
-            if return_deriv else None
-        vdp2 = vdp1.copy() if (return_deriv and wrt_filter1 != wrt_filter2) else None
-        vp = _np.empty(nElements, 'd') if return_pr else None
-
-        self.bulk_fill_hprobs(vhp, eval_tree,
-                              vp, vdp1, vdp2, clip_to, check, comm,
-                              wrt_filter1, wrt_filter1, wrt_block_size1, wrt_block_size2)
+        #Note: don't use smartc for now.
+        vhp = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
+        self.bulk_fill_hprobs(vhp, copa_layout, clip_to, resource_alloc,
+                              wrt_filter1, wrt_filter1)
 
         ret = _collections.OrderedDict()
-        for i, opstr in enumerate(circuits):
-            elInds = _slct.indices(el_indices[i]) \
-                if isinstance(el_indices[i], slice) else el_indices[i]
-            outcomeQtys = _ld.OutcomeLabelDict()
-            for ei, outLbl in zip(elInds, outcomes[i]):
-                if return_deriv:
-                    if vdp2 is None:
-                        if return_pr: t = (vhp[ei], vdp1[ei], vp[ei])
-                        else: t = (vhp[ei], vdp1[ei])
-                    else:
-                        if return_pr: t = (vhp[ei], vdp1[ei], vdp2[ei], vp[ei])
-                        else: t = (vhp[ei], vdp1[ei], vdp2[ei])
-                else:
-                    if return_pr: t = (vhp[ei], vp[ei])
-                    else: t = vhp[ei]
-                outcomeQtys[outLbl] = t
-            ret[opstr] = outcomeQtys
-
+        for elInds, c, outcomes in copa_layout.iter_circuits():
+            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+            ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
 
-    def create_evaltree(self, simplified_circuits, num_subtree_comms):
+    def bulk_fill_probs(self, array_to_fill, layout, resource_alloc=None):
         """
-        Constructs an EvalTree object appropriate for this calculator.
+        Compute the outcome probabilities for a list circuits.
+
+        This routine fills a 1D array, `array_to_fill` with circuit outcome probabilities
+        as dictated by a :class:`CircuitOutcomeProbabilityArrayLayout` ("COPA layout")
+        object, which is usually specifically tailored for efficiency.
+
+        The `array_to_fill` array must have length equal to the number of elements in
+        `layout`, and the meanings of each element are given by `layout`.
 
         Parameters
         ----------
-        simplified_circuits : list
-            A list of Circuits or tuples of operation labels which specify
-            the circuits to create an evaluation tree out of
-            (most likely because you want to computed their probabilites).
-            These are a "simplified" circuits in that they should only contain
-            "deterministic" elements (no POVM or Instrument labels).
-
-        num_subtree_comms : int
-            The number of processor groups that will be assigned to
-            subtrees of the created tree.  This aids in the tree construction
-            by giving the tree information it needs to distribute itself
-            among the available processors.
-
-        Returns
-        -------
-        EvalTree
-        """
-        raise NotImplementedError("create_evaltree(...) is not implemented!")
-
-    def _set_param_block_size(self, wrt_filter, wrt_block_size, comm):
-        if wrt_filter is None:
-            blkSize = wrt_block_size  # could be None
-            if (comm is not None) and (comm.Get_size() > 1):
-                comm_blkSize = self.Np / comm.Get_size()
-                blkSize = comm_blkSize if (blkSize is None) \
-                    else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
-        else:
-            blkSize = None  # wrt_filter dictates block
-        return blkSize
-
-    def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
-        """
-        Performs initial computation needed for bulk_fill_probs and related calls.
-
-        For example, as computing probability polynomials. This is usually coupled with
-        the creation of an evaluation tree, but is separated from it because this
-        "preparation" may use `comm` to distribute a computationally intensive task.
-
-        Parameters
-        ----------
-        eval_tree : EvalTree
-            The evaluation tree used to define a list of circuits and hold (cache)
-            any computed quantities.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of `eval_tree` (if it is split).
-
-        mem_limit : int
-            Rough memory limit in bytes.
-
-        Returns
-        -------
-        None
-        """
-        pass  # default is to have no pre-computed quantities (but not an error to call this fn)
-
-    def bulk_fill_probs(self, mx_to_fill, eval_tree,
-                        clip_to=None, check=False, comm=None):
-        """
-        Compute the outcome probabilities for an entire tree of circuits.
-
-        This routine fills a 1D array, `mx_to_fill` with the probabilities
-        corresponding to the *simplified* circuits found in an evaluation
-        tree, `eval_tree`.  An initial list of (general) :class:`Circuit`
-        objects is *simplified* into a lists of gate-only sequences along with
-        a mapping of final elements (i.e. probabilities) to gate-only sequence
-        and prep/effect pairs.  The evaluation tree organizes how to efficiently
-        compute the gate-only sequences.  This routine fills in `mx_to_fill`, which
-        must have length equal to the number of final elements (this can be
-        obtained by `eval_tree.num_final_elements()`.  To interpret which elements
-        correspond to which strings and outcomes, you'll need the mappings
-        generated when the original list of `Circuits` was simplified.
-
-        Parameters
-        ----------
-        mx_to_fill : numpy ndarray
+        array_to_fill : numpy ndarray
             an already-allocated 1D numpy array of length equal to the
-            total number of computed elements (i.e. eval_tree.num_final_elements())
+            total number of computed elements (i.e. `len(layout)`).
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed over
-            subtrees of eval_tree (if it is split).
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
         None
         """
-        raise NotImplementedError("bulk_fill_probs(...) is not implemented!")
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        return self._bulk_fill_probs(array_to_fill, layout, resource_alloc)
 
-    def bulk_fill_dprobs(self, mx_to_fill, eval_tree,
-                         pr_mx_to_fill=None, clip_to=None, check=False,
-                         comm=None, wrt_filter=None, wrt_block_size=None,
-                         profiler=None, gather_mem_limit=None):
+    def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
+        return self._bulk_fill_probs_block(array_to_fill, layout, resource_alloc)
+
+    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+        for element_indices, circuit, outcomes in layout.iter_circuits():
+            self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
+                                                        outcomes, resource_alloc, time=None)
+
+    def _bulk_fill_probs_at_times(self, array_to_fill, layout, times, resource_alloc):
+        # A separate function because computation with time-dependence is often approached differently
+        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times, resource_alloc)
+
+    def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times, resource_alloc):
+        for (element_indices, circuit, outcomes), time in zip(layout.iter_circuits(), times):
+            self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
+                                                        outcomes, resource_alloc, time)
+
+    def bulk_fill_dprobs(self, array_to_fill, layout,
+                         pr_array_to_fill=None, resource_alloc=None, wrt_filter=None):
         """
         Compute the outcome probability-derivatives for an entire tree of circuits.
 
-        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
-        probability-derivatives for each "final element" of `eval_tree`.
+        This routine fills a 2D array, `array_to_fill` with circuit outcome probabilities
+        as dictated by a :class:`CircuitOutcomeProbabilityArrayLayout` ("COPA layout")
+        object, which is usually specifically tailored for efficiency.
+
+        The `array_to_fill` array must have length equal to the number of elements in
+        `layout`, and the meanings of each element are given by `layout`.
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated ExM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M is the
-            number of model parameters.
+        array_to_fill : numpy ndarray
+            an already-allocated 2D numpy array of shape `(len(layout), Np)`, where
+            `Np` is the number of model parameters being differentiated with respect to.
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
         pr_mx_to_fill : numpy array, optional
-            when not None, an already-allocated length-E numpy array that is filled
-            with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-`len(layout)` numpy array that is
+            filled with probabilities, just as in :method:`bulk_fill_probs`.
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
-
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+o
         wrt_filter : list of ints, optional
             If not None, a list of integers specifying which parameters
             to include in the derivative dimension. This argument is used
             internally for distributing calculations across multiple
-            processors and to control memory usage.  Cannot be specified
-            in conjuction with wrt_block_size.
-
-        wrt_block_size : int or float, optional
-            The maximum number of derivative columns to compute *products*
-            for simultaneously.  None means compute all requested columns
-            at once.  The  minimum of wrt_block_size and the size that makes
-            maximal use of available processors is used as the final block size.
-            This argument must be None if wrt_filter is not None.  Set this to
-            non-None to reduce amount of intermediate memory required.
-
-        profiler : Profiler, optional
-            A profiler object used for to track timing and memory usage.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
+            processors and to control memory usage.
 
         Returns
         -------
         None
         """
-        raise NotImplementedError("bulk_fill_dprobs(...) is not implemented!")
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter)
 
-    def bulk_fill_hprobs(self, mx_to_fill, eval_tree,
-                         pr_mx_to_fill=None, deriv1_mx_to_fill=None, deriv2_mx_to_fill=None,
-                         clip_to=None, check=False, comm=None, wrt_filter1=None, wrt_filter2=None,
-                         wrt_block_size1=None, wrt_block_size2=None, gather_mem_limit=None):
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter):
+        if wrt_filter is not None:
+            wrt_filter = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
+        if pr_array_to_fill is not None:
+            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
+        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, wrt_filter, resource_alloc)
+
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+
+        #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
+        try:
+            for element_indices, circuit, outcomes in layout.iter_circuits():
+                self._compute_circuit_outcome_probability_derivatives(
+                    array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc)
+            return
+        except NotImplementedError:
+            pass  # otherwise, proceed to compute derivatives via finite difference.
+
+        eps = 1e-7  # hardcoded?
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params())
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(len(layout), 'd')
+        self._bulk_fill_probs_block(probs, layout, resource_alloc)
+
+        probs2 = _np.empty(len(layout), 'd')
+        orig_vec = self.model.to_vector().copy()
+        for i in range(self.model.num_params()):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.model.from_vector(vec, close=True)
+                self._bulk_fill_probs_block(probs2, layout, resource_alloc)
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+        self.model.from_vector(orig_vec, close=True)
+
+    def bulk_fill_hprobs(self, array_to_fill, layout,
+                         pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None,
+                         resource_alloc=None, wrt_filter1=None, wrt_filter2=None):
         """
-        Compute the outcome probability-Hessians for an entire tree of circuits.
+        Compute the outcome probability-Hessians for an entire list of circuits.
 
         Similar to `bulk_fill_probs(...)`, but fills a 3D array with
-        probability-Hessians for each "final element" of `eval_tree`.
+        the Hessians for each circuit outcome probability.
 
         Parameters
         ----------
-        mx_to_fill : numpy ndarray
-            an already-allocated ExMxM numpy array where E is the total number of
-            computed elements (i.e. eval_tree.num_final_elements()) and M1 & M2 are
-            the number of selected gate-set parameters (by wrt_filter1 and wrt_filter2).
+        array_to_fill : numpy ndarray
+            an already-allocated numpy array of shape `(len(layout),M1,M2)` where
+            `M1` and `M2` are the number of selected model parameters (by `wrt_filter1`
+            and `wrt_filter2`).
 
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
-            strings to compute the bulk operation on.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
         pr_mx_to_fill : numpy array, optional
-            when not None, an already-allocated length-E numpy array that is filled
-            with probabilities, just like in bulk_fill_probs(...).
+            when not None, an already-allocated length-`len(layout)` numpy array that is
+            filled with probabilities, just as in :method:`bulk_fill_probs`.
 
-        deriv1_mx_to_fill : numpy array, optional
-            when not None, an already-allocated ExM numpy array that is filled
-            with probability derivatives, similar to bulk_fill_dprobs(...), but
-            where M is the number of model parameters selected for the 1st
-            differentiation (i.e. by wrt_filter1).
+        deriv1_array_to_fill : numpy array, optional
+            when not None, an already-allocated numpy array of shape `(len(layout),M1)`
+            that is filled with probability derivatives, similar to
+            :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M1`).
 
-        deriv2_mx_to_fill : numpy array, optional
-            when not None, an already-allocated ExM numpy array that is filled
-            with probability derivatives, similar to bulk_fill_dprobs(...), but
-            where M is the number of model parameters selected for the 2nd
-            differentiation (i.e. by wrt_filter2).
+        deriv2_array_to_fill : numpy array, optional
+            when not None, an already-allocated numpy array of shape `(len(layout),M2)`
+            that is filled with probability derivatives, similar to
+            :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
 
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
-
-        check : boolean, optional
-            If True, perform extra checks within code to verify correctness,
-            generating warnings when checks fail.  Used for testing, and runs
-            much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is first performed over
-            subtrees of eval_tree (if it is split), and then over blocks (subsets)
-            of the parameters being differentiated with respect to (see
-            wrt_block_size).
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         wrt_filter1 : list of ints, optional
             If not None, a list of integers specifying which model parameters
@@ -753,36 +614,74 @@ class ForwardSimulator(object):
             If not None, a list of integers specifying which model parameters
             to differentiate with respect to in the second (col) derivative operations.
 
-        wrt_block_size1: int or float, optional
-            The maximum number of 1st (row) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
-
-        wrt_block_size2 : int or float, optional
-            The maximum number of 2nd (col) derivatives to compute
-            *products* for simultaneously.  None means compute all requested
-            rows or columns at once.  The minimum of wrt_block_size and the size
-            that makes maximal use of available processors is used as the final
-            block size.  This argument must be None if the corresponding
-            wrt_filter is not None.  Set this to non-None to reduce amount of
-            intermediate memory required.
-
-        gather_mem_limit : int, optional
-            A memory limit in bytes to impose upon the "gather" operations
-            performed as a part of MPI processor syncronization.
-
         Returns
         -------
         None
         """
-        raise NotImplementedError("bulk_fill_hprobs(...) is not implemented!")
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        return self._bulk_fill_hprobs(array_to_fill, layout, pr_array_to_fill,
+                                      deriv1_array_to_fill, deriv2_array_to_fill,
+                                      resource_alloc, wrt_filter1, wrt_filter2)
 
-    def bulk_hprobs_by_block(self, eval_tree, wrt_slices_list,
-                             return_dprobs_12=False, comm=None):
+    def _bulk_fill_hprobs(self, array_to_fill, layout,
+                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
+                          resource_alloc, wrt_filter1, wrt_filter2):
+        if wrt_filter1 is not None:
+            wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
+        else:
+            wrtSlice1 = None
+
+        if wrt_filter2 is not None:
+            wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
+        else:
+            wrtSlice2 = None
+
+        if pr_array_to_fill is not None:
+            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
+        if deriv1_array_to_fill is not None:
+            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, wrtSlice1, resource_alloc)
+        if deriv2_array_to_fill is not None:
+            if wrtSlice1 == wrtSlice2:
+                deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
+            else:
+                self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, wrtSlice2, resource_alloc)
+
+        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
+
+    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
+                                param_slice1, param_slice2, resource_alloc):
+        eps = 1e-4  # hardcoded?
+        if param_slice1 is None: param_slice1 = slice(0, self.model.num_params())
+        if param_slice2 is None: param_slice2 = slice(0, self.model.num_params())
+        param_indices1 = _slct.to_array(param_slice1)
+        param_indices2 = _slct.to_array(param_slice2)
+
+        if dest_param_slice1 is None:
+            dest_param_slice1 = slice(0, len(param_indices1))
+        if dest_param_slice2 is None:
+            dest_param_slice2 = slice(0, len(param_indices2))
+        dest_param_indices1 = _slct.to_array(dest_param_slice1)
+        #dest_param_indices2 = _slct.to_array(dest_param_slice2)  # unused
+
+        iParamToFinal = {i: dest_param_indices1[ii] for ii, i in enumerate(param_indices1)}
+
+        nP2 = len(param_indices2)
+        dprobs = _np.empty((len(layout), nP2), 'd')
+        self._bulk_fill_dprobs_block(dprobs, None, layout, param_slice2, resource_alloc)
+
+        dprobs2 = _np.empty((len(layout), nP2), 'd')
+        orig_vec = self.model.to_vector().copy()
+        for i in range(self.model.num_params()):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.model.from_vector(vec, close=True)
+                self._bulk_fill_dprobs_block(dprobs2, None, layout, param_slice2, resource_alloc)
+                array_to_fill[:, iFinal, dest_param_slice2] = (dprobs2 - dprobs) / eps
+        self.model.from_vector(orig_vec, close=True)
+
+    def bulk_hprobs_by_block(self, layout, wrt_slices_list,
+                             return_dprobs_12=False, resource_alloc=None):
         """
         An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
@@ -795,9 +694,9 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        eval_tree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the circuits
-            to compute the bulk operation on.  This tree *cannot* be split.
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for generated arrays, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
         wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
@@ -815,13 +714,13 @@ class ForwardSimulator(object):
             Hessian, and turns out to be useful when computing the Hessian
             of functions of the probabilities.
 
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.  Distribution is performed as in
-            bulk_product, bulk_dproduct, and bulk_hproduct.
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
 
         Returns
         -------
+        TODO: docstring - this is outdated!
         block_generator
             A generator which, when iterated, yields the 3-tuple
             `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
@@ -840,4 +739,95 @@ class ForwardSimulator(object):
             - `hprobs == mx[:,:,rowSlice,colSlice]`
             - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
-        raise NotImplementedError("bulk_hprobs_by_block(...) is not implemented!")
+        yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12, resource_alloc)
+
+    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
+
+        nElements = len(layout)
+
+        #NOTE: don't override this method in DistributableForwardSimulator
+        # by a method that distributes wrt_slices_list across comm procs,
+        # as we assume the user has already done any such distribution
+        # and has given each processor a list appropriate for it.
+        # Use comm only for speeding up the calcs of the given
+        # wrt_slices_list
+
+        for wrtSlice1, wrtSlice2 in wrt_slices_list:
+
+            if return_dprobs_12:
+                dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
+                dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+            else:
+                dprobs1 = dprobs2 = None
+            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
+                                _slct.length(wrtSlice2)), 'd')
+
+            self.bulk_fill_hprobs(hprobs, layout, None, dprobs1, dprobs2, resource_alloc,
+                                  wrt_filter1=_slct.indices(wrtSlice1),
+                                  wrt_filter2=_slct.indices(wrtSlice2))
+
+            if return_dprobs_12:
+                dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
+                yield wrtSlice1, wrtSlice2, hprobs, dprobs12
+            else:
+                yield wrtSlice1, wrtSlice2, hprobs
+
+
+class CacheForwardSimulator(ForwardSimulator):
+    """
+    A forward simulator that works with :class:`CachedCOPALayout` layouts.
+
+    This is just a small addition to :class:`ForwardSimulator`, adding a
+    persistent cache passed to new derived-class-overridable compute routines.
+    """
+
+    def create_layout(self, circuits, dataset=None, resource_alloc=None,
+                      array_types=(), derivative_dimensions=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
+
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be computed.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        Returns
+        -------
+        CachedCOPALayout
+        """
+        #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
+        cache = None  # Derived classes should override this function and create a cache here.
+        # A dictionary whose keys are the elements of `circuits` and values can be
+        #    whatever the user wants.  These values are provided when calling
+        #    :method:`iter_circuits_with_cache`.
+        return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
+
+    # Override these two functions to plumb `cache` down to _compute* methods
+    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+            self._compute_circuit_outcome_probabilities_with_cache(array_to_fill[element_indices], circuit,
+                                                                   outcomes, resource_alloc, cache, time=None)
+
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+            self._compute_circuit_outcome_probability_derivatives_with_cache(
+                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc, cache)
+
+    def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
+                                                          cache, time=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def _compute_circuit_outcome_probability_derivatives_with_cache(self, array_to_fill, circuit, outcomes, param_slice,
+                                                                    resource_alloc, cache):
+        # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
+        # derivatives of each specified circuit outcome probability.
+        raise NotImplementedError("Derived classes can implement this to speed up derivative computation")

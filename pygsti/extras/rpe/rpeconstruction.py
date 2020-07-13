@@ -16,7 +16,7 @@ from ... import tools as _tools
 
 
 def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol,
-                                    gate_depol=None, with_id=True, rpeconfig_inst=None):
+                                   gate_depol=None, with_id=True, rpeconfig_inst=None):
     """
     Make a model for simulating RPE, paramaterized by rotation angles.  Note
     that the output model also has thetaTrue, alpha_true, and epsilon_true
@@ -314,5 +314,5 @@ def create_rpe_dataset(model_or_dataset, string_list_d, n_samples, sample_error=
        A static data set filled with counts for the specified operation sequences.
     """
     return _cnst.simulate_data(model_or_dataset,
-                                    string_list_d['totalStrList'],
-                                    n_samples, sample_error=sample_error, seed=seed)
+                               string_list_d['totalStrList'],
+                               n_samples, sample_error=sample_error, seed=seed)

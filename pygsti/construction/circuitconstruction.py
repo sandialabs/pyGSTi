@@ -504,8 +504,8 @@ def create_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     if line_labels is None or len(line_labels) == 0: line_labels = ('*',)
     singleOps = [_cir.Circuit((gl,), line_labels=line_labels)**1 for gl in opLabels]  # **1 adds parens to stringrep
     ret = create_circuits('eStr', 'prepStr', 'prepStr+eStr', 'prepStr+g+eStr',
-                              eStr=meas_fiducials, prepStr=prep_fiducials, g=singleOps,
-                              order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
+                          eStr=meas_fiducials, prepStr=prep_fiducials, g=singleOps,
+                          order=['g', 'prepStr', 'eStr'])  # LEXICOGRAPHICAL VS MATRIX ORDER
     return _lt.remove_duplicates(ret)
 
 

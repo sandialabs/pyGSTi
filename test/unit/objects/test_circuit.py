@@ -94,10 +94,11 @@ class CircuitTester(BaseCase):
     def test_expand_and_factorize_circuitlabel(self):
         c = circuit.Circuit(None, stringrep='Gi(Gx:1)^2', num_lines=3, editable=True, expand_subcircuits=False)
         c[1, 0] = "Gx"
-        self.assertEqual(c, ('Gi', (CircuitLabel('', [('Gx', 1)], (1,), 2), ('Gx', 0))) + ('@', 0, 1, 2))
+        self.assertEqual(c.tup, ('Gi', (CircuitLabel('', [('Gx', 1)], (1,), 2), ('Gx', 0))) + ('@', 0, 1, 2))
 
         c.expand_subcircuits()
-        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)) + ('@', 0, 1, 2))
+        self.assertEqual(c.tup, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)) + ('@', 0, 1, 2))
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)))   # `c` compares vs. labels when RHS is not a Circuit
 
         c2 = circuit.Circuit(None, stringrep='GiGxGxGxGxGy', editable=True)
         self.assertEqual(c2, ('Gi', 'Gx', 'Gx', 'Gx', 'Gx', 'Gy'))
@@ -155,7 +156,7 @@ class CircuitTester(BaseCase):
         c[1, 0:2] = c2.to_label(nreps=2)
 
         tup = ('Gi', ('', (0, 1), 2, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3)
-        self.assertEqual(c, tup)
+        self.assertEqual(c.tup, tup)  # can't compare with `c` b/c comparison with non-Circuits compares against labels only
         self.assertEqual(c.num_layers, 3)
         self.assertEqual(c.depth, 6)
         # Qubit 0 ---|Gi|-||([Gx:0Gx:1]Gy:1)^2||-| |---
@@ -165,7 +166,8 @@ class CircuitTester(BaseCase):
 
         c = c1.copy()
         c[1, 0:2] = c2  # special behavior: c2 is converted to a label to cram it into a single layer
-        self.assertEqual(c, ('Gi', ('', (0, 1), 1, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c.tup, ('Gi', ('', (0, 1), 1, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c, ('Gi', ('', (0, 1), 1, (('Gx', 0), ('Gx', 1)), ('Gy', 1)), ()))
         self.assertEqual(c.num_layers, 3)
         self.assertEqual(c.depth, 4)
 
@@ -176,7 +178,8 @@ class CircuitTester(BaseCase):
 
         c = c1.copy()
         c[(1, 2), 0:2] = c2  # writes into described block
-        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c.tup, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)))
         self.assertEqual(c.num_layers, 3)
         self.assertEqual(c.depth, 3)
         # Qubit 0 ---|Gi|-|Gx|-|  |---
@@ -186,7 +189,8 @@ class CircuitTester(BaseCase):
 
         c = c1.copy()
         c[(1, 2), 0:2] = c2.to_label().components  # same as above, but more roundabout
-        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c.tup, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)) + ('@', 0, 1, 2, 3))
+        self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gy', 1)))
         self.assertEqual(c.num_layers, 3)
         self.assertEqual(c.depth, 3)
 
@@ -197,7 +201,8 @@ class CircuitTester(BaseCase):
     def test_replace_with_idling_line(self):
         c = circuit.Circuit([('Gcnot', 0, 1)], editable=True)
         c.replace_with_idling_line_inplace(0)
-        self.assertEqual(c, ((),) + ('@', 0, 1))
+        self.assertEqual(c.tup, ((),) + ('@', 0, 1))
+        self.assertEqual(c, ((),))
 
     def test_to_pythonstr(self):
         mdl = circuit.Circuit(None, stringrep="Gx^3Gy^2GxGz")

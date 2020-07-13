@@ -27,7 +27,11 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
+from .layerrules import LayerRules as _LayerRules
+from .forwardsim import ForwardSimulator as _FSim
+from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from .mapforwardsim import MapForwardSimulator as _MapFSim
+from .termforwardsim import TermForwardSimulator as _TermFSim
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis
@@ -118,11 +122,20 @@ class LocalNoiseModel(_ImplicitOpModel):
     evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.
 
-    sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-        The simulation method used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+        The circuit simulator used to compute any
+        requested probabilities, e.g. from :method:`probs` or
+        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        selects the simulation type, and is usually what you want. Other
+        special allowed values are:
+
+        - "matrix" : op_matrix-op_matrix products are computed and
+          cached to get composite gates which can then quickly simulate
+          a circuit for any preparation and outcome.  High memory demand;
+          best for a small number of (1 or 2) qubits.
+        - "map" : op_matrix-state_vector products are repeatedly computed
+          to simulate circuits.  Slower for a small number of qubits, but
+          faster and more memory efficient for higher numbers of qubits (3+).
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the conversion from a value in `gatedict` to a
@@ -144,7 +157,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
+        be either :class:`ComposedDenseOp` (with a "matrix" forward simulator) or
         :class:`ComposedOp` (othewise) objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
@@ -160,11 +173,11 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     @classmethod
     def from_parameterization(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
-                                    custom_gates=None, availability=None, qubit_labels=None,
-                                    geometry="line", parameterization='static', evotype="auto",
-                                    sim_type="auto", on_construction_error='raise',
-                                    independent_gates=False, ensure_composed_gates=False,
-                                    global_idle=None):
+                              custom_gates=None, availability=None, qubit_labels=None,
+                              geometry="line", parameterization='static', evotype="auto",
+                              simulator="auto", on_construction_error='raise',
+                              independent_gates=False, ensure_composed_gates=False,
+                              global_idle=None):
         """
         Creates a n-qubit model, usually of ideal gates, that is capable of describing "local noise".
 
@@ -288,9 +301,10 @@ class LocalNoiseModel(_ImplicitOpModel):
             if you give unitary maps instead of superoperators in `gatedict`
             you'll want to set this to `"statevec"`.
 
-        sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-            The simulation method used to compute predicted probabilities for the
-            resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.  Usually `"auto"` is fine, the default for
             each `evotype` is usually what you want.  Setting this to something
             else is expert-level tuning.
 
@@ -314,8 +328,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         ensure_composed_gates : bool, optional
             If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
-            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
+            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often
             dense gates) are used directly.
@@ -378,14 +392,19 @@ class LocalNoiseModel(_ImplicitOpModel):
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
             v0 = v1 = None  # then we shouldn't use these
 
-        if sim_type == "auto":
+        if simulator == "auto":
             if evotype == "densitymx":
-                sim_type = "matrix" if n_qubits <= 2 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                sim_type = "matrix" if n_qubits <= 4 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
-                sim_type = "map"  # use map as default for stabilizer-type evolutions
+                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
+        elif simulator == "map":
+            simulator = _MapFSim()
+        elif simulator == "matrix":
+            simulator = _MatrixFSim()
+        assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
         prep_layers = {}
         povm_layers = {}
@@ -416,19 +435,22 @@ class LocalNoiseModel(_ImplicitOpModel):
             # parameterization should be a type amenable to Lindblad
             # create lindblad SPAM ops w/max_weight == 1 & errcomp_type = 'gates' (HARDCODED for now)
             from . import cloudnoisemodel as _cnm
-            maxSpamWeight = 1; sparse = False; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
+            maxSpamWeight = 1; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
+            sparse_lindblad_basis = False; sparse_lindblad_reps = False  # HARDCODED
             if qubit_labels is None:
                 qubit_labels = tuple(range(n_qubits))
             qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, "line", qubit_labels=qubit_labels)
             # geometry doesn't matter while maxSpamWeight==1
 
             prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
-            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
-                                                        parameterization, errcomp_type, verbosity)
+            prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
+                                                        sparse_lindblad_reps, simulator, parameterization,
+                                                        errcomp_type, verbosity)
             prep_layers['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
 
-            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
-                                                        parameterization, errcomp_type, verbosity)
+            povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
+                                                        sparse_lindblad_reps, simulator, parameterization,
+                                                        errcomp_type, verbosity)
             povm_layers['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
         #OLD: when had a 'spamdict' arg: else:
@@ -471,7 +493,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 
         return cls(n_qubits, gatedict, prep_layers, povm_layers, availability,
-                   qubit_labels, geometry, evotype, sim_type, on_construction_error,
+                   qubit_labels, geometry, evotype, simulator, on_construction_error,
                    independent_gates, ensure_composed_gates, global_idle)
 
     #        spamdict : dict
@@ -484,7 +506,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def __init__(self, n_qubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
                  qubit_labels=None, geometry="line", evotype="densitymx",
-                 sim_type="auto", on_construction_error='raise',
+                 simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
         """
@@ -572,11 +594,20 @@ class LocalNoiseModel(_ImplicitOpModel):
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.
 
-        sim_type : {"auto", "matrix", "map", "termorder:<N>"}
-            The simulation method used to compute predicted probabilities for the
-            resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-            each `evotype` is usually what you want.  Setting this to something
-            else is expert-level tuning.
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :method:`probs` or
+            :method:`bulk_probs`.  The default value of `"auto"` automatically
+            selects the simulation type, and is usually what you want. Other
+            special allowed values are:
+
+            - "matrix" : op_matrix-op_matrix products are computed and
+              cached to get composite gates which can then quickly simulate
+              a circuit for any preparation and outcome.  High memory demand;
+              best for a small number of (1 or 2) qubits.
+            - "map" : op_matrix-state_vector products are repeatedly computed
+              to simulate circuits.  Slower for a small number of qubits, but
+              faster and more memory efficient for higher numbers of qubits (3+).
 
         on_construction_error : {'raise','warn',ignore'}
             What to do when the conversion from a value in `gatedict` to a
@@ -598,8 +629,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         ensure_composed_gates : bool, optional
             If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or
-            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
+            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often
             dense gates) are used directly.
@@ -646,14 +677,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #self.parameterization = parameterization
         #self.independent_gates = independent_gates
 
-        #REMOVE - "auto" not allowed here b/c no parameterization to infer from
-        #if evotype == "auto":  # Note: this same logic is repeated in build_standard above
-        #    if parameterization == "clifford": evotype = "stabilizer"
-        #    elif parameterization == "static unitary": evotype = "statevec"
-        #    elif _gt.is_valid_lindblad_paramtype(parameterization):
-        #        _, evotype = _gt.split_lindblad_paramtype(parameterization)
-        #    else: evotype = "densitymx"  # everything else
-
+        #Note - evotype="auto" not allowed here b/c no parameterization to infer from
         if evotype in ("densitymx", "svterm", "cterm"):
             basis1Q = _BuiltinBasis("pp", 4)
         elif evotype == "statevec":
@@ -662,13 +686,13 @@ class LocalNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("sv", 2)
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
 
-        if sim_type == "auto":
+        if simulator == "auto":
             if evotype == "densitymx":
-                sim_type = "matrix" if n_qubits <= 2 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                sim_type = "matrix" if n_qubits <= 4 else "map"
+                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
-                sim_type = "map"  # use map as default for stabilizer-type evolutions
+                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
         qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
@@ -679,8 +703,8 @@ class LocalNoiseModel(_ImplicitOpModel):
             qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
             #Only extract qubit labels from the first tensor-product block...
 
-        super(LocalNoiseModel, self).__init__(qubit_sslbls, basis1Q.name, {}, _SimpleCompLayerLizard, {},
-                                              sim_type=sim_type, evotype=evotype)
+        super(LocalNoiseModel, self).__init__(qubit_sslbls, _SimpleCompLayerRules(), basis1Q.name,
+                                              simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_dim': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
@@ -715,8 +739,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
-        Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
-        primitive_ops = []
+        Composed = _op.ComposedDenseOp if isinstance(simulator, _MatrixFSim) else _op.ComposedOp
 
         for gateName, gate in mm_gatedict.items():  # gate is a ModelMember - either LinearOperator, or an OpFactory
             if _Lbl(gateName).sslbls is not None: continue
@@ -800,27 +823,24 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds[0] == '*':
                         embedded_op = _opfactory.EmbeddingOpFactory(self.state_space_labels, base_gate,
-                                                                    dense=bool(sim_type == "matrix"),
+                                                                    dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
-                        #Add any primitive ops for this factory?
 
                     elif gate_is_factory:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
                             embedded_op = _opfactory.EmbeddedOpFactory(self.state_space_labels, inds, base_gate,
-                                                                       dense=bool(sim_type == "matrix"))
+                                                                       dense=isinstance(simulator, _MatrixFSim))
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
-                        #Add any primitive ops for this factory?
                     else:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            EmbeddedOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+                            EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                             embedded_op = EmbeddedOp(self.state_space_labels, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
-                        primitive_ops.append(_Lbl(gateName, inds))
 
                 except Exception as e:
                     if on_construction_error == 'warn':
@@ -838,7 +858,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
             if n_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QIdle')] = global_idle
-                Embedded = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+                Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                 global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
                                         for qlbl in qubit_labels])
 
@@ -849,87 +869,78 @@ class LocalNoiseModel(_ImplicitOpModel):
                 "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, n_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
 
-        self.primitive_op_labels = primitive_ops
-        self.primitive_prep_labels = self.prep_blks['layers'].keys()
-        self.primitive_povm_labels = self.povm_blks['layers'].keys()
-        #(no instruments)
 
+class _SimpleCompLayerRules(_LayerRules):
 
-class _SimpleCompLayerLizard(_ImplicitLayerLizard):
-    """
-    The layer lizard class for a :class:`LocalNoiseModel`.
-
-    This class creates layers by composing perfect target gates, and local errors.
-
-    This is a simple process because gates in a layer will have disjoint sets
-    of target qubits, and thus the local errors (and, as always, the gate
-    operations) can be composed as separate quantum processes without regard
-    for ordering.
-    """
-
-    def prep(self, layerlbl):
+    def prep_layer_operator(self, model, layerlbl, caches):
         """
-        Return the (simplified) preparation layer operator given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The preparation layer label.
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
-        return self.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
+        #No cache for preps
+        return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
 
-    def effect(self, layerlbl):
+    def povm_layer_operator(self, model, layerlbl, caches):
         """
-        Return the (simplified) POVM effect layer operator given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The effect layer label
+            A circuit layer label.
 
         Returns
         -------
-        LinearOperator
+        POVM or SPAMVec
         """
-        if layerlbl in self.effect_blks['layers']:
-            return self.effect_blks['layers'][layerlbl]  # effect_blks['layer'] are full effect ops
+        # caches['povm-layers'] *are* just complete layers
+        if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
+        if layerlbl in model.povm_blks['layers']:
+            return model.povm_blks['layers'][layerlbl]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
-            # if so, create the marginalized POVM and add its effects to self.effect_blks['layers']
-            if isinstance(layerlbl, _Lbl):  # this should always be the case...
-                povmName = _gt.effect_label_to_povm(layerlbl)
-                if povmName in self.povm_blks['layers']:
-                    # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
-                    # are not present in the stored POVM's label.
-                    mpovm = _povm.MarginalizedPOVM(self.povm_blks['layers'][povmName],
-                                                   self.model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
-                    mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                    self.effect_blks['layers'].update(mpovm.simplify_effects(mpovm_lbl))
-                    assert(layerlbl in self.effect_blks['layers']), "Failed to create marginalized effect!"
-                    return self.effect_blks['layers'][layerlbl]
-        raise KeyError("Could not build effect for '%s' label!" % str(layerlbl))
+            # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
+            assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
+            povmName = _gt.effect_label_to_povm(layerlbl)
+            if povmName in model.povm_blks['layers']:
+                # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
+                # are not present in the stored POVM's label.
+                mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
+                                               model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
+                assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
+                return caches['povm-layers'][layerlbl]
+            else:
+                #raise KeyError(f"Could not build povm/effect for {layerlbl}!")
+                raise KeyError("Could not build povm/effect for %s!" % str(layerlbl))
 
-    def operation(self, layerlbl):
+    def operation_layer_operator(self, model, layerlbl, caches):
         """
-        Return the (simplified) layer operation given by `layerlbl`.
+        Create the operator corresponding to `layerlbl`.
 
         Parameters
         ----------
         layerlbl : Label
-            The circuit (operation-) layer label.
+            A circuit layer label.
 
         Returns
         -------
         LinearOperator
         """
-        dense = bool(self.model._sim_type == "matrix")  # whether dense matrix gates should be created
+        if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
+        dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.simpleop_blks['layers'])
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
@@ -937,17 +948,19 @@ class _SimpleCompLayerLizard(_ImplicitLayerLizard):
         #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
 
         if len(components) == 1 and not bHasGlobalIdle:
-            return self._layer_component_operation(components[0], dense)
+            ret = self._layer_component_operation(model, components[0], caches['op-layers'], dense)
         else:
-            gblIdle = [self.simpleop_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+            gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            ret = Composed(gblIdle + [self._layer_component_operation(l, dense) for l in components],
-                           dim=self.model.dim,
-                           evotype=self.model._evotype)
-            self.model._init_virtual_obj(ret)  # so ret's gpindices get set
-            return ret
+            ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
+                                      for l in components],
+                           dim=model.dim, evotype=model.evotype)
+            model._init_virtual_obj(ret)  # so ret's gpindices get set
 
-    def _layer_component_operation(self, complbl, dense):
+        caches['complete-layers'][layerlbl] = ret  # cache the final label value
+        return ret
+
+    def _layer_component_operation(self, model, complbl, cache, dense):
         """
         Retrieves the operation corresponding to one component of a layer operation.
 
@@ -963,9 +976,15 @@ class _SimpleCompLayerLizard(_ImplicitLayerLizard):
         -------
         LinearOperator
         """
+        if complbl in cache:
+            return cache[complbl]
+
+        #Note: currently we don't cache complbl because it's not the final
+        # label being created, but we could if it would improve performance.
         if isinstance(complbl, _CircuitLabel):
-            return self._create_op_for_circuitlabel(complbl, dense)
-        elif complbl in self.simpleop_blks['layers']:
-            return self.simpleop_blks['layers'][complbl]
+            ret = self._create_op_for_circuitlabel(model, complbl, dense)
+        elif complbl in model.operation_blks['layers']:
+            ret = model.operation_blks['layers'][complbl]
         else:
-            return _opfactory.op_from_factories(self.model.factories['layers'], complbl)
+            ret = _opfactory.op_from_factories(model.factories['layers'], complbl)
+        return ret

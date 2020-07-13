@@ -222,7 +222,7 @@ class CustomLMOptimizer(Optimizer):
         """
         objective_func = objective.lsvec
         jacobian = objective.dlsvec
-        x0 = objective.mdl.to_vector()
+        x0 = objective.model.to_vector()
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,
@@ -481,8 +481,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             # DB: from ..tools import matrixtools as _mt
             # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
             if profiler: profiler.memory_check("custom_leastsq: after jacobian:"
-                                            + "shape=%s, GB=%.2f" % (str(Jac.shape),
-                                                                     Jac.nbytes / (1024.0**3)))
+                                               + "shape=%s, GB=%.2f" % (str(Jac.shape),
+                                                                        Jac.nbytes / (1024.0**3)))
 
             Jnorm = _np.linalg.norm(Jac)
             xnorm = _np.linalg.norm(x)

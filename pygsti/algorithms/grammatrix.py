@@ -67,7 +67,7 @@ def max_gram_basis(op_labels, dataset, max_length=0):
 
 
 def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length=10,
-                            fixed_lists=None):
+                                  fixed_lists=None):
     """
     Compute the rank and singular values of a maximal Gram matrix.
 
@@ -102,6 +102,6 @@ def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length
         maxRhoStrs, maxEStrs = fixed_lists
     else:
         maxRhoStrs = maxEStrs = max_gram_basis(dataset.gate_labels(),
-                                                   dataset, max_basis_string_length)
+                                               dataset, max_basis_string_length)
 
     return _gram_rank_and_evals(dataset, maxRhoStrs, maxEStrs, target_model)

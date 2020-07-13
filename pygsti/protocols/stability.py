@@ -440,9 +440,9 @@ class StabilityAnalysis(_proto.Protocol):
         if self.verbosity > 0: print(" - Running instability detection...", end='')
         if self.verbosity > 1: print('')
         results.run_instability_detection(significance=self.significance, freqstest=self.freqstest, tests=self.tests,
-                                         inclass_correction=self.inclass_correction,
-                                         betweenclass_weighting=self.betweenclass_weighting,
-                                         saveas='default', default=True, overwrite=False, verbosity=self.verbosity - 1)
+                                          inclass_correction=self.inclass_correction,
+                                          betweenclass_weighting=self.betweenclass_weighting,
+                                          saveas='default', default=True, overwrite=False, verbosity=self.verbosity - 1)
         if self.verbosity == 1: print("done!")
         # Estimate the drifting probabilities.
         if self.verbosity > 0: print(" - Running instability characterization...", end='')
@@ -451,7 +451,7 @@ class StabilityAnalysis(_proto.Protocol):
         # The model selector something slightly more complicated for this method: this function only allows us to
         # set the second part of the modelselector tuple.
         results.run_instability_characterization(estimator=self.estimator, modelselector=(None, self.modelselector),
-                                                default=True, verbosity=self.verbosity - 1)
+                                                 default=True, verbosity=self.verbosity - 1)
         if self.verbosity == 1: print("done!")
 
         return StabilityAnalysisResults(data, self, results)  # put results in here

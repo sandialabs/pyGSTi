@@ -145,7 +145,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
         if nBelowThreshold > 0:
             table.add_row(["%d observed rates below %g" % (nBelowThreshold, rate_threshold), ""],
-                         [None, None])
+                          [None, None])
 
         table.finish()
         return table
@@ -261,7 +261,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
 
         if nBelowThreshold > 0:
             table.add_row(["", "%d observed rates below %g" % (nBelowThreshold, rate_threshold)],
-                         [None, None])
+                          [None, None])
 
         table.finish()
         return table

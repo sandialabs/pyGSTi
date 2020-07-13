@@ -1,68 +1,42 @@
 from ..util import BaseCase
 
-from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti.objects.circuitstructure as cs
+from pygsti.objects import Circuit
 
 
-class AbstractCircuitStructureTester(BaseCase):
-    # XXX is testing an abstract base class really useful?  EGN: I guess it tests the interface.
+class LSGermsStructureTester(BaseCase):
     def setUp(self):
-        self.gss = cs.CircuitStructure()
-
-    def test_xvals(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.xvals
-
-    def test_yvals(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.yvals
-
-    def test_minor_xvals(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.minor_xvals
-
-    def test_minor_yvals(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.minor_yvals
-
-    def test_create_plaquette(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.create_plaquette(base_circuit="")
-
-    def test_get_plaquette(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.get_plaquette(x=0, y=0)
-
-    def test_plaquette_rows_cols(self):
-        with self.assertRaises(NotImplementedError):
-            self.gss.num_plaquette_rows_cols
-
-
-class LSGermsStructureTester(AbstractCircuitStructureTester):
-    def setUp(self):
-        self.gss = cs.LsGermsStructure([1, 2, 4], std.germs, std.prepStrs, std.effectStrs)
+        plaquettes = {}
+        self.xvals = ['x1', 'x2']
+        self.yvals = ['y1', 'y2']
+        self.circuit = Circuit("GxGy")
+        for x in self.xvals:
+            for y in self.yvals:
+                plaquettes[(x,y)] = cs.CircuitPlaquette({(minor_x, minor_y): self.circuit
+                                                         for minor_x in [0,1] for minor_y in [0,1]})
+        self.gss = cs.PlaquetteGridCircuitStructure(plaquettes, self.xvals, self.yvals, 'xlabel', 'ylabel')
 
     def test_truncate(self):
-        self.gss.truncate([1, 2])
+        self.gss.truncate(xs_to_keep=['x1'])
+        self.gss.truncate(ys_to_keep=['y1'])
         # TODO assert correctness
 
     def test_xvals(self):
-        self.skipTest("TODO")
+        self.assertEqual(self.gss.xs, self.xvals)
 
     def test_yvals(self):
-        self.skipTest("TODO")
-
-    def test_minor_xvals(self):
-        self.skipTest("TODO")
-
-    def test_minor_yvals(self):
-        self.skipTest("TODO")
-
-    def test_create_plaquette(self):
-        self.skipTest("TODO")
+        self.assertEqual(self.gss.ys, self.yvals)
 
     def test_get_plaquette(self):
-        self.skipTest("TODO")
+        plaq = self.gss.plaquette('x1', 'y1')
+        self.assertTrue(plaq is not None)
+        self.assertEqual(len(plaq), 4)
 
-    def test_plaquette_rows_cols(self):
-        self.skipTest("TODO")
+        plaq = self.gss.plaquette('x10', 'y10', empty_if_missing=True)
+        self.assertEqual(len(plaq), 0)
+
+    def test_plaquette_iteration(self):
+        cnt = 0
+        for (x,y), plaq in self.gss.iter_plaquettes():
+            cnt += 1
+        self.assertEqual(cnt, len(self.xvals) * len(self.yvals))

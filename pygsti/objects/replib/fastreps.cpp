@@ -2620,34 +2620,34 @@ namespace CReps {
   // OTHER Classes
 
   /****************************************************************************\
-  |* PolyCRep                                                                 *|
+  |* PolynomialCRep                                                                 *|
   \****************************************************************************/
   
-  PolyCRep::PolyCRep() {
-    _coeffs = std::unordered_map<PolyVarsIndex, dcomplex>();
+  PolynomialCRep::PolynomialCRep() {
+    _coeffs = std::unordered_map<PolynomialVarsIndex, dcomplex>();
     _max_num_vars = 0;
     _vindices_per_int = 0;
   }
   
-  PolyCRep::PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int) {
+  PolynomialCRep::PolynomialCRep(std::unordered_map<PolynomialVarsIndex, dcomplex> coeffs, INT max_num_vars, INT vindices_per_int) {
     _coeffs = coeffs;
     _max_num_vars = max_num_vars;
     _vindices_per_int = vindices_per_int;
   }
 
-  PolyCRep::PolyCRep(const PolyCRep& other) {
+  PolynomialCRep::PolynomialCRep(const PolynomialCRep& other) {
     _coeffs = other._coeffs;
     _max_num_vars = other._max_num_vars;
   }
 
-  PolyCRep::~PolyCRep() { }
+  PolynomialCRep::~PolynomialCRep() { }
 
-  PolyCRep PolyCRep::mult(const PolyCRep& other) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it1, itk;
-    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
-    std::unordered_map<PolyVarsIndex, dcomplex> result;
+  PolynomialCRep PolynomialCRep::mult(const PolynomialCRep& other) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator it1, itk;
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::const_iterator it2;
+    std::unordered_map<PolynomialVarsIndex, dcomplex> result;
     dcomplex val;
-    PolyVarsIndex k;
+    PolynomialVarsIndex k;
 
     for(it1 = _coeffs.begin(); it1 != _coeffs.end(); ++it1) {
       for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
@@ -2659,16 +2659,16 @@ namespace CReps {
 	else result[k] = val;
       }
     }
-    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
+    PolynomialCRep ret(result, _max_num_vars, _vindices_per_int);
     return ret; // need a copy constructor?
   }
 
-  PolyCRep PolyCRep::abs_mult(const PolyCRep& other) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it1, itk;
-    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
-    std::unordered_map<PolyVarsIndex, dcomplex> result;
+  PolynomialCRep PolynomialCRep::abs_mult(const PolynomialCRep& other) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator it1, itk;
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::const_iterator it2;
+    std::unordered_map<PolynomialVarsIndex, dcomplex> result;
     dcomplex val;
-    PolyVarsIndex k;
+    PolynomialVarsIndex k;
 
     for(it1 = _coeffs.begin(); it1 != _coeffs.end(); ++it1) {
       for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
@@ -2680,16 +2680,16 @@ namespace CReps {
 	else result[k] = val;
       }
     }
-    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
+    PolynomialCRep ret(result, _max_num_vars, _vindices_per_int);
     return ret; // need a copy constructor?
   }
 
 
-  void PolyCRep::add_inplace(const PolyCRep& other) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
-      std::unordered_map<PolyVarsIndex, dcomplex>::iterator itk;
+  void PolynomialCRep::add_inplace(const PolynomialCRep& other) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::const_iterator it2;
+      std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator itk;
     dcomplex val, newval;
-    PolyVarsIndex k;
+    PolynomialVarsIndex k;
 
     for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
       k = it2->first; // key
@@ -2709,11 +2709,11 @@ namespace CReps {
     }
   }
 
-  void PolyCRep::add_abs_inplace(const PolyCRep& other) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::const_iterator it2;
-      std::unordered_map<PolyVarsIndex, dcomplex>::iterator itk;
+  void PolynomialCRep::add_abs_inplace(const PolynomialCRep& other) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::const_iterator it2;
+      std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator itk;
     double val;
-    PolyVarsIndex k;
+    PolynomialVarsIndex k;
 
     for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
       k = it2->first; // key
@@ -2730,36 +2730,36 @@ namespace CReps {
     }
   }
 
-  PolyCRep PolyCRep::abs() {
-    std::unordered_map<PolyVarsIndex, dcomplex> result;
-    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it;
+  PolynomialCRep PolynomialCRep::abs() {
+    std::unordered_map<PolynomialVarsIndex, dcomplex> result;
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator it;
     for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
         result[it->first] = std::abs(it->second);
     }
     
-    PolyCRep ret(result, _max_num_vars, _vindices_per_int);
+    PolynomialCRep ret(result, _max_num_vars, _vindices_per_int);
     return ret; // need a copy constructor?
   }
 
-  void PolyCRep::scale(dcomplex scale) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it;
+  void PolynomialCRep::scale(dcomplex scale) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator it;
     for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
       it->second = it->second * scale; // note: *= doesn't work here (complex Cython?)
     }
   }
 
-  void PolyCRep::add_scalar_to_all_coeffs_inplace(dcomplex offset) {
-    std::unordered_map<PolyVarsIndex, dcomplex>::iterator it;
+  void PolynomialCRep::add_scalar_to_all_coeffs_inplace(dcomplex offset) {
+    std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator it;
     for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
       it->second = it->second + offset; // note: += doesn't work here (complex Cython?)
     }
   }
 
 
-  PolyVarsIndex PolyCRep::vinds_to_int(std::vector<INT> vinds) {
+  PolynomialVarsIndex PolynomialCRep::vinds_to_int(std::vector<INT> vinds) {
     INT ret, end, m;
     INT sz = ceil(1.0 * vinds.size() / _vindices_per_int);
-    PolyVarsIndex ret_tup(sz);
+    PolynomialVarsIndex ret_tup(sz);
     for(INT k=0; k<sz-1; k++) {
       ret = 0; m = 1;
       for(std::size_t i=_vindices_per_int*k; i<_vindices_per_int*(k+1); i++) { // last tuple index is most significant
@@ -2779,7 +2779,7 @@ namespace CReps {
     return ret_tup;
   }
   
-  std::vector<INT> PolyCRep::int_to_vinds(PolyVarsIndex indx_tup) {
+  std::vector<INT> PolynomialCRep::int_to_vinds(PolynomialVarsIndex indx_tup) {
     std::vector<INT> ret;
     INT nxt, i, indx;
     for(std::size_t i=0; i < indx_tup._parts.size(); i++) {
@@ -2796,7 +2796,7 @@ namespace CReps {
     return ret;
   }
   
-  PolyVarsIndex PolyCRep::mult_vinds_ints(PolyVarsIndex i1, PolyVarsIndex i2) {
+  PolynomialVarsIndex PolynomialCRep::mult_vinds_ints(PolynomialVarsIndex i1, PolynomialVarsIndex i2) {
     // multiply vinds corresponding to i1 & i2 and return resulting integer
     std::vector<INT> vinds1 = int_to_vinds(i1);
     std::vector<INT> vinds2 = int_to_vinds(i2);
@@ -2809,7 +2809,7 @@ namespace CReps {
   |* SVTermCRep                                                               *|
   \****************************************************************************/
     
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SVTermCRep::SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 SVStateCRep* pre_state, SVStateCRep* post_state,
 			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
@@ -2823,7 +2823,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SVTermCRep::SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
 			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
@@ -2837,7 +2837,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SVTermCRep::SVTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
     _magnitude = magnitude;
@@ -2900,7 +2900,7 @@ namespace CReps {
   |* SBTermCRep                                                               *|
   \****************************************************************************/
     
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SBTermCRep::SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 SBStateCRep* pre_state, SBStateCRep* post_state,
 			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
@@ -2914,7 +2914,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SBTermCRep::SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
 			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
@@ -2928,7 +2928,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+  SBTermCRep::SBTermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 std::vector<SBOpCRep*> pre_ops,
 			 std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;

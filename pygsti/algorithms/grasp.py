@@ -67,7 +67,7 @@ def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
 
 
 def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_threshold=None,
-                              feasible_fn=None, initial_elements=None):
+                                       feasible_fn=None, initial_elements=None):
     """
     Constructs a subset of `elements` that represents a feasible solution.
 
@@ -166,7 +166,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
 
 
 def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
-                       feasible_threshold=None, feasible_fn=None):
+                        feasible_threshold=None, feasible_fn=None):
     """
     Perfom the local-search part of a grasp iteration.
 
@@ -265,8 +265,8 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
 
 
 def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
-                       get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
-                       initial_elements=None, seed=None, verbosity=0):
+                        get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
+                        initial_elements=None, seed=None, verbosity=0):
     """
     Perform one iteration of GRASP (greedy construction and local search).
 
@@ -333,15 +333,15 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     printer = _objs.VerbosityPrinter.create_printer(verbosity)
 
     initialSoln = _grasp_construct_feasible_solution(elements, greedy_score_fn, rcl_fn,
-                                            feasible_threshold, feasible_fn,
-                                            initial_elements)
+                                                     feasible_threshold, feasible_fn,
+                                                     initial_elements)
     printer.log('Initial construction:', 1)
     def to_str(x): return x.str if isinstance(x, _objs.Circuit) else str(x)
     printer.log(str([to_str(element) for element in initialSoln]), 1)
 
     localSoln = _grasp_local_search(initialSoln, local_score_fn, elements,
-                                   get_neighbors_fn, feasible_threshold,
-                                   feasible_fn)
+                                    get_neighbors_fn, feasible_threshold,
+                                    feasible_fn)
     printer.log('Local optimum:', 1)
     printer.log(str([to_str(element) for element in localSoln]), 1)
 
@@ -349,8 +349,8 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
 
 
 def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn,
-             final_score_fn, iterations, feasible_threshold=None, feasible_fn=None,
-             initial_elements=None, seed=None, verbosity=0):
+              final_score_fn, iterations, feasible_threshold=None, feasible_fn=None,
+              initial_elements=None, seed=None, verbosity=0):
     """
     Perform GRASP to come up with an optimal feasible set of elements.
 
@@ -427,12 +427,12 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
         _, localSoln = run_grasp_iteration(elements, greedy_score_fn,
-                                          rcl_fn, local_score_fn,
-                                          get_neighbors_fn,
-                                          feasible_threshold,
-                                          feasible_fn,
-                                          initial_elements, seed,
-                                          verbosity)
+                                           rcl_fn, local_score_fn,
+                                           get_neighbors_fn,
+                                           feasible_threshold,
+                                           feasible_fn,
+                                           initial_elements, seed,
+                                           verbosity)
         if bestSoln is None:
             bestSoln = localSoln
         elif final_score_fn(localSoln) < final_score_fn(bestSoln):

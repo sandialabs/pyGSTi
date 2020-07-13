@@ -16,10 +16,6 @@ pyGSTi Objects Python Package
 #Import Objects at package level
 from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
-from .evaltree import EvalTree
-from .matrixevaltree import MatrixEvalTree
-from .mapevaltree import MapEvalTree
-from .termevaltree import TermEvalTree
 from .operation import LinearOperator
 from .operation import DenseOperator
 from .operation import LinearlyParamDenseOp
@@ -73,9 +69,8 @@ from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
 from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel
-from .circuitstructure import CircuitStructure
-from .circuitstructure import LsGermsStructure
-from .circuitstructure import LsGermsSerialStructure
+from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, GermFiducialPairPlaquette
+from .circuitstructure import PlaquetteGridCircuitStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
@@ -84,6 +79,11 @@ from .processorspec import ProcessorSpec
 from .stabilizer import StabilizerFrame
 from .qubitgraph import QubitGraph
 from .hypothesistest import HypothesisTest
+
+from .forwardsim import ForwardSimulator
+from .matrixforwardsim import MatrixForwardSimulator
+from .mapforwardsim import MapForwardSimulator
+from .termforwardsim import TermForwardSimulator
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
@@ -95,8 +95,7 @@ from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
 from .labeldicts import StateSpaceLabels
 
-from .computationcache import ComputationCache
-from .bulkcircuitlist import BulkCircuitList
+from .circuitlist import CircuitList
 from .resourceallocation import ResourceAllocation
 from .objectivefns import ObjectiveFunctionBuilder, \
     ObjectiveFunction, RawChi2Function, RawChiAlphaFunction, RawFreqWeightedChi2Function, \
@@ -104,7 +103,9 @@ from .objectivefns import ObjectiveFunctionBuilder, \
     Chi2Function, ChiAlphaFunction, FreqWeightedChi2Function, PoissonPicDeltaLogLFunction, DeltaLogLFunction, \
     MaxLogLFunction, TVDFunction, TimeDependentChi2Function, TimeDependentPoissonPicLogLFunction, LogLWildcardFunction
 
-from .results import Results
+from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
+
+#from .results import Results  # REMOVE
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter

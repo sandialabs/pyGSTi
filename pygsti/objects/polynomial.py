@@ -1177,3 +1177,26 @@ def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars
                 poly_coeffs[tuple(vtape[i:i + nVars])] = a; i += nVars
             result.append(Polynomial(poly_coeffs, max_num_vars))
     return result
+
+
+def compact_polynomial_list(list_of_polys):
+    """
+    Create a single vtape,ctape pair from a list of normal Polynomals
+
+    Parameters
+    ----------
+    list_of_polys : list
+        A list of :class:`Polynomial` objects.
+
+    Returns
+    -------
+    vtape: numpy.ndarray
+        A "tape" of the variable indices.
+
+    ctape: numpy.ndarray
+        A "tape" of the polynomial coefficients.
+    """
+    tapes = [p.compact() for p in list_of_polys]
+    vtape = _np.concatenate([t[0] for t in tapes])
+    ctape = _np.concatenate([t[1] for t in tapes])
+    return vtape, ctape
