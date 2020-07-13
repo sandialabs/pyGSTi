@@ -108,6 +108,8 @@ class ModelTest(_proto.Protocol):
                  gaugeopt_target=None, objfn_builder=None, badfit_options=None,
                  set_trivial_gauge_group=True, verbosity=2, name=None):
 
+        from .gst import GSTBadFitOptions as _GSTBadFitOptions
+
         if set_trivial_gauge_group:
             model_to_test = model_to_test.copy()
             model_to_test.default_gauge_group = _objs.TrivialGaugeGroup(model_to_test.dim)  # so no gauge opt is done
@@ -117,7 +119,7 @@ class ModelTest(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
         self.gaugeopt_target = gaugeopt_target
-        self.badfit_options = badfit_options
+        self.badfit_options = _GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         self.objfn_builders = [self.create_objective_builder(objfn_builder)]
