@@ -114,7 +114,7 @@ TOL = 1e-20
 #   F(p) = piecewise{ if( p>r ) then p; else (r-p)^2/(2*r) + p }
 
 
-def logl(model, dataset, circuit_list=None,
+def logl(model, dataset, circuits=None,
          min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
          poisson_picture=True, op_label_aliases=None, wildcard=None,
          mdc_store=None, comm=None, mem_limit=None):
@@ -129,7 +129,7 @@ def logl(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -167,7 +167,7 @@ def logl(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -182,14 +182,14 @@ def logl(model, dataset, circuit_list=None,
     float
         The log likelihood
     """
-    v = logl_per_circuit(model, dataset, circuit_list,
+    v = logl_per_circuit(model, dataset, circuits,
                          min_prob_clip, prob_clip_interval, radius,
                          poisson_picture, op_label_aliases, wildcard,
                          mdc_store, comm, mem_limit)
     return _np.sum(v)  # sum over *all* dimensions
 
 
-def logl_per_circuit(model, dataset, circuit_list=None,
+def logl_per_circuit(model, dataset, circuits=None,
                      min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                      poisson_picture=True, op_label_aliases=None, wildcard=None,
                      mdc_store=None, comm=None, mem_limit=None):
@@ -204,7 +204,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -242,7 +242,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -255,16 +255,16 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     Returns
     -------
     numpy.ndarray
-        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
+        Array of length either `len(circuits)` or `len(dataset.keys())`.
         Values are the log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
-    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, mdc_store=mdc_store,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, mdc_store, comm, mem_limit)
 
@@ -276,7 +276,7 @@ def logl_per_circuit(model, dataset, circuit_list=None,
     return obj_max.percircuit() - obj.percircuit()
 
 
-def logl_jacobian(model, dataset, circuit_list=None,
+def logl_jacobian(model, dataset, circuits=None,
                   min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                   poisson_picture=True, op_label_aliases=None, mdc_store=None,
                   comm=None, mem_limit=None, verbosity=0):
@@ -291,7 +291,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -321,7 +321,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -342,13 +342,13 @@ def logl_jacobian(model, dataset, circuit_list=None,
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, mdc_store, comm, mem_limit)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
-def logl_hessian(model, dataset, circuit_list=None,
+def logl_hessian(model, dataset, circuits=None,
                  min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                  poisson_picture=True, op_label_aliases=None, mdc_store=None,
                  comm=None, mem_limit=None, verbosity=0):
@@ -363,7 +363,7 @@ def logl_hessian(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -394,7 +394,7 @@ def logl_hessian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -415,13 +415,13 @@ def logl_hessian(model, dataset, circuit_list=None,
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, mdc_store, comm, mem_limit)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
-def logl_approximate_hessian(model, dataset, circuit_list=None,
+def logl_approximate_hessian(model, dataset, circuits=None,
                              min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                              poisson_picture=True, op_label_aliases=None, mdc_store=None,
                              comm=None, mem_limit=None, verbosity=0):
@@ -449,7 +449,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -479,7 +479,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -498,7 +498,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
         array of shape (M,M), where M is the length of the vectorized model.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
@@ -506,7 +506,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
     return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
-def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
+def logl_max(model, dataset, circuits=None, poisson_picture=True,
              op_label_aliases=None, mdc_store=None):
     """
     The maximum log-likelihood possible for a DataSet.
@@ -522,7 +522,7 @@ def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
     dataset : DataSet
         the data set to use.
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the max-log-likelihood
         sum.  Default value of None implies all the circuits in dataset should
         be used.
@@ -538,18 +538,18 @@ def logl_max(model, dataset, circuit_list=None, poisson_picture=True,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     Returns
     -------
     float
     """
-    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, mdc_store=mdc_store,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.fn()
 
 
-def logl_max_per_circuit(model, dataset, circuit_list=None,
+def logl_max_per_circuit(model, dataset, circuits=None,
                          poisson_picture=True, op_label_aliases=None, mdc_store=None):
     """
     The vector of maximum log-likelihood contributions for each circuit, aggregated over outcomes.
@@ -562,7 +562,7 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
     dataset : DataSet
         the data set to use.
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the max-log-likelihood
         sum.  Default value of None implies all the circuits in dataset should
         be used.
@@ -578,21 +578,21 @@ def logl_max_per_circuit(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     Returns
     -------
     numpy.ndarray
-        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
+        Array of length either `len(circuits)` or `len(dataset.keys())`.
         Values are the maximum log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
-    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuit_list, mdc_store=mdc_store,
+    obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
     return obj_max.percircuit()
 
 
-def two_delta_logl_nsigma(model, dataset, circuit_list=None,
+def two_delta_logl_nsigma(model, dataset, circuits=None,
                           min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                           poisson_picture=True, op_label_aliases=None,
                           dof_calc_method='nongauge', wildcard=None):
@@ -607,7 +607,7 @@ def two_delta_logl_nsigma(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -654,13 +654,13 @@ def two_delta_logl_nsigma(model, dataset, circuit_list=None,
     float
     """
     assert(dof_calc_method is not None)
-    return two_delta_logl(model, dataset, circuit_list,
+    return two_delta_logl(model, dataset, circuits,
                           min_prob_clip, prob_clip_interval, radius,
                           poisson_picture, op_label_aliases,
                           None, None, dof_calc_method, wildcard)[1]
 
 
-def two_delta_logl(model, dataset, circuit_list=None,
+def two_delta_logl(model, dataset, circuits=None,
                    min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                    poisson_picture=True, op_label_aliases=None,
                    dof_calc_method=None, wildcard=None,
@@ -686,7 +686,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -731,7 +731,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -745,7 +745,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
@@ -769,8 +769,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
         mdl_dof = model.num_params()
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
-    if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuits(circuit_list, op_label_aliases)
+    if circuits is not None:
+        ds_strs = _lt.apply_aliases_to_circuits(circuits, op_label_aliases)
     else: ds_strs = None
 
     ds_dof = dataset.degrees_of_freedom(ds_strs)
@@ -783,7 +783,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     return two_delta_logl, nsigma, pvalue
 
 
-def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
+def two_delta_logl_per_circuit(model, dataset, circuits=None,
                                min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                                poisson_picture=True, op_label_aliases=None,
                                dof_calc_method=None, wildcard=None,
@@ -805,7 +805,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     dataset : DataSet
         Probability data
 
-    circuit_list : list of (tuples or Circuits), optional
+    circuits : list of (tuples or Circuits), optional
         Each element specifies a circuit to include in the log-likelihood
         sum.  Default value of None implies all the circuits in dataset
         should be used.
@@ -849,7 +849,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -862,7 +862,7 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
         Only returned when `dof_calc_method` is not None.
     """
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-    obj = _objfns._objfn(obj_cls, model, dataset, circuit_list,
+    obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius}, None,
                          {'prob_clip_interval': prob_clip_interval},
@@ -880,14 +880,14 @@ def two_delta_logl_per_circuit(model, dataset, circuit_list=None,
     elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
-    if circuit_list is not None:
-        ds_strs = _lt.apply_aliases_to_circuits(circuit_list, op_label_aliases)
+    if circuits is not None:
+        ds_strs = _lt.apply_aliases_to_circuits(circuits, op_label_aliases)
     else: ds_strs = None
 
     ds_dof = dataset.degrees_of_freedom(ds_strs)
     k = max(ds_dof - mdl_dof, 1)
     # HACK - just take a single average #dof per circuit to use as chi_k distribution!
-    k = int(_np.ceil(k / (1.0 * len(circuit_list))))
+    k = int(_np.ceil(k / (1.0 * len(circuits))))
 
     nsigma = (two_dlogl_percircuit - k) / _np.sqrt(2 * k)
     pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in two_dlogl_percircuit], 'd')

@@ -71,7 +71,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     Returns
     -------
@@ -1038,7 +1038,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -3951,7 +3951,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4802,7 +4802,7 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4859,7 +4859,7 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4920,7 +4920,7 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -4977,7 +4977,7 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5035,7 +5035,7 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5092,7 +5092,7 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5152,7 +5152,7 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 
@@ -5209,7 +5209,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         The data set - specifies how counts and total_counts are obtained for each
         circuit outcome.
 
-    circuit_list : list or CircuitList
+    circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
 

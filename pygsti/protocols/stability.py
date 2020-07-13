@@ -20,7 +20,7 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
 
     Parameters
     ----------
-    circuit_list : list
+    circuits : list
         The list of circuits to perform the stability analysis on. These
         can be anything.
 
@@ -29,9 +29,9 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
         be the line labels of `circuits`.
     """
 
-    def __init__(self, circuit_list, qubit_labels=None):
+    def __init__(self, circuits, qubit_labels=None):
         self.needs_timestamps = True
-        super().__init__(circuit_list, qubit_labels=qubit_labels)
+        super().__init__(circuits, qubit_labels=qubit_labels)
 
 
 class StabilityAnalysis(_proto.Protocol):

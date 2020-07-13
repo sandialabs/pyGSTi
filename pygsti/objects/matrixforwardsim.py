@@ -1711,7 +1711,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         derivs : numpy array
             * if flat == False, an array of shape S x M x G x G, where:
-              - S == len(circuit_list)
+              - S == len(circuits)
               - M == the length of the vectorized model
               - G == the linear dimension of a operation matrix (G x G operation matrices)
               and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry

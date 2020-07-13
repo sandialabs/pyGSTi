@@ -66,7 +66,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         return unique_circuits, to_unique
 
     @classmethod
-    def create_from(cls, circuits, model_shlp, dataset=None, additional_dimensions=()):
+    def create_from(cls, circuits, model, dataset=None, additional_dimensions=()):
         """
         TODO: docstring
         Simplifies a list of :class:`Circuit`s.
@@ -90,7 +90,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         unique_circuits, to_unique = cls._compute_unique_circuits(circuits)
-        unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
+        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, circuits.op_label_aliases)
 
         # Create a dict of the "present outcomes" of each circuit, defined as those outcomes
@@ -103,7 +103,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         if dataset is not None:
             present_outcomes = {i: dataset[ds_c].outcomes for i, ds_c in enumerate(ds_circuits)}
         else:
-            present_outcomes = {i: model_shlp.circuit_outcomes(c) for i, c in enumerate(unique_circuits)}
+            present_outcomes = {i: model.circuit_outcomes(c) for i, c in enumerate(unique_circuits)}
 
         # Step3: create a dictionary of element indices by concatenating the present outcomes of all
         #  the circuits in order.

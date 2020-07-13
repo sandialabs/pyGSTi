@@ -20,7 +20,7 @@ from .. import objects as _objs
 from . import loaders as _loaders
 
 
-def write_empty_dataset(filename, circuit_list,
+def write_empty_dataset(filename, circuits,
                         header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
                         append_weights_column=False):
     """
@@ -31,7 +31,7 @@ def write_empty_dataset(filename, circuit_list,
     filename : string
         The filename to write.
 
-    circuit_list : list of Circuits
+    circuits : list of Circuits
         List of circuits to write, each to be followed by num_zero_cols zeros.
 
     header_string : string, optional
@@ -51,8 +51,8 @@ def write_empty_dataset(filename, circuit_list,
     None
     """
 
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     if num_zero_cols is None:  # TODO: cleaner way to extract number of columns from header_string?
         if header_string.startswith('## Columns = '):
@@ -63,7 +63,7 @@ def write_empty_dataset(filename, circuit_list,
     with open(str(filename), 'w') as output:
         zeroCols = "  ".join(['0'] * num_zero_cols)
         output.write(header_string + '\n')
-        for circuit in circuit_list:  # circuit should be a Circuit object here
+        for circuit in circuits:  # circuit should be a Circuit object here
             output.write(circuit.str + "  " + zeroCols + (("  %f" %
                                                            circuit.weight) if append_weights_column else "") + '\n')
 
@@ -73,7 +73,7 @@ def _outcome_to_str(x):
     else: return ":".join([str(i) for i in x])
 
 
-def write_dataset(filename, dataset, circuit_list=None,
+def write_dataset(filename, dataset, circuits=None,
                   outcome_label_order=None, fixed_column_mode='auto', with_times="auto"):
     """
     Write a text-formatted dataset file.
@@ -86,7 +86,7 @@ def write_dataset(filename, dataset, circuit_list=None,
     dataset : DataSet
         The data set from which counts are obtained.
 
-    circuit_list : list of Circuits, optional
+    circuits : list of Circuits, optional
         The list of circuits to include in the written dataset.
         If None, all circuits are output.
 
@@ -111,11 +111,11 @@ def write_dataset(filename, dataset, circuit_list=None,
     -------
     None
     """
-    if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if circuits is not None:
+        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+            raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
-        circuit_list = list(dataset.keys())
+        circuits = list(dataset.keys())
 
     if outcome_label_order is not None:  # convert to tuples if needed
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
@@ -153,7 +153,7 @@ def write_dataset(filename, dataset, circuit_list=None,
 
     with open(str(filename), 'w') as output:
         output.write(headerString)
-        for circuit in circuit_list:  # circuit should be a Circuit object here
+        for circuit in circuits:  # circuit should be a Circuit object here
             dataRow = dataset[circuit]
             counts = dataRow.counts
 
@@ -182,7 +182,7 @@ def write_dataset(filename, dataset, circuit_list=None,
                 output.write('\n')  # blank line between circuits
 
 
-def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_order=None):
+def write_multidataset(filename, multidataset, circuits=None, outcome_label_order=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -194,7 +194,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
     multidataset : MultiDataSet
         The multi data set from which counts are obtained.
 
-    circuit_list : list of Circuits
+    circuits : list of Circuits
         The list of circuits to include in the written dataset.
         If None, all circuits are output.
 
@@ -207,11 +207,11 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
     None
     """
 
-    if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if circuits is not None:
+        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+            raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
-        circuit_list = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
+        circuits = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
 
     if outcome_label_order is not None:  # convert to tuples if needed
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
@@ -240,7 +240,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
     datasets = [multidataset[dsl] for dsl in dsLabels]
     with open(str(filename), 'w') as output:
         output.write(headerString + '\n')
-        for circuit in circuit_list:  # circuit should be a Circuit object here
+        for circuit in circuits:  # circuit should be a Circuit object here
             cnts = [ds[circuit].counts.get(ol, '--') for ds in datasets for ol in outcomeLabels]
             output.write(circuit.str + "  " + "  ".join([(("%g" % cnt) if (cnt != '--') else cnt)
                                                          for cnt in cnts]) + '\n')
@@ -250,7 +250,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcome_label_
             output.write('\n')  # finish the line
 
 
-def write_circuit_list(filename, circuit_list, header=None):
+def write_circuit_list(filename, circuits, header=None):
     """
     Write a text-formatted circuit list file.
 
@@ -259,7 +259,7 @@ def write_circuit_list(filename, circuit_list, header=None):
     filename : string
         The filename to write.
 
-    circuit_list : list of Circuits
+    circuits : list of Circuits
         The list of circuits to include in the written dataset.
 
     header : string, optional
@@ -270,14 +270,14 @@ def write_circuit_list(filename, circuit_list, header=None):
     -------
     None
     """
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     with open(str(filename), 'w') as output:
         if header is not None:
             output.write("# %s" % header + '\n')
 
-        for circuit in circuit_list:
+        for circuit in circuits:
             output.write(circuit.str + '\n')
 
 
@@ -595,7 +595,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     times : iterable, optional
         When not None, a list of time-stamps at which data should be sampled.
         `n_samples` samples will be simulated at each time value, meaning that
-        each circuit in `circuit_list` will be evaluated with the given time
+        each circuit in `circuits` will be evaluated with the given time
         value as its *start time*.
 
     fixed_column_mode : bool or 'auto', optional

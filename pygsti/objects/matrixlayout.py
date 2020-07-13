@@ -27,7 +27,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, model_shlp, dataset, offset, elindex_outcome_tuples):
+                 ds_circuits, group, model, dataset, offset, elindex_outcome_tuples):
 
         expanded_nospam_circuit_outcomes = _collections.OrderedDict()
         for i in group:
@@ -35,7 +35,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             for orig_i in circuits_by_unique_nospam_circuits[nospam_c]:  # orig circuits that add SPAM to nospam_c
                 observed_outcomes = None if (dataset is None) else dataset[ds_circuits[orig_i]].outcomes
                 expc_outcomes = unique_complete_circuits[orig_i].expand_instruments_and_separate_povm(
-                    model_shlp, observed_outcomes)
+                    model, observed_outcomes)
 
                 for sep_povm_c, outcomes in expc_outcomes.items():
                     prep_lbl = sep_povm_c.circuit_without_povm[0]
@@ -155,7 +155,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model_shlp, dataset=None, max_sub_tree_size=None,
+    def __init__(self, circuits, model, dataset=None, max_sub_tree_size=None,
                  num_sub_trees=None, additional_dimensions=(), verbosity=0):
 
         #OUTDATED: TODO - revise this:
@@ -171,11 +171,11 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
+        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
         circuits_by_unique_nospam_circuits = _collections.OrderedDict()
         for i, c in enumerate(unique_complete_circuits):
-            _, nospam_c, _ = model_shlp.split_circuit(c)
+            _, nospam_c, _ = model.split_circuit(c)
             if nospam_c in circuits_by_unique_nospam_circuits:
                 circuits_by_unique_nospam_circuits[nospam_c].append(i)
             else:
@@ -195,7 +195,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         for group in groups:
             atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                                circuits_by_unique_nospam_circuits, ds_circuits, group,
-                                               model_shlp, dataset, offset, elindex_outcome_tuples))
+                                               model, dataset, offset, elindex_outcome_tuples))
             offset += atoms[-1].num_elements
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,

@@ -25,7 +25,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     """
 
     @classmethod
-    def create_from(cls, circuits, model_shlp, dataset=None, additional_dimensions=(), cache=None):
+    def create_from(cls, circuits, model, dataset=None, additional_dimensions=(), cache=None):
         """
         TODO: docstring
         Simplifies a list of :class:`Circuit`s.
@@ -53,7 +53,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             :method:`iter_circuits_with_cache`.
         """
         if cache is None: cache = {}
-        ret = super().create_from(circuits, model_shlp, dataset, additional_dimensions)
+        ret = super().create_from(circuits, model, dataset, additional_dimensions)
         ret._cache = {i: cache.get(c, None) for c, i in ret._unique_circuit_index.items()}
         return ret
 

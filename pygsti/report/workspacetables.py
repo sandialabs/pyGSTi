@@ -2885,9 +2885,9 @@ class FitComparisonTable(WorkspaceTable):
                     'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
 
-        for X, mdl, circuit_list, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
+        for X, mdl, circuits, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
-                _ph.rated_n_sigma, dataset, mdl, circuit_list,
+                _ph.rated_n_sigma, dataset, mdl, circuits,
                 objfn_builder, Np, wildcard, return_all=True,
                 comm=comm)  # self.ws.smartCache derived?
             table.add_row((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
