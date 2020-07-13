@@ -489,7 +489,7 @@ class GSTBadFitOptions(object):
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
                  wildcard_budget_includes_spam=True, wildcard_smart_init=True):
-        valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust')
+        valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
         self.threshold = float(threshold)
