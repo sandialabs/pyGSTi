@@ -1275,7 +1275,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng)
                     #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
                     #             f" {(final_mem + _next) * C}GB"))
-                    printer.log(" mem(%d atoms, %d,% param-grps, %d proc-grps) = %.2fGB" %
+                    printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
                                 (nc, np1, np2, Ng, (final_mem + _next) * C))
 
                     if _next >= cmem:  # special failsafe
