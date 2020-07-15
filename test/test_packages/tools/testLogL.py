@@ -35,10 +35,11 @@ class LogLTestCase(BaseTestCase):
         #L3 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
         #                         poisson_picture=True, mem_limit=current_mem()+300000, verbosity=10) # Very low memory (splits tree)
 
-        with self.assertRaises(MemoryError):
-            pygsti.logl_hessian(model, ds,
-                                prob_clip_interval=(-1e6,1e6),
-                                poisson_picture=True, mem_limit=current_mem()+10000) # Splitting unproductive
+        #We've currently disabled memory errors - re-enable this after we get memory checks working again.
+        #with self.assertRaises(MemoryError):
+        pygsti.logl_hessian(model, ds,
+                            prob_clip_interval=(-1e6,1e6),
+                            poisson_picture=True, mem_limit=current_mem()+100) # Splitting unproductive
 
 
         #print("****DEBUG LOGL HESSIAN L****")

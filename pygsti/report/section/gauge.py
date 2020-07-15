@@ -10,6 +10,7 @@
 
 from . import Section as _Section
 from .. import reportables as _reportables
+from ..workspace import NotApplicable as _NotApplicable
 
 
 class GaugeInvariantsGatesSection(_Section):
@@ -96,13 +97,18 @@ class GaugeInvariantsGatesSection(_Section):
     @_Section.figure_factory(4)
     def final_gauge_inv_metric_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                      gr_switchboard=None, **kwargs):
-        if len(switchboard.mdl_final.base) == 0 or switchboard.mdl_final.base.flat[0].dim > 4:
+        # Temporarily disable this table for > 1Q models, since it's so slow...
+        first_model = None
+        for mdl in switchboard.mdl_final.base.flat:
+            if not isinstance(mdl, _NotApplicable):
+                first_model = mdl; break
+        if first_model and first_model.dim > 4:
             return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
-        else:
-            return workspace.GaugeRobustMetricTable(
-                switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
-                _cri(1, switchboard, confidence_level, ci_brevity)
-            )
+
+        return workspace.GaugeRobustMetricTable(
+            switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
+            _cri(1, switchboard, confidence_level, ci_brevity)
+        )
 
     @_Section.figure_factory(4)
     def gram_bar_plot(workspace, switchboard=None, **kwargs):
