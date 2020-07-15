@@ -137,6 +137,8 @@ def write_dataset(filename, dataset, circuits=None,
                 headerString += "# " + commentLine + '\n'
 
     if fixed_column_mode == "auto":
+        if with_times == "auto":
+            with_times = not dataset.has_trivial_timedependence()
         fixed_column_mode = bool(len(outcomeLabels) <= 8 and not with_times)
 
     if fixed_column_mode is True:

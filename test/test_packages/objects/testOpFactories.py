@@ -44,7 +44,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_amt, self.over_rotation],'d') #our parameter vector
         
-    def from_vector(self,v, close=False, nodirty=False):
+    def from_vector(self,v, close=False, dirty_value=True):
         #initialize from parameter vector v
         self.depol_amt = v[0]
         self.over_rotation = v[1]
@@ -60,6 +60,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
                                    [0,   a,   0,   0],
                                    [0,   0,   c,  -b],
                                    [0,   0,   b,   c]],'d')
+        self.dirty = dirty_value
 
         
 class ParamXRotationOpFactory(pygsti.obj.OpFactory):
@@ -79,8 +80,9 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
     def to_vector(self):
         return self.params #our parameter vector
         
-    def from_vector(self,v, close=False, nodirty=False):
+    def from_vector(self,v, close=False, dirty_value=True):
         self.params[:] = v
+        self.dirty = dirty_value
 
     
 class OpFactoryTestCase(BaseTestCase):
@@ -149,8 +151,7 @@ class OpFactoryTestCase(BaseTestCase):
 
         #see that parent and gpindices of ops created by factory are correctly set
         mdl.from_vector( np.array([0.1,0.02]) )
-        liz = mdl._layer_lizard()
-        op = liz.operation( pygsti.obj.Label(('Gxrot',';1.57',0)) )
+        op = mdl.circuit_layer_operator( pygsti.obj.Label(('Gxrot',';1.57',0)), 'op')
         self.assertArraysAlmostEqual( op.to_dense(),
                                       np.array([[1,   0,    0,   0],
                                                 [0, 0.9,    0,   0],

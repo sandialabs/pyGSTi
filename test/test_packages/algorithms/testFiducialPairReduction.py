@@ -15,7 +15,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         # A very low memlimit
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, test_pair_list=[(0,0),(0,1),(1,0)],
-                                                  verbosity=0, mem_limit=8192)
+                                                  verbosity=0, mem_limit=81920)
         # A significantly higher one
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, test_pair_list=[(0,0),(0,1),(1,0)],

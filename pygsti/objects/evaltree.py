@@ -377,7 +377,16 @@ class EvalTree(list):
 
         #Remove all "scratch" indices, as we want a partition just of the "final" items:
         subTreeSetList = [set(filter(lambda x: x < num_elements, s)) for s in subTreeSetList]
-        return subTreeSetList
+
+        #Remove duplicated "final" items, as only a single tree (the first one to claim it)
+        # should be assigned each final item, even if other trees need to compute that item as scratch.
+        claimed_final_indices = set(); disjointLists = []
+        for subTreeSet in subTreeSetList:
+            disjointLists.append(subTreeSet - claimed_final_indices)
+            claimed_final_indices.update(subTreeSet)
+
+        assert(sum(map(len, disjointLists)) == num_elements), "sub-tree sets are not disjoint!"
+        return disjointLists
 
 
 #TODO: update this or REMOVE it -- maybe move to unit tests?

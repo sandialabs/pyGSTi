@@ -38,7 +38,7 @@ class LogLTestCase(BaseTestCase):
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6),
-                                poisson_picture=True, mem_limit=current_mem()+70000) # Splitting unproductive
+                                poisson_picture=True, mem_limit=current_mem()+10000) # Splitting unproductive
 
 
         #print("****DEBUG LOGL HESSIAN L****")

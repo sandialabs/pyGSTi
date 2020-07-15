@@ -266,7 +266,7 @@ def logl_per_circuit(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit)
+                         op_label_aliases, comm, mem_limit, mdc_store)
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
@@ -344,7 +344,7 @@ def logl_jacobian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit)
+                         op_label_aliases, comm, mem_limit, mdc_store)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -417,7 +417,7 @@ def logl_hessian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit)
+                         op_label_aliases, comm, mem_limit, mdc_store)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -502,7 +502,7 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit)
+                         op_label_aliases, comm, mem_limit, mdc_store)
     return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -749,7 +749,7 @@ def two_delta_logl(model, dataset, circuits=None,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm)
+                         op_label_aliases, comm, None, mdc_store)
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
@@ -866,7 +866,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius}, None,
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm)
+                         op_label_aliases, comm, None, mdc_store)
 
     if wildcard:
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"

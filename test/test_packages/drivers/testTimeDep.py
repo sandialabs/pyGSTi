@@ -29,10 +29,11 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_rate],'d') #our parameter vector
 
-    def from_vector(self, v, close=False, nodirty=False):
+    def from_vector(self, v, close=False, dirty_value=True):
         #initialize from parameter vector v
         self.depol_rate = v[0]
         self.need_time = True
+        self.dirty = dirty_value
 
     def set_time(self,t):
         a = 1.0-min(self.depol_rate*t,1.0)
@@ -62,7 +63,7 @@ class TimeDependentTestCase(BaseTestCase):
         #Create a time-dependent dataset (simulation of time-dependent model):
         circuits = std1Q_XYI.prepStrs +  pygsti.construction.to_circuits([ ('Gi',), ('Gi','Gx','Gi','Gx')]) # just pick some circuits
         ds = pygsti.construction.simulate_data(mdl, circuits, n_samples=100,
-                                                    sample_error='none', seed=1234, times=[0,0.1,0.2])
+                                               sample_error='none', seed=1234, times=[0,0.1,0.2])
 
         self.assertArraysEqual(ds[('Gi',)].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
         self.assertArraysEqual(ds[('Gi',)].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
@@ -70,8 +71,8 @@ class TimeDependentTestCase(BaseTestCase):
 
         # sparse data
         ds2 = pygsti.construction.simulate_data(mdl, circuits, n_samples=100,
-                                                     sample_error='none', seed=1234, times=[0,0.1,0.2],
-                                                     record_zero_counts=False)
+                                                sample_error='none', seed=1234, times=[0,0.1,0.2],
+                                                record_zero_counts=False)
         self.assertArraysEqual(ds2[('Gi',)].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
         self.assertArraysEqual(ds2[('Gi',)].reps, np.array([100.,  95.,   5.,  90.,  10.]))
         self.assertArraysEqual(ds2[('Gi',)].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
@@ -90,11 +91,11 @@ class TimeDependentTestCase(BaseTestCase):
 
         # *sparse*, time-independent data
         ds = pygsti.construction.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, n_samples=10,
-                                                    sample_error="binomial", seed=1234, times=[0],
-                                                    record_zero_counts=False)
+                                               sample_error="binomial", seed=1234, times=[0],
+                                               record_zero_counts=False)
         data = pygsti.protocols.ProtocolData(edesign, ds)
 
-        target_model.set_simtype('map', max_cache_size=0)  # No caching allowed for time-dependent calcs
+        target_model.sim = pygsti.objects.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 126)
 
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()],[])
@@ -104,10 +105,10 @@ class TimeDependentTestCase(BaseTestCase):
 
         # Normal GST used as a check - should get same answer since data is time-independent
         results2 = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                               germs, maxLengths, verbosity=3,
-                                               advanced_options={'starting_point': 'target',
-                                                                 'always_perform_mle': True,
-                                                                 'only_perform_mle': True}, gauge_opt_params=False)
+                                                germs, maxLengths, verbosity=3,
+                                                advanced_options={'starting_point': 'target',
+                                                                  'always_perform_mle': True,
+                                                                  'only_perform_mle': True}, gauge_opt_params=False)
 
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
@@ -140,7 +141,7 @@ class TimeDependentTestCase(BaseTestCase):
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 500)
 
         target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0
-        target_model.set_simtype('map', max_cache_size=0)  # No caching allowed for time-dependent calcs
+        target_model.sim = pygsti.objects.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()],[])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,

@@ -509,7 +509,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
         def hover_label_fn(val, iy, ix):
             """ Standard hover labels """
             if _np.isnan(val): return ""
-            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy], empty_if_missing=True)
             txt = plaq.summary_label()
             txt += "<br>value: %g" % val
             for lbl, addl_subMxs in addl_hover_submxs.items():
@@ -522,7 +522,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
             #Note: in this case, we need to "flip" the iiy index because
             # the matrices being plotted are flipped within _summable_color_boxplot(...)
             if _np.isnan(val): return ""
-            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy], empty_if_missing=True)
             txt = plaq.element_label(iiy, iix)  # note: *row* index = iiy
             txt += ("<br>value: %g" % val)
             for lbl, addl_subMxs in addl_hover_submxs.items():
@@ -1694,7 +1694,7 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = "trivial"
                 ytitle = ""
                 mx_fn = _mx_fn_blank  # use a *global* function so cache can tell it's the same
-                extra_arg = circuits
+                extra_arg = None
 
             elif ptyp == "errorrate":
                 colormapType = "seq"
@@ -1937,13 +1937,14 @@ def _mx_fn_from_elements(plaq, x, y, extra):
 #                          probs_precomp_dict)
 
 
-def _mx_fn_blank(plaq, x, y, gss):
-    return _np.nan * _np.zeros((len(gss.minor_yvals()),
-                                len(gss.minor_xvals())), 'd')
+def _mx_fn_blank(plaq, x, y, unused):
+    return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
-    return _np.array([[_ph.small_eigenvalue_err_rate(plaq.base, direct_gst_models)]])
+    base_circuit = plaq.base if isinstance(plaq, _objs.circuitstructure.GermFiducialPairPlaquette) \
+        else _objs.Circuit(())
+    return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 
 def _mx_fn_directchi2(plaq, x, y, extra):

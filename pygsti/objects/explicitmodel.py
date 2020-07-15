@@ -440,7 +440,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         elif typ == 'clifford':
             self._evotype = "stabilizer"
-            self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+            self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
+            #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif _gt.is_valid_lindblad_paramtype(typ):
             baseType, evotype = _gt.split_lindblad_paramtype(typ)
@@ -514,7 +515,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if 'state_space_labels' in state_dict:
             state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
 
-        self.__dict__.update(state_dict)
+        super().__setstate__(state_dict)  # ~ self.__dict__.update(state_dict)
 
         if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid

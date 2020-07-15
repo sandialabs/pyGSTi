@@ -81,7 +81,7 @@ def create_fake_dataset(comm):
             std.germs, maxLengths, fidPairList )
 
     lsgstStringsToUse = lsgstStrings
-    allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
+    allRequiredStrs = pygsti.remove_duplicates(list(lgstStrings) + list(lsgstStrings[-1]))
 
     if comm is None or comm.Get_rank() == 0:
         mdl_dataGen = std.target_model().depolarize(op_noise=0.1)
@@ -104,9 +104,10 @@ def test_MPI_products(comm):
     #Create some model
     mdl = std.target_model()
 
-    #Remove spam elements so product calculations have element indices <=> product indices
-    del mdl.preps['rho0']
-    del mdl.povms['Mdefault']
+    #Unnecessary now:
+    # #Remove spam elements so product calculations have element indices <=> product indices
+    # del mdl.preps['rho0']
+    # del mdl.povms['Mdefault']
 
     mdl.kick(0.1,seed=1234)
 
@@ -114,15 +115,14 @@ def test_MPI_products(comm):
     maxLengths = [1,2,4,8]
     gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
-    split_tree = tree.copy()
-    split_lookup = split_tree.split(lookup,num_sub_trees=g_numSubTrees)
+    layout = mdl.sim.create_layout(gstrs)
+    split_layout = mdl.sim.create_layout(gstrs, resource_alloc={'comm': comm})  # if force split: num_sub_trees=g_numSubTrees
 
     # Check wrt_filter functionality in dproduct
     some_wrtFilter = [0,2,3,5,10]
     for s in gstrs[0:20]:
-        result = mdl._fwdsim().dproduct(s, wrt_filter=some_wrtFilter)
-        chk_result = mdl.dproduct(s) #no filtering
+        result = mdl.sim.dproduct(s, wrt_filter=some_wrtFilter)
+        chk_result = mdl.sim.dproduct(s) #no filtering
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(chk_result[i]-result[ii]) < 1e-6)
         taken_chk_result = chk_result.take( some_wrtFilter, axis=0 )
@@ -131,68 +131,46 @@ def test_MPI_products(comm):
 
     #Check bulk products
 
-      #bulk_product - no parallelization unless tree is split
-    serial = mdl.bulk_product(tree, scale=False)
-    parallel = mdl.bulk_product(tree, scale=False, comm=comm)
+      #bulk_product - no parallelization unless layout is split
+    serial = mdl.sim.bulk_product(gstrs, scale=False)
+    parallel = mdl.sim.bulk_product(gstrs, scale=False, resource_alloc={'comm': comm})
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial_scl, sscale = mdl.bulk_product(tree, scale=True)
-    parallel, pscale = mdl.bulk_product(tree, scale=True, comm=comm)
+    serial_scl, sscale = mdl.sim.bulk_product(gstrs, scale=True)
+    parallel, pscale = mdl.sim.bulk_product(gstrs, scale=True, resource_alloc={'comm': comm})
     assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
 
-      # will use a split tree to parallelize
-    parallel = mdl.bulk_product(split_tree, scale=False, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial[lookup[i]]-parallel[split_lookup[i]]) < 1e-6)
-
-    parallel, pscale = mdl.bulk_product(split_tree, scale=True, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None] -
-                              parallel[split_lookup[i]]*pscale[split_lookup[i],None,None]) < 1e-6)
-
-
       #bulk_dproduct - no split tree => parallel by col
-    serial = mdl.bulk_dproduct(tree, scale=False)
-    parallel = mdl.bulk_dproduct(tree, scale=False, comm=comm)
+    serial = mdl.sim.bulk_dproduct(gstrs, scale=False)
+    parallel = mdl.sim.bulk_dproduct(gstrs, scale=False, resource_alloc={'comm': comm})
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial_scl, sscale = mdl.bulk_dproduct(tree, scale=True)
-    parallel, pscale = mdl.bulk_dproduct(tree, scale=True, comm=comm)
+    serial_scl, sscale = mdl.sim.bulk_dproduct(gstrs, scale=True)
+    parallel, pscale = mdl.sim.bulk_dproduct(gstrs, scale=True, resource_alloc={'comm': comm})
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
-      # will just ignore a split tree for now (just parallel by col)
-    parallel = mdl.bulk_dproduct(split_tree, scale=False, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial[lookup[i]] - parallel[split_lookup[i]]) < 1e-6)
-
-    parallel, pscale = mdl.bulk_dproduct(split_tree, scale=True, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None,None] -
-                              parallel[split_lookup[i]]*pscale[split_lookup[i],None,None,None]) < 1e-6)
-
-
-
-      #bulk_hproduct - no split tree => parallel by col
-    serial = mdl.bulk_hproduct(tree, scale=False)
-    parallel = mdl.bulk_hproduct(tree, scale=False, comm=comm)
-    assert(np.linalg.norm(serial-parallel) < 1e-6)
-
-    serial_scl, sscale = mdl.bulk_hproduct(tree, scale=True)
-    parallel, pscale = mdl.bulk_hproduct(tree, scale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
-                          parallel*pscale[:,None,None,None,None]) < 1e-6)
-
-      # will just ignore a split tree for now (just parallel by col)
-    parallel = mdl.bulk_hproduct(split_tree, scale=False, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial[lookup[i]] - parallel[split_lookup[i]]) < 1e-6)
-
-    parallel, pscale = mdl.bulk_hproduct(split_tree, scale=True, comm=comm)
-    for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None,None,None] -
-                              parallel[split_lookup[i]]*pscale[split_lookup[i],None,None,None,None]) < 1e-6)
+    #No more bulk_hproduct -- not really used, even for 1Q 
+    #   #bulk_hproduct - no split tree => parallel by col
+    # serial = mdl.sim.bulk_hproduct(layout, scale=False)
+    # parallel = mdl.sim.bulk_hproduct(layout, scale=False, comm=comm)
+    # assert(np.linalg.norm(serial-parallel) < 1e-6)
+    # 
+    # serial_scl, sscale = mdl.sim.bulk_hproduct(layout, scale=True)
+    # parallel, pscale = mdl.sim.bulk_hproduct(layout, scale=True, comm=comm)
+    # assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
+    #                       parallel*pscale[:,None,None,None,None]) < 1e-6)
+    # 
+    #   # will just ignore a split tree for now (just parallel by col)
+    # parallel = mdl.sim.bulk_hproduct(split_layout, scale=False, comm=comm)
+    # for i,opstr in enumerate(gstrs):
+    #     assert(np.linalg.norm(serial[layout.indices_for_index(i)] - parallel[split_layout.indices_for_index(i)]) < 1e-6)
+    # 
+    # parallel, pscale = mdl.sim.bulk_hproduct(split_layout, scale=True, comm=comm)
+    # for i,opstr in enumerate(gstrs):
+    #     assert(np.linalg.norm(serial_scl[layout.indices_for_index(i)]*sscale[layout.indices_for_index(i),None,None,None,None] -
+    #                           parallel[split_layout.indices_for_index(i)]*pscale[split_layout.indices_for_index(i),None,None,None,None]) < 1e-6)
 
 
 
@@ -297,22 +275,16 @@ def test_MPI_probs(comm):
 
     # non-split tree => automatically adjusts wrt_block_size to accomodate
     #                    the number of processors
-    serial = mdl.bulk_probs(gstrs, clip_to=(-1e6,1e6))
-    parallel = mdl.bulk_probs(gstrs, clip_to=(-1e6,1e6), comm=comm)
+    serial = mdl.sim.bulk_probs(gstrs, clip_to=(-1e6,1e6))
+    parallel = mdl.sim.bulk_probs(gstrs, clip_to=(-1e6,1e6), resource_alloc={'comm': comm})
     compare_prob_dicts(serial,parallel)
 
-    serial = mdl.bulk_dprobs(gstrs, clip_to=(-1e6,1e6))
-    parallel = mdl.bulk_dprobs(gstrs, clip_to=(-1e6,1e6), comm=comm)
+    serial = mdl.sim.bulk_dprobs(gstrs)
+    parallel = mdl.sim.bulk_dprobs(gstrs, resource_alloc={'comm': comm})
     compare_prob_dicts(serial,parallel)
 
-    serial = mdl.bulk_dprobs(gstrs, return_pr=True, clip_to=(-1e6,1e6))
-    parallel = mdl.bulk_dprobs(gstrs, return_pr=True, clip_to=(-1e6,1e6), comm=comm)
-    compare_prob_dicts(serial,parallel,(0,1))
-
-    serial = mdl.bulk_hprobs(gstrs, return_pr=True, return_deriv=True,
-                             clip_to=(-1e6,1e6))
-    parallel = mdl.bulk_hprobs(gstrs, return_pr=True,
-                                 return_deriv=True, clip_to=(-1e6,1e6), comm=comm)
+    serial = mdl.sim.bulk_hprobs(gstrs)
+    parallel = mdl.sim.bulk_hprobs(gstrs, resource_alloc={'comm': comm})
     compare_prob_dicts(serial,parallel,(0,1,2))
 
     ##OLD: cannot tell bulk_probs to use a split tree anymore (just give list)
@@ -363,13 +335,12 @@ def test_MPI_fills(comm):
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
-    split_tree = tree.copy()
-    split_lookup = split_tree.split(lookup,num_sub_trees=g_numSubTrees)
-
+    layout = mdl.sim.create_layout(gstrs)
+    split_layout = mdl.sim.create_layout(gstrs, resource_alloc={'comm': comm})  # num_sub_trees=g_numSubTrees?
+    assert(layout.num_elements == split_layout.num_elements)
 
     #Check fill probabilities
-    nEls = tree.num_final_elements()
+    nEls = layout.num_elements
     nCircuits = len(gstrs)
     nDerivCols = mdl.num_params()
 
@@ -382,82 +353,75 @@ def test_MPI_fills(comm):
     vdp_serial2 = np.empty( (nEls,nDerivCols), 'd' )
     vp_serial2  = np.empty(  nEls, 'd' )
 
-    mdl.bulk_fill_probs(vp_serial, tree,
-                       (-1e6,1e6), comm=None)
+    mdl.sim.bulk_fill_probs(vp_serial, layout, resource_alloc=None)
 
-    mdl.bulk_fill_dprobs(vdp_serial, tree,
-                        vp_serial2, (-1e6,1e6), comm=None,
-                        wrt_block_size=None)
+    mdl.sim.bulk_fill_dprobs(vdp_serial, layout,
+                        vp_serial2, resource_alloc=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
 
-    mdl.bulk_fill_hprobs(vhp_serial, tree,
-                        vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
-                        wrt_block_size1=None, wrt_block_size2=None)
+    mdl.sim.bulk_fill_hprobs(vhp_serial, layout,
+                        vp_serial2, vdp_serial2, resource_alloc=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
 
 
     #Check serial results with a split tree, just to be sure
-    mdl.bulk_fill_probs(vp_serial2, split_tree,
-                       (-1e6,1e6), comm=None)
+    split_layout_1comm = split_layout.copy()
+    split_layout_1comm.set_distribution_params(1, split_layout.additional_dimension_blk_sizes, split_layout.gather_mem_limit)
+    mdl.sim.bulk_fill_probs(vp_serial2, split_layout_1comm, resource_alloc=None)
     for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(vp_serial[ lookup[i] ] -
-                              vp_serial2[ split_lookup[i] ]) < 1e-6)
+        assert(np.linalg.norm(vp_serial[ layout.indices_for_index(i) ] -
+                              vp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
 
-    mdl.bulk_fill_dprobs(vdp_serial2, split_tree,
-                        vp_serial2, (-1e6,1e6), comm=None,
-                        wrt_block_size=None)
+    mdl.sim.bulk_fill_dprobs(vdp_serial2, split_layout_1comm,
+                             vp_serial2, resource_alloc=None)
     for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(vp_serial[ lookup[i] ] -
-                              vp_serial2[ split_lookup[i] ]) < 1e-6)
-        assert(np.linalg.norm(vdp_serial[ lookup[i] ] -
-                              vdp_serial2[ split_lookup[i] ]) < 1e-6)
+        assert(np.linalg.norm(vp_serial[ layout.indices_for_index(i) ] -
+                              vp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
+        assert(np.linalg.norm(vdp_serial[ layout.indices_for_index(i) ] -
+                              vdp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
 
-    mdl.bulk_fill_hprobs(vhp_serial2, split_tree,
-                        vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
-                        wrt_block_size1=None, wrt_block_size2=None)
+    mdl.sim.bulk_fill_hprobs(vhp_serial2, split_layout_1comm,
+                        vp_serial2, vdp_serial2, resource_alloc=None)
     for i,opstr in enumerate(gstrs):
-        assert(np.linalg.norm(vp_serial[ lookup[i] ] -
-                              vp_serial2[ split_lookup[i] ]) < 1e-6)
-        assert(np.linalg.norm(vdp_serial[ lookup[i] ] -
-                              vdp_serial2[ split_lookup[i] ]) < 1e-6)
-        assert(np.linalg.norm(vhp_serial[ lookup[i] ] -
-                              vhp_serial2[ split_lookup[i] ]) < 1e-6)
+        assert(np.linalg.norm(vp_serial[ layout.indices_for_index(i) ] -
+                              vp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
+        assert(np.linalg.norm(vdp_serial[ layout.indices_for_index(i) ] -
+                              vdp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
+        assert(np.linalg.norm(vhp_serial[ layout.indices_for_index(i) ] -
+                              vhp_serial2[ split_layout_1comm.indices_for_index(i) ]) < 1e-6)
 
     #Get parallel results - with and without split tree
     vhp_parallel = np.empty( (nEls,nDerivCols,nDerivCols),'d')
     vdp_parallel = np.empty( (nEls,nDerivCols), 'd' )
     vp_parallel = np.empty( nEls, 'd' )
 
-    for tstTree,tstLookup in zip([tree, split_tree],[lookup,split_lookup]):
+    for tstLayout in [layout, split_layout]:
 
-        mdl.bulk_fill_probs(vp_parallel, tstTree,
-                           (-1e6,1e6), comm=comm)
+        mdl.sim.bulk_fill_probs(vp_parallel, tstLayout, resource_alloc={'comm': comm})
         for i,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
-                                  vp_serial[ lookup[i] ]) < 1e-6)
+            assert(np.linalg.norm(vp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vp_serial[ layout.indices_for_index(i) ]) < 1e-6)
 
-        for blkSize in [None, 4]:
-            mdl.bulk_fill_dprobs(vdp_parallel, tstTree,
-                                vp_parallel, (-1e6,1e6), comm=comm,
-                                wrt_block_size=blkSize)
-            for i,opstr in enumerate(gstrs):
-                assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
-                                      vp_serial[ lookup[i] ]) < 1e-6)
-                assert(np.linalg.norm(vdp_parallel[ tstLookup[i] ] -
-                                      vdp_serial[ lookup[i] ]) < 1e-6)
+        #for blkSize in [None, 4]:
+        mdl.sim.bulk_fill_dprobs(vdp_parallel, tstLayout,
+                             vp_parallel, resource_alloc={'comm': comm}) # wrt_block_size=blkSize)
+        for i,opstr in enumerate(gstrs):
+            assert(np.linalg.norm(vp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vp_serial[ layout.indices_for_index(i) ]) < 1e-6)
+            assert(np.linalg.norm(vdp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vdp_serial[ layout.indices_for_index(i) ]) < 1e-6)
 
-            for blkSize2 in [None, 2, 4]:
-                mdl.bulk_fill_hprobs(vhp_parallel, tstTree,
-                                    vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
-                                    wrt_block_size1=blkSize, wrt_block_size2=blkSize2)
-                for i,opstr in enumerate(gstrs):
-                    assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
-                                          vp_serial[ lookup[i] ]) < 1e-6)
-                    assert(np.linalg.norm(vdp_parallel[ tstLookup[i] ] -
-                                          vdp_serial[ lookup[i] ]) < 1e-6)
-                    assert(np.linalg.norm(vhp_parallel[ tstLookup[i] ] -
-                                          vhp_serial[ lookup[i] ]) < 1e-6)
+        #for blkSize2 in [None, 2, 4]:
+        mdl.sim.bulk_fill_hprobs(vhp_parallel, tstLayout,
+                             vp_parallel, vdp_parallel, resource_alloc={'comm': comm}) #wrt_block_size1=blkSize, wrt_block_size2=blkSize2)
+        for i,opstr in enumerate(gstrs):
+            assert(np.linalg.norm(vp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vp_serial[ layout.indices_for_index(i) ]) < 1e-6)
+            assert(np.linalg.norm(vdp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vdp_serial[ layout.indices_for_index(i) ]) < 1e-6)
+            assert(np.linalg.norm(vhp_parallel[ tstLayout.indices_for_index(i) ] -
+                                  vhp_serial[ layout.indices_for_index(i) ]) < 1e-6)
 
     #Test Serial vs Parallel use of wrt_filter
     some_wrtFilter = [0,1,2,3,4,5,6,7] #must be contiguous now - not arbitraray
@@ -466,38 +430,38 @@ def test_MPI_fills(comm):
     vhp_parallelF2 = np.empty( (nEls,len(some_wrtFilter),len(some_wrtFilter2)),'d')
     vdp_parallelF = np.empty( (nEls,len(some_wrtFilter)), 'd' )
 
-    for tstTree,tstLookup in zip([tree, split_tree],[lookup, split_lookup]):
+    for tstLayout in [layout, split_layout]:
 
-        mdl._fwdsim().bulk_fill_dprobs(vdp_parallelF, tstTree,
-                            None, (-1e6,1e6), comm=comm,
-                            wrt_filter=some_wrtFilter, wrt_block_size=None)
+        mdl.sim.bulk_fill_dprobs(vdp_parallelF, tstLayout,
+                                 None, resource_alloc={'comm': comm},
+                                 wrt_filter=some_wrtFilter)
         for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
-                assert(np.linalg.norm(vdp_serial[lookup[k],i]-vdp_parallelF[tstLookup[k],ii]) < 1e-6)
+                assert(np.linalg.norm(vdp_serial[layout.indices_for_index(k),i]-vdp_parallelF[tstLayout.indices_for_index(k),ii]) < 1e-6)
         taken_result = vdp_serial.take( some_wrtFilter, axis=1 )
         for k,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(taken_result[lookup[k]]-vdp_parallelF[tstLookup[k]]) < 1e-6)
+            assert(np.linalg.norm(taken_result[layout.indices_for_index(k)]-vdp_parallelF[tstLayout.indices_for_index(k)]) < 1e-6)
 
-        mdl._fwdsim().bulk_fill_hprobs(vhp_parallelF, tstTree,
-                        None, None,None, (-1e6,1e6), comm=comm,
-                        wrt_filter2=some_wrtFilter, wrt_block_size2=None)
+        mdl.sim.bulk_fill_hprobs(vhp_parallelF, tstLayout,
+                                 None, None, None, resource_alloc={'comm': comm},
+                                 wrt_filter2=some_wrtFilter)
         for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
-                assert(np.linalg.norm(vhp_serial[lookup[k],:,i]-vhp_parallelF[tstLookup[k],:,ii]) < 1e-6)
+                assert(np.linalg.norm(vhp_serial[layout.indices_for_index(k),:,i]-vhp_parallelF[tstLayout.indices_for_index(k),:,ii]) < 1e-6)
         taken_result = vhp_serial.take( some_wrtFilter, axis=2 )
         for k,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF[tstLookup[k]]) < 1e-6)
+            assert(np.linalg.norm(taken_result[layout.indices_for_index(k)]-vhp_parallelF[tstLayout.indices_for_index(k)]) < 1e-6)
 
-        mdl._fwdsim().bulk_fill_hprobs(vhp_parallelF2, tstTree,
-                        None, None,None, (-1e6,1e6), comm=comm,
-                        wrt_filter1=some_wrtFilter, wrt_filter2=some_wrtFilter2)
+        mdl.sim.bulk_fill_hprobs(vhp_parallelF2, tstLayout,
+                                 None, None, None, resource_alloc={'comm': comm},
+                                 wrt_filter1=some_wrtFilter, wrt_filter2=some_wrtFilter2)
         for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
                 for jj,j in enumerate(some_wrtFilter2):
-                    assert(np.linalg.norm(vhp_serial[lookup[k],i,j]-vhp_parallelF2[tstLookup[k],ii,jj]) < 1e-6)
+                    assert(np.linalg.norm(vhp_serial[layout.indices_for_index(k),i,j]-vhp_parallelF2[tstLayout.indices_for_index(k),ii,jj]) < 1e-6)
         taken_result = vhp_serial.take( some_wrtFilter, axis=1 ).take( some_wrtFilter2, axis=2)
         for k,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF2[tstLookup[k]]) < 1e-6)
+            assert(np.linalg.norm(taken_result[layout.indices_for_index(k)]-vhp_parallelF2[tstLayout.indices_for_index(k)]) < 1e-6)
 
 @mpitest(4)
 def test_MPI_compute_cache(comm):
@@ -511,10 +475,10 @@ def test_MPI_compute_cache(comm):
 
     #Get some operation sequences
     gstrs = pygsti.construction.to_circuits([('Gx',), ('Gy')])
-    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
+    layout = mdl.sim.create_layout(gstrs)
 
     #Check fill probabilities
-    nEls = tree.num_final_elements()
+    nEls = layout.num_elements
     nCircuits = len(gstrs)
     nDerivCols = mdl.num_params()
     print("NUMS = ",nEls,nCircuits,nDerivCols)
@@ -529,12 +493,12 @@ def test_MPI_compute_cache(comm):
     pcache = np.empty((nEls,d,d),'d')
     dcache1 = np.empty((nEls,2,d,d),'d')
     dcache2 = np.empty((nEls,2,d,d),'d')
-    hcache = mdl._fwdsim()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
-                                                comm, wrt_slice1=slc1, wrt_slice2=slc2)
+    hcache = mdl.sim._compute_hproduct_cache(layout.atoms[0].tree, pcache, dcache1, dcache2, scache,
+                                             comm, wrt_slice1=slc1, wrt_slice2=slc2)
 
     #without comm
-    hcache_chk = mdl._fwdsim()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
-                                                comm=None, wrt_slice1=slc1, wrt_slice2=slc2)
+    hcache_chk = mdl.sim._compute_hproduct_cache(layout.atoms[0].tree, pcache, dcache1, dcache2, scache,
+                                                 comm=None, wrt_slice1=slc1, wrt_slice2=slc2)
     assert(np.linalg.norm(hcache-hcache_chk) < 1e-6)
 
 
@@ -554,13 +518,10 @@ def test_MPI_by_block(comm):
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookkup = mdl.bulk_evaltree(gstrs)
-    #split_tree = tree.copy()
-    #split_lookup = split_tree.split(lookup,num_sub_trees=g_numSubTrees)
-
+    layout = mdl.sim.create_layout(gstrs)
 
     #Check that "by column" matches standard "at once" methods:
-    nEls = tree.num_final_elements()
+    nEls = layout.num_elements
     nCircuits = len(gstrs)
     nDerivCols = mdl.num_params()
 
@@ -569,17 +530,17 @@ def test_MPI_by_block(comm):
     vdp_serial = np.empty( (nEls,nDerivCols), 'd' )
     vp_serial = np.empty( nEls, 'd' )
 
-    mdl.bulk_fill_hprobs(vhp_serial, tree,
-                        vp_serial, vdp_serial, (-1e6,1e6), comm=None)
+    mdl.sim.bulk_fill_hprobs(vhp_serial, layout,
+                         vp_serial, vdp_serial, resource_alloc={'comm': comm})
     dprobs12_serial = vdp_serial[:,:,None] * vdp_serial[:,None,:]
 
 
-    for tstTree,tstLookup in zip([tree],[lookup]): # currently no split trees allowed (ValueError), split_tree]:
+    for tstLayout in [layout]: # currently no split layouts allowed
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nDerivCols),slice(i,i+1)) for i in range(nDerivCols) ]
-        for s1,s2, hprobs, dprobs12 in mdl.bulk_hprobs_by_block(
-            tstTree, slicesList, True, comm):
+        for s1,s2, hprobs, dprobs12 in mdl.sim.bulk_hprobs_by_block(
+            layout, slicesList, True, {'comm': comm}):
             hcols.append(hprobs)
             d12cols.append(dprobs12)
 
@@ -602,7 +563,7 @@ def test_MPI_by_block(comm):
         #    assert(np.linalg.norm(all_hcols[0,:,8:,i]-vhp_serial[0,:,8:,i]) < 1e-6)
 
         for i,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(all_hcols[tstLookup[i]]-vhp_serial[lookup[i]]) < 1e-6)
+            assert(np.linalg.norm(all_hcols[tstLayout.indices_for_index(i)]-vhp_serial[layout.indices_for_index(i)]) < 1e-6)
 
         #for i in range(all_d12cols.shape[3]):
         #    print "Diff(%d) = " % i, np.linalg.norm(all_d12cols[0,:,8:,i]-dprobs12_serial[0,:,8:,i])
@@ -611,22 +572,22 @@ def test_MPI_by_block(comm):
         #            print "Diff(%d,%d) = " % (i,j), np.linalg.norm(all_d12cols[0,:,8:,i]-dprobs12_serial[0,:,8:,j])
 
         for i,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(all_d12cols[tstLookup[i]]-dprobs12_serial[lookup[i]]) < 1e-6)
+            assert(np.linalg.norm(all_d12cols[tstLayout.indices_for_index(i)]-dprobs12_serial[layout.indices_for_index(i)]) < 1e-6)
 
 
         hcols = []
         d12cols = []
         slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs, dprobs12 in mdl.bulk_hprobs_by_block(
-            tstTree, slicesList, True, comm):
+        for s1,s2, hprobs, dprobs12 in mdl.sim.bulk_hprobs_by_block(
+            tstLayout, slicesList, True, resource_alloc={'comm': comm}):
             hcols.append(hprobs)
             d12cols.append(dprobs12)
 
         all_hcols = np.concatenate( hcols, axis=2 )
         all_d12cols = np.concatenate( d12cols, axis=2 )
         for i,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(all_hcols[tstLookup[i]]-vhp_serial[lookup[i],2:12,1:10]) < 1e-6)
-            assert(np.linalg.norm(all_d12cols[tstLookup[i]]-dprobs12_serial[lookup[i],2:12,1:10]) < 1e-6)
+            assert(np.linalg.norm(all_hcols[tstLayout.indices_for_index(i)]-vhp_serial[layout.indices_for_index(i),2:12,1:10]) < 1e-6)
+            assert(np.linalg.norm(all_d12cols[tstLayout.indices_for_index(i)]-dprobs12_serial[layout.indices_for_index(i),2:12,1:10]) < 1e-6)
 
 
         hprobs_by_block = np.zeros(vhp_serial.shape,'d')
@@ -634,14 +595,14 @@ def test_MPI_by_block(comm):
         blocks1 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 3)
         blocks2 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
-        for s1,s2, hprobs_blk, dprobs12_blk in mdl.bulk_hprobs_by_block(
-            tstTree, slicesList, True, comm):
+        for s1,s2, hprobs_blk, dprobs12_blk in mdl.sim.bulk_hprobs_by_block(
+            tstLayout, slicesList, True, resource_alloc={'comm': comm}):
             hprobs_by_block[:,s1,s2] = hprobs_blk
             dprobs12_by_block[:,s1,s2] = dprobs12_blk
 
         for i,opstr in enumerate(gstrs):
-            assert(np.linalg.norm(hprobs_by_block[tstLookup[i]]-vhp_serial[lookup[i]]) < 1e-6)
-            assert(np.linalg.norm(dprobs12_by_block[tstLookup[i]]-dprobs12_serial[lookup[i]]) < 1e-6)
+            assert(np.linalg.norm(hprobs_by_block[tstLayout.indices_for_index(i)]-vhp_serial[layout.indices_for_index(i)]) < 1e-6)
+            assert(np.linalg.norm(dprobs12_by_block[tstLayout.indices_for_index(i)]-dprobs12_serial[layout.indices_for_index(i)]) < 1e-6)
 
 
 
@@ -775,7 +736,7 @@ def test_MPI_mlgst_forcefn(comm):
             regularization={'min_prob_clip': 1e-4},
             penalties={'forcefn_grad': forcingfn_grad, 'prob_clip_interval': (-1e2, 1e2)}
         ),
-        resource_alloc=pygsti.objects.resourceallocation.ResourceAllocation(comm=comm), cache=None
+        resource_alloc=pygsti.objects.resourceallocation.ResourceAllocation(comm=comm)
     )
 
 

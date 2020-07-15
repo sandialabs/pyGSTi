@@ -818,7 +818,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.LindbladOp(None, errgen, dense_rep=sparse_lindblad_reps)
+            return _op.LindbladOp(None, errgen, dense_rep=not sparse_lindblad_reps)
         else:
             return errgen
 

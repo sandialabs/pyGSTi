@@ -56,20 +56,20 @@ class GateSetTestCase(BaseTestCase):
 
         self.mgateset = self.model.copy()
         #self.mgateset._calcClass = MapForwardSimulator
-        self.mgateset.set_simtype('map')
+        self.mgateset.sim = 'map'
 
 
 class TestGateSetMethods(GateSetTestCase):
     def test_bulk_multiplication(self):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
-        evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring1,gatestring2] )
+        layout = self.model.sim.create_layout( [gatestring1,gatestring2] )
 
         p1 = np.dot( self.model['Gy'], self.model['Gx'] )
         p2 = np.dot( self.model['Gy'], np.dot( self.model['Gy'], self.model['Gx'] ))
 
-        bulk_prods = self.model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = self.model.bulk_product(evt, scale=True)
+        bulk_prods = self.model.sim.bulk_product([gatestring1,gatestring2])
+        bulk_prods_scaled, scaleVals = self.model.sim.bulk_product([gatestring1,gatestring2], scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[ 0 ],p1)
         self.assertArraysAlmostEqual(bulk_prods[ 1 ],p2)
@@ -79,15 +79,11 @@ class TestGateSetMethods(GateSetTestCase):
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
         PORIG = pygsti.objects.matrixforwardsim._PSMALL; pygsti.objects.matrixforwardsim._PSMALL = 10
-        bulk_prods_scaled, scaleVals3 = self.model.bulk_product(evt, scale=True)
+        bulk_prods_scaled, scaleVals3 = self.model.sim.bulk_product([gatestring1,gatestring2], scale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
         pygsti.objects.matrixforwardsim._PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
         self.assertArraysAlmostEqual(bulk_prods3[1],p2)
-
-
-        #tag on a few extra EvalTree tests
-        debug_stuff = evt._compute_analysis_plot_infos()
 
     def test_hessians(self):
         gatestring0 = pygsti.obj.Circuit(('Gi','Gx'))
@@ -95,26 +91,23 @@ class TestGateSetMethods(GateSetTestCase):
         gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
 
         circuitList = pygsti.construction.to_circuits([gatestring0,gatestring1,gatestring2])
-        evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
-        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
+        layout = self.model.sim.create_layout([gatestring0,gatestring1,gatestring2])
+        mlayout = self.mgateset.sim.create_layout([gatestring0,gatestring1,gatestring2])
 
-
-
-        nElements = evt.num_final_elements(); nParams = self.model.num_params()
+        nElements = layout.num_elements; nParams = self.model.num_params()
         probs_to_fill = np.empty( nElements, 'd')
         dprobs_to_fill = np.empty( (nElements,nParams), 'd')
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
-        self.assertNoWarnings(self.model.bulk_fill_hprobs, hprobs_to_fill, evt,
-                              pr_mx_to_fill=probs_to_fill, deriv_mx_to_fill=dprobs_to_fill, check=True)
-
+        self.assertNoWarnings(self.model.sim.bulk_fill_hprobs, hprobs_to_fill, layout,
+                              pr_array_to_fill=probs_to_fill, deriv1_array_to_fill=dprobs_to_fill)
 
         nP = self.model.num_params()
 
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.bulk_hprobs_by_block(
-            evt, slicesList, True):
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+            layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
         all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
@@ -148,8 +141,8 @@ class TestGateSetMethods(GateSetTestCase):
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.bulk_hprobs_by_block(
-            evt, slicesList, True):
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+            layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
         all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
@@ -177,8 +170,8 @@ class TestGateSetMethods(GateSetTestCase):
         hcols = []
         d12cols = []
         slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.bulk_hprobs_by_block(
-            evt, slicesList, True):
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+            layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
         all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
@@ -210,15 +203,15 @@ class TestGateSetMethods(GateSetTestCase):
         blocks1 = pygsti.tools.mpitools.slice_up_range(nP, 3)
         blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
-        for s1,s2, hprobs_blk, dprobs12_blk in self.model.bulk_hprobs_by_block(
-            evt, slicesList, True):
+        for s1,s2, hprobs_blk, dprobs12_blk in self.model.sim.bulk_hprobs_by_block(
+            layout, slicesList, True):
             hprobs_by_block[:,s1,s2] = hprobs_blk
             dprobs12_by_block[:,s1,s2] = dprobs12_blk
 
         #again, but no dprobs12
         hprobs_by_block2 = np.zeros(hprobs_to_fill.shape,'d')
-        for s1,s2, hprobs_blk in self.model.bulk_hprobs_by_block(
-                evt, slicesList, False):
+        for s1,s2, hprobs_blk in self.model.sim.bulk_hprobs_by_block(
+                layout, slicesList, False):
             hprobs_by_block2[:,s1,s2] = hprobs_blk
 
         #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.bulk_hprobs_by_block(
@@ -279,34 +272,25 @@ class TestGateSetMethods(GateSetTestCase):
 
         for nprocs in (1,4,10,40,100):
             fake_comm = FakeComm(nprocs)
-            for distribute_method in ('deriv','circuits'):
-                for memLimit in (-100, 1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
-                    print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distribute_method, memLimit))
-                    try:
-                        evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
-                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
-                        evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
-                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
-                        evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
-                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
-                        evt,_,_,lookup,outcome_lookup = mdl_few.bulk_evaltree_from_resources(
-                            circuits, mem_limit=memLimit, distribute_method=distribute_method,
-                            subcalls=['bulk_fill_dprobs'], comm=fake_comm) #where bNp2Matters == False
-
-                    except MemoryError:
-                        pass #OK - when memlimit is too small and splitting is unproductive
+            for memLimit in (-100, 1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
+                print("Nprocs = %d, memLim = %g" % (nprocs, memLimit))
+                try:
+                    layout = self.model.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
+                    layout = self.mgateset.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
+                    layout = mdl_few.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
+                    layout = mdl_few.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('dp',)) #where bNp2Matters == False
+                    
+                except MemoryError:
+                    pass #OK - when memlimit is too small and splitting is unproductive
 
         #balanced not implemented
-        with self.assertRaises(NotImplementedError):
-            evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-                circuits, mem_limit=memLimit, distribute_method="balanced", subcalls=['bulk_fill_hprobs'])
+        #with self.assertRaises(NotImplementedError):
+        #    evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
+        #        circuits, mem_limit=memLimit, distribute_method="balanced", subcalls=['bulk_fill_hprobs'])
 
 
-
-    def test_tree_splitting(self):
+    @unittest.skip("Need to add a way to force layout splitting")
+    def test_layout_splitting(self):
         circuits = [('Gx',),
                        ('Gy',),
                        ('Gx','Gy'),
@@ -355,6 +339,7 @@ class TestGateSetMethods(GateSetTestCase):
                                          bulk_probsC[ lookupC[i] ])
 
 
+    @unittest.skip("TODO: add backward compatibility for old gatesets?")
     def test_load_old_gateset(self):
         #pygsti.obj.results.enable_old_python_results_unpickling()
         with enable_old_object_unpickling(), patched_uuid():
@@ -397,25 +382,19 @@ Gx^4  0:100
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
 
         gstrs = list(ds.keys())
-        raw_dict, elIndices, outcome_lookup, ntotal = std1Q_XYI.target_model().simplify_circuits(gstrs, ds)
+        layout = std1Q_XYI.target_model().sim.create_layout(gstrs, dataset=ds)
 
-        print("Raw circuit -> elabels dict:\n","\n".join(["%s: %s" % (str(k),str(v)) for k,v in raw_dict.items()]))
-        print("\nElement indices lookup (orig opstr index -> element indices):\n",elIndices)
-        print("\nOutcome lookup (orig opstr index -> list of outcome for each element):\n",outcome_lookup)
-        print("\ntotal elements = ", ntotal)
+        self.assertEqual(layout.outcomes(()), (('1',),) )
+        self.assertEqual(layout.outcomes(('Gx',)), (('1',), ('0',)) )  # '1' comes first because it's the first outcome to appear
+        self.assertEqual(layout.outcomes(('Gx','Gy')), (('1',), ('0',)) )
+        self.assertEqual(layout.outcomes(('Gx',)*4), (('0',),) )
 
-        self.assertEqual(raw_dict[('rho0',)], [L('Mdefault_1')])
-        self.assertEqual(raw_dict[('rho0','Gx',)], [L('Mdefault_0'), L('Mdefault_1')])
-        self.assertEqual(raw_dict[('rho0','Gx','Gy')], [L('Mdefault_0'), L('Mdefault_1')])
-        self.assertEqual(raw_dict[('rho0',) + ('Gx',)*4], [L('Mdefault_0')])
+        self.assertEqual(layout.indices(()), slice(0, 1, None))
+        self.assertArraysEqual(layout.indices(('Gx',)), [1,3] )
+        self.assertArraysEqual(layout.indices(('Gx','Gy')), [2,4] )
+        self.assertEqual(layout.indices(('Gx',)*4), slice(5, 6, None))
 
-        self.assertEqual(elIndices, collections.OrderedDict(
-            [(0, slice(0, 1, None)), (1, slice(1, 3, None)), (2, slice(3, 5, None)), (3, slice(5, 6, None))]) )
-
-        self.assertEqual(outcome_lookup, collections.OrderedDict(
-            [(0, [('1',)]), (1, [('0',), ('1',)]), (2, [('0',), ('1',)]), (3, [('0',)])]) )
-
-        self.assertEqual(ntotal, 6)
+        self.assertEqual(layout.num_elements, 6)
 
 
         #A sparse dataset loading test using the more common format:

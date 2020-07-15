@@ -196,7 +196,7 @@ class CircuitPlaquette(object):
         return CircuitPlaquette(self.elements, self.num_rows, self.num_cols, aliases)
 
     def summary_label(self):
-        return "%d circuits" % len(self)
+        return ("%d circuits" % len(self)) if len(self) > 0 else ""
 
     def element_label(self, irow, icol):
         c = self.elements.get((irow, icol), None)
@@ -540,7 +540,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             additional_circuits = []
 
         if additional_circuits_location == 'start':
-            additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+            plaq_circuits = set([c for plaq in plaquettes.values() for c in plaq.circuits])
+            additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in plaq_circuits)])
             circuits.update(additional)
 
         for plaq in plaquettes.values():
@@ -712,9 +713,15 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         if len(self.xs) > 0 and isinstance(self.xs[0], _Circuit):
             xs = list(map(P, self.xs))
             plaquettes = _collections.OrderedDict([((P(x), y), v) for (x, y), v in plaquettes.items()])
+        else:
+            xs = self.xs
+
         if len(self.ys) > 0 and isinstance(self.ys[0], _Circuit):
             ys = list(map(P, self.ys))
             plaquettes = _collections.OrderedDict([((x, P(y)), v) for (x, y), v in plaquettes.items()])
+        else:
+            ys = self.ys
+
         additional = list(map(P, self._additional_circuits))
 
         circuit_weights_dict = {P(c): weight for c, weight in zip(self, self.circuit_weights)} \

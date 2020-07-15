@@ -19,14 +19,14 @@ class RepLibTestCase(BaseTestCase):
     def testRepLib_map(self):
         #Just test a Model with a "map" simtype to exercise the replib
         mdl = std.target_model()
-        mdl.set_simtype("map")
+        mdl.sim = "map"
 
 
         probs = mdl.probabilities(('Gx','Gx'))
         self.assertAlmostEqual(probs['0'], 0.0)
         self.assertAlmostEqual(probs['1'], 1.0)
 
-        probs2 = mdl.bulk_probs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
+        probs2 = mdl.sim.bulk_probs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
         self.assertAlmostEqual(probs2[('Gx',)]['0'], 0.5)
         self.assertAlmostEqual(probs2[('Gx',)]['1'], 0.5)
         self.assertAlmostEqual(probs2[('Gx','Gx')]['0'], 0.0)
@@ -35,7 +35,7 @@ class RepLibTestCase(BaseTestCase):
         self.assertAlmostEqual(probs2[('Gx','Gx','Gy')]['1'], 0.5)
 
         #LATER: save & check outputs of dprobs
-        dprobs = mdl.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
+        dprobs = mdl.sim.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
 
         #RUN TO SAVE outputs
         if regenerate_references():

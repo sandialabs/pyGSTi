@@ -44,7 +44,7 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
         cache : dict
             A dictionary whose keys are the elements of `circuits` and values can be
             whatever the user wants.  These values are provided when calling
-            :method:`iter_circuits_with_cache`.
+            :method:`iter_unique_circuits_with_cache`.
 
         Returns
         -------

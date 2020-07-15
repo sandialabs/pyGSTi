@@ -95,6 +95,13 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(), G)  # LEXI VS MATRIX ORDER
             return G
 
+    def _rho_es_from_spam_tuples(self, rholabel, elabels):
+        # This calculator uses the convention that rho has shape (N,1)
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense()[:, None]
+        Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(elabel, 'povm').to_dense()[:, None]))
+              for elabel in elabels]  # [:, None] becuse of convention: E has shape (1,N)
+        return rho, Es
+
     def _process_wrt_filter(self, wrt_filter, obj):
         """ Helper function for doperation and hoperation below: pulls out pieces of
             a wrt_filter argument relevant for a single object (gate or spam vec) """
@@ -484,7 +491,6 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             # axes = (model_parameter1, model_parameter2, model_element_row, model_element_col)
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
-        #def _prs(self, rholabel, elabels, circuit, clip_to, use_scaling=False, time=None):
         """
         Compute probabilities of a multiple "outcomes" for a single circuit.
 
@@ -502,10 +508,6 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         circuit : Circuit or tuple
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
-
-        clip_to : 2-tuple
-            (min,max) to clip returned probability to if not None.
-            Only relevant when pr_mx_to_fill is not None.
 
         use_scaling : bool, optional
             Whether to use a post-scaled product internally.  If False, this
@@ -531,7 +533,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             indices = [outcome_to_index[o] for o in spc_outcomes]
             rholabel = spc.circuit_without_povm[0]
             circuit_ops = spc.circuit_without_povm[1:]
-            rho, Es = self._rho_es_from_spam_tuples(rholabel, spc.effect_labels)
+            rho, Es = self._rho_es_from_spam_tuples(rholabel, spc.full_effect_labels)
             #shapes: rho = (N,1), Es = (len(elabels),N)
 
             if use_scaling:
@@ -1327,18 +1329,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return scaleVals
 
     def _rho_e_from_spam_tuple(self, spam_tuple):
-        assert(len(spam_tuple) == 2)
-        if isinstance(spam_tuple[0], _Label):
-            rholabel, elabel = spam_tuple
-            # This calculator uses the convention that rho has shape (N,1)
-            rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense()[:, None]
-            E = _np.conjugate(_np.transpose(self.model.circuit_layer_operator(elabel, 'povm').to_dense()
-                                            [:, None]))  # convention: E has shape (1,N)
-        else:
-            # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
-            #  objects: (prepVec, effectVec)
-            rho, Eraw = spam_tuple
-            E = _np.conjugate(_np.transpose(Eraw))
+        # This calculator uses the convention that rho has shape (N,1)
+        rholabel, elabel = spam_tuple
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense()[:, None]
+        E = _np.conjugate(_np.transpose(self.model.circuit_layer_operator(elabel, 'povm').to_dense()[:, None]))
         return rho, E
 
     def _probs_from_rho_e(self, rho, e, gs, scale_vals):

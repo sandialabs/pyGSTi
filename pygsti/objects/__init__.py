@@ -81,8 +81,8 @@ from .qubitgraph import QubitGraph
 from .hypothesistest import HypothesisTest
 
 from .forwardsim import ForwardSimulator
-from .matrixforwardsim import MatrixForwardSimulator
-from .mapforwardsim import MapForwardSimulator
+from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
+from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
 from .termforwardsim import TermForwardSimulator
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement

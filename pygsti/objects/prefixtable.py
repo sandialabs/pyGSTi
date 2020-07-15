@@ -302,6 +302,7 @@ class PrefixTable(object):
             subTableSetList, totalCost = create_subtables(
                 max_sub_table_size, max_cost_rate=0, cost_metric="size")
 
+        assert(sum(map(len, subTableSetList)) == len(self)), "sub-table sets are not disjoint!"
         return subTableSetList
 
 

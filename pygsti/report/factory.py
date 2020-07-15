@@ -281,15 +281,26 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
 
-        prep_fiducials = results.circuit_lists.get('prep fiducials', None) \
-            or results.data.edesign.prep_fiducials
-        meas_fiducials = results.circuit_lists.get('meas fiducials', None) \
-            or results.data.edesign.meas_fiducials
-        germs = results.circuit_lists.get('germs', None) or results.data.edesign.germs
+        prep_fiducials = results.circuit_lists.get('prep fiducials', None)
+        meas_fiducials = results.circuit_lists.get('meas fiducials', None)
+        germs = results.circuit_lists.get('germs', None)
+
+        NA = ws.NotApplicable()
+        if prep_fiducials is None:
+            prep_fiducials = results.data.edesign.prep_fiducials \
+                if hasattr(results.data.edesign, 'prep_fiducials') else NA
+        if meas_fiducials is None:
+            meas_fiducials = results.data.edesign.meas_fiducials \
+                if hasattr(results.data.edesign, 'meas_fiducials') else NA
+        if germs is None:
+            germs = results.data.edesign.germs \
+                if hasattr(results.data.edesign, 'germs') else NA
+
         switchBd.ds[d] = results.dataset
         switchBd.prep_fiducials[d] = prep_fiducials
         switchBd.meas_fiducials[d] = meas_fiducials
-        switchBd.fiducials_tup[d] = (prep_fiducials, meas_fiducials)
+        switchBd.fiducials_tup[d] = (prep_fiducials, meas_fiducials) \
+            if (prep_fiducials is not NA and meas_fiducials is not NA) else NA
         switchBd.germs[d] = germs
 
         switchBd.circuits_final[d] = results.circuit_lists['final']

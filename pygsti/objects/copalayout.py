@@ -127,13 +127,14 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         self._unique_circuit_index = _collections.OrderedDict(
             [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
         self._to_unique = to_unique  # original indices => unique circuit indices
-        self._size = sum(map(len, elindex_outcome_tuples.values()))  # total number of elements
         self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
         self._additional_dimensions = additional_dimensions
 
         max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()]))
-        assert(self._size == max_element_index + 1), \
-            "Inconsistency: %d elements but max index is %d!" % (self._size, max_element_index)
+        indices = set(i for tuples in elindex_outcome_tuples.values() for i, o in tuples)
+        self._size = max_element_index + 1
+        assert(len(indices) == self._size), \
+            "Inconsistency: %d distinct indices but max index + 1 is %d!" % (len(indices), self._size)
 
         self._outcomes = _collections.OrderedDict()
         self._element_indices = _collections.OrderedDict()
@@ -199,7 +200,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             for element_index, outcome in zip(self._element_indices[i], self._outcomes[i]):
                 yield element_index, circuit, outcome
 
-    def iter_circuits(self):
+    def iter_unique_circuits(self):
         for circuit, i in self._unique_circuit_index.items():
             yield self._element_indices[i], circuit, self._outcomes[i]
 

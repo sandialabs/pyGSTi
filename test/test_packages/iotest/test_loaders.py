@@ -80,10 +80,10 @@ class LoadersTester(IOBase):
     def test_load_model_alt_format(self):
         mdl_formats = loaders.load_model(str(self.reference_path('formatExample.model')))
 
-        rotXPi = pc._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotYPi = pc._create_operation([(4,)], [('Q0',)], "Y(pi,Q0)")
-        rotXPiOv2 = pc._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotYPi = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi,Q0)")
+        rotXPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4, 'd'))
         self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)

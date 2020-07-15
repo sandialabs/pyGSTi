@@ -26,6 +26,8 @@ class CircuitTestCase(BaseTestCase):
             Gy.done_editing()
 
             tgt = std1Q_XYI.target_model()
+            tgt.sim = pygsti.objects.MapForwardSimulator()  # or use *simple* matrix fwdsim
+            # but usual matrix fwdsim takes a long time because it builds a tree.
             for N,zeroProb in zip((1,2,10,100,10000),(0.5, 0, 0, 1, 1)):
                 p1 = tgt.probabilities(('Gi',) + ('Gy',)*N)
                 p2 = tgt.probabilities( Gi + Gy*N )

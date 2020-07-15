@@ -50,7 +50,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         cache : dict
             A dictionary whose keys are the elements of `circuits` and values can be
             whatever the user wants.  These values are provided when calling
-            :method:`iter_circuits_with_cache`.
+            :method:`iter_unique_circuits_with_cache`.
         """
         if cache is None: cache = {}
         ret = super().create_from(circuits, model, dataset, additional_dimensions)
@@ -64,7 +64,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         if cache is None: cache = {}
         self._cache = {i: cache.get(c, None) for c, i in self._unique_circuit_index.items()}
 
-    def iter_circuits_with_cache(self):
+    def iter_unique_circuits_with_cache(self):
         """Includes a persistent per-circuit cache dictionary to hold metadata """
         for circuit, i in self._unique_circuit_index.items():
             yield self._element_indices[i], circuit, self._outcomes[i], self._cache[i]

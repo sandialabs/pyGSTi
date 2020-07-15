@@ -135,6 +135,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
             #Set wrt_block_size to use available processors if it isn't specified
             blkSize1 = self._set_param_block_size(wrt_filter1, layout.additional_dimension_blk_sizes[0], mySubComm)
             blkSize2 = self._set_param_block_size(wrt_filter2, layout.additional_dimension_blk_sizes[1], mySubComm)
+            if wrt_filter1 is not None or wrt_filter2 is not None:
+                blkSize1 = blkSize2 = None  # if *either* filter is given, we don't use block sizes
 
             self._bulk_fill_hprobs_singleatom(array_to_fill, atom,
                                               pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,

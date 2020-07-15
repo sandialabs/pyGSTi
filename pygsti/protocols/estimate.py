@@ -502,7 +502,7 @@ class Estimate(object):
             for y in gss.used_ys:
                 sub_mxs.append([])
                 for x in gss.used_xs:
-                    plaq = gss.get_plaquette(x, y).expand_aliases()
+                    plaq = gss.plaquette(x, y, empty_if_missing=True).expand_aliases()
                     scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
 
                     if len(plaq) > 0:
@@ -528,7 +528,7 @@ class Estimate(object):
                 for y in gss.used_ys:
                     sub_mxs.append([])
                     for x in gss.used_xs:
-                        plaq = gss.get_plaquette(x, y)
+                        plaq = gss.get_plaquette(x, y, empty_if_missing=True)
                         scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = 1.0

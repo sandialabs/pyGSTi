@@ -3619,10 +3619,10 @@ class Circuit(object):
                     subs[el[0]].append(el[1:])
             return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
 
-        def add_expanded_circuit_outcomes(cir, running_outcomes, ootree, start):
+        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
             """
             """
-            cir = cir if start == 0 else cir[start:]  # for performance, avoid uneeded slicing
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
             for k, layer_label in enumerate(cir, start=start):
                 components = layer_label.components
                 instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
@@ -3631,11 +3631,12 @@ class Circuit(object):
                     # This layer contains at least one instrument => recurse with instrument(s) replaced with
                     #  all combinations of their members.
                     component_lookup = {i: comp for i, comp in enumerate(components)}
-                    instrument_members = [model.get_member_labels_for_instrument(components[i])
+                    instrument_members = [model._member_labels_for_instrument(components[i])
                                           for i in instrument_inds]  # also components of outcome labels
                     for selected_instrmt_members in _itertools.product(*instrument_members):
                         expanded_layer_lbl = component_lookup.copy()
-                        expanded_layer_lbl.update({i: sel for i, sel in zip(instrument_inds, selected_instrmt_members)})
+                        expanded_layer_lbl.update({i: components[i] + "_" + sel
+                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
                         expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
 
                         if ootree is not None:
@@ -3651,11 +3652,11 @@ class Circuit(object):
                     break
 
             else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-                assert(cir not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
+                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
                 elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
                     else tuple(ootree.keys())
                 outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[SeparatePOVMCircuit(cir, povm_lbl, elabels)] = outcomes
+                expanded_circuit_outcomes[SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
 
         ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
         # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
@@ -3744,8 +3745,9 @@ class CompressedCircuit(object):
         Circuit
         """
         tup = CompressedCircuit.expand_op_label_tuple(self._tup)
+        occurrence = self._occurrence_id if hasattr(self, '_occurrence_id') else None  # backward compatibility
         return Circuit(tup, self._line_labels, editable=False, stringrep=self._str,
-                       check=False, occurrence=self._occurrence_id)
+                       check=False, occurrence=occurrence)
 
     @staticmethod
     def _get_num_periods(circuit, period_len):
