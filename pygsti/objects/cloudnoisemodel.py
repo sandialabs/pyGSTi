@@ -766,7 +766,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         # a dictionary of "cloud" objects
         # keys = cloud identifiers, e.g. (target_qubit_indices, cloud_qubit_indices) tuples
         # values = list of gate-labels giving the gates (primitive layers?) associated with that cloud (necessary?)
-        self.clouds = _collections.OrderedDict()
+        self._clouds = _collections.OrderedDict()
 
         #Get gates availability
         gates_and_avail = _collections.OrderedDict()
@@ -890,7 +890,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
 
     @property
-    def get_clouds(self):
+    def clouds(self):
         """
         Returns the set of cloud-sets used when creating sequences which amplify the parameters of this model.
 
@@ -898,7 +898,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         -------
         dict
         """
-        return self.clouds
+        return self._clouds
 
 
 def _get_lindblad_factory(simulator, parameterization, errcomp_type):

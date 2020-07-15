@@ -432,7 +432,7 @@ def create_cloudnoise_model_from_hops_and_weights(
     if return_clouds:
         #FUTURE - just return cloud *keys*? (operation label values are never used
         # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.get_clouds
+        return mdl, mdl.clouds
     else:
         return mdl
 
@@ -2849,7 +2849,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         errcomp_type="gates",
         sparse_lindblad_basis=sparse_lindblad_basis,
         sparse_lindblad_reps=sparse_lindblad_reps)
-    clouds = model.get_clouds
+    clouds = model.clouds
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
     #print("DB: CLOUDS = ",clouds)

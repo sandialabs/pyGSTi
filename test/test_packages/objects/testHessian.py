@@ -157,7 +157,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertTrue( cfctry.has_hessian )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        mdl_dummy = cfctry.get_model # test method
+        mdl_dummy = cfctry.model # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -204,7 +204,7 @@ class TestHessianMethods(BaseTestCase):
         #self.assertTrue( cfctryLR.can_construct_views() )
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
 
-        mdl_dummy = cfctryLR.get_model # test method
+        mdl_dummy = cfctryLR.model # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 

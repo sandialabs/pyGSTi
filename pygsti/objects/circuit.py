@@ -827,7 +827,7 @@ class Circuit(object):
             return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
     @property
-    def number_of_lines(self):
+    def num_lines(self):
         """
         The number of lines in this circuit.
 
@@ -2900,7 +2900,7 @@ class Circuit(object):
     #    """
     #    f = 1.
     #    depth = self.num_layers
-    #    for i in range(0,self.number_of_lines):
+    #    for i in range(0,self.num_lines):
     #        for j in range(0,depth):
     #            gatelbl = self.line_items[i][j]
     #
@@ -2941,7 +2941,7 @@ class Circuit(object):
         """
 
         # If it's a circuit over no lines, return an empty string
-        if self.number_of_lines == 0: return ''
+        if self.num_lines == 0: return ''
 
         s = ''
         Ctxt = 'C'
@@ -2977,12 +2977,12 @@ class Circuit(object):
 
         line_items = self._togrid(identityName)
         max_labellen = [max([len(abbrev(line_items[i][j], i))
-                             for i in range(0, self.number_of_lines)])
+                             for i in range(0, self.num_lines)])
                         for j in range(0, self.num_layers)]
 
         max_linelabellen = max([len(str(llabel)) for llabel in self.line_labels])
 
-        for i in range(self.number_of_lines):
+        for i in range(self.num_lines):
             s += 'Qubit {} '.format(self.line_labels[i]) + ' ' * \
                 (max_linelabellen - len(str(self.line_labels[i]))) + '---'
             for j, maxlbllen in enumerate(max_labellen):
@@ -3020,7 +3020,7 @@ class Circuit(object):
         line_strings = circuit_string.split('\n')
         nLines = len(line_strings)  # e.g., number of qubits
         lineLen = len(line_strings[0])
-        assert(nLines == self.number_of_lines)  # this is assumed...
+        assert(nLines == self.num_lines)  # this is assumed...
         assert(all([len(linestr) == lineLen for linestr in line_strings]))  # assume all lines have same length
 
         iSegment = iStart = iEnd = 0
@@ -3074,7 +3074,7 @@ class Circuit(object):
         None
         """
         raise NotImplementedError("TODO: need to upgrade this method")
-        n = self.number_of_lines
+        n = self.num_lines
         d = self.num_layers
 
         f = open(filename, 'w')
@@ -3265,7 +3265,7 @@ class Circuit(object):
 
         depth = self.num_layers
 
-#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.num_lines))
         quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'

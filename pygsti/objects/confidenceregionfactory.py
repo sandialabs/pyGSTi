@@ -205,7 +205,7 @@ class ConfidenceRegionFactory(object):
             return False
 
     @property
-    def get_model(self):
+    def model(self):
         """
         Retrieve the associated model.
 
@@ -437,7 +437,7 @@ class ConfidenceRegionFactory(object):
         }
 
         #Count everything as non-gauge? TODO BETTER
-        self.nNonGaugeParams = self.get_model.num_params()
+        self.nNonGaugeParams = self.model.num_params()
         self.nGaugeParams = 0
 
     def view(self, confidence_level, region_type='normal',

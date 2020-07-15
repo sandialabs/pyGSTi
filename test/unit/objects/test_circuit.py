@@ -13,13 +13,13 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(num_lines=5)
         self.assertEqual(c.depth, 0)
         self.assertEqual(c.size, 0)
-        self.assertEqual(c.number_of_lines, 5)
+        self.assertEqual(c.num_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
         c = circuit.Circuit(layer_labels=[], num_lines=5)
         self.assertEqual(c.depth, 0)
         self.assertEqual(c.size, 0)
-        self.assertEqual(c.number_of_lines, 5)
+        self.assertEqual(c.num_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
     def test_construct_from_label(self):
@@ -31,7 +31,7 @@ class CircuitTester(BaseCase):
         # Not parallelized by default, so will be depth 2.
         self.assertEqual(c.depth, 2)
         self.assertEqual(c.size, 2)
-        self.assertEqual(c.number_of_lines, 4)
+        self.assertEqual(c.num_lines, 4)
         self.assertEqual(c.line_labels, ('Q0', 'Q1', 'Q8', 'Q12'))
 
     def test_construct_from_label_parallelized(self):
@@ -292,14 +292,14 @@ class CircuitMethodTester(BaseCase):
         c2 = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1', 'Q2', 'Q3'])
         self.c.insert_circuit(c2, 0)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines, 2)
+        self.assertEqual(self.c.num_lines, 2)
 
     def test_insert_circuit_with_qubit_subset(self):
         # Test inserting a circuit that is on *less* qubits.
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ])
         self.c.insert_circuit(c2, 1)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines, 2)
+        self.assertEqual(self.c.num_lines, 2)
 
     def test_append_circuit(self):
         # Test appending
@@ -380,10 +380,10 @@ class CircuitMethodTester(BaseCase):
         # Test deleting and inserting idling wires.
         self.c._append_idling_lines(['Q2'])
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
-        self.assertEqual(self.c.number_of_lines, 3)
+        self.assertEqual(self.c.num_lines, 3)
         self.c.delete_idling_lines()
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
-        self.assertEqual(self.c.number_of_lines, 2)
+        self.assertEqual(self.c.num_lines, 2)
 
     def test_circuit_reverse(self):
         # Test circuit reverse.

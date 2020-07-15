@@ -1060,7 +1060,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     p : dictionary of numpy arrays
         The phase vector representing the Clifford implement by the input circuit
     """
-    n = circuit.number_of_lines
+    n = circuit.num_lines
     depth = circuit.depth
 
     if pspec is not None:
