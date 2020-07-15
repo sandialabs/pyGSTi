@@ -221,6 +221,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
                 simplified[prefix + k] = comp
         return simplified
 
+    @property
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.
@@ -555,6 +556,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
                  for i, k in enumerate(self.keys())])
         return simplified
 
+    @property
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.

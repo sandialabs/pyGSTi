@@ -535,6 +535,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
 
+    @property
     def num_elements(self):
         """
         Return the number of total operation matrix and spam vector elements in this model.
@@ -549,9 +550,9 @@ class ExplicitOpModel(_mdl.OpModel):
             the number of model elements.
         """
         rhoSize = [rho.size for rho in self.preps.values()]
-        povmSize = [povm.num_elements() for povm in self.povms.values()]
+        povmSize = [povm.num_elements for povm in self.povms.values()]
         opSize = [gate.size for gate in self.operations.values()]
-        instSize = [i.num_elements() for i in self.instruments.values()]
+        instSize = [i.num_elements for i in self.instruments.values()]
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
 
     def num_nongauge_params(self):

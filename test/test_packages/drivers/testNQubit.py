@@ -231,7 +231,7 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=1,
             sparse_lindblad_basis=True, sparse_lindblad_reps=True,
             simulator="map",verbosity=1)
-        #print("nElements test = ",target_model.num_elements())
+        #print("nElements test = ",target_model.num_elements)
         #print("nParams test = ",target_model.num_params)
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
 

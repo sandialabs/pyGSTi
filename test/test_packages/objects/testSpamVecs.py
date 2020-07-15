@@ -143,7 +143,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         for i,p in enumerate([povm, tp_povm, tensor_povm]):
             print("Testing POVM of type ", type(p))
-            Nels = p.num_elements()
+            Nels = p.num_elements
             cpy = p.copy()
             s = str(p)
 

@@ -670,7 +670,7 @@ class ExplicitOpModelCalc(object):
         #  (below) is (nParams)x(nParams) as desired.
 
         #DEBUG
-        #nElements = self.num_elements()
+        #nElements = self.num_elements
         #for iRow in range(nElements):
         #    pNorm = _np.linalg.norm(dP[iRow])
         #    if pNorm < 1e-6:

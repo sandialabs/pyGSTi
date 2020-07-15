@@ -412,7 +412,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
             start = 0
             d = mdl_pre.dim
             N = gauge_group_el.num_params
-            L = mdl_pre.num_elements()
+            L = mdl_pre.num_elements
 
             #Compute "extra" (i.e. beyond the model-element) rows of jacobian
             if cptp_penalty_factor != 0: L += _cptp_penalty_size(mdl_pre)

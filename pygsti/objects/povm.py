@@ -295,6 +295,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         raise ValueError("Cannot depolarize a %s object" % self.__class__.__name__)
         #self.dirty = True
 
+    @property
     def num_elements(self):
         """
         Return the number of total spam vector elements in this povm.
