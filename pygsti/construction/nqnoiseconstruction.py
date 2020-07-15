@@ -2986,7 +2986,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     #Look for and add additional germs to amplify the *rest* of the model's parameters
     Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params  # assumes nqnoise (Implicit) model
     SPAM_nparams = sum([obj.num_params for obj in _itertools.chain(model.prep_blks['layers'].values(),
-                                                                     model.povm_blks['layers'].values())])
+                                                                   model.povm_blks['layers'].values())])
     Np_to_amplify = model.num_params - Gi_nparams - SPAM_nparams
     printer.log("Idle gate has %d (amplified) params; Spam has %d (unamplifiable) params; %d gate params left" %
                 (Gi_nparams, SPAM_nparams, Np_to_amplify))

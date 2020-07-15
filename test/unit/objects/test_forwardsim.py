@@ -23,7 +23,7 @@ class AbstractForwardSimTester(BaseCase):
         mock_model = mock.MagicMock()
         mock_model.evotype.return_value = "densitymx"
         mock_model.circuit_outcomes.return_value = ('NA',)
-        mock_model.num_params.return_value = 0
+        mock_model.num_params = 0
         self.fwdsim = ForwardSimulator(mock_model)
         self.circuit = Circuit("GxGx")
 
