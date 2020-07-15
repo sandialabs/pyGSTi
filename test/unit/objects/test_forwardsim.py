@@ -62,7 +62,7 @@ class ForwardSimBase(object):
     def setUp(self):
         self.fwdsim = self.model.sim
         self.layout = self.fwdsim.create_layout([('Gx',), ('Gx', 'Gx')])
-        self.nP = self.model.num_params()
+        self.nP = self.model.num_params
         self.nEls = self.layout.num_elements
 
     def test_bulk_fill_probs(self):

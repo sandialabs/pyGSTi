@@ -342,7 +342,7 @@ def test_MPI_fills(comm):
     #Check fill probabilities
     nEls = layout.num_elements
     nCircuits = len(gstrs)
-    nDerivCols = mdl.num_params()
+    nDerivCols = mdl.num_params
 
     #Get serial results
     vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
@@ -480,7 +480,7 @@ def test_MPI_compute_cache(comm):
     #Check fill probabilities
     nEls = layout.num_elements
     nCircuits = len(gstrs)
-    nDerivCols = mdl.num_params()
+    nDerivCols = mdl.num_params
     print("NUMS = ",nEls,nCircuits,nDerivCols)
 
     #Get serial results
@@ -523,7 +523,7 @@ def test_MPI_by_block(comm):
     #Check that "by column" matches standard "at once" methods:
     nEls = layout.num_elements
     nCircuits = len(gstrs)
-    nDerivCols = mdl.num_params()
+    nDerivCols = mdl.num_params
 
     #Get serial results
     vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
@@ -727,7 +727,7 @@ def test_MPI_mlgst_forcefn(comm):
     mdl_lgst = pygsti.run_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
     mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
-    forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
+    forcingfn_grad = np.ones((1,mdl_lgst_go.num_params), 'd')
     mdl_lsgst_chk_opts3 = pygsti.algorithms.core.run_gst_fit_simple(
         ds, mdl_lgst_go, lgstStrings, optimizer=None,
         objective_function_builder=pygsti.objects.PoissonPicDeltaLogLFunction.builder(

@@ -42,7 +42,7 @@ class ModelConstructionTester(BaseCase):
                                         ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertEqual(set(model.operations.keys()), set(['Gi', 'Gx', 'Gy']))
         self.assertAlmostEqual(sum(model.probabilities(('Gx', 'Gi', 'Gy')).values()), 1.0)
-        self.assertEqual(model.num_params(), 60)
+        self.assertEqual(model.num_params, 60)
 
         model2 = mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
@@ -70,7 +70,7 @@ class ModelConstructionTester(BaseCase):
         assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
         assert(set(mdl.operation_blks['layers'].keys()) == set(
             [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0)]))
-        self.assertEqual(mdl.num_params(), 0)
+        self.assertEqual(mdl.num_params, 0)
 
         addlErr = pygsti.obj.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
         addlErr2 = pygsti.obj.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
@@ -79,7 +79,7 @@ class ModelConstructionTester(BaseCase):
         mdl.operation_blks['gates']['Gy'].append(addlErr2)
         mdl.operation_blks['gates']['Gi'].append(addlErr)
 
-        self.assertEqual(mdl.num_params(), 24)
+        self.assertEqual(mdl.num_params, 24)
 
         self.assertEqual(mdl.operation_blks['layers'][('Gx', 0)].gpindices, slice(0, 12))
         self.assertEqual(mdl.operation_blks['layers'][('Gy', 0)].gpindices, slice(12, 24))
@@ -99,7 +99,7 @@ class ModelConstructionTester(BaseCase):
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=False, independent_gates=True)
 
-        self.assertEqual(cfmdl.num_params(), 17)
+        self.assertEqual(cfmdl.num_params, 17)
 
         # Case: ensure_composed_gates=True, independent_gates=False
         cfmdl2 = mc.create_crosstalk_free_model(
@@ -110,7 +110,7 @@ class ModelConstructionTester(BaseCase):
              'idle': 0.01, 'prep': 0.01, 'povm': 0.01
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
-        self.assertEqual(cfmdl2.num_params(), 11)
+        self.assertEqual(cfmdl2.num_params, 11)
 
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
         cfmdl3 = mc.create_crosstalk_free_model(
@@ -122,7 +122,7 @@ class ModelConstructionTester(BaseCase):
              'idle': 0.01, 'prep': 0.01, 'povm': 0.01
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
-        self.assertEqual(cfmdl3.num_params(), 12)
+        self.assertEqual(cfmdl3.num_params, 12)
 
     def test_build_crosstalk_free_model_with_nonstd_gate_unitary_factory(self):
         nQubits = 2

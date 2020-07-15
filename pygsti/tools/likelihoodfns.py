@@ -764,9 +764,9 @@ def two_delta_logl(model, dataset, circuits=None,
         if hasattr(model, 'num_nongauge_params'):
             mdl_dof = model.num_nongauge_params()
         else:
-            mdl_dof = model.num_params()
+            mdl_dof = model.num_params
     elif dof_calc_method == "all":
-        mdl_dof = model.num_params()
+        mdl_dof = model.num_params
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuits is not None:
@@ -876,7 +876,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     two_dlogl_percircuit = 2 * obj.percircuit()
 
     if dof_calc_method is None: return two_dlogl_percircuit
-    elif dof_calc_method == "all": mdl_dof = model.num_params()
+    elif dof_calc_method == "all": mdl_dof = model.num_params
     elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
@@ -1088,7 +1088,7 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
 
 
 #def dlogl_analytic(model, dataset):
-#    nP = model.num_params()
+#    nP = model.num_params
 #    result = _np.zeros([1,nP])
 #    dPmx = dpr_plus(model, [circuit for circuit in dataset])
 #
@@ -1109,13 +1109,13 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
 #    return numerical_deriv(logl, model, dataset, 1)
 #
 #def logl_hessian_finite_diff(model, dataset):
-#    return numerical_deriv(dlogl_finite_diff, model, dataset, model.num_params())
+#    return numerical_deriv(dlogl_finite_diff, model, dataset, model.num_params)
 #
 #def logl_hessian_at_ml(model, circuits, nSamples):
 #    return nSamples * logl_hessian_at_ML_per_sample(model, circuits)
 #
 #def logl_hessian_at_ML_per_sample(model, circuits):
-#    nP = model.num_params()
+#    nP = model.num_params
 #    result = _np.zeros([nP,nP])
 #
 #    dPmx = dpr_plus(model, circuits)
@@ -1134,7 +1134,7 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
 #
 #def dpr_plus(model, circuits):
 #    DELTA = 1e-7
-#    nP = model.num_params()
+#    nP = model.num_params
 #    n_circuits = len(circuits)
 #    result = _np.zeros([nP,n_circuits])
 #
@@ -1164,7 +1164,7 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
 #
 #def numerical_deriv(fnToDifferentiate, model, dataset, resultLen):
 #    DELTA = 1e-6
-#    nP = model.num_params()
+#    nP = model.num_params
 #    result = _np.zeros([resultLen,nP])
 #
 #    fMid = fnToDifferentiate(model, dataset)

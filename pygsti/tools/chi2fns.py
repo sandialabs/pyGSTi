@@ -193,7 +193,7 @@ def chi2_jacobian(model, dataset, circuits=None,
     Returns
     -------
     numpy array
-        The gradient vector of length `model.num_params()`, the number of model parameters.
+        The gradient vector of length `model.num_params`, the number of model parameters.
     """
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
@@ -250,7 +250,7 @@ def chi2_hessian(model, dataset, circuits=None,
     -------
     numpy array
         The Hessian matrix of shape (nModelParams, nModelParams), where
-        nModelParams = `model.num_params()`.
+        nModelParams = `model.num_params`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
@@ -313,7 +313,7 @@ def chi2_approximate_hessian(model, dataset, circuits=None,
     -------
     numpy array
         The Hessian matrix of shape (nModelParams, nModelParams), where
-        nModelParams = `model.num_params()`.
+        nModelParams = `model.num_params`.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},

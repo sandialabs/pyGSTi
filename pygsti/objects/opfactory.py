@@ -243,7 +243,7 @@ class OpFactory(_gm.ModelMember):
 
     def __str__(self):
         s = "%s object with dimension %d and %d params" % (
-            self.__class__.__name__, self.dim, self.num_params())
+            self.__class__.__name__, self.dim, self.num_params)
         return s
 
     #Note: to_vector, from_vector, and num_params are inherited from
@@ -372,6 +372,7 @@ class EmbeddedOpFactory(OpFactory):
         """
         return [self.embedded_factory]
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this OpFactory.
@@ -381,7 +382,7 @@ class EmbeddedOpFactory(OpFactory):
         int
             the number of independent parameters.
         """
-        return self.embedded_factory.num_params()
+        return self.embedded_factory.num_params
 
     def to_vector(self):
         """
@@ -557,6 +558,7 @@ class EmbeddingOpFactory(OpFactory):
         """
         return [self.embedded_factory_or_op]
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this OpFactory.
@@ -566,7 +568,7 @@ class EmbeddingOpFactory(OpFactory):
         int
             the number of independent parameters.
         """
-        return self.embedded_factory_or_op.num_params()
+        return self.embedded_factory_or_op.num_params
 
     def to_vector(self):
         """
@@ -724,6 +726,7 @@ class ComposedOpFactory(OpFactory):
         """
         return self.factors
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this factory.
@@ -745,7 +748,7 @@ class ComposedOpFactory(OpFactory):
             The parameters as a 1D array with length num_params().
         """
         assert(self.gpindices is not None), "Must set a ComposedOpFactory's .gpindices before calling to_vector"
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for gate in self.factors:
             factor_local_inds = _gm._decompose_gpindices(
                 self.gpindices, gate.gpindices)

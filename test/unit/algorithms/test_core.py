@@ -395,7 +395,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
 
     # XXX if this function needs explicit coverage, it should be public!
     def test_do_mlgst_base_forcefn_grad(self):
-        forcefn_grad = np.ones((1, self.mdl_clgst.num_params()), 'd')
+        forcefn_grad = np.ones((1, self.mdl_clgst.num_params), 'd')
         obj_builder = PoissonPicDeltaLogLFunction.builder(
             name='logl',
             description="2*DeltaLogL",

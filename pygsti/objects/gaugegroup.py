@@ -42,6 +42,7 @@ class GaugeGroup(object):
         """
         self.name = name
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group..
@@ -155,6 +156,7 @@ class GaugeGroupElement(object):
         """
         pass
 
+    @property
     def num_params(self):
         """
         Return the number of parameters of this gauge group element.
@@ -265,6 +267,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.from_vector()
 
+    @property
     def num_params(self):
         """
         Return the number of parameters of this gauge group element.
@@ -275,7 +278,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         -------
         int
         """
-        return self.inverse_element.num_params()
+        return self.inverse_element.num_params
 
     def inverse(self):
         """
@@ -331,6 +334,7 @@ class OpGaugeGroup(GaugeGroup):
         self.element = elementcls
         GaugeGroup.__init__(self, name)
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
@@ -339,7 +343,7 @@ class OpGaugeGroup(GaugeGroup):
         -------
         int
         """
-        return self._operation.num_params()
+        return self._operation.num_params
 
     def compute_element(self, param_vec):
         """
@@ -467,6 +471,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         self._operation.from_vector(v)
         self._inv_matrix = None
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this element.
@@ -475,7 +480,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         -------
         int
         """
-        return self._operation.num_params()
+        return self._operation.num_params
 
 
 class FullGaugeGroup(OpGaugeGroup):
@@ -864,6 +869,7 @@ class TrivialGaugeGroup(GaugeGroup):
         self.dim = dim
         GaugeGroup.__init__(self, "Trivial")
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
@@ -987,6 +993,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """
         assert(len(v) == 0)
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this element.

@@ -9,14 +9,14 @@ class GaugeGroupBase(object):
     def test_construction(self):
         params = self.gg.initial_params
         self.assertEqual(len(params), self.n_params)
-        self.assertEqual(self.gg.num_params(), self.n_params)
+        self.assertEqual(self.gg.num_params, self.n_params)
         element = self.gg.compute_element(params)
         # XXX is this necessary?  EGN: maybe not, but it asserts correctness and should be fast
         self.assertIsInstance(element, self.element_type)
 
     def test_element_construction(self):
         el = self.gg.compute_element(self.gg.initial_params)
-        self.assertEqual(el.num_params(), self.n_params)
+        self.assertEqual(el.num_params, self.n_params)
 
     def test_element_get_transform_matrix(self):
         el = self.gg.compute_element(self.gg.initial_params)

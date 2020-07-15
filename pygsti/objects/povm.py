@@ -206,6 +206,7 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
     def __pygsti_reduce__(self):
         return self.__reduce__()
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this POVM.
@@ -392,7 +393,7 @@ class _BasePOVM(POVM):
             if dim is None: dim = effect.dim
             assert(dim == effect.dim), "All effect vectors must have the same dimension"
 
-            N = effect.num_params()
+            N = effect.num_params
             effect.set_gpindices(slice(self.Np, self.Np + N), self); self.Np += N
             copied_items.append((k, effect))
         items = copied_items
@@ -420,7 +421,7 @@ class _BasePOVM(POVM):
         Np = 0
         for k, effect in self.items():
             if k == self.complement_label: continue
-            N = effect.num_params()
+            N = effect.num_params
             pslc = slice(Np, Np + N)
             if effect.gpindices != pslc:
                 effect.set_gpindices(pslc, self)
@@ -494,6 +495,7 @@ class _BasePOVM(POVM):
             # of complement vector to the same as POVM (it uses *all* params)
         return simplified
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this POVM.
@@ -514,7 +516,7 @@ class _BasePOVM(POVM):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
             v[effect.gpindices] = effect.to_vector()
@@ -712,7 +714,7 @@ class TensorProdPOVM(POVM):
 
         off = 0; evotype = None
         for povm in self.factorPOVMs:
-            N = povm.num_params()
+            N = povm.num_params
             povm.set_gpindices(slice(off, off + N), self); off += N
 
             if evotype is None: evotype = povm._evotype
@@ -830,6 +832,7 @@ class TensorProdPOVM(POVM):
              for k in self.keys()])
         return simplified
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this POVM.
@@ -839,7 +842,7 @@ class TensorProdPOVM(POVM):
         int
             the number of independent parameters.
         """
-        return sum([povm.num_params() for povm in self.factorPOVMs])
+        return sum([povm.num_params for povm in self.factorPOVMs])
 
     def to_vector(self):
         """
@@ -850,7 +853,7 @@ class TensorProdPOVM(POVM):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for povm in self.factorPOVMs:
             v[povm.gpindices] = povm.to_vector()
         return v
@@ -1132,7 +1135,7 @@ class LindbladPOVM(POVM):
             assert(povm._evotype == evotype), \
                 ("Evolution type of `povm` (%s) must match that of "
                  "`errormap` (%s)!") % (povm._evotype, evotype)
-            assert(povm.num_params() == 0), \
+            assert(povm.num_params == 0), \
                 "Given `povm` must be static (have 0 parameters)!"
         self.base_povm = povm
 
@@ -1221,7 +1224,7 @@ class LindbladPOVM(POVM):
         if id(self) in memo: return 0
         memo.add(id(self))
 
-        assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
+        assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
         num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
         _gm.ModelMember.set_gpindices(
             self, self.error_map.gpindices, parent)
@@ -1282,7 +1285,7 @@ class LindbladPOVM(POVM):
         elif id(self) in memo: return
         memo.add(id(self))
 
-        assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
+        assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
         self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {}  # clear terms cache since param indices have changed now
         _gm.ModelMember._set_only_my_gpindices(self, gpindices, parent)
@@ -1313,6 +1316,7 @@ class LindbladPOVM(POVM):
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this POVM.
@@ -1322,8 +1326,8 @@ class LindbladPOVM(POVM):
         int
             the number of independent parameters.
         """
-        # Recall self.base_povm.num_params() == 0
-        return self.error_map.num_params()
+        # Recall self.base_povm.num_params == 0
+        return self.error_map.num_params
 
     def to_vector(self):
         """
@@ -1334,7 +1338,7 @@ class LindbladPOVM(POVM):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        # Recall self.base_povm.num_params() == 0
+        # Recall self.base_povm.num_params == 0
         return self.error_map.to_vector()
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -1361,7 +1365,7 @@ class LindbladPOVM(POVM):
         -------
         None
         """
-        # Recall self.base_povm.num_params() == 0
+        # Recall self.base_povm.num_params == 0
         self.error_map.from_vector(v, close, dirty_value)
 
     def transform_inplace(self, s):
@@ -1564,7 +1568,7 @@ class MarginalizedPOVM(POVM):
     #    if id(self) in memo: return 0
     #    memo.add(id(self))
     #
-    #    assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
+    #    assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
     #    num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
     #    _gm.ModelMember.set_gpindices(
     #        self, self.error_map.gpindices, parent)
@@ -1614,7 +1618,7 @@ class MarginalizedPOVM(POVM):
     #    elif id(self) in memo: return
     #    memo.add(id(self))
     #
-    #    assert(self.base_povm.num_params() == 0)  # so no need to do anything w/base_povm
+    #    assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
     #    self.error_map.set_gpindices(gpindices, parent, memo)
     #    self.terms = {}  # clear terms cache since param indices have changed now
     #    _gm.ModelMember._set_only_my_gpindices(self, gpindices, parent)

@@ -207,7 +207,7 @@ class ForwardSimulator(object):
 
     def dprobs(self, circuit):
         copa_layout = self.create_layout([circuit])
-        dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
+        dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout)
 
         dprobs = _ld.OutcomeLabelDict()
@@ -218,7 +218,7 @@ class ForwardSimulator(object):
 
     def hprobs(self, circuit):
         copa_layout = self.create_layout([circuit])
-        hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
+        hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(hprobs_array, copa_layout)
 
         hprobs = _ld.OutcomeLabelDict()
@@ -373,7 +373,7 @@ class ForwardSimulator(object):
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         #Note: don't use smartc for now.
-        vdp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
+        vdp = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
 
         ret = _collections.OrderedDict()
@@ -422,7 +422,7 @@ class ForwardSimulator(object):
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
         #Note: don't use smartc for now.
-        vhp = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
+        vhp = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
                               wrt_filter1, wrt_filter1)
 
@@ -544,7 +544,7 @@ o
 
         eps = 1e-7  # hardcoded?
         if param_slice is None:
-            param_slice = slice(0, self.model.num_params())
+            param_slice = slice(0, self.model.num_params)
         param_indices = _slct.to_array(param_slice)
 
         if dest_param_slice is None:
@@ -558,7 +558,7 @@ o
 
         probs2 = _np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector().copy()
-        for i in range(self.model.num_params()):
+        for i in range(self.model.num_params):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
@@ -650,8 +650,8 @@ o
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
                                 param_slice1, param_slice2, resource_alloc):
         eps = 1e-4  # hardcoded?
-        if param_slice1 is None: param_slice1 = slice(0, self.model.num_params())
-        if param_slice2 is None: param_slice2 = slice(0, self.model.num_params())
+        if param_slice1 is None: param_slice1 = slice(0, self.model.num_params)
+        if param_slice2 is None: param_slice2 = slice(0, self.model.num_params)
         param_indices1 = _slct.to_array(param_slice1)
         param_indices2 = _slct.to_array(param_slice2)
 
@@ -670,7 +670,7 @@ o
 
         dprobs2 = _np.empty((len(layout), nP2), 'd')
         orig_vec = self.model.to_vector().copy()
-        for i in range(self.model.num_params()):
+        for i in range(self.model.num_params):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps

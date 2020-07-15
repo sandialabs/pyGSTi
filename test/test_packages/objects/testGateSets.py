@@ -94,14 +94,14 @@ class TestGateSetMethods(GateSetTestCase):
         layout = self.model.sim.create_layout([gatestring0,gatestring1,gatestring2])
         mlayout = self.mgateset.sim.create_layout([gatestring0,gatestring1,gatestring2])
 
-        nElements = layout.num_elements; nParams = self.model.num_params()
+        nElements = layout.num_elements; nParams = self.model.num_params
         probs_to_fill = np.empty( nElements, 'd')
         dprobs_to_fill = np.empty( (nElements,nParams), 'd')
         hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
         self.assertNoWarnings(self.model.sim.bulk_fill_hprobs, hprobs_to_fill, layout,
                               pr_array_to_fill=probs_to_fill, deriv1_array_to_fill=dprobs_to_fill)
 
-        nP = self.model.num_params()
+        nP = self.model.num_params
 
         hcols = []
         d12cols = []
@@ -258,7 +258,7 @@ class TestGateSetMethods(GateSetTestCase):
         mdl_few = self.model.copy()
         mdl_few.set_all_parameterizations("static")
         mdl_few.preps['rho0'] = self.model.preps['rho0'].copy()
-        self.assertEqual(mdl_few.num_params(),4)
+        self.assertEqual(mdl_few.num_params,4)
 
         #mdl_big = pygsti.construction.create_explicit_model(
         #    [('Q0','Q3','Q2')],['Gi'], [ "I(Q0)"])

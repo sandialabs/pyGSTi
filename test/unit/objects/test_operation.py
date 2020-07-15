@@ -18,7 +18,7 @@ class OpBase(object):
         self.gate = self.build_gate()
 
     def test_num_params(self):
-        self.assertEqual(self.gate.num_params(), self.n_params)
+        self.assertEqual(self.gate.num_params, self.n_params)
 
     def test_copy(self):
         gate_copy = self.gate.copy()
@@ -301,7 +301,7 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
         # TODO what is actually being tested here?
         gate_full_B = op.FullDenseOp([[1, 0], [0, 1]])
 
-        numParams = gate_full_B.num_params()
+        numParams = gate_full_B.num_params
         v = gate_full_B.to_vector()
         gate_full_B.from_vector(v)
         deriv = gate_full_B.deriv_wrt_params()
@@ -352,7 +352,7 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
             op.LinearlyParamDenseOp(baseMx, np.array([1.0 + 1j, 1.0]),
                                     parameterToBaseIndicesMap, real=True)  # must be real
 
-        numParams = gate_linear_B.num_params()
+        numParams = gate_linear_B.num_params
         v = gate_linear_B.to_vector()
         gate_linear_B.from_vector(v)
         deriv = gate_linear_B.deriv_wrt_params()

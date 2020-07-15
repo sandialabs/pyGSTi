@@ -69,8 +69,8 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         )
         # TODO assert correctness
 
-        pDDD = np.zeros((len(self.germ_set), self.mdl_target_noisy.num_params(),
-                         self.mdl_target_noisy.num_params()), 'd')
+        pDDD = np.zeros((len(self.germ_set), self.mdl_target_noisy.num_params,
+                         self.mdl_target_noisy.num_params), 'd')
         score_pDDD = germsel.compute_composite_germ_set_score(
             np.sum, model=self.mdl_target_noisy, partial_germs_list=self.germ_set,
             partial_deriv_dagger_deriv=pDDD, op_penalty=1.0
@@ -122,8 +122,8 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         with self.assertRaises(ValueError):
             germsel.compute_composite_germ_set_score(np.sum)
 
-        pDDD = np.zeros((len(self.germ_set), self.mdl_target_noisy.num_params(),
-                         self.mdl_target_noisy.num_params()), 'd')
+        pDDD = np.zeros((len(self.germ_set), self.mdl_target_noisy.num_params,
+                         self.mdl_target_noisy.num_params), 'd')
         with self.assertRaises(ValueError):
             germsel.compute_composite_germ_set_score(np.sum, partial_deriv_dagger_deriv=pDDD)
         with self.assertRaises(ValueError):

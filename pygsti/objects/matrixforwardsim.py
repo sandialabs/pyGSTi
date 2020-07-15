@@ -161,7 +161,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols = self.model.num_params() if (wrt_filter is None) else len(wrt_filter)
+        num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
 
         _fas(flattened_dprod, [None, gpindices],
@@ -191,8 +191,8 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols1 = self.model.num_params() if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = self.model.num_params() if (wrt_filter2 is None) else len(wrt_filter2)
+        num_deriv_cols1 = self.model.num_params if (wrt_filter1 is None) else len(wrt_filter1)
+        num_deriv_cols2 = self.model.num_params if (wrt_filter2 is None) else len(wrt_filter2)
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
@@ -283,7 +283,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
-        num_deriv_cols = self.model.num_params() if (wrt_filter is None) else len(wrt_filter)
+        num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
 
         # For each operation label, compute the derivative of the entire circuit
@@ -421,8 +421,8 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                     gate_wrtFilters1[opLabel], gate_wrtFilters2[opLabel])
 
         # Allocate memory for the final result
-        num_deriv_cols1 = self.model.num_params() if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = self.model.num_params() if (wrt_filter2 is None) else len(wrt_filter2)
+        num_deriv_cols1 = self.model.num_params if (wrt_filter1 is None) else len(wrt_filter1)
+        num_deriv_cols2 = self.model.num_params if (wrt_filter2 is None) else len(wrt_filter2)
         flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         # For each pair of gates in the string, compute the hessian of the entire
@@ -607,8 +607,8 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #    old_err = _np.seterr(over='ignore')
     #    prod, scale = self.product(circuit, True)
     #    dprod_dOps = self.dproduct(circuit)
-    #    dpr_dOps = _np.empty((1, self.model.num_params()))
-    #    for i in range(self.model.num_params()):
+    #    dpr_dOps = _np.empty((1, self.model.num_params))
+    #    for i in range(self.model.num_params):
     #        dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
     #
     #    if return_pr:
@@ -617,11 +617,11 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #
     #    #Derivs wrt SPAM
     #    derivWrtAnyRhovec = scale * _np.dot(E, prod)
-    #    dpr_drhos = _np.zeros((1, self.model.num_params()))
+    #    dpr_drhos = _np.zeros((1, self.model.num_params))
     #    _fas(dpr_drhos, [0, self.model.prep(rholabel).gpindices],
     #         _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
     #
-    #    dpr_dEs = _np.zeros((1, self.model.num_params()))
+    #    dpr_dEs = _np.zeros((1, self.model.num_params))
     #    derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
     #    # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
     #    _fas(dpr_dEs, [0, EVec.gpindices],
@@ -689,9 +689,9 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #    d2prod_dGates = self.hproduct(circuit)
     #    assert(d2prod_dGates.shape[0] == d2prod_dGates.shape[1])
     #
-    #    d2pr_dOps2 = _np.empty((1, self.model.num_params(), self.model.num_params()))
-    #    for i in range(self.model.num_params()):
-    #        for j in range(self.model.num_params()):
+    #    d2pr_dOps2 = _np.empty((1, self.model.num_params, self.model.num_params))
+    #    for i in range(self.model.num_params):
+    #        for j in range(self.model.num_params):
     #            d2pr_dOps2[0, i, j] = float(_np.dot(E, _np.dot(d2prod_dGates[i, j], rho)))
     #
     #    old_err = _np.seterr(over='ignore')
@@ -702,36 +702,36 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #        if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
     #
     #    dprod_dOps = self.dproduct(circuit)
-    #    assert(dprod_dOps.shape[0] == self.model.num_params())
+    #    assert(dprod_dOps.shape[0] == self.model.num_params)
     #    if return_deriv:  # same as in dpr(...)
-    #        dpr_dOps = _np.empty((1, self.model.num_params()))
-    #        for i in range(self.model.num_params()):
+    #        dpr_dOps = _np.empty((1, self.model.num_params))
+    #        for i in range(self.model.num_params):
     #            dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
     #
     #    #Derivs wrt SPAM
     #    if return_deriv:  # same as in dpr(...)
-    #        dpr_drhos = _np.zeros((1, self.model.num_params()))
+    #        dpr_drhos = _np.zeros((1, self.model.num_params))
     #        derivWrtAnyRhovec = scale * _np.dot(E, prod)
     #        _fas(dpr_drhos, [0, self.model.prep(rholabel).gpindices],
     #             _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
     #
-    #        dpr_dEs = _np.zeros((1, self.model.num_params()))
+    #        dpr_dEs = _np.zeros((1, self.model.num_params))
     #        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
     #        _fas(dpr_dEs, [0, EVec.gpindices],
     #             _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
     #
     #        dpr = dpr_drhos + dpr_dEs + dpr_dOps
     #
-    #    d2pr_drhos = _np.zeros((1, self.model.num_params(), self.model.num_params()))
+    #    d2pr_drhos = _np.zeros((1, self.model.num_params, self.model.num_params))
     #    _fas(d2pr_drhos, [0, None, self.model.prep(rholabel).gpindices],
     #         _np.dot(_np.dot(E, dprod_dOps), rhoVec.deriv_wrt_params())[0])  # (= [0,:,:])
     #
-    #    d2pr_dEs = _np.zeros((1, self.model.num_params(), self.model.num_params()))
+    #    d2pr_dEs = _np.zeros((1, self.model.num_params, self.model.num_params))
     #    derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dOps, rho), axis=(2,))
     #    _fas(d2pr_dEs, [0, None, EVec.gpindices],
     #         _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
     #
-    #    d2pr_dErhos = _np.zeros((1, self.model.num_params(), self.model.num_params()))
+    #    d2pr_dErhos = _np.zeros((1, self.model.num_params, self.model.num_params))
     #    derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params())  # may generate overflow, but OK
     #    _fas(d2pr_dErhos, [0, EVec.gpindices, self.model.prep(rholabel).gpindices],
     #         _np.dot(_np.transpose(EVec.deriv_wrt_params()), derivWrtAnyEvec))
@@ -740,7 +740,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #    # a more than linear dependence on their parameters.
     #    if self.model.prep(rholabel).has_nonzero_hessian():
     #        derivWrtAnyRhovec = scale * _np.dot(E, prod)  # may overflow, but OK
-    #        d2pr_d2rhos = _np.zeros((1, self.model.num_params(), self.model.num_params()))
+    #        d2pr_d2rhos = _np.zeros((1, self.model.num_params, self.model.num_params))
     #        _fas(d2pr_d2rhos, [0, self.model.prep(rholabel).gpindices, self.model.prep(rholabel).gpindices],
     #             _np.tensordot(derivWrtAnyRhovec, self.model.prep(rholabel).hessian_wrt_params(), (1, 0)))
     #        # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.model.prep(rholabel).hessian_wrt_params())
@@ -749,7 +749,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     #
     #    if self.model.effect(elabel).has_nonzero_hessian():
     #        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
-    #        d2pr_d2Es = _np.zeros((1, self.model.num_params(), self.model.num_params()))
+    #        d2pr_d2Es = _np.zeros((1, self.model.num_params, self.model.num_params))
     #        _fas(d2pr_d2Es, [0, self.model.effect(elabel).gpindices, self.model.effect(elabel).gpindices],
     #             _np.tensordot(derivWrtAnyEvec, self.model.effect(elabel).hessian_wrt_params(), (1, 0)))
     #        # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.model.effect(elabel).hessian_wrt_params())
@@ -888,7 +888,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if profiler is None: profiler = _dummy_profiler
         dim = self.model.dim
-        nDerivCols = self.model.num_params() if (wrt_slice is None) \
+        nDerivCols = self.model.num_params if (wrt_slice is None) \
             else _slct.length(wrt_slice)
         deriv_shape = (nDerivCols, dim, dim)
         eval_tree = layout_atom_tree
@@ -1158,7 +1158,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params()
+        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -1358,7 +1358,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
         E_wrtFilter, E_gpindices = self._process_wrt_filter(
             wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
-        nDerivCols = self.model.num_params() if wrt_slice is None else _slct.length(wrt_slice)
+        nDerivCols = self.model.num_params if wrt_slice is None else _slct.length(wrt_slice)
 
         # GATE DERIVS (assume d_gs is already sized/filtered) -------------------
         assert(d_gs.shape[1] == nDerivCols), "d_gs must be pre-filtered!"
@@ -1423,8 +1423,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         E_wrtFilter2, E_gpindices2 = self._process_wrt_filter(
             wrt_slice2, self.model.circuit_layer_operator(elabel, 'povm'))
 
-        nDerivCols1 = self.model.num_params() if wrt_slice1 is None else _slct.length(wrt_slice1)
-        nDerivCols2 = self.model.num_params() if wrt_slice2 is None else _slct.length(wrt_slice2)
+        nDerivCols1 = self.model.num_params if wrt_slice1 is None else _slct.length(wrt_slice1)
+        nDerivCols2 = self.model.num_params if wrt_slice2 is None else _slct.length(wrt_slice2)
 
         #flt1 = self._get_filter_info(wrtSlices1)
         #flt2 = self._get_filter_info(wrtSlices2)
@@ -1726,7 +1726,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             the derivatives and/or products for the i-th operation sequence.
         """
         nCircuits = len(circuits)
-        nDerivCols = self.model.num_params() if (wrt_filter is None) else _slct.length(wrt_filter)
+        nDerivCols = self.model.num_params if (wrt_filter is None) else _slct.length(wrt_filter)
 
         wrtSlice = _slct.list_to_slice(wrt_filter) if (wrt_filter is not None) else None
         #TODO: just allow slices as argument: wrt_filter -> wrtSlice?

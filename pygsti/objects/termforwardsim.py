@@ -309,7 +309,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params()
+        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
 
@@ -333,7 +333,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
-        if param_slice is None: param_slice = slice(0, self.model.num_params())
+        if param_slice is None: param_slice = slice(0, self.model.num_params)
         if dest_param_slice is None: dest_param_slice = slice(0, _slct.length(param_slice))
 
         if self.mode == "direct":
@@ -349,8 +349,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
-        if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params())
-        if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.model.num_params())
+        if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params)
+        if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.model.num_params)
         if dest_param_slice1 is None: dest_param_slice1 = slice(0, _slct.length(param_slice1))
         if dest_param_slice2 is None: dest_param_slice2 = slice(0, _slct.length(param_slice2))
 
@@ -576,7 +576,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         thresholds = {}
         num_failed = 0  # number of circuits which fail to achieve the target sopm
         failed_circuits = []
-        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params)
 
         for sep_povm_circuit in layout_atom.expanded_circuits:
             rholabel = sep_povm_circuit.circuit_without_povm[0]
@@ -971,7 +971,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             of the sum-of-path-magnitude gaps.
         """
         assert(self.mode == "pruned")
-        termgap_penalty_jac = _np.empty((layout.num_elements, self.model.num_params()), 'd')
+        termgap_penalty_jac = _np.empty((layout.num_elements, self.model.num_params), 'd')
 
         def compute_gap_jac(layout_atom, sub_resource_alloc):
             elInds = layout_atom.element_slice
@@ -1121,7 +1121,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         repcache = layout_atom.pathset.highmag_termrep_cache
         circuitsetup_cache = layout_atom.pathset.circuitsetup_cache
         thresholds = layout_atom.pathset.thresholds
-        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params)
 
         all_compact_polys = []  # holds one compact polynomial per final *element*
 
@@ -1302,7 +1302,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         None
         """
         local_path_sets = list(path_set.local_atom_pathsets) if self.mode == "pruned" else None
-        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params())
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params)
 
         def set_pathset_for_atom(layout_atom, sub_resource_alloc):
             if self.mode == "pruned":

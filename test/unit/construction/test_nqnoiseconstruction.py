@@ -75,7 +75,7 @@ class NQNoiseConstructionTester(BaseCase):
              'prep': {('S', 'XX:qb0,qb1'): 0.01},
              'povm': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
-        self.assertEqual(ccmdl1.num_params(), 7)
+        self.assertEqual(ccmdl1.num_params, 7)
 
         #Using sparse=True and a map-based simulator
         ccmdl1 = nc.create_cloud_crosstalk_model(
@@ -87,7 +87,7 @@ class NQNoiseConstructionTester(BaseCase):
              'povm': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             simulator="map", sparse_lindblad_basis=True, sparse_lindblad_reps=True)
-        self.assertEqual(ccmdl1.num_params(), 7)
+        self.assertEqual(ccmdl1.num_params, 7)
 
 
         #Using compact notation:
@@ -99,7 +99,7 @@ class NQNoiseConstructionTester(BaseCase):
              'prep': {'SXX:0,1': 0.01},
              'povm': {'SXX:0,1': 0.01}
              })
-        self.assertEqual(ccmdl2.num_params(), 7)
+        self.assertEqual(ccmdl2.num_params, 7)
 
         #also using qubit_labels
         ccmdl3 = nc.create_cloud_crosstalk_model(
@@ -110,7 +110,7 @@ class NQNoiseConstructionTester(BaseCase):
              'prep': {'SXX:qb0,qb1': 0.01},
              'povm': {'SXX:qb0,qb1': 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
-        self.assertEqual(ccmdl3.num_params(), 7)
+        self.assertEqual(ccmdl3.num_params, 7)
 
     def test_build_cloud_crosstalk_model_stencils(self):
         nQubits = 2
@@ -120,7 +120,7 @@ class NQNoiseConstructionTester(BaseCase):
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
-        self.assertEqual(ccmdl1.num_params(), 5)
+        self.assertEqual(ccmdl1.num_params, 5)
 
         #Using compact notation:
         ccmdl2 = nc.create_cloud_crosstalk_model(
@@ -129,7 +129,7 @@ class NQNoiseConstructionTester(BaseCase):
              'Gcnot': {'HZZ': 0.02, 'SXX:@1+right,@0+left': 0.02},
              'idle': {'SXX:qb0,qb1': 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
-        self.assertEqual(ccmdl2.num_params(), 5)
+        self.assertEqual(ccmdl2.num_params, 5)
 
     def test_build_cloud_crosstalk_model_indepgates(self):
         #Same as test_cloud_crosstalk_stencils case but set independent_gates=True
@@ -140,7 +140,7 @@ class NQNoiseConstructionTester(BaseCase):
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)], independent_gates=True)
-        self.assertEqual(ccmdl1.num_params(), 8)
+        self.assertEqual(ccmdl1.num_params, 8)
 
     def test_build_cloud_crosstalk_model_with_nonstd_gate_unitary_factory(self):
         nQubits = 2

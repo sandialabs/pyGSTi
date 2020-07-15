@@ -678,7 +678,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #REMOVE self.gatedict = _collections.OrderedDict()  # static *target* ops (unused) as numpy arrays
         for gn, gate in gatedict.items():
             if isinstance(gate, _op.LinearOperator):
-                assert(gate.num_params() == 0), "Only *static* ideal operators are allowed in `gatedict`!"
+                assert(gate.num_params == 0), "Only *static* ideal operators are allowed in `gatedict`!"
                 #REMOVE self.gatedict[gn] = gate.to_dense()
                 if gate._evotype != evotype and isinstance(gate, _op.StaticDenseOp):
                     # special case: we'll convert static ops to the right evotype (convenient)
@@ -686,7 +686,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 else:
                     mm_gatedict[gn] = gate
             elif isinstance(gate, _opfactory.OpFactory):
-                assert(gate.num_params() == 0), "Only *static* ideal factories are allowed in `gatedict`!"
+                assert(gate.num_params == 0), "Only *static* ideal factories are allowed in `gatedict`!"
                 # don't store factories in self.gatedict for now (no good dense representation)
                 mm_gatedict[gn] = gate
             else:  # presumably a numpy array or something like it:
@@ -1071,9 +1071,9 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
 
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
-            assert(fullTermErr.num_params() == termErr.num_params())
+            assert(fullTermErr.num_params == termErr.num_params)
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
-                        (termErr.dim, termErr.num_params(), fullTermErr.dim))
+                        (termErr.dim, termErr.num_params, fullTermErr.dim))
 
             termops.append(fullTermErr)
 
@@ -1216,9 +1216,9 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mx_basis=wtBasis, relative=True)
 
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
-            assert(fullTermErr.num_params() == termErr.num_params())
+            assert(fullTermErr.num_params == termErr.num_params)
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
-                        (termErr.dim, termErr.num_params(), fullTermErr.dim))
+                        (termErr.dim, termErr.num_params, fullTermErr.dim))
 
             loc_noise_termops.append(fullTermErr)
 

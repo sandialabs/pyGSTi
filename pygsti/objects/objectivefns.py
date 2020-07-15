@@ -812,7 +812,7 @@ class ModelDatasetCircuitsStore(object):
                  precomp_layout=None, verbosity=0):
         self.dataset = dataset
         self.model = model
-        #self.nparams = mdl.num_params()
+        #self.nparams = mdl.num_params
         #self.opBasis = mdl.basis
         self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
         # expand = ??? get from model based on fwdsim type?
@@ -861,7 +861,7 @@ class ModelDatasetCircuitsStore(object):
         #self.wrt_block_size2 = self.cache.wrt_block_size2
 
         #convenience attributes (could make properties?)
-        self.nparams = self.model.num_params()
+        self.nparams = self.model.num_params
         self.nelements = len(self.layout)
 
     @property
@@ -983,7 +983,7 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
     #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
     #    else:
     #        ne = num_elements
-    #    np = self.mdl.num_params()
+    #    np = self.mdl.num_params
     #
     #    # "persistent" memory is that used to store the final results.
     #    obj_fn_mem = FLOATSIZE * ne
@@ -1077,7 +1077,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         #self.dataset = dataset
         #self.mdl = mdl
-        #self.nparams = mdl.num_params()
+        #self.nparams = mdl.num_params
         #self.opBasis = mdl.basis
         #self.enable_hessian = enable_hessian
         #self.gthrMem = None  # set below
@@ -1421,7 +1421,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
     #    else:
     #        ne = num_elements
-    #    np = self.mdl.num_params()
+    #    np = self.mdl.num_params
     #
     #    # "persistent" memory is that used to store the final results.
     #    obj_fn_mem = FLOATSIZE * ne
@@ -1503,7 +1503,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #get distribution across subtrees (groups if needed) -- assumes a DistributableCOPALayout
         my_atom_indices, atom_owners, my_subcomm = self.layout.distribute(self.resource_alloc.comm)
 
-        nparams = self.model.num_params()
+        nparams = self.model.num_params
         blk_size1, blk_size2 = self.layout.additional_dimension_blk_sizes
         row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
         col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
@@ -1538,7 +1538,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             if prob_clip_interval is not None:
                 _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
 
-            num_cols = self.model.num_params()
+            num_cols = self.model.num_params
             blocks1 = _mpit.slice_up_range(num_cols, row_parts)
             blocks2 = _mpit.slice_up_range(num_cols, col_parts)
             slicetup_list_all = list(_itertools.product(blocks1, blocks2))
@@ -5714,7 +5714,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
 
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     for i, gate in enumerate(mdl.operations.values()):
-        nparams = gate.num_params()
+        nparams = gate.num_params
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
@@ -5787,7 +5787,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
     for i, prepvec in enumerate(mdl.preps.values()):
-        nparams = prepvec.num_params()
+        nparams = prepvec.num_params
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
@@ -5822,7 +5822,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
         #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
         for _, effectvec in povm.simplify_effects(povmlbl).items():
-            nparams = effectvec.num_params()
+            nparams = effectvec.num_params
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
             emx = _tools.vec_to_stdmx(effectvec, op_basis)

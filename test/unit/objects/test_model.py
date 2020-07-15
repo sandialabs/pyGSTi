@@ -86,7 +86,7 @@ class StaticModelBase(ModelBase):
 class GeneralMethodBase(object):
     def _assert_model_params(self, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
-        self.assertEqual(self.model.num_params(), nParams)
+        self.assertEqual(self.model.num_params, nParams)
         # TODO does this actually assert correctness?
 
     def test_set_all_parameterizations_full(self):
@@ -411,7 +411,7 @@ class SimMethodBase(object):
     def test_bulk_fill_dprobs(self):
         layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
         nElements = layout.num_elements
-        nParams = self.model.num_params()
+        nParams = self.model.num_params
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
         with self.assertNoWarns():
@@ -429,7 +429,7 @@ class SimMethodBase(object):
         with smallness_threshold(10):
             layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
             nElements = layout.num_elements
-            nParams = self.model.num_params()
+            nParams = self.model.num_params
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
 
             self.model.sim.bulk_fill_dprobs(dprobs_to_fill, layout)
@@ -439,7 +439,7 @@ class SimMethodBase(object):
         self.skipTest("Need a way to manually create 'split' layouts")
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
-        nParams = self.model.num_params()
+        nParams = self.model.num_params
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
@@ -466,7 +466,7 @@ class SimMethodBase(object):
     def test_bulk_fill_hprobs(self):
         layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
         nElements = layout.num_elements
-        nParams = self.model.num_params()
+        nParams = self.model.num_params
 
         # call normally
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
@@ -492,7 +492,7 @@ class SimMethodBase(object):
         with smallness_threshold(10):
             layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
             nElements = layout.num_elements
-            nParams = self.model.num_params()
+            nParams = self.model.num_params
             hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
 
             self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
@@ -502,7 +502,7 @@ class SimMethodBase(object):
         self.skipTest("Need a way to manually create 'split' layouts")
         evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
         nElements = evt.num_final_elements()
-        nParams = self.model.num_params()
+        nParams = self.model.num_params
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         lookup_split = evt.split(lookup, num_sub_trees=2)
         with self.assertNoWarns():
@@ -511,7 +511,7 @@ class SimMethodBase(object):
 
     def test_bulk_hprobs_by_block(self):
         layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
-        nP = self.model.num_params()
+        nP = self.model.num_params
 
         hcols = []
         d12cols = []
@@ -587,7 +587,7 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         del mdl.operations['Gnew1']
 
         v = mdl.to_vector()
-        Np = mdl.num_params()
+        Np = mdl.num_params
         gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
         gate_with_gpindices[0, :] = v[0:4]
         gate_with_gpindices.set_gpindices(np.concatenate(

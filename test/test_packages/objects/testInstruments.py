@@ -34,7 +34,7 @@ class InstrumentTestCase(BaseTestCase):
         E = self.target_model.povms['Mdefault']['0']
         InstEl = pygsti.obj.FullDenseOp( np.dot(E,E.T) )
         InstEl2 = InstEl.copy()
-        nParams = InstEl.num_params() # should be 16
+        nParams = InstEl.num_params # should be 16
 
         I = pygsti.obj.Instrument({})
         InstEl.set_gpindices(slice(0,16), I)
@@ -86,7 +86,7 @@ class InstrumentTestCase(BaseTestCase):
 
     def testIntermediateMeas(self):
         # Mess with the target model to add some error to the povm and instrument
-        self.assertEqual(self.target_model.num_params(),92) # 4*3 + 16*5 = 92
+        self.assertEqual(self.target_model.num_params,92) # 4*3 + 16*5 = 92
         mdl = self.target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         gs2 = self.target_model.depolarize(max_op_noise=0.01, max_spam_noise=0.01, seed=1234) #another way to depolarize
         mdl.povms['Mdefault'].depolarize(0.01)
@@ -101,7 +101,7 @@ class InstrumentTestCase(BaseTestCase):
         Gmz_plus = np.dot(E,E.T) #since E0 is stored internally as column spamvec
         Gmz_minus = np.dot(Erem,Erem.T)
         mdl.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        self.assertEqual(mdl.num_params(),92) # 4*3 + 16*5 = 92
+        self.assertEqual(mdl.num_params,92) # 4*3 + 16*5 = 92
         #print(mdl)
 
         germs = std.germs
@@ -154,7 +154,7 @@ class InstrumentTestCase(BaseTestCase):
         #LGST w/TP gates
         mdl_targetTP = self.target_model.copy()
         mdl_targetTP.set_all_parameterizations("TP")
-        self.assertEqual(mdl_targetTP.num_params(),71) # 3 + 4*2 + 12*5 = 71
+        self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
         resultsTP = pygsti.run_long_sequence_gst(ds,mdl_targetTP,fiducials,fiducials,germs,max_lengths)
         mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
@@ -200,7 +200,7 @@ class InstrumentTestCase(BaseTestCase):
                     print("  > ",sublbl,':',subobj.gpindices, pygsti.tools.length(subobj.gpindices))
 
 
-            print("NPARAMS = ",model.num_params())
+            print("NPARAMS = ",model.num_params)
             print("")
 
 

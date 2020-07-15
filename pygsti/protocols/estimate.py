@@ -428,7 +428,7 @@ class Estimate(object):
         assert(crf.has_hessian), "Initial factory must contain a computed Hessian!"
 
         #Update hessian by TMx = d(diffs in current go'd model)/d(diffs in ref model)
-        tmx = _np.empty((final_model.num_params(), ref_model.num_params()), 'd')
+        tmx = _np.empty((final_model.num_params, ref_model.num_params), 'd')
         v0, w0 = ref_model.to_vector(), final_model.to_vector()
         mdl = ref_model.copy()
 
@@ -436,7 +436,7 @@ class Estimate(object):
                     (from_model_label, to_model_label))
 
         with printer.progress_logging(1):
-            for icol in range(ref_model.num_params()):
+            for icol in range(ref_model.num_params):
                 v = v0.copy(); v[icol] += eps  # dv is along iCol-th direction
                 mdl.from_vector(v)
                 for gauge_group_el in gauge_group_els:
@@ -444,7 +444,7 @@ class Estimate(object):
                 w = mdl.to_vector()
                 dw = (w - w0) / eps
                 tmx[:, icol] = dw
-                printer.show_progress(icol, ref_model.num_params(), prefix='Column: ')
+                printer.show_progress(icol, ref_model.num_params, prefix='Column: ')
                 #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
 
         #rank = _np.linalg.matrix_rank(TMx)
@@ -569,9 +569,9 @@ class Estimate(object):
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
         ds_dof = ds.degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
         if hasattr(mdl, 'num_nongauge_params'):
-            mdl_dof = mdl.num_nongauge_params() if use_accurate_np else mdl.num_params()
+            mdl_dof = mdl.num_nongauge_params() if use_accurate_np else mdl.num_params
         else:
-            mdl_dof = mdl.num_params()
+            mdl_dof = mdl.num_params
         k = max(ds_dof - mdl_dof, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
         if ds_dof <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1."
                                              % (ds_dof, mdl_dof))

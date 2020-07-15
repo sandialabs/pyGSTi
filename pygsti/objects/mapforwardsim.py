@@ -92,7 +92,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params()
+        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -240,9 +240,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         eps = 1e-4  # hardcoded?
 
         if param_indices1 is None:
-            param_indices1 = list(range(self.model.num_params()))
+            param_indices1 = list(range(self.model.num_params))
         if param_indices2 is None:
-            param_indices2 = list(range(self.model.num_params()))
+            param_indices2 = list(range(self.model.num_params))
         if dest_param_indices1 is None:
             dest_param_indices1 = list(range(_slct.length(param_indices1)))
         if dest_param_indices2 is None:
@@ -269,7 +269,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, comm)
 
         orig_vec = self.model.to_vector().copy()
-        for i in range(self.model.num_params()):
+        for i in range(self.model.num_params):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps

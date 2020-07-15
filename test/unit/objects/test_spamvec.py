@@ -44,7 +44,7 @@ class SpamvecBase(object):
         ExplicitOpModel._strict = False
 
     def test_num_params(self):
-        self.assertEqual(self.vec.num_params(), self.n_params)
+        self.assertEqual(self.vec.num_params, self.n_params)
 
     def test_copy(self):
         vec_copy = self.vec.copy()

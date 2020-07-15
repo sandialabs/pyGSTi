@@ -830,7 +830,7 @@ def _do_runopt(objective, optimizer, printer):
     if printer.verbosity > 0:
         #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
         if hasattr(mdl, 'num_elements'):
-            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params() + mdl.dim**2) \
+            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params + mdl.dim**2) \
                 * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
 
             if resource_alloc.mem_limit is None or 0.1 * resource_alloc.mem_limit < memForNumGaugeParams:
@@ -838,12 +838,12 @@ def _do_runopt(objective, optimizer, printer):
                     nModelParams = mdl.num_nongauge_params()  # len(x0)
                 except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
                     printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
-                    nModelParams = mdl.num_params()
+                    nModelParams = mdl.num_params
             else:
                 printer.log("Finding num_nongauge_params is too expensive: using total params.")
-                nModelParams = mdl.num_params()  # just use total number of params
+                nModelParams = mdl.num_params  # just use total number of params
         else:
-            nModelParams = mdl.num_params()  # just use total number of params
+            nModelParams = mdl.num_params  # just use total number of params
 
         #Get number of maximal-model parameter ("dataset params") if needed for print messages
         # -> number of independent parameters in dataset (max. model # of params)

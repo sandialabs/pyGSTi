@@ -220,7 +220,7 @@ class ExplicitOpModel(_mdl.OpModel):
         simplified_preps = self.preps
 
         return _explicitcalc.ExplicitOpModelCalc(self.dim, simplified_preps, simplified_ops,
-                                                 simplified_effects, self.num_params())
+                                                 simplified_effects, self.num_params)
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
     #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
@@ -563,7 +563,7 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of non-gauge model parameters.
         """
-        return self.num_params() - self.num_gauge_params()
+        return self.num_params - self.num_gauge_params()
 
     def num_gauge_params(self):
         """
@@ -580,7 +580,7 @@ class ExplicitOpModel(_mdl.OpModel):
         gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
         if gaugeDirs.size == 0:  # if there are *no* gauge directions
             return 0  # calling matrix_rank on a length-0 array => error
-        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(), :])
+        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params, :])
 
     def deriv_wrt_params(self):
         """

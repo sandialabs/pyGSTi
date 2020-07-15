@@ -1056,7 +1056,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
         '`model` must use a 1-st order Term-type forward simulator!'
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
     resource_alloc = _ResourceAllocation()  # don't use comm here, since it's not used for prs_as_polynomials
 
     if prep_lbl is None:
@@ -1069,10 +1069,10 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
 
-    #dummy = 0.05*_np.ones(model.num_params(),'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params()+1) # for evaluating derivs...
-    #dummy = 0.05*_np.random.random(model.num_params())
-    dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
+    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
+    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
+    #dummy = 0.05*_np.random.random(model.num_params)
+    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
 
     print("DB gpindices = ")
@@ -1080,7 +1080,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
     #amped_polys = []
     selected_gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params())
+    if wrt_params is None: wrt_params = slice(0, model.num_params)
     Np = _slct.length(wrt_params)
     if init_j is None:
         J = _np.empty((0, Np), 'complex'); Jrank = 0
@@ -1269,7 +1269,7 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
         '`model` must use a 1-st order Term-type forward simulator!'
 
     # printer = _VerbosityPrinter.create_printer(verbosity)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
     resource_alloc = _ResourceAllocation()
 
     if prep_lbl is None:
@@ -1277,9 +1277,9 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     if effect_lbls is None:
         povmLbl = model._default_primitive_povm_layer_lbl()
         effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
-    dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
+    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
 
-    if wrt_params is None: wrt_params = slice(0, model.num_params())
+    if wrt_params is None: wrt_params = slice(0, model.num_params)
     Np = _slct.length(wrt_params)
     nEffectLbls = len(effect_lbls)
     nRows = len(fidpairs) * nEffectLbls  # number of jacobian rows
@@ -1428,7 +1428,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     # relies on only expanding to *first* order.
     assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
     resource_alloc = _ResourceAllocation()
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1442,15 +1442,15 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
 
-    #dummy = 0.05*_np.ones(model.num_params(),'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params()+1) # for evaluating derivs...
-    #dummy = 0.05*_np.random.random(model.num_params())
-    dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
+    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
+    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
+    #dummy = 0.05*_np.random.random(model.num_params)
+    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
 
     #amped_polys = []
     selected_gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params())
+    if wrt_params is None: wrt_params = slice(0, model.num_params)
     Np = _slct.length(wrt_params)
     if init_j is None:
         J = _np.empty((0, Np), 'complex'); Jrank = 0
@@ -1666,7 +1666,7 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         See :function:`_find_amped_polynomials_for_syntheticidle` for details.
     """
     printer = _VerbosityPrinter.create_printer(verbosity)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params())
+    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
     resource_alloc = _ResourceAllocation()
 
     if prep_lbl is None:
@@ -1678,14 +1678,14 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         # TODO: assert model has Gx and Gy gates?
         single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
 
-    #dummy = 0.05*_np.ones(model.num_params(),'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params()+1) # for evaluating derivs...
-    dummy = 5.0 * _np.random.random(model.num_params()) + 0.5 * _np.ones(model.num_params(), 'd')
+    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
+    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
+    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
 
     #OLD: selected_fidpairs = []
     gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params())
+    if wrt_params is None: wrt_params = slice(0, model.num_params)
     Np = _slct.length(wrt_params)
     Namped = amped_poly_j.shape[0]; assert(amped_poly_j.shape[1] == Np)
     J = _np.empty((0, Namped), 'complex'); Jrank = 0
@@ -2871,7 +2871,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         errcomp_type="gates")
     # for testing for synthetic idles - so no " terms"
 
-    Np = model.num_params()
+    Np = model.num_params
     idle_op_str = _objs.Circuit(idle_op_str, num_lines=n_qubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
@@ -2984,10 +2984,10 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
                 cache['Idle gatename fidpair lists'][syntheticIdleWt] = idle_gatename_fidpair_lists
 
     #Look for and add additional germs to amplify the *rest* of the model's parameters
-    Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params()  # assumes nqnoise (Implicit) model
-    SPAM_nparams = sum([obj.num_params() for obj in _itertools.chain(model.prep_blks['layers'].values(),
+    Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params  # assumes nqnoise (Implicit) model
+    SPAM_nparams = sum([obj.num_params for obj in _itertools.chain(model.prep_blks['layers'].values(),
                                                                      model.povm_blks['layers'].values())])
-    Np_to_amplify = model.num_params() - Gi_nparams - SPAM_nparams
+    Np_to_amplify = model.num_params - Gi_nparams - SPAM_nparams
     printer.log("Idle gate has %d (amplified) params; Spam has %d (unamplifiable) params; %d gate params left" %
                 (Gi_nparams, SPAM_nparams, Np_to_amplify))
 
@@ -3013,7 +3013,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
         # This is fine, but we don't demand that such params be amplified, since they *must* be
         # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
-        # OK b/c model.num_params() called above
+        # OK b/c model.num_params called above
         Gi_params = set(_slct.to_array(model.operation_blks['layers']['globalIdle'].gpindices))
         pure_op_labels = []
         for gl in model.primitive_op_labels:  # take this as the set of "base"/"serial" operations

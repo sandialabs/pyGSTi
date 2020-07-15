@@ -552,7 +552,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     Returns
     -------
     twirledDerivDaggerDeriv : numpy.ndarray
-        A complex array of shape `(len(germs), model.num_params(), model.num_params())`.
+        A complex array of shape `(len(germs), model.num_params, model.num_params)`.
     """
     if germ_lengths is None:
         germ_lengths = _np.array([len(germ) for germ in germs_list])
@@ -1405,12 +1405,12 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                                    randomization_strength, num_copies, seed)
 
     dim = model_list[0].dim
-    #Np = model_list[0].num_params() #wrong:? includes spam...
-    Np = model_list[0].num_params()
+    #Np = model_list[0].num_params #wrong:? includes spam...
+    Np = model_list[0].num_params
     #print("DB Np = %d, Ng = %d" % (Np,Ng))
     assert(all([(mdl.dim == dim) for mdl in model_list])), \
         "All models must have the same dimension!"
-    #assert(all([(mdl.num_params() == Np) for mdl in model_list])), \
+    #assert(all([(mdl.num_params == Np) for mdl in model_list])), \
     #    "All models must have the same number of parameters!"
 
     (_, numGaugeParams,
