@@ -152,12 +152,6 @@ class MatrixForwardSimTester(ForwardSimBase, BaseCase):
     #    self.fwdsim._hpr(Ls('rho0', 'Mdefault_0'), Ls('Gx', 'Gx'), False, False, clip_to=(-1, 1))
     #    # TODO assert correctness
 
-    def test_rhoE_from_spamTuple(self):
-        # XXX does this need to be tested?  EGN: No
-        custom_spamTuple = (np.zeros((4, 1), 'd'), np.zeros((4, 1), 'd'))
-        self.fwdsim._rho_e_from_spam_tuple(custom_spamTuple)
-        # TODO assert correctness
-
 
 class CPTPMatrixForwardSimTester(MatrixForwardSimTester):
     @classmethod
