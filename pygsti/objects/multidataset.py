@@ -314,6 +314,7 @@ class MultiDataSet(object):
         self.repType = _np.float32
         # thought: _np.uint16 but doesn't play well with rescaling
 
+    @property
     def outcome_labels(self):
         """
         Get a list of *all* the outcome labels contained in this MultiDataSet.

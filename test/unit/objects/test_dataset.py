@@ -144,7 +144,7 @@ class DataSetMethodBase(object):
         # TODO assert correctness
 
     def test_get_outcome_labels(self):
-        outcomes = self.ds.outcome_labels()
+        outcomes = self.ds.outcome_labels
         self.assertEqual(outcomes, [('0',), ('1',)])
 
     def test_get_gate_labels(self):
@@ -213,15 +213,15 @@ class DataSetMethodBase(object):
 
     # Row instance tests
     def test_row_get_expanded_ol(self):
-        self.dsRow.expanded_ol()
+        self.dsRow.expanded_ol
         # TODO assert correctness
 
     def test_row_get_expanded_oli(self):
-        self.dsRow.expanded_oli()
+        self.dsRow.expanded_oli
         # TODO assert correctness
 
     def test_row_get_expanded_times(self):
-        self.dsRow.expanded_times()
+        self.dsRow.expanded_times
         # TODO assert correctness
 
     def test_row_fraction(self):
@@ -276,11 +276,11 @@ class DataSetNonstaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, 
     def test_warn_on_nonintegral_scaled_row_access(self):
         self.dsRow.scale_inplace(3.141592)
         with self.assertWarns(Warning):
-            self.dsRow.expanded_ol()
+            self.dsRow.expanded_ol
         with self.assertWarns(Warning):
-            self.dsRow.expanded_oli()
+            self.dsRow.expanded_oli
         with self.assertWarns(Warning):
-            self.dsRow.expanded_times()
+            self.dsRow.expanded_times
 
 
 class DataSetStaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):

@@ -1708,7 +1708,7 @@ class ColorBoxPlot(WorkspacePlot):
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = dscomparator.llr_pseudothreshold()
+                linlog_trans = dscomparator.llr_pseudothreshold
                 ytitle = "2 log(L ratio)"
                 mx_fn = _mx_fn_dscmp  # use a *global* function so cache can tell it's the same
                 extra_arg = dscomparator
@@ -1818,7 +1818,7 @@ class ColorBoxPlot(WorkspacePlot):
                     _warnings.warn("No dataset specified: using DOF-per-element == 1")
                     element_dof = 1
                 else:
-                    #element_dof = len(dataset.outcome_labels()) - 1
+                    #element_dof = len(dataset.outcome_labels) - 1
                     #Instead of the above, which doesn't work well when there are circuits with different
                     # outcomes, the line below just takes the average degrees of freedom per circuit
                     element_dof = dataset.degrees_of_freedom(circuits) / len(circuits)
@@ -2998,7 +2998,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             except:  # numpy can throw a LinAlgError
                 _warnings.warn(("FigComparisonBarPlot could not obtain number of"
                                 " *non-gauge* parameters - using total params instead"))
-                np_by_x = [mdl.num_params() if (mdl is not None) else 0
+                np_by_x = [mdl.num_params if (mdl is not None) else 0
                            for mdl in model_by_x]
 
         if isinstance(dataset_by_x, _objs.DataSet):
@@ -3299,11 +3299,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         for i, _ in enumerate(dslabels):
             for j, _ in enumerate(dslabels[i + 1:], start=i + 1):
                 dsc = dsc_dict.get((i, j), dsc_dict.get((j, i), None))
-                val = dsc.aggregate_nsigma() if (dsc is not None) else None
+                val = dsc.aggregate_nsigma if (dsc is not None) else None
                 nSigmaMx[i, j] = nSigmaMx[j, i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
-                val = dsc.aggregate_llr() if (dsc is not None) else None
+                val = dsc.aggregate_llr if (dsc is not None) else None
                 logLMx[i, j] = logLMx[j, i] = val
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
 

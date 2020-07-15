@@ -826,7 +826,8 @@ class Circuit(object):
         else:
             return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
-    def number_of_lines(self):
+    @property
+    def num_lines(self):
         """
         The number of lines in this circuit.
 
@@ -1695,13 +1696,13 @@ class Circuit(object):
             for l in self._layer_components(i):  # loop over labels in this layer
                 if isinstance(l, _CircuitLabel):
                     circuits_to_expand.append(l)
-                    layers_to_add = max(layers_to_add, l.depth() - 1)
+                    layers_to_add = max(layers_to_add, l.depth - 1)
 
             if layers_to_add > 0:
                 self.insert_idling_layers(i + 1, layers_to_add)
             for subc in circuits_to_expand:
-                self.clear_labels(slice(i, i + subc.depth()), subc.sslbls)  # remove the CircuitLabel
-                self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth()),
+                self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
+                self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
                                 subc.sslbls)  # dump in the contents
 
     def _factorize_repetitions_inplace(self):
@@ -1720,7 +1721,7 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-        nLayers = self.num_layers()
+        nLayers = self.num_layers
         iLayersToRemove = []
         iStart = 0
         while iStart < nLayers - 1:
@@ -1826,7 +1827,7 @@ class Circuit(object):
         -------
         None
         """
-        self.insert_circuit(circuit, self.num_layers())
+        self.insert_circuit(circuit, self.num_layers)
 
     def prefix_circuit(self, circuit):
         """
@@ -2138,7 +2139,7 @@ class Circuit(object):
             def get_compilation(gate):
                 return compilation.get(gate, None)
 
-        for ilayer in range(self.num_layers() - 1, -1, -1):
+        for ilayer in range(self.num_layers - 1, -1, -1):
             icomps_to_remove = []
             for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
                 replacement_circuit = get_compilation(l)
@@ -2618,7 +2619,7 @@ class Circuit(object):
 
         if verbosity > 0:
             print("- Implementing circuit depth compression")
-            print("  - Circuit depth before compression is {}".format(self.num_layers()))
+            print("  - Circuit depth before compression is {}".format(self.num_layers))
 
         flag1 = False
         if one_q_gate_relations is not None:
@@ -2629,7 +2630,7 @@ class Circuit(object):
         if verbosity > 0:
             if not (flag1 or flag2 or flag3):
                 print("  - Circuit unchanged by depth compression algorithm")
-            print("  - Circuit depth after compression is {}".format(self.num_layers()))
+            print("  - Circuit depth after compression is {}".format(self.num_layers))
 
     def layer(self, j):
         """
@@ -2665,8 +2666,8 @@ class Circuit(object):
         -------
         Label
         """
-        assert(j >= 0 and j < self.num_layers()
-               ), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers())
+        assert(j >= 0 and j < self.num_layers
+               ), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers)
         return self[j]
 
     def layer_with_idles(self, j, idle_gate_name='I'):
@@ -2723,6 +2724,7 @@ class Circuit(object):
                 components.append(_Label(idle_gate_name, line_lbl))
         return _Label(components)
 
+    @property
     def num_layers(self):
         """
         The number of circuit layers.
@@ -2737,6 +2739,7 @@ class Circuit(object):
         """
         return len(self._labels)
 
+    @property
     def depth(self):
         """
         The circuit depth.
@@ -2750,10 +2753,11 @@ class Circuit(object):
         int
         """
         if self._static:
-            return sum([lbl.depth() for lbl in self._labels])
+            return sum([lbl.depth for lbl in self._labels])
         else:
-            return sum([_Label(layer_lbl).depth() for layer_lbl in self._labels])
+            return sum([_Label(layer_lbl).depth for layer_lbl in self._labels])
 
+    @property
     def width(self):
         """
         The circuit width.
@@ -2768,6 +2772,7 @@ class Circuit(object):
         """
         return len(self.line_labels)
 
+    @property
     def size(self):
         """
         Returns the circuit size.
@@ -2844,6 +2849,7 @@ class Circuit(object):
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
 
+    @property
     def num_multiq_gates(self):
         """
         The number of multi-qubit (2+ qubits) gates in the circuit.
@@ -2893,8 +2899,8 @@ class Circuit(object):
     #        The probability that there is one or more errors in the circuit.
     #    """
     #    f = 1.
-    #    depth = self.num_layers()
-    #    for i in range(0,self.number_of_lines()):
+    #    depth = self.num_layers
+    #    for i in range(0,self.num_lines):
     #        for j in range(0,depth):
     #            gatelbl = self.line_items[i][j]
     #
@@ -2908,7 +2914,7 @@ class Circuit(object):
 
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
-        d = self.num_layers()
+        d = self.num_layers
         line_items = [[_Label(identity_name, ll)] * d for ll in self.line_labels]
 
         for ilayer in range(len(self._labels)):
@@ -2935,7 +2941,7 @@ class Circuit(object):
         """
 
         # If it's a circuit over no lines, return an empty string
-        if self.number_of_lines() == 0: return ''
+        if self.num_lines == 0: return ''
 
         s = ''
         Ctxt = 'C'
@@ -2971,12 +2977,12 @@ class Circuit(object):
 
         line_items = self._togrid(identityName)
         max_labellen = [max([len(abbrev(line_items[i][j], i))
-                             for i in range(0, self.number_of_lines())])
-                        for j in range(0, self.num_layers())]
+                             for i in range(0, self.num_lines)])
+                        for j in range(0, self.num_layers)]
 
         max_linelabellen = max([len(str(llabel)) for llabel in self.line_labels])
 
-        for i in range(self.number_of_lines()):
+        for i in range(self.num_lines):
             s += 'Qubit {} '.format(self.line_labels[i]) + ' ' * \
                 (max_linelabellen - len(str(self.line_labels[i]))) + '---'
             for j, maxlbllen in enumerate(max_labellen):
@@ -3014,7 +3020,7 @@ class Circuit(object):
         line_strings = circuit_string.split('\n')
         nLines = len(line_strings)  # e.g., number of qubits
         lineLen = len(line_strings[0])
-        assert(nLines == self.number_of_lines())  # this is assumed...
+        assert(nLines == self.num_lines)  # this is assumed...
         assert(all([len(linestr) == lineLen for linestr in line_strings]))  # assume all lines have same length
 
         iSegment = iStart = iEnd = 0
@@ -3046,8 +3052,8 @@ class Circuit(object):
                 for i, cmp in enumerate(x.components):
                     plbl(cmp, "  %s[%d]" % (lit, i))
 
-        print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers()))
-        for j in range(0, self.num_layers()):
+        print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers))
+        for j in range(0, self.num_layers):
             plbl(self[j], "self[%d]" % j)
 
     def _write_q_circuit_tex(self, filename):  # TODO
@@ -3068,8 +3074,8 @@ class Circuit(object):
         None
         """
         raise NotImplementedError("TODO: need to upgrade this method")
-        n = self.number_of_lines()
-        d = self.num_layers()
+        n = self.num_lines
+        d = self.num_layers
 
         f = open(filename, 'w')
         f.write("\documentclass{article}\n")
@@ -3156,7 +3162,7 @@ class Circuit(object):
                 gatename_conversion[idle_gate_name] = cirq.WaitGate(wait_duration)
 
         moments = []
-        for i in range(self.num_layers()):
+        for i in range(self.num_layers):
             layer = self.layer_with_idles(i, idle_gate_name)
             operations = []
             for gate in layer:
@@ -3257,9 +3263,9 @@ class Circuit(object):
             for gate_lbl in gate_declarations.keys():
                 quil += _np_to_quil_def_str(gate_lbl, gate_declarations[gate_lbl])
 
-        depth = self.num_layers()
+        depth = self.num_layers
 
-#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
+#        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.num_lines))
         quil += 'DECLARE ro BIT[{0}]\n'.format(str(num_qubits))
 
         quil += 'RESET\n'
@@ -3415,7 +3421,7 @@ class Circuit(object):
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
         openqasm += '\n'
 
-        depth = self.num_layers()
+        depth = self.num_layers
 
         # Go through the layers, and add the openqasm for each layer in turn.
         for l in range(depth):

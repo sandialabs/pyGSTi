@@ -10,7 +10,7 @@ from pygsti.objects import instrument as inst, FullGaugeGroupElement
 
 class InstrumentMethodBase(object):
     def test_num_elements(self):
-        self.assertEqual(self.instrument.num_elements(), self.n_elements)
+        self.assertEqual(self.instrument.num_elements, self.n_elements)
 
     def test_copy(self):
         inst_copy = self.instrument.copy()

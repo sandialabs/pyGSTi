@@ -66,7 +66,7 @@ class MultiDataSetMethodBase(object):
             self._assert_datasets_equal(a, b)
 
     def test_get_outcome_labels(self):
-        labels = self.mds.outcome_labels()
+        labels = self.mds.outcome_labels
         # TODO assert correctness
 
     def test_get_datasets_aggregate(self):

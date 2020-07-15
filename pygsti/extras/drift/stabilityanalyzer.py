@@ -321,7 +321,7 @@ class StabilityAnalyzer(object):
         multids = _obj.MultiDataSet()  # This is where the formatted data is recorded
 
         # We need the data to have the same number of total counts per-time for all the circuits.
-        assert(tempds.has_constant_totalcounts_pertime()), "Data must contain" \
+        assert(tempds.has_constant_totalcounts_pertime), "Data must contain" \
             + "a constant number of total counts as a function of time-step and circuit!"
 
         if not isinstance(constnumtimes, bool):
@@ -334,7 +334,7 @@ class StabilityAnalyzer(object):
 
         if constnumtimes:
             tempds = _dsconst.trim_to_constant_numtimesteps(tempds)
-            assert(tempds.has_constant_totalcounts()), "Data formatting has failed!"
+            assert(tempds.has_constant_totalcounts), "Data formatting has failed!"
 
         # Checks that the specified transform is valid, and writes it into the object.
         if transform == 'auto': transform = 'dct'
@@ -376,7 +376,7 @@ class StabilityAnalyzer(object):
         # Do any marginalization, labelling qubits as integers.
         if marginalize:
 
-            n = len(ds.outcome_labels()[0][0])
+            n = len(ds.outcome_labels[0][0])
             if n > 1:
                 for i in range(n):
                     margds = _dsconst.filter_dataset(tempds, (i,), filtercircuits=False)
@@ -535,7 +535,7 @@ class StabilityAnalyzer(object):
 
         dskeys = tuple(self.data.keys())
         circuits = tuple(self.data[dskeys[0]].keys())
-        outcomes = tuple(self.data.outcome_labels())
+        outcomes = tuple(self.data.outcome_labels)
         arrayshape = []
         arrayshape = (len(dskeys), len(circuits), len(outcomes), numfrequencies)
         self._shape = arrayshape
@@ -558,7 +558,7 @@ class StabilityAnalyzer(object):
         # removed in the future, so we check it here again.
         counts = []
         for ds in self.data.values():
-            counts.append(ds.totalcounts_pertime())
+            counts.append(ds.totalcounts_pertime)
         assert(_np.var(_np.array(counts)) == 0), "An equal number of counts at every time-step " \
             "in every circuit is currently required!"
         counts = counts[0]
@@ -568,7 +568,7 @@ class StabilityAnalyzer(object):
             ds = self.data[dskey]
             for j, circuit in enumerate(circuits):
                 # The time-series data to generate power spectra for.
-                times, outcomedict = ds[circuit].timeseries_for_outcomes()
+                times, outcomedict = ds[circuit].timeseries_for_outcomes
                 # Go through the outcomes and generate a power spectrum for the clickstream of each outcome
                 for k, outcome in enumerate(outcomes):
 
@@ -770,7 +770,7 @@ class StabilityAnalyzer(object):
         elif axislabel == 'circuit':
             return list(self.data[self.data.keys()[0]].keys()).index(key)
         elif axislabel == 'outcome':
-            return self.data.outcome_labels().index(key)
+            return self.data.outcome_labels.index(key)
         else:
             raise ValueError("axislabel must be one of `dataset`, `circuit` and `outcome`!")
 
@@ -1759,7 +1759,7 @@ class StabilityAnalyzer(object):
 
         dskeys = list(self.data.keys())
         circuits = self.data[dskeys[0]].keys()
-        outcomes = self.data.outcome_labels()
+        outcomes = self.data.outcome_labels
 
         for i, dskey in enumerate(dskeys):
             for j, circuit in enumerate(circuits):
@@ -1790,7 +1790,7 @@ class StabilityAnalyzer(object):
                     # If there is more than just the DC mode there is something non-trivial to do.
                     if len(freqs) > 0:
 
-                        times, clickstreams = self.data[dskey][circuit].timeseries_for_outcomes()
+                        times, clickstreams = self.data[dskey][circuit].timeseries_for_outcomes
                         parameters = _sig.amplitudes_at_frequencies(freqs, clickstreams, transform=self.transform)
                         del parameters[outcomes[-1]]
                         # Divide by the counts
@@ -1860,7 +1860,7 @@ class StabilityAnalyzer(object):
             dskey = list(self.data.keys())[0]
 
         # Find the index for this dataset, circuit, and an arbitrary outcome.
-        tup = self._tupletoindex[(dskey, circuit, self.data.outcome_labels()[0])]
+        tup = self._tupletoindex[(dskey, circuit, self.data.outcome_labels[0])]
         dsind = tup[0]
         circind = tup[1]
 

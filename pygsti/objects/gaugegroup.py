@@ -42,6 +42,7 @@ class GaugeGroup(object):
         """
         self.name = name
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group..
@@ -67,6 +68,7 @@ class GaugeGroup(object):
         """
         return GaugeGroupElement()
 
+    @property
     def initial_params(self):
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
@@ -88,6 +90,7 @@ class GaugeGroupElement(object):
         """Creates a new GaugeGroupElement"""
         pass
 
+    @property
     def transform_matrix(self):
         """
         The gauge-transform matrix.
@@ -98,6 +101,7 @@ class GaugeGroupElement(object):
         """
         return None
 
+    @property
     def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
@@ -152,6 +156,7 @@ class GaugeGroupElement(object):
         """
         pass
 
+    @property
     def num_params(self):
         """
         Return the number of parameters of this gauge group element.
@@ -188,6 +193,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
     def __init__(self, gauge_group_el):
         self.inverse_element = gauge_group_el
 
+    @property
     def transform_matrix(self):
         """
         The gauge-transform matrix.
@@ -196,8 +202,9 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         -------
         numpy.ndarray
         """
-        return self.inverse_element.transform_matrix_inverse()
+        return self.inverse_element.transform_matrix_inverse
 
+    @property
     def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
@@ -206,7 +213,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         -------
         numpy.ndarray
         """
-        return self.inverse_element.transform_matrix()
+        return self.inverse_element.transform_matrix
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -226,7 +233,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         numpy.ndarray
         """
         #Derivative of inv(M): d(inv_M) = inv_M * dM * inv_M
-        Tinv = self.transform_matrix()  # inverse of *original* transform
+        Tinv = self.transform_matrix  # inverse of *original* transform
         dT = self.inverse_element.deriv_wrt_params(wrt_filter)  # shape (d*d, n)
         d, n = int(round(_np.sqrt(dT.shape[0]))), dT.shape[1]
 
@@ -260,6 +267,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.from_vector()
 
+    @property
     def num_params(self):
         """
         Return the number of parameters of this gauge group element.
@@ -270,7 +278,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         -------
         int
         """
-        return self.inverse_element.num_params()
+        return self.inverse_element.num_params
 
     def inverse(self):
         """
@@ -326,6 +334,7 @@ class OpGaugeGroup(GaugeGroup):
         self.element = elementcls
         GaugeGroup.__init__(self, name)
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
@@ -334,7 +343,7 @@ class OpGaugeGroup(GaugeGroup):
         -------
         int
         """
-        return self._operation.num_params()
+        return self._operation.num_params
 
     def compute_element(self, param_vec):
         """
@@ -353,6 +362,7 @@ class OpGaugeGroup(GaugeGroup):
         elgate.from_vector(param_vec)
         return self.element(elgate)
 
+    @property
     def initial_params(self):
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
@@ -392,6 +402,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         self._inv_matrix = None
         GaugeGroupElement.__init__(self)
 
+    @property
     def transform_matrix(self):
         """
         The gauge-transform matrix.
@@ -402,6 +413,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         """
         return self._operation.to_dense()
 
+    @property
     def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
@@ -459,6 +471,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         self._operation.from_vector(v)
         self._inv_matrix = None
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this element.
@@ -467,7 +480,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         -------
         int
         """
-        return self._operation.num_params()
+        return self._operation.num_params
 
 
 class FullGaugeGroup(OpGaugeGroup):
@@ -556,6 +569,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
         """
         OpGaugeGroupElement.__init__(self, operation)
 
+    @property
     def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
@@ -855,6 +869,7 @@ class TrivialGaugeGroup(GaugeGroup):
         self.dim = dim
         GaugeGroup.__init__(self, "Trivial")
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
@@ -881,6 +896,7 @@ class TrivialGaugeGroup(GaugeGroup):
         assert(len(param_vec) == 0)
         return TrivialGaugeGroupElement(self.dim)
 
+    @property
     def initial_params(self):
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
@@ -911,6 +927,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         self._matrix = _np.identity(dim, 'd')
         GaugeGroupElement.__init__(self)
 
+    @property
     def transform_matrix(self):
         """
         The gauge-transform matrix.
@@ -921,6 +938,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """
         return self._matrix
 
+    @property
     def transform_matrix_inverse(self):
         """
         The inverse of the gauge-transform matrix.
@@ -975,6 +993,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """
         assert(len(v) == 0)
 
+    @property
     def num_params(self):
         """
         Return the number of parameters (degrees of freedom) of this element.

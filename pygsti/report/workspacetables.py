@@ -159,7 +159,7 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Brackets')
                 elif display_as == "boxes":
                     rhoMx_real = rhoMx.hermitian_to_real()
-                    v = rhoMx_real.value()
+                    v = rhoMx_real.value
                     fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                              box_labels=True, prec='compacthp',
                                              mx_basis=None)  # no basis labels
@@ -205,7 +205,7 @@ class SpamTable(WorkspaceTable):
                         rowFormatters.append('Brackets')
                     elif display_as == "boxes":
                         EMx_real = EMx.hermitian_to_real()
-                        v = EMx_real.value()
+                        v = EMx_real.value
                         fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
                                                  box_labels=True, prec='compacthp',
                                                  mx_basis=None)  # no basis labels
@@ -308,7 +308,7 @@ class SpamParametersTable(WorkspaceTable):
             cri = confidence_region_info if (confidence_region_info
                                              and confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
             spamDotProdsQty = _ev(_reportables.Spam_dotprods(model), cri)
-            DPs, DPEBs = spamDotProdsQty.value_and_errorbar()
+            DPs, DPEBs = spamDotProdsQty.value_and_errorbar
             assert(DPs.shape[1] == len(effectLbls)), \
                 "Models must have the same number of POVMs & effects"
 
@@ -624,7 +624,7 @@ class ChoiTable(WorkspaceTable):
 
                 elif disp == "barplot":
                     for model, (_, evals) in zip(models, qtysList):
-                        evs, evsEB = evals[i].value_and_errorbar()
+                        evs, evsEB = evals[i].value_and_errorbar
                         fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                         row_data.append(fig)
                         row_formatters.append('Figure')
@@ -632,7 +632,7 @@ class ChoiTable(WorkspaceTable):
                 elif disp == "boxplot":
                     for model, (choiMxs, _) in zip(models, qtysList):
                         choiMx_real = choiMxs[i].hermitian_to_real()
-                        choiMx, EB = choiMx_real.value_and_errorbar()
+                        choiMx, EB = choiMx_real.value_and_errorbar
                         fig = _wp.GateMatrixPlot(self.ws, choiMx,
                                                  colorbar=False,
                                                  mx_basis=model.basis,
@@ -1507,20 +1507,20 @@ class ErrgenTable(WorkspaceTable):
             else: raise ValueError("Invalid generator type: %s" % gen_type)
             errgenAndProjs[gl] = info
 
-            errgen = info['error generator'].value()
+            errgen = info['error generator'].value
             absMax = _np.max(_np.abs(errgen))
             add_max(errgensM, absMax)
 
             if "H" in display:
-                absMax = _np.max(_np.abs(info['hamiltonian projections'].value()))
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].value))
                 add_max(hamProjsM, absMax)
 
             if "S" in display:
-                absMax = _np.max(_np.abs(info['stochastic projections'].value()))
+                absMax = _np.max(_np.abs(info['stochastic projections'].value))
                 add_max(stoProjsM, absMax)
 
             if "A" in display:
-                absMax = _np.max(_np.abs(info['affine projections'].value()))
+                absMax = _np.max(_np.abs(info['affine projections'].value))
                 add_max(affProjsM, absMax)
 
         #Do plotting
@@ -1532,7 +1532,7 @@ class ErrgenTable(WorkspaceTable):
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        errgen, EB = info['error generator'].value_and_errorbar()
+                        errgen, EB = info['error generator'].value_and_errorbar
                         m, M = get_min_max(errgensM, _np.max(_np.abs(errgen)))
                         errgen_fig = _wp.GateMatrixPlot(self.ws, errgen, m, M,
                                                         basis, eb_matrix=EB)
@@ -1544,8 +1544,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['hamiltonian projection power'].value()
-                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['hamiltonian projection power'].value
+                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar
                         m, M = get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis, m, M,
@@ -1558,8 +1558,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['stochastic projection power'].value()
-                        stoProjs, EB = info['stochastic projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['stochastic projection power'].value
+                        stoProjs, EB = info['stochastic projections'].value_and_errorbar
                         m, M = get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis, m, M,
@@ -1572,8 +1572,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "A":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['affine projection power'].value()
-                        affProjs, EB = info['affine projections'].value_and_errorbar()
+                        T = "Power %.2g" % info['affine projection power'].value
+                        affProjs, EB = info['affine projections'].value_and_errorbar
                         m, M = get_min_max(affProjsM, _np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, affProjs, basis, m, M,
@@ -2068,7 +2068,7 @@ class GateDecompTable(WorkspaceTable):
 
         for gl in opLabels:
             gl = str(gl)  # Label -> str for decomp-dict keys
-            axis, axisEB = decomp[gl + ' axis'].value_and_errorbar()
+            axis, axisEB = decomp[gl + ' axis'].value_and_errorbar
             axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0, 1.0,
                                              box_labels=True, eb_matrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale_inplace(1.0 / _np.pi)  # scale evals to units of pi
@@ -2078,8 +2078,8 @@ class GateDecompTable(WorkspaceTable):
 
             for gl_other in opLabels:
                 gl_other = str(gl_other)
-                rotnAngle = decomp[gl + ' angle'].value()
-                rotnAngle_other = decomp[gl_other + ' angle'].value()
+                rotnAngle = decomp[gl + ' angle'].value
+                rotnAngle_other = decomp[gl_other + ' angle'].value
 
                 if gl_other == gl:
                     rowData.append("")
@@ -2153,7 +2153,7 @@ class OldGateDecompTable(WorkspaceTable):
 
         for decomp, gl in zip(decomps, opLabels):
             evals = _ev(_reportables.GateEigenvalues(model, gl))
-            decomp, decompEB = decomp.value_and_errorbar()  # OLD
+            decomp, decompEB = decomp.value_and_errorbar  # OLD
 
             rowData = [gl, evals] + [decomp.get(x, 'X') for x in decompNames[0:2]] + \
                 [(decomp.get(x, 'X'), decompEB) for x in decompNames[2:4]]
@@ -2236,15 +2236,15 @@ class OldRotationAxisTable(WorkspaceTable):
 
         rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(model),
                                 confidence_region_info)
-        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.value_and_errorbar()
+        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.value_and_errorbar
 
         for i, gl in enumerate(opLabels):
-            decomp, decompEB = decomps[i].value_and_errorbar()  # OLD
+            decomp, decompEB = decomps[i].value_and_errorbar  # OLD
             rotnAngle = decomp.get('pi rotations', 'X')
 
             angles_btwn_rotn_axes = []
             for j, gl_other in enumerate(opLabels):
-                decomp_other, _ = decomps[j].value_and_errorbar()  # OLD
+                decomp_other, _ = decomps[j].value_and_errorbar  # OLD
                 rotnAngle_other = decomp_other.get('pi rotations', 'X')
 
                 if gl_other == gl:
@@ -2488,12 +2488,12 @@ class GateEigenvalueTable(WorkspaceTable):
                             model, target_model, gl), confidence_region_info)
 
                 # permute target eigenvalues according to min-weight matching
-                _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
+                _, pairs = _tools.minweight_match(evals.value, target_evals, lambda x, y: abs(x - y))
                 matched_target_evals = target_evals.copy()
                 for i, j in pairs:
                     matched_target_evals[i] = target_evals[j]
                 target_evals = matched_target_evals
-                target_evals = target_evals.reshape(evals.value().shape)
+                target_evals = target_evals.reshape(evals.value.shape)
                 # b/c evals have shape (x,1) and targets (x,),
                 # which causes problems when we try to subtract them
 
@@ -2561,7 +2561,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                 elif disp == "polar":
-                    evals_val = evals.value()
+                    evals_val = evals.value
                     if target_model is None:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2573,7 +2573,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and target_model is not None:
-                    rel_evals_val = rel_evals.value()
+                    rel_evals_val = rel_evals.value
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws, [rel_evals_val], ["red"], ["rel"], center_text=str(gl))
                     row_data.append(fig)
@@ -2598,12 +2598,12 @@ class GateEigenvalueTable(WorkspaceTable):
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching
-                    _, pairs = _tools.minweight_match(evals.value(), target_evals, lambda x, y: abs(x - y))
+                    _, pairs = _tools.minweight_match(evals.value, target_evals, lambda x, y: abs(x - y))
                     matched_target_evals = target_evals.copy()
                     for i, j in pairs:
                         matched_target_evals[i] = target_evals[j]
                     target_evals = matched_target_evals
-                    target_evals = target_evals.reshape(evals.value().shape)
+                    target_evals = target_evals.reshape(evals.value.shape)
                     # b/c evals have shape (x,1) and targets (x,),
                     # which causes problems when we try to subtract them
 
@@ -2658,7 +2658,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                     elif disp == "polar":
-                        evals_val = evals.value()
+                        evals_val = evals.value
                         if target_model is None:
                             fig = _wp.PolarEigenvaluePlot(
                                 self.ws, [evals_val], ["blue"], center_text=str(gl))
@@ -2727,7 +2727,7 @@ class DataSetOverviewTable(WorkspaceTable):
 
         table.add_row(("Number of strings", str(len(dataset))), (None, None))
         table.add_row(("Gate labels", ", ".join([str(gl) for gl in dataset.gate_labels()])), (None, None))
-        table.add_row(("Outcome labels", ", ".join(map(str, dataset.outcome_labels()))), (None, None))
+        table.add_row(("Outcome labels", ", ".join(map(str, dataset.outcome_labels))), (None, None))
         table.add_row(("Counts per string", cntStr), (None, None))
 
         if max_length_list is not None:
@@ -2873,11 +2873,11 @@ class FitComparisonTable(WorkspaceTable):
                 _warnings.warn(("LinAlgError when trying to compute the number"
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))
-                np_by_x = [mdl.num_params() for mdl in model_by_x]
+                np_by_x = [mdl.num_params for mdl in model_by_x]
             except (NotImplementedError, AttributeError):
                 _warnings.warn(("FitComparisonTable could not obtain number of"
                                 "*non-gauge* parameters - using total params instead"))
-                np_by_x = [mdl.num_params() for mdl in model_by_x]
+                np_by_x = [mdl.num_params for mdl in model_by_x]
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
@@ -3682,7 +3682,7 @@ class WildcardBudgetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
 
         if budget is not None:
-            for nm, (desc, val) in budget.description().items():
+            for nm, (desc, val) in budget.description.items():
                 table.add_row((nm, desc, val), (None, None, None))
 
         table.finish()

@@ -337,7 +337,7 @@ class TimeIndependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
             except NotImplementedError:
                 continue  # ok if hessian is not always implemented
 
-            self.assertEqual(hessian.shape, (self.model.num_params(), self.model.num_params()))
+            self.assertEqual(hessian.shape, (self.model.num_params, self.model.num_params))
 
             eps = 1e-7
             fd_hessian = np.zeros(hessian.shape, 'd')

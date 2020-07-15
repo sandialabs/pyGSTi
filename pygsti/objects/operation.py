@@ -305,15 +305,15 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
     dim = operation.dim
     op2 = operation.copy()
     p = operation.to_vector()
-    fd_deriv = _np.empty((dim, dim, operation.num_params()), operation.dtype)
+    fd_deriv = _np.empty((dim, dim, operation.num_params), operation.dtype)
 
-    for i in range(operation.num_params()):
+    for i in range(operation.num_params):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         op2.from_vector(p_plus_dp)
         fd_deriv[:, :, i] = (op2 - operation) / eps
 
-    fd_deriv.shape = [dim**2, operation.num_params()]
+    fd_deriv.shape = [dim**2, operation.num_params]
     if wrt_filter is None:
         return fd_deriv
     else:
@@ -722,7 +722,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         #DEBUG TODO REMOVE
         #chk1 = sum([t[1].magnitude for t in sorted_terms])
-        #chk2 = self.total_term_magnitude()
+        #chk2 = self.total_term_magnitude
         #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order,
         #      " minmag=",min_term_mag)
         #print("  sum of magnitudes =",chk1, " <?= ", chk2)
@@ -953,8 +953,8 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        Smx = s.transform_matrix()
-        Si = s.transform_matrix_inverse()
+        Smx = s.transform_matrix
+        Si = s.transform_matrix_inverse
         self.set_dense(_np.dot(Si, _np.dot(self.to_dense(), Smx)))
 
     def depolarize(self, amount):
@@ -1063,7 +1063,7 @@ class LinearOperator(_modelmember.ModelMember):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        if(self.num_params() != 0):
+        if(self.num_params != 0):
             raise NotImplementedError("Default deriv_wrt_params is only for 0-parameter (default) case (%s)"
                                       % str(self.__class__.__name__))
 
@@ -1085,7 +1085,7 @@ class LinearOperator(_modelmember.ModelMember):
         bool
         """
         #Default: assume Hessian can be nonzero if there are any parameters
-        return self.num_params() > 0
+        return self.num_params > 0
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
@@ -1111,7 +1111,7 @@ class LinearOperator(_modelmember.ModelMember):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros((self.size, self.num_params(), self.num_params()), 'd')
+            return _np.zeros((self.size, self.num_params, self.num_params), 'd')
 
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
@@ -1500,6 +1500,7 @@ class FullDenseOp(DenseOperator):
         self.base[:, :] = _np.array(mx)
         self.dirty = True
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -1681,6 +1682,7 @@ class TPDenseOp(DenseOperator):
         self.base[1:, :] = mx[1:, :]
         self.dirty = True
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -1956,6 +1958,7 @@ class LinearlyParamDenseOp(DenseOperator):
         self.base[:, :] = matrix
         self.base.flags.writeable = False
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -2446,6 +2449,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         self.base[:, :] = matrix.real
         self.base.flags.writeable = False
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -2492,7 +2496,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self.paramvals = v
         self._construct_matrix()
         self.dirty = dirty_value
@@ -2523,7 +2527,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         # d(matrix)/d(param) = B * d(diag)/d(param) * Bi
 
         # EigenvalueParameterizedGates are assumed to be real
-        derivMx = _np.zeros((self.dim**2, self.num_params()), 'd')
+        derivMx = _np.zeros((self.dim**2, self.num_params), 'd')
 
         # Compute d(diag)/d(param) for each params, then apply B & Bi
         for k, pdesc in enumerate(self.params):
@@ -2776,6 +2780,7 @@ class StochasticNoiseOp(LinearOperator):
         else:
             return global_param_terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -2794,6 +2799,7 @@ class StochasticNoiseOp(LinearOperator):
         rates = self._params_to_rates(self.to_vector())
         return _np.sum(_np.abs(rates))
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -2804,12 +2810,13 @@ class StochasticNoiseOp(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
         # abs(rates) = rates = params**2
         # so d( sum(abs(rates)) )/dparam_i = 2*param_i
         return 2 * self.to_vector()
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -2864,7 +2871,7 @@ class StochasticNoiseOp(LinearOperator):
 
     def __str__(self):
         s = "Stochastic noise operation map with dim = %d, num params = %d\n" % \
-            (self.dim, self.num_params())
+            (self.dim, self.num_params)
         return s
 
 
@@ -3610,7 +3617,7 @@ class LindbladOp(LinearOperator):
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
             dexpL = _d_exp_x(self.errorgen.to_dense(), derrgen, self.exp_err_gen,
                              self.unitary_postfactor)
-            derivMx = dexpL.reshape(d2**2, self.num_params())  # [iFlattenedOp,iParam]
+            derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
                 ("Deriv matrix has imaginary part = %s.  This can result from "
@@ -3675,7 +3682,7 @@ class LindbladOp(LinearOperator):
 
         if self.base_hessian is None:
             d2 = self.dim
-            nP = self.num_params()
+            nP = self.num_params
             hessianMx = _np.zeros((d2**2, nP, nP), 'd')
 
             #Deriv wrt other params
@@ -3930,6 +3937,7 @@ class LindbladOp(LinearOperator):
             terms.append(term)
         return terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -3947,11 +3955,12 @@ class LindbladOp(LinearOperator):
         # (unitary postfactor has weight == 1.0 so doesn't enter)
         #TODO REMOVE:
         #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
-        #egttm = self.errorgen.total_term_magnitude()
+        #egttm = self.errorgen.total_term_magnitude
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.total_term_magnitude())
+        return _np.exp(self.errorgen.total_term_magnitude)
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -3962,10 +3971,11 @@ class LindbladOp(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
-        return _np.exp(self.errorgen.total_term_magnitude()) * self.errorgen.total_term_magnitude_deriv()
+        return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -3975,7 +3985,7 @@ class LindbladOp(LinearOperator):
         int
             the number of independent parameters.
         """
-        return self.errorgen.num_params()
+        return self.errorgen.num_params
 
     def to_vector(self):
         """
@@ -4218,8 +4228,8 @@ class LindbladOp(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
             #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
@@ -4270,8 +4280,8 @@ class LindbladOp(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
 
             #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
@@ -4309,7 +4319,7 @@ class LindbladOp(LinearOperator):
 
     def __str__(self):
         s = "Lindblad Parameterized operation map with dim = %d, num params = %d\n" % \
-            (self.dim, self.num_params())
+            (self.dim, self.num_params)
         return s
 
 
@@ -4618,24 +4628,24 @@ class TPInstrumentOp(DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        Np = self.num_params()
+        Np = self.num_params
         derivMx = _np.zeros((self.dim**2, Np), 'd')
         Nels = len(self.param_ops)
 
         off = 0
         if self.index < Nels - 1:  # matrix = Di + MT = param_ops[index+1] + param_ops[0]
             for i in [0, self.index + 1]:
-                Np = self.param_ops[i].num_params()
+                Np = self.param_ops[i].num_params
                 derivMx[:, off:off + Np] = self.param_ops[i].deriv_wrt_params()
                 off += Np
 
         else:  # matrix = -(nEls-2)*MT-sum(Di)
-            Np = self.param_ops[0].num_params()
+            Np = self.param_ops[0].num_params
             derivMx[:, off:off + Np] = -(Nels - 2) * self.param_ops[0].deriv_wrt_params()
             off += Np
 
             for i in range(1, Nels):
-                Np = self.param_ops[i].num_params()
+                Np = self.param_ops[i].num_params
                 derivMx[:, off:off + Np] = -self.param_ops[i].deriv_wrt_params()
                 off += Np
 
@@ -4656,6 +4666,7 @@ class TPInstrumentOp(DenseOperator):
         """
         return False
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -5133,6 +5144,7 @@ class ComposedOp(LinearOperator):
         #coeffs_as_compact_polys = (vtape, ctape)
         #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -5150,8 +5162,9 @@ class ComposedOp(LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
-        return _np.product([f.total_term_magnitude() for f in self.factorops])
+        return _np.product([f.total_term_magnitude for f in self.factorops])
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -5162,18 +5175,19 @@ class ComposedOp(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
-        opmags = [f.total_term_magnitude() for f in self.factorops]
+        opmags = [f.total_term_magnitude for f in self.factorops]
         product = _np.product(opmags)
-        ret = _np.zeros(self.num_params(), 'd')
+        ret = _np.zeros(self.num_params, 'd')
         for opmag, f in zip(opmags, self.factorops):
             f_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, f.gpindices)
-            local_deriv = product / opmag * f.total_term_magnitude_deriv()
+            local_deriv = product / opmag * f.total_term_magnitude_deriv
             ret[f_local_inds] += local_deriv
         return ret
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -5195,7 +5209,7 @@ class ComposedOp(LinearOperator):
             The operation parameters as a 1D array with length num_params().
         """
         assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling to_vector"
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for operation in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, operation.gpindices)
@@ -5255,13 +5269,13 @@ class ComposedOp(LinearOperator):
             Array of derivatives with shape (dimension^2, num_params)
         """
         typ = complex if any([_np.iscomplexobj(op.to_dense()) for op in self.factorops]) else 'd'
-        derivMx = _np.zeros((self.dim, self.dim, self.num_params()), typ)
+        derivMx = _np.zeros((self.dim, self.dim, self.num_params), typ)
 
         #Product rule to compute jacobian
         for i, op in enumerate(self.factorops):  # loop over the operation we differentiate wrt
-            if op.num_params() == 0: continue  # no contribution
+            if op.num_params == 0: continue  # no contribution
             deriv = op.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this operation...
-            deriv.shape = (self.dim, self.dim, op.num_params())
+            deriv.shape = (self.dim, self.dim, op.num_params)
 
             if i > 0:  # factors before ith
                 pre = self.factorops[0].to_dense()
@@ -5281,7 +5295,7 @@ class ComposedOp(LinearOperator):
                 self.gpindices, op.gpindices)
             derivMx[:, :, factorgate_local_inds] += deriv
 
-        derivMx.shape = (self.dim**2, self.num_params())
+        derivMx.shape = (self.dim**2, self.num_params)
         if wrt_filter is None:
             return derivMx
         else:
@@ -5522,6 +5536,7 @@ class ExponentiatedOp(LinearOperator):
     #FUTURE: term-related functions (maybe base off of ComposedOp or use a composedop to generate them?)
     # e.g. ComposedOp([self.exponentiated_op] * power, dim, evotype)
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -5531,7 +5546,7 @@ class ExponentiatedOp(LinearOperator):
         int
             the number of independent parameters.
         """
-        return self.exponentiated_op.num_params()
+        return self.exponentiated_op.num_params
 
     def to_vector(self):
         """
@@ -5568,7 +5583,7 @@ class ExponentiatedOp(LinearOperator):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self.exponentiated_op.from_vector(v, close, dirty_value)
         self.dirty = dirty_value
 
@@ -6036,6 +6051,7 @@ class EmbeddedOp(LinearOperator):
         return [t.embed(sslbls, self.targetLabels)
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -6063,8 +6079,9 @@ class EmbeddedOp(LinearOperator):
         #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return self.embedded_op.total_term_magnitude()
+        return self.embedded_op.total_term_magnitude
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -6075,10 +6092,11 @@ class EmbeddedOp(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
-        return self.embedded_op.total_term_magnitude_deriv()
+        return self.embedded_op.total_term_magnitude_deriv
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -6088,7 +6106,7 @@ class EmbeddedOp(LinearOperator):
         int
             the number of independent parameters.
         """
-        return self.embedded_op.num_params()
+        return self.embedded_op.num_params
 
     def to_vector(self):
         """
@@ -6125,7 +6143,7 @@ class EmbeddedOp(LinearOperator):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self.embedded_op.from_vector(v, close, dirty_value)
         if self.dense_rep: self._update_denserep()
         self.dirty = dirty_value
@@ -6786,7 +6804,7 @@ class ComposedErrorgen(LinearOperator):
         # doing all filtering at the end
 
         d2 = self.dim
-        derivMx = _np.zeros((d2**2, self.num_params()), 'd')
+        derivMx = _np.zeros((d2**2, self.num_params), 'd')
         for eg in self.factors:
             factor_deriv = eg.deriv_wrt_params(None)  # do filtering at end
             rel_gpindices = _modelmember._decompose_gpindices(
@@ -6828,7 +6846,7 @@ class ComposedErrorgen(LinearOperator):
         # doing all filtering at the end
 
         d2 = self.dim
-        nP = self.num_params()
+        nP = self.num_params
         hessianMx = _np.zeros((d2**2, nP, nP), 'd')
         for eg in self.factors:
             factor_hessian = eg.hessian_wrt_params(None, None)  # do filtering at end
@@ -7025,7 +7043,7 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors:
             eg_terms = [t.copy() for t in eg.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)]
             mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
-                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params()))))
+                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))))
             for t in eg_terms:
                 # t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
                 #     # map global to *local* indices
@@ -7037,6 +7055,7 @@ class ComposedErrorgen(LinearOperator):
         #     *[eg.get_taylor_order_terms(order, max_polynomial_vars, return_coeff_polys) for eg in self.factors]
         # ))
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -7073,8 +7092,9 @@ class ComposedErrorgen(LinearOperator):
         #print("ComposedErrorgen CHECK = ",sum(mags), " vs ", ret)
         #assert(sum(mags) <= ret+1e-4)
 
-        return sum([eg.total_term_magnitude() for eg in self.factors])
+        return sum([eg.total_term_magnitude for eg in self.factors])
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -7085,15 +7105,16 @@ class ComposedErrorgen(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
-        ret = _np.zeros(self.num_params(), 'd')
+        ret = _np.zeros(self.num_params, 'd')
         for eg in self.factors:
             eg_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
-            ret[eg_local_inds] += eg.total_term_magnitude_deriv()
+            ret[eg_local_inds] += eg.total_term_magnitude_deriv
         return ret
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this error generator.
@@ -7115,7 +7136,7 @@ class ComposedErrorgen(LinearOperator):
             The operation parameters as a 1D array with length num_params().
         """
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling to_vector"
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, eg.gpindices)
@@ -8454,6 +8475,7 @@ class LindbladErrorgen(LinearOperator):
     #    poly_terms = self.get_taylor_order_terms(order)
     #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
@@ -8472,6 +8494,7 @@ class LindbladErrorgen(LinearOperator):
         vtape, ctape = self.Lterm_coeffs
         return _abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), len(self.Lterms))
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
@@ -8482,13 +8505,13 @@ class LindbladErrorgen(LinearOperator):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
         # In general: d(|x|)/dp = d( sqrt(x.r^2 + x.im^2) )/dp = (x.r*dx.r/dp + x.im*dx.im/dp) / |x| = Re(x * conj(dx/dp))/|x|  # noqa: E501
         # The total term magnitude in this case is sum_i( |coeff_i| ) so we need to compute:
         # d( sum_i( |coeff_i| )/dp = sum_i( d(|coeff_i|)/dp ) = sum_i( Re(coeff_i * conj(d(coeff_i)/dp)) / |coeff_i| )
 
-        wrtInds = _np.ascontiguousarray(_np.arange(self.num_params()), _np.int64)  # for Cython arg mapping
+        wrtInds = _np.ascontiguousarray(_np.arange(self.num_params), _np.int64)  # for Cython arg mapping
         vtape, ctape = self.Lterm_coeffs
         coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), (len(self.Lterms),))
         coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
@@ -8502,11 +8525,11 @@ class LindbladErrorgen(LinearOperator):
         return ret.real
 
         #DEBUG
-        #ret2 = _np.empty(self.num_params(),'d')
+        #ret2 = _np.empty(self.num_params,'d')
         #eps = 1e-8
         #orig_vec = self.to_vector().copy()
         #f0 = sum([abs(coeff) for coeff in coeff_values])
-        #for i in range(self.num_params()):
+        #for i in range(self.num_params):
         #    v = orig_vec.copy()
         #    v[i] += eps
         #    new_coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, v, (len(self.Lterms),))
@@ -8518,6 +8541,7 @@ class LindbladErrorgen(LinearOperator):
         #    import bpdb; bpdb.set_trace()
         #return ret
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -8564,7 +8588,7 @@ class LindbladErrorgen(LinearOperator):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self.paramvals = v
         if self._evotype == "densitymx":
             self._update_rep()
@@ -8780,8 +8804,8 @@ class LindbladErrorgen(LinearOperator):
         """
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
 
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
@@ -8829,8 +8853,8 @@ class LindbladErrorgen(LinearOperator):
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix()
-            Uinv = s.transform_matrix_inverse()
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
             err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
 
             #just act on postfactor and Lindbladian exponent:
@@ -9119,7 +9143,7 @@ class LindbladErrorgen(LinearOperator):
         #                             dHdO |  d2O
         # But only d2O is non-zero - and only when cptp == True
 
-        nTotParams = self.num_params()
+        nTotParams = self.num_params
         hessianMx = _np.zeros((d2**2, nTotParams, nTotParams), 'd')
 
         #Deriv wrt other params
@@ -9158,5 +9182,5 @@ class LindbladErrorgen(LinearOperator):
 
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \
-            (self.dim, self.num_params())
+            (self.dim, self.num_params)
         return s

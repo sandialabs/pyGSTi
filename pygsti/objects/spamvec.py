@@ -193,7 +193,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mx_basis="pp"):
     evoution type `new_evotype`.  Used to convert spam vecs to
     being LindbladSPAMVec objects.
     """
-    if vec._evotype == new_evotype and vec.num_params() == 0:
+    if vec._evotype == new_evotype and vec.num_params == 0:
         return vec  # no conversion necessary
     if new_evotype == "densitymx":
         return StaticSPAMVec(vec.to_dense(), "densitymx", typ)
@@ -253,15 +253,15 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
     dim = spamvec.dim
     spamvec2 = spamvec.copy()
     p = spamvec.to_vector()
-    fd_deriv = _np.empty((dim, spamvec.num_params()), 'd')  # assume real (?)
+    fd_deriv = _np.empty((dim, spamvec.num_params), 'd')  # assume real (?)
 
-    for i in range(spamvec.num_params()):
+    for i in range(spamvec.num_params):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         spamvec2.from_vector(p_plus_dp, close=True)
         fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
 
-    fd_deriv.shape = [dim, spamvec.num_params()]
+    fd_deriv.shape = [dim, spamvec.num_params]
     if wrt_filter is None:
         return fd_deriv
     else:
@@ -748,10 +748,10 @@ class SPAMVec(_modelmember.ModelMember):
         None
         """
         if typ == 'prep':
-            Si = s.transform_matrix_inverse()
+            Si = s.transform_matrix_inverse
             self.set_dense(_np.dot(Si, self.to_dense()))
         elif typ == 'effect':
-            Smx = s.transform_matrix()
+            Smx = s.transform_matrix
             self.set_dense(_np.dot(_np.transpose(Smx), self.to_dense()))
             #Evec^T --> ( Evec^T * s )^T
         else:
@@ -786,6 +786,7 @@ class SPAMVec(_modelmember.ModelMember):
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
         self.set_dense(_np.dot(D, self.to_dense()))
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -870,7 +871,7 @@ class SPAMVec(_modelmember.ModelMember):
         bool
         """
         #Default: assume Hessian can be nonzero if there are any parameters
-        return self.num_params() > 0
+        return self.num_params > 0
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
@@ -896,7 +897,7 @@ class SPAMVec(_modelmember.ModelMember):
             Hessian with shape (dimension, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros(self.size, self.num_params(), self.num_params())
+            return _np.zeros(self.size, self.num_params, self.num_params)
 
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
@@ -1224,6 +1225,7 @@ class FullSPAMVec(DenseSPAMVec):
         self._base_1d[:] = vec
         self.dirty = True
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -1398,6 +1400,7 @@ class TPSPAMVec(DenseSPAMVec):
         self._base_1d[1:] = vec[1:]
         self.dirty = True
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -1542,6 +1545,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         self._base_1d[:] = self.identity._base_1d - sum([vec._base_1d for vec in self.other_vecs])
         self._base_1d.flags.writeable = False
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -1811,6 +1815,7 @@ class CPTPSPAMVec(DenseSPAMVec):
             raise ValueError("Error initializing the parameters of this "
                              "CPTPSPAMVec object: " + str(e))
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -1858,7 +1863,7 @@ class CPTPSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self.params[:] = v[:]
         self._construct_vector()
         self.dirty = dirty_value
@@ -2015,7 +2020,7 @@ class TensorProdSPAMVec(SPAMVec):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
-        self.Np = sum([fct.num_params() for fct in factors])
+        self.Np = sum([fct.num_params for fct in factors])
         if typ == "effect":
             self.effectLbls = _np.array(povm_effect_lbls)
         elif typ == "prep":
@@ -2104,7 +2109,7 @@ class TensorProdSPAMVec(SPAMVec):
             off = 0
             for fct in factors:
                 assert(isinstance(fct, SPAMVec)), "Factors must be SPAMVec objects!"
-                N = fct.num_params()
+                N = fct.num_params
                 fct.set_gpindices(slice(off, off + N), self); off += N
             assert(off == self.Np)
 
@@ -2364,6 +2369,7 @@ class TensorProdSPAMVec(SPAMVec):
         else:
             return terms  # Cache terms in FUTURE?
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -2454,15 +2460,15 @@ class TensorProdSPAMVec(SPAMVec):
         """
         assert(self._evotype in ("statevec", "densitymx"))
         typ = complex if self._evotype == "statevec" else 'd'
-        derivMx = _np.zeros((self.dim, self.num_params()), typ)
+        derivMx = _np.zeros((self.dim, self.num_params), typ)
 
         #Product rule to compute jacobian
         for i, fct in enumerate(self.factors):  # loop over the spamvec/povm we differentiate wrt
             vec = fct if (self._prep_or_effect == "prep") else fct[self.effectLbls[i]]
 
-            if vec.num_params() == 0: continue  # no contribution
+            if vec.num_params == 0: continue  # no contribution
             deriv = vec.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this gate...
-            deriv.shape = (vec.dim, vec.num_params())
+            deriv.shape = (vec.dim, vec.num_params)
 
             if i > 0:  # factors before ith
                 if self._prep_or_effect == "prep":
@@ -2496,7 +2502,7 @@ class TensorProdSPAMVec(SPAMVec):
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
             derivMx[:, local_inds] += deriv
 
-        derivMx.shape = (self.dim, self.num_params())  # necessary?
+        derivMx.shape = (self.dim, self.num_params)  # necessary?
         if wrt_filter is None:
             return derivMx
         else:
@@ -2675,7 +2681,7 @@ class PureStateSPAMVec(SPAMVec):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        if self.num_params() > 0:
+        if self.num_params > 0:
             raise ValueError(("PureStateSPAMVec.taylor_order_terms(...) is only "
                               "implemented for the case when its underlying "
                               "pure state vector has 0 parameters (is static)"))
@@ -2714,7 +2720,7 @@ class PureStateSPAMVec(SPAMVec):
     #    list
     #        A list of :class:`RankOneTerm` objects.
     #    """
-    #    if self.num_params() > 0:
+    #    if self.num_params > 0:
     #        raise ValueError(("PureStateSPAMVec.taylor_order_terms(...) is only "
     #                          "implemented for the case when its underlying "
     #                          "pure state vector has 0 parameters (is static)"))
@@ -2730,6 +2736,7 @@ class PureStateSPAMVec(SPAMVec):
     #        terms = []
     #    return terms
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -2739,7 +2746,7 @@ class PureStateSPAMVec(SPAMVec):
         int
             the number of independent parameters.
         """
-        return self.pure_state_vec.num_params()
+        return self.pure_state_vec.num_params
 
     def to_vector(self):
         """
@@ -3198,7 +3205,7 @@ class LindbladSPAMVec(SPAMVec):
 
         assert(pure_vec._evotype == evotype), \
             "`pure_vec` evotype must match `errormap` ('%s' != '%s')" % (pure_vec._evotype, evotype)
-        assert(pure_vec.num_params() == 0), "`pure_vec` 'reference' must have *zero* parameters!"
+        assert(pure_vec.num_params == 0), "`pure_vec` 'reference' must have *zero* parameters!"
 
         d2 = pure_vec.dim
         self.state_vec = pure_vec
@@ -3466,6 +3473,7 @@ class LindbladSPAMVec(SPAMVec):
                  for t in err_terms]  # t ops occur *after* stateTerm's
         return terms
 
+    @property
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this SPAM vector's terms.
@@ -3480,8 +3488,9 @@ class LindbladSPAMVec(SPAMVec):
         float
         """
         # return (sum of absvals of *all* term coeffs)
-        return self.error_map.total_term_magnitude()  # error map is only part with terms
+        return self.error_map.total_term_magnitude  # error map is only part with terms
 
+    @property
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this SPAM vector's terms.
@@ -3492,9 +3501,9 @@ class LindbladSPAMVec(SPAMVec):
         Returns
         -------
         numpy array
-            An array of length self.num_params()
+            An array of length self.num_params
         """
-        return self.error_map.total_term_magnitude_deriv()
+        return self.error_map.total_term_magnitude_deriv
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -3568,6 +3577,7 @@ class LindbladSPAMVec(SPAMVec):
             #return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,n_params)
             return _np.tensordot(herrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,n_params)
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -3577,7 +3587,7 @@ class LindbladSPAMVec(SPAMVec):
         int
             the number of independent parameters.
         """
-        return self.error_map.num_params()
+        return self.error_map.num_params
 
     def to_vector(self):
         """
@@ -4140,6 +4150,7 @@ class ComputationalSPAMVec(SPAMVec):
             else:
                 return []
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.

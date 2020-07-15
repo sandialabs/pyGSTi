@@ -89,7 +89,7 @@ class SPAMVecTestCase(BaseTestCase):
         v = model.to_vector()
         model.from_vector(v)
 
-        #print(Ec.num_params()) #not implemented for complement vecs - only for POVM
+        #print(Ec.num_params) #not implemented for complement vecs - only for POVM
         identity = np.array([[np.sqrt(2)], [0], [0], [0]],'d')
         print("TEST1")
         print(E0)
@@ -143,7 +143,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         for i,p in enumerate([povm, tp_povm, tensor_povm]):
             print("Testing POVM of type ", type(p))
-            Nels = p.num_elements()
+            Nels = p.num_elements
             cpy = p.copy()
             s = str(p)
 
@@ -206,7 +206,7 @@ class SPAMVecTestCase(BaseTestCase):
         items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx",'effect'))
                   for outcomes in itertools.product(*iterover) ]
         povm = pygsti.obj.UnconstrainedPOVM(items)
-        self.assertEqual(povm.num_params(),0)
+        self.assertEqual(povm.num_params,0)
 
         mdl = std1Q_XYI.target_model()
         mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')

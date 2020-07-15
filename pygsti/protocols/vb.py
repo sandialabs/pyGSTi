@@ -380,7 +380,7 @@ class SummaryStatistics(_proto.Protocol):
         """
         def get_circuit_values(icirc, circ, dsrow, idealout):
             ret = {'twoQgate_count': circ.two_q_gate_count(),
-                   'circuit_depth': circ.depth(),
+                   'circuit_depth': circ.depth,
                    'idealout': idealout,
                    'circuit_index': icirc,
                    'circuit_width': len(circ.line_labels)}

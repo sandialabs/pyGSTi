@@ -162,7 +162,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                                                     array_types=('dp',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty((layout.num_elements, target_model.num_params()), 'd')
+            dP = _np.empty((layout.num_elements, target_model.num_params), 'd')
             target_model.sim.bulk_fill_dprobs(dP, layout)  # num_els x num_params
             dPall.append(dP)
 
@@ -394,7 +394,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             printer.show_progress(i, len(germs),
                                   suffix='-- %s germ (%d params)' %
-                                  (germ, gsGerm.num_params()))
+                                  (germ, gsGerm.num_params))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
             #print(gsGerm.operations["Ggerm"].params)
@@ -418,7 +418,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                     # "original" indices into lst for k-th fiducial pair
                     elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
-            dPall = _np.empty((layout.num_elements, gsGerm.num_params()), 'd')
+            dPall = _np.empty((layout.num_elements, gsGerm.num_params), 'd')
             gsGerm.sim.bulk_fill_dprobs(dPall, layout)  # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
@@ -430,7 +430,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             # want sensitivity to.
             RANK_TOL = 1e-7
             rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
-            if rank < gsGerm.num_params():  # full fiducial set should work!
+            if rank < gsGerm.num_params:  # full fiducial set should work!
                 raise ValueError("Incomplete fiducial-pair set!")
 
             #Below will take a *subset* of the rows in dPall
@@ -444,7 +444,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = None; maxRank = 0
-            for nNeededPairs in range(gsGerm.num_params(), nPossiblePairs):
+            for nNeededPairs in range(gsGerm.num_params, nPossiblePairs):
                 printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
                             (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
 
@@ -477,9 +477,9 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
                     printer.log("Pair list %s ==> %d of %d amplified parameters"
                                 % (" ".join(map(str, pairList)), rank,
-                                   gsGerm.num_params()), 3)
+                                   gsGerm.num_params), 3)
 
-                    if rank == gsGerm.num_params():
+                    if rank == gsGerm.num_params:
                         printer.log("Found a good set of %d pairs: %s" %
                                     (nNeededPairs, " ".join(map(str, pairList))), 2)
                         goodPairList = pairList
@@ -496,7 +496,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             #    #we tried all the way to nPossiblePairs-1 and no success,
             #    # just return all the pairs
             #    printer.log(" --> Highest number amplified = %d of %d" %
-            #                (maxRank, gsGerms.num_params()))
+            #                (maxRank, gsGerms.num_params))
             #    listOfAllPairs = [ (prepfid_index,iEStr)
             #                       for prepfid_index in range(nRhoStrs)
             #                       for iEStr in range(nEStrs) ]
@@ -571,7 +571,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
 
-    nModelParams = target_model.num_params()
+    nModelParams = target_model.num_params
 
     def get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>

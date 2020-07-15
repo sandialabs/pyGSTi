@@ -372,7 +372,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                 assert(len(stabilityanalyzer.data.keys()) == 1), \
                     "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
-            dtimes, data = stabilityanalyzer.data[dskey][circuit].timeseries_for_outcomes()
+            dtimes, data = stabilityanalyzer.data[dskey][circuit].timeseries_for_outcomes
             if times is None:
                 times = _np.linspace(min(dtimes), max(dtimes), 5000)
             p = stabilityanalyzer.get_probability_trajectory(
@@ -546,7 +546,7 @@ def _create_drift_switchboard(ws, results, circuits):
             [list(results.data.keys()), [c.str for c in circuit_struct.germs],
              [c.str for c in circuit_struct.prep_fiducials],
              [c.str for c in circuit_struct.meas_fiducials],
-             [i.str for i in results.data.outcome_labels()]],
+             [i.str for i in results.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
@@ -559,7 +559,7 @@ def _create_drift_switchboard(ws, results, circuits):
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
             [[c.str for c in circuit_struct.germs], [c.str for c in circuit_struct.prep_fiducials],
-             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.outcome_labels()]],
+             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prep_fiducials", (1,))
@@ -569,7 +569,7 @@ def _create_drift_switchboard(ws, results, circuits):
         drift_switchBd.germs[:] = circuit_struct.germs
         drift_switchBd.prep_fiducials[:] = circuit_struct.prep_fiducials
         drift_switchBd.meas_fiducials[:] = circuit_struct.meas_fiducials
-        drift_switchBd.outcomes[:] = results.data.outcome_labels()
+        drift_switchBd.outcomes[:] = results.data.outcome_labels
 
     return drift_switchBd
 

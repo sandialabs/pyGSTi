@@ -46,13 +46,13 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         def printInfo():
             def pp(x): return id(x) if (x is not None) else x #print's parent nicely
             print("INDEX INFO")
-            print("idleErr0 (%d):" % id(idleErr0), idleErr0.gpindices, pp(idleErr0.parent), idleErr0.num_params())
-            print("idleErr1 (%d):" % id(idleErr1), idleErr1.gpindices, pp(idleErr1.parent), idleErr1.num_params())
-            print("idleErr2 (%d):" % id(idleErr2), idleErr2.gpindices, pp(idleErr2.parent), idleErr2.num_params())
-            print("Gxii_xErr (%d):" % id(Gxii_xErr), Gxii_xErr.gpindices, pp(Gxii_xErr.parent), Gxii_xErr.num_params())
-            print("Gxii_xGate (%d):" % id(Gxii_xGate), Gxii_xGate.gpindices, pp(Gxii_xGate.parent), Gxii_xGate.num_params())
-            print("Giii (%d):" % id(Giii), Giii.gpindices, pp(Giii.parent), Giii.num_params())
-            print("Gxii (%d):" % id(Gxii), Gxii.gpindices, pp(Gxii.parent), Gxii.num_params())
+            print("idleErr0 (%d):" % id(idleErr0), idleErr0.gpindices, pp(idleErr0.parent), idleErr0.num_params)
+            print("idleErr1 (%d):" % id(idleErr1), idleErr1.gpindices, pp(idleErr1.parent), idleErr1.num_params)
+            print("idleErr2 (%d):" % id(idleErr2), idleErr2.gpindices, pp(idleErr2.parent), idleErr2.num_params)
+            print("Gxii_xErr (%d):" % id(Gxii_xErr), Gxii_xErr.gpindices, pp(Gxii_xErr.parent), Gxii_xErr.num_params)
+            print("Gxii_xGate (%d):" % id(Gxii_xGate), Gxii_xGate.gpindices, pp(Gxii_xGate.parent), Gxii_xGate.num_params)
+            print("Giii (%d):" % id(Giii), Giii.gpindices, pp(Giii.parent), Giii.num_params)
+            print("Gxii (%d):" % id(Gxii), Gxii.gpindices, pp(Gxii.parent), Gxii.num_params)
             print()
 
         # rubber meets road: how to assign gpindices??
@@ -77,12 +77,12 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Gxii = mdl_constructed.operations['Gxii'] #so printInfo works
         printInfo()
 
-        print("TOTAL Params = ", mdl_constructed.num_params())
+        print("TOTAL Params = ", mdl_constructed.num_params)
 
         v = mdl_constructed.to_vector()
         print("len(v) =",len(v))
         mdl_constructed2 = mdl_constructed.copy()
-        print("Copy's total params = ", mdl_constructed2.num_params())
+        print("Copy's total params = ", mdl_constructed2.num_params)
         mdl_constructed2.from_vector(v)
         print("Diff = %g (should be 0)" % mdl_constructed.frobeniusdist(mdl_constructed2))
         self.assertAlmostEqual(mdl_constructed.frobeniusdist(mdl_constructed2),0)

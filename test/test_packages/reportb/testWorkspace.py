@@ -314,6 +314,7 @@ class TestWorkspace(ReportBaseCase):
         #        effectStrs=effectStrs,
         #        prep_labels=list(self.mdl.preps.keys()),
         #        effect_labels=self.mdl.get_effect_labels() )
+
         baseStrs = [plaq.base for _, plaq in self.gss.iter_plaquettes()]
         directModels = dx.direct_mlgst_models(
             baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)

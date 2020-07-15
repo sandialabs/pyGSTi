@@ -37,7 +37,8 @@ class XRotationOp(pygsti.obj.DenseOperator):
         self.target_angle = target_angle
         super(XRotationOp,self).__init__(np.identity(4,'d'), "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector(np.array(initial_params,'d'))         
-        
+
+    @property
     def num_params(self): 
         return 2 # we have two parameters
     
@@ -73,7 +74,8 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
         assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
         assert(len(args) == 1)
         return XRotationOp( float(args[0]) ) #no need to set parameters of returned op - done by base class
-    
+
+    @property
     def num_params(self): 
         return len(self.params) # we have two parameters
     
@@ -147,7 +149,7 @@ class OpFactoryTestCase(BaseTestCase):
         mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_param_factory
-        self.assertEqual(mdl.num_params(), 2)
+        self.assertEqual(mdl.num_params, 2)
 
         #see that parent and gpindices of ops created by factory are correctly set
         mdl.from_vector( np.array([0.1,0.02]) )

@@ -59,7 +59,7 @@ class NQubitTestCase(BaseTestCase):
         #                                    roughNoise=(1234,0.1))
 
         #print("Constructed model with %d gates, dim=%d, and n_params=%d.  Norm(paramvec) = %g" %
-        #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
+        #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params, np.linalg.norm(mdl_test.to_vector()) ))
 
     def test_sequential_sequenceselection(self):
 
@@ -231,8 +231,8 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=1,
             sparse_lindblad_basis=True, sparse_lindblad_reps=True,
             simulator="map",verbosity=1)
-        #print("nElements test = ",target_model.num_elements())
-        #print("nParams test = ",target_model.num_params())
+        #print("nElements test = ",target_model.num_elements)
+        #print("nParams test = ",target_model.num_params)
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
 
         print("Constructing Datagen LinearOperator Set")
@@ -244,7 +244,7 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_test = mdl_datagen
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
-              (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
+              (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params, np.linalg.norm(mdl_test.to_vector()) ))
 
         op_labels = target_model.primitive_op_labels
         line_labels = tuple(range(nQubits))
@@ -271,7 +271,7 @@ class NQubitTestCase(BaseTestCase):
         chi2 = pygsti.tools.chi2(mdl_datagen, ds, expList)
 
         dof = ds.degrees_of_freedom()
-        nParams = mdl_datagen.num_params()
+        nParams = mdl_datagen.num_params
         print("Datagen 2DeltaLogL = 2(%g-%g) = %g" % (logL,max_logL,twoDeltaLogL))
         print("Datagen chi2 = ",chi2)
         print("Datagen expected DOF = ",dof)
@@ -296,7 +296,7 @@ class NQubitTestCase(BaseTestCase):
             factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
         povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
         print(list(povm.keys()))
-        print("params = ",povm.num_params(),"dim = ",povm.dim)
+        print("params = ",povm.num_params,"dim = ",povm.dim)
         print(povm)
 
         v = povm.to_vector()

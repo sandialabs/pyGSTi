@@ -32,7 +32,7 @@ def minimum(qty1, qty2):
     -------
     ReportableQty
     """
-    if qty1.value() <= qty2.value():
+    if qty1.value <= qty2.value:
         return qty1
     else:
         return qty2
@@ -54,7 +54,7 @@ def maximum(qty1, qty2):
     -------
     ReportableQty
     """
-    if qty1.value() >= qty2.value():
+    if qty1.value >= qty2.value:
         return qty1
     else:
         return qty2
@@ -102,7 +102,8 @@ class ReportableQty(object):
             boolean indicating if non markovian error bars should be used
         """
         self._value = value
-        self._errbar = errbar
+        self._errorbar = errbar
+
         self.nonMarkovianEBs = non_markovian_ebs
 
     def __str__(self):
@@ -113,22 +114,22 @@ class ReportableQty(object):
         return 'ReportableQty({})'.format(str(self))
 
     def __add__(self, x):
-        if self.has_errorbar():
-            return ReportableQty(self._value + x, self._errbar, self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(self.value + x, self.errorbar, self.nonMarkovianEBs)
         else:
-            return ReportableQty(self._value + x)
+            return ReportableQty(self.value + x)
 
     def __mul__(self, x):
-        if self.has_errorbar():
-            return ReportableQty(self._value * x, self._errbar * x, self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(self.value * x, self.errorbar * x, self.nonMarkovianEBs)
         else:
-            return ReportableQty(self._value * x)
+            return ReportableQty(self.value * x)
 
     def __truediv__(self, x):
-        if self.has_errorbar():
-            return ReportableQty(self._value / x, self._errbar / x, self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(self.value / x, self.errorbar / x, self.nonMarkovianEBs)
         else:
-            return ReportableQty(self._value / x)
+            return ReportableQty(self.value / x)
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
@@ -138,14 +139,10 @@ class ReportableQty(object):
         self.__dict__.update(d)
 
     def __copy__(self):
-        return ReportableQty(self._value, self._errbar)
+        return ReportableQty(self.value, self.errorbar)
 
     def __deepcopy__(self, memo):
-        return ReportableQty(_deepcopy(self._value, memo), _deepcopy(self._errbar, memo))
-
-    #def __getattr__(self, attr):
-        #print(self._value)
-        #return getattr(self._value, attr)
+        return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errorbar, memo))
 
     def log(self):
         """
@@ -158,12 +155,12 @@ class ReportableQty(object):
         # log(1 + x) ~ x
         # x + dx
         # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
-        v = self._value
+        v = self.value
         if _np.any(_np.isreal(v)) and _np.any(v < 0):
             v = v.astype(complex)  # so logarithm can be complex
 
-        if self.has_errorbar():
-            return ReportableQty(_np.log(v), _np.log(v + self._errbar) - _np.log(v),
+        if self.has_errorbar:
+            return ReportableQty(_np.log(v), _np.log(v + self.errorbar) - _np.log(v),
                                  self.nonMarkovianEBs)
         else:
             return ReportableQty(_np.log(v))
@@ -176,10 +173,10 @@ class ReportableQty(object):
         -------
         ReportableQty
         """
-        if self.has_errorbar():
-            return ReportableQty(_np.real(self._value), _np.real(self._errbar), self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(_np.real(self.value), _np.real(self.errorbar), self.nonMarkovianEBs)
         else:
-            return ReportableQty(_np.real(self._value))
+            return ReportableQty(_np.real(self.value))
 
     def imag(self):
         """
@@ -189,10 +186,10 @@ class ReportableQty(object):
         -------
         ReportableQty
         """
-        if self.has_errorbar():
-            return ReportableQty(_np.imag(self._value), _np.imag(self._errbar), self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(_np.imag(self.value), _np.imag(self.errorbar), self.nonMarkovianEBs)
         else:
-            return ReportableQty(_np.imag(self._value))
+            return ReportableQty(_np.imag(self.value))
 
     def absdiff(self, constant_value, separate_re_im=False):
         """
@@ -220,18 +217,18 @@ class ReportableQty(object):
             Otherwise a single quantity is returned.
         """
         if separate_re_im:
-            re_v = _np.fabs(_np.real(self._value) - _np.real(constant_value))
-            im_v = _np.fabs(_np.imag(self._value) - _np.imag(constant_value))
-            if self.has_errorbar():
-                return (ReportableQty(re_v, _np.fabs(_np.real(self._errbar)), self.nonMarkovianEBs),
-                        ReportableQty(im_v, _np.fabs(_np.imag(self._errbar)), self.nonMarkovianEBs))
+            re_v = _np.fabs(_np.real(self.value) - _np.real(constant_value))
+            im_v = _np.fabs(_np.imag(self.value) - _np.imag(constant_value))
+            if self.has_errorbar:
+                return (ReportableQty(re_v, _np.fabs(_np.real(self.errorbar)), self.nonMarkovianEBs),
+                        ReportableQty(im_v, _np.fabs(_np.imag(self.errorbar)), self.nonMarkovianEBs))
             else:
                 return ReportableQty(re_v), ReportableQty(im_v)
 
         else:
-            v = _np.absolute(self._value - constant_value)
-            if self.has_errorbar():
-                return ReportableQty(v, _np.absolute(self._errbar), self.nonMarkovianEBs)
+            v = _np.absolute(self.value - constant_value)
+            if self.has_errorbar:
+                return ReportableQty(v, _np.absolute(self.errorbar), self.nonMarkovianEBs)
             else:
                 return ReportableQty(v)
 
@@ -256,10 +253,10 @@ class ReportableQty(object):
         # so d(diff)/dx.re = -const.re, d(diff)/dx.im = -const.im
         # diff(x + dx) = diff(x) + d(diff)/dx * dx
         # diff(x + dx) - diff(x) =  - (const.re * dx.re + const.im * dx.im)
-        v = 1.0 - _np.real(_np.conjugate(constant_value) * self._value)
-        if self.has_errorbar():
-            eb = abs(_np.real(constant_value) * _np.real(self._errbar)
-                     + _np.imag(constant_value) * _np.real(self._errbar))
+        v = 1.0 - _np.real(_np.conjugate(constant_value) * self.value)
+        if self.has_errorbar:
+            eb = abs(_np.real(constant_value) * _np.real(self.errorbar)
+                     + _np.imag(constant_value) * _np.real(self.errorbar))
             return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
             return ReportableQty(v)
@@ -279,9 +276,9 @@ class ReportableQty(object):
         -------
         ReportableQty
         """
-        v = self._value % x
-        if self.has_errorbar():
-            eb = self._errbar % x
+        v = self.value % x
+        if self.has_errorbar:
+            eb = self.errorbar % x
             return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
             return ReportableQty(v)
@@ -302,7 +299,7 @@ class ReportableQty(object):
         -------
         ReportableQty
         """
-        if _np.linalg.norm(self._value - _np.conjugate(self._value).T) > 1e-8:
+        if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
 
         def _convert(a):
@@ -314,9 +311,9 @@ class ReportableQty(object):
                     ret[j, i] = a[i, j].imag
             return ret
 
-        v = _convert(self._value)
-        if self.has_errorbar():
-            eb = _convert(self._errbar)
+        v = _convert(self.value)
+        if self.has_errorbar:
+            eb = _convert(self.errorbar)
             return ReportableQty(v, eb, self.nonMarkovianEBs)
         else:
             return ReportableQty(v)
@@ -329,10 +326,10 @@ class ReportableQty(object):
         -------
         ReportableQty
         """
-        if self.has_errorbar():
-            return ReportableQty(self._value.reshape(*args), self._errbar.reshape(*args), self.nonMarkovianEBs)
+        if self.has_errorbar:
+            return ReportableQty(self.value.reshape(*args), self.errorbar.reshape(*args), self.nonMarkovianEBs)
         else:
-            return ReportableQty(self._value.reshape(*args))
+            return ReportableQty(self.value.reshape(*args))
 
     @property
     def size(self):
@@ -343,7 +340,7 @@ class ReportableQty(object):
         -------
         int
         """
-        return self._value.size
+        return self.value.size
 
     @staticmethod
     def from_val(value, non_markovian_ebs=False):
@@ -383,6 +380,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(value, non_markovian_ebs=non_markovian_ebs)
 
+    @property
     def has_errorbar(self):
         """
         Return whether this quantity is storing an error bar (bool).
@@ -391,7 +389,7 @@ class ReportableQty(object):
         -------
         bool
         """
-        return self._errbar is not None
+        return self.errorbar is not None
 
     def scale_inplace(self, factor):
         """
@@ -407,8 +405,10 @@ class ReportableQty(object):
         None
         """
         self._value *= factor
-        if self.has_errorbar(): self._errbar *= factor
+        if self.has_errorbar:
+            self._errorbar *= factor
 
+    @property
     def value(self):
         """
         Returns the quantity's value
@@ -420,6 +420,7 @@ class ReportableQty(object):
         """
         return self._value
 
+    @property
     def errorbar(self):
         """
         Returns the quantity's error bar(s)
@@ -429,8 +430,9 @@ class ReportableQty(object):
         object
             Usually a float or numpy array.
         """
-        return self._errbar
+        return self._errorbar
 
+    @property
     def value_and_errorbar(self):
         """
         Returns the quantity's value and error bar(s)
@@ -443,7 +445,8 @@ class ReportableQty(object):
         error_bar : object
             This object's value (usually a float or numpy array).
         """
-        return self._value, self._errbar
+        # XXX isn't this redundant?
+        return self.value, self.errorbar
 
     def render_with(self, f, specs=None, ebstring='%s +/- %s', nmebstring=None):
         """
@@ -478,14 +481,14 @@ class ReportableQty(object):
             nmebstring = ebstring
         if specs is None:
             specs = dict()
-        if self._errbar is not None:
+        if self.has_errorbar:
             specs['formatstring'] = '%s'  # Don't recursively apply format strings to inside error bars
             if self.nonMarkovianEBs:
-                rendered = nmebstring % (f(self._value, specs),
-                                         f(self._errbar, specs))
+                rendered = nmebstring % (f(self.value, specs),
+                                         f(self.errorbar, specs))
             else:
-                rendered = ebstring % (f(self._value, specs),
-                                       f(self._errbar, specs))
+                rendered = ebstring % (f(self.value, specs),
+                                       f(self.errorbar, specs))
         else:
-            rendered = f(self._value, specs)
+            rendered = f(self.value, specs)
         return rendered

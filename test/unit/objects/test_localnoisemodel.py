@@ -20,7 +20,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
             [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')]))
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')], ('Gcnot', 'qb0', 'qb1'), [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
-        self.assertEqual(mdl_local.num_params(), 108)
+        self.assertEqual(mdl_local.num_params, 108)
 
     def test_dep_localnoise(self):
         nQubits = 2
@@ -35,7 +35,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
             [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')]))
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')], ('Gcnot', 'qb0', 'qb1'), [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
-        self.assertEqual(mdl_local.num_params(), 66)
+        self.assertEqual(mdl_local.num_params, 66)
 
     def test_localnoise_with1Qidle(self):
         nQubits = 2
@@ -56,7 +56,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.3576168)
-        self.assertEqual(mdl_local.num_params(), 0)
+        self.assertEqual(mdl_local.num_params, 0)
 
     def test_localnoise_withNQidle(self):
         nQubits = 2
@@ -75,4 +75,4 @@ class LocalNoiseModelInstanceTester(BaseCase):
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.414025)
-        self.assertEqual(mdl_local.num_params(), 144)
+        self.assertEqual(mdl_local.num_params, 144)

@@ -1723,7 +1723,7 @@ def _compute_robust_scaling(scale_typ, mdc_store, parameters):
     fitqty = _get_fit_qty(mdc_store, parameters)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
-    expected = (len(ds.outcome_labels()) - 1)  # == "k"
+    expected = (len(ds.outcome_labels) - 1)  # == "k"
     dof_per_box = expected; nboxes = len(circuit_list)
     pc = 0.05  # hardcoded (1 - confidence level) for now -- make into advanced option w/default
 
@@ -1810,7 +1810,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
     ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
-    nparams = model.num_params()  # just use total number of params
+    nparams = model.num_params  # just use total number of params
     percentile = 0.05; nboxes = len(circuits_to_use)
     two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)

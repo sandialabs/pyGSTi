@@ -2170,7 +2170,7 @@ def DM_mapfill_dprobs_block(fwdsim,
     cdef double eps = 1e-7 #hardcoded?
 
     if param_indices is None:
-        param_indices = list(range(fwdsim.model.num_params()))
+        param_indices = list(range(fwdsim.model.num_params))
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
@@ -2222,7 +2222,7 @@ def DM_mapfill_dprobs_block(fwdsim,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
 
     orig_vec = fwdsim.model.to_vector().copy()
-    for i in range(fwdsim.model.num_params()):
+    for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
@@ -2420,7 +2420,7 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     cdef double eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(fwdsim.model.num_params()) if (wrt_slice is None) else _slct.indices(wrt_slice)
+    param_indices = range(fwdsim.model.num_params) if (wrt_slice is None) else _slct.indices(wrt_slice)
     #cdef INT nDerivCols = len(param_indices)  # *all*, not just locally computed ones
 
     #rhoVec, EVecs = fwdsim._rho_es_from_labels(rholabel, elabels)
@@ -2447,8 +2447,8 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
     orig_vec = fwdsim.model.to_vector().copy()
-    for i in range(fwdsim.model.num_params()):
-        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params()))
+    for i in range(fwdsim.model.num_params):
+        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
@@ -2464,7 +2464,7 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (fwdsim.model.num_params(), fwdsim.model.dim, cacheSize, len(layout_atom), layout_atom.get_num_applies(), _time.time()-tStart)) #DEBUG
+    #      (fwdsim.model.num_params, fwdsim.model.dim, cacheSize, len(layout_atom), layout_atom.get_num_applies(), _time.time()-tStart)) #DEBUG
 
 
 # ------------------------------------- TERM CALC FUNCTIONS ------------------------------
@@ -2499,7 +2499,7 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
     for gl in circuit:
         cgatestring.push_back(<INT>glmap[gl])
 
-    cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
+    cdef INT mpv = fwdsim.model.num_params # max_polynomial_vars
     #cdef INT mpo = fwdsim.max_order*2 #max_polynomial_order
     cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT order;
@@ -3093,7 +3093,7 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
 
     cdef INT i
     cdef INT numEs = len(elabels)
-    cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
+    cdef INT mpv = fwdsim.model.num_params # max_polynomial_vars
     cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef CircuitSetupCacheEl cscel;
 
@@ -3109,13 +3109,13 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
     cdef vector[INT] npaths = vector[INT](numEs)
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude()
+    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude
     for glbl in circuit:
         op = fwdsim.model.circuit_layer_operator(glbl, 'op')
-        max_partial_sopm *= op.total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude() - pathmagnitude_gap  # absolute gap
-        #target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.sos.get_effect(elbl).total_term_magnitude() * (1.0 - pathmagnitude_gap)  # relative gap
+        target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude - pathmagnitude_gap  # absolute gap
+        #target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.sos.get_effect(elbl).total_term_magnitude * (1.0 - pathmagnitude_gap)  # relative gap
 
     cdef double threshold = sv_find_best_pathmagnitude_threshold(
         cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
@@ -3200,7 +3200,7 @@ def SV_compute_pruned_path_polynomials_given_threshold(
 
     cdef INT i
     cdef INT numEs = len(elabels)
-    cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
+    cdef INT mpv = fwdsim.model.num_params # max_polynomial_vars
     cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT stateDim = int(round(np.sqrt(fwdsim.model.dim)))
     cdef double min_term_mag = fwdsim.min_term_mag
@@ -3822,7 +3822,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 
     cdef INT i, j
     cdef INT numEs = len(elabels)
-    cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
+    cdef INT mpv = fwdsim.model.num_params # max_polynomial_vars
     cdef CircuitSetupCacheEl cscel;
     circuitsetup_cache = {} # for now...
 
@@ -3833,13 +3833,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude()
+    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
         op = fwdsim.model.circuit_layer_operator(glbl, 'op')
-        max_partial_sopm *= op.total_term_magnitude()
+        max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+        max_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(fwdsim.model.dim)))
@@ -4563,7 +4563,7 @@ def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
     for gl in circuit:
         cgatestring.push_back(<INT>glmap[gl])
 
-    cdef INT mpv = fwdsim.model.num_params() # max_polynomial_vars
+    cdef INT mpv = fwdsim.model.num_params # max_polynomial_vars
     #cdef INT mpo = fwdsim.max_order*2 #max_polynomial_order
     cdef INT vpi = polynomial_vindices_per_int  #pass this in directly so fwdsim can compute once & use multiple times
     cdef INT order;

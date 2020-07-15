@@ -7,45 +7,45 @@ from pygsti.objects import gaugegroup as ggrp, operation as op
 
 class GaugeGroupBase(object):
     def test_construction(self):
-        params = self.gg.initial_params()
+        params = self.gg.initial_params
         self.assertEqual(len(params), self.n_params)
-        self.assertEqual(self.gg.num_params(), self.n_params)
+        self.assertEqual(self.gg.num_params, self.n_params)
         element = self.gg.compute_element(params)
         # XXX is this necessary?  EGN: maybe not, but it asserts correctness and should be fast
         self.assertIsInstance(element, self.element_type)
 
     def test_element_construction(self):
-        el = self.gg.compute_element(self.gg.initial_params())
-        self.assertEqual(el.num_params(), self.n_params)
+        el = self.gg.compute_element(self.gg.initial_params)
+        self.assertEqual(el.num_params, self.n_params)
 
     def test_element_get_transform_matrix(self):
-        el = self.gg.compute_element(self.gg.initial_params())
-        mx = el.transform_matrix()
+        el = self.gg.compute_element(self.gg.initial_params)
+        mx = el.transform_matrix
         # TODO assert correctness
 
     def test_element_get_transform_matrix_inverse(self):
-        el = self.gg.compute_element(self.gg.initial_params())
-        mx = el.transform_matrix()
-        inv = el.transform_matrix_inverse()
+        el = self.gg.compute_element(self.gg.initial_params)
+        mx = el.transform_matrix
+        inv = el.transform_matrix_inverse
         self.assertArraysAlmostEqual(np.linalg.inv(mx), inv)
 
     def test_element_deriv_wrt_params(self):
-        el = self.gg.compute_element(self.gg.initial_params())
+        el = self.gg.compute_element(self.gg.initial_params)
         deriv = el.deriv_wrt_params()
         # TODO assert correctness
 
     def test_element_to_vector(self):
-        el = self.gg.compute_element(self.gg.initial_params())
+        el = self.gg.compute_element(self.gg.initial_params)
         v = el.to_vector()
         # TODO assert correctness
 
     def test_element_from_vector(self):
-        ip = self.gg.initial_params()
+        ip = self.gg.initial_params
         el = self.gg.compute_element(ip)
         el2 = self.gg.compute_element(ip)
         v = el.to_vector()
         el2.from_vector(v)
-        self.assertArraysAlmostEqual(el.transform_matrix(), el2.transform_matrix())
+        self.assertArraysAlmostEqual(el.transform_matrix, el2.transform_matrix)
         # TODO does this actually assert correctness?
 
 
@@ -59,8 +59,8 @@ class GaugeGroupTester(GaugeGroupBase, BaseCase):
         self.gg = ggrp.GaugeGroup('myGaugeGroupName')
 
     def test_element_get_transform_matrix_inverse(self):
-        el = self.gg.compute_element(self.gg.initial_params())
-        inv = el.transform_matrix_inverse()
+        el = self.gg.compute_element(self.gg.initial_params)
+        inv = el.transform_matrix_inverse
         self.assertIsNone(inv)
 
     def test_element_from_vector(self):

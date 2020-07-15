@@ -96,7 +96,10 @@ class OplessModel(_Model):
 
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.basis = None
-        self.dim = 0
+
+    @property
+    def dim(self):
+        return 0
 
     def circuit_outcomes(self, circuit):  # needed for sparse data detection
         """
@@ -202,7 +205,7 @@ class OplessModel(_Model):
     #    """
     #    eps = 1e-7
     #    orig_pvec = self.to_vector()
-    #    Np = self.num_params()
+    #    Np = self.num_params
     #    probs0 = self.probabilities(circuit, clip_to, None)
     #
     #    deriv = {k: _np.empty(Np, 'd') for k in probs0.keys()}
@@ -413,7 +416,7 @@ class OplessModel(_Model):
 #        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(circuit_list, comm, memLimit,
 #                                                                                "default", [], dataset)
 #        nElements = evalTree.num_final_elements()
-#        nDerivCols = self.num_params()
+#        nDerivCols = self.num_params
 #
 #        vdp = _np.empty((nElements, nDerivCols), 'd')
 #        vp = _np.empty(nElements, 'd') if return_pr else None
@@ -485,7 +488,7 @@ class SuccessFailModel(OplessModel):
         """ Derived classes can override this.  Default implemntation is to use finite difference. """
         eps = 1e-7
         orig_pvec = self.to_vector()
-        wrtIndices = _slct.indices(param_slice) if (param_slice is not None) else list(range(self.num_params()))
+        wrtIndices = _slct.indices(param_slice) if (param_slice is not None) else list(range(self.num_params))
         sp0 = self._success_prob(circuit, cache)
 
         deriv = _np.empty(len(wrtIndices), 'd')
@@ -814,8 +817,8 @@ class ErrorRatesModel(SuccessFailModel):
         if not isinstance(circuit, _Circuit):
             circuit = _Circuit.from_tuple(circuit)
 
-        depth = circuit.depth()
-        width = circuit.width()
+        depth = circuit.depth
+        width = circuit.width
         g_inds = self._gate_error_rate_indices
         r_inds = self._readout_error_rate_indices
 
@@ -1003,7 +1006,7 @@ class TwirledGatesModel(ErrorRatesModel):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer[:-1])
         readout_inds_to_mult = inds_to_mult_by_layer[-1]
-        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt
@@ -1109,7 +1112,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return all_inds_to_mult, all_inds_to_mult_cnt
@@ -1191,7 +1194,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params(), int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt
@@ -1245,7 +1248,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     #     if not isinstance(circuit, _Circuit):
     #         circuit = _Circuit.from_tuple(circuit)
 
-    #     depth = circuit.depth()
+    #     depth = circuit.depth
     #     width = circuit.width()
     #     pvec = self._paramvec
     #     g_inds = self._gate_error_rate_indices

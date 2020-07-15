@@ -1381,7 +1381,7 @@ class PolynomialRep(dict):
                 k = newpoly._vinds_to_int(inds)
                 if k in newpoly: newpoly[k] += v1 * v2
                 else: newpoly[k] = v1 * v2
-        assert(newpoly.degree() <= self.degree() + x.degree())
+        assert(newpoly.degree <= self.degree + x.degree)
         return newpoly
 
     def scale(self, x):
@@ -2252,9 +2252,9 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 
     ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
@@ -2365,9 +2365,9 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
 
     ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
@@ -2569,7 +2569,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
 
     #max_degrees = []
     #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #    max_degrees.append(max([f.coeff.degree for f in factors]))
     #print("Max degrees = ",max_degrees)
     #for Ei,prp in enumerate(prps):
     #    print(Ei,":", prp.debug_report())
@@ -2764,9 +2764,9 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude() for op in ops])
+    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude()
+        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
@@ -2889,7 +2889,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     #max_degrees = []
     #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #    max_degrees.append(max([f.coeff.degree for f in factors]))
     #print("Max degrees = ",max_degrees)
     #for Ei,prp in enumerate(prps):
     #    print(Ei,":", prp.debug_report())

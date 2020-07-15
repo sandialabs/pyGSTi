@@ -116,6 +116,7 @@ v
         """
         return self._hyperparams  # Note: no need to set this param - just set/update values
 
+    @property
     def num_params(self):
         """
         The number of free parameters when vectorizing this model.
@@ -145,7 +146,7 @@ v
         Parameters
         ----------
         v : numpy.ndarray
-            A vector of parameters, with length equal to `self.num_params()`.
+            A vector of parameters, with length equal to `self.num_params`.
 
         close : bool, optional
             Set to `True` if `v` is close to the current parameter vector.
@@ -155,7 +156,7 @@ v
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         self._paramvec = v.copy()
 
     def probabilities(self, circuit, clip_to=None):
@@ -425,7 +426,7 @@ class OpModel(Model):
     @sim.setter
     def sim(self, simulator):
         if simulator == "auto":
-            d = self._dim if (self._dim is not None) else 0
+            d = self.dim if (self.dim is not None) else 0
             simulator = "matrix" if d <= 16 else "map"
 
         if simulator == "matrix":
@@ -520,6 +521,7 @@ class OpModel(Model):
     ## Parameter vector maintenance
     ####################################################
 
+    @property
     def num_params(self):
         """
         The number of free parameters when vectorizing this model.
@@ -541,7 +543,7 @@ class OpModel(Model):
 
         TOL = 1e-8
         for lbl, obj in self._iter_parameterized_objs():
-            if debug: print(lbl, ":", obj.num_params(), obj.gpindices)
+            if debug: print(lbl, ":", obj.num_params, obj.gpindices)
             w = obj.to_vector()
             msg = "None" if (obj.parent is None) else id(obj.parent)
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
@@ -638,7 +640,7 @@ class OpModel(Model):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
-        v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params() since the latter calls us!
+        v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
         off = 0; shift = 0
         #print("DEBUG: rebuilding...")
 
@@ -701,14 +703,14 @@ class OpModel(Model):
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
-                #obj.set_gpindices( slice(off, off+obj.num_params()), self )
-                #shift += obj.num_params()
-                #off += obj.num_params()
+                #obj.set_gpindices( slice(off, off+obj.num_params), self )
+                #shift += obj.num_params
+                #off += obj.num_params
 
                 shift += num_new_params
                 off += num_new_params
                 #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
-                #      % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
+                #      % (str(lbl),obj.num_params), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds) > 0 else -1; L = len(v)
@@ -743,7 +745,7 @@ class OpModel(Model):
             return  # if parent is already set we assume obj has already been init
 
         #Assume all parameters of obj are new independent parameters
-        num_new_params = obj.allocate_gpindices(self.num_params(), self)
+        num_new_params = obj.allocate_gpindices(self.num_params, self)
         assert(num_new_params == 0), "Virtual object is requesting %d new params!" % num_new_params
 
     def _obj_refcount(self, obj):
@@ -774,7 +776,7 @@ class OpModel(Model):
         Parameters
         ----------
         v : numpy.ndarray
-            A vector of parameters, with length equal to `self.num_params()`.
+            A vector of parameters, with length equal to `self.num_params`.
 
         close : bool, optional
             Set to `True` if `v` is close to the current parameter vector.
@@ -784,7 +786,7 @@ class OpModel(Model):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
 
         self._paramvec = v.copy()
         for _, obj in self._iter_parameterized_objs():

@@ -530,8 +530,8 @@ class CompilationLibrary(_collections.OrderedDict):
             graph_constraint = allowed_filter.get(gate_name, None)
             if graph_constraint is not None:
                 directed = graph_constraint.directed or init_qgraph.directed
-                init_nodes = set(init_qgraph.node_names())
-                qlabels = [lbl for lbl in graph_constraint.node_names()
+                init_nodes = set(init_qgraph.node_names)
+                qlabels = [lbl for lbl in graph_constraint.node_names
                            if lbl in init_nodes]  # labels common to both graphs
                 qlset = set(qlabels)  # for faster lookups
                 final_edges = []

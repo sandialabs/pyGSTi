@@ -22,6 +22,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
         super(XRotationOp,self).__init__(np.identity(4, 'd'), "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector(np.array(initial_params,'d'))
 
+    @property
     def num_params(self):
         return 2 # we have two parameters
 
@@ -58,6 +59,7 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
         assert(len(args) == 1)
         return XRotationOp( float(args[0]) ) #no need to set parameters of returned op - done by base class
 
+    @property
     def num_params(self):
         return len(self.params) # we have two parameters
 
@@ -102,11 +104,11 @@ class ContinuousGatesTestCase(BaseTestCase):
             nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
 
         mdl_datagen.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
-        print(mdl_datagen.num_params(), "model params")
-        self.assertEqual(mdl_datagen.num_params(), 32)
+        print(mdl_datagen.num_params, "model params")
+        self.assertEqual(mdl_datagen.num_params, 32)
 
         np.random.seed(4567)
-        datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params())
+        datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params)
         mdl_datagen.from_vector(datagen_vec)
         ds = pygsti.construction.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
 

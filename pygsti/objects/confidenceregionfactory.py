@@ -76,7 +76,7 @@ class ConfidenceRegionFactory(object):
 
     hessian : numpy array, optional
         A pre-computed n_params x n_params Hessian matrix, where n_params is
-        the number of dimensions of model space, i.e. model.num_params().
+        the number of dimensions of model space, i.e. model.num_params.
 
     non_mark_radius_sq : float, optional
         The non-Markovian radius associated with the goodness of fit found
@@ -108,7 +108,7 @@ class ConfidenceRegionFactory(object):
 
         hessian : numpy array, optional
             A pre-computed n_params x n_params Hessian matrix, where n_params is
-            the number of dimensions of model space, i.e. model.num_params().
+            the number of dimensions of model space, i.e. model.num_params.
 
         non_mark_radius_sq : float, optional
             The non-Markovian radius associated with the goodness of fit found
@@ -167,6 +167,7 @@ class ConfidenceRegionFactory(object):
         """
         self.parent = parent
 
+    @property
     def has_hessian(self):
         """
         Returns whether or not the Hessian has already been computed.
@@ -203,7 +204,8 @@ class ConfidenceRegionFactory(object):
         except:
             return False
 
-    def get_model(self):
+    @property
+    def model(self):
         """
         Retrieve the associated model.
 
@@ -352,7 +354,7 @@ class ConfidenceRegionFactory(object):
         model = self.parent.models[self.model_lbl]
         proj_non_gauge = model.compute_nongauge_projector()
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
-        self.nGaugeParams = model.num_params() - self.nNonGaugeParams
+        self.nGaugeParams = model.num_params - self.nNonGaugeParams
 
         #Project Hessian onto non-gauge space
         if projection_type == 'none':
@@ -435,7 +437,7 @@ class ConfidenceRegionFactory(object):
         }
 
         #Count everything as non-gauge? TODO BETTER
-        self.nNonGaugeParams = self.get_model().num_params()
+        self.nNonGaugeParams = self.model.num_params
         self.nGaugeParams = 0
 
     def view(self, confidence_level, region_type='normal',
@@ -781,7 +783,8 @@ class ConfidenceRegionFactoryView(object):
             del self.mlgst_params['comm']  # one *cannot* pickle Comm objects
         return to_pickle
 
-    def get_errobar_type(self):
+    @property
+    def errorbar_type(self):
         """
         Return the type of error bars this view will generate, either "standard" or "non-markovian".
 
@@ -869,7 +872,7 @@ class ConfidenceRegionFactoryView(object):
             at the gate specified by op_label.
         """
 
-        nParams = self.model.num_params()
+        nParams = self.model.num_params
         f0 = fn_obj.evaluate(self.model)  # function value at "base point"
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
@@ -889,7 +892,7 @@ class ConfidenceRegionFactoryView(object):
             mdl = self.model.copy()  # copy that will contain the "+eps" model
 
             if dependency == 'all':
-                all_gpindices.extend(range(mdl.num_params()))
+                all_gpindices.extend(range(mdl.num_params))
             else:
                 # copy objects because we add eps to them below
                 typ, lbl = dependency

@@ -22,7 +22,7 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
         self.from_vector([initial_depol_rate])
         self.set_time(0.0)
 
-
+    @property
     def num_params(self):
         return 1 # we have two parameters
 

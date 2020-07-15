@@ -221,6 +221,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
                 simplified[prefix + k] = comp
         return simplified
 
+    @property
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.
@@ -235,6 +236,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         """
         return sum([g.size for g in self.values()])
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this Instrument.
@@ -281,7 +283,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         -------
         None
         """
-        assert(len(v) == self.num_params())
+        assert(len(v) == self.num_params)
         for gate in self.values():
             gate.from_vector(v[gate.gpindices], close, dirty_value)
         self._paramvec = v
@@ -470,15 +472,15 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
 
             # Create gate objects that are used to parameterize this instrument
             MT = _op.TPDenseOp(sum([v for k, v in matrix_list]))
-            MT.set_gpindices(slice(0, MT.num_params()), self)
+            MT.set_gpindices(slice(0, MT.num_params), self)
             self.param_ops.append(MT)
 
-            dim = MT.dim; off = MT.num_params()
+            dim = MT.dim; off = MT.num_params
             for k, v in matrix_list[:-1]:
                 Di = _op.FullDenseOp(v - MT)
-                Di.set_gpindices(slice(off, off + Di.num_params()), self)
+                Di.set_gpindices(slice(off, off + Di.num_params), self)
                 assert(Di.dim == dim)
-                self.param_ops.append(Di); off += Di.num_params()
+                self.param_ops.append(Di); off += Di.num_params
 
             #Create a TPInstrumentOp for each operation matrix
             # Note: TPInstrumentOp sets it's own parent and gpindices
@@ -554,6 +556,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
                  for i, k in enumerate(self.keys())])
         return simplified
 
+    @property
     def num_elements(self):
         """
         Return the number of total gate elements in this instrument.
@@ -568,6 +571,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         """
         return sum([g.size for g in self.values()])
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this Instrument.
@@ -577,7 +581,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         int
             the number of independent parameters.
         """
-        return sum([g.num_params() for g in self.param_ops])
+        return sum([g.num_params for g in self.param_ops])
 
     def to_vector(self):
         """
@@ -588,7 +592,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        v = _np.empty(self.num_params(), 'd')
+        v = _np.empty(self.num_params, 'd')
         for gate in self.param_ops:
             v[gate.gpindices] = gate.to_vector()
         return v

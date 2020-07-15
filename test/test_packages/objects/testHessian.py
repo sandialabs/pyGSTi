@@ -34,7 +34,7 @@ class TestHessianMethods(BaseTestCase):
 
     def test_parameter_counting(self):
         #XY Model: SPAM=True
-        n = stdxy.target_model().num_params()
+        n = stdxy.target_model().num_params
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
         n = stdxy.target_model().num_nongauge_params()
@@ -44,7 +44,7 @@ class TestHessianMethods(BaseTestCase):
         tst = stdxy.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,32) # 2*16 = 32
 
         n = tst.num_nongauge_params()
@@ -52,7 +52,7 @@ class TestHessianMethods(BaseTestCase):
 
 
         #XYI Model: SPAM=True
-        n = stdxyi.target_model().num_params()
+        n = stdxyi.target_model().num_params
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
         n = stdxyi.target_model().num_nongauge_params()
@@ -62,7 +62,7 @@ class TestHessianMethods(BaseTestCase):
         tst = stdxyi.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,48) # 3*16 = 48
 
         n = tst.num_nongauge_params()
@@ -71,7 +71,7 @@ class TestHessianMethods(BaseTestCase):
         #XYI Model: SP0=False
         tst = stdxyi.target_model()
         tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
         n = tst.num_nongauge_params()
@@ -81,7 +81,7 @@ class TestHessianMethods(BaseTestCase):
         tst.operations['Gi'] = pygsti.obj.TPDenseOp(tst.operations['Gi'])
         tst.operations['Gx'] = pygsti.obj.TPDenseOp(tst.operations['Gx'])
         tst.operations['Gy'] = pygsti.obj.TPDenseOp(tst.operations['Gy'])
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
         n = tst.num_nongauge_params()
@@ -94,7 +94,7 @@ class TestHessianMethods(BaseTestCase):
         projectedHessian = np.dot(proj_non_gauge,
                                   np.dot(chi2Hessian, proj_non_gauge))
 
-        print(self.model.num_params())
+        print(self.model.num_params)
         print(proj_non_gauge.shape)
         self.assertEqual( projectedHessian.shape, (60,60) )
         #print("Evals = ")
@@ -154,10 +154,10 @@ class TestHessianMethods(BaseTestCase):
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        mdl_dummy = cfctry.get_model() # test method
+        mdl_dummy = cfctry.model # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -204,7 +204,7 @@ class TestHessianMethods(BaseTestCase):
         #self.assertTrue( cfctryLR.can_construct_views() )
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
 
-        mdl_dummy = cfctryLR.get_model() # test method
+        mdl_dummy = cfctryLR.model # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 
@@ -378,7 +378,7 @@ class TestHessianMethods(BaseTestCase):
 
         cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
 
         cfctry.project_hessian('std')
         ci_std = cfctry.view( 95.0, 'normal', 'std')

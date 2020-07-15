@@ -268,7 +268,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="matrix", verbosity=1)
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -291,7 +291,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="map", errcomp_type='gates', verbosity=1)
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -313,7 +313,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="map", errcomp_type='errorgens', verbosity=1)
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -329,7 +329,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=True, sparse_lindblad_reps=True,
                                                      simulator="map", errcomp_type='gates', verbosity=1)
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -351,7 +351,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=True, sparse_lindblad_reps=True,
                                                      simulator="map", errcomp_type='errorgens', verbosity=1)
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -369,7 +369,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
                                                      simulator=termsim, parameterization="H+S terms", errcomp_type='gates')
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -394,7 +394,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
                                                      simulator=termsim, parameterization="H+S terms", errcomp_type='errorgens')
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -416,7 +416,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                                allowed_perr=0.05, max_paths_per_outcome=1000,
                                                                perr_heuristic='none', max_term_stages=5)
 
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -435,7 +435,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
                                                      simulator=termsim, parameterization="H+S clifford terms", errcomp_type='gates')
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -455,7 +455,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                      extraWeight1Hops=0, extraGateWeight=1,
                                                      sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
                                                      simulator=termsim, parameterization="H+S clifford terms", errcomp_type='errorgens')
-        print("Num params = ",target_model.num_params())
+        print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,

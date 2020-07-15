@@ -251,15 +251,15 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         if gauge_group is None:
             #don't do any gauge optimization (assume trivial gauge group)
             _warnings.warn("No gauge group specified, so no gauge optimization performed.")
-        if gauge_group is None or gauge_group.num_params() == 0 or \
-           model.num_params() == 0:
+        if gauge_group is None or gauge_group.num_params == 0 or \
+           model.num_params == 0:
             if return_all:
                 trivialEl = _objs.TrivialGaugeGroupElement(model.dim)
                 return None, trivialEl, model.copy()
             else:
                 return model.copy()
 
-    x0 = gauge_group.initial_params()  # gauge group picks a good initial el
+    x0 = gauge_group.initial_params  # gauge group picks a good initial el
     gaugeGroupEl = gauge_group.compute_element(x0)  # re-used element for evals
 
     def _call_objective_fn(gauge_group_el_vec, oob_check=False):
@@ -411,8 +411,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
             # Indices: Jacobian output matrix has shape (L, N)
             start = 0
             d = mdl_pre.dim
-            N = gauge_group_el.num_params()
-            L = mdl_pre.num_elements()
+            N = gauge_group_el.num_params
+            L = mdl_pre.num_elements
 
             #Compute "extra" (i.e. beyond the model-element) rows of jacobian
             if cptp_penalty_factor != 0: L += _cptp_penalty_size(mdl_pre)
@@ -464,8 +464,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
             my_jacMx = jacMx[:, myDerivColSlice]  # just the columns I'm responsible for
 
             # S, and S_inv are shape (d,d)
-            #S       = gauge_group_el.transform_matrix()
-            S_inv = gauge_group_el.transform_matrix_inverse()
+            #S       = gauge_group_el.transform_matrix
+            S_inv = gauge_group_el.transform_matrix_inverse
             dS = gauge_group_el.deriv_wrt_params(wrtIndices)  # shape (d*d),n
             dS.shape = (d, d, n)  # call it (d1,d2,n)
             dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -719,7 +719,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
                            gauge_group_el, prefactor, op_basis, wrt_filter):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (len(mdl.operations), gauge_group_el.num_params()).
+    Returns a (real) array of shape (len(mdl.operations), gauge_group_el.num_params).
     """
 
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
@@ -728,10 +728,10 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     # gauge_group_el.
 
     # S, and S_inv are shape (d,d)
-    d, N = mdl_pre.dim, gauge_group_el.num_params()
+    d, N = mdl_pre.dim, gauge_group_el.num_params
     n = N if (wrt_filter is None) else len(wrt_filter)
-    #S       = gauge_group_el.transform_matrix()
-    S_inv = gauge_group_el.transform_matrix_inverse()
+    #S       = gauge_group_el.transform_matrix
+    S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
@@ -783,7 +783,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
                            gauge_group_el, prefactor, op_basis, wrt_filter):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (_spam_penalty_size(mdl), gauge_group_el.num_params()).
+    Returns a (real) array of shape (_spam_penalty_size(mdl), gauge_group_el.num_params).
     """
     BMxs = op_basis.elements  # shape [mdl.dim, dmDim, dmDim]
     ddenMxdV = dEMxdV = BMxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
@@ -800,9 +800,9 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         + "'%s' basis for spam pentalty factor!" % op_basis.name
 
     # S, and S_inv are shape (d,d)
-    d, N = mdl_pre.dim, gauge_group_el.num_params()
+    d, N = mdl_pre.dim, gauge_group_el.num_params
     n = N if (wrt_filter is None) else len(wrt_filter)
-    S_inv = gauge_group_el.transform_matrix_inverse()
+    S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
     dS.shape = (d, d, n)  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)

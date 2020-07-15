@@ -121,7 +121,7 @@ def write_dataset(filename, dataset, circuits=None,
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = dataset.outcome_labels()
+    outcomeLabels = dataset.outcome_labels
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -138,7 +138,7 @@ def write_dataset(filename, dataset, circuits=None,
 
     if fixed_column_mode == "auto":
         if with_times == "auto":
-            with_times = not dataset.has_trivial_timedependence()
+            with_times = not dataset.has_trivial_timedependence
         fixed_column_mode = bool(len(outcomeLabels) <= 8 and not with_times)
 
     if fixed_column_mode is True:
@@ -149,7 +149,7 @@ def write_dataset(filename, dataset, circuits=None,
         headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
 
         if with_times == "auto":
-            trivial_times = dataset.has_trivial_timedependence()
+            trivial_times = dataset.has_trivial_timedependence
         else:
             trivial_times = not with_times
 
@@ -219,7 +219,7 @@ def write_multidataset(filename, multidataset, circuits=None, outcome_label_orde
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
                                for ol in outcome_label_order]
 
-    outcomeLabels = multidataset.outcome_labels()
+    outcomeLabels = multidataset.outcome_labels
     if outcome_label_order is not None:
         assert(len(outcome_label_order) == len(outcomeLabels))
         assert(all([ol in outcomeLabels for ol in outcome_label_order]))
@@ -615,6 +615,6 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
                              collision_action, record_zero_counts, comm,
                              mem_limit, times)
     if fixed_column_mode == "auto":
-        fixed_column_mode = bool(len(ds_template.outcome_labels()) <= 8 and times is None)
+        fixed_column_mode = bool(len(ds_template.outcome_labels) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds

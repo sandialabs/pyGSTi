@@ -246,6 +246,7 @@ class FASTPolynomial(object):
 
         return FASTPolynomial(dcoeffs, self.max_num_vars)
 
+    @property
     def degree(self):
         """
         The largest sum-of-exponents for any term (monomial) within this polynomial.
@@ -256,7 +257,7 @@ class FASTPolynomial(object):
         -------
         int
         """
-        return 0 if len(self) == 0 else max([len(k) for k in self.coeffs.keys()])
+        return max((len(k) for k in self.coeffs), default=0)
 
     def evaluate(self, variable_values):
         """
@@ -743,8 +744,8 @@ class SLOWPolynomial(dict):  # REMOVE THIS CLASS (just for reference)
         -------
         int
         """
-        ret = 0 if len(self) == 0 else max([len(k) for k in self.keys()])
-        assert(self.fastpoly.degree() == ret)
+        ret = max((len(k) for k in self), default=0)
+        assert(self.fastpoly.degree == ret)
         self._check_fast_polynomial()
         return ret
 

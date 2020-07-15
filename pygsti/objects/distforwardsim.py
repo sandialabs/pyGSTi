@@ -31,7 +31,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         if wrt_filter is None:
             blkSize = wrt_block_size  # could be None
             if (comm is not None) and (comm.Get_size() > 1):
-                comm_blkSize = self.model.num_params() / comm.Get_size()
+                comm_blkSize = self.model.num_params / comm.Get_size()
                 blkSize = comm_blkSize if (blkSize is None) \
                     else min(comm_blkSize, blkSize)  # override with smaller comm_blkSize
         else:
@@ -55,7 +55,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
         sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
         wrt_block_size = layout.additional_dimension_blk_sizes[0]
-        Np = self.model.num_params()
+        Np = self.model.num_params
 
         if wrt_filter is not None:
             assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
@@ -162,7 +162,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                      pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
                                      resource_alloc, wrt_slice1, wrt_slice2, wrt_blksize1, wrt_blksize2,
                                      gather_mem_limit):
-        Np = self.model.num_params()
+        Np = self.model.num_params
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, resource_alloc)
 
@@ -326,7 +326,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
         #sub_resource_alloc = _ResourceAllocation(comm=mySubComm)  # FUTURE: pass this to *_fn instead of mySubComm?
         wrt_block_size = layout.additional_dimension_blk_sizes[0]
-        Np = self.model.num_params()
+        Np = self.model.num_params
 
         if wrt_filter is not None:
             assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size

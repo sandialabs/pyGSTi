@@ -23,7 +23,7 @@ class AbstractForwardSimTester(BaseCase):
         mock_model = mock.MagicMock()
         mock_model.evotype.return_value = "densitymx"
         mock_model.circuit_outcomes.return_value = ('NA',)
-        mock_model.num_params.return_value = 0
+        mock_model.num_params = 0
         self.fwdsim = ForwardSimulator(mock_model)
         self.circuit = Circuit("GxGx")
 
@@ -62,7 +62,7 @@ class ForwardSimBase(object):
     def setUp(self):
         self.fwdsim = self.model.sim
         self.layout = self.fwdsim.create_layout([('Gx',), ('Gx', 'Gx')])
-        self.nP = self.model.num_params()
+        self.nP = self.model.num_params
         self.nEls = self.layout.num_elements
 
     def test_bulk_fill_probs(self):

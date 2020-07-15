@@ -384,7 +384,7 @@ class ModelMember(ModelChild):
             if self.gpindices is None or parent is not self.parent:
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"
-                Np = self.num_params()
+                Np = self.num_params
                 slc = slice(starting_index, starting_index + Np) \
                     if Np > 0 else slice(0, 0, None)  # special "null slice" for zero params
                 self.set_gpindices(slc, parent, memo)
@@ -419,6 +419,7 @@ class ModelMember(ModelChild):
         else:
             return self._gpindices  # it's already an array
 
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this object.

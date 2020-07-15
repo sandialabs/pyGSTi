@@ -115,6 +115,7 @@ class WildcardBudget(object):
         # circuit_budgets = [self.circuit_budget(circ) for circ in circuits]
         pass
 
+    @property
     def description(self):
         """
         A dictionary of quantities describing this budget.
@@ -126,7 +127,7 @@ class WildcardBudget(object):
         -------
         dict
         """
-        raise NotImplementedError("Derived classes must implement `to_descriptive_dict`")
+        raise NotImplementedError("Derived classes must implement `description`")
 
     #def compute_circuit_wildcard_budget(c, w_vec):
     #    #raise NotImplementedError("TODO!!!")
@@ -642,6 +643,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             circuit_budgets = _np.dot(precomp, Wvec) + off
         return circuit_budgets
 
+    @property
     def description(self):
         """
         A dictionary of quantities describing this budget.

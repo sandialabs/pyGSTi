@@ -609,7 +609,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting1:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != source_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != source_qubit])
 
                                 source_setting1_seq = key_copy
                                 break
@@ -618,7 +618,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(source_qubit,)] == source_setting2:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != source_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != source_qubit])
 
                                 source_setting2_seq = key_copy
                                 break
@@ -627,7 +627,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                         for key in results.pygsti_ds.keys():
                             if results.pygsti_ds.auxInfo[key]['settings'][(dest_qubit,)] == dest_setting:
                                 key_copy = key.copy(editable=True)
-                                key_copy.delete_lines([i for i in range(key.number_of_lines()) if i != dest_qubit])
+                                key_copy.delete_lines([i for i in range(key.number_of_lines) if i != dest_qubit])
 
                                 dest_seq = key_copy
                                 break
@@ -702,7 +702,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):
@@ -822,7 +822,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0, n)]
     for i in range(0, len(gates_available)):
         for q in range(0, n):
@@ -979,7 +979,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
     experiment_dict['circuits'] = {}
     experiment_dict['settings'] = {}
 
-    gates_available = list(pspec.models['target'].primitive_op_labels())
+    gates_available = list(pspec.models['target'].primitive_op_labels)
     gates_by_qubit = [[] for _ in range(0,n)]
     for i in range(0,len(gates_available)):
         for q in range(0,n):

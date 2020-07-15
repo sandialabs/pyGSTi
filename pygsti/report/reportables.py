@@ -83,7 +83,7 @@ def evaluate(model_fn, cri=None, verbosity=0):
         return _ReportableQty(_np.nan)
 
     if cri:
-        nmEBs = bool(cri.get_errobar_type() == "non-markovian")
+        nmEBs = bool(cri.errorbar_type == "non-markovian")
         df, f0 = cri.compute_confidence_interval(
             model_fn, return_fn_val=True,
             verbosity=verbosity)
