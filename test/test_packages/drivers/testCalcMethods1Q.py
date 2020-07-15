@@ -22,8 +22,9 @@ from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_refe
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                      extraWeight1Hops=0, extraGateWeight=0,
+                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                      roughNoise=None, simulator="matrix", parameterization="H+S",
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
 
@@ -42,8 +43,9 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
     return pc.create_cloudnoise_model_from_hops_and_weights(
         nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight, sparse,
-        roughNoise, sim_type, parameterization,
+        extraWeight1Hops, extraGateWeight,
+        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
+        simulator, parameterization,
         spamtype, addIdleNoiseToAllGates,
         errcomp_type, True, return_clouds, verbosity)
 
@@ -88,8 +90,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Reduced model GST dataset
         cls.nQubits=1 # can't just change this now - see op_labels below
         cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                                                  extraWeight1Hops=0, extraGateWeight=1, sparse=False,
-                                                                  sim_type="matrix", verbosity=1, roughNoise=(1234,0.01))
+                                                               extraWeight1Hops=0, extraGateWeight=1,
+                                                               sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                                               simulator="matrix", verbosity=1, roughNoise=(1234,0.01))
 
         #Create a reduced set of fiducials and germs
         op_labels = [ L('Gx',0), L('Gy',0) ] # 1Q gate labels
@@ -142,7 +145,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using matrix-based calculations
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
-        target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
+        target_model.sim = 'matrix' # the default for 1Q, so we could remove this line
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
 
@@ -175,7 +178,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using map-based calculation
         target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
-        target_model.set_simtype('map')
+        target_model.sim = 'map'
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
 
@@ -196,7 +199,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # This performs a map-based unitary evolution along each path.
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
-        target_model.set_simtype('termorder', max_order=1) # this is the default set by set_all_parameterizations above
+        target_model.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)  # this is the default set by set_all_parameterizations above
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=1)
 
@@ -229,9 +232,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         # This performs a map-based unitary evolution along each path.
         target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
-        target_model.set_simtype('termgap', max_order=3, desired_perr=0.01, allowed_perr=0.1,
-                                 max_paths_per_outcome=1000, perr_heuristic='scaled', max_term_stages=5)
-
+        target_model.sim = pygsti.objects.TermForwardSimulator(mode='pruned', max_order=3, desired_perr=0.01,
+                                                               allowed_perr=0.1, max_paths_per_outcome=1000,
+                                                               perr_heuristic='scaled', max_term_stages=5)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=3)
 
@@ -262,8 +265,9 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_reducedmod_matrix(self):
         # Using dense matrices and matrix-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
-                                             sim_type="matrix", verbosity=1)
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                                     simulator="matrix", verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -284,8 +288,9 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
-                                             sim_type="map", errcomp_type='gates', verbosity=1)
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                                     simulator="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -305,8 +310,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using dense embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
-                                             sim_type="map", errcomp_type='errorgens', verbosity=1)
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                                     simulator="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -320,8 +326,9 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
-                                             sim_type="map", errcomp_type='gates', verbosity=1)
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=True, sparse_lindblad_reps=True,
+                                                     simulator="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -341,8 +348,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using sparse embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
-                                             sim_type="map", errcomp_type='errorgens', verbosity=1)
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=True, sparse_lindblad_reps=True,
+                                                     simulator="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -356,14 +364,16 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                      sim_type="termorder", parameterization="H+S terms", errcomp_type='gates')
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     simulator=termsim, parameterization="H+S terms", errcomp_type='gates')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -379,9 +389,11 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_reducedmod_svterm_errogens(self):
         # Using term-based calcs using map-based state-vector propagation (same as above)
         # but w/errcomp_type=errogens Model
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                      sim_type="termorder", parameterization="H+S terms", errcomp_type='errorgens')
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     simulator=termsim, parameterization="H+S terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -393,13 +405,16 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Note: we don't compare errorgens models to a reference model yet...
 
     def test_reducedmod_prunedpath_svterm_errogens(self):
+        termsim = pygsti.objects.TermForwardSimulator(mode='pruned')
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                      sim_type="termgap", parameterization="H+S terms", errcomp_type='errorgens')
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     simulator=termsim, parameterization="H+S terms", errcomp_type='errorgens')
 
         #separately call set_simtype to set other params
-        target_model.set_simtype('termgap', max_order=3, desired_perr=0.01, allowed_perr=0.05,
-                                 max_paths_per_outcome=1000, perr_heuristic='none', max_term_stages=5)
+        target_model.sim = pygsti.objects.TermForwardSimulator(mode='pruned', max_order=3, desired_perr=0.01,
+                                                               allowed_perr=0.05, max_paths_per_outcome=1000,
+                                                               perr_heuristic='none', max_term_stages=5)
 
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
@@ -415,9 +430,11 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                             sim_type="termorder", parameterization="H+S clifford terms", errcomp_type='gates')
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     simulator=termsim, parameterization="H+S clifford terms", errcomp_type='gates')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -433,9 +450,11 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_reducedmod_cterm_errorgens(self):
         # Using term-based calcs using map-based stabilizer-state propagation (same as above)
         # but w/errcomp_type=errogens Model
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                             sim_type="termorder", parameterization="H+S clifford terms", errcomp_type='errorgens')
+                                                     extraWeight1Hops=0, extraGateWeight=1,
+                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     simulator=termsim, parameterization="H+S clifford terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params())
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -461,7 +480,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         print(probs1)
 
         gs2 = std.target_model()
-        gs2.set_simtype("map")
+        gs2.sim = "map"
         probs1 = gs2.probabilities(self.circuit1)
         #self.circuit1.simulate(gs2) # calls probs - same as above line
         print(probs1)
@@ -469,11 +488,11 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Using n-qubit models
         mdl = pygsti.construction.create_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="matrix", ensure_composed_gates=False)
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], simulator="matrix", ensure_composed_gates=False)
         probs1 = mdl.probabilities(self.circuit3)
 
         mdl = pygsti.construction.create_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="map", ensure_composed_gates=False)
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], simulator="map", ensure_composed_gates=False)
         probs2 = mdl.probabilities(self.circuit3)
 
         expected = { ('000',): 0.0,
@@ -504,7 +523,8 @@ class CalcMethods1QTestCase(BaseTestCase):
             return np.array(spl.expm(-1j * exp/2),complex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
 
         #Create a model with unitary gates and state vectors (instead of the usual superoperators and density mxs)
-        mdl = pygsti.obj.ExplicitOpModel(['Q0'],evotype='statevec',sim_type="matrix")
+        simple_matrix_sim = pygsti.objects.SimpleMatrixForwardSimulator()
+        mdl = pygsti.obj.ExplicitOpModel(['Q0'],evotype='statevec', simulator=simple_matrix_sim)
         mdl.operations['Gi'] = pygsti.obj.StaticDenseOp( np.identity(2,'complex') )
         mdl.operations['Gx'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmax))
         mdl.operations['Gy'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmay))
@@ -519,16 +539,18 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         gs2 = mdl.copy()
-        gs2.set_simtype("map")
+        gs2.sim = pygsti.objects.SimpleMapForwardSimulator()
         gs2.probabilities(self.circuit1)
         #self.circuit1.simulate(gs2) # calls probs - same as above line
 
         #Using n-qubit models
         mdl = pygsti.construction.create_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], evotype="statevec", sim_type="matrix", ensure_composed_gates=False)
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], evotype="statevec",
+            simulator=pygsti.objects.SimpleMatrixForwardSimulator(), ensure_composed_gates=False)
         probs1 = mdl.probabilities(self.circuit3)
         mdl = pygsti.construction.create_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'],  evotype="statevec", sim_type="map", ensure_composed_gates=False)
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'],  evotype="statevec",
+            simulator=pygsti.objects.SimpleMapForwardSimulator(), ensure_composed_gates=False)
         probs2 = mdl.probabilities(self.circuit3)
 
         expected = { ('000',): 0.0,
@@ -544,14 +566,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, expected)
         self.assert_outcomes(probs2, expected)
 
-
     def test_circuitsim_svterm(self):
         # ### Density-matrix simulation (of superoperator gates) using map/matrix-based terms calcs
         # In this mode, "term calcs" use many state-vector propagation paths to simulate density
         # matrix propagation up to some desired order (in the assumed-to-be-small error rates).
         mdl = std.target_model()
-        mdl.set_simtype('termorder', max_order=1) # 1st-order in error rates
         mdl.set_all_parameterizations("H+S terms")
+        mdl.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
 
         probs1 = mdl.probabilities(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
@@ -560,8 +581,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         #Using n-qubit models ("H+S terms" parameterization constructs embedded/composed gates containing LindbladTermGates, etc.)
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
         mdl = pygsti.construction.create_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="termorder",
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], simulator=termsim,
             parameterization="H+S terms", ensure_composed_gates=False)
         probs1 = mdl.probabilities(self.circuit3)
         probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
@@ -586,8 +608,10 @@ class CalcMethods1QTestCase(BaseTestCase):
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
+        cliffordsim = pygsti.objects.SimpleMapForwardSimulator()
         mdl = pygsti.construction.create_localnoise_model(
-            1, ['Gi','Gx','Gy'], parameterization="clifford", ensure_composed_gates=False)
+            1, ['Gi','Gx','Gy'], parameterization="clifford",
+            ensure_composed_gates=False, simulator=cliffordsim)
 
         probs0 = mdl.probabilities(c0)
         probs1 = mdl.probabilities(c1)
@@ -636,8 +660,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
         mdl = pygsti.construction.create_localnoise_model(
-            1, ['Gi','Gx','Gy'], sim_type="termorder", parameterization="H+S clifford terms", ensure_composed_gates=False)
+            1, ['Gi','Gx','Gy'], simulator=termsim, parameterization="H+S clifford terms", ensure_composed_gates=False)
 
         probs0 = mdl.probabilities(c0)
         probs1 = mdl.probabilities(c1)

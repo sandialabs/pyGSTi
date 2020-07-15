@@ -489,10 +489,13 @@ class GSTBadFitOptions(object):
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
                  wildcard_budget_includes_spam=True, wildcard_smart_init=True):
-        self.threshold = threshold
-        self.actions = actions  # e.g. ["wildcard", "Robust+"]; empty list => 'do nothing'
-        self.wildcard_budget_includes_spam = wildcard_budget_includes_spam
-        self.wildcard_smart_init = wildcard_smart_init
+        valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
+        if not all([(action in valid_actions) for action in actions]):
+            raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
+        self.threshold = float(threshold)
+        self.actions = tuple(actions)  # e.g. ("wildcard", "Robust+"); empty list => 'do nothing'
+        self.wildcard_budget_includes_spam = bool(wildcard_budget_includes_spam)
+        self.wildcard_smart_init = bool(wildcard_smart_init)
 
 
 class GSTObjFnBuilders(object):
@@ -1034,7 +1037,7 @@ class StandardGST(_proto.Protocol):
         self.gaugeopt_target = gaugeopt_target
         self.objfn_builders = objfn_builders
         self.optimizer = optimizer
-        self.badfit_options = badfit_options
+        self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         self.auxfile_types['models_to_test'] = 'pickle'

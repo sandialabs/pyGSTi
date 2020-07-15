@@ -177,10 +177,10 @@ class TestWorkspace(ReportBaseCase):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
 
         tbls.append( w.DataSetOverviewTable(self.ds,max_length_list=[1,2,4,8]) )
-        tbls.append( w.FitComparisonTable(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
+        tbls.append( w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
                                           self.results.estimates['default'].models['iteration estimates'], self.ds) )
         with self.assertRaises(ValueError):
-            w.FitComparisonTable(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
+            w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
                                  self.results.estimates['default'].models['iteration estimates'], self.ds, objfn_builder="foobar")
 
         tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
@@ -279,8 +279,8 @@ class TestWorkspace(ReportBaseCase):
                                     hover_info=True, sum_up=False, invert=False) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
                                     hover_info=True, sum_up=True, invert=False) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
-                                    hover_info=True, sum_up=False, invert=True) )
+        #plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
+        #                            hover_info=True, sum_up=False, invert=True) )  # invert no longer supported
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
                                     hover_info=True, sum_up=False, invert=False, typ="scatter") )
 
@@ -314,12 +314,13 @@ class TestWorkspace(ReportBaseCase):
         #        effectStrs=effectStrs,
         #        prep_labels=list(self.mdl.preps.keys()),
         #        effect_labels=self.mdl.get_effect_labels() )
-        baseStrs = self.gss.circuit_structure.basestrings
+
+        baseStrs = [plaq.base for _, plaq in self.gss.iter_plaquettes()]
         directModels = dx.direct_mlgst_models(
             baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
-        plts.append( w.ColorBoxPlot(["chi2","logl","blank"], self.gss.circuit_structure,
+        plts.append( w.ColorBoxPlot(["chi2","logl","blank"], self.gss,
                                     self.ds, self.mdl, box_labels=False, direct_gst_models=directModels) )
-        plts.append( w.ColorBoxPlot(["errorrate"], self.gss.circuit_structure,
+        plts.append( w.ColorBoxPlot(["errorrate"], self.gss,
                                     self.ds, self.mdl, box_labels=False, sum_up=True,
                                     direct_gst_models=directModels) )
 
@@ -342,7 +343,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ChoiEigenvalueBarPlot(choievals, None) )
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
 
-        plts.append( w.FitComparisonBarPlot(self.gss.circuit_structure.Ls, self.results.circuit_lists['iteration'],
+        plts.append( w.FitComparisonBarPlot(self.gss.xs, self.results.circuit_lists['iteration'],
                                           self.results.estimates['default'].models['iteration estimates'], self.ds,) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
 
@@ -632,48 +633,42 @@ class TestWorkspace(ReportBaseCase):
 
         # ---- _summable_color_boxplot ----
         pygsti.report.workspaceplots._summable_color_boxplot(
-            mxs, gstrs, gstrs,
-            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap) #circuit labels
+            mxs, gstrs, gstrs, 'Xlbl','Ylbl', colormap) #circuit labels
 
         pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
-            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            'Xlbl','Ylbl', colormap,
             sum_up=True, hover_info=True) #sumup test
 
         pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
-            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            'Xlbl','Ylbl', colormap,
             sum_up=True, hover_info=False) #no hover info
 
         pygsti.report.workspaceplots._summable_color_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
-            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            'Xlbl','Ylbl', colormap,
             sum_up=False, hover_info=False) # no hover info or sum_up
 
-        pygsti.report.workspaceplots._summable_color_boxplot(
-            mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
-            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
-            sum_up=True, invert=True) #ignores invert
+        # invert is no longer an option
+        #pygsti.report.workspaceplots._summable_color_boxplot(
+        #    mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
+        #    'Xlbl','Ylbl', colormap,
+        #    sum_up=True, invert=True) #ignores invert
 
         # ----- _circuit_color_boxplot -----
         germs = preps = effects = gstrs
-        gss = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
+        plaquettes = {}
+        fidpairs = {(i,j): (prep, meas) for j,prep in enumerate(preps) for i,meas in enumerate(effects)}
         for L in [1,2]:
             for germ in germs:
-                gss.add_plaquette(germ*L, L, germ)
-        gss2 = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
-        for L in [1,2]:
-            for germ in germs:
-                gss2.add_plaquette(germ*L + pygsti.obj.Circuit(('Gy',)), L, germ) # makes base strs != germ^some_power
-        gss3 = gss.copy()
-        cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))
-        gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)
-        assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
+                plaquettes[(L, germ)] = pygsti.obj.GermFiducialPairPlaquette(germ, L, fidpairs)
+        gss = pygsti.obj.PlaquetteGridCircuitStructure(plaquettes, [1,2], germs, 'L', 'germ')
+        gss2 = gss.copy()
+        
+        #cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))
+        #gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)
+        #assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
 
         pygsti.report.workspaceplots._circuit_color_boxplot(
             gss, mxs, colormap, sum_up=True)
@@ -698,10 +693,10 @@ class TestWorkspace(ReportBaseCase):
             gss, mxs, colormap, sum_up=True, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
         pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, sum_up=False, addl_hover_submxs={'qty': mxs} ) # just reuse mxs
-        pygsti.report.workspaceplots._circuit_color_scatterplot(
-            gss3, mxs, colormap, sum_up=True, hover_info=True) # gss3 case
-        pygsti.report.workspaceplots._circuit_color_scatterplot(
-            gss3, mxs, colormap, sum_up=False, hover_info=True) # gss3 case
+        #pygsti.report.workspaceplots._circuit_color_scatterplot(
+        #    gss3, mxs, colormap, sum_up=True, hover_info=True) # gss3 case
+        #pygsti.report.workspaceplots._circuit_color_scatterplot(
+        #    gss3, mxs, colormap, sum_up=False, hover_info=True) # gss3 case
 
 
         # ---- _circuit_color_histogram ----

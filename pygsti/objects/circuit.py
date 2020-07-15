@@ -3590,7 +3590,7 @@ class Circuit(object):
             self._static = True
             self._labels = tuple([_Label(layer_lbl) for layer_lbl in self._labels])
 
-    def expand_instruments_and_separate_povm(self, model_shlp, observed_outcomes=None):
+    def expand_instruments_and_separate_povm(self, model, observed_outcomes=None):
         """
         Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
 
@@ -3603,7 +3603,7 @@ class Circuit(object):
 
         Parameters
         ----------
-        model_shlp : TODO docstring
+        model : TODO docstring
 
         Returns
         -------
@@ -3612,7 +3612,7 @@ class Circuit(object):
             values are tuples of the outcome labels corresponding to this circuit,
             one per POVM effect held in the key.
         """
-        complete_circuit = model_shlp.complete_circuit(self)
+        complete_circuit = model.complete_circuit(self)
         expanded_circuit_outcomes = _collections.OrderedDict()
         povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
         circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
@@ -3625,23 +3625,24 @@ class Circuit(object):
                     subs[el[0]].append(el[1:])
             return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
 
-        def add_expanded_circuit_outcomes(cir, running_outcomes, ootree, start):
+        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
             """
             """
-            cir = cir if start == 0 else cir[start:]  # for performance, avoid uneeded slicing
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
             for k, layer_label in enumerate(cir, start=start):
                 components = layer_label.components
-                instrument_inds = _np.nonzero([model_shlp._is_primitive_instrument_layer_lbl(component)
+                instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
                                                for component in components])[0]
                 if instrument_inds.size > 0:
                     # This layer contains at least one instrument => recurse with instrument(s) replaced with
                     #  all combinations of their members.
                     component_lookup = {i: comp for i, comp in enumerate(components)}
-                    instrument_members = [model_shlp.get_member_labels_for_instrument(components[i])
+                    instrument_members = [model._member_labels_for_instrument(components[i])
                                           for i in instrument_inds]  # also components of outcome labels
                     for selected_instrmt_members in _itertools.product(*instrument_members):
                         expanded_layer_lbl = component_lookup.copy()
-                        expanded_layer_lbl.update({i: sel for i, sel in zip(instrument_inds, selected_instrmt_members)})
+                        expanded_layer_lbl.update({i: components[i] + "_" + sel
+                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
                         expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
 
                         if ootree is not None:
@@ -3657,11 +3658,11 @@ class Circuit(object):
                     break
 
             else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-                assert(cir not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
-                elabels = model_shlp._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
+                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
+                elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
                     else tuple(ootree.keys())
                 outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[SeparatePOVMCircuit(cir, povm_lbl, elabels)] = outcomes
+                expanded_circuit_outcomes[SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
 
         ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
         # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
@@ -3750,8 +3751,9 @@ class CompressedCircuit(object):
         Circuit
         """
         tup = CompressedCircuit.expand_op_label_tuple(self._tup)
+        occurrence = self._occurrence_id if hasattr(self, '_occurrence_id') else None  # backward compatibility
         return Circuit(tup, self._line_labels, editable=False, stringrep=self._str,
-                       check=False, occurrence=self._occurrence_id)
+                       check=False, occurrence=occurrence)
 
     @staticmethod
     def _get_num_periods(circuit, period_len):

@@ -22,42 +22,45 @@ affine=True
 
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                      maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
-                                      spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                      errcomp_type="gates", return_clouds=False, verbosity=0):
+                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                  extraWeight1Hops=0, extraGateWeight=0,
+                                  sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                  roughNoise=None, simulator="matrix", parameterization="H+S",
+                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                  errcomp_type="gates", return_clouds=False, verbosity=0):
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
     return pygsti.construction.create_cloudnoise_model_from_hops_and_weights(
         nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight, sparse,
-        roughNoise, sim_type, parameterization,
+        extraWeight1Hops, extraGateWeight,
+        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
+        simulator, parameterization,
         spamtype, addIdleNoiseToAllGates,
         errcomp_type, True, return_clouds, verbosity)
 
-def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials):
+
+def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \
             (nQubits,maxMaxLen,errMag,spamMag,
              "nosampleerr" if (nSamples == "inf") else ("%dsamples" % nSamples),
-             simtype, 'idleErrInFids' if idleErrorInFiducials else 'noIdleErrInFids')
+             simulator, 'idleErrInFids' if idleErrorInFiducials else 'noIdleErrInFids')
 
 def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001), spamMag=0,
-                              nSamplesList=(100,'inf'), simtype="map"):
+                              nSamplesList=(100,'inf'), simulator="map"):
 
     base_param = []
     if hamiltonian: base_param.append('H')
     if stochastic: base_param.append('S')
     if affine: base_param.append('A')
     base_param = '+'.join(base_param)
-    parameterization = base_param+" terms" if simtype.startswith('termorder') else base_param # "H+S+A"
+    parameterization = base_param+" terms" if isinstance(simulator, pygsti.objects.TermForwardSimulator) else base_param # "H+S+A"
 
     gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
-                                      sim_type=simtype, parameterization=parameterization,
+                                      simulator=simulator, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=True)
     gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
-                                      sim_type=simtype, parameterization=parameterization,
+                                      simulator=simulator, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=False)
 
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
@@ -89,7 +92,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             ds_idleInFids = pygsti.construction.simulate_data(
                                 gateset_idleInFids, listOfExperiments, n_samples=Nsamp,
                                 sample_error=sampleError, seed=8675309)
-            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, True)
+            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, True)
             pickle.dump(gateset_idleInFids, open("%s_gs.pkl" % fileroot, "wb"))
             pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
             print("Wrote fileroot ",fileroot)
@@ -98,7 +101,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
                                 gateset_noIdleInFids, listOfExperiments, n_samples=Nsamp,
                                 sample_error=sampleError, seed=8675309)
 
-            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simtype, False)
+            fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, False)
             pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))
             pickle.dump(ds_noIdleInFids, open("%s_ds.pkl" % fileroot, "wb"))
 
@@ -115,9 +118,9 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             print("Wrote fileroot ",fileroot)
 
 def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.01, spamMag=0, nSamples=100,
-                         simtype="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):
+                         simulator="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):
     if fileroot is None:
-        fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials)
+        fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials)
 
     mdl_datagen = pickle.load(open("%s_gs.pkl" % fileroot, "rb"))
     ds = pickle.load(open("%s_ds.pkl" % fileroot, "rb"))
@@ -194,13 +197,14 @@ class IDTTestCase(BaseTestCase):
         # means that probabilities *won't* be clipped to [0,1] - so we get really
         # funky and unphysical data here, but data that idle tomography should be
         # able to fit *exactly* (with any errMags, so be pick a big one).
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder")  # how specify order
+                                  nSamplesList=('inf',), simulator=termsim)  # how specify order
 
         # Note: no spam error, as accounting for this isn't build into idle tomography yet.
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
-                                                errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder")  # how specify order
+                                                  errMag=0.01, spamMag=0, nSamples='inf',
+                                                  idleErrorInFiducials=False, fitOrder=1, simulator=termsim)  # how specify order
 
         #Make sure exact identification of errors was possible
         self.assertLess(maxH, 1e-6)
@@ -210,11 +214,12 @@ class IDTTestCase(BaseTestCase):
     def test_idletomography_2Q(self):
         #Same thing but for 2 qubits
         nQ = 2
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simtype="termorder")  #How specify order?
+                                  nSamplesList=('inf',), simulator=termsim)  #How specify order?
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
-                                                idleErrorInFiducials=False, fitOrder=1, simtype="termorder") # how specify order?
+                                                  idleErrorInFiducials=False, fitOrder=1, simulator=termsim)  # how specify order?
         self.assertLess(maxH, 1e-6)
         self.assertLess(maxS, 1e-6)
         self.assertLess(maxA, 1e-6)
@@ -316,12 +321,12 @@ class IDTTestCase(BaseTestCase):
 
         # ---- Create some fake data ----
         target_model = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
-                                                              sim_type="map", parameterization="H+S")
+                                                     simulator="map", parameterization="H+S")
 
         #Note: generate data with affine errors too (H+S+A used below)
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
-                                                               sim_type="map", parameterization="H+S+A",
-                                                               roughNoise=(1234,0.001))
+                                                    simulator="map", parameterization="H+S+A",
+                                                    roughNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
         idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
                   hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?
@@ -366,7 +371,7 @@ class IDTTestCase(BaseTestCase):
                               '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
 
         target_model = build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
-                                                     sim_type="map", parameterization="H+S+A")
+                                                     simulator="map", parameterization="H+S+A")
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)
         self.assertEqual(measDict, expected_measDict)

@@ -281,8 +281,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         #Do some additional initialization
         if self.model.evotype not in ("svterm", "cterm"):
-            #raise ValueError(f"Evolution type {self.model.evotype} is incompatbile with term-based calculations")
-            raise ValueError("Evolution type %s is incompatbile with term-based calculations" % self.model.evotype)
+            #raise ValueError(f"Evolution type {self.model.evotype} is incompatible with term-based calculations")
+            _warnings.warn("Evolution type %s is incompatible with term-based calculations" % self.model.evotype)
 
     def copy(self):
         """
@@ -310,6 +310,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params()
+        polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -318,7 +319,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
         layout = _TermCOPALayout(circuits, self.model, dataset, None, nprocs, (num_params, num_params), printer)
-        self._prepare_layout(layout, resource_alloc)
+        self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)
         return layout
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
@@ -1314,7 +1315,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         self._run_on_atoms(layout, set_pathset_for_atom, resource_alloc)
 
     ## ----- Other functions -----
-    def _prepare_layout(self, layout, resource_alloc):
+    def _prepare_layout(self, layout, resource_alloc, polynomial_vindices_per_int):
         """
         Performs preparatory work for computing circuit outcome probabilities.
 
@@ -1330,6 +1331,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             Available resources for this computation. Includes the number of processors
             (MPI comm) and memory limit.
 
+        polynomial_vindices_per_int : int
+            The number of variable indices that can fit into a single platform-width integer
+            (can be computed from number of model params, but passed in for performance).
+
         Returns
         -------
         None
@@ -1341,8 +1346,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self._select_paths_set_block(layout_atom, pathset, sub_resource_alloc)  # "locks in" path set
                 return pathset.num_failures
             else:
-                self._cache_p_polynomials(layout_atom, sub_resource_alloc)
-                # (nTotFailed += 0)
+                self._cache_p_polynomials(layout_atom, sub_resource_alloc, polynomial_vindices_per_int)
+                return 0  # (nTotFailed += 0)
 
         local_nFailures = self._run_on_atoms(layout, find_and_select_pathset, resource_alloc)
 

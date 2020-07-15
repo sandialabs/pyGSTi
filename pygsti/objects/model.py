@@ -408,6 +408,10 @@ class OpModel(Model):
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
 
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
+        self._sim.model = self  # ensure the simulator's `model` is set to self (usually == None in serialization)
+
     ##########################################
     ## Get/Set methods
     ##########################################
@@ -1154,7 +1158,7 @@ class OpModel(Model):
             A dictionary with keys equal to outcome labels and
             values equal to probabilities.
         """
-        return self._sim.probs(circuit, outcomes, time)
+        return self.sim.probs(circuit, outcomes, time)
 
     def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
@@ -1207,7 +1211,6 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
         copy_into._opcaches = {}  # don't copy opcaches
-        copy_into._sim = self.sim.copy()  # not actually difficult - just so we use the object's copy() method
         super(OpModel, self)._init_copy(copy_into)
 
     def _post_copy(self, copy_into):

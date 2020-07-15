@@ -38,7 +38,7 @@ class TestDriversMethods(DriversTestCase):
         fullStructs = pygsti.construction.make_lsgst_structs(
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens)
 
-        lens = [ len(strct.allstrs) for strct in fullStructs ]
+        lens = [ len(strct) for strct in fullStructs ]
         self.assertEqual(lens, [92,168,450]) # ,817,1201, 1585]
 
 
@@ -52,7 +52,7 @@ class TestDriversMethods(DriversTestCase):
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
             fid_pairs=fidPairs)
 
-        lens = [ len(strct.allstrs) for strct in gfprStructs ]
+        lens = [ len(strct) for strct in gfprStructs ]
         #self.assertEqual(lens, [92,100,130]) #,163,196,229]
           #can't test reliably b/c "random" above
           # means different answers on different systems
@@ -77,7 +77,7 @@ class TestDriversMethods(DriversTestCase):
             std.target_model(), std.fiducials, std.fiducials, std.germs, maxLens,
             fid_pairs=fidPairsDict) #note: fidPairs arg can be a dict too!
 
-        lens = [ len(strct.allstrs) for strct in pfprStructs ]
+        lens = [ len(strct) for strct in pfprStructs ]
         #self.assertEqual(lens, [92,99,138]) # ,185,233,281]
           #can't test reliably b/c "random" above
           # means different answers on different systems

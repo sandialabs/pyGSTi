@@ -139,7 +139,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
     @property
     def _primitive_op_label_dict(self):
-        return self.operation_blks['layers']
+        return {k: None for k in self.operation_blks['layers'] if k != 'globalIdle'}  # don't include 'globalIdle'
 
     @property
     def _primitive_instrument_label_dict(self):
@@ -179,7 +179,7 @@ class ImplicitOpModel(_mdl.OpModel):
         copy_into._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
 
     def __setstate__(self, state_dict):
-        self.__dict__.update(state_dict)
+        super().__setstate__(state_dict)
         if 'uuid' not in state_dict:
             self.uuid = _uuid.uuid4()  # create a new uuid
 

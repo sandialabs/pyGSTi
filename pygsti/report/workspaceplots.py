@@ -509,7 +509,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
         def hover_label_fn(val, iy, ix):
             """ Standard hover labels """
             if _np.isnan(val): return ""
-            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy], empty_if_missing=True)
             txt = plaq.summary_label()
             txt += "<br>value: %g" % val
             for lbl, addl_subMxs in addl_hover_submxs.items():
@@ -522,7 +522,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
             #Note: in this case, we need to "flip" the iiy index because
             # the matrices being plotted are flipped within _summable_color_boxplot(...)
             if _np.isnan(val): return ""
-            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy])
+            plaq = circuit_structure.plaquette(xvals[ix], yvals[iy], empty_if_missing=True)
             txt = plaq.element_label(iiy, iix)  # note: *row* index = iiy
             txt += ("<br>value: %g" % val)
             for lbl, addl_subMxs in addl_hover_submxs.items():
@@ -1383,7 +1383,7 @@ class ColorBoxPlot(WorkspacePlot):
         Specifies the type of plot. "errorate" requires that
         `direct_gst_models` be set.
 
-    circuit_list : CircuitList or list of Circuits
+    circuits : CircuitList or list of Circuits
         Specifies the set of circuits, usually along with their structure, e.g.
         fiducials, germs, and maximum lengths.
 
@@ -1445,7 +1445,7 @@ class ColorBoxPlot(WorkspacePlot):
         A dictionary whose keys correspond to other potential plot
         types and whose values are each a list-of-lists of the sub
         matrices to plot, corresponding to the used x and y values
-        of the structure of `circuit_list`.
+        of the structure of `circuits`.
 
     typ : {"boxes","scatter","histogram"}
         Which type of plot to make: the standard grid of "boxes", a
@@ -1474,7 +1474,7 @@ class ColorBoxPlot(WorkspacePlot):
         `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
     """
 
-    def __init__(self, ws, plottype, circuit_list, dataset, model,
+    def __init__(self, ws, plottype, circuits, dataset, model,
                  sum_up=False, box_labels=False, hover_info=True, invert=False,
                  prec='compact', linlg_pcntle=.05, direct_gst_models=None,
                  dscomparator=None, stabilityanalyzer=None, mdc_store=None,
@@ -1494,7 +1494,7 @@ class ColorBoxPlot(WorkspacePlot):
             Specifies the type of plot. "errorate" requires that
             `direct_gst_models` be set.
 
-        circuit_list : CircuitList or list of Circuits
+        circuits : CircuitList or list of Circuits
             Specifies the set of circuits, usually along with their structure, e.g.
             fiducials, germs, and maximum lengths.
 
@@ -1556,7 +1556,7 @@ class ColorBoxPlot(WorkspacePlot):
             A dictionary whose keys correspond to other potential plot
             types and whose values are each a list-of-lists of the sub
             matrices to plot, corresponding to the used x and y values
-            of the structure of `circuit_list`.
+            of the structure of `circuits`.
 
         typ : {"boxes","scatter","histogram"}
             Which type of plot to make: the standard grid of "boxes", a
@@ -1585,12 +1585,12 @@ class ColorBoxPlot(WorkspacePlot):
             `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
-        super(ColorBoxPlot, self).__init__(ws, self._create, plottype, circuit_list, dataset, model,
+        super(ColorBoxPlot, self).__init__(ws, self._create, plottype, circuits, dataset, model,
                                            prec, sum_up, box_labels, hover_info, invert, linlg_pcntle,
                                            direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
                                            submatrices, typ, scale, comm, wildcard, colorbar, bgcolor)
 
-    def _create(self, plottypes, circuit_list, dataset, model, prec, sum_up, box_labels, hover_info,
+    def _create(self, plottypes, circuits, dataset, model, prec, sum_up, box_labels, hover_info,
                 invert, linlg_pcntle, direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
                 submatrices, typ, scale, comm, wildcard, colorbar, bgcolor):
 
@@ -1598,8 +1598,8 @@ class ColorBoxPlot(WorkspacePlot):
         addl_hover_info_fns = _collections.OrderedDict()
 
         if mdc_store is not None:  # then it overrides
-            assert(circuit_list is None and dataset is None and model is None)
-            circuit_list = mdc_store.circuits
+            assert(circuits is None and dataset is None and model is None)
+            circuits = mdc_store.circuits
             dataset = mdc_store.dataset
             model = mdc_store.model
 
@@ -1634,7 +1634,7 @@ class ColorBoxPlot(WorkspacePlot):
 
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 if mdc_store is None:
-                    mdc_store = _ModelDatasetCircuitStore(model, dataset, circuit_list, array_types=('p',))
+                    mdc_store = _ModelDatasetCircuitStore(model, dataset, circuits, array_types=('p',))
 
                 objfn_builder = ptyp
                 objfn = objfn_builder.build_from_store(mdc_store)
@@ -1694,7 +1694,7 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = "trivial"
                 ytitle = ""
                 mx_fn = _mx_fn_blank  # use a *global* function so cache can tell it's the same
-                extra_arg = circuit_list
+                extra_arg = None
 
             elif ptyp == "errorrate":
                 colormapType = "seq"
@@ -1796,7 +1796,7 @@ class ColorBoxPlot(WorkspacePlot):
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
-            circuit_struct = _PlaquetteGridCircuitStructure.cast(circuit_list)  # , dataset?
+            circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)  # , dataset?
 
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
@@ -1821,7 +1821,7 @@ class ColorBoxPlot(WorkspacePlot):
                     #element_dof = len(dataset.outcome_labels) - 1
                     #Instead of the above, which doesn't work well when there are circuits with different
                     # outcomes, the line below just takes the average degrees of freedom per circuit
-                    element_dof = dataset.degrees_of_freedom(circuit_list) / len(circuit_list)
+                    element_dof = dataset.degrees_of_freedom(circuits) / len(circuits)
 
                 n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sum_up, element_dof)
                 # NOTE: currently dof_per_box is constant, and takes the total
@@ -1937,13 +1937,14 @@ def _mx_fn_from_elements(plaq, x, y, extra):
 #                          probs_precomp_dict)
 
 
-def _mx_fn_blank(plaq, x, y, gss):
-    return _np.nan * _np.zeros((len(gss.minor_yvals),
-                                len(gss.minor_xvals)), 'd')
+def _mx_fn_blank(plaq, x, y, unused):
+    return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
-    return _np.array([[_ph.small_eigenvalue_err_rate(plaq.base, direct_gst_models)]])
+    base_circuit = plaq.base if isinstance(plaq, _objs.circuitstructure.GermFiducialPairPlaquette) \
+        else _objs.Circuit(())
+    return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 
 def _mx_fn_directchi2(plaq, x, y, extra):
@@ -3003,12 +3004,12 @@ class FitComparisonBarPlot(WorkspacePlot):
         if isinstance(dataset_by_x, _objs.DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)
 
-        for X, mdl, circuit_list, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):
-            if circuit_list is None or mdl is None:
+        for X, mdl, circuits, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):
+            if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
-                                                          circuit_list, objfn_builder, Np, wildcard,
+                                                          circuits, objfn_builder, Np, wildcard,
                                                           return_all=True, comm=comm)
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
@@ -3202,14 +3203,14 @@ class FitComparisonBoxPlot(WorkspacePlot):
             for iX, X in enumerate(xs):
                 dataset = dataset_by_yx[iY][iX]
                 mdl = model_by_yx[iY][iX]
-                circuit_list = circuits_by_yx[iY][iX]
+                circuits = circuits_by_yx[iY][iX]
 
-                if dataset is None or circuit_list is None or mdl is None:
+                if dataset is None or circuits is None or mdl is None:
                     NsigMx[iY][iX] = _np.nan
                     continue
 
                 Nsig, rating, _, _, _, _ = self._ccompute(
-                    _ph.rated_n_sigma, dataset, mdl, circuit_list, objfn_builder,
+                    _ph.rated_n_sigma, dataset, mdl, circuits, objfn_builder,
                     None, wildcard, return_all=True, comm=comm)  # self.ws.smartCache,
                 NsigMx[iY][iX] = Nsig
 

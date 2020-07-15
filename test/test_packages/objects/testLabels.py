@@ -56,8 +56,9 @@ class LabelTestCase(BaseTestCase):
         mdl = pc.create_cloudnoise_model_from_hops_and_weights(
             2, ['Gx','Gy','Gcnot'], {}, None, availability,
             None, "line", max_idle_weight=1, maxhops=1,
-            extra_weight_1_hops=0, extra_gate_weight=1, sparse=True,
-            sim_type="map", parameterization="H+S")
+            extra_weight_1_hops=0, extra_gate_weight=1,
+            simulator="map", parameterization="H+S",
+            sparse_lindblad_basis=True, sparse_lindblad_reps=True)
         # mdl[('Gx',0)].factorops  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
         self.assertEqual( set(mdl.primitive_op_labels), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
 

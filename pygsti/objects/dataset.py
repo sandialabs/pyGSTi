@@ -1268,14 +1268,14 @@ class DataSet(object):
                     if opLabel not in opLabels: opLabels.append(opLabel)
         return opLabels
 
-    def degrees_of_freedom(self, circuit_list=None, method="present_outcomes-1",
+    def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
                            aggregate_times=True):
         """
-        Returns the number of independent degrees of freedom in the data for the circuits in `circuit_list`.
+        Returns the number of independent degrees of freedom in the data for the circuits in `circuits`.
 
         Parameters
         ----------
-        circuit_list : list of Circuits
+        circuits : list of Circuits
             The list of circuits to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
 
@@ -1302,12 +1302,12 @@ class DataSet(object):
         -------
         int
         """
-        if circuit_list is None:
-            circuit_list = list(self.keys())
+        if circuits is None:
+            circuits = list(self.keys())
 
         nDOF = 0
         Nout = len(self.olIndex)
-        for opstr in circuit_list:
+        for opstr in circuits:
             dsRow = self[opstr]
             cur_t = dsRow.time[0]
             cur_outcomes = set()  # holds *distinct* outcomes at current time

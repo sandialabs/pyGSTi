@@ -21,17 +21,20 @@ from pygsti.construction import modelconstruction, nqnoiseconstruction
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                      extraWeight1Hops=0, extraGateWeight=0,
+                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                      roughNoise=None, simulator="matrix", parameterization="H+S",
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
+
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
     return pc.create_cloudnoise_model_from_hops_and_weights(
         nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
         None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight, sparse,
-        roughNoise, sim_type, parameterization,
+        extraWeight1Hops, extraGateWeight,
+        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
+        simulator, parameterization,
         spamtype, addIdleNoiseToAllGates,
         errcomp_type, True, return_clouds, verbosity)
 
@@ -51,7 +54,8 @@ class NQubitTestCase(BaseTestCase):
         print("TEST3")
         mdl_test = build_XYCNOT_cloudnoise_model(
             nQubits=3, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map", verbosity=10)
+            extraWeight1Hops=0, extraGateWeight=1, sparse_lindblad_basis=True,
+            sparse_lindblad_reps=True, simulator="map", verbosity=10)
         #                                    roughNoise=(1234,0.1))
 
         #print("Constructed model with %d gates, dim=%d, and n_params=%d.  Norm(paramvec) = %g" %
@@ -60,7 +64,7 @@ class NQubitTestCase(BaseTestCase):
     def test_sequential_sequenceselection(self):
 
         #only test when reps are fast (b/c otherwise this test is slow!)
-        try: from pygsti.objects import fastreplib
+        try: from pygsti.objects.replib import fastreplib
         except ImportError:
             warnings.warn("Skipping test_sequential_sequenceselection b/c no fastreps!")
             return
@@ -70,15 +74,16 @@ class NQubitTestCase(BaseTestCase):
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
-                                      sim_type="map", parameterization="H+S",
-                                      roughNoise=(1234,0.01))
+                                                    extraWeight1Hops=0, extraGateWeight=0,
+                                                    sparse_lindblad_basis=True, sparse_lindblad_reps=True, verbosity=1,
+                                                    simulator="map", parameterization="H+S",
+                                                    roughNoise=(1234,0.01))
 
         cache = {}
         gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
-        expList = gss.allstrs #[ tup[0] for tup in expList_tups]
+        expList = list(gss) #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list & dataset
         if regenerate_references():
@@ -87,7 +92,7 @@ class NQubitTestCase(BaseTestCase):
             pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        self.assertEqual(set(gss.allstrs), set(compare_gss.allstrs))
+        self.assertEqual(set(gss), set(compare_gss))
 
 
 
@@ -97,8 +102,9 @@ class NQubitTestCase(BaseTestCase):
         cnot_edges = []
 
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
-                                                    extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
-                                                    sim_type="map", parameterization="H+S",
+                                                    extraWeight1Hops=0, extraGateWeight=0,
+                                                    sparse_lindblad_basis=True, sparse_lindblad_reps=True,
+                                                    verbosity=1, simulator="map", parameterization="H+S",
                                                     roughNoise=(1234,0.01))
 
         cache = {}
@@ -125,19 +131,19 @@ class NQubitTestCase(BaseTestCase):
         #    #    print(tuple(etup[0]))
         #    #    print(tuple(ctup[0]))
 
-        self.assertEqual(set(gss.allstrs), set(compare_gss.allstrs))
+        self.assertEqual(set(gss), set(compare_gss))
 
 
     def test_2Q(self):
 
         #only test when reps are fast (b/c otherwise this test is slow!)
-        try: from pygsti.objects import fastreplib
+        try: from pygsti.objects.replib import fastreplib
         except ImportError:
             warnings.warn("Skipping test_2Q b/c no fastreps!")
             return
 
         gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        expList = gss.allstrs
+        expList = list(gss)
 
         ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")
@@ -156,7 +162,8 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                         sim_type="map", parameterization="H+S", sparse=True)
+                                                         simulator="map", parameterization="H+S",
+                                                        sparse_lindblad_basis=True, sparse_lindblad_reps=True)
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gauge_opt_params=False,
                                                    advanced_options={'tolerance': 1e-1}, verbosity=4)
@@ -164,13 +171,13 @@ class NQubitTestCase(BaseTestCase):
     def test_2Q_terms(self):
 
         #only test when reps are fast (b/c otherwise this test is slow!)
-        try: from pygsti.objects import fastreplib
+        try: from pygsti.objects.replib import fastreplib
         except ImportError:
             warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
             return
 
         gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        expList = gss.allstrs
+        expList = list(gss)
 
         ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")
@@ -187,30 +194,32 @@ class NQubitTestCase(BaseTestCase):
         #    lsgstLists.append(lst[:]) # append *running* list
         lsgstLists = gss # can just use gss as input to pygsti.run_long_sequence_gst_base
 
+        termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
-                                                  extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                  sim_type="termorder", parameterization="H+S terms", sparse=False)
+                                                        extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                        simulator=termsim, parameterization="H+S terms",
+                                                        sparse_lindblad_basis=False, sparse_lindblad_reps=False)
 
         #RUN to create cache (SAVE)
         if regenerate_references():
             calc_cache = {}
-            mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
-            mdl_to_optimize.bulk_probs(gss.allstrs) #lsgstLists[-1]
+            mdl_to_optimize.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1, cache=calc_cache)
+            mdl_to_optimize.sim.bulk_probs(gss) #lsgstLists[-1]
             pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
 
         #Just load precomputed cache (we test run_long_sequence_gst_base here, not cache computation)
         calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
-        mdl_to_optimize.set_simtype("termorder", max_order=1, cache=calc_cache)
+        mdl_to_optimize.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1, cache=calc_cache)
 
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gauge_opt_params=False,
-                                                   advanced_options={'tolerance': 1e-3}, verbosity=4)
+                                                    lsgstLists, gauge_opt_params=False,
+                                                    advanced_options={'tolerance': 1e-3}, verbosity=4)
 
 
     def test_3Q(self):
 
         #only test when reps are fast (b/c otherwise this test is slow!)
-        try: from pygsti.objects import fastreplib
+        try: from pygsti.objects.replib import fastreplib
         except ImportError:
             warnings.warn("Skipping test_3Q b/c no fastreps!")
             return
@@ -219,7 +228,9 @@ class NQubitTestCase(BaseTestCase):
         print("Constructing Target LinearOperator Set")
         target_model = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map",verbosity=1)
+            extraWeight1Hops=0, extraGateWeight=1,
+            sparse_lindblad_basis=True, sparse_lindblad_reps=True,
+            simulator="map",verbosity=1)
         #print("nElements test = ",target_model.num_elements())
         #print("nParams test = ",target_model.num_params())
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
@@ -227,8 +238,9 @@ class NQubitTestCase(BaseTestCase):
         print("Constructing Datagen LinearOperator Set")
         mdl_datagen = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1, sparse=True, verbosity=1,
-            roughNoise=(1234,0.1), sim_type="map")
+            extraWeight1Hops=0, extraGateWeight=1,
+            sparse_lindblad_basis=True, sparse_lindblad_reps=True,
+            verbosity=1, roughNoise=(1234,0.1), simulator="map")
 
         mdl_test = mdl_datagen
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %

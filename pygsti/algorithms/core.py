@@ -543,7 +543,7 @@ def gram_rank_and_eigenvalues(dataset, prep_fiducials, effect_fiducials, target_
 #                 Long sequence GST
 ##################################################################################
 
-def run_gst_fit_simple(dataset, start_model, circuit_list, optimizer, objective_function_builder,
+def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_function_builder,
                        resource_alloc, verbosity=0):
     """
     Performs core Gate Set Tomography function of model optimization.
@@ -561,7 +561,7 @@ def run_gst_fit_simple(dataset, start_model, circuit_list, optimizer, objective_
         The Model used as a starting point for the least-squares
         optimization.
 
-    circuit_list : list of (tuples or Circuits)
+    circuits : list of (tuples or Circuits)
         Each tuple contains operation labels and specifies a circuit whose
         probabilities are considered when trying to least-squares-fit the
         probabilities given in the dataset.
@@ -594,7 +594,7 @@ def run_gst_fit_simple(dataset, start_model, circuit_list, optimizer, objective_
     model : Model
         the best-fit model.
     """
-    mdc_store = _objs.ModelDatasetCircuitsStore(start_model, dataset, circuit_list, resource_alloc,
+    mdc_store = _objs.ModelDatasetCircuitsStore(start_model, dataset, circuits, resource_alloc,
                                                 array_types=('p', 'dp'), verbosity=verbosity)
     result, mdc_store = run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity)
     return result, mdc_store.model

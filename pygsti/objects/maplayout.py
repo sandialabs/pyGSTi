@@ -28,14 +28,14 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
 
-    def __init__(self, unique_complete_circuits, ds_circuits, unique_to_orig, group, model_shlp,
+    def __init__(self, unique_complete_circuits, ds_circuits, unique_to_orig, group, model,
                  dataset, offset, elindex_outcome_tuples, max_cache_size):
 
         expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
+            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
             expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 
@@ -116,13 +116,13 @@ class MapCOPALayout(_DistributableCOPALayout):
         Maximum cache size, used for holding common circuit prefixes.
     """
 
-    def __init__(self, circuits, model_shlp, dataset=None, max_cache_size=None,
+    def __init__(self, circuits, model, dataset=None, max_cache_size=None,
                  max_sub_table_size=None, num_sub_tables=None, additional_dimensions=(), verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
+        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
         circuit_table = _PrefixTable(unique_complete_circuits, max_cache_size)
         groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity)
@@ -135,7 +135,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         offset = 0
         for group in groups:
             atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
-                                            model_shlp, dataset, offset, elindex_outcome_tuples, max_cache_size))
+                                            model, dataset, offset, elindex_outcome_tuples, max_cache_size))
             offset += atoms[-1].num_elements
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,

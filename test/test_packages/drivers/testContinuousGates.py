@@ -28,7 +28,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
     def to_vector(self):
         return np.array([self.depol_amt, self.over_rotation],'d') #our parameter vector
 
-    def from_vector(self,v, close=False, nodirty=False):
+    def from_vector(self,v, close=False, dirty_value=True):
         #initialize from parameter vector v
         self.depol_amt = v[0]
         self.over_rotation = v[1]
@@ -44,6 +44,7 @@ class XRotationOp(pygsti.obj.DenseOperator):
                                  [0,   a,   0,   0],
                                  [0,   0,   c,  -b],
                                  [0,   0,   b,   c]],'d')
+        self.dirty = dirty_value
 
 
 class ParamXRotationOpFactory(pygsti.obj.OpFactory):
@@ -63,8 +64,9 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
     def to_vector(self):
         return self.params #our parameter vector
 
-    def from_vector(self, v, clean=False, nodirty=False):
+    def from_vector(self, v, clean=False, dirty_value=True):
         self.params[:] = v
+        self.dirty = dirty_value
 
 
 
@@ -90,10 +92,10 @@ class ContinuousGatesTestCase(BaseTestCase):
             return ret
         ss0 = seqStructs[0].copy()
         ss1 = ss0.process_circuits(sub_Gxrots)
-        allStrs = pygsti.tools.remove_duplicates(ss0.allstrs + ss1.allstrs)
+        allStrs = pygsti.tools.remove_duplicates(ss0[:] + ss1[:])
 
         print(len(allStrs),"sequences ")
-        self.assertEqual(len(allStrs), 167)
+        self.assertEqual(len(allStrs), 209)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
 
         #Generate some data for these sequences (simulates an implicit model with factory)
         mdl_datagen = pygsti.obj.LocalNoiseModel.from_parameterization(
@@ -112,7 +114,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
         mdl.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
-        mdl.set_simtype('map')  # must use map calcs with factories (at least for now, since matrix eval trees don't know about all possible gates?)
+        mdl.sim = 'map'  # must use map calcs with factories (at least for now, since matrix eval trees don't know about all possible gates?)
         #mdl.from_vector( datagen_vec ) # DEBUG - used to see at where optimization should get us...
 
         results = pygsti.run_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)

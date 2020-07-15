@@ -426,16 +426,14 @@ class ConfidenceRegionFactory(object):
 
         parameters = self.parent.parameters
         builder = parameters['final_objfn_builder']
-        cache = parameters.get('final_cache', None)
         opt = {'maxiter': 100, 'tol': 1e-10}  # don't let this run for too long
 
         self.linresponse_gstfit_params = {
             'dataset': dataset,
-            'circuit_list': circuits,
+            'circuits': circuits,
             'optimizer': opt,
             'objective_function_builder': _copy.deepcopy(builder),
             'resource_alloc': resource_alloc,
-            'cache': cache
         }
 
         #Count everything as non-gauge? TODO BETTER
@@ -972,7 +970,7 @@ class ConfidenceRegionFactoryView(object):
         penalties.update({'forcefn_grad': grad_f, 'shift_fctr': 100.0})
         mlgst_args['objective_function_builder'].penalties = penalties
 
-        _, bestGS = _alg.core.run_gst_fit(**mlgst_args)
+        _, bestGS = _alg.core.run_gst_fit_simple(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
         delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())

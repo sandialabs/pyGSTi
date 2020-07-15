@@ -55,7 +55,7 @@ class ParserTester(StdInputBase, IOBase):
                         ("rho0*Gx*Mdefault", ('rho0', 'Gx', 'Mdefault'))]
 
         for s, expected in string_tests:
-            result, line_labels = self.std.parse_circuit(s, lookup=lkup)
+            result, line_labels, occurrence_id = self.std.parse_circuit(s, lookup=lkup)
             self.assertEqual(line_labels, None)
             circuit_result = Circuit(result, line_labels="auto", expand_subcircuits=True)
             #use "auto" line labels since none are parsed.
@@ -84,19 +84,19 @@ class ParserTester(StdInputBase, IOBase):
 
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[0], expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])
+            (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[1], expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1*G2*G3', None, [0.798, 100.0])
+            (['G1', 'G2', 'G3'], 'G1*G2*G3', None, None, [0.798, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[2], expected_counts=2),
-            (['G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'], 'G1*(G2*G3)^2*G4', None, [1.0, 100.0])
+            (['G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'], 'G1*(G2*G3)^2*G4', None, None, [1.0, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline("G1G2G3 0.1 100 2.0", expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1G2G3', None, [0.1, 100.0])
+            (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0])
         )  # extra col ignored
 
     def test_parse_dataline_raises_on_syntax_error(self):
@@ -110,11 +110,11 @@ class ParserTester(StdInputBase, IOBase):
                           "MyFav (G1G2)^3"]
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[0]),
-            ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None)
+            ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None, None)
         )
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[1]),
-            ('MyFav', [CircuitLabel('', ('G1', 'G2'), None, 3)], '(G1G2)^3', None)
+            ('MyFav', [CircuitLabel('', ('G1', 'G2'), None, 3)], '(G1G2)^3', None, None)
         )
 
 
@@ -366,8 +366,8 @@ BASIS: pp 4
 """)
     def test_read_model(self, tmp_path):
         gs1 = stdin.parse_model(tmp_path)
-        rotXPiOv2 = pc._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'], rotYPiOv2)
@@ -417,9 +417,9 @@ GAUGEGROUP: Full
 """)
     def test_read_model_non_liouville(self, tmp_path):
         gs2 = stdin.parse_model(tmp_path)
-        rotXPi = pc._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = pc._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotXPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
         self.assertArraysAlmostEqual(gs2.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G2'], rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G3'], rotXPi)

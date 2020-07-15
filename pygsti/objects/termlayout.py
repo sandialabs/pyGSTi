@@ -27,14 +27,14 @@ class _TermCOPALayoutAtom(_DistributableAtom):
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
 
-    def __init__(self, unique_complete_circuits, ds_circuits, group, model_shlp, dataset,
+    def __init__(self, unique_complete_circuits, ds_circuits, group, model, dataset,
                  offset, elindex_outcome_tuples):
 
         expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model_shlp, observed_outcomes)
+            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
             expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 
@@ -116,13 +116,13 @@ class TermCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model_shlp, dataset=None, max_sub_table_size=None, num_sub_tables=None,
+    def __init__(self, circuits, model, dataset=None, max_sub_table_size=None, num_sub_tables=None,
                  additional_dimensions=(), verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model_shlp.complete_circuit(c) for c in unique_circuits]
+        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
         #Create evenly divided groups of indices of unique_complete_circuits
         assert(max_sub_table_size is None), "No support for size-limited subtables yet!"
@@ -134,7 +134,7 @@ class TermCOPALayout(_DistributableCOPALayout):
 
         offset = 0
         for group in groups:
-            atoms.append(_TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model_shlp,
+            atoms.append(_TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model,
                                              dataset, offset, elindex_outcome_tuples))
             offset += atoms[-1].num_elements
 

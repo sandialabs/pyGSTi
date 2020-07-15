@@ -84,6 +84,11 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        state_dict['_model'] = None  # don't serialize parent model (will cause recursion)
+        return state_dict
+
     @property
     def model(self):
         return self._model
@@ -200,10 +205,10 @@ class ForwardSimulator(object):
             probs[outcome] = probs_array[element_index]
         return probs
 
-    def dprobs(self, circuit, clip_to=None):
+    def dprobs(self, circuit):
         copa_layout = self.create_layout([circuit])
         dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
-        self.bulk_fill_dprobs(dprobs_array, copa_layout, clip_to)
+        self.bulk_fill_dprobs(dprobs_array, copa_layout)
 
         dprobs = _ld.OutcomeLabelDict()
         elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
@@ -211,10 +216,10 @@ class ForwardSimulator(object):
             dprobs[outcome] = dprobs_array[element_index]
         return dprobs
 
-    def hprobs(self, circuit, clip_to=None):
+    def hprobs(self, circuit):
         copa_layout = self.create_layout([circuit])
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
-        self.bulk_fill_hprobs(hprobs_array, copa_layout, clip_to)
+        self.bulk_fill_hprobs(hprobs_array, copa_layout)
 
         hprobs = _ld.OutcomeLabelDict()
         elindices, outcomes = copa_layout.indices_and_outcomes_for_index(0)
@@ -325,12 +330,12 @@ class ForwardSimulator(object):
             vp = _np.clip(vp, clip_to[0], clip_to[1])
 
         ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_circuits():
+        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
             if isinstance(elInds, slice): elInds = _slct.indices(elInds)
             ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
 
-    def bulk_dprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
+    def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None,
                     wrt_filter=None):
         """
         Construct a dictionary containing the probability derivatives for an entire list of circuits.
@@ -340,9 +345,6 @@ class ForwardSimulator(object):
         circuits : list of Circuits
             The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
             object containing pre-computed quantities that make this function run faster.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
 
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
@@ -372,15 +374,15 @@ class ForwardSimulator(object):
 
         #Note: don't use smartc for now.
         vdp = _np.empty((copa_layout.num_elements, self.model.num_params()), 'd')
-        self.bulk_fill_dprobs(vdp, copa_layout, clip_to, resource_alloc, wrt_filter)
+        self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
 
         ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_circuits():
+        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
             if isinstance(elInds, slice): elInds = _slct.indices(elInds)
             ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
 
-    def bulk_hprobs(self, circuits, clip_to=None, resource_alloc=None, smartc=None,
+    def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None,
                     wrt_filter1=None, wrt_filter2=None):
         """
         Construct a dictionary containing the probability Hessians for an entire list of circuits.
@@ -390,9 +392,6 @@ class ForwardSimulator(object):
         circuits : list of Circuits
             The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
             object containing pre-computed quantities that make this function run faster.
-
-        clip_to : 2-tuple, optional
-            (min,max) to clip return value if not None.
 
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
@@ -424,11 +423,11 @@ class ForwardSimulator(object):
 
         #Note: don't use smartc for now.
         vhp = _np.empty((copa_layout.num_elements, self.model.num_params(), self.model.num_params()), 'd')
-        self.bulk_fill_hprobs(vhp, copa_layout, clip_to, resource_alloc,
+        self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
                               wrt_filter1, wrt_filter1)
 
         ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_circuits():
+        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
             if isinstance(elInds, slice): elInds = _slct.indices(elInds)
             ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
         return ret
@@ -469,7 +468,7 @@ class ForwardSimulator(object):
         return self._bulk_fill_probs_block(array_to_fill, layout, resource_alloc)
 
     def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
-        for element_indices, circuit, outcomes in layout.iter_circuits():
+        for element_indices, circuit, outcomes in layout.iter_unique_circuits():
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
                                                         outcomes, resource_alloc, time=None)
 
@@ -478,7 +477,7 @@ class ForwardSimulator(object):
         return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times, resource_alloc)
 
     def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times, resource_alloc):
-        for (element_indices, circuit, outcomes), time in zip(layout.iter_circuits(), times):
+        for (element_indices, circuit, outcomes), time in zip(layout.iter_unique_circuits(), times):
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
                                                         outcomes, resource_alloc, time)
 
@@ -536,7 +535,7 @@ o
 
         #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
         try:
-            for element_indices, circuit, outcomes in layout.iter_circuits():
+            for element_indices, circuit, outcomes in layout.iter_unique_circuits():
                 self._compute_circuit_outcome_probability_derivatives(
                     array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc)
             return
@@ -808,17 +807,17 @@ class CacheForwardSimulator(ForwardSimulator):
         cache = None  # Derived classes should override this function and create a cache here.
         # A dictionary whose keys are the elements of `circuits` and values can be
         #    whatever the user wants.  These values are provided when calling
-        #    :method:`iter_circuits_with_cache`.
+        #    :method:`iter_unique_circuits_with_cache`.
         return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
 
     # Override these two functions to plumb `cache` down to _compute* methods
     def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
-        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+        for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probabilities_with_cache(array_to_fill[element_indices], circuit,
                                                                    outcomes, resource_alloc, cache, time=None)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
-        for element_indices, circuit, outcomes, cache in layout.iter_circuits_with_cache():
+        for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probability_derivatives_with_cache(
                 array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc, cache)
 

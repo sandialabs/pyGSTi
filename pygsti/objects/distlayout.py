@@ -28,7 +28,7 @@ class _DistributableAtom(object):
     needs .element_slice to indicate "final"/"global" indices.
     needs .wrt_block_size[1,2] to indicate how to distribute derivative calculations in arrays
       with derivative dimensions.
-    needs __len__ and .iter_circuits like a COPA layout (so functions as a sub-layout)
+    needs __len__ and .iter_unique_circuits like a COPA layout (so functions as a sub-layout)
     """
 
     def __init__(self, element_slice, num_elements=None):

@@ -131,7 +131,7 @@ class TestHessianMethods(BaseTestCase):
 
     def test_confidenceRegion(self):
 
-        edesign = proto.CircuitListsDesign([pygsti.obj.BulkCircuitList(circuit_struct)
+        edesign = proto.CircuitListsDesign([pygsti.obj.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
@@ -360,7 +360,7 @@ class TestHessianMethods(BaseTestCase):
         #TODO: assert values of df & f0 ??
 
     def test_pickle_ConfidenceRegion(self):
-        edesign = proto.CircuitListsDesign([pygsti.obj.BulkCircuitList(circuit_struct)
+        edesign = proto.CircuitListsDesign([pygsti.obj.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))

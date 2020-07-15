@@ -108,16 +108,16 @@ class InstrumentTestCase(BaseTestCase):
         fiducials = std.fiducials
         max_lengths = [1] #,2,4,8]
         glbls = list(mdl.operations.keys()) + list(mdl.instruments.keys())
-        lsgst_list = pygsti.construction.create_lsgst_circuits(
+        lsgst_struct = pygsti.construction.create_lsgst_circuits(
             glbls,fiducials,fiducials,germs,max_lengths)
-        lsgst_list2 = pygsti.construction.create_lsgst_circuits(
+        lsgst_struct2 = pygsti.construction.create_lsgst_circuits(
             mdl,fiducials,fiducials,germs,max_lengths) #use mdl as source
-        self.assertEqual(lsgst_list, lsgst_list2)
+        self.assertEqual(list(lsgst_struct), list(lsgst_struct2))
 
 
 
         mdl_datagen = mdl
-        ds = pygsti.construction.simulate_data(mdl,lsgst_list,1000,'none') #'multinomial')
+        ds = pygsti.construction.simulate_data(mdl,lsgst_struct,1000,'none') #'multinomial')
         pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt",ds)
         ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
@@ -235,24 +235,24 @@ class InstrumentTestCase(BaseTestCase):
         gatestring2 = ('Gx','Gy','Gy')
 
         p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
-        p2 = model.product(gatestring1, scale=False)
-        p3,scale = model.product(gatestring1, scale=True)
+        p2 = model.sim.product(gatestring1, scale=False)
+        p3,scale = model.sim.product(gatestring1, scale=True)
 
         print(p1)
         print(p2)
         print(p3*scale)
         self.assertAlmostEqual(np.linalg.norm(p1-scale*p3),0.0)
 
-        dp = model.dproduct(gatestring1)
-        dp_flat = model.dproduct(gatestring1,flat=True)
+        dp = model.sim.dproduct(gatestring1)
+        dp_flat = model.sim.dproduct(gatestring1,flat=True)
 
-        evt, lookup, outcome_lookup = model.bulk_evaltree( [gatestring1,gatestring2] )
+        layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
         p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
         p2 = np.dot( model.operations['Gy'], np.dot( model.operations['Gy'], model.operations['Gx'] ))
 
-        bulk_prods = model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = model.bulk_product(evt, scale=True)
+        bulk_prods = model.sim.bulk_product([gatestring1,gatestring2])
+        bulk_prods_scaled, scaleVals = model.sim.bulk_product([gatestring1,gatestring2], scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[0],p1)
         self.assertArraysAlmostEqual(bulk_prods[1],p2)
@@ -263,7 +263,7 @@ class InstrumentTestCase(BaseTestCase):
         gatestring1 = ('Gx','Gy') #,'Itest')
         gatestring2 = ('Gx','Gy','Gy')
 
-        evt, lookup, outcome_lookup = model.bulk_evaltree( [gatestring1,gatestring2] )
+        layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
         p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].to_dense()),
                      np.dot( model.operations['Gy'],
@@ -281,36 +281,36 @@ class InstrumentTestCase(BaseTestCase):
         #assertArraysAlmostEqual(p1,p30)
         #assertArraysAlmostEqual(p21,p31)
 
-        bulk_probs = model.bulk_probs([gatestring1,gatestring2],check=True)
+        bulk_probs = model.sim.bulk_probs([gatestring1,gatestring2])
 
-        evt_split = evt.copy()
-        new_lookup = evt_split.split(lookup, num_sub_trees=2)
-        print("SPLIT TREE: new el_indices = ",new_lookup)
-        probs_to_fill = np.empty( evt_split.num_final_elements(), 'd')
-        model.bulk_fill_probs(probs_to_fill,evt_split,check=True)
+        #Need to add way to force split a layout to check this:
+        #evt_split = evt.copy()
+        #new_lookup = evt_split.split(lookup, num_sub_trees=2)
+        #print("SPLIT TREE: new el_indices = ",new_lookup)
+        #probs_to_fill = np.empty( evt_split.num_final_elements(), 'd')
+        #model.bulk_fill_probs(probs_to_fill,evt_split,check=True)
 
-        dProbs = model.dprobs(gatestring1)
-        bulk_dProbs = model.bulk_dprobs([gatestring1,gatestring2], return_pr=False, check=True)
+        #dProbs = model.sim.dprobs(gatestring1)  #Removed this functionality (unused)
+        bulk_dProbs = model.sim.bulk_dprobs([gatestring1,gatestring2])
 
-        hProbs = model.hprobs(gatestring1)
-        bulk_hProbs = model.bulk_hprobs([gatestring1,gatestring2], return_pr=False, check=True)
-
+        #hProbs = model.sim.hprobs(gatestring1)  #Removed this functionality (unused)
+        bulk_hProbs = model.sim.bulk_hprobs([gatestring1,gatestring2])
 
         print("DONE")
 
     def testAdvancedGateStrs(self):
         #specify prep and/or povm labels in operation sequence:
-        mdl_normal = pygsti.obj.Circuit( ('Gx',) )
-        mdl_wprep = pygsti.obj.Circuit( ('rho0','Gx') )
-        mdl_wpovm = pygsti.obj.Circuit( ('Gx','Mdefault') )
-        mdl_wboth = pygsti.obj.Circuit( ('rho0','Gx','Mdefault') )
+        circuit_normal = pygsti.obj.Circuit( ('Gx',) )
+        circuit_wprep = pygsti.obj.Circuit( ('rho0','Gx') )
+        circuit_wpovm = pygsti.obj.Circuit( ('Gx','Mdefault') )
+        circuit_wboth = pygsti.obj.Circuit( ('rho0','Gx','Mdefault') )
 
         #Now compute probabilities for these:
         model = self.target_model.copy()
-        probs_normal = model.probabilities(mdl_normal)
-        probs_wprep = model.probabilities(mdl_wprep)
-        probs_wpovm = model.probabilities(mdl_wpovm)
-        probs_wboth = model.probabilities(mdl_wboth)
+        probs_normal = model.probabilities(circuit_normal)
+        probs_wprep = model.probabilities(circuit_wprep)
+        probs_wpovm = model.probabilities(circuit_wpovm)
+        probs_wboth = model.probabilities(circuit_wboth)
 
         print(probs_normal)
         print(probs_wprep)
@@ -322,7 +322,7 @@ class InstrumentTestCase(BaseTestCase):
         self.assertEqual( probs_normal, probs_wboth )
 
         #now try bulk op
-        bulk_probs = model.bulk_probs([mdl_normal, mdl_wprep, mdl_wpovm, mdl_wboth],check=True)
+        bulk_probs = model.sim.bulk_probs([circuit_normal, circuit_wprep, circuit_wpovm, circuit_wboth])
 
     def testWriteAndLoad(self):
         mdl = self.target_model.copy()

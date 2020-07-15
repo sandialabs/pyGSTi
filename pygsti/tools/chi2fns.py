@@ -17,7 +17,7 @@ from ..objects import objectivefns as _objfns
 from ..tools.legacytools import deprecate as _deprecated_fn
 
 
-def chi2(model, dataset, circuit_list=None,
+def chi2(model, dataset, circuits=None,
          min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
          op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
@@ -37,7 +37,7 @@ def chi2(model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
@@ -58,7 +58,7 @@ def chi2(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -73,13 +73,13 @@ def chi2(model, dataset, circuit_list=None,
     chi2 : float
         chi^2 value, equal to the sum of chi^2 terms from all specified circuits
     """
-    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                           {'prob_clip_interval': prob_clip_interval},
                           op_label_aliases, comm, mem_limit, mdc_store).fn()
 
 
-def chi2_per_circuit(model, dataset, circuit_list=None,
+def chi2_per_circuit(model, dataset, circuits=None,
                      min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
                      op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
@@ -98,7 +98,7 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
@@ -119,7 +119,7 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -132,17 +132,17 @@ def chi2_per_circuit(model, dataset, circuit_list=None,
     Returns
     -------
     chi2 : numpy.ndarray
-        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
+        Array of length either `len(circuits)` or `len(dataset.keys())`.
         Values are the chi2 contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                           {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, mdc_store, comm, mem_limit).percircuit()
+                          op_label_aliases, comm, mem_limit, mdc_store).percircuit()
 
 
-def chi2_jacobian(model, dataset, circuit_list=None,
+def chi2_jacobian(model, dataset, circuits=None,
                   min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
                   op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
@@ -159,7 +159,7 @@ def chi2_jacobian(model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
@@ -180,7 +180,7 @@ def chi2_jacobian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -195,13 +195,13 @@ def chi2_jacobian(model, dataset, circuit_list=None,
     numpy array
         The gradient vector of length `model.num_params()`, the number of model parameters.
     """
-    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                           {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, mdc_store, comm, mem_limit).jacobian()
+                          op_label_aliases, comm, mem_limit, mdc_store).jacobian()
 
 
-def chi2_hessian(model, dataset, circuit_list=None,
+def chi2_hessian(model, dataset, circuits=None,
                  min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
                  op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
@@ -215,7 +215,7 @@ def chi2_hessian(model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
@@ -236,7 +236,7 @@ def chi2_hessian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -252,14 +252,14 @@ def chi2_hessian(model, dataset, circuit_list=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params()`.
     """
-    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit, enable_hessian=True)
+                         op_label_aliases, comm, mem_limit, mdc_store, enable_hessian=True)
     return obj.hessian()
 
 
-def chi2_approximate_hessian(model, dataset, circuit_list=None,
+def chi2_approximate_hessian(model, dataset, circuits=None,
                              min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
                              op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
@@ -278,7 +278,7 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
@@ -299,7 +299,7 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -315,14 +315,14 @@ def chi2_approximate_hessian(model, dataset, circuit_list=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params()`.
     """
-    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuit_list,
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, mdc_store, comm, mem_limit)
+                         op_label_aliases, comm, mem_limit, mdc_store)
     return obj.approximate_hessian()
 
 
-def chialpha(alpha, model, dataset, circuit_list=None,
+def chialpha(alpha, model, dataset, circuits=None,
              pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
              radius=None, op_label_aliases=None,
              mdc_store=None, comm=None, mem_limit=None):
@@ -340,7 +340,7 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi-alpha sum.
         Default value (None) means "all strings in dataset".
 
@@ -370,7 +370,7 @@ def chialpha(alpha, model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -384,15 +384,15 @@ def chialpha(alpha, model, dataset, circuit_list=None,
     -------
     float
     """
-    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
                           {'pfratio_stitchpt': pfratio_stitchpt,
                            'pfratio_derivpt': pfratio_derivpt,
                            'radius': radius},
                           {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).fn()
+                          op_label_aliases, comm, mem_limit, mdc_store, alpha=alpha).fn()
 
 
-def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
+def chialpha_per_circuit(alpha, model, dataset, circuits=None,
                          pfratio_stitchpt=1e-2, pfratio_derivpt=1e-2, prob_clip_interval=(-10000, 10000),
                          radius=None, op_label_aliases=None,
                          mdc_store=None, comm=None, mem_limit=None):
@@ -410,7 +410,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    circuit_list : list of Circuits or tuples, optional
+    circuits : list of Circuits or tuples, optional
         List of circuits whose terms will be included in chi-alpha sum.
         Default value (None) means "all strings in dataset".
 
@@ -440,7 +440,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
-        list.  If given, `model` and `dataset` and `circuit_list` should be set to None.
+        list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -453,16 +453,16 @@ def chialpha_per_circuit(alpha, model, dataset, circuit_list=None,
     Returns
     -------
     numpy.ndarray
-        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
+        Array of length either `len(circuits)` or `len(dataset.keys())`.
         Values are the chi-alpha contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuit_list,
+    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
                           {'pfratio_stitchpt': pfratio_stitchpt,
                            'pfratio_derivpt': pfratio_derivpt,
                            'radius': radius},
                           {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, mdc_store, comm, mem_limit, alpha=alpha).percircuit()
+                          op_label_aliases, comm, mem_limit, mdc_store, alpha=alpha).percircuit()
 
 
 @_deprecated_fn('This function will be removed soon.  Use chi2fn(...) with `p` and `1-p`.')

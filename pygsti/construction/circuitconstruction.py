@@ -623,36 +623,36 @@ def translate_circuit(circuit, alias_dict):
             line_labels=circuit.line_labels)
 
 
-def translate_circuits(circuit_list, alias_dict):
+def translate_circuits(circuits, alias_dict):
     """
-    Applies :function:`translate_circuit` to each element of `circuit_list`.
+    Applies :function:`translate_circuit` to each element of `circuits`.
 
     Creates a new list of Circuit objects from an existing one by replacing
-    operation labels in `circuit_list` by (possibly multiple) new labels according
+    operation labels in `circuits` by (possibly multiple) new labels according
     to `alias_dict`.
 
     Parameters
     ----------
-    circuit_list : list of Circuits
+    circuits : list of Circuits
         The list of circuits to use as the base for find & replace
         operations.
 
     alias_dict : dict
         A dictionary whose keys are single operation labels and whose values are
         lists or tuples of the new operation labels that should replace that key.
-        If `alias_dict is None` then `circuit_list` is returned.
+        If `alias_dict is None` then `circuits` is returned.
 
     Returns
     -------
     list of Circuits
     """
     if alias_dict is None:
-        return circuit_list
+        return circuits
     else:
         new_circuits = [_cir.Circuit(tuple(_itertools.chain(
             *[alias_dict.get(lbl, (lbl,)) for lbl in opstr])),
             line_labels=opstr.line_labels)  # line labels aren't allowed to change
-            for opstr in circuit_list]
+            for opstr in circuits]
         return new_circuits
 
 
@@ -777,16 +777,16 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     return _cir.Circuit(circuit, line_labels)
 
 
-def manipulate_circuits(circuit_list, sequence_rules, line_labels="auto"):
+def manipulate_circuits(circuits, sequence_rules, line_labels="auto"):
     """
-    Applies :function:`manipulate_circuit` to each element of `circuit_list`.
+    Applies :function:`manipulate_circuit` to each element of `circuits`.
 
     This creates a new list of Circuit objects from an existing one by performing
     replacements according to `sequence_rules` (see :func:`manipulate_circuit`).
 
     Parameters
     ----------
-    circuit_list : list of Circuits
+    circuits : list of Circuits
         The list of circuits to use as the base for find & replace
         operations.
 
@@ -794,7 +794,7 @@ def manipulate_circuits(circuit_list, sequence_rules, line_labels="auto"):
         A list of `(find,replace)` 2-tuples which specify the replacement
         rules.  Both `find` and `replace` are tuples of operation labels
         (or `Circuit` objects).  If `sequence_rules is None` then
-        `circuit_list` is returned.
+        `circuits` is returned.
 
     line_labels : "auto" or tuple, optional
         The line labels to use when creating output Circuit objects.
@@ -806,9 +806,9 @@ def manipulate_circuits(circuit_list, sequence_rules, line_labels="auto"):
     list of Circuits
     """
     if sequence_rules is None:
-        return circuit_list
+        return circuits
     else:
-        return [manipulate_circuit(opstr, sequence_rules, line_labels) for opstr in circuit_list]
+        return [manipulate_circuit(opstr, sequence_rules, line_labels) for opstr in circuits]
 
 
 def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=()):
