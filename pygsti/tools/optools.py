@@ -3164,12 +3164,11 @@ def is_valid_lindblad_paramtype(typ):
     "GLND" (general unconstrained Lindbladian), "CPTP" (cptp-constrained),
     or any/all of the letters "H" (Hamiltonian), "S" (Stochastic, CPTP),
     "s" (Stochastic), "A" (Affine), "D" (Depolarization, CPTP),
-    "d" (Depolarization) joined with plus (+) signs.  Note that "H"
-    cannot appear alone, and that "A" cannot appear without one of
-    {"S","s","D","d"}. The suffix can be non-existent (density-matrix),
-    "terms" (state-vector terms) or "clifford terms" (stabilizer-state
-    terms).  For example, valid Lindblad types are "H+S", "H+d+A",
-    "CPTP clifford terms", or "S+A terms".
+    "d" (Depolarization) joined with plus (+) signs.  Note that "A" cannot
+    appear without one of {"S","s","D","d"}. The suffix can be non-existent
+    (density-matrix), "terms" (state-vector terms) or "clifford terms"
+    (stabilizer-state terms).  For example, valid Lindblad types are "H+S",
+    "H+d+A", "CPTP clifford terms", or "S+A terms".
 
     Parameters
     ----------
@@ -3185,7 +3184,7 @@ def is_valid_lindblad_paramtype(typ):
     except ValueError:
         return False  # if can't even split `typ`
     return baseTyp in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                       "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A")
+                       "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
 def split_lindblad_paramtype(typ):

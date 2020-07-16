@@ -3135,8 +3135,8 @@ class LindbladOp(LinearOperator):
         #Break param_type in to a "base" type and an evotype
         bTyp, evotype, nonham_mode, param_mode = cls.decomp_paramtype(param_type)
 
-        ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
-        nonham_basis = proj_basis
+        ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
+        nonham_basis = None if bTyp == "H" else proj_basis
 
         def beq(b1, b2):
             """ Check if bases have equal names """
