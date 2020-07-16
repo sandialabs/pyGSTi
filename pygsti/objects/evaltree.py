@@ -118,13 +118,13 @@ class EvalTree(list):
                     #print("DB: taking bite: ", circuit[0:bite], "indx = ",iCur)
                     if bFinal:
                         if iCur != k:  # then we have a duplicate final operation sequence
+                            if 0 not in evalDict:
+                                evalDict[0] = {}
+                                _bisect.insort(evalDict_keys, 0)
                             iEmptyStr = evalDict[0].get(None, None)
                             if iEmptyStr is None:  # then we need to add the empty string
                                 # duplicate final strs require the empty string to be included in the tree
                                 iEmptyStr = next_scratch_index; next_scratch_index += 1
-                                if 0 not in evalDict:
-                                    evalDict[0] = {}
-                                    _bisect.insort(evalDict_keys, 0)
                                 evalDict[0][None] = iEmptyStr
                                 eval_tree.append((iEmptyStr, None, None))  # iLeft = iRight = None => no-op
                             #assert(self[k] is None)  # make sure we haven't put anything here yet
