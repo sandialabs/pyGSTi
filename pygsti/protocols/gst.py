@@ -1090,24 +1090,27 @@ class StandardGST(_proto.Protocol):
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
 
-                elif mode in ('full', 'TP', 'CPTP', 'H+S', 'S', 'static'):  # mode is a parameterization
-                    parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = data.edesign.target_model.copy()
-                    initial_model.set_all_parameterizations(parameterization)
-                    initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
-
-                    gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target, self.objfn_builders,
-                              self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
-                    result = gst.run(data, memlimit, comm)
-                    ret.add_estimates(result)
-
                 elif mode in models_to_test:
                     mdltest = _ModelTest(models_to_test[mode], None, self.gaugeopt_suite, self.gaugeopt_target,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
+
                 else:
-                    raise ValueError("Invalid item in 'modes' argument: %s" % mode)
+                    #Try to interpret `mode` as a parameterization
+                    parameterization = mode  # for now, 1-1 correspondence
+                    initial_model = data.edesign.target_model.copy()
+
+                    try:
+                        initial_model.set_all_parameterizations(parameterization)
+                    except ValueError as e:
+                        raise ValueError("Could not interpret '%s' mode as a parameterization! Details:\n%s" % str(e))
+
+                    initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
+                    gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target, self.objfn_builders,
+                              self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
+                    result = gst.run(data, memlimit, comm)
+                    ret.add_estimates(result)
 
         return ret
 

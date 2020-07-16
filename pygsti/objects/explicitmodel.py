@@ -454,11 +454,13 @@ class ExplicitOpModel(_mdl.OpModel):
                 if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
                     self._sim = _termfwdsim.TermForwardSimulator(self)
 
-        else:  # assume all other parameterizations are densitymx type
+        elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
             if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
                 self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
                     _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+        else:
+            raise ValueError("Invalid parameterization type: %s" % str(typ))
 
         basis = self.basis
         if extra is None: extra = {}
