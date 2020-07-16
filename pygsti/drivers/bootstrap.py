@@ -86,7 +86,9 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     simDS = _obj.DataSet(outcome_labels=outcome_labels,
                          collision_action=input_data_set.collisionAction)
     circuit_list = list(input_data_set.keys())
-    probs = input_model.sim.bulk_probs(circuit_list)
+    probs = input_model.sim.bulk_probs(circuit_list) \
+        if generation_method == 'parametric' else None
+
     for s in circuit_list:
         nSamples = input_data_set[s].total
         if generation_method == 'parametric':
