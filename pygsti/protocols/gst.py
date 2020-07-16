@@ -1104,7 +1104,8 @@ class StandardGST(_proto.Protocol):
                     try:
                         initial_model.set_all_parameterizations(parameterization)
                     except ValueError as e:
-                        raise ValueError("Could not interpret '%s' mode as a parameterization! Details:\n%s" % str(e))
+                        raise ValueError("Could not interpret '%s' mode as a parameterization! Details:\n%s"
+                                         % (mode, str(e)))
 
                     initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
                     gst = GST(initial_model, self.gaugeopt_suite, self.gaugeopt_target, self.objfn_builders,
@@ -1854,6 +1855,19 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             return max(0, two_dlogl - two_dlogl_threshold) \
                 + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
 
+        ##For debugging wildcard (see below for suggested insertion point)
+        #def _wildcard_objective_firstterms_debug(wv):
+        #    dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+        #    for i in range(num_circuits):
+        #        dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+        #    two_dlogl_percircuit = 2 * dlogl_percircuit
+        #    two_dlogl = sum(two_dlogl_percircuit)
+        #    print("Aggregate penalty = ", two_dlogl, "-", two_dlogl_threshold, "=", two_dlogl - two_dlogl_threshold)
+        #    print("Per-circuit (redbox) penalty = ", sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None)))
+        #    print(" per-circuit threshold = ", redbox_threshold, " highest violators = ")
+        #    sorted_percircuit = sorted(enumerate(two_dlogl_percircuit), key=lambda x: x[1], reverse=True)
+        #    print('\n'.join(["(%d) %s: %g" % (i, layout.circuits[i].str, val) for i, val in sorted_percircuit[0:10]]))
+
         num_iters = 0
         wvec_init = budget.to_vector()
 
@@ -1905,6 +1919,12 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(wv)), 2)
             else:
                 callbackf = None
+
+            #DEBUG: If you need to debug a wildcard budget, uncommend the function above and try this:
+            # import bpdb; bpdb.set_trace()
+            # wv_test = _np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2])  # trial budget
+            # _wildcard_objective_firstterms_debug(wv_test)  # try this
+            # callbackf(_np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2]))  # or this
 
             #OLD: scipy optimize - proved unreliable
             #soln = _spo.minimize(_wildcard_objective, wvec_init,
