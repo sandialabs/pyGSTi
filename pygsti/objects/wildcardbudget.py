@@ -153,6 +153,8 @@ class WildcardBudget(object):
         circuit_budget_matrix = _np.zeros((len(circuits), len(self.wildcard_vector)), 'd')
         for i, circuit in enumerate(circuits):
             for layer in circuit:
+                if len(layer.components) == 0:  # special case of global idle, which has 0 components
+                    circuit_budget_matrix[i, self.primOpLookup[layer]] += 1.0
                 for component in layer.components:
                     circuit_budget_matrix[i, self.primOpLookup[component]] += 1.0
         return circuit_budget_matrix
@@ -614,6 +616,8 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         Wvec = self.wildcard_vector
         budget = 0 if (self.spam_index is None) else pos(Wvec[self.spam_index])
         for layer in circuit:
+            if len(layer.components) == 0:  # special case of global idle, which has 0 components
+                budget += pos(Wvec[self.primOpLookup[layer]])
             for component in layer.components:
                 budget += pos(Wvec[self.primOpLookup[component]])
         return budget
