@@ -16,6 +16,7 @@ import collections as _collections
 import bisect as _bisect
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from .circuit import Circuit as _Circuit
 
 
 def _walk_subtree(treedict, indx, running_inds):
@@ -54,7 +55,7 @@ class EvalTree(list):
         #Evaluation dictionary:
         # keys == operation sequences that have been evaluated so far
         # values == index of operation sequence (key) within eval_tree
-        evalDict = {} #_collections.defaultdict(dict)
+        evalDict = {}  # _collections.defaultdict(dict)
         evalDict_keys = []  # the sorted keys of evalDict
 
         #Process circuits in order of length, so that we always place short strings
@@ -66,7 +67,7 @@ class EvalTree(list):
         next_scratch_index = len(circuits_to_evaluate)
         for k in indices_sorted_by_circuit_len:
             circuit = circuits_to_evaluate[k]
-            layertup = circuit.layertup  # only need to compare with layer tuple, which is faster
+            layertup = circuit.layertup if isinstance(circuit, _Circuit) else circuit
             L = len(circuit)
 
             #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
@@ -101,6 +102,9 @@ class EvalTree(list):
                 else:
                     # Can't even take a bite of length 1, so add the next op-label to the tree and take b=1 bite.
                     eval_tree.append((next_scratch_index, None, layertup[start]))
+                    if 1 not in evalDict:
+                        evalDict[1] = {}
+                        _bisect.insort(evalDict_keys, 1)
                     evalDict[1][layertup[start:start + 1]] = next_scratch_index; next_scratch_index += 1
                     bite = 1
 
@@ -118,8 +122,10 @@ class EvalTree(list):
                             if iEmptyStr is None:  # then we need to add the empty string
                                 # duplicate final strs require the empty string to be included in the tree
                                 iEmptyStr = next_scratch_index; next_scratch_index += 1
+                                if 0 not in evalDict:
+                                    evalDict[0] = {}
+                                    _bisect.insort(evalDict_keys, 0)
                                 evalDict[0][None] = iEmptyStr
-                                _bisect.insort(evalDict_keys, 0)  # inserts L into evalDict_keys while maintaining sorted order
                                 eval_tree.append((iEmptyStr, None, None))  # iLeft = iRight = None => no-op
                             #assert(self[k] is None)  # make sure we haven't put anything here yet
                             eval_tree.append((k, iCur, iEmptyStr))
