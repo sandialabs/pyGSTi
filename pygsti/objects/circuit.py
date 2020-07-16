@@ -1713,7 +1713,7 @@ class Circuit(object):
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
                                 subc.sslbls)  # dump in the contents
 
-    def _factorize_repetitions_inplace(self):
+    def factorize_repetitions_inplace(self):
         """
         Attempt to replace repeated sub-circuits with :class:`CircuitLabel` objects.
 
