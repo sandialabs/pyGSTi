@@ -504,7 +504,7 @@ class CircuitOperationTester(BaseCase):
             self.s1[0] = 'Gx'  # cannot set items - like a tuple they're read-only
 
     def test_raise_on_add_non_circuit(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             self.s1 + ("Gx",)  # can't add non-Circuit to circuit
 
     def test_clear(self):
