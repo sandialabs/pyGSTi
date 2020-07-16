@@ -579,6 +579,8 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         if self._evotype not in ("densitymx", "statevec"):
             return 0  # punt on computing number of gauge parameters for other evotypes
+        if self.num_params == 0:
+            return 0  # save the trouble of getting gauge params when there are no params to begin with
         dPG = self._excalc()._buildup_dpg()
         gaugeDirs = _mt.nullspace_qr(dPG)  # cols are gauge directions
         if gaugeDirs.size == 0:  # if there are *no* gauge directions

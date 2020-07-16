@@ -414,6 +414,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
 
+    if x.size == 0:  # a model with 0 parameters - nothing to optimize
+        msg = "No parameters to optimize"; converged = True
+
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
     #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
