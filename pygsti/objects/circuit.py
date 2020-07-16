@@ -750,9 +750,17 @@ class Circuit(object):
         """Note: this is not covered by __iter__ for case of contained CircuitLabels """
         return any([(x == layer or x in layer) for layer in self._labels])
 
+    def __radd__(self, x):
+        if not isinstance(x, Circuit):
+            assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
+            return Circuit._fastinit(x + self.layertup, self.line_labels, editable=False)
+        return x.__add__(self)
+
     def __add__(self, x):
         if not isinstance(x, Circuit):
-            raise ValueError("Can only add Circuits objects to other Circuit objects")
+            assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
+            return Circuit._fastinit(self.layertup + x, self.line_labels, editable=False)
+
         if self._str is None or x._str is None:
             s = None
         else:
@@ -763,13 +771,13 @@ class Circuit(object):
                 s = (mystr + xstr) if xstr != "{}" else mystr
             else: s = xstr
 
-        editable = not self._static or not x._static
         added_labels = tuple([l for l in x.line_labels if l not in self.line_labels])
         new_line_labels = self.line_labels + added_labels
         if s is not None:
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
-        return Circuit(self.layertup + x.layertup, new_line_labels,
-                       None, editable, s, check=False)
+
+        return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
+                                 stringrep=s, occurrence=None)
 
     def repeat(self, ntimes, expand="default"):
         """
@@ -3631,8 +3639,10 @@ class Circuit(object):
             cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
             for k, layer_label in enumerate(cir, start=start):
                 components = layer_label.components
-                instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
-                                               for component in components])[0]
+                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
+                #                               for component in components])[0]  # SLOWER than statement below
+                instrument_inds = _np.array([i for i, component in enumerate(components)
+                                             if model._is_primitive_instrument_layer_lbl(component)])
                 if instrument_inds.size > 0:
                     # This layer contains at least one instrument => recurse with instrument(s) replaced with
                     #  all combinations of their members.
@@ -3667,7 +3677,13 @@ class Circuit(object):
         ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
         # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
 
-        add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        if model._has_instruments():
+            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        else:
+            elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) else tuple(ootree.keys())
+            outcomes = tuple(((elabel,) for elabel in elabels))
+            expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
+
         return expanded_circuit_outcomes
 
 

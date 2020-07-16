@@ -200,9 +200,12 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
-        circuit_tree = _EvalTree.create(unique_nospam_circuits)
-        groups = circuit_tree.find_splitting(len(unique_nospam_circuits),
-                                             max_sub_tree_size, num_sub_trees, verbosity)  # a list of tuples/sets?
+        if num_sub_trees > 1 or max_sub_tree_size is not None:
+            circuit_tree = _EvalTree.create(unique_nospam_circuits)
+            groups = circuit_tree.find_splitting(len(unique_nospam_circuits),
+                                                 max_sub_tree_size, num_sub_trees, verbosity)  # a list of tuples/sets?
+        else:
+            groups = [set(range(len(unique_nospam_circuits)))]
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
         atoms = []
