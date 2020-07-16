@@ -1482,6 +1482,7 @@ class PolynomialRep(dict):
     def __repr__(self):
         return "PolynomialRep[ " + str(self) + " ]"
 
+    @property
     def degree(self):
         """ Used for debugging in slowreplib routines only"""
         return max([len(self._int_to_vinds(k)) for k in self.keys()])
@@ -1686,7 +1687,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     eps = 1e-7  # hardcoded?
 
     if param_indices is None:
-        param_indices = list(range(fwdsim.model.num_params()))
+        param_indices = list(range(fwdsim.model.num_params))
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
@@ -1710,7 +1711,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, comm)
 
     orig_vec = fwdsim.model.to_vector().copy()
-    for i in range(fwdsim.model.num_params()):
+    for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
@@ -1888,7 +1889,7 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     eps = 1e-7  # hardcoded?
 
     #Compute finite difference derivatives, one parameter at a time.
-    param_indices = range(fwdsim.model.num_params()) if (wrt_slice is None) else _slct.indices(wrt_slice)
+    param_indices = range(fwdsim.model.num_params) if (wrt_slice is None) else _slct.indices(wrt_slice)
 
     nEls = layout_atom.num_elements
     vals = _np.empty(nEls, 'd')
@@ -1909,8 +1910,8 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
     orig_vec = fwdsim.model.to_vector().copy()
-    for i in range(fwdsim.model.num_params()):
-        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params()))
+    for i in range(fwdsim.model.num_params):
+        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
@@ -1926,7 +1927,7 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
-    #      (fwdsim.model.num_params(), fwdsim.model.dim, cache_size, len(layout_atom),
+    #      (fwdsim.model.num_params, fwdsim.model.dim, cache_size, len(layout_atom),
     #       layout_atom.num_applies(), _time.time()-tStart)) #DEBUG
 
 
@@ -1993,7 +1994,7 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
     #       res *= (pLeft * pRight)
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
-    mpv = fwdsim.model.num_params()  # max_polynomial_vars
+    mpv = fwdsim.model.num_params  # max_polynomial_vars
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
@@ -2208,7 +2209,7 @@ def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholab
 
 def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
     """ TODO: docstring """
-    mpv = fwdsim.model.num_params()  # max_polynomial_vars
+    mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -2354,7 +2355,7 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, fwdsim.model.num_params())
+            fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, fwdsim.model.num_params)
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2454,7 +2455,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
 
     if circuit not in circuitsetup_cache:
         circuitsetup_cache[circuit] = create_circuitsetup_cacheel(
-            fwdsim, rholabel, elabels, circuit, repcache, fwdsim.min_term_mag, fwdsim.model.num_params())
+            fwdsim, rholabel, elabels, circuit, repcache, fwdsim.min_term_mag, fwdsim.model.num_params)
     rho_term_reps, op_term_reps, E_term_reps, \
         rho_foat_indices, op_foat_indices, E_foat_indices, E_indices = circuitsetup_cache[circuit]
 
@@ -2598,7 +2599,7 @@ def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elab
 
 def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv):
     # Construct dict of gate term reps
-    mpv = fwdsim.model.num_params()  # max_polynomial_vars
+    mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
@@ -2717,7 +2718,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
     """
     #t0 = _time.time()
     # Construct dict of gate term reps
-    mpv = fwdsim.model.num_params()  # max_polynomial_vars
+    mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
     op_term_reps = {}
