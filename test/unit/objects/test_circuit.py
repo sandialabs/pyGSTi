@@ -103,7 +103,7 @@ class CircuitTester(BaseCase):
         c2 = circuit.Circuit(None, stringrep='GiGxGxGxGxGy', editable=True)
         self.assertEqual(c2, ('Gi', 'Gx', 'Gx', 'Gx', 'Gx', 'Gy'))
 
-        c2._factorize_repetitions_inplace()
+        c2.factorize_repetitions_inplace()
         self.assertEqual(c2, ('Gi', CircuitLabel('', ['Gx'], None, 4), 'Gy'))
 
     def test_circuitlabel_inclusion(self):
