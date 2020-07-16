@@ -230,7 +230,7 @@ class TestDriversMethods(DriversTestCase):
         tp_target.set_all_parameterizations("TP")
         mdl = pygsti.run_lgst(ds, std.fiducials, std.fiducials, target_model=tp_target, svd_truncate_to=4, verbosity=0)
 
-        default_maxLens = [0]+[2**k for k in range(10)]
+        default_maxLens = [0]+[2**k for k in range(5)]
         circuits = pygsti.construction.create_lsgst_circuits(
             self.op_labels, self.fiducials, self.fiducials, self.germs,
             default_maxLens, fid_pairs=None, trunc_scheme="whole germ powers")
@@ -240,8 +240,8 @@ class TestDriversMethods(DriversTestCase):
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.create_bootstrap_models(
                 2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-                std.germs, None, input_model=mdl,
-                return_data=False) #test when max_lengths == None
+                std.germs, default_maxLens, input_model=mdl,
+                return_data=False) #test when max_lengths == None ?
 
 
 if __name__ == "__main__":

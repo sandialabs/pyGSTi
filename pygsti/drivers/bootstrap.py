@@ -86,10 +86,11 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     simDS = _obj.DataSet(outcome_labels=outcome_labels,
                          collision_action=input_data_set.collisionAction)
     circuit_list = list(input_data_set.keys())
+    probs = input_model.sim.bulk_probs(circuit_list)
     for s in circuit_list:
         nSamples = input_data_set[s].total
         if generation_method == 'parametric':
-            ps = input_model.probabilities(s)
+            ps = probs[s]  # SLOW: input_model.probabilities(s)
         elif generation_method == 'nonparametric':
             ps = {ol: input_data_set[s].fraction(ol) for ol in outcome_labels}
         pList = _np.array([_np.clip(ps[outcomeLabel], 0, 1) for outcomeLabel in outcome_labels])
@@ -188,7 +189,7 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
     """
 
     if max_lengths is None:
-        print("No max_lengths value specified; using [0,1,24,...,1024]")
+        print("No max_lengths value specified; using [0,1,2,4,...,1024]")
         max_lengths = [0] + [2**k for k in range(10)]
 
     if (input_model is None and target_model is None):
