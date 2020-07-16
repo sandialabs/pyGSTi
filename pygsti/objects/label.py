@@ -1390,7 +1390,7 @@ class LabelTupWithArgs(Label, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupWithArgs, (self[:], self.time), None)
 
-    def tonative(self):
+    def to_native(self):
         """
         Returns this label as native python types.
 

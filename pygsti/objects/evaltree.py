@@ -12,6 +12,8 @@ Defines the EvalTree class.
 
 import numpy as _np
 import time as _time  # DEBUG TIMERS
+import collections as _collections
+import bisect as _bisect
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
@@ -52,7 +54,8 @@ class EvalTree(list):
         #Evaluation dictionary:
         # keys == operation sequences that have been evaluated so far
         # values == index of operation sequence (key) within eval_tree
-        evalDict = {}
+        evalDict = {} #_collections.defaultdict(dict)
+        evalDict_keys = []  # the sorted keys of evalDict
 
         #Process circuits in order of length, so that we always place short strings
         # in the right place (otherwise assert stmt below can fail)
@@ -63,6 +66,7 @@ class EvalTree(list):
         next_scratch_index = len(circuits_to_evaluate)
         for k in indices_sorted_by_circuit_len:
             circuit = circuits_to_evaluate[k]
+            layertup = circuit.layertup  # only need to compare with layer tuple, which is faster
             L = len(circuit)
 
             #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
@@ -70,41 +74,52 @@ class EvalTree(list):
             #  operation labels.
             if L == 0:
                 eval_tree.append((k, None, None))  # iLeft = iRight = None => no-op (length-0 circuit)
-                evalDict[None] = k
+                if L not in evalDict:
+                    evalDict[L] = {}
+                    _bisect.insort(evalDict_keys, L)  # inserts L into evalDict_keys while maintaining sorted order
+                evalDict[L][None] = k
                 continue
 
             elif L == 1:
-                eval_tree.append((k, None, circuit[0]))  # iLeft = None => evaluate iRight as a label
-                evalDict[circuit] = k
+                eval_tree.append((k, None, layertup[0]))  # iLeft = None => evaluate iRight as a label
+                if L not in evalDict:
+                    evalDict[L] = {}
+                    _bisect.insort(evalDict_keys, L)  # inserts L into evalDict_keys while maintaining sorted order
+                evalDict[L][layertup] = k
                 continue
 
             start = 0; bite = 1
+            possible_bs = list(reversed(evalDict_keys))  # copy list
             while start < L:
 
                 #Take a bite out of circuit, starting at `start` that is in evalDict
-                for b in range(L - start, 0, -1):
-                    if circuit[start:start + b] in evalDict:
+                maxb = L - start
+                possible_bs = [b for b in possible_bs if b <= maxb]
+                for b in possible_bs:  # range(L - start, 0, -1):
+                    if layertup[start:start + b] in evalDict[b]:
                         bite = b; break
                 else:
                     # Can't even take a bite of length 1, so add the next op-label to the tree and take b=1 bite.
-                    eval_tree.append((next_scratch_index, None, circuit[start]))
-                    evalDict[circuit[start:start + 1]] = next_scratch_index; next_scratch_index += 1
+                    eval_tree.append((next_scratch_index, None, layertup[start]))
+                    evalDict[1][layertup[start:start + 1]] = next_scratch_index; next_scratch_index += 1
                     bite = 1
 
                 bFinal = bool(start + bite == L)
+                evalDict_bite = evalDict[bite]
                 #print("DB: start=",start,": found ",circuit[start:start+bite],
                 #      " (len=%d) in evalDict" % bite, "(final=%s)" % bFinal)
 
                 if start == 0:  # first in-evalDict bite - no need to add anything to self yet
-                    iCur = evalDict[circuit[0:bite]]
+                    iCur = evalDict_bite[layertup[0:bite]]
                     #print("DB: taking bite: ", circuit[0:bite], "indx = ",iCur)
                     if bFinal:
                         if iCur != k:  # then we have a duplicate final operation sequence
-                            iEmptyStr = evalDict.get(None, None)
+                            iEmptyStr = evalDict[0].get(None, None)
                             if iEmptyStr is None:  # then we need to add the empty string
                                 # duplicate final strs require the empty string to be included in the tree
                                 iEmptyStr = next_scratch_index; next_scratch_index += 1
-                                evalDict[None] = iEmptyStr
+                                evalDict[0][None] = iEmptyStr
+                                _bisect.insort(evalDict_keys, 0)  # inserts L into evalDict_keys while maintaining sorted order
                                 eval_tree.append((iEmptyStr, None, None))  # iLeft = iRight = None => no-op
                             #assert(self[k] is None)  # make sure we haven't put anything here yet
                             eval_tree.append((k, iCur, iEmptyStr))
@@ -112,17 +127,21 @@ class EvalTree(list):
                             #self.eval_order.append(k)  # multiplying by the empty string.
                 else:
                     # add (iCur, iBite)
-                    assert(circuit[0:start + bite] not in evalDict)
-                    iBite = evalDict[circuit[start:start + bite]]
+                    assert(layertup[0:start + bite] not in evalDict_bite)
+                    iBite = evalDict_bite[layertup[start:start + bite]]
+                    if start + bite not in evalDict:
+                        evalDict[start + bite] = {}
+                        _bisect.insort(evalDict_keys, start + bite)
+
                     if bFinal:  # place (iCur, iBite) at location k
                         iNew = k
-                        evalDict[circuit[0:start + bite]] = iNew
+                        evalDict[start + bite][layertup[0:start + bite]] = iNew  # note: start + bite == L
                         #assert(self[iNew] is None)  # make sure we haven't put anything here yet
                         #self[k] = (iCur, iBite)
                         eval_tree.append((k, iCur, iBite))
                     else:
                         iNew = next_scratch_index
-                        evalDict[circuit[0:start + bite]] = iNew
+                        evalDict[start + bite][layertup[0:start + bite]] = iNew
                         eval_tree.append((iNew, iCur, iBite))
                         next_scratch_index += 1
                         #self.append((iCur, iBite))
