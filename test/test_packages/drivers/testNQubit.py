@@ -233,7 +233,7 @@ class NQubitTestCase(BaseTestCase):
             simulator="map",verbosity=1)
         #print("nElements test = ",target_model.num_elements)
         #print("nParams test = ",target_model.num_params)
-        #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
+        #print("nNonGaugeParams test = ",target_model.num_nongauge_params)
 
         print("Constructing Datagen LinearOperator Set")
         mdl_datagen = build_XYCNOT_cloudnoise_model(

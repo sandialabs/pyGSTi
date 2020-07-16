@@ -768,7 +768,7 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
 
     np : int, optional
         The number of free parameters in the model.  If None, then
-        `model.num_nongauge_params()` is used.
+        `model.num_nongauge_params` is used.
 
     wildcard : WildcardBudget
         A wildcard budget to apply to the objective function (`objective`),
@@ -815,7 +815,7 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     ds_gstrs = _tools.apply_aliases_to_circuits(circuits, aliases)
 
     if hasattr(model, 'num_nongauge_params'):
-        np = model.num_nongauge_params()
+        np = model.num_nongauge_params
     else:
         np = model.num_params
     Ns = dataset.degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset

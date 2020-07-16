@@ -762,7 +762,7 @@ def two_delta_logl(model, dataset, circuits=None,
         return two_delta_logl
     elif dof_calc_method == "nongauge":
         if hasattr(model, 'num_nongauge_params'):
-            mdl_dof = model.num_nongauge_params()
+            mdl_dof = model.num_nongauge_params
         else:
             mdl_dof = model.num_params
     elif dof_calc_method == "all":
@@ -877,7 +877,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
 
     if dof_calc_method is None: return two_dlogl_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params
-    elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
+    elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuits is not None:

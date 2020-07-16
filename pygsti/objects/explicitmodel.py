@@ -557,6 +557,7 @@ class ExplicitOpModel(_mdl.OpModel):
         instSize = [i.num_elements for i in self.instruments.values()]
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
 
+    @property
     def num_nongauge_params(self):
         """
         Return the number of non-gauge parameters in this model.
@@ -566,8 +567,9 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of non-gauge model parameters.
         """
-        return self.num_params - self.num_gauge_params()
+        return self.num_params - self.num_gauge_params
 
+    @property
     def num_gauge_params(self):
         """
         Return the number of gauge parameters in this model.

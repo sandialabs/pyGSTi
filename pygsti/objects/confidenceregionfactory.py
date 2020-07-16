@@ -271,7 +271,7 @@ class ConfidenceRegionFactory(object):
         #Expand operation label aliases used in DataSet lookups
         ds_circuit_list = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
-        nModelParams = model.num_nongauge_params()
+        nModelParams = model.num_nongauge_params
         nDataParams = dataset.degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)
 
@@ -505,7 +505,7 @@ class ConfidenceRegionFactory(object):
         #TODO: where to move this?
         ##Check that number of gauge parameters reported by model is consistent with confidence region
         ## since the parameter number computed this way is used in chi2 or logl progress tables
-        #Np_check =  model.num_nongauge_params()
+        #Np_check =  model.num_nongauge_params
         #if(Np_check != cri.nNonGaugeParams):
         #    _warnings.warn("Number of non-gauge parameters in model and confidence region do "
         #                   + " not match.  This indicates an internal logic error.")

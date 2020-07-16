@@ -835,7 +835,7 @@ def _do_runopt(objective, optimizer, printer):
 
             if resource_alloc.mem_limit is None or 0.1 * resource_alloc.mem_limit < memForNumGaugeParams:
                 try:
-                    nModelParams = mdl.num_nongauge_params()  # len(x0)
+                    nModelParams = mdl.num_nongauge_params  # len(x0)
                 except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
                     printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
                     nModelParams = mdl.num_params

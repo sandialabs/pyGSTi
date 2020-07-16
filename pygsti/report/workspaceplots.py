@@ -2993,7 +2993,7 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         if np_by_x is None:
             try:
-                np_by_x = [mdl.num_nongauge_params() if (mdl is not None) else 0
+                np_by_x = [mdl.num_nongauge_params if (mdl is not None) else 0
                            for mdl in model_by_x]  # Note: models can be None => N/A
             except:  # numpy can throw a LinAlgError
                 _warnings.warn(("FigComparisonBarPlot could not obtain number of"

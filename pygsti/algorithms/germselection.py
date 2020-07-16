@@ -336,7 +336,7 @@ def _get_model_params(model_list):
 
     # All the models should have the same number of parameters and gates, but
     # let's be paranoid here for the time being and make sure.
-    numGaugeParamsList = [reducedModel.num_gauge_params()
+    numGaugeParamsList = [reducedModel.num_gauge_params
                           for reducedModel in reducedModelList]
     numGaugeParams = numGaugeParamsList[0]
     if not all([numGaugeParams == otherNumGaugeParams
@@ -344,7 +344,7 @@ def _get_model_params(model_list):
         raise ValueError("All models must have the same number of gauge "
                          "parameters!")
 
-    numNonGaugeParamsList = [reducedModel.num_nongauge_params()
+    numNonGaugeParamsList = [reducedModel.num_nongauge_params
                              for reducedModel in reducedModelList]
     numNonGaugeParams = numNonGaugeParamsList[0]
     if not all([numNonGaugeParams == otherNumNonGaugeParams
@@ -473,7 +473,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
         if model is None:
             raise ValueError("Must provide either num_gauge_params or model!")
         else:
-            num_gauge_params = _remove_spam_vectors(model).num_gauge_params()
+            num_gauge_params = _remove_spam_vectors(model).num_gauge_params
 
     # Calculate penalty scores
     numGerms = partial_deriv_dagger_deriv.shape[0]
@@ -808,7 +808,7 @@ def _num_non_spam_gauge_params(model):
     """
     Return the number of non-gauge, non-SPAM parameters in `model`.
 
-    Equivalent to `_remove_spam_vectors(model).num_gauge_params()`.
+    Equivalent to `_remove_spam_vectors(model).num_gauge_params`.
 
     Parameters
     ---------
@@ -823,7 +823,7 @@ def _num_non_spam_gauge_params(model):
     -------
     int
     """
-    return _remove_spam_vectors(model).num_gauge_params()
+    return _remove_spam_vectors(model).num_gauge_params
 
 
 # wrt is op_dim x op_dim, so is M, Minv, Proj
@@ -1058,7 +1058,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
     sortedEigenvals = _sq_sing_vals_from_deriv(normalizedDeriv, weights)
 
-    nGaugeParams = model.num_gauge_params()
+    nGaugeParams = model.num_gauge_params
 
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
@@ -1135,7 +1135,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     combinedTDDD = _np.tensordot(weights, twirledDerivDaggerDeriv, (0, 0))
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
-    nGaugeParams = model.num_gauge_params()
+    nGaugeParams = model.num_gauge_params
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
     bSuccess = bool(_scoring.list_score(observableEigenvals, score_func)
@@ -1777,7 +1777,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
     # Initially allow adding to weight. -- maybe make this an argument??
     lessWeightOnly = False
 
-    nGaugeParams = model0.num_gauge_params()
+    nGaugeParams = model0.num_gauge_params
 
     # score dictionary:
     #   keys = (modelNum, tuple-ized weight vector of 1's and 0's only)

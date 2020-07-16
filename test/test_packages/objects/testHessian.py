@@ -37,7 +37,7 @@ class TestHessianMethods(BaseTestCase):
         n = stdxy.target_model().num_params
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
-        n = stdxy.target_model().num_nongauge_params()
+        n = stdxy.target_model().num_nongauge_params
         self.assertEqual(n,28) # full 16 gauge params
 
         #XY Model: SPAM=False
@@ -47,7 +47,7 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_params
         self.assertEqual(n,32) # 2*16 = 32
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,18) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
 
@@ -55,7 +55,7 @@ class TestHessianMethods(BaseTestCase):
         n = stdxyi.target_model().num_params
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
-        n = stdxyi.target_model().num_nongauge_params()
+        n = stdxyi.target_model().num_nongauge_params
         self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
         #XYI Model: SPAM=False
@@ -65,7 +65,7 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_params
         self.assertEqual(n,48) # 3*16 = 48
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Model: SP0=False
@@ -74,7 +74,7 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_params
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
@@ -84,7 +84,7 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
     def test_hessian_projection(self):

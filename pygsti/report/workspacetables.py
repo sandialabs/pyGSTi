@@ -2868,7 +2868,7 @@ class FitComparisonTable(WorkspaceTable):
 
         if np_by_x is None:
             try:
-                np_by_x = [mdl.num_nongauge_params() for mdl in model_by_x]
+                np_by_x = [mdl.num_nongauge_params for mdl in model_by_x]
             except _np.linalg.LinAlgError:
                 _warnings.warn(("LinAlgError when trying to compute the number"
                                 " of non-gauge parameters.  Using total"

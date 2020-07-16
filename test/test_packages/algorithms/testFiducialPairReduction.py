@@ -97,7 +97,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         #Note: can't amplify SPAM params, so don't count them
 
-        nTotal = germselection._remove_spam_vectors(target_model).num_nongauge_params()
+        nTotal = germselection._remove_spam_vectors(target_model).num_nongauge_params
         self.assertEqual(nTotal, 34)
 
         print("GFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
