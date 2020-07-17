@@ -23,7 +23,6 @@ from .. import objects as _objs
 from .. import construction as _pc
 from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects.computationcache import ComputationCache as _ComputationCache
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
@@ -579,10 +578,6 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
         A resource allocation object containing information about how to
         divide computation amongst multiple processors and any memory
         limits that should be imposed.
-
-    cache : ComputationCache
-        A persistent cache used to hold information specific to the
-        given dataset, model, and circuit list.
 
     verbosity : int, optional
         How much detail to send to stdout.

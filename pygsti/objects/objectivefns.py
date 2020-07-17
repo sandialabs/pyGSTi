@@ -20,7 +20,6 @@ from .. import optimize as _opt
 from .. import tools as _tools
 from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
-#from .computationcache import ComputationCache as _ComputationCache
 from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
@@ -1041,9 +1040,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     circuits : list or CircuitList
         The circuit list - specifies what probabilities and counts this objective
         function compares.  If `None`, then the keys of `dataset` are used.
-
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
 
     enable_hessian : bool, optional
         Whether hessian calculations are allowed.  If `True` then more resources are
@@ -3962,9 +3958,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
 
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
-
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
 
@@ -4813,9 +4806,6 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
 
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
-
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
 
@@ -4869,9 +4859,6 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     penalties : dict, optional
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
-
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
 
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
@@ -4931,9 +4918,6 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
 
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
-
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
 
@@ -4987,9 +4971,6 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     penalties : dict, optional
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
-
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
 
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
@@ -5046,9 +5027,6 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
 
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
-
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
 
@@ -5102,9 +5080,6 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
     penalties : dict, optional
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
-
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
 
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
@@ -5163,9 +5138,6 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
 
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
-
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.
 
@@ -5219,9 +5191,6 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     penalties : dict, optional
         Penalty values.  Penalties usually add additional (penalty) terms to the sum
         of per-circuit-outcome contributions that evaluate to the objective function.
-
-    cache : ComputationCache, optional
-        A cache for storing values using the same model, data set, and circuit list.
 
     resource_alloc : ResourceAllocation, optional
         Available resources and how they should be allocated for computations.

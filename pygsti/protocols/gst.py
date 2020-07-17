@@ -1705,9 +1705,6 @@ def _compute_robust_scaling(scale_typ, mdc_store, parameters):
     parameters : dict
         Various parameters of the estimate at hand.
 
-    cache : ComputationCache
-        A cache object used to increase performance.
-
     comm : mpi4py.MPI.Comm, optional
         An MPI communicator used to run this computation in parallel.
 
@@ -1984,9 +1981,6 @@ def _reoptimize_with_weights(mdc_store, circuit_weights_dict, objfn_builder, opt
 
     resource_alloc : ResourceAllocation, optional
         What resources are available and how they should be distributed.
-
-    cache : ComputationCache
-        A cache object used to increase performance.
 
     verbosity : int, optional
         Level of detail printed to stdout.
