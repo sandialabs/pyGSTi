@@ -95,7 +95,7 @@ class NQubitTestCase(BaseTestCase):
 
         #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
         # (maybe a different numpy version?)  Maybe look into this later?
-        import pygsti.obj.Circuit
+        Circuit = pygsti.obj.Circuit
         compare_gss_travis = set(compare_gss)
         compare_gss_travis.remove(Circuit("Gcnot:0:1Gy:0Gx:1@(0,1)"))
         compare_gss_travis.remove(Circuit("Gcnot:0:1Gx:0Gx:1@(0,1)"))
@@ -148,7 +148,7 @@ class NQubitTestCase(BaseTestCase):
 
         #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
         # (maybe a different numpy version?)  Maybe look into this later?
-        import pygsti.obj.Circuit
+        Circuit = pygsti.obj.Circuit
         compare_gss_travis = set(compare_gss)
         compare_gss_travis.remove(Circuit("Gy:0Gx:0Gx:0@(0)"))
         compare_gss_travis.add(Circuit("Gx:0Gy:0@(0)"))
