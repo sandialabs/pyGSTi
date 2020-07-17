@@ -50,7 +50,7 @@ def ds(self):
     )
     return pc.simulate_data(
         self.datagen_gateset, expList,
-        n_samples=1000, sample_error='binomial', seed=_SEED
+        num_samples=1000, sample_error='binomial', seed=_SEED
     )
 
 
@@ -58,7 +58,7 @@ def ds(self):
 def ds_lgst(self):
     return pc.simulate_data(
         self.datagen_gateset, self.lgstStrings,
-        n_samples=10000, sample_error='binomial', seed=_SEED
+        num_samples=10000, sample_error='binomial', seed=_SEED
     )
 
 

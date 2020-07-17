@@ -713,7 +713,7 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
     return mdl_new
 
 
-def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
                             availability=None, qubit_labels=None, geometry="line", parameterization='static',
                             evotype="auto", simulator="auto", on_construction_error='raise',
                             independent_gates=False, ensure_composed_gates=False, global_idle=None):
@@ -739,7 +739,7 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     gate_names : list
@@ -799,8 +799,8 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph, optional
         The type of connectivity among the qubits, specifying a graph used to
@@ -858,9 +858,9 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
     global_idle : LinearOperator, optional
         A global idle operation, which is performed once at the beginning
         of every circuit layer.  If `None`, no such operation is performed.
-        If a 1-qubit operator is given and `n_qubits > 1` the global idle
+        If a 1-qubit operator is given and `num_qubits > 1` the global idle
         is the parallel application of this operator on each qubit line.
-        Otherwise the given operator must act on all `n_qubits` qubits.
+        Otherwise the given operator must act on all `num_qubits` qubits.
 
     Returns
     -------
@@ -871,13 +871,13 @@ def create_localnoise_model(n_qubits, gate_names, nonstd_gate_unitaries=None, cu
         qubit 2 might be `Label("Gx",1)`.
     """
     return _LocalNoiseModel.from_parameterization(
-        n_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
+        num_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
         availability, qubit_labels, geometry, parameterization, evotype,
         simulator, on_construction_error, independent_gates,
         ensure_composed_gates, global_idle)
 
 
-def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+def create_crosstalk_free_model(num_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
                                 availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                 evotype="auto", simulator="auto", on_construction_error='raise',
                                 independent_gates=False, ensure_composed_gates=False):
@@ -889,7 +889,7 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     gate_names : list
@@ -957,8 +957,8 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph, optional
         The type of connectivity among the qubits, specifying a graph used to
@@ -1142,21 +1142,21 @@ def create_crosstalk_free_model(n_qubits, gate_names, error_rates, nonstd_gate_u
         assert(isinstance(error_rates['prep'], (dict, float))), "error_rates['prep'] can only be a dict or float!"
         rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
         prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, create_gate('prep', _np.identity(4)), 'prep')
-        prep_factors = [prep1Q.copy() for i in range(n_qubits)] if independent_gates else [prep1Q] * n_qubits
+        prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
         prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
     else:
-        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * n_qubits, evotype, 'prep')
+        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * num_qubits, evotype, 'prep')
 
     povm_layers = {}
     if 'povm' in error_rates:
         assert(isinstance(error_rates['povm'], (dict, float))), "error_rates['povm'] can only be a dict or float!"
         Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
         povm1Q = _povm.LindbladPOVM(create_gate('povm', _np.identity(4)), Mdefault_base1Q, "pp")
-        povm_factors = [povm1Q.copy() for i in range(n_qubits)] if independent_gates else [povm1Q] * n_qubits
+        povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
         povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
     else:
-        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(n_qubits, evotype)
+        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 
-    return _LocalNoiseModel(n_qubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
+    return _LocalNoiseModel(num_qubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
                             geometry, evotype, simulator, on_construction_error,
                             independent_gates, ensure_composed_gates, global_idle=idleOp)

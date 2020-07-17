@@ -63,13 +63,13 @@ class QubitGraph(object):
     """
 
     @classmethod
-    def common_graph(cls, n_qubits=0, geometry="line", directed=True, qubit_labels=None, all_directions=False):
+    def common_graph(cls, num_qubits=0, geometry="line", directed=True, qubit_labels=None, all_directions=False):
         """
         Create a QubitGraph that is one of several standard types of graphs.
 
         Parameters
         ----------
-        n_qubits : int, optional
+        num_qubits : int, optional
             The number of qubits (nodes in the graph).
 
         geometry : {"line","ring","grid","torus"}
@@ -80,8 +80,8 @@ class QubitGraph(object):
             Whether the graph is directed or undirected.
 
         qubit_labels : iterable, optional
-            The labels for the qubits.  Must be of length `n_qubits`.
-            If None, then the integers from 0 to `n_qubits-1` are used.
+            The labels for the qubits.  Must be of length `num_qubits`.
+            If None, then the integers from 0 to `num_qubits-1` are used.
 
         all_directions : bool, optional
             Whether to include edges with all directions.  Typically it
@@ -91,23 +91,24 @@ class QubitGraph(object):
         -------
         QubitGraph
         """
-        qls = tuple(range(n_qubits)) if (qubit_labels is None) else qubit_labels
-        assert(len(qls) == n_qubits), "Invalid `qubit_labels` arg - length %d! (expected %d)" % (len(qls), n_qubits)
+        qls = tuple(range(num_qubits)) if (qubit_labels is None) else qubit_labels
+        assert(len(qls) == num_qubits), "Invalid `qubit_labels` arg - length %d! (expected %d)" % (len(qls), num_qubits)
         edges = []
-        if n_qubits >= 2:
+        if num_qubits >= 2:
             if geometry in ("line", "ring"):
-                for i in range(n_qubits - 1):
+                for i in range(num_qubits - 1):
                     edges.append((qls[i], qls[i + 1], "right") if directed else (qls[i], qls[i + 1]))
                     if all_directions:
                         edges.append((qls[i + 1], qls[i], "left") if directed else (qls[i + 1], qls[i]))
-                if n_qubits > 2 and geometry == "ring":
-                    edges.append((qls[n_qubits - 1], qls[0], "right") if directed else (qls[n_qubits - 1], qls[0]))
+                if num_qubits > 2 and geometry == "ring":
+                    edges.append((qls[num_qubits - 1], qls[0], "right") if directed else (qls[num_qubits - 1], qls[0]))
                     if all_directions:
-                        edges.append((qls[0], qls[n_qubits - 1], "left") if directed else (qls[0], qls[n_qubits - 1]))
+                        edges.append((qls[0], qls[num_qubits - 1], "left")
+                                     if directed else (qls[0], qls[num_qubits - 1]))
             elif geometry in ("grid", "torus"):
-                s = int(round(_np.sqrt(n_qubits)))
-                assert(n_qubits >= 4 and s * s == n_qubits), \
-                    "`n_qubits` must be a perfect square >= 4"
+                s = int(round(_np.sqrt(num_qubits)))
+                assert(num_qubits >= 4 and s * s == num_qubits), \
+                    "`num_qubits` must be a perfect square >= 4"
                 #row links
                 for irow in range(s):
                     for icol in range(s):

@@ -24,7 +24,7 @@ from . import circuitconstruction as _gstrc
 from pprint import pprint
 
 
-def simulate_data(model_or_dataset, circuit_list, n_samples,
+def simulate_data(model_or_dataset, circuit_list, num_samples,
                   sample_error="multinomial", seed=None, rand_state=None,
                   alias_dict=None, collision_action="aggregate",
                   record_zero_counts=True, comm=None, mem_limit=None, times=None):
@@ -42,7 +42,7 @@ def simulate_data(model_or_dataset, circuit_list, n_samples,
         specifies a gate sequence whose counts are included
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
-    n_samples : int or list of ints or None
+    num_samples : int or list of ints or None
         The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
         integer, all circuits have this number of total samples. If a list,
@@ -104,7 +104,7 @@ def simulate_data(model_or_dataset, circuit_list, n_samples,
 
     times : iterable, optional
         When not None, a list of time-stamps at which data should be sampled.
-        `n_samples` samples will be simulated at each time value, meaning that
+        `num_samples` samples will be simulated at each time value, meaning that
         each circuit in `circuit_list` will be evaluated with the given time
         value as its *start time*.
 
@@ -195,14 +195,14 @@ def simulate_data(model_or_dataset, circuit_list, n_samples,
                     if adjusted:
                         _warnings.warn('Adjustment finished')
 
-                if n_samples is None and dsGen is not None:
+                if num_samples is None and dsGen is not None:
                     N = dsGen[trans_s].total  # use the number of samples from the generating dataset
                     #Note: total() accounts for other intermediate-measurment branches automatically
                 else:
                     try:
-                        N = n_samples[k]  # try to treat n_samples as a list
+                        N = num_samples[k]  # try to treat num_samples as a list
                     except:
-                        N = n_samples  # if not indexable, n_samples should be a single number
+                        N = num_samples  # if not indexable, num_samples should be a single number
 
                 nWeightedSamples = N
 
@@ -333,17 +333,17 @@ def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=Tru
     return merged_dataset
 
 
-def _create_qubit_merge_dict(n_qubits, qubits_to_keep):
+def _create_qubit_merge_dict(num_qubits, qubits_to_keep):
     """
     Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
 
     The returned dictionary instructs `aggregate_dataset_outcomes` to aggregate all but
     the specified `qubits_to_keep` when the outcome labels are those of
-    `n_qubits` qubits (i.e. strings of 0's and 1's).
+    `num_qubits` qubits (i.e. strings of 0's and 1's).
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits
 
     qubits_to_keep : list
@@ -355,7 +355,7 @@ def _create_qubit_merge_dict(n_qubits, qubits_to_keep):
     -------
     dict
     """
-    outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=n_qubits)]
+    outcome_labels = [''.join(map(str, t)) for t in _itertools.product([0, 1], repeat=num_qubits)]
     return _create_merge_dict(qubits_to_keep, outcome_labels)
 
 

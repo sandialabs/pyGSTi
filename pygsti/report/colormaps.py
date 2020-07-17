@@ -295,7 +295,7 @@ class LinlogColormap(Colormap):
     vmax : float
         The maximum value of the data being colormapped.
 
-    n_boxes : int
+    num_boxes : int
         The number of boxes in the plot this colormap is being used with,
         so that `pcntle` gives a percentage of the *worst* box being "red".
 
@@ -311,7 +311,7 @@ class LinlogColormap(Colormap):
         The color to use for the non-grayscale part of the color scale.
     """
 
-    def __init__(self, vmin, vmax, n_boxes, pcntle, dof_per_box, color="red"):
+    def __init__(self, vmin, vmax, num_boxes, pcntle, dof_per_box, color="red"):
         """
         Create a new LinlogColormap.
 
@@ -320,7 +320,7 @@ class LinlogColormap(Colormap):
         vmin, vmax : float
             The min and max values of the data being colormapped.
 
-        n_boxes : int
+        num_boxes : int
             The number of boxes in the plot this colormap is being used with,
             so that `pcntle` gives a percentage of the *worst* box being "red".
 
@@ -335,7 +335,7 @@ class LinlogColormap(Colormap):
         color : {"red","blue","green","cyan","yellow","purple"}
             The color to use for the non-grayscale part of the color scale.
         """
-        self.N = n_boxes
+        self.N = num_boxes
         self.percentile = pcntle
         self.dof = dof_per_box
         hmin = 0  # we'll normalize all values to [0,1] and then
@@ -411,8 +411,8 @@ class LinlogColormap(Colormap):
         -------
         LinlogColormap
         """
-        n_boxes = 1; pcntle = 0.5; dof_per_box = 1
-        cmap = cls(vmin, vmax, n_boxes, pcntle, dof_per_box, color)
+        num_boxes = 1; pcntle = 0.5; dof_per_box = 1
+        cmap = cls(vmin, vmax, num_boxes, pcntle, dof_per_box, color)
         cmap.trans = trans  # override __init__'s value
         cmap.vmax = max(cmap.vmax, trans)  # repeat of line in __init__ that depends on trans
         return cmap

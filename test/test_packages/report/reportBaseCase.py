@@ -44,10 +44,10 @@ class ReportBaseCase(BaseTestCase):
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
         if regenerate_references():
-            ds = pygsti.construction.simulate_data(datagen_gateset, cls.lsgstStrings[-1], n_samples=1000,
+            ds = pygsti.construction.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
                                                         sample_error='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset")
-            ds2 = pygsti.construction.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], n_samples=1000,
+            ds2 = pygsti.construction.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
                                                          sample_error='binomial', seed=100)
             ds2.save(compare_files + "/reportgen2.dataset")
 

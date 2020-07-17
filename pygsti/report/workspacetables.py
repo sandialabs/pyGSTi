@@ -2913,7 +2913,7 @@ class CircuitTable(WorkspaceTable):
         The title(s) for the different string lists.  These are displayed in
         the relevant table columns containing the strings.
 
-    n_cols : int, optional
+    num_cols : int, optional
         The number of *data* columns, i.e. those containing
         circuits, for each string list.
 
@@ -2922,7 +2922,7 @@ class CircuitTable(WorkspaceTable):
         all the other column headers.
     """
 
-    def __init__(self, ws, circuit_lists, titles, n_cols=1, common_title=None):
+    def __init__(self, ws, circuit_lists, titles, num_cols=1, common_title=None):
         """
         Creates a table of enumerating one or more sets of circuits.
 
@@ -2935,7 +2935,7 @@ class CircuitTable(WorkspaceTable):
             The title(s) for the different string lists.  These are displayed in
             the relevant table columns containing the strings.
 
-        n_cols : int, optional
+        num_cols : int, optional
             The number of *data* columns, i.e. those containing
             circuits, for each string list.
 
@@ -2948,9 +2948,9 @@ class CircuitTable(WorkspaceTable):
         ReportTable
         """
         super(CircuitTable, self).__init__(ws, self._create, circuit_lists, titles,
-                                           n_cols, common_title)
+                                           num_cols, common_title)
 
-    def _create(self, circuit_lists, titles, n_cols, common_title):
+    def _create(self, circuit_lists, titles, num_cols, common_title):
 
         if len(circuit_lists) == 0:
             circuit_lists = [[]]
@@ -2960,8 +2960,8 @@ class CircuitTable(WorkspaceTable):
 
         if isinstance(titles, str): titles = [titles] * len(circuit_lists)
 
-        colHeadings = (('#',) + tuple(titles)) * n_cols
-        formatters = (('Conversion',) + ('Normal',) * len(titles)) * n_cols
+        colHeadings = (('#',) + tuple(titles)) * num_cols
+        formatters = (('Conversion',) + ('Normal',) * len(titles)) * num_cols
 
         if common_title is None:
             table = _ReportTable(colHeadings, formatters)
@@ -2981,15 +2981,15 @@ class CircuitTable(WorkspaceTable):
                                  custom_header={'latex': latex_head,
                                                 'html': html_head})
 
-        formatters = (('Normal',) + ('Circuit',) * len(circuit_lists)) * n_cols
+        formatters = (('Normal',) + ('Circuit',) * len(circuit_lists)) * num_cols
 
         maxListLength = max(list(map(len, circuit_lists)))
-        nRows = (maxListLength + (n_cols - 1)) // n_cols  # ceiling
+        nRows = (maxListLength + (num_cols - 1)) // num_cols  # ceiling
 
         #for i in range( max([len(gsl) for gsl in circuit_lists]) ):
         for i in range(nRows):
             rowData = []
-            for k in range(n_cols):
+            for k in range(num_cols):
                 l = i + nRows * k  # index of circuit
                 rowData.append(l + 1)
                 for gsList in circuit_lists:

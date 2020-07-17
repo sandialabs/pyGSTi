@@ -38,7 +38,7 @@ class ProcessorSpec(object):
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the device.
 
     gate_names : list of strings
@@ -102,7 +102,7 @@ class ProcessorSpec(object):
         If > 0, information about the generation of the ProcessorSpec is printed to the screen.
     """
 
-    def __init__(self, n_qubits, gate_names, nonstd_gate_unitaries={}, availability={},
+    def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries={}, availability={},
                  qubit_labels=None, construct_models=('clifford', 'target'),
                  construct_clifford_compilations={'paulieq': ('1Qcliffords', 'allcnots'),
                                                   'absolute': ('paulis', '1Qcliffords')}, verbosity=0):
@@ -117,7 +117,7 @@ class ProcessorSpec(object):
 
         Parameters
         ----------
-        n_qubits : int
+        num_qubits : int
             The number of qubits in the device.
 
         gate_names : list of strings
@@ -181,10 +181,10 @@ class ProcessorSpec(object):
         -------
         ProcessorSpec
         """
-        assert(type(n_qubits) is int), "The number of qubits, n, should be an integer!"
+        assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
 
         #Store inputs for adding models later
-        self.number_of_qubits = n_qubits
+        self.number_of_qubits = num_qubits
         self.root_gate_names = gate_names[:]  # copy this list
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
         #self.root_gate_names += list(self.nonstd_gate_unitaries.keys())  # must specify all names in `gate_names`
@@ -202,11 +202,11 @@ class ProcessorSpec(object):
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-        # If no qubit labels are provided it defaults to integers from 0 to n_qubits-1.
+        # If no qubit labels are provided it defaults to integers from 0 to num_qubits-1.
         if qubit_labels is None:
-            self.qubit_labels = list(range(n_qubits))
+            self.qubit_labels = list(range(num_qubits))
         else:
-            assert(len(qubit_labels) == n_qubits)
+            assert(len(qubit_labels) == num_qubits)
             self.qubit_labels = list(qubit_labels)
 
         # A dictionary of models for the device (e.g., imperfect unitaries, process matrices etc).

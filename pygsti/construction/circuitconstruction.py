@@ -103,20 +103,20 @@ def create_circuits(*args, **kwargs):
     return lst
 
 
-def repeat(x, n_times, assert_at_least_one_rep=False):
+def repeat(x, num_times, assert_at_least_one_rep=False):
     """
-    Repeat x n_times times.
+    Repeat x num_times times.
 
     Parameters
     ----------
     x : tuple or Circuit
         the operation sequence to repeat
 
-    n_times : int
+    num_times : int
         the number of times to repeat x
 
     assert_at_least_one_rep : bool, optional
-        if True, assert that n_times > 0.  This can be useful when used
+        if True, assert that num_times > 0.  This can be useful when used
         within a create_circuits inner loop to build a operation sequence
         lists where a string must be repeated at least once to be added
         to the list.
@@ -125,8 +125,8 @@ def repeat(x, n_times, assert_at_least_one_rep=False):
     -------
     tuple or Circuit (whichever x was)
     """
-    if assert_at_least_one_rep: assert(n_times > 0)
-    return x * n_times
+    if assert_at_least_one_rep: assert(num_times > 0)
+    return x * num_times
 
 
 def repeat_count_with_max_length(x, max_length, assert_at_least_one_rep=False):

@@ -1227,7 +1227,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     else: raise ValueError("Invalid array type: %s" % array_type)
                 return mem
 
-            def cache_mem_estimate(nc, np1, np2, n_comms):
+            def cache_mem_estimate(nc, np1, np2, num_comms):
                 """ Estimate of memory required by "cache" - the only memory that dependes on the layout distribution"""
                 if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
                 trial_layout = layout_cache[nc]
@@ -1239,7 +1239,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 blk1, blk2 = num_params / np1, num_params / np2  # float blk sizes ok for now
                 return _cache_mem(max_cache_size, blk1, blk2)
 
-            def approx_cache_mem_estimate(nc, np1, np2, n_comms):
+            def approx_cache_mem_estimate(nc, np1, np2, num_comms):
                 approx_cache_size = (len(circuits) / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
                 return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
 

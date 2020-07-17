@@ -49,7 +49,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     gatedict : dict
@@ -57,7 +57,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
         `numpy.ndarray` objects. When the objects may act on fewer than the total
         number of qubits (determined by their dimension/shape) then they are
-        repeatedly embedded into `n_qubits`-qubit gates as specified by `availability`.
+        repeatedly embedded into `num_qubits`-qubit gates as specified by `availability`.
         While the keys of this dictionary are usually string-type gate *names*,
         labels that include target qubits, e.g. `("Gx",0)`, may be used to
         override the default behavior of embedding a reference or a copy of
@@ -110,8 +110,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph
         The type of connectivity among the qubits, specifying a
@@ -166,13 +166,13 @@ class LocalNoiseModel(_ImplicitOpModel):
     global_idle : LinearOperator, optional
         A global idle operation, which is performed once at the beginning
         of every circuit layer.  If `None`, no such operation is performed.
-        If a 1-qubit operator is given and `n_qubits > 1` the global idle
+        If a 1-qubit operator is given and `num_qubits > 1` the global idle
         is the parallel application of this operator on each qubit line.
-        Otherwise the given operator must act on all `n_qubits` qubits.
+        Otherwise the given operator must act on all `num_qubits` qubits.
     """
 
     @classmethod
-    def from_parameterization(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
+    def from_parameterization(cls, num_qubits, gate_names, nonstd_gate_unitaries=None,
                               custom_gates=None, availability=None, qubit_labels=None,
                               geometry="line", parameterization='static', evotype="auto",
                               simulator="auto", on_construction_error='raise',
@@ -209,7 +209,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         Parameters
         ----------
-        n_qubits : int
+        num_qubits : int
             The total number of qubits.
 
         gate_names : list
@@ -277,8 +277,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         qubit_labels : tuple, optional
             The circuit-line labels for each of the qubits, which can be integers
-            and/or strings.  Must be of length `n_qubits`.  If None, then the
-            integers from 0 to `n_qubits-1` are used.
+            and/or strings.  Must be of length `num_qubits`.  If None, then the
+            integers from 0 to `num_qubits-1` are used.
 
         geometry : {"line","ring","grid","torus"} or QubitGraph, optional
             The type of connectivity among the qubits, specifying a graph used to
@@ -337,9 +337,9 @@ class LocalNoiseModel(_ImplicitOpModel):
         global_idle : LinearOperator, optional
             A global idle operation, which is performed once at the beginning
             of every circuit layer.  If `None`, no such operation is performed.
-            If a 1-qubit operator is given and `n_qubits > 1` the global idle
+            If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
-            Otherwise the given operator must act on all `n_qubits` qubits.
+            Otherwise the given operator must act on all `num_qubits` qubits.
 
         Returns
         -------
@@ -394,9 +394,9 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if simulator == "auto":
             if evotype == "densitymx":
-                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
+                simulator = _MatrixFSim() if num_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
+                simulator = _MatrixFSim() if num_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
                 simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
@@ -410,7 +410,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         povm_layers = {}
         if parameterization in ("TP", "full"):  # then make tensor-product spam
             prep_factors = []; povm_factors = []
-            for i in range(n_qubits):
+            for i in range(num_qubits):
                 prep_factors.append(
                     _sv.convert(_sv.StaticSPAMVec(v0), "TP", basis1Q))
                 povm_factors.append(
@@ -423,13 +423,13 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         elif parameterization == "clifford":
             # Clifford object construction is different enough we do it separately
-            prep_layers['rho0'] = _sv.StabilizerSPAMVec(n_qubits)  # creates all-0 state by default
-            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(n_qubits, 'stabilizer')
+            prep_layers['rho0'] = _sv.StabilizerSPAMVec(num_qubits)  # creates all-0 state by default
+            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, 'stabilizer')
 
         elif parameterization in ("static", "static unitary"):
             #static computational basis
-            prep_layers['rho0'] = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
-            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(n_qubits, evotype)
+            prep_layers['rho0'] = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
+            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 
         else:
             # parameterization should be a type amenable to Lindblad
@@ -438,11 +438,11 @@ class LocalNoiseModel(_ImplicitOpModel):
             maxSpamWeight = 1; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
             sparse_lindblad_basis = False; sparse_lindblad_reps = False  # HARDCODED
             if qubit_labels is None:
-                qubit_labels = tuple(range(n_qubits))
-            qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, "line", qubit_labels=qubit_labels)
+                qubit_labels = tuple(range(num_qubits))
+            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, "line", qubit_labels=qubit_labels)
             # geometry doesn't matter while maxSpamWeight==1
 
-            prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
+            prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
                                                         errcomp_type, verbosity)
@@ -458,7 +458,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #    A dictionary (an `OrderedDict` if you care about insertion order) which
         #    associates string-type state preparation and POVM names (e.g. `"rho0"`
         #    or `"Mdefault"`) with :class:`SPAMVec` and :class:`POVM` objects, respectively.
-        #    Currently, these objects must operate on all `n_qubits` qubits.  If None,
+        #    Currently, these objects must operate on all `num_qubits` qubits.  If None,
         #    then a 0-state prep `"rho0"` and computational basis measurement `"Mdefault"`
         #    will be created with the given `parameterization`.
         #
@@ -492,7 +492,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 else:
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 
-        return cls(n_qubits, gatedict, prep_layers, povm_layers, availability,
+        return cls(num_qubits, gatedict, prep_layers, povm_layers, availability,
                    qubit_labels, geometry, evotype, simulator, on_construction_error,
                    independent_gates, ensure_composed_gates, global_idle)
 
@@ -504,7 +504,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     #        then a 0-state prep `"rho0"` and computational basis measurement `"Mdefault"`
     #        will be created with the given `parameterization`.
 
-    def __init__(self, n_qubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
+    def __init__(self, num_qubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
                  qubit_labels=None, geometry="line", evotype="densitymx",
                  simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
@@ -514,14 +514,14 @@ class LocalNoiseModel(_ImplicitOpModel):
         as requested and creating a perfect 0-prep and z-basis POVM.
 
         The gates in `gatedict` often act on fewer (typically just 1 or 2) than
-        the total `n_qubits` qubits, in which case embedded-gate objects are
+        the total `num_qubits` qubits, in which case embedded-gate objects are
         automatically (and repeatedly) created to wrap the lower-dimensional gate.
         Parameterization of each gate is done once, before any embedding, so that
         just a single set of parameters will exist for each low-dimensional gate.
 
         Parameters
         ----------
-        n_qubits : int
+        num_qubits : int
             The total number of qubits.
 
         gatedict : dict
@@ -529,7 +529,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
             `numpy.ndarray` objects. When the objects may act on fewer than the total
             number of qubits (determined by their dimension/shape) then they are
-            repeatedly embedded into `n_qubits`-qubit gates as specified by `availability`.
+            repeatedly embedded into `num_qubits`-qubit gates as specified by `availability`.
             While the keys of this dictionary are usually string-type gate *names*,
             labels that include target qubits, e.g. `("Gx",0)`, may be used to
             override the default behavior of embedding a reference or a copy of
@@ -582,8 +582,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         qubit_labels : tuple, optional
             The circuit-line labels for each of the qubits, which can be integers
-            and/or strings.  Must be of length `n_qubits`.  If None, then the
-            integers from 0 to `n_qubits-1` are used.
+            and/or strings.  Must be of length `num_qubits`.  If None, then the
+            integers from 0 to `num_qubits-1` are used.
 
         geometry : {"line","ring","grid","torus"} or QubitGraph
             The type of connectivity among the qubits, specifying a
@@ -638,19 +638,19 @@ class LocalNoiseModel(_ImplicitOpModel):
         global_idle : LinearOperator, optional
             A global idle operation, which is performed once at the beginning
             of every circuit layer.  If `None`, no such operation is performed.
-            If a 1-qubit operator is given and `n_qubits > 1` the global idle
+            If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
-            Otherwise the given operator must act on all `n_qubits` qubits.
+            Otherwise the given operator must act on all `num_qubits` qubits.
         """
         if qubit_labels is None:
-            qubit_labels = tuple(range(n_qubits))
+            qubit_labels = tuple(range(num_qubits))
         if availability is None:
             availability = {}
 
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
         else:
-            qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, geometry, directed=False,
+            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
                                                          qubit_labels=qubit_labels)
 
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
@@ -670,7 +670,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 #REMOVE self.gatedict[gn] = _np.array(gate)
                 mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype)  # static gates by default
 
-        self.nQubits = n_qubits
+        self.nQubits = num_qubits
         self.availability = availability
         self.qubit_labels = qubit_labels
         self.geometry = geometry
@@ -688,9 +688,9 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if simulator == "auto":
             if evotype == "densitymx":
-                simulator = _MatrixFSim() if n_qubits <= 2 else _MapFSim()
+                simulator = _MatrixFSim() if num_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
-                simulator = _MatrixFSim() if n_qubits <= 4 else _MapFSim()
+                simulator = _MatrixFSim() if num_qubits <= 4 else _MapFSim()
             elif evotype == "stabilizer":
                 simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
@@ -856,7 +856,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 if (evotype in ("densitymx", "svterm", "cterm")) \
                 else int(round(_np.log2(global_idle.dim)))  # evotype in ("statevec","stabilizer")
 
-            if n_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
+            if num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QIdle')] = global_idle
                 Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                 global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
@@ -865,8 +865,8 @@ class LocalNoiseModel(_ImplicitOpModel):
             global_idle_nQubits = int(round(_np.log2(global_idle.dim) / 2)) \
                 if (evotype in ("densitymx", "svterm", "cterm")) \
                 else int(round(_np.log2(global_idle.dim)))  # evotype in ("statevec","stabilizer")
-            assert(global_idle_nQubits == n_qubits), \
-                "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, n_qubits)
+            assert(global_idle_nQubits == num_qubits), \
+                "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, num_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
 
 

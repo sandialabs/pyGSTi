@@ -48,7 +48,7 @@ class TestCoreMethods(AlgorithmsBase):
         oldType = pygsti.objects.dataset.Repcount_type
         pygsti.objects.dataset.Repcount_type = np.float64
         ds = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
-                                                    n_samples=10000, sample_error='none')
+                                                    num_samples=10000, sample_error='none')
         pygsti.objects.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)

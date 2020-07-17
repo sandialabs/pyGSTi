@@ -15,7 +15,7 @@ fixture_1Q = Namespace(
                            [0, 1]], dtype=np.int8),
     clifford_phase=np.array([0, 2])
 )
-fixture_1Q.pspec = ProcessorSpec(n_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'])
+fixture_1Q.pspec = ProcessorSpec(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'])
 fixture_2Q = Namespace(
     n=2,
     qubit_labels=['Q0', 'Q1'],

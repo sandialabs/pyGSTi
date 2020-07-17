@@ -751,7 +751,7 @@ class ErrorRatesModel(SuccessFailModel):
         A dictionary with "gates" and "readout" keys, each of which corresponds to a
         dictionary of error-rates for gates or SPAM elements, respectively.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the model.
 
     state_space_labels : StateSpaceLabels or list or tuple
@@ -770,11 +770,11 @@ class ErrorRatesModel(SuccessFailModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         if state_space_labels is None:
-            state_space_labels = ['Q%d' % i for i in range(n_qubits)]
+            state_space_labels = ['Q%d' % i for i in range(num_qubits)]
         else:
-            assert(len(state_space_labels) == n_qubits)
+            assert(len(state_space_labels) == num_qubits)
 
         SuccessFailModel.__init__(self, state_space_labels, use_cache=True)
 
@@ -873,7 +873,7 @@ class TwirledLayersModel(ErrorRatesModel):
         A dictionary with "gates" and "readout" keys, each of which corresponds to a
         dictionary of error-rates for gates or SPAM elements, respectively.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the model.
 
     state_space_labels : StateSpaceLabels or list or tuple
@@ -892,8 +892,8 @@ class TwirledLayersModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
-        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _success_prob(self, circuit, cache):
@@ -976,7 +976,7 @@ class TwirledGatesModel(ErrorRatesModel):
         A dictionary with "gates" and "readout" keys, each of which corresponds to a
         dictionary of error-rates for gates or SPAM elements, respectively.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the model.
 
     state_space_labels : StateSpaceLabels or list or tuple
@@ -995,11 +995,11 @@ class TwirledGatesModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
         """
         todo
         """
-        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
+        ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -1086,7 +1086,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         A dictionary with "gates" and "readout" keys, each of which corresponds to a
         dictionary of error-rates for gates or SPAM elements, respectively.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the model.
 
     state_space_labels : StateSpaceLabels or list or tuple
@@ -1105,8 +1105,8 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
-        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):
@@ -1168,7 +1168,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         A dictionary with "gates" and "readout" keys, each of which corresponds to a
         dictionary of error-rates for gates or SPAM elements, respectively.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits in the model.
 
     state_space_labels : StateSpaceLabels or list or tuple
@@ -1187,8 +1187,8 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, n_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
-        ErrorRatesModel.__init__(self, error_rates, n_qubits, state_space_labels=state_space_labels,
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idlename='Gi'):
+        ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idlename=idlename)
 
     def _circuit_cache(self, circuit):

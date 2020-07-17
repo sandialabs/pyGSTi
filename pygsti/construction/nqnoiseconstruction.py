@@ -54,7 +54,7 @@ RANK_TOL = 1e-9
 
 
 @_deprecated_fn("This function is overly specific and will be removed soon.")
-def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=1, maxhops=0,
+def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weight=1, maxhops=0,
                                      extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
                                      independent_1q_gates=True, zz_only=False, verbosity=0):
     """
@@ -67,7 +67,7 @@ def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph
@@ -119,15 +119,15 @@ def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=
     # noise can be either a seed or a random array that is long enough to use
 
     printer = _VerbosityPrinter.create_printer(verbosity)
-    printer.log("Computing parameters for a %d-qubit %s model" % (n_qubits, geometry))
+    printer.log("Computing parameters for a %d-qubit %s model" % (num_qubits, geometry))
 
-    qubitGraph = _objs.QubitGraph.common_graph(n_qubits, geometry)
+    qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry)
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     def idle_count_nparams(max_weight):
         """Parameter count of a `build_nqn_global_idle`-constructed gate"""
         ret = 0
-        possible_err_qubit_inds = _np.arange(n_qubits)
+        possible_err_qubit_inds = _np.arange(num_qubits)
         for wt in range(1, max_weight + 1):
             nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
             if zz_only and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
@@ -166,13 +166,13 @@ def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=
                                [(1 + x, maxhops) for x in range(1, extra_gate_weight + 1)]
 
     if independent_1q_gates:
-        for i in range(n_qubits):
+        for i in range(num_qubits):
             printer.log("Creating 1Q X(pi/2) and Y(pi/2) gates on qubit %d!!" % i)
             nParams[_Lbl("Gx", i)] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
             nParams[_Lbl("Gy", i)] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
     else:
         printer.log("Creating common 1Q X(pi/2) and Y(pi/2) gates")
-        rep = int(n_qubits / 2)
+        rep = int(num_qubits / 2)
         nParams[_Lbl("Gxrep")] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
         nParams[_Lbl("Gyrep")] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
 
@@ -185,14 +185,14 @@ def _nparams_xycnot_cloudnoise_model(n_qubits, geometry="line", max_idle_weight=
 
     #SPAM
     nPOVM_1Q = 4  # params for a single 1Q POVM
-    nParams[_Lbl('rho0')] = 3 * n_qubits  # 3 b/c each component is TP
-    nParams[_Lbl('Mdefault')] = nPOVM_1Q * n_qubits  # n_qubits 1Q-POVMs
+    nParams[_Lbl('rho0')] = 3 * num_qubits  # 3 b/c each component is TP
+    nParams[_Lbl('Mdefault')] = nPOVM_1Q * num_qubits  # num_qubits 1Q-POVMs
 
     return nParams, sum(nParams.values())
 
 
 def create_cloudnoise_model_from_hops_and_weights(
-        n_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+        num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
         availability=None, qubit_labels=None, geometry="line",
         max_idle_weight=1, max_spam_weight=1, maxhops=0,
         extra_weight_1_hops=0, extra_gate_weight=0,
@@ -233,7 +233,7 @@ def create_cloudnoise_model_from_hops_and_weights(
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     gate_names : list
@@ -293,8 +293,8 @@ def create_cloudnoise_model_from_hops_and_weights(
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph
         The type of connectivity among the qubits, specifying a
@@ -336,7 +336,7 @@ def create_cloudnoise_model_from_hops_and_weights(
 
     sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -407,7 +407,7 @@ def create_cloudnoise_model_from_hops_and_weights(
     Model
     """
     mdl = _CloudNoiseModel.from_hops_and_weights(
-        n_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
+        num_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
         availability, qubit_labels, geometry,
         max_idle_weight, max_spam_weight, maxhops,
         extra_weight_1_hops, extra_gate_weight,
@@ -437,7 +437,7 @@ def create_cloudnoise_model_from_hops_and_weights(
         return mdl
 
 
-def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
+def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
                                  availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                  evotype="auto", simulator="auto", independent_gates=False, sparse_lindblad_basis=False,
                                  sparse_lindblad_reps=False, errcomp_type="errorgens", add_idle_noise_to_all_gates=True,
@@ -452,7 +452,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits
 
     gate_names : list
@@ -528,8 +528,8 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph
         The type of connectivity among the qubits, specifying a
@@ -557,7 +557,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
     sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -610,7 +610,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
         evotype = "densitymx"  # FUTURE: do something more sophisticated?
 
     if qubit_labels is None:
-        qubit_labels = tuple(range(n_qubits))
+        qubit_labels = tuple(range(num_qubits))
 
     qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
     if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
@@ -623,11 +623,11 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     if isinstance(geometry, _qgraph.QubitGraph):
         qubitGraph = geometry
     else:
-        qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, geometry, directed=True,
+        qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=True,
                                                      qubit_labels=qubit_labels, all_directions=True)
         printer.log("Created qubit graph:\n" + str(qubitGraph))
 
-    nQubit_dim = 2**n_qubits if evotype in ('statevec', 'stabilizer') else 4**n_qubits
+    nQubit_dim = 2**num_qubits if evotype in ('statevec', 'stabilizer') else 4**num_qubits
 
     orig_error_rates = error_rates.copy()
     cparser = _CircuitParser()
@@ -827,7 +827,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
     if simulator == "auto":
         if evotype in ("svterm", "cterm"): simulator = _TermFSim()
-        else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
+        else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
 
     #Global Idle
     if 'idle' in error_rates:
@@ -838,17 +838,17 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
 
     #SPAM
     if 'prep' in error_rates:
-        prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
+        prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
         prepNoiseMap = create_error(qubit_labels, error_rates['prep'], return_what="errmap")
         prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
     else:
-        prep_layers = [_sv.ComputationalSPAMVec([0] * n_qubits, evotype)]
+        prep_layers = [_sv.ComputationalSPAMVec([0] * num_qubits, evotype)]
 
     if 'povm' in error_rates:
         povmNoiseMap = create_error(qubit_labels, error_rates['povm'], return_what="errmap")
         povm_layers = [_povm.LindbladPOVM(povmNoiseMap, None, "pp")]
     else:
-        povm_layers = [_povm.ComputationalBasisPOVM(n_qubits, evotype)]
+        povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype)]
 
     stencils = _collections.OrderedDict()
 
@@ -898,7 +898,7 @@ def create_cloud_crosstalk_model(n_qubits, gate_names, error_rates, nonstd_gate_
     for lbl, gate in custom_gates.items():
         if lbl not in gate_names: gatedict[lbl] = gate
 
-    return _CloudNoiseModel(n_qubits, gatedict, availability, qubit_labels, geometry,
+    return _CloudNoiseModel(num_qubits, gatedict, availability, qubit_labels, geometry,
                             global_idle_layer, prep_layers, povm_layers,
                             build_cloudnoise_fn, build_cloudkey_fn,
                             simulator, evotype, errcomp_type,
@@ -2168,7 +2168,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
 
 
 @_deprecated_fn("Use pygsti.construction.create_standard_cloudnoise_circuits(...).")
-def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
+def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
                                        extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
                                        sparse=False, verbosity=0, cache=None, idle_only=False,
                                        idt_pauli_dicts=None, algorithm="greedy", comm=None):
@@ -2181,7 +2181,7 @@ def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edg
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The total number of qubits.
 
     max_lengths : list
@@ -2226,7 +2226,7 @@ def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edg
 
     sparse : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -2286,14 +2286,14 @@ def _create_xycnot_cloudnoise_circuits(n_qubits, max_lengths, geometry, cnot_edg
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx', 'Gx')]
 
-    return create_cloudnoise_circuits(n_qubits, max_lengths, singleQfiducials,
+    return create_cloudnoise_circuits(num_qubits, max_lengths, singleQfiducials,
                                       gatedict, availability, geometry, max_idle_weight, maxhops,
                                       extra_weight_1_hops, extra_gate_weight, paramroot,
                                       sparse, True, verbosity, cache, idle_only,
                                       idt_pauli_dicts, algorithm, comm=comm)
 
 
-def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
+def create_standard_localnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                         gate_names, nonstd_gate_unitaries=None,
                                         availability=None, geometry="line",
                                         paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
@@ -2323,7 +2323,7 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits
 
     max_lengths : list
@@ -2389,7 +2389,7 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -2441,7 +2441,7 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
         list of circuits.
     """
     #Same as cloudnoise but no hopping. -- should max_idle_weight == 0?
-    return create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
+    return create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                                gate_names, nonstd_gate_unitaries,
                                                availability, geometry,
                                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0,
@@ -2455,7 +2455,7 @@ def create_standard_localnoise_circuits(n_qubits, max_lengths, single_q_fiducial
                                                idle_op_str=idle_op_str, comm=comm)
 
 
-def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
+def create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                         gate_names, nonstd_gate_unitaries=None,
                                         availability=None, geometry="line",
                                         max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
@@ -2486,7 +2486,7 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits
 
     max_lengths : list
@@ -2574,7 +2574,7 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
 
     sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -2638,14 +2638,14 @@ def create_standard_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducial
         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         # assume evotype is a densitymx or term type
 
-    return create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
+    return create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                       gatedict, availability, geometry, max_idle_weight, maxhops,
                                       extra_weight_1_hops, extra_gate_weight, paramroot,
                                       sparse_lindblad_basis, sparse_lindblad_reps, verbosity, cache,
                                       idle_only, idt_pauli_dicts, algorithm, idle_op_str, comm)
 
 
-def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
+def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                gatedict, availability, geometry, max_idle_weight=1, maxhops=0,
                                extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
                                sparse_lindblad_basis=False, sparse_lindblad_reps=False, verbosity=0,
@@ -2666,7 +2666,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits
 
     max_lengths : list
@@ -2742,7 +2742,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 
     sparse_lindblad_basis : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates use sparse bases or not.  When sparse, these
+        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
         Lindblad gates - especially those with high-weight action or errors - take
         less memory, but their simulation is slightly slower.  Usually it's fine to
         leave this as the default (False), except when considering unusually
@@ -2835,12 +2835,12 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     if isinstance(geometry, _objs.QubitGraph):
         qubitGraph = geometry
     else:
-        qubitGraph = _objs.QubitGraph.common_graph(n_qubits, geometry, directed=False)
+        qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry, directed=False)
         printer.log("Created qubit graph:\n" + str(qubitGraph))
     all_qubit_labels = qubitGraph.node_names
 
     model = _CloudNoiseModel.from_hops_and_weights(
-        n_qubits, tuple(gatedict.keys()), None, gatedict,
+        num_qubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
         max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
         verbosity=printer - 5,
@@ -2862,7 +2862,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     # ideal or error - except that which is the same as the Gi gate.
 
     ideal_model = _CloudNoiseModel.from_hops_and_weights(
-        n_qubits, tuple(gatedict.keys()), None, gatedict,
+        num_qubits, tuple(gatedict.keys()), None, gatedict,
         availability, None, qubitGraph,
         0, 0, 0, 0, 0,
         verbosity=printer - 5,
@@ -2872,7 +2872,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params
-    idle_op_str = _objs.Circuit(idle_op_str, num_lines=n_qubits)
+    idle_op_str = _objs.Circuit(idle_op_str, num_lines=num_qubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
 
@@ -2880,7 +2880,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     # the errors of the actual n-qubit model...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
-    # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < n_qubits!
+    # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
     printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
     idle_model = _CloudNoiseModel.from_hops_and_weights(
         max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
@@ -2911,7 +2911,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     #Since this is the idle, these max_idle_weight-qubit fidpairs can be "tiled"
     # to the n-qubits
     printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" %
-                (len(idle_maxwt_gatename_fidpair_lists), n_qubits), 2)
+                (len(idle_maxwt_gatename_fidpair_lists), num_qubits), 2)
     idle_fidpairs = _tile_idle_fidpairs(all_qubit_labels, idle_maxwt_gatename_fidpair_lists, max_idle_weight)
     printer.log("%d idle pairs found" % len(idle_fidpairs), 2)
 
@@ -2958,7 +2958,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
     weights = set([len(gl.sslbls) for gl in model.primitive_op_labels if (gl.sslbls is not None)])
     for gateWt in sorted(list(weights)):
         maxSyntheticIdleWt = (gateWt + extra_gate_weight) + (gateWt - 1)  # gate-error-wt + spreading potential
-        maxSyntheticIdleWt = min(maxSyntheticIdleWt, n_qubits)
+        maxSyntheticIdleWt = min(maxSyntheticIdleWt, num_qubits)
 
         for syntheticIdleWt in range(1, maxSyntheticIdleWt + 1):
             if syntheticIdleWt not in cache['Idle gatename fidpair lists']:
@@ -3202,7 +3202,7 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
                         continue  # move on to the next germ
 
                 #Let's see if we want to add this germ
-                sireps = _compute_reps_for_synthetic_idle(ideal_model, candidate_germ, n_qubits, core_qubits)
+                sireps = _compute_reps_for_synthetic_idle(ideal_model, candidate_germ, num_qubits, core_qubits)
                 syntheticIdle = candidate_germ * sireps
                 maxWt = min((len(core_qubits) + extra_gate_weight) + (len(core_qubits) - 1),
                             len(cloud_qubits))  # gate-error-wt + spreading potential
@@ -3357,9 +3357,9 @@ def create_cloudnoise_circuits(n_qubits, max_lengths, single_q_fiducials,
 def _get_kcoverage_template_k2(n):
     """ Special case where k == 2 -> use hypercube construction """
     # k = 2 implies binary strings of 0's and 1's
-    def bitstr(n_qubits, bit):
-        """ Returns a length-n_qubits list of the values of the bit-th bit in the integers 0->n_qubits"""
-        return [((i >> bit) & 1) for i in range(n_qubits)]
+    def bitstr(num_qubits, bit):
+        """ Returns a length-num_qubits list of the values of the bit-th bit in the integers 0->num_qubits"""
+        return [((i >> bit) & 1) for i in range(num_qubits)]
 
     def invert(bstr):
         return [(0 if x else 1) for x in bstr]
@@ -3719,7 +3719,7 @@ def _gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
     return fidpairs
 
 
-def _fidpairs_to_gatename_fidpair_list(fidpairs, n_qubits):
+def _fidpairs_to_gatename_fidpair_list(fidpairs, num_qubits):
     """
     The inverse of :function:`_gatename_fidpair_list_to_fidpairs`.
 
@@ -3734,9 +3734,9 @@ def _fidpairs_to_gatename_fidpair_list(fidpairs, n_qubits):
         A list of `(prep_fiducial, meas_fiducial)` pairs, where `prep_fiducial`
         and `meas_fiducial` are :class:`Circuit` objects.
 
-    n_qubits : int
+    num_qubits : int
         The number of qubits.  Qubit labels within `fidpairs` are assumed to
-        be the integers from 0 to `n_qubits-1`.
+        be the integers from 0 to `num_qubits-1`.
 
     Returns
     -------
@@ -3747,7 +3747,7 @@ def _fidpairs_to_gatename_fidpair_list(fidpairs, n_qubits):
     """
     gatename_fidpair_list = []
     for fidpair in fidpairs:
-        gatenames_per_qubit = [(list(), list()) for i in range(n_qubits)]  # prepnames, measnames for each qubit
+        gatenames_per_qubit = [(list(), list()) for i in range(num_qubits)]  # prepnames, measnames for each qubit
         prepStr, measStr = fidpair
 
         for lbl in prepStr:

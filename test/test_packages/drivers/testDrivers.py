@@ -26,7 +26,7 @@ class DriversTestCase(BaseTestCase):
             datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
             ds = pygsti.construction.simulate_data(
                 datagen_gateset, self.lsgstStrings[-1],
-                n_samples=1000,sample_error='binomial', seed=100)
+                num_samples=1000,sample_error='binomial', seed=100)
             ds.save(compare_files + "/drivers.dataset")
 
 class TestDriversMethods(DriversTestCase):
@@ -235,7 +235,7 @@ class TestDriversMethods(DriversTestCase):
             self.op_labels, self.fiducials, self.fiducials, self.germs,
             default_maxLens, fid_pairs=None, trunc_scheme="whole germ powers")
         ds_defaultMaxLens = pygsti.construction.simulate_data(
-            mdl, circuits, n_samples=10000, sample_error='round')
+            mdl, circuits, num_samples=10000, sample_error='round')
 
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.create_bootstrap_models(

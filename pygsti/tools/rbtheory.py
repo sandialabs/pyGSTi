@@ -787,7 +787,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
                                             mx_basis=mx_basis))
         elif norm == '1to1':
             gate_dif = error_gs.operations[gate] - error_gs.operations['Gavg']
-            delta.append(_optls.norm1to1(gate_dif, n_samples=1000, mx_basis=mx_basis, return_list=False))
+            delta.append(_optls.norm1to1(gate_dif, num_samples=1000, mx_basis=mx_basis, return_list=False))
         else:
             raise ValueError("Only diamond or 1to1 norm available.")
 
@@ -824,7 +824,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),
 #                                     ('1_cm', target_model.povms['Mdefault']['1'])] )
 #    ave_error_gsl = _cnst.to_circuits([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
-#    data = _cnst.simulate_data(error_gs, ave_error_gsl, n_samples=1, sample_error="none")#
+#    data = _cnst.simulate_data(error_gs, ave_error_gsl, num_samples=1, sample_error="none")#
 
 #    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
 #    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]

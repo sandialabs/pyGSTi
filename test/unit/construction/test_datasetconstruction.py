@@ -43,25 +43,25 @@ class DataSetConstructionTester(BaseCase):
         maxLengths = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256]
         self.lsgst_lists = make_lsgst_lists(gates, fiducials, germs, maxLengths)
         self.circuit_list = self.lsgst_lists[-1]
-        self.dataset = pc.simulate_data(self.depolGateset, self.circuit_list, n_samples=1000,
+        self.dataset = pc.simulate_data(self.depolGateset, self.circuit_list, num_samples=1000,
                                              sample_error='binomial', seed=100)
 
     def test_generate_fake_data(self):
-        dataset = pc.simulate_data(self.dataset, self.circuit_list, n_samples=None,
+        dataset = pc.simulate_data(self.dataset, self.circuit_list, num_samples=None,
                                         sample_error='none', seed=100)
-        dataset = pc.simulate_data(self.dataset, self.circuit_list, n_samples=100,
+        dataset = pc.simulate_data(self.dataset, self.circuit_list, num_samples=100,
                                         sample_error='round', seed=100)
-        dataset = pc.simulate_data(self.dataset, self.circuit_list, n_samples=100,
+        dataset = pc.simulate_data(self.dataset, self.circuit_list, num_samples=100,
                                         sample_error='multinomial', seed=100)
 
         randState = np.random.RandomState(1234)
-        dataset = pc.simulate_data(dataset, self.circuit_list, n_samples=100,
+        dataset = pc.simulate_data(dataset, self.circuit_list, num_samples=100,
                                         sample_error='binomial', rand_state=randState)
         # TODO assert correctness
 
     def test_generate_fake_data_raises_on_bad_sample_error(self):
         with self.assertRaises(ValueError):
-            pc.simulate_data(self.dataset, self.circuit_list, n_samples=None,
+            pc.simulate_data(self.dataset, self.circuit_list, num_samples=None,
                                   sample_error='foobar', seed=100)
 
     def test_merge_outcomes(self):

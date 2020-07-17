@@ -28,5 +28,5 @@ def lsgstStrings(self):
 def dataset(self):
     return pc.simulate_data(
         self.datagen_gateset, self.lsgstStrings[-1],
-        n_samples=1000, sample_error='binomial', seed=100
+        num_samples=1000, sample_error='binomial', seed=100
     )

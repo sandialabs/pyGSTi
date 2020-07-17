@@ -718,7 +718,7 @@ def test_MPI_mlgst_forcefn(comm):
     if comm is None or comm.Get_rank() == 0:
         datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         ds = pygsti.construction.simulate_data(datagen_gateset, lgstStrings,
-                                                    n_samples=10000, sample_error='binomial', seed=100)
+                                                    num_samples=10000, sample_error='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
     else:
         ds = comm.bcast(None, root=0)
@@ -774,7 +774,7 @@ def test_run1Q_end2end(comm):
     listOfExperiments = pygsti.construction.create_lsgst_circuits(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
     ds = pygsti.construction.simulate_data(mdl_datagen, listOfExperiments,
-                                                n_samples=1000,
+                                                num_samples=1000,
                                                 sample_error="binomial",
                                                 seed=1234, comm=comm)
     if comm.Get_rank() == 0:

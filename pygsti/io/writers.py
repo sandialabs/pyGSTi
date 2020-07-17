@@ -518,7 +518,7 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
-def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
+def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
                                          sample_error="multinomial", seed=None, rand_state=None,
                                          alias_dict=None, collision_action="aggregate",
                                          record_zero_counts=True, comm=None, mem_limit=None, times=None,
@@ -534,7 +534,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     dataset_filename : str
         the path to the text-formatted data set file.
 
-    n_samples : int or list of ints or None
+    num_samples : int or list of ints or None
         The simulated number of samples for each circuit.  This only has
         effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
         integer, all circuits have this number of total samples. If a list,
@@ -596,7 +596,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
 
     times : iterable, optional
         When not None, a list of time-stamps at which data should be sampled.
-        `n_samples` samples will be simulated at each time value, meaning that
+        `num_samples` samples will be simulated at each time value, meaning that
         each circuit in `circuits` will be evaluated with the given time
         value as its *start time*.
 
@@ -610,7 +610,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, n_samples,
     """
     from ..construction import simulate_data as _generate_fake_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
-    ds = _generate_fake_data(model, list(ds_template.keys()), n_samples,
+    ds = _generate_fake_data(model, list(ds_template.keys()), num_samples,
                              sample_error, seed, rand_state, alias_dict,
                              collision_action, record_zero_counts, comm,
                              mem_limit, times)

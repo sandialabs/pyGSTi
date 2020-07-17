@@ -79,7 +79,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         incomplete_strings = self.lgstStrings[5:]  # drop first 5 strings...
         bad_ds = pc.simulate_data(
             self.datagen_gateset, incomplete_strings,
-            n_samples=10, sample_error='none')
+            num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.run_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,
@@ -90,7 +90,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         incomplete_strings = self.lgstStrings[:-5]  # drop last 5 strings...
         bad_ds = pc.simulate_data(
             self.datagen_gateset, incomplete_strings,
-            n_samples=10, sample_error='none')
+            num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.run_lgst(
                 bad_ds, self.fiducials, self.fiducials, self.model,

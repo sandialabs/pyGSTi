@@ -735,7 +735,7 @@ def random_hermitian(dim):
     return c / my_norm
 
 
-def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
+def norm1to1(operator, num_samples=10000, mx_basis="gm", return_list=False):
     """
     The Hermitian 1-to-1 norm of a superoperator represented in the standard basis.
 
@@ -747,7 +747,7 @@ def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
     operator : numpy.ndarray
         The operator matrix to take the norm of.
 
-    n_samples : int, optional
+    num_samples : int, optional
         Number of Monte-Carlo samples.
 
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis
@@ -764,7 +764,7 @@ def norm1to1(operator, n_samples=10000, mx_basis="gm", return_list=False):
     std_operator = change_basis(operator, mx_basis, 'std')
     rand_dim = int(_np.sqrt(float(len(std_operator))))
     vals = [norm1(unvec(_np.dot(std_operator, vec(random_hermitian(rand_dim)))))
-            for n in range(n_samples)]
+            for n in range(num_samples)]
     if return_list:
         return vals
     else:

@@ -77,7 +77,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     Parameters
     ----------
-    n_qubits : int
+    num_qubits : int
         The number of qubits
 
     gatedict : dict
@@ -85,7 +85,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
         `numpy.ndarray`, or :class:`OpFactory` objects. When the objects may act on
         fewer than the total number of qubits (determined by their dimension/shape) then
-        they are repeatedly embedded into `n_qubits`-qubit gates as specified by their
+        they are repeatedly embedded into `num_qubits`-qubit gates as specified by their
         `availability`.  These operations represent the ideal target operations, and
         thus, any `LinearOperator` or `OpFactory` objects must be *static*, i.e., have
         zero parameters.
@@ -116,8 +116,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     qubit_labels : tuple, optional
         The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `n_qubits`.  If None, then the
-        integers from 0 to `n_qubits-1` are used.
+        and/or strings.  Must be of length `num_qubits`.  If None, then the
+        integers from 0 to `num_qubits-1` are used.
 
     geometry : {"line","ring","grid","torus"} or QubitGraph
         The type of connectivity among the qubits, specifying a
@@ -200,14 +200,14 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     sparse_lindblad_basis : bool, optional
         Whether embedded Lindblad-parameterized gates within the constructed
-        `n_qubits`-qubit gates are sparse or not.
+        `num_qubits`-qubit gates are sparse or not.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
     """
 
     @classmethod
-    def from_hops_and_weights(cls, n_qubits, gate_names, nonstd_gate_unitaries=None,
+    def from_hops_and_weights(cls, num_qubits, gate_names, nonstd_gate_unitaries=None,
                               custom_gates=None, availability=None,
                               qubit_labels=None, geometry="line",
                               max_idle_weight=1, max_spam_weight=1, maxhops=0,
@@ -221,7 +221,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         Parameters
         ----------
-        n_qubits : int
+        num_qubits : int
             The number of qubits
 
         gate_names : list
@@ -281,8 +281,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         qubit_labels : tuple, optional
             The circuit-line labels for each of the qubits, which can be integers
-            and/or strings.  Must be of length `n_qubits`.  If None, then the
-            integers from 0 to `n_qubits-1` are used.
+            and/or strings.  Must be of length `num_qubits`.  If None, then the
+            integers from 0 to `num_qubits-1` are used.
 
         geometry : {"line","ring","grid","torus"} or QubitGraph
             The type of connectivity among the qubits, specifying a
@@ -317,7 +317,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         sparse_lindblad_basis : bool, optional
             Whether the embedded Lindblad-parameterized gates within the constructed
-            `n_qubits`-qubit gates are sparse or not.  (This is determied by whether
+            `num_qubits`-qubit gates are sparse or not.  (This is determied by whether
             they are constructed using sparse basis matrices.)  When sparse, these
             Lindblad gates take up less memory, but their action is slightly slower.
             Usually it's fine to leave this as the default (False), except when
@@ -412,7 +412,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             if lbl not in gate_names: gatedict[lbl] = gate
 
         if qubit_labels is None:
-            qubit_labels = tuple(range(n_qubits))
+            qubit_labels = tuple(range(num_qubits))
 
         if not independent_clouds:
             raise NotImplementedError("Non-independent noise clounds are not supported yet!")
@@ -420,14 +420,14 @@ class CloudNoiseModel(_ImplicitOpModel):
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
         else:
-            qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, geometry, directed=False,
+            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
                                                          qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
         #Process "auto" simulator
         if simulator == "auto":
             if evotype in ("svterm", "cterm"): simulator = _TermFSim()
-            else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
+            else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
         elif simulator == "map":
             simulator = _MapFSim()
         elif simulator == "matrix":
@@ -448,8 +448,8 @@ class CloudNoiseModel(_ImplicitOpModel):
             if max_spam_weight > 0:
                 _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                                 "`max_spam_weight=%d > 0`") % max_spam_weight)
-            prep_layers = [_sv.ComputationalSPAMVec([0] * n_qubits, evotype)]
-            povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(n_qubits, evotype)}
+            prep_layers = [_sv.ComputationalSPAMVec([0] * num_qubits, evotype)]
+            povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(num_qubits, evotype)}
 
         elif spamtype == "tensorproduct":
 
@@ -468,7 +468,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                              ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D+A", "D+A", "D") \
                              else parameterization
 
-            for i in range(n_qubits):
+            for i in range(num_qubits):
                 prep_factors.append(
                     _sv.convert(_sv.StaticSPAMVec(v0), rtyp, basis1Q))
                 povm_factors.append(
@@ -481,7 +481,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         elif spamtype == "lindblad":
 
-            prepPure = _sv.ComputationalSPAMVec([0] * n_qubits, evotype)
+            prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
             prepNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
                 parameterization, errcomp_type, printer - 1)
@@ -521,13 +521,13 @@ class CloudNoiseModel(_ImplicitOpModel):
             cloud_key = (tuple(lbl.sslbls), tuple(sorted(cloud_inds)))  # (sets are unhashable)
             return cloud_key
 
-        return cls(n_qubits, gatedict, availability, qubit_labels, geometry,
+        return cls(num_qubits, gatedict, availability, qubit_labels, geometry,
                    global_idle_layer, prep_layers, povm_layers,
                    build_cloudnoise_fn, build_cloudkey_fn,
                    simulator, evotype, errcomp_type,
                    add_idle_noise_to_all_gates, sparse_lindblad_reps, printer)
 
-    def __init__(self, n_qubits, gatedict, availability=None,
+    def __init__(self, num_qubits, gatedict, availability=None,
                  qubit_labels=None, geometry="line",
                  global_idle_layer=None, prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
@@ -546,7 +546,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         Parameters
         ----------
-        n_qubits : int
+        num_qubits : int
             The number of qubits
 
         gatedict : dict
@@ -554,7 +554,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
             `numpy.ndarray`, or :class:`OpFactory` objects. When the objects may act on
             fewer than the total number of qubits (determined by their dimension/shape) then
-            they are repeatedly embedded into `n_qubits`-qubit gates as specified by their
+            they are repeatedly embedded into `num_qubits`-qubit gates as specified by their
             `availability`.  These operations represent the ideal target operations, and
             thus, any `LinearOperator` or `OpFactory` objects must be *static*, i.e., have
             zero parameters.
@@ -585,8 +585,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         qubit_labels : tuple, optional
             The circuit-line labels for each of the qubits, which can be integers
-            and/or strings.  Must be of length `n_qubits`.  If None, then the
-            integers from 0 to `n_qubits-1` are used.
+            and/or strings.  Must be of length `num_qubits`.  If None, then the
+            integers from 0 to `num_qubits-1` are used.
 
         geometry : {"line","ring","grid","torus"} or QubitGraph
             The type of connectivity among the qubits, specifying a
@@ -665,7 +665,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             An integer >= 0 dictating how must output to send to stdout.
         """
         if qubit_labels is None:
-            qubit_labels = tuple(range(n_qubits))
+            qubit_labels = tuple(range(num_qubits))
         if availability is None:
             availability = {}
 
@@ -695,7 +695,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             assert(mm_gatedict[gn]._evotype == evotype)
 
         #Set other members
-        self.nQubits = n_qubits
+        self.nQubits = num_qubits
         self.availability = availability
         self.qubit_labels = qubit_labels
         self.geometry = geometry
@@ -713,7 +713,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #Process "auto" simulator
         if simulator == "auto":
             if evotype in ("svterm", "cterm"): simulator = _TermFSim()
-            else: simulator = _MapFSim() if n_qubits > 2 else _MatrixFSim()
+            else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
         elif simulator == "map":
             simulator = _MapFSim()
         elif simulator == "matrix":
@@ -747,12 +747,12 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         printer = _VerbosityPrinter.create_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
-        printer.log("Creating a %d-qubit local-noise %s model" % (n_qubits, geometry_name))
+        printer.log("Creating a %d-qubit local-noise %s model" % (num_qubits, geometry_name))
 
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
         else:
-            qubitGraph = _qgraph.QubitGraph.common_graph(n_qubits, geometry, directed=False,
+            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
                                                          qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 

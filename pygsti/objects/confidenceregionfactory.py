@@ -75,7 +75,7 @@ class ConfidenceRegionFactory(object):
         when computing fit functions (the log-likelihood or chi2).
 
     hessian : numpy array, optional
-        A pre-computed n_params x n_params Hessian matrix, where n_params is
+        A pre-computed num_params x num_params Hessian matrix, where num_params is
         the number of dimensions of model space, i.e. model.num_params.
 
     non_mark_radius_sq : float, optional
@@ -107,7 +107,7 @@ class ConfidenceRegionFactory(object):
             when computing fit functions (the log-likelihood or chi2).
 
         hessian : numpy array, optional
-            A pre-computed n_params x n_params Hessian matrix, where n_params is
+            A pre-computed num_params x num_params Hessian matrix, where num_params is
             the number of dimensions of model space, i.e. model.num_params.
 
         non_mark_radius_sq : float, optional
@@ -952,15 +952,15 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % len(f0.shape))
             #May not be needed here, but gives uniformity with Hessian case
 
-        #massage grad_f, which has shape (n_params,) + f0.shape
+        #massage grad_f, which has shape (num_params,) + f0.shape
         # to that expected by _do_mlgst_base, which is
-        # (flat_f0_size, n_params)
+        # (flat_f0_size, num_params)
         if len(grad_f.shape) == 1:
             grad_f.shape = (1, grad_f.shape[0])
         else:
             flatDim = _np.prod(f0.shape)
             grad_f.shape = (grad_f.shape[0], flatDim)
-            grad_f = _np.transpose(grad_f)  # now shape == (flatDim, n_params)
+            grad_f = _np.transpose(grad_f)  # now shape == (flatDim, num_params)
         assert(len(grad_f.shape) == 2)
 
         mlgst_args = self.mlgst_params.copy()
@@ -1070,21 +1070,21 @@ class ConfidenceRegionFactoryView(object):
 #Helper functions
 
 
-def _create_empty_grad(val, n_params):
-    """ Get finite difference derivative grad_f that is shape (n_params, <shape of val>) """
+def _create_empty_grad(val, num_params):
+    """ Get finite difference derivative grad_f that is shape (num_params, <shape of val>) """
     if isinstance(val, float) or isinstance(val, int):
-        gradVal = _np.zeros(n_params, 'd')
+        gradVal = _np.zeros(num_params, 'd')
     elif isinstance(val, complex):
-        gradVal = _np.zeros(n_params, 'complex')
+        gradVal = _np.zeros(num_params, 'complex')
     else:
-        gradSize = (n_params,) + tuple(val.shape)
+        gradSize = (num_params,) + tuple(val.shape)
         gradVal = _np.zeros(gradSize, val.dtype)
     return gradVal  # gradient of value (empty)
 
 
-def _create_empty_grad_f(f0, n_params):
+def _create_empty_grad_f(f0, num_params):
     if isinstance(f0, dict):  # special behavior for dict: process each item separately
-        gradF = {ky: _create_empty_grad(val, n_params) for ky, val in f0.items()}
+        gradF = {ky: _create_empty_grad(val, num_params) for ky, val in f0.items()}
     else:
-        gradF = _create_empty_grad(f0, n_params)
+        gradF = _create_empty_grad(f0, num_params)
     return gradF
