@@ -93,19 +93,18 @@ class NQubitTestCase(BaseTestCase):
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
 
-        #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
-        # (maybe a different numpy version?)  Maybe look into this later?
-        Circuit = pygsti.obj.Circuit
-        compare_gss_travis = set(compare_gss)
-        compare_gss_travis.remove(Circuit("Gcnot:0:1Gy:0Gx:1@(0,1)"))
-        compare_gss_travis.remove(Circuit("Gcnot:0:1Gx:0Gx:1@(0,1)"))
-        compare_gss_travis.remove(Circuit("Gy:0Gx:0[Gx:0Gx:1]@(0,1)"))
-        compare_gss_travis.remove(Circuit("Gy:1Gx:1[Gx:0Gx:1]@(0,1)"))
-        compare_gss_travis.add(Circuit("Gx:1Gy:1[Gx:0Gx:1]@(0,1)"))
-        compare_gss_travis.add(Circuit("Gy:0Gcnot:0:1Gx:1@(0,1)"))
-        compare_gss_travis.add(Circuit("Gx:0Gy:0[Gx:0Gx:1]@(0,1)"))
-
         try:
+            #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
+            # (maybe a different numpy version?)  Maybe look into this later?
+            Circuit = pygsti.obj.Circuit
+            compare_gss_travis = set(compare_gss)
+            compare_gss_travis.remove(Circuit("Gcnot:0:1Gy:0Gx:1@(0,1)"))
+            compare_gss_travis.remove(Circuit("Gcnot:0:1Gx:0Gx:1@(0,1)"))
+            compare_gss_travis.remove(Circuit("Gy:0Gx:0[Gx:0Gx:1]@(0,1)"))
+            compare_gss_travis.remove(Circuit("Gy:1Gx:1[Gx:0Gx:1]@(0,1)"))
+            compare_gss_travis.add(Circuit("Gx:1Gy:1[Gx:0Gx:1]@(0,1)"))
+            compare_gss_travis.add(Circuit("Gy:0Gcnot:0:1Gx:1@(0,1)"))
+            compare_gss_travis.add(Circuit("Gx:0Gy:0[Gx:0Gx:1]@(0,1)"))
             self.assertEqual(set(gss), set(compare_gss_travis))
         except:
             self.assertEqual(set(gss), set(compare_gss))
@@ -146,14 +145,13 @@ class NQubitTestCase(BaseTestCase):
         #    #    print(tuple(etup[0]))
         #    #    print(tuple(ctup[0]))
 
-        #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
-        # (maybe a different numpy version?)  Maybe look into this later?
-        Circuit = pygsti.obj.Circuit
-        compare_gss_travis = set(compare_gss)
-        compare_gss_travis.remove(Circuit("Gy:0Gx:0Gx:0@(0)"))
-        compare_gss_travis.add(Circuit("Gx:0Gy:0@(0)"))
-
         try:
+            #For some unknown reason, the python version on TravisCI produces a slightly different set of sequences
+            # (maybe a different numpy version?)  Maybe look into this later?
+            Circuit = pygsti.obj.Circuit
+            compare_gss_travis = set(compare_gss)
+            compare_gss_travis.remove(Circuit("Gy:0Gx:0Gx:0@(0)"))
+            compare_gss_travis.add(Circuit("Gx:0Gy:0@(0)"))
             self.assertEqual(set(gss), set(compare_gss_travis))
         except:
             self.assertEqual(set(gss), set(compare_gss))
