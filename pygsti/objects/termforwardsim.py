@@ -737,11 +737,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         Returns
         -------
-        max_sopm : numpy.ndarray
-            An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
-
         achieved_sopm : numpy.ndarray
             An array containing the per-circuit-outcome achieved sum-of-path-magnitudes.
+
+        max_sopm : numpy.ndarray
+            An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
         """
         assert(self.mode == "pruned")
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -751,7 +751,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         def compute_sopm(layout_atom, sub_resource_alloc):
             elInds = layout_atom.element_slice
             replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
-            maxx, achieved = self._achieved_and_max_sopm_block(layout_atom)
+            achieved, maxx = self._achieved_and_max_sopm_block(layout_atom)
             _fas(max_sopm, [elInds], maxx)
             _fas(achieved_sopm, [elInds], achieved)
 
@@ -762,7 +762,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _mpit.gather_slices(all_atom_element_slices, atomOwners, max_sopm, [], 0, resource_alloc.comm)
         _mpit.gather_slices(all_atom_element_slices, atomOwners, achieved_sopm, [], 0, resource_alloc.comm)
 
-        return max_sopm, achieved_sopm
+        return achieved_sopm, max_sopm
 
     ## ----- A couple more bulk_* convenience functions that wrap bulk_achieved_and_max_sopm -----
     def bulk_test_if_paths_are_sufficient(self, layout, probs, resource_alloc=None, verbosity=0):
