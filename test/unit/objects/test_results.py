@@ -89,5 +89,5 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
     def test_add_model_test(self):
         # add estimate from model test
         mdl_guess = std.target_model().depolarize(op_noise=0.07, spam_noise=0.03)
-        self.res.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
+        self.res.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gaugeopt_keys="auto")
         # TODO assert correctness

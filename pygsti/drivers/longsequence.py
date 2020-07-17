@@ -552,8 +552,8 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
 def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                         germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
-                        gauge_opt_suite='stdgaugeopt',
-                        gauge_opt_target=None, models_to_test=None, comm=None, mem_limit=None,
+                        gaugeopt_suite='stdgaugeopt',
+                        gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
                         advanced_options=None, output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using standard practices.
@@ -609,13 +609,13 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
         - "Target" : use the target (ideal) gates as the estimate
         - <model> : any key in the `models_to_test` argument
 
-    gauge_opt_suite : str or list or dict, optional
+    gaugeopt_suite : str or list or dict, optional
         Specifies which gauge optimizations to perform on each estimate.  A
         string or list of strings (see below) specifies built-in sets of gauge
-        optimizations, otherwise `gauge_opt_suite` should be a dictionary of
+        optimizations, otherwise `gaugeopt_suite` should be a dictionary of
         gauge-optimization parameter dictionaries, as specified by the
         `gauge_opt_params` argument of :func:`run_long_sequence_gst`.  The key
-        names of `gauge_opt_suite` then label the gauge optimizations within
+        names of `gaugeopt_suite` then label the gauge optimizations within
         the resuling `Estimate` objects.  The built-in suites are:
 
           - "single" : performs only a single "best guess" gauge optimization.
@@ -626,12 +626,12 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
           - "none" : no gauge optimizations are performed.
 
-    gauge_opt_target : Model, optional
+    gaugeopt_target : Model, optional
         If not None, a model to be used as the "target" for gauge-
         optimization (only).  This argument is useful when you want to
         gauge optimize toward something other than the *ideal* target gates
         given by `target_model_filename_or_object`, which are used as the default when
-        `gauge_opt_target` is None.
+        `gaugeopt_target` is None.
 
     models_to_test : dict, optional
         A dictionary of Model objects representing (gate-set) models to
@@ -684,7 +684,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
-    proto = _proto.StandardGST(modes, gauge_opt_suite, gauge_opt_target, models_to_test,
+    proto = _proto.StandardGST(modes, gaugeopt_suite, gaugeopt_target, models_to_test,
                                _get_gst_builders(advanced_options),
                                _get_optimizer(advanced_options, exp_design),
                                _get_badfit_options(advanced_options), printer,

@@ -118,7 +118,7 @@ class TestReport(ReportBaseCase):
         #Also test adding a model-test estimate to this report
         mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
-        results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
+        results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gaugeopt_keys="auto")
 
 
         #Note: this report will have (un-combined) Robust estimates too

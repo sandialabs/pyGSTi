@@ -137,8 +137,8 @@ class StdPracticeGSTTester(LongSequenceBase):
         result = ls.run_stdpractice_gst(
             self.ds, self.model, self.fiducials, self.fiducials,
             self.germs, self.maxLens, modes="TP", comm=None,
-            mem_limit=None, verbosity=5, gauge_opt_target=self.mdl_guess,
-            gauge_opt_suite=myGaugeOptSuiteDict
+            mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
+            gaugeopt_suite=myGaugeOptSuiteDict
         )
         # TODO assert correctness
 
@@ -153,8 +153,8 @@ class StdPracticeGSTTester(LongSequenceBase):
             result = ls.run_stdpractice_gst(
                 self.ds, self.model, self.fiducials, self.fiducials,
                 self.germs, self.maxLens, modes="TP", comm=None,
-                mem_limit=None, verbosity=5, gauge_opt_target=self.mdl_guess,
-                gauge_opt_suite=myGaugeOptSuiteDict
+                mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
+                gaugeopt_suite=myGaugeOptSuiteDict
             )
             # TODO assert correctness
 

@@ -2239,7 +2239,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         #    self.circuit_structs['final'].Ls
 
     def add_model_test(self, target_model, themodel,
-                       estimate_key='test', gauge_opt_keys="auto"):
+                       estimate_key='test', gaugeopt_keys="auto"):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
@@ -2255,7 +2255,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         estimate_key : str, optional
             The key or label used to identify this estimate.
 
-        gauge_opt_keys : list, optional
+        gaugeopt_keys : list, optional
             A list of gauge-optimization keys to add to the estimate.  All
             of these keys will correspond to trivial gauge optimizations,
             as the model model is assumed to be fixed and to have no

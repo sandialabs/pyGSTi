@@ -3342,20 +3342,20 @@ class GaugeOptParamsTable(WorkspaceTable):
     ws : Workspace
         The containing (parent) workspace.
 
-    gauge_opt_args : dict or list
+    gaugeopt_args : dict or list
         A dictionary or list of dictionaries specifying values for
         zero or more of the *arguments* of pyGSTi's
         :func:`gaugeopt_to_target` function.
     """
 
-    def __init__(self, ws, gauge_opt_args):
+    def __init__(self, ws, gaugeopt_args):
         """
         Create a table displaying a list of gauge
         optimzation parameters.
 
         Parameters
         ----------
-        gauge_opt_args : dict or list
+        gaugeopt_args : dict or list
             A dictionary or list of dictionaries specifying values for
             zero or more of the *arguments* of pyGSTi's
             :func:`gaugeopt_to_target` function.
@@ -3364,18 +3364,18 @@ class GaugeOptParamsTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GaugeOptParamsTable, self).__init__(ws, self._create, gauge_opt_args)
+        super(GaugeOptParamsTable, self).__init__(ws, self._create, gaugeopt_args)
 
-    def _create(self, gauge_opt_args):
+    def _create(self, gaugeopt_args):
 
         colHeadings = ('G-Opt Param', 'Value')
         formatters = ('Bold', 'Bold')
 
-        if gauge_opt_args is False:  # signals *no* gauge optimization
+        if gaugeopt_args is False:  # signals *no* gauge optimization
             goargs_list = [{'Method': "No gauge optimization was performed"}]
         else:
-            goargs_list = [gauge_opt_args] if hasattr(gauge_opt_args, 'keys') \
-                else gauge_opt_args
+            goargs_list = [gaugeopt_args] if hasattr(gaugeopt_args, 'keys') \
+                else gaugeopt_args
 
         table = _ReportTable(colHeadings, formatters)
 
