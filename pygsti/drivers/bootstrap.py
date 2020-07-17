@@ -94,7 +94,8 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
         if generation_method == 'parametric':
             ps = probs[s]  # SLOW: input_model.probabilities(s)
         elif generation_method == 'nonparametric':
-            ps = {ol: input_data_set[s].fraction(ol) for ol in outcome_labels}
+            dsRow_fractions = input_data_set[s].fractions
+            ps = {ol: dsRow_fractions[ol] for ol in outcome_labels}
         pList = _np.array([_np.clip(ps[outcomeLabel], 0, 1) for outcomeLabel in outcome_labels])
         #Truncate before normalization; bad extremal values shouldn't
         # screw up not-bad values, yes?

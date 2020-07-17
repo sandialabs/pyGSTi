@@ -32,7 +32,7 @@ class TestDataSetMethods(BaseTestCase):
         with open(temp_files + '/dataset.pickle', 'rb') as datasetfile:
             ds_from_pkl = pickle.load(datasetfile)
         self.assertEqual(ds_from_pkl[('Gx',)]['0'], 10)
-        self.assertAlmostEqual(ds_from_pkl[('Gx',)].fraction('0'), 0.1)
+        self.assertAlmostEqual(ds_from_pkl[('Gx',)].fractions['0'], 0.1)
 
 
         # Invoke the DataSet constructor other ways
@@ -312,7 +312,7 @@ Gx^4 20 80 0.2 100
             print( ds[opstr].counts )
             print( ds[opstr].fractions )
             print( ds[opstr].total )
-            print( ds[opstr].fraction('0') )
+            print( ds[opstr].fractions['0'] )
             print( "[0] (int) = ",ds[opstr][0] ) # integer index
             print( "[0.0] (float) = ",ds[opstr][0.0] ) # time index
             print( "['0'] (str) = ",ds[opstr]['0'] ) # outcome-label index
@@ -418,8 +418,8 @@ Gy 11001100
         with open(temp_files + "/TDDataset.txt","w") as output:
             output.write(dataset_txt)
         ds = pygsti.io.load_time_dependent_dataset(temp_files + "/TDDataset.txt")
-        self.assertEqual(ds[()].fraction('1'), 0.5)
-        self.assertEqual(ds[('Gy',)].fraction('1'), 0.5)
+        self.assertEqual(ds[()].fractions['1'], 0.5)
+        self.assertEqual(ds[('Gy',)].fractions['1'], 0.5)
         self.assertEqual(ds[('Gx',)].total, 9)
 
         bad_dataset_txt = \

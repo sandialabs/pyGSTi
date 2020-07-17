@@ -29,6 +29,7 @@ from collections import defaultdict as _defaultdict
 
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 from . import circuit as _cir
 from . import labeldicts as _ld
@@ -618,7 +619,7 @@ class _DataSetRow(object):
         else:
             return sum(self.reps)
 
-    #TODO: remove in favor of fractions property?
+    @_deprecated_fn('DataSetRow.fractions')
     def fraction(self, outcomelabel):
         """
         The fraction of total counts for `outcomelabel`.

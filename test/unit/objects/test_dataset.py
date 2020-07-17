@@ -107,7 +107,7 @@ class DefaultDataSetInstance(object):
     def test_construction(self):
         self.assertEqual(self.ds[('Gx',)]['0'], 10)
         self.assertEqual(self.ds[('Gx',)]['1'], 90)
-        self.assertAlmostEqual(self.ds[('Gx',)].fraction('0'), 0.1)
+        self.assertAlmostEqual(self.ds[('Gx',)].fractions['0'], 0.1)
 
     def test_raise_on_new_outcome_label(self):
         with self.assertRaises(NotImplementedError):
@@ -224,8 +224,8 @@ class DataSetMethodBase(object):
         self.dsRow.expanded_times
         # TODO assert correctness
 
-    def test_row_fraction(self):
-        self.dsRow.fraction('0')
+    def test_row_fractions(self):
+        self.dsRow.fractions['0']
         # TODO assert correctness
 
     def test_row_counts_at_time(self):

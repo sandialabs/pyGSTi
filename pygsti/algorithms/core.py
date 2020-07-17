@@ -238,9 +238,9 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 if circuit not in dataset and len(target_model.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
-                dsRow = dataset[circuit]
+                dsRow_fractions = dataset[circuit].fractions
                 # outcome labels should just be effect labels (no instruments!)
-                EVec[0, i] = dsRow.fraction((effectLabel,))
+                EVec[0, i] = dsRow_fractions[(effectLabel,)]
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(povm_effects)
@@ -254,8 +254,8 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             if circuit not in dataset and len(target_model.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
-            dsRow = dataset[circuit]
-            rhoVec[eoff:eoff + povmLen, 0] = [dsRow.fraction((ol,)) for ol in target_model.povms[povmLbl]]
+            dsRow_fractions = dataset[circuit].fractions
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions[(ol,)] for ol in target_model.povms[povmLbl]]
             eoff += povmLen
         rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
@@ -393,8 +393,8 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
             outcomes = expd_circuit_outcomes[unique_key]
             assert(len(outcomes) == povmLen)
 
-            dsRow = dataset[dsStr]
-            AB[eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
+            dsRow_fractions = dataset[dsStr].fractions
+            AB[eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
         eoff += povmLen
 
     return AB
@@ -417,12 +417,12 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
             opLabelString = rhostr + _objs.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
             expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
-            dsRow = dataset[dsStr]
+            dsRow_fractions = dataset[dsStr].fractions
             assert(len(expd_circuit_outcomes) == nVariants)
 
             for k, (sep_povm_c, outcomes) in enumerate(expd_circuit_outcomes.items()):
                 assert(len(outcomes) == povmLen)
-                X[k, eoff:eoff + povmLen, j] = [dsRow.fraction(ol) for ol in outcomes]
+                X[k, eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
         eoff += povmLen
 
     return X
