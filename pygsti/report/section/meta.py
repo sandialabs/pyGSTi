@@ -22,7 +22,7 @@ class InputSection(_Section):
 
     @_Section.figure_factory(2)
     def germ_list_2col_table(workspace, switchboard=None, **kwargs):
-        return workspace.CircuitTable(switchboard.germs, "Germ", n_cols=2)
+        return workspace.CircuitTable(switchboard.germs, "Germ", num_cols=2)
 
     @_Section.figure_factory(2)
     def dataset_overview_table(workspace, switchboard=None, **kwargs):
