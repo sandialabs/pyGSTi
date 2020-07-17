@@ -607,7 +607,7 @@ class _DataSetRow(object):
         """
         cnts = self._get_counts(all_outcomes)
         total = sum(cnts.values())
-        return _OrderedDict([(k, cnt / total) for k, cnt in cnts.items()])
+        return _ld.OutcomeLabelDict([(k, cnt / total) for k, cnt in cnts.items()])
 
     @property
     def total(self):
