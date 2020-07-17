@@ -684,11 +684,11 @@ def _compose_alias_dicts(alias_dict_1, alias_dict_2):
     return ret
 
 
-def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
+def manipulate_circuit(circuit, rules, line_labels="auto"):
     """
-    Manipulates a Circuit object according to `sequence_rules`.
+    Manipulates a Circuit object according to `rules`.
 
-    Each element of `sequence_rules` is of the form `(find,replace)`,
+    Each element of `rules` is of the form `(find,replace)`,
     and specifies a replacement rule.  For example,
     `('A',), ('B','C')` simply replaces each `A` with `B,C`.
     `('A', 'B'), ('A', 'B2'))` replaces `B` with `B2` when it follows `A`.
@@ -699,10 +699,10 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     circuit : Circuit or tuple
         The circuit to manipulate.
 
-    sequence_rules : list
+    rules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
         rules.  Both `find` and `replace` are tuples of operation labels
-        (or `Circuit` objects).  If `sequence_rules is None` then
+        (or `Circuit` objects).  If `rules is None` then
         `circuit` is returned.
 
     line_labels : "auto" or tuple, optional
@@ -714,7 +714,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     -------
     list of Circuits
     """
-    if sequence_rules is None:
+    if rules is None:
         return circuit  # avoids doing anything to circuit
 
     # flag labels as modified so signal they cannot be processed
@@ -725,7 +725,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
 
     #Step 0: compute prefixes and postfixes of rules
     ruleInfo = []
-    for rule, replacement in sequence_rules:
+    for rule, replacement in rules:
         n_pre = 0  # length of shared prefix btwn rule & replacement
         for a, b in zip(rule, replacement):
             if a == b: n_pre += 1
@@ -746,7 +746,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     # of it are marked as having been modified to avoid double-modifications.
     for i in range(len(circuit)):
         #print(" **** i = ",i) #DEBUG
-        for k, (rule, replacement) in enumerate(sequence_rules):
+        for k, (rule, replacement) in enumerate(rules):
             n_pre, n_post, n = ruleInfo[k]
 
             #if there's a match that doesn't double-modify
@@ -764,7 +764,7 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     for i in range(N - 1, -1, -1):
         for k in actions[i]:
             #apply rule k at index i of circuit
-            rule, replacement = sequence_rules[k]
+            rule, replacement = rules[k]
             n_pre, n_post, n = ruleInfo[k]
 
             begin = circuit[:i + n_pre]
@@ -777,12 +777,12 @@ def manipulate_circuit(circuit, sequence_rules, line_labels="auto"):
     return _cir.Circuit(circuit, line_labels)
 
 
-def manipulate_circuits(circuits, sequence_rules, line_labels="auto"):
+def manipulate_circuits(circuits, rules, line_labels="auto"):
     """
     Applies :function:`manipulate_circuit` to each element of `circuits`.
 
     This creates a new list of Circuit objects from an existing one by performing
-    replacements according to `sequence_rules` (see :func:`manipulate_circuit`).
+    replacements according to `rules` (see :func:`manipulate_circuit`).
 
     Parameters
     ----------
@@ -790,10 +790,10 @@ def manipulate_circuits(circuits, sequence_rules, line_labels="auto"):
         The list of circuits to use as the base for find & replace
         operations.
 
-    sequence_rules : list
+    rules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
         rules.  Both `find` and `replace` are tuples of operation labels
-        (or `Circuit` objects).  If `sequence_rules is None` then
+        (or `Circuit` objects).  If `rules is None` then
         `circuits` is returned.
 
     line_labels : "auto" or tuple, optional
@@ -805,10 +805,10 @@ def manipulate_circuits(circuits, sequence_rules, line_labels="auto"):
     -------
     list of Circuits
     """
-    if sequence_rules is None:
+    if rules is None:
         return circuits
     else:
-        return [manipulate_circuit(opstr, sequence_rules, line_labels) for opstr in circuits]
+        return [manipulate_circuit(opstr, rules, line_labels) for opstr in circuits]
 
 
 def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=()):

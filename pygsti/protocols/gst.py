@@ -172,7 +172,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         length == L contains *only* those circuits specified in the
         description above, and *not* those for previous values of L.
 
-    sequence_rules : list, optional
+    circuit_rules : list, optional
         A list of `(find,replace)` 2-tuples which specify circuit-label replacement
         rules.  Both `find` and `replace` are tuples of operation labels (or `Circuit` objects).
 
@@ -209,7 +209,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     def __init__(self, target_model_filename_or_obj, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                  germ_list_or_filename, max_lengths, germ_length_limits=None, fiducial_pairs=None, keep_fraction=1,
-                 keep_seed=None, include_lgst=True, nest=True, sequence_rules=None, op_label_aliases=None,
+                 keep_seed=None, include_lgst=True, nest=True, circuit_rules=None, op_label_aliases=None,
                  dscheck=None, action_if_missing="raise", qubit_labels=None, verbosity=0,
                  add_default_protocol=False):
 
@@ -225,7 +225,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.germ_length_limits = germ_length_limits
         self.include_lgst = include_lgst
         self.aliases = op_label_aliases
-        self.sequence_rules = sequence_rules
+        self.circuit_rules = circuit_rules
 
         #Hardcoded for now... - include so gets written when serialized
         self.truncation_method = "whole germ powers"
@@ -242,7 +242,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
-            self.aliases, self.sequence_rules, dscheck, action_if_missing,
+            self.aliases, self.circuit_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
@@ -283,7 +283,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         return StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
                                  self.germs, max_lengths, self.germ_length_limits, self.fiducial_pairs,
                                  self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
-                                 self.sequence_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
+                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
                                  verbosity, add_default_protocol=False)
 
 

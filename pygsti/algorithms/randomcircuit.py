@@ -1248,7 +1248,7 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
     """
     Generates a "direct randomized benchmarking" (DRB) circuit.
 
-    DRB is the protocol introduced in arXiv:1807.07975 (2018). The length of the "core" sequence is
+    DRB is the protocol introduced in arXiv:1807.07975 (2018). The length of the "core" circuit is
     given by `length` and may be any integer >= 0. An n-qubit DRB circuit consists of (1) a circuit
     the prepares a uniformly random stabilizer state; (2) a length-l circuit (specified by `length`)
     consisting of circuit layers sampled according to some user-specified distribution (specified by
@@ -1776,7 +1776,7 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     cliffordtwirl : bool, optional
-        Wether to begin the circuitas with a sequence that generates a random stabilizer state. For
+        Wether to begin the circuit with a sequence that generates a random stabilizer state. For
         standard DRB this should be set to True. There are a variety of reasons why it is better
         to have this set to True.
 
@@ -1970,7 +1970,7 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
     CRB is the current-standard RB protocol defined in "Scalable and robust randomized benchmarking of quantum
-    processes", Magesan et al. PRL 106 180504 (2011). This consists of a sequence of `length`+1 uniformly
+    processes", Magesan et al. PRL 106 180504 (2011). This consists of a circuit of `length`+1 uniformly
     random n-qubit Clifford gates followed by the unique inversion Clifford, with all the Cliffords compiled
     into the "native" gates of a device as specified by `pspec`. The circuit output by this function will
     respect the connectivity of the device, as encoded into `pspec` (see the ProcessorSpec object docstring
@@ -2376,11 +2376,11 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
     return circuit, idealout
 
 
-def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=False, interleaved=None,
-                                         group_inverse_only=False, group_prep=False, compilation=None,
-                                         generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
+def sample_one_q_generalized_rb_circuit(m, group_or_model, inverse=True, random_pauli=False, interleaved=None,
+                                        group_inverse_only=False, group_prep=False, compilation=None,
+                                        generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
     """
-    Makes a random 1-qubit RB sequence, with RB over an arbitrary group.
+    Makes a random 1-qubit RB circuit, with RB over an arbitrary group.
 
     This function also contains a range of other options that allow circuits for many
     types of RB to be generated, including:
@@ -2399,10 +2399,10 @@ def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random
     Parameters
     ----------
     m : int
-        The number of random gates in the sequence.
+        The number of random gates in the circuit.
 
     group_or_model : Model or MatrixGroup
-        Which Model of MatrixGroup to create the random sequence for. If
+        Which Model of MatrixGroup to create the random circuit for. If
         inverse is true and this is a Model, the Model gates must form
         a group (so in this case it requires the *target model* rather than
         a noisy model). When inverse is true, the MatrixGroup for the model
@@ -2410,8 +2410,8 @@ def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random
         multiple times, it will be much faster if the MatrixGroup is provided.
 
     inverse : Bool, optional
-        If true, the random sequence is followed by its inverse gate. The model
-        must form a group if this is true. If it is true then the sequence
+        If true, the random circuit is followed by its inverse gate. The model
+        must form a group if this is true. If it is true then the circuit
         returned is length m+1 (2m+1) if interleaved is False (True).
 
     random_pauli : <TODO typ>, optional
@@ -2419,7 +2419,7 @@ def sample_one_q_generalized_rb_sequence(m, group_or_model, inverse=True, random
 
     interleaved : Str, optional
         If not None, then a oplabel string. When a oplabel string is provided,
-        every random gate is followed by this gate. So the returned sequence is of
+        every random gate is followed by this gate. So the returned circuit is of
         length 2m+1 (2m) if inverse is True (False).
 
     group_inverse_only : <TODO typ>, optional

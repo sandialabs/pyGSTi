@@ -259,7 +259,7 @@ def make_lsgst_structs(op_label_src, prep_strs, effect_strs, germ_list, max_leng
 def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, germs, max_lengths,
                                fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
                                keep_fraction=1, keep_seed=None, include_lgst=True,
-                               op_label_aliases=None, sequence_rules=None,
+                               op_label_aliases=None, circuit_rules=None,
                                dscheck=None, action_if_missing="raise", germ_length_limits=None,
                                verbosity=0):
     """
@@ -364,7 +364,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    sequence_rules : list, optional
+    circuit_rules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement
         rules.  Both `find` and `replace` are tuples of operation labels
         (or `Circuit` objects).

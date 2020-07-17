@@ -333,7 +333,7 @@ class GSTModelPack(ModelPack):
         StandardGSTDesign
         """
         for k in kwargs.keys():
-            if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'sequence_rules',
+            if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'circuit_rules',
                          'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol'):
                 raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
@@ -361,7 +361,7 @@ class GSTModelPack(ModelPack):
             kwargs.get('keep_seed', None),
             kwargs.get('include_lgst', True),
             kwargs.get('nest', True),
-            kwargs.get('sequence_rules', None),
+            kwargs.get('circuit_rules', None),
             kwargs.get('op_label_aliases', None),
             kwargs.get('dscheck', None),
             kwargs.get('action_if_missing', None),

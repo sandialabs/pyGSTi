@@ -495,7 +495,7 @@ class DataComparator():
         self.pVal_pseudothreshold = None
         self._jsd_pseudothreshold = None
 
-    def run(self, significance=0.05, per_sequence_correction='Hochberg',
+    def run(self, significance=0.05, per_circuit_correction='Hochberg',
             aggregate_test_weighting=0.5, pass_alpha=True, verbosity=2):
         """
         Runs statistical hypothesis testing.
@@ -514,15 +514,15 @@ class DataComparator():
         ----------
         significance : float in (0,1), optional (default is 0.05)
             The "global" statistical significance to implement the tests at. I.e, with
-            the standard `per_sequence_correction` value (and some other values for this parameter)
+            the standard `per_circuit_correction` value (and some other values for this parameter)
             the probability that a sequence that has been flagged up as context dependent
             is actually from a context-independent circuit is no more than `significance`.
             Precisely, `significance` is what the "family-wise error rate" (FWER) of the full set
             of hypothesis tests (1 "aggregate test", and 1 test per sequence) is controlled to,
-            as long as `per_sequence_correction` is set to the default value, or another option
+            as long as `per_circuit_correction` is set to the default value, or another option
             that controls the FWER of the per-sequence comparion (see below).
 
-        per_sequence_correction : string, optional (default is 'Hochberg')
+        per_circuit_correction : string, optional (default is 'Hochberg')
             The multi-hypothesis test correction used for the per-circuit/sequence comparisons.
             (See "Probing context-dependent errors in quantum processors", by Rudinger et al. for
             the details of what the per-circuit comparison is). This can be any string that is an allowed
@@ -605,7 +605,7 @@ class DataComparator():
         else: passing_graph = 'none'
 
         hypotest = _HypothesisTest(hypotheses, significance=significance, weighting=weighting,
-                                   passing_graph=passing_graph, local_corrections=per_sequence_correction)
+                                   passing_graph=passing_graph, local_corrections=per_circuit_correction)
         extended_pVals_dict = _copy.copy(self.pVals)
         extended_pVals_dict['aggregate'] = self.aggregate_pVal
         hypotest.add_pvalues(extended_pVals_dict)
