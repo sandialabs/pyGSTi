@@ -351,7 +351,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
 
     ident = _np.identity(smallDim, 'd')
 
-    objective = _cvxpy.Maximize(_cvxpy.trace(K.T * Y + L.T * Z))
+    objective = _cvxpy.Maximize(_cvxpy.trace(K.T @ Y + L.T @ Z))
     constraints = [_cvxpy.bmat([
         [_cvxpy.kron(ident, sig0), Y, -_cvxpy.kron(ident, tau0), -Z],
         [Y.T, _cvxpy.kron(ident, sig1), Z.T, -_cvxpy.kron(ident, tau1)],
