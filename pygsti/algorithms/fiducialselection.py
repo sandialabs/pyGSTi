@@ -230,7 +230,7 @@ def xor(*args):
     return output
 
 
-def create_prep_mxs(mdl, prep_fid_list):
+def create_prep_mxs(model, prep_fid_list):
     """
     Make a list of matrices for the model preparation operations.
 
@@ -240,7 +240,7 @@ def create_prep_mxs(mdl, prep_fid_list):
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model (associates operation matrices with operation labels).
 
     prep_fid_list : list of Circuits
@@ -250,23 +250,23 @@ def create_prep_mxs(mdl, prep_fid_list):
     -------
     list
         A list of matrices, each of shape `(dim, len(prep_fid_list))` where
-        `dim` is the dimension of `mdl` (4 for a single qubit).  The length
-        of this list is equal to the number of state preparations in `mdl`.
+        `dim` is the dimension of `model` (4 for a single qubit).  The length
+        of this list is equal to the number of state preparations in `model`.
     """
 
-    dimRho = mdl.dim
-    #numRho = len(mdl.preps)
+    dimRho = model.dim
+    #numRho = len(model.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
-    for rho in list(mdl.preps.values()):
+    for rho in list(model.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
         for i, prepFid in enumerate(prep_fid_list):
-            outputMat[:, i] = _np.dot(mdl.sim.product(prepFid), rho)[:, 0]
+            outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho)[:, 0]
         outputMatList.append(outputMat)
     return outputMatList
 
 
-def create_meas_mxs(mdl, meas_fid_list):
+def create_meas_mxs(model, meas_fid_list):
     """
     Make a list of matrices for the model measurement operations.
 
@@ -276,7 +276,7 @@ def create_meas_mxs(mdl, meas_fid_list):
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model (associates operation matrices with operation labels).
 
     meas_fid_list : list of Circuits
@@ -286,19 +286,19 @@ def create_meas_mxs(mdl, meas_fid_list):
     -------
     list
         A list of matrices, each of shape `(dim, len(meas_fid_list))` where
-        `dim` is the dimension of `mdl` (4 for a single qubit).  The length
-        of this list is equal to the number of POVM effects in `mdl`.
+        `dim` is the dimension of `model` (4 for a single qubit).  The length
+        of this list is equal to the number of POVM effects in `model`.
     """
 
-    dimE = mdl.dim
+    dimE = model.dim
     numFid = len(meas_fid_list)
     outputMatList = []
-    for povm in mdl.povms.values():
+    for povm in model.povms.values():
         for E in povm.values():
             if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
-                outputMat[:, i] = _np.dot(E.T, mdl.sim.product(measFid))[0, :]
+                outputMat[:, i] = _np.dot(E.T, model.sim.product(measFid))[0, :]
             outputMatList.append(outputMat)
     return outputMatList
 

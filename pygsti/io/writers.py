@@ -283,13 +283,13 @@ def write_circuit_list(filename, circuits, header=None):
             output.write(circuit.str + '\n')
 
 
-def write_model(mdl, filename, title=None):
+def write_model(model, filename, title=None):
     """
     Write a text-formatted model file.
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to write to file.
 
     filename : string
@@ -324,7 +324,7 @@ def write_model(mdl, filename, title=None):
             output.write("# %s" % title + '\n')
         output.write('\n')
 
-        for prepLabel, rhoVec in mdl.preps.items():
+        for prepLabel, rhoVec in model.preps.items():
             props = None
             if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
             elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
@@ -345,7 +345,7 @@ def write_model(mdl, filename, title=None):
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
-        for povmLabel, povm in mdl.povms.items():
+        for povmLabel, povm in model.povms.items():
             props = None; povm_to_write = povm
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
@@ -381,7 +381,7 @@ def write_model(mdl, filename, title=None):
 
             output.write("END POVM\n\n")
 
-        for label, gate in mdl.operations.items():
+        for label, gate in model.operations.items():
             props = None
             if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
             elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
@@ -406,7 +406,7 @@ def write_model(mdl, filename, title=None):
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
-        for instLabel, inst in mdl.instruments.items():
+        for instLabel, inst in model.instruments.items():
             if isinstance(inst, _objs.Instrument): typ = "Instrument"
             elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
             else:
@@ -431,28 +431,28 @@ def write_model(mdl, filename, title=None):
                 writeprop(output, "LiouvilleMx", gate.to_dense())
             output.write("END Instrument\n\n")
 
-        if mdl.state_space_labels is not None:
-            output.write("STATESPACE: " + str(mdl.state_space_labels) + "\n")
+        if model.state_space_labels is not None:
+            output.write("STATESPACE: " + str(model.state_space_labels) + "\n")
             # StateSpaceLabels.__str__ formats the output properly
 
-        basisdim = mdl.basis.dim
+        basisdim = model.basis.dim
 
         if basisdim is None:
-            output.write("BASIS: %s\n" % mdl.basis.name)
+            output.write("BASIS: %s\n" % model.basis.name)
         else:
-            if mdl.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
-                assert(mdl.state_space_labels is not None), \
+            if model.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
+                assert(model.state_space_labels is not None), \
                     "Must set a Model's state space labels when using fancy a basis!"
                 # don't write the dim - the state space labels will cover this.
-                output.write("BASIS: %s\n" % mdl.basis.name)
+                output.write("BASIS: %s\n" % model.basis.name)
             else:
-                output.write("BASIS: %s %d\n" % (mdl.basis.name, basisdim))
+                output.write("BASIS: %s %d\n" % (model.basis.name, basisdim))
 
-        if isinstance(mdl.default_gauge_group, _objs.FullGaugeGroup):
+        if isinstance(model.default_gauge_group, _objs.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(mdl.default_gauge_group, _objs.TPGaugeGroup):
+        elif isinstance(model.default_gauge_group, _objs.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(mdl.default_gauge_group, _objs.UnitaryGaugeGroup):
+        elif isinstance(model.default_gauge_group, _objs.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
 

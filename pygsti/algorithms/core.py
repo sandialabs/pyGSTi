@@ -367,12 +367,12 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     return lgstModel
 
 
-def _lgst_matrix_dims(mdl, prep_fiducials, effect_fiducials):
-    assert(mdl is not None), "LGST matrix construction requires a non-None Model!"
+def _lgst_matrix_dims(model, prep_fiducials, effect_fiducials):
+    assert(model is not None), "LGST matrix construction requires a non-None Model!"
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
-    povmLbls = [mdl.split_circuit(s, ('povm',))[2]  # povm_label
+    povmLbls = [model.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
-    povmLens = ([len(mdl.povms[l]) for l in povmLbls])
+    povmLens = ([len(model.povms[l]) for l in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
@@ -428,11 +428,11 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
     return X
 
 
-def _construct_a(effect_fiducials, mdl):
+def _construct_a(effect_fiducials, model):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
-        mdl, [], effect_fiducials)
+        model, [], effect_fiducials)
 
-    dim = mdl.dim
+    dim = model.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
 
@@ -443,19 +443,19 @@ def _construct_a(effect_fiducials, mdl):
         #A[k,:] = st[0,:] # E_k == kth row of A
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
-            mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probabilities(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
-            A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in mdl.povms[povmLbl]]  # CHECK will this work?
-            del mdl.preps['rho_LGST_tmp']
+            model.preps['rho_LGST_tmp'] = basis_st
+            probs = model.probabilities(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in model.povms[povmLbl]]  # CHECK will this work?
+            del model.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
     return A
 
 
-def _construct_b(prep_fiducials, mdl):
+def _construct_b(prep_fiducials, model):
     n = len(prep_fiducials)
-    dim = mdl.dim
+    dim = model.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
 
@@ -465,16 +465,16 @@ def _construct_b(prep_fiducials, mdl):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    mdl.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
+    model.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
         [("E%d" % i, E) for i, E in enumerate(basis_Es)])
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probabilities(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = model.probabilities(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
-    del mdl.povms['M_LGST_tmp_povm']
+    del model.povms['M_LGST_tmp_povm']
     return B
 
 

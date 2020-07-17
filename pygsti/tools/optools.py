@@ -568,10 +568,10 @@ def entanglement_infidelity(a, b, mx_basis='pp'):
     return 1 - float(entanglement_fidelity(a, b, mx_basis))
 
 
-def gateset_infidelity(mdl, target_model, itype='EI',
+def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None):
     """
-    Computes the average-over-gates of the infidelity between gates in `mdl` and the gates in `target_model`.
+    Computes the average-over-gates of the infidelity between gates in `model` and the gates in `target_model`.
 
     If `itype` is 'EI' then the "infidelity" is the entanglement infidelity; if
     `itype` is 'AGI' then the "infidelity" is the average gate infidelity (AGI
@@ -582,11 +582,11 @@ def gateset_infidelity(mdl, target_model, itype='EI',
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to calculate the average infidelity, to `target_model`, of.
 
     target_model : Model
-        The model to calculate the average infidelity, to `mdl`, of.
+        The model to calculate the average infidelity, to `model`, of.
 
     itype : str, optional
         The infidelity type. Either 'EI', corresponding to entanglement
@@ -594,7 +594,7 @@ def gateset_infidelity(mdl, target_model, itype='EI',
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are, possibly unnormalized, probabilities.
+        in `model` and the values are, possibly unnormalized, probabilities.
         These probabilities corresponding to the weighting in the average,
         so if the model contains gates A and B and weights[A] = 2 and
         weights[B] = 1 then the output is Inf(A)*2/3  + Inf(B)/3 where
@@ -614,15 +614,15 @@ def gateset_infidelity(mdl, target_model, itype='EI',
     assert(itype == 'AGI' or itype == 'EI'), \
         "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
 
-    if mx_basis is None: mx_basis = mdl.basis
+    if mx_basis is None: mx_basis = model.basis
 
     sum_of_weights = 0
     I_list = []
     for gate in list(target_model.operations.keys()):
         if itype == 'AGI':
-            I = average_gate_infidelity(mdl.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = average_gate_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
         if itype == 'EI':
-            I = entanglement_infidelity(mdl.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = entanglement_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
         if weights is None:
             w = 1
         else:

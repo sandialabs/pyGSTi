@@ -21,7 +21,7 @@ import numpy as _np
 import warnings as _warnings
 
 
-def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
+def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """
     Predicts the RB error rate from a model.
 
@@ -43,7 +43,7 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to calculate the RB number of. This model is the
         model randomly sampled over, so this is not necessarily the
         set of physical primitives. In Clifford RB this is a set of
@@ -51,13 +51,13 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
         physical primitives.
 
     target_model : Model
-        The target model, corresponding to `mdl`. This function is not invariant
-        under swapping `mdl` and `target_model`: this Model must be the target model,
+        The target model, corresponding to `model`. This function is not invariant
+        under swapping `model` and `target_model`: this Model must be the target model,
         and should consistent of perfect gates.
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are the unnormalized probabilities to apply
+        in `model` and the values are the unnormalized probabilities to apply
         each gate at each stage of the RB protocol. If not None, the values
         in weights must all be non-negative, and they must not all be zero.
         Because, when divided by their sum, they must be a valid probability
@@ -66,7 +66,7 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
         But, this weighting is flexible in the "direct RB" protocol.
 
     d : int, optional
-        The Hilbert space dimension.  If None, then sqrt(mdl.dim) is used.
+        The Hilbert space dimension.  If None, then sqrt(model.dim) is used.
 
     rtype : str, optional
         The type of RB error rate, either "EI" or "AGI", corresponding to
@@ -90,13 +90,13 @@ def predicted_rb_number(mdl, target_model, weights=None, d=None, rtype='EI'):
     r : float.
         The predicted RB number.
     """
-    if d is None: d = int(round(_np.sqrt(mdl.dim)))
-    p = predicted_rb_decay_parameter(mdl, target_model, weights=weights)
+    if d is None: d = int(round(_np.sqrt(model.dim)))
+    p = predicted_rb_decay_parameter(model, target_model, weights=weights)
     r = _rbtls.p_to_r(p, d=d, rtype=rtype)
     return r
 
 
-def predicted_rb_decay_parameter(mdl, target_model, weights=None):
+def predicted_rb_decay_parameter(model, target_model, weights=None):
     """
     Computes the second largest eigenvalue of the 'L matrix' (see the `L_matrix` function).
 
@@ -106,7 +106,7 @@ def predicted_rb_decay_parameter(mdl, target_model, weights=None):
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to calculate the RB decay parameter of. This model is the
         model randomly sampled over, so this is not necessarily the
         set of physical primitives. In Clifford RB this is a set of
@@ -114,13 +114,13 @@ def predicted_rb_decay_parameter(mdl, target_model, weights=None):
         physical primitives.
 
     target_model : Model
-        The target model corresponding to mdl. This function is not invariant under
-        swapping `mdl` and `target_model`: this Model must be the target model, and
+        The target model corresponding to model. This function is not invariant under
+        swapping `model` and `target_model`: this Model must be the target model, and
         should consistent of perfect gates.
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are the unnormalized probabilities to apply
+        in `model` and the values are the unnormalized probabilities to apply
         each gate at each stage of the RB protocol. If not None, the values
         in weights must all be non-negative, and they must not all be zero.
         Because, when divided by their sum, they must be a valid probability
@@ -134,7 +134,7 @@ def predicted_rb_decay_parameter(mdl, target_model, weights=None):
         The second largest eigenvalue of L. This is the RB decay parameter
         for various types of RB.
     """
-    L = L_matrix(mdl, target_model, weights=weights)
+    L = L_matrix(model, target_model, weights=weights)
     E = _np.absolute(_np.linalg.eigvals(L))
     E = _np.flipud(_np.sort(E))
     if abs(E[0] - 1) > 10**(-12):
@@ -146,32 +146,32 @@ def predicted_rb_decay_parameter(mdl, target_model, weights=None):
     return p
 
 
-def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
+def rb_gauge(model, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
     Computes the gauge transformation required so that the RB number matches the average model infidelity.
 
     This function computes the gauge transformation required so that, when the
     model is transformed via this gauge-transformation, the RB number -- as
     predicted by the function `predicted_rb_number` -- is the average model
-    infidelity between the transformed `mdl` model and the target model
+    infidelity between the transformed `model` model and the target model
     `target_model`. This transformation is defined Proctor et al
     Phys. Rev. Lett. 119, 130502 (2017), and see also Wallman Quantum 2, 47
     (2018).
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The RB model. This is not necessarily the set of physical primitives -- it
         is the model randomly sampled over in the RB protocol (e.g., the Cliffords).
 
     target_model : Model
-        The target model corresponding to mdl. This function is not invariant under
-        swapping `mdl` and `target_model`: this Model must be the target model, and
+        The target model corresponding to model. This function is not invariant under
+        swapping `model` and `target_model`: this Model must be the target model, and
         should consistent of perfect gates.
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are the unnormalized probabilities to apply
+        in `model` and the values are the unnormalized probabilities to apply
         each gate at each stage of the RB protocol. If not None, the values
         in weights must all be non-negative, and they must not all be zero.
         Because, when divided by their sum, they must be a valid probability
@@ -195,7 +195,7 @@ def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighti
     l_operator : array
         The matrix defining the gauge-transformation.
     """
-    gam, vecs = _np.linalg.eig(L_matrix(mdl, target_model, weights=weights))
+    gam, vecs = _np.linalg.eig(L_matrix(model, target_model, weights=weights))
     absgam = abs(gam)
     index_max = _np.argmax(absgam)
     gam_max = gam[index_max]
@@ -212,7 +212,7 @@ def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighti
     vec_l_operator = vecs[:, index_max] + eigenvector_weighting * vecs[:, index_2ndmax]
 
     if mx_basis is None:
-        mx_basis = mdl.basis.name
+        mx_basis = model.basis.name
     assert(mx_basis == 'pp' or mx_basis == 'gm' or mx_basis == 'std'), "mx_basis must be 'gm', 'pp' or 'std'."
 
     if mx_basis in ('pp', 'gm'):
@@ -225,7 +225,7 @@ def rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighti
     return l_operator
 
 
-def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
+def transform_to_rb_gauge(model, target_model, weights=None, mx_basis=None, eigenvector_weighting=1.0):
     """
     Transforms a Model into the "RB gauge" (see the `RB_gauge` function).
 
@@ -236,18 +236,18 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The RB model. This is not necessarily the set of physical primitives -- it
         is the model randomly sampled over in the RB protocol (e.g., the Cliffords).
 
     target_model : Model
-        The target model corresponding to mdl. This function is not invariant under
-        swapping `mdl` and `target_model`: this Model must be the target model, and
+        The target model corresponding to model. This function is not invariant under
+        swapping `model` and `target_model`: this Model must be the target model, and
         should consistent of perfect gates.
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are the unnormalized probabilities to apply
+        in `model` and the values are the unnormalized probabilities to apply
         each gate at each stage of the RB protocol. If not None, the values
         in weights must all be non-negative, and they must not all be zero.
         Because, when divided by their sum, they must be a valid probability
@@ -268,18 +268,18 @@ def transform_to_rb_gauge(mdl, target_model, weights=None, mx_basis=None, eigenv
 
     Returns
     -------
-    mdl_in_RB_gauge : Model
-        The model `mdl` transformed into the "RB gauge".
+    model_in_RB_gauge : Model
+        The model `model` transformed into the "RB gauge".
     """
-    l = rb_gauge(mdl, target_model, weights=weights, mx_basis=mx_basis,
+    l = rb_gauge(model, target_model, weights=weights, mx_basis=mx_basis,
                  eigenvector_weighting=eigenvector_weighting)
-    mdl_in_RB_gauge = mdl.copy()
+    model_in_RB_gauge = model.copy()
     S = _objs.FullGaugeGroupElement(_np.linalg.inv(l))
-    mdl_in_RB_gauge.transform_inplace(S)
-    return mdl_in_RB_gauge
+    model_in_RB_gauge.transform_inplace(S)
+    return model_in_RB_gauge
 
 
-def L_matrix(mdl, target_model, weights=None):  # noqa N802
+def L_matrix(model, target_model, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'L-matrix' linear operator on superoperators.
 
@@ -292,18 +292,18 @@ def L_matrix(mdl, target_model, weights=None):  # noqa N802
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The RB model. This is not necessarily the set of physical primitives -- it
         is the model randomly sampled over in the RB protocol (e.g., the Cliffords).
 
     target_model : Model
-        The target model corresponding to mdl. This function is not invariant under
-        swapping `mdl` and `target_model`: this Model must be the target model, and
+        The target model corresponding to model. This function is not invariant under
+        swapping `model` and `target_model`: this Model must be the target model, and
         should consistent of perfect gates.
 
     weights : dict, optional
         If not None, a dictionary of floats, whereby the keys are the gates
-        in `mdl` and the values are the unnormalized probabilities to apply
+        in `model` and the values are the unnormalized probabilities to apply
         each gate at each stage of the RB protocol. If not None, the values
         in weights must all be non-negative, and they must not all be zero.
         Because, when divided by their sum, they must be a valid probability
@@ -325,13 +325,13 @@ def L_matrix(mdl, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
-            mdl.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
+            model.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
         ) for key in target_model.operations.keys())
 
     return L_matrix
 
 
-def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weights=None):  # noqa N802
+def R_matrix_predicted_rb_decay_parameter(model, group, group_to_model=None, weights=None):  # noqa N802
     """
     Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the `R_matrix` function].
 
@@ -343,24 +343,24 @@ def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weigh
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to predict the RB decay paramter for. If `group_to_model` is
-        None, the labels of the gates in `mdl` should be the  same as the labels of the
+        None, the labels of the gates in `model` should be the  same as the labels of the
         group elements in `group`. For Clifford RB this would be the clifford model,
         for direct RB it would be the primitive gates.
 
     group : MatrixGroup
-        The group that the `mdl` model contains gates from (`mdl` does not
+        The group that the `model` model contains gates from (`model` does not
         need to be the full group, and could be a subset of `group`). For
         Clifford RB and direct RB, this would be the Clifford group.
 
     group_to_model : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of `mdl`. If `mdl` and `group` elements have the same labels, this dictionary
+        of `model`. If `model` and `group` elements have the same labels, this dictionary
         is not required. Otherwise it is necessary.
 
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in `mdl`
+        If not None, a dictionary of floats, whereby the keys are the gates in `model`
         and the values are the unnormalized probabilities to apply each gate at
         each stage of the RB protocol. If not None, the values in weights must all
         be positive or zero, and they must not all be zero (because, when divided by
@@ -374,14 +374,14 @@ def R_matrix_predicted_rb_decay_parameter(mdl, group, group_to_model=None, weigh
         The predicted RB decay parameter. Valid for standard Clifford RB or direct RB
         with trace-preserving gates, and in a range of other circumstances.
     """
-    R = R_matrix(mdl, group, group_to_model=group_to_model, weights=weights)
+    R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
     E = _np.absolute(_np.linalg.eigvals(R))
     E = _np.flipud(_np.sort(E))
     p = E[1]
     return p
 
 
-def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
+def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
     """
     Constructs a generalization of the 'R-matrix' of Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
 
@@ -391,26 +391,26 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The noisy model (e.g., the Cliffords) to calculate the R matrix of.
         The correpsonding `target` model (not required in this function)
         must be equal to or a subset of (a faithful rep of) the group `group`.
-        If `group_to_model `is None, the labels of the gates in mdl should be
+        If `group_to_model `is None, the labels of the gates in model should be
         the same as the labels of the corresponding group elements in `group`.
-        For Clifford RB `mdl` should be the clifford model; for direct RB
+        For Clifford RB `model` should be the clifford model; for direct RB
         this should be the native model.
 
     group : MatrixGroup
-        The group that the `mdl` model contains gates from. For Clifford RB
+        The group that the `model` model contains gates from. For Clifford RB
         or direct RB, this would be the Clifford group.
 
     group_to_model : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of mdl. This is required if the labels of the gates in `mdl` are different
+        of model. This is required if the labels of the gates in `model` are different
         from the labels of the corresponding group elements in `group`.
 
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in mdl
+        If not None, a dictionary of floats, whereby the keys are the gates in model
         and the values are the unnormalized probabilities to apply each gate at
         for each layer of the RB protocol. If None, the weighting defaults to an
         equal weighting on all gates, as used in most RB protocols (e.g., Clifford
@@ -423,23 +423,23 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
         et al Phys. Rev. Lett. 119, 130502 (2017).
     """
     if group_to_model is None:
-        for key in list(mdl.operations.keys()):
+        for key in list(model.operations.keys()):
             assert(key in group.labels), "Gates labels are not in `group`!"
     else:
-        for key in list(mdl.operations.keys()):
+        for key in list(model.operations.keys()):
             assert(key in group_to_model.values()), "Gates labels are not in `group_to_model`!"
 
-    d = int(round(_np.sqrt(mdl.dim)))
+    d = int(round(_np.sqrt(model.dim)))
     group_dim = len(group)
     R_dim = group_dim * d**2
     R = _np.zeros([R_dim, R_dim], float)
 
     if weights is None:
         weights = {}
-        for key in list(mdl.operations.keys()):
+        for key in list(model.operations.keys()):
             weights[key] = 1.
 
-    normalizer = _np.sum(_np.array([weights[key] for key in list(mdl.operations.keys())]))
+    normalizer = _np.sum(_np.array([weights[key] for key in list(model.operations.keys())]))
 
     for i in range(0, group_dim):
         for j in range(0, group_dim):
@@ -447,18 +447,18 @@ def R_matrix(mdl, group, group_to_model=None, weights=None):  # noqa N802
             if group_to_model is not None:
                 if label_itoj in group_to_model:
                     gslabel = group_to_model[label_itoj]
-                    R[j * d**2:(j + 1) * d**2, i * d**2:(i + 1) * d**2] = weights[gslabel] * mdl.operations[gslabel]
+                    R[j * d**2:(j + 1) * d**2, i * d**2:(i + 1) * d**2] = weights[gslabel] * model.operations[gslabel]
             else:
-                if label_itoj in list(mdl.operations.keys()):
+                if label_itoj in list(model.operations.keys()):
                     gslabel = label_itoj
-                    R[j * d**2:(j + 1) * d**2, i * d**2:(i + 1) * d**2] = weights[gslabel] * mdl.operations[gslabel]
+                    R[j * d**2:(j + 1) * d**2, i * d**2:(i + 1) * d**2] = weights[gslabel] * model.operations[gslabel]
 
     R = R / normalizer
 
     return R
 
 
-def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+def exact_rb_asps(model, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
                   group_to_model=None, weights=None, compilation=None, group_twirled=False):
     """
     Calculates the exact RB average success probablilites (ASP).
@@ -470,17 +470,17 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The noisy model (e.g., the Cliffords) to calculate the R matrix of.
         The correpsonding `target` model (not required in this function)
         must be equal to or a subset of (a faithful rep of) the group `group`.
-        If group_to_model is None, the labels of the gates in mdl should be
+        If group_to_model is None, the labels of the gates in model should be
         the same as the labels of the corresponding group elements in `group`.
-        For Clifford RB `mdl` should be the clifford model; for direct RB
+        For Clifford RB `model` should be the clifford model; for direct RB
         this should be the native model.
 
     group : MatrixGroup
-        The group that the `mdl` model contains gates from. For Clifford RB
+        The group that the `model` model contains gates from. For Clifford RB
         or direct RB, this would be the Clifford group.
 
     m_max : int
@@ -499,26 +499,26 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
 
     group_to_model : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of mdl. This is required if the labels of the gates in `mdl` are different
+        of model. This is required if the labels of the gates in `model` are different
         from the labels of the corresponding group elements in `group`.
 
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in mdl
+        If not None, a dictionary of floats, whereby the keys are the gates in model
         and the values are the unnormalized probabilities to apply each gate at
         for each layer of the RB protocol. If None, the weighting defaults to an
         equal weighting on all gates, as used in most RB protocols (e.g., Clifford
         RB).
 
     compilation : dict, optional
-        If `mdl` is not the full group `group` (with the same labels), then a
+        If `model` is not the full group `group` (with the same labels), then a
         compilation for the group elements, used to implement the inversion gate
         (and the initial randomgroup element, if `group_twirled` is True). This
         is a dictionary with the group labels as keys and a gate sequence of the
-        elements of `mdl` as values.
+        elements of `model` as values.
 
     group_twirled : bool, optional
         If True, the random sequence starts with a single uniformly random group
-        element before the m random elements of `mdl`.
+        element before the m random elements of `model`.
 
     Returns
     -------
@@ -529,28 +529,28 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
         Array containing ASP values for the specified sequence length values.
     """
     if compilation is None:
-        for key in list(mdl.operations.keys()):
+        for key in list(model.operations.keys()):
             assert(key in group.labels), "Gates labels are not in `group`, so `compilation must be specified."
         for label in group.labels:
-            assert(label in list(mdl.operations.keys())
-                   ), "Some group elements not in `mdl`, so `compilation must be specified."
+            assert(label in list(model.operations.keys())
+                   ), "Some group elements not in `model`, so `compilation must be specified."
 
     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
     m = _np.zeros(1 + i_max, int)
     P_m = _np.zeros(1 + i_max, float)
     group_dim = len(group)
-    R = R_matrix(mdl, group, group_to_model=group_to_model, weights=weights)
-    success_prepLabel = list(mdl.preps.keys())[0]  # just take first prep
+    R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
+    success_prepLabel = list(model.preps.keys())[0]  # just take first prep
     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
-    extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, mdl.povms['Mdefault'][success_effectLabel].T)
-    extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), mdl.preps[success_prepLabel])
+    extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, model.povms['Mdefault'][success_effectLabel].T)
+    extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), model.preps[success_prepLabel])
 
     if compilation is None:
         extended_E = group_dim * _np.dot(extended_E, R)
         if group_twirled is True:
             extended_rho = _np.dot(R, extended_rho)
     else:
-        full_model = _cnst.create_explicit_alias_model(mdl, compilation)
+        full_model = _cnst.create_explicit_alias_model(model, compilation)
         R_fullgroup = R_matrix(full_model, group)
         extended_E = group_dim * _np.dot(extended_E, R_fullgroup)
         if group_twirled is True:
@@ -566,14 +566,14 @@ def exact_rb_asps(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
     return m, P_m
 
 
-def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
+def L_matrix_asps(model, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
                   return_error_bounds=False, norm='diamond'):
     """
     Computes RB average survival probablities, as predicted by the 'L-matrix' theory.
 
     This theory was introduced in Proctor et al Phys. Rev. Lett. 119, 130502
-    (2017). Within the function, the mdl is gauge-optimized to target_model. This is
+    (2017). Within the function, the model is gauge-optimized to target_model. This is
     *not* optimized to the gauge specified by Proctor et al, but instead performs the
     standard pyGSTi gauge-optimization (using the frobenius distance). In most cases,
     this is likely to be a reasonable proxy for the gauge optimization perscribed by
@@ -581,7 +581,7 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The noisy model.
 
     target_model : Model
@@ -600,17 +600,17 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
         The outcome label associated with success.
 
     compilation : dict, optional
-        If `mdl` is not the full group, then a compilation for the group elements,
+        If `model` is not the full group, then a compilation for the group elements,
         used to implement the inversion gate (and the initial random group element,
         if `group_twirled` is True). This is a dictionary with the group labels as
-        keys and a gate sequence of the elements of `mdl` as values.
+        keys and a gate sequence of the elements of `model` as values.
 
     group_twirled : bool, optional
         If True, the random sequence starts with a single uniformly random group
-        element before the m random elements of `mdl`.
+        element before the m random elements of `model`.
 
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in mdl
+        If not None, a dictionary of floats, whereby the keys are the gates in model
         and the values are the unnormalized probabilities to apply each gate at
         for each layer of the RB protocol. If None, the weighting defaults to an
         equal weighting on all gates, as used in most RB protocols (e.g., Clifford
@@ -649,31 +649,31 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
         upper_bound: float
             Array containing upper bounds on the possible ASP values
     """
-    d = int(round(_np.sqrt(mdl.dim)))
+    d = int(round(_np.sqrt(model.dim)))
 
     if gauge_optimize:
-        mdl_go = _algs.gaugeopt_to_target(mdl, target_model)
+        model_go = _algs.gaugeopt_to_target(model, target_model)
     else:
-        mdl_go = mdl.copy()
-    L = L_matrix(mdl_go, target_model, weights=weights)
-    success_prepLabel = list(mdl.preps.keys())[0]  # just take first prep
+        model_go = model.copy()
+    L = L_matrix(model_go, target_model, weights=weights)
+    success_prepLabel = list(model.preps.keys())[0]  # just take first prep
     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
     identity_vec = _mtls.vec(_np.identity(d**2, float))
 
     if compilation is not None:
-        mdl_group = _cnst.create_explicit_alias_model(mdl_go, compilation)
-        mdl_target_group = _cnst.create_explicit_alias_model(target_model, compilation)
-        delta = gate_dependence_of_errormaps(mdl_group, mdl_target_group, norm=norm)
-        emaps = errormaps(mdl_group, mdl_target_group)
-        E_eff = _np.dot(mdl_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
+        model_group = _cnst.create_explicit_alias_model(model_go, compilation)
+        model_target_group = _cnst.create_explicit_alias_model(target_model, compilation)
+        delta = gate_dependence_of_errormaps(model_group, model_target_group, norm=norm)
+        emaps = errormaps(model_group, model_target_group)
+        E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
 
         if group_twirled is True:
-            L_group = L_matrix(mdl_group, mdl_target_group)
+            L_group = L_matrix(model_group, model_target_group)
 
     if compilation is None:
-        delta = gate_dependence_of_errormaps(mdl_go, target_model, norm=norm)
-        emaps = errormaps(mdl_go, target_model)
-        E_eff = _np.dot(mdl_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
+        delta = gate_dependence_of_errormaps(model_go, target_model, norm=norm)
+        emaps = errormaps(model_go, target_model)
+        E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
 
     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
     m = _np.zeros(1 + i_max, int)
@@ -689,7 +689,7 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
             L_m_rdd = _mtls.unvec(_np.dot(L_group, _np.dot(Literate, identity_vec)))
         else:
             L_m_rdd = _mtls.unvec(_np.dot(Literate, identity_vec))
-        P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, mdl_go.preps[success_prepLabel]))
+        P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, model_go.preps[success_prepLabel]))
         Literate = _np.dot(Lstep, Literate)
         upper_bound[i] = P_m[i] + delta / 2
         lower_bound[i] = P_m[i] - delta / 2
@@ -703,7 +703,7 @@ def L_matrix_asps(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
         return m, P_m
 
 
-def errormaps(mdl, target_model):
+def errormaps(model, target_model):
     """
     Computes the 'left-multiplied' error maps associated with a noisy gate set, along with the average error map.
 
@@ -717,7 +717,7 @@ def errormaps(mdl, target_model):
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The imperfect model.
 
     target_model : Model
@@ -730,9 +730,9 @@ def errormaps(mdl, target_model):
         with the key 'Gavg'.
     """
     errormaps_gate_list = []
-    errormaps = mdl.copy()
+    errormaps = model.copy()
     for gate in list(target_model.operations.keys()):
-        errormaps.operations[gate] = _np.dot(mdl.operations[gate],
+        errormaps.operations[gate] = _np.dot(model.operations[gate],
                                              _np.transpose(target_model.operations[gate]))
         errormaps_gate_list.append(errormaps.operations[gate])
 
@@ -741,7 +741,7 @@ def errormaps(mdl, target_model):
     return errormaps
 
 
-def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=None):
+def gate_dependence_of_errormaps(model, target_model, norm='diamond', mx_basis=None):
     """
     Computes the "gate-dependence of errors maps" parameter defined by
 
@@ -753,7 +753,7 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The actual model
 
     target_model : Model
@@ -772,11 +772,11 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
     delta_avg : float
         The value of the parameter defined above.
     """
-    error_gs = errormaps(mdl, target_model)
+    error_gs = errormaps(model, target_model)
     delta = []
 
     if mx_basis is None:
-        mx_basis = mdl.basis.name
+        mx_basis = model.basis.name
     assert(mx_basis == 'pp' or mx_basis == 'gm' or mx_basis == 'std'), "mx_basis must be 'gm', 'pp' or 'std'."
 
     for gate in list(target_model.operations.keys()):
@@ -795,17 +795,17 @@ def gate_dependence_of_errormaps(mdl, target_model, norm='diamond', mx_basis=Non
     return delta_avg
 
 # Future : perhaps put these back in.
-#def Magesan_theory_predicted_decay(mdl, target_model, mlist, success_outcomelabel=('0',),
+#def Magesan_theory_predicted_decay(model, target_model, mlist, success_outcomelabel=('0',),
 #                                   norm='1to1', order='zeroth', return_all = False):
 #
 #    assert(order == 'zeroth' or order == 'first')
 #
-#    d = int(round(_np.sqrt(mdl.dim)))
+#    d = int(round(_np.sqrt(model.dim)))
 #    MTPs = {}
-#    MTPs['r'] = gateset_infidelity(mdl,target_model,itype='AGI')
+#    MTPs['r'] = gateset_infidelity(model,target_model,itype='AGI')
 #    MTPs['p'] = _analysis.r_to_p(MTPs['r'],d,rtype='AGI')
-#    MTPs['delta'] = gate_dependence_of_errormaps(mdl, target_model, norm)
-#    error_gs = errormaps(mdl, target_model)
+#    MTPs['delta'] = gate_dependence_of_errormaps(model, target_model, norm)
+#    error_gs = errormaps(model, target_model)
 #
 #    R_list = []
 #    Q_list = []
