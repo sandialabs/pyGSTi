@@ -605,7 +605,7 @@ class _DataSetRow(object):
         """
         Dictionary of per-outcome fractions.
         """
-        cnts = self._get_counts(all_outcomes)
+        cnts = self._get_counts(None, all_outcomes)
         total = sum(cnts.values())
         return _ld.OutcomeLabelDict([(k, cnt / total) for k, cnt in cnts.items()])
 
