@@ -19,6 +19,7 @@ import itertools as _itertools
 from ..objects import dataset as _ds
 from ..objects import labeldicts as _ld
 from ..objects import label as _lbl
+from ..protocols import ExperimentDesign as _ExperimentDesign
 from . import circuitconstruction as _gstrc
 
 from pprint import pprint
@@ -34,13 +35,16 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
     Parameters
     ----------
     model_or_dataset : Model or DataSet object
+        The source of the underlying probabilities used to generate the data.
         If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
 
-    circuit_list : list of (tuples or Circuits) or None
+    circuit_list : list of (tuples or Circuits) or ExperimentDesign or None
         Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
+        If an :class:`ExperimentDesign`, then the design's `.all_circuits_needing_data`
+        list is used as the circuit list.
 
     num_samples : int or list of ints or None
         The simulated number of samples for each circuit.  This only has
@@ -129,6 +133,9 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
     if alias_dict:
         alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                       for ky, val in alias_dict.items()}  # convert to use Labels
+
+    if isinstance(circuit_list, _ExperimentDesign):
+        circuit_list = circuit_list.all_circuits_needing_data
 
     if gsGen and times is None:
         if alias_dict is not None:
