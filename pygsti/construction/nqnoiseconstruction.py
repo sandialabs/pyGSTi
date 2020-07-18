@@ -2152,10 +2152,8 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
             full_core_list.append(gl)
 
     # form all low-length strings out of these gates.
-    print("DB: CANDIDATE LIST: oplabel_list=", oplabel_list, " full_core_list=", full_core_list)
     candidate_germs = []
     for i, (germLength, count) in enumerate(candidate_counts.items()):
-        print("DB:   Candidates[0:5] = ", candidate_germs[0:5], " germLen=", germLength, "count=", count)
         if count == "all upto":
             candidate_germs.extend(_gsc.list_all_circuits_without_powers_and_cycles(
                 oplabel_list, max_length=germLength))
@@ -2163,10 +2161,8 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
             candidate_germs.extend(_gsc.list_random_circuits_onelen(
                 oplabel_list, germLength, count, seed=seed_start + i))
 
-    print("DB: pre-filter candidate germs = ", candidate_germs[0:10])
     #filter: make sure there's at least one gate in each germ that acts on the *entire* core
     candidate_germs = [g for g in candidate_germs if any([(gl in g) for gl in full_core_list])]  # filter?
-    print("DB: post-filter candidate germs = ", candidate_germs[0:10])
 
     return candidate_germs
 
