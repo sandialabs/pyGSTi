@@ -71,6 +71,7 @@ class ResourceAllocation(object):
         else:
             self.profiler = _dummy_profiler
         self.distribute_method = distribute_method
+        self.reset()  # begin with no memory allocated
 
     def copy(self):
         """
@@ -81,6 +82,37 @@ class ResourceAllocation(object):
         ResourceAllocation
         """
         return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
+
+    def reset(self):
+        """
+        Resets all internal allocation counters to zero.
+
+        Returns
+        -------
+        None
+        """
+        self.allocated_memory = 0
+
+    def track_memory_allocation(self, nbytes):
+        """
+        Adds `nbytes` to the total amount of allocated memory being tracked.
+
+        If the total (tracked) memory exceeds `self.mem_limit` a :class:`MemoryError`
+        exception is raised.
+
+        Parameters
+        ----------
+        nbytes : int
+            The number of alocated bytes to track.
+
+        Returns
+        -------
+        None
+        """
+        self.allocated_memory += nbytes
+        if self.allocated_memory > self.mem_limit:
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
+                              % (self.mem_limit / (1024.0**3)))
 
     def __getstate__(self):
         # Can't pickle comm objects
