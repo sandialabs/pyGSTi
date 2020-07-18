@@ -2152,10 +2152,10 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
             full_core_list.append(gl)
 
     # form all low-length strings out of these gates.
-    print("DB: CANDIDATE LIST: oplabel_list=",oplabel_list," full_core_list=",full_core_list)
+    print("DB: CANDIDATE LIST: oplabel_list=", oplabel_list, " full_core_list=", full_core_list)
     candidate_germs = []
     for i, (germLength, count) in enumerate(candidate_counts.items()):
-        print("DB:   Candidates[0:5] = ",candidate_germs[0:5], " germLen=",germLength, "count=",count)
+        print("DB:   Candidates[0:5] = ", candidate_germs[0:5], " germLen=", germLength, "count=", count)
         if count == "all upto":
             candidate_germs.extend(_gsc.list_all_circuits_without_powers_and_cycles(
                 oplabel_list, max_length=germLength))
