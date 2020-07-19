@@ -883,6 +883,7 @@ class ModelDatasetCircuitsStore(object):
         Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
         """
         if self.firsts is None or force:
+            # FUTURE: add any tracked memory? self.resource_alloc.add_tracked_memory(...)
             self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
             for i, c in enumerate(self.circuits):
                 lklen = _slct.length(self.layout.indices_for_index(i))
@@ -903,6 +904,11 @@ class ModelDatasetCircuitsStore(object):
         Ensure this store contains count and total-count vectors.
         """
         if self.counts is None or self.total_counts is None or force:
+            #Assume if an item is not None the appropriate amt of memory has already been tracked
+            if self.counts is None: self.resource_alloc.add_tracked_memory(self.nelements)
+            if self.total_counts is None: self.resource_alloc.add_tracked_memory(self.nelements)
+            if self.freqs is None: self.resource_alloc.add_tracked_memory(self.nelements)
+
             counts = _np.empty(self.nelements, 'd')
             totals = _np.empty(self.nelements, 'd')
 
@@ -950,6 +956,7 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
         #else:
         #    evt_mlim = None
 
+        #Note: don't add any tracked memory to self.resource_alloc, as none is used yet.
         self.probs = None
         self.dprobs = None
         self.hprobs = None
@@ -4021,15 +4028,24 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
+        self.initial_allocated_memory = self.resource_alloc.allocated_memory
+        self.resource_alloc.add_tracked_memory(self.nelements + (self.nelements + self.ex) * self.nparams)
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
-        self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd') if 'hp' in self.array_types else None
+        if 'hp' in self.array_types:
+            self.resource_alloc.add_tracked_memory(self.nelements * self.nelements * self.nparams)
+            self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
+        else:
+            self.hprobs = None
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.add_count_vectors()
         self.add_omitted_freqs()  # sets self.first and more
 
-    #Model-based regularization and penalty support functions
+    def __del__(self):
+        # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
+        self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
 
+    #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
                       forcefn_grad=None, shift_fctr=100, prob_clip_interval=(-10000, 1000)):
 
@@ -5253,10 +5269,16 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
+        self.initial_allocated_memory = self.resource_alloc.allocated_memory
+        self.resource_alloc.add_tracked_memory(self.nelements + (self.nelements + self.ex) * self.nparams)
         self.v = _np.empty(self.nelements, 'd')
         self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.num_total_outcomes = [self.model.compute_num_outcomes(c) for c in self.circuits]  # to detect sparse-data
+
+    def __del__(self):
+        # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
+        self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
 
     def set_regularization(self):
         """
@@ -5858,6 +5880,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         self.description = logl_objective_fn.description + " + wildcard budget"
 
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
+        self.logl_objfn.resource_alloc.add_tracked_memory(self.logl_objfn.probs.size)
         self.probs = self.logl_objfn.probs.copy()
 
     #def _default_evalpt(self):

@@ -224,6 +224,11 @@ class CustomLMOptimizer(Optimizer):
         jacobian = objective.dlsvec
         x0 = objective.model.to_vector()
 
+        # Check memory limit can handle what custom_leastsq will "allocate"
+        nelements = 0  #TODO -- but idea is that we need to figure out how much allocation is needed before calling 'create_layout', which we wouldn't by now...
+        # so maybe need a mem_estimate function?  
+        objective.resource_alloc.check_can_allocate_memory(nelements)
+
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,

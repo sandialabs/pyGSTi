@@ -9,6 +9,7 @@ Resource allocation manager
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+import numpy as _np
 from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -83,9 +84,14 @@ class ResourceAllocation(object):
         """
         return ResourceAllocation(self.comm, self.mem_limit, self.profiler, self.distribute_method)
 
-    def reset(self):
+    def reset(self, allocated_memory=0):
         """
-        Resets all internal allocation counters to zero.
+        Resets internal allocation counters to given values (defaults to zero).
+
+        Parameters
+        ----------
+        allocated_memory : int64
+            The value to set the memory allocation counter to.
 
         Returns
         -------
@@ -93,24 +99,52 @@ class ResourceAllocation(object):
         """
         self.allocated_memory = 0
 
-    def track_memory_allocation(self, nbytes):
+    def add_tracked_memory(self, num_elements, dtype='d'):
         """
-        Adds `nbytes` to the total amount of allocated memory being tracked.
+        Adds `nelements * itemsize` bytes to the total amount of allocated memory being tracked.
 
         If the total (tracked) memory exceeds `self.mem_limit` a :class:`MemoryError`
         exception is raised.
 
         Parameters
         ----------
-        nbytes : int
-            The number of alocated bytes to track.
+        num_elements : int
+            The number of elements to track allocation of.
+
+        dtype : numpy.dtype
+            The type of elements, needed to compute the number of bytes per element.
 
         Returns
         -------
         None
         """
+        nbytes = num_elements * _np.dtype(dtype).itemsize
         self.allocated_memory += nbytes
-        if self.allocated_memory > self.mem_limit:
+        if self.mem_limit is not None and self.allocated_memory > self.mem_limit:
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
+                              % (self.mem_limit / (1024.0**3)))
+
+    def check_can_allocate_memory(self, num_elements, dtype='d'):
+        """
+        Checks that allocating `nelements` doesn't cause the memory limit to be exceeded.
+
+        This memory isn't tracked - it's just added to the current tracked memory and a
+        :class:`MemoryError` exception is raised if the result exceeds `self.mem_limit`.
+
+        Parameters
+        ----------
+        num_elements : int
+            The number of elements to track allocation of.
+
+        dtype : numpy.dtype
+            The type of elements, needed to compute the number of bytes per element.
+
+        Returns
+        -------
+        None
+        """
+        nbytes = num_elements * _np.dtype(dtype).itemsize
+        if self.mem_limit is not None and self.allocated_memory + nbytes > self.mem_limit:
             raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
                               % (self.mem_limit / (1024.0**3)))
 
