@@ -488,7 +488,7 @@ class GSTBadFitOptions(object):
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
-                 wildcard_budget_includes_spam=True, wildcard_smart_init=True):
+                 wildcard_budget_includes_spam=True, wildcard_smart_init=True, wildcard_L1_weights=None):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -496,6 +496,7 @@ class GSTBadFitOptions(object):
         self.actions = tuple(actions)  # e.g. ("wildcard", "Robust+"); empty list => 'do nothing'
         self.wildcard_budget_includes_spam = bool(wildcard_budget_includes_spam)
         self.wildcard_smart_init = bool(wildcard_smart_init)
+        self.wildcard_L1_weights = wildcard_L1_weights
 
 
 class GSTObjFnBuilders(object):
@@ -1623,8 +1624,6 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
 
         elif badfit_typ == "wildcard":
             try:
-                badfit_options = {'wildcard_budget_includes_spam': badfit_options.wildcard_budget_includes_spam,
-                                  'wildcard_smart_init': badfit_options.wildcard_smart_init}
                 unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
                 base_estimate.parameters['unmodeled_error'] = unmodeled
                 # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
@@ -1796,7 +1795,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     comm = mdc_store.resource_alloc.comm
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
     fitqty = _get_fit_qty(mdc_store, parameters)
-    badfit_options = badfit_options or {}
+    badfit_options = GSTBadFitOptions.cast(badfit_options)
     circuits_to_use = mdc_store.circuits
     model = mdc_store.model
     ds = mdc_store.dataset
@@ -1824,8 +1823,18 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     two_dlogl = sum(two_dlogl_terms)
 
     budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
-                                              add_spam=badfit_options.get('wildcard_budget_includes_spam', True),
+                                              add_spam=badfit_options.wildcard_budget_includes_spam,
                                               start_budget=0.0)
+
+    if badfit_options.wildcard_L1_weights:
+        L1weights = _np.ones(budget.num_params)
+        for op_label, weight in badfit_options.wildcard_L1_weights.items():
+            L1weights[budget.primOpLookup[op_label]] = weight
+        printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
+
+        def L1term(wv): return _np.sum(_np.abs(wv) * L1weights)
+    else:
+        def L1term(wv): return _np.linalg.norm(wv, ord=1)
 
     if two_dlogl <= two_dlogl_threshold \
        and sum(_np.clip(two_dlogl_terms - redbox_threshold, 0, None)) < 1e-6:
@@ -1869,7 +1878,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         wvec_init = budget.to_vector()
 
         # Optional: set initial wildcard budget by pushing on each Wvec component individually
-        if badfit_options.get('wildcard_smart_init', True):
+        if badfit_options.wildcard_smart_init:
             MULT = 2                                                                                                    # noqa
             probe = wvec_init.copy()
             for i in range(len(wvec_init)):
@@ -1898,7 +1907,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             printer.log("  Iter %d: trying eta = %g" % (num_iters, eta))
 
             def _wildcard_objective(wv):
-                return _wildcard_objective_firstterms(wv) + eta * _np.linalg.norm(wv, ord=1)
+                return _wildcard_objective_firstterms(wv) + eta * L1term(wv)
 
             #TODO REMOVE
             #import bpdb; bpdb.set_trace()
@@ -1912,7 +1921,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                              " - this *increases* the runtime significantly."), 2)
 
                 def callbackf(wv):
-                    a, b = _wildcard_objective_firstterms(wv), eta * _np.linalg.norm(wv, ord=1)
+                    a, b = _wildcard_objective_firstterms(wv), eta * L1term(wv)
                     printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(wv)), 2)
             else:
                 callbackf = None

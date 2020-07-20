@@ -79,6 +79,17 @@ class WildcardBudget(object):
         """
         self.wildcard_vector = w_vec
 
+    @property
+    def num_params(self):
+        """
+        The number of parameters of this wildcard budget.
+
+        Returns
+        -------
+        int
+        """
+        return len(self.wildcard_vector)
+
     def circuit_budget(self, circuit):
         """
         Get the amount of wildcard budget, or "outcome-probability-slack" for `circuit`.
@@ -594,6 +605,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         if add_spam:
             nPrimOps += 1
             self.spam_index = nPrimOps - 1  # last element is SPAM
+            self.primOpLookup['SPAM'] = self.spam_index
         else:
             self.spam_index = None
 
@@ -662,6 +674,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         """
         wildcardDict = {}
         for lbl, index in self.primOpLookup.items():
+            if lbl == "SPAM": continue  # treated separately below
             wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(self.wildcard_vector[index]))
         if self.spam_index is not None:
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
@@ -687,5 +700,4 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     def __str__(self):
         wildcardDict = {lbl: pos(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
-        if self.spam_index is not None: wildcardDict['SPAM'] = pos(self.wildcard_vector[self.spam_index])
         return "Wildcard budget: " + str(wildcardDict)
