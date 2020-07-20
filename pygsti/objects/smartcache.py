@@ -568,7 +568,7 @@ def digest(obj, custom_digests=None):
                             except CustomDigestError:
                                 pass
                         else:
-                            attribs = list(sorted(dir(v)))
+                            attribs = sorted(v.__dict__.keys()) if hasattr(v, '__dict__') else list(sorted(dir(v)))
                             for k in attribs:
                                 if k.startswith('__'):
                                     continue
