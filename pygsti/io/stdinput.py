@@ -683,6 +683,7 @@ class StdInputParser(object):
                                       check=False, expand_subcircuits=False, occurrence=occurrence_id)
                 #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  # supresses warnings
+                for count_dict in dsCountDicts.values(): count_dict.clear()  # reset before filling
                 self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)
 
                 bSkip = False
