@@ -70,6 +70,14 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_fill_probs': return ('cv',)  # cache of rho-vectors
+        if method_name == 'bulk_fill_dprobs': return ('cv',)  # cache of rho-vectors
+        if method_name == 'bulk_fill_hprobs': return ('cv',)  # cache of rho-vectors
+        return super()._array_types_for_method(method_name)
+
     def __init__(self, model=None, max_cache_size=None):
         super().__init__(model)
         self._max_cache_size = max_cache_size

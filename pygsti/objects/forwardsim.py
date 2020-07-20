@@ -52,6 +52,14 @@ class ForwardSimulator(object):
         The current parameter vector of the Model.
     """
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_probs': return ('p',) + cls.array_types_for_method('bulk_fill_probs')
+        if method_name == 'bulk_dprobs': return ('dp',) + cls.array_types_for_method('bulk_fill_dprobs')
+        if method_name == 'bulk_hprobs': return ('hp',) + cls.array_types_for_method('bulk_fill_hprobs')
+        return ()
+
     def __init__(self, model=None):
         """
         TODO: docstring

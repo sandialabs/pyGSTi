@@ -810,6 +810,14 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
 class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForwardSimulator):
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_fill_probs': return ('cg', 'cp', 'cp')  # cache of gates, scales, and scaleVals
+        if method_name == 'bulk_fill_dprobs': return ('cdg_dist',)  # cache x dim x dim x distributed_nparams
+        if method_name == 'bulk_fill_hprobs': return ('chg_dist',)  # cache x dim x dim x distributed_nparams1 x distributed_nparams2
+        return super()._array_types_for_method(method_name)
+
     def copy(self):
         """
         Return a shallow copy of this MatrixForwardSimulator

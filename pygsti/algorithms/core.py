@@ -749,8 +749,12 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
+            #HERE - mby need to plumb `optimizer` down to mdc_store creation so memory estimate can be accurate.
+            #OLD ('p', 'dp')
+            array_types = optimizer.array_types + mdl.sim.array_types + \
+                _max_array_types([builder.array_types for builder in iteration_objfn_builders + final_objfn_builders])
             mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                        array_types=('p', 'dp'), verbosity=printer - 1)
+                                                        array_types=array_types, verbosity=printer - 1)
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()

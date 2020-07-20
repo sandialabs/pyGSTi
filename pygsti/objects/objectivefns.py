@@ -42,7 +42,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     Parameters
     ----------
     objfn_cls : class
-        The :class:`MDSObjectiveFunction`-derived class to create.
+        The :class:`MDCObjectiveFunction`-derived class to create.
 
     model : Model
         The model.
@@ -114,7 +114,7 @@ class ObjectiveFunctionBuilder(object):
     Parameters
     ----------
     cls_to_build : class
-        The :class:`MDSObjectiveFunction`-derived objective function class to build.
+        The :class:`MDCObjectiveFunction`-derived objective function class to build.
 
     name : str, optional
         A name for the built objective function (can be anything).
@@ -214,7 +214,7 @@ class ObjectiveFunctionBuilder(object):
         Build an objective function.  This is the workhorse method of an :class:`ObjectiveFunctionBuilder`.
 
         Arguments are the additional information needed to construct a
-        :class:`MDSObjectiveFunction` object, beyond what is stored in
+        :class:`MDCObjectiveFunction` object, beyond what is stored in
         this builder object.
 
         Parameters
@@ -237,7 +237,7 @@ class ObjectiveFunctionBuilder(object):
 
         Returns
         -------
-        MDSObjectiveFunction
+        MDCObjectiveFunction
         """
         return self.cls_to_build.create_from(model=model, dataset=dataset, circuits=circuits,
                                              resource_alloc=resource_alloc, verbosity=verbosity,
@@ -262,7 +262,7 @@ class ObjectiveFunctionBuilder(object):
 
         Returns
         -------
-        MDSObjectiveFunction
+        MDCObjectiveFunction
         """
         return self.cls_to_build(mdc_store, verbosity=verbosity,
                                  regularization=self.regularization, penalties=self.penalties,
@@ -1064,15 +1064,25 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
     @classmethod
     def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, enable_hessian=False):
-        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')  # just *guesses* - better to __init__ directly
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
         return cls(raw_objfn, mdc_store, verbosity)
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        if method_name == 'fn': return cls._array_types_for_method('terms')
+        if method_name == 'jacobian': return cls._array_types_for_method('dterms')
+        if method_name == 'terms': return cls._array_types_for_method('lsvec') + ('p',)  # extra 'p' for **2
+        if method_name == 'dterms': return cls._array_types_for_method('dlsvec') + ('dp',)
+        if method_name == 'percircuit': return cls._array_types_for_method('terms') + ('c',)
+        if method_name == 'dpercircuit': return cls._array_types_for_method('dterms') + ('dc',)
+        return ()
+
     def __init__(self, raw_objfn, mdc_store, verbosity=0):
         """
-        Create a new MDSObjectiveFunction.
+        Create a new MDCObjectiveFunction.
 
-        mdc_store is thought to be a normal MDS store, but could also be an evaluated one,
+        mdc_store is thought to be a normal MDC store, but could also be an evaluated one,
         in which case should we take enable_hessian from it?
         """
         EvaluatedModelDatasetCircuitsStore.__init__(self, mdc_store, verbosity)
@@ -4009,15 +4019,54 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
     @classmethod
-    def _create_mdc_store(cls, model, dataset, circuits, resource_alloc, enable_hessian):
-        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+    def _create_mdc_store(cls, model, dataset, circuits, resource_alloc,
+                          method_names=('fn',), optimizer=None):
+        #TODO REMOVE
+        # HERE = self.nelements + (self.nelements + self.ex) * self.nparams)  # HERE - memory for needed array types for store
+        # ALSO - want array types for optimization (LM) - from OPTIMIZER (needs to be passed in?)
+        # ALSO - want array types for (common?) temporary variables - maybe be pessimistic here?  Hopefully it doesn't vary much? - from FWDSIM in model
+        #           -- ADD fwdsim._temporary_array_types(enable_jacobian, enable_hessian)
+        # maybe need an `enable_jacobian=True` also?
+        # maybe have generic function bytes_for_array_types(array_types, total_elements, max_per_processor_elements, derivative_dimensions, max_per_processor_derivative_dimensions)
+        #  that is used by __init__ below (in add_tracked_memory call) and in FWDSIM.create_layout to get memory estimates.
+        #OLD: array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+        
+        #Array types are used to construct memory estimates (as a function of element number, etc) for layout creation.
+        # They account for memory used in:
+        #  1) an optimization method (if present),
+        #  2) objective function methods that will be called (?)
+        #  3) memory taken by (this) store itself - mirrors allocations in __init__ below.
+        array_types = (optimizer.array_types if (optimizer is not None) else 0) + \
+            cls.compute_array_types(method_names)
         return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
 
     @classmethod
     def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
-                    verbosity=0, enable_hessian=False):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, enable_hessian)
+                    verbosity=0, method_names=('fn',), optimizer=None):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc,
+                                          method_names, optimizer)
         return cls(raw_objfn, mdc_store, penalties, verbosity)
+
+    @classmethod
+    def _array_types_for_method(cls, method_name, fsim):
+        if method_name == 'lsvec': return fsim._array_types_for_method('bulk_fill_probs') # more? - from raw_objfn?
+        if method_name == 'terms': return fsim._array_types_for_method('bulk_fill_probs') # more? - from raw_objfn?
+        if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_dprobs') + ('dp',) # more? - from raw_objfn?
+        if method_name == 'dterms': return fsim._array_types_for_method('bulk_fill_dprobs') + ('dp',) # more? - from raw_objfn?
+        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs')  # more? - from raw_objfn?
+        if method_name == 'hessian': return fsim._array_types_for_method('bulk_fill_hprobs')  # more? - from raw_objfn?
+        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('dp',)
+        return ()
+
+    @classmethod
+    def compute_array_types(cls, method_names):
+        #Get array types for arrays allocated as part of this object (not-intermediate) - these are filled in other fns
+        array_types = ('p',) * 4  # self.probs + 3x add_count_vectors
+        if any([x in ('dlsvec', 'dterms') for x in method_names]): array_types += ('dp',)
+        if any([x in ('hessian', 'approximate_hessian') for x in method_names]): array_types += ('hp',)
+        for method_name in method_names:
+            array_types += cls._array_types_for_method(method_name)
+        return array_types
 
     def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
 
@@ -4029,16 +4078,21 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
-        self.resource_alloc.add_tracked_memory(self.nelements + (self.nelements + self.ex) * self.nparams)
+        self.resource_alloc.add_tracked_memory(self.nelements)  # 'p' - see compute_array_types above
         self.probs = _np.empty(self.nelements, 'd')
-        self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+        self.jac = None
+        self.hprobs = None
+
+        if 'dp' in self.array_types:
+            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'dp'
+            self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+
         if 'hp' in self.array_types:
             self.resource_alloc.add_tracked_memory(self.nelements * self.nelements * self.nparams)
             self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
-        else:
-            self.hprobs = None
+
         self.maxCircuitLength = max([len(x) for x in self.circuits])
-        self.add_count_vectors()
+        self.add_count_vectors()  # allocates 3x 'p' arrays
         self.add_omitted_freqs()  # sets self.first and more
 
     def __del__(self):
@@ -5249,11 +5303,27 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0):
-        enable_hessian = False
-        array_types = ('p', 'dp', 'hp') if enable_hessian else ('p', 'dp')
+                    resource_alloc=None, name=None, description=None, verbosity=0,
+                    enable_jacobian=False, enable_hessian=False, optimizer=None):
+        assert(enable_hessian is False), "Hessian is not suppored in " + str(cls)
+        #HERE
+
+        #Array types are used to construct memory estimates (as a function of element number, etc) for layout creation.
+        # They account for memory used in:
+        #  1) an optimization method (if present),
+        #  2) objective function methods that will be called (?)
+        #  3) memory taken by (this) store itself - mirrors allocations in __init__ below.
+        array_types = (optimizer.array_types if (optimizer is not None) else 0) + \
+            cls.compute_array_types(enable_jacobian, enable_hessian)
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
+
+    @classmethod
+    def compute_array_types(cls, enable_jacobian, enable_hessian):
+        array_types = ('p',) * 4  # self.probs + 3x add_count_vectors
+        if enable_jacobian: array_types += ('dp',)
+        if enable_hessian: array_types += ('hp',)
+        return array_types
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         dummy = RawObjectiveFunction({}, mdc_store.resource_alloc, name, description, verbosity)
@@ -5270,9 +5340,14 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
-        self.resource_alloc.add_tracked_memory(self.nelements + (self.nelements + self.ex) * self.nparams)
+        self.resource_alloc.add_tracked_memory(self.nelements)  # 'p' - see compute_array_types above
         self.v = _np.empty(self.nelements, 'd')
-        self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+        self.jac = None
+
+        if 'dp' in self.array_types:
+            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'dp'
+            self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.num_total_outcomes = [self.model.compute_num_outcomes(c) for c in self.circuits]  # to detect sparse-data
 
