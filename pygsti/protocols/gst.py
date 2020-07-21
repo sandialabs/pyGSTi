@@ -488,7 +488,8 @@ class GSTBadFitOptions(object):
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
-                 wildcard_budget_includes_spam=True, wildcard_smart_init=True, wildcard_L1_weights=None):
+                 wildcard_budget_includes_spam=True, wildcard_smart_init=True,
+                 wildcard_L1_weights=None, wildcard_budget_keyname='unmodeled_error'):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -497,6 +498,7 @@ class GSTBadFitOptions(object):
         self.wildcard_budget_includes_spam = bool(wildcard_budget_includes_spam)
         self.wildcard_smart_init = bool(wildcard_smart_init)
         self.wildcard_L1_weights = wildcard_L1_weights
+        self.wildcard_budget_keyname = wildcard_budget_keyname
 
 
 class GSTObjFnBuilders(object):
@@ -1541,8 +1543,8 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starti
                     results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
-def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_builder, optimizer,
-                          resource_alloc=None, verbosity=0):
+def _add_badfit_estimates(results, base_estimate_label, badfit_options,
+                          objfn_builder=None, optimizer=None, resource_alloc=None, verbosity=0):
     """
     Add any and all "bad fit" estimates to `results`.
 
@@ -1580,6 +1582,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
     if badfit_options is None:
         return  # nothing to do
 
+    badfit_options = GSTBadFitOptions.cast(badfit_options)
     base_estimate = results.estimates[base_estimate_label]
     parameters = base_estimate.parameters
     mdc_store = parameters.get('final_objfn_store', None)
@@ -1617,7 +1620,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
 
         if badfit_typ in ("robust", "Robust", "robust+", "Robust+"):
             new_params['weights'] = _compute_robust_scaling(badfit_typ, mdc_store, parameters)
-            if badfit_typ in ("Robust", "Robust+") and (optimizer is not None):
+            if badfit_typ in ("Robust", "Robust+") and (optimizer is not None) and (objfn_builder is not None):
                 mdl_reopt = _reoptimize_with_weights(mdc_store, new_params['weights'],
                                                      objfn_builder, optimizer, printer - 1)
                 new_final_model = mdl_reopt
@@ -1625,8 +1628,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options, objfn_bu
         elif badfit_typ == "wildcard":
             try:
                 unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
-                base_estimate.parameters['unmodeled_error'] = unmodeled
-                # new_params['unmodeled_error'] = unmodeled  # OLD: when we created a new estimate (seems unneces
+                base_estimate.parameters[badfit_options.wildcard_budget_keyname] = unmodeled
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 new_params['unmodeled_error'] = None
