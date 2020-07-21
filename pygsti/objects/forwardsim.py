@@ -55,9 +55,9 @@ class ForwardSimulator(object):
     @classmethod
     def _array_types_for_method(cls, method_name):
         # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
-        if method_name == 'bulk_probs': return ('p',) + cls.array_types_for_method('bulk_fill_probs')
-        if method_name == 'bulk_dprobs': return ('dp',) + cls.array_types_for_method('bulk_fill_dprobs')
-        if method_name == 'bulk_hprobs': return ('hp',) + cls.array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'bulk_probs': return ('E',) + cls.array_types_for_method('bulk_fill_probs')
+        if method_name == 'bulk_dprobs': return ('EP',) + cls.array_types_for_method('bulk_fill_dprobs')
+        if method_name == 'bulk_hprobs': return ('EPP',) + cls.array_types_for_method('bulk_fill_hprobs')
         return ()
 
     def __init__(self, model=None):
@@ -838,3 +838,34 @@ class CacheForwardSimulator(ForwardSimulator):
         # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
         # derivatives of each specified circuit outcome probability.
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
+
+
+def _bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
+                          total_circuits, max_per_processor_circuits,
+                          derivative_dimensions, max_per_processor_derivative_dimensions,
+                          max_per_processor_cachesize, dim, dtype='d'):
+    bytes_per_item = _np.dtype(dtype).itemsize
+
+    size = 1; cur_deriv_dim = 0
+    for letter in array_type:
+        if letter == 'E': size *= total_elements
+        if letter == 'e': size *= max_per_processor_elements
+        if letter == 'C': size *= total_circuits
+        if letter == 'c': size *= max_per_processor_circuits
+        if letter == 'P':
+            size *= derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+        if letter == 'p':
+            size *= max_per_processor_derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+        if letter == 'z': size *= max_per_processor_cachesize
+        if letter == 'd': size *= dim
+    return size * bytes_per_item
+
+
+def _bytes_for_array_types(array_types, total_elements, max_per_processor_elements,
+                           total_circuits, max_per_processor_circuits,
+                           derivative_dimensions, max_per_processor_derivative_dimensions,
+                           max_per_processor_cachesize, dim, dtype='d'):  # cache is only local to processors
+    return sum([_bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
+                                      total_circuits, max_per_processor_circuits,
+                                      derivative_dimensions, max_per_processor_derivative_dimensions,
+                                      max_per_processor_cachesize, dim, dtype) for array_type in array_types])

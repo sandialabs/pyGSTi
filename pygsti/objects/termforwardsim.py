@@ -297,7 +297,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                     self.perr_heuristic, self. max_term_stages, self.path_fraction_threshold,
                                     self.oob_check_interval, self.cache)
 
-    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
 
         #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the

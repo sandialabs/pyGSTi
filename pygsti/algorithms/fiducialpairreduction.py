@@ -159,7 +159,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                 expGerm=expGerm, pp=prep_povm_tuples, order=('f0', 'f1', 'pp'))
 
             layout = target_model.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
-                                                    array_types=('dp',), verbosity=0)
+                                                    array_types=('EP',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
             dP = _np.empty((layout.num_elements, target_model.num_params), 'd')
@@ -409,7 +409,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 order=('f0', 'f1', 'pp'))
 
             layout = gsGerm.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
-                                              array_types=('dp',), verbosity=0)
+                                              array_types=('EP',), verbosity=0)
 
             elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
             nPrepPOVM = len(pre_povm_tuples)
@@ -587,7 +587,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         circuits = _remove_duplicates(circuits)
 
         layout = target_model.sim.create_layout(circuits, resource_alloc={'mem_limit': mem_limit},
-                                                array_types=('dp',), verbosity=0)
+                                                array_types=('EP',), verbosity=0)
         dP = _np.empty((layout.num_elements, nModelParams))
         target_model.sim.bulk_fill_dprobs(dP, layout)
         return dP
