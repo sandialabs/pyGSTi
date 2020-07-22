@@ -45,9 +45,9 @@ extensions = [
 autosummary_generate = True
 autosummary_imported_members = True
 autodoc_default_options = {
-    'members': True,
-    'inherited-members': True,
-    'show-inheritance': True,
+    'members': None,
+    'inherited-members': None,
+    'show-inheritance': None,
 }
 napoleon_numpy_docstring = True
 napoleon_use_rtype = False
