@@ -1634,7 +1634,7 @@ class ColorBoxPlot(WorkspacePlot):
 
             if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder):
                 if mdc_store is None:
-                    mdc_store = _ModelDatasetCircuitStore(model, dataset, circuits, array_types=('p',))
+                    mdc_store = _ModelDatasetCircuitStore(model, dataset, circuits, array_types=('E',))
 
                 objfn_builder = ptyp
                 objfn = objfn_builder.build_from_store(mdc_store)

@@ -52,6 +52,14 @@ class ForwardSimulator(object):
         The current parameter vector of the Model.
     """
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_probs': return ('E',) + cls.array_types_for_method('bulk_fill_probs')
+        if method_name == 'bulk_dprobs': return ('EP',) + cls.array_types_for_method('bulk_fill_dprobs')
+        if method_name == 'bulk_hprobs': return ('EPP',) + cls.array_types_for_method('bulk_fill_hprobs')
+        return ()
+
     def __init__(self, model=None):
         """
         TODO: docstring
@@ -319,15 +327,17 @@ class ForwardSimulator(object):
             circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        vp = _np.empty(copa_layout.num_elements, 'd')
-        if smartc:
-            smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
-                                  resource_alloc, _filledarrays=(0,))
-        else:
-            self.bulk_fill_probs(vp, copa_layout, resource_alloc)
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        with resource_alloc.temporarily_track_memory(copa_layout.num_elements):  # 'E' (vp)
+            vp = _np.empty(copa_layout.num_elements, 'd')
+            if smartc:
+                smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
+                                      resource_alloc, _filledarrays=(0,))
+            else:
+                self.bulk_fill_probs(vp, copa_layout, resource_alloc)
 
-        if clip_to is not None:
-            vp = _np.clip(vp, clip_to[0], clip_to[1])
+            if clip_to is not None:
+                vp = _np.clip(vp, clip_to[0], clip_to[1])
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_unique_circuits():
@@ -372,9 +382,11 @@ class ForwardSimulator(object):
         else:
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        #Note: don't use smartc for now.
-        vdp = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
-        self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
+            #Note: don't use smartc for now.
+            vdp = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
+            self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_unique_circuits():
@@ -421,10 +433,12 @@ class ForwardSimulator(object):
         else:
             copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
 
-        #Note: don't use smartc for now.
-        vhp = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
-        self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
-                              wrt_filter1, wrt_filter1)
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params**2):  # 'EPP'(vhp)
+            #Note: don't use smartc for now.
+            vhp = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
+            self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
+                                  wrt_filter1, wrt_filter1)
 
         ret = _collections.OrderedDict()
         for elInds, c, outcomes in copa_layout.iter_unique_circuits():
@@ -830,3 +844,34 @@ class CacheForwardSimulator(ForwardSimulator):
         # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
         # derivatives of each specified circuit outcome probability.
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
+
+
+def _bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
+                          total_circuits, max_per_processor_circuits,
+                          derivative_dimensions, max_per_processor_derivative_dimensions,
+                          max_per_processor_cachesize, dim, dtype='d'):
+    bytes_per_item = _np.dtype(dtype).itemsize
+
+    size = 1; cur_deriv_dim = 0
+    for letter in array_type:
+        if letter == 'E': size *= total_elements
+        if letter == 'e': size *= max_per_processor_elements
+        if letter == 'C': size *= total_circuits
+        if letter == 'c': size *= max_per_processor_circuits
+        if letter == 'P':
+            size *= derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+        if letter == 'p':
+            size *= max_per_processor_derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+        if letter == 'z': size *= max_per_processor_cachesize
+        if letter == 'd': size *= dim
+    return size * bytes_per_item
+
+
+def _bytes_for_array_types(array_types, total_elements, max_per_processor_elements,
+                           total_circuits, max_per_processor_circuits,
+                           derivative_dimensions, max_per_processor_derivative_dimensions,
+                           max_per_processor_cachesize, dim, dtype='d'):  # cache is only local to processors
+    return sum([_bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
+                                      total_circuits, max_per_processor_circuits,
+                                      derivative_dimensions, max_per_processor_derivative_dimensions,
+                                      max_per_processor_cachesize, dim, dtype) for array_type in array_types])

@@ -23,6 +23,7 @@ from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .maplayout import MapCOPALayout as _MapCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
+from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -70,6 +71,18 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_fill_probs': return ('zd',)  # cache of rho-vectors
+        if method_name == 'bulk_fill_dprobs': return ('zd',)  # cache of rho-vectors
+        if method_name == 'bulk_fill_hprobs': return ('zd',)  # cache of rho-vectors
+        if method_name == 'bulk_fill_timedep_loglpp': return ()
+        if method_name == 'bulk_fill_timedep_dloglpp': return ('p',)  # just an additional parameter vector
+        if method_name == 'bulk_fill_timedep_chi2': return ()
+        if method_name == 'bulk_fill_timedep_dchi2': return ('p',)  # just an additional parameter vector
+        return super()._array_types_for_method(method_name)
+
     def __init__(self, model=None, max_cache_size=None):
         super().__init__(model)
         self._max_cache_size = max_cache_size
@@ -84,15 +97,17 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         return MapForwardSimulator(self.model, self._max_cache_size)
 
-    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
-        mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
+        mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
+            if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        num_circuits = len(circuits)
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -111,63 +126,46 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # for each array type.  This amount doesn't depend on how the layout is "split" into atoms.
         layout_cache = {}  # cache of layout candidates indexed on # (minimal) atoms, to avoid re-computation
         layout_cache[nc] = create_layout_candidate(nc)
+        num_elements = layout_cache[nc].num_elements  # should be fixed
 
         if mem_limit is not None:
-
-            final_mem = sum([layout_cache[nc].memory_estimate(array_type) for array_type in array_types])
             gather_mem_limit = mem_limit * 0.01  # better?
-            cache_mem_limit = mem_limit - final_mem - gather_mem_limit
-            if cache_mem_limit < 0: raise MemoryError("Not enough memory to hold final results!")
 
-            d = self.model.dim
-            bytes_per_element = _np.dtype('d').itemsize
-            num_circuits = len(circuits)
-
-            def _cache_mem(cache_size, wrtblk1_size, wrtblk2_size):  # based on cache size and param block sizes
-                mem = 0
-                for array_type in array_types:
-                    if array_type == "p": mem += cache_size * d * bytes_per_element
-                    elif array_type == "dp": mem += 2 * cache_size * d * bytes_per_element
-                    elif array_type == "hp": mem += cache_size * d * wrtblk2_size * bytes_per_element
-                    else: raise ValueError("Invalid array type: %s" % array_type)
-                return mem
-
-            def cache_mem_estimate(nc, np1, np2, num_comms):
-                """ Estimate of memory required by "cache" - the only memory that dependes on the layout distribution"""
+            def mem_estimate(nc, np1, np2):
                 if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
-                trial_layout = layout_cache[nc]
+                layout = layout_cache[nc]
+                return _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
+                                              layout.num_circuits, num_circuits / nc,
+                                              layout._additional_dimensions, (num_params / np1, num_params / np2),
+                                              layout.max_atom_cachesize, self.model.dim)
 
-                #Each atom holds its own cache, and when these include derivatives these are computed by *block*
-                max_cache_size = max([atom.cache_size for atom in trial_layout.atoms])
-                blk1, blk2 = num_params / np1, num_params / np2  # float blk sizes ok for now
-                return _cache_mem(max_cache_size, blk1, blk2)
+            def approx_mem_estimate(nc, np1, np2):
+                approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
+                return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
+                                              num_circuits, num_circuits / nc
+                                              (num_params, num_params), (num_params / np1, num_params / np2),
+                                              approx_cachesize, self.model.dim)
 
-            def approx_cache_mem_estimate(nc, np1, np2, num_comms):
-                approx_cache_size = (len(circuits) / nc) * 0.7
-                if self._max_cache_size is not None:
-                    approx_cache_size = min(approx_cache_size, self._max_cache_size)
-                return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
-
-            cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            mem = mem_estimate(nc, np1, np2)  # initial estimate (to screen)
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {cmem * C}GB")
             printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
+                        (nc, np1, np2, Ng, mem * C))
 
             #Increase nc in amounts of Ng (so nc % Ng == 0).  Start with approximation, then switch to slow mode.
-            while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit:
+            while approx_mem_estimate(nc, np1, np2) > mem_limit:
                 if nc == num_circuits:  # even "maximal" splitting doesn't work!
                     raise MemoryError("Cannot split or layout enough to achieve memory limit")
                 nc += Ng
                 if nc > num_circuits: nc = num_circuits
 
-            cmem = cache_mem_estimate(nc, np1, np2, Ng)
-            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            mem = mem_estimate(nc, np1, np2)
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
             printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
-            while cmem > cache_mem_limit:
-                nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng, log=True)
-                if(_next >= cmem): raise MemoryError("Not enough memory: splitting unproductive")
-                cmem = _next
+                        (nc, np1, np2, Ng, mem * C))
+            while mem > mem_limit:
+                nc += Ng; _next = mem_estimate(nc, np1, np2)
+                if(_next >= mem): raise MemoryError("Not enough memory: splitting unproductive")
+                mem = _next
 
                 #Note: could do these while loops smarter, e.g. binary search-like?
                 #  or assume mem_estimate scales linearly in ng? E.g:
@@ -185,7 +183,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # param blocks is communicated to forwardsim routines (taking ceiling or
         # floor can lead to inefficient MPI distribution)
 
-        bNp2Matters = bool("hp" in array_types)
+        bNp2Matters = bool("EPP" in array_types)
         nparams = (num_params, num_params) if bNp2Matters else num_params
         np = (np1, np2) if bNp2Matters else np1
         paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
@@ -216,17 +214,20 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
         replib.DM_mapfill_probs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
                                       layout_atom, resource_alloc.comm)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.num_params)
         replib.DM_mapfill_dprobs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
                                        layout_atom, param_slice, resource_alloc.comm)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.num_params**2)
         self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
                                       dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc.comm)
 

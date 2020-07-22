@@ -24,6 +24,7 @@ from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
+from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -810,6 +811,14 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
 class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForwardSimulator):
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
+        if method_name == 'bulk_fill_probs': return ('zdd', 'z', 'z')  # cache of gates, scales, and scaleVals
+        if method_name == 'bulk_fill_dprobs': return ('zddp',)  # cache x dim x dim x distributed_nparams
+        if method_name == 'bulk_fill_hprobs': return ('zddpp',)  # cache x dim x dim x dist_nparams1 x dist_nparams2
+        return super()._array_types_for_method(method_name)
+
     def copy(self):
         """
         Return a shallow copy of this MatrixForwardSimulator
@@ -1122,7 +1131,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return hProdCache
 
-    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
@@ -1155,10 +1164,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
-        mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
+        mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
+            if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        num_circuits = len(circuits)
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -1170,8 +1181,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             return _MatrixCOPALayout(circuits, self.model, dataset, None, num_atoms,
                                      (num_params, num_params), verbosity)
 
-        bNp1Matters = bool("dp" in array_types or "hp" in array_types)
-        bNp2Matters = bool("hp" in array_types)
+        bNp1Matters = bool("EP" in array_types or "EPP" in array_types)
+        bNp2Matters = bool("EPP" in array_types)
 
         #Start with how we'd like to split processors up (without regard to memory limit):
         nc = Ng = 1
@@ -1207,82 +1218,70 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout_cache = {}  # cache of layout candidates indexed on # (minimal) atoms, to avoid re-computation
         layout_cache[nc] = create_layout_candidate(nc)
+        num_elements = layout_cache[nc].num_elements  # should be fixed
 
         if mem_limit is not None:  # the hard case when there's a memory limit
-
-            final_mem = sum([layout_cache[nc].memory_estimate(array_type) for array_type in array_types])
             gather_mem_limit = mem_limit * 0.01  # better?
-            cache_mem_limit = mem_limit - final_mem - gather_mem_limit
-            if cache_mem_limit < 0: raise MemoryError("Not enough memory to hold final results!")
 
-            d2 = self.model.dim**2
-            bytes_per_element = _np.dtype('d').itemsize
-
-            def _cache_mem(cache_size, wrtblk1_size, wrtblk2_size):  # based on cache size and param block sizes
-                mem = 0
-                for array_type in array_types:
-                    if array_type == "p": mem += cache_size * (d2 + 2) * bytes_per_element  # +2 for scale cache
-                    elif array_type == "dp": mem += cache_size * d2 * wrtblk1_size * bytes_per_element
-                    elif array_type == "hp": mem += cache_size * d2 * wrtblk1_size * wrtblk2_size * bytes_per_element
-                    else: raise ValueError("Invalid array type: %s" % array_type)
-                return mem
-
-            def cache_mem_estimate(nc, np1, np2, num_comms):
-                """ Estimate of memory required by "cache" - the only memory that dependes on the layout distribution"""
+            def mem_estimate(nc, np1, np2):
                 if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
-                trial_layout = layout_cache[nc]
+                layout = layout_cache[nc]
+                return _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
+                                              layout.num_circuits, num_circuits / nc,
+                                              layout._additional_dimensions, (num_params / np1, num_params / np2),
+                                              layout.max_atom_cachesize, self.model.dim)
 
-                #Each atom holds its own cache, and when these include derivatives these
-                # are computed by *block* (if gather=False, then final array above becomes a
-                # per-processor quantity, but cache is still per-block).
-                max_cache_size = max([atom.cache_size for atom in trial_layout.atoms])
-                blk1, blk2 = num_params / np1, num_params / np2  # float blk sizes ok for now
-                return _cache_mem(max_cache_size, blk1, blk2)
+            def approx_mem_estimate(nc, np1, np2):
+                approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
+                return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
+                                              num_circuits, num_circuits / nc,
+                                              (num_params, num_params), (num_params / np1, num_params / np2),
+                                              approx_cachesize, self.model.dim)
 
-            def approx_cache_mem_estimate(nc, np1, np2, num_comms):
-                approx_cache_size = (len(circuits) / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
-                return _cache_mem(approx_cache_size, num_params / np1, num_params / np2)
-
-            cmem = cache_mem_estimate(nc, np1, np2, Ng)  # initial estimate (to screen)
-            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+            mem = mem_estimate(nc, np1, np2)  # initial estimate (to screen)
+            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
             printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (nc, np1, np2, Ng, (final_mem + cmem) * C))
+                        (nc, np1, np2, Ng, mem * C))
 
             #Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
             ok = False
             if (not ok) and bNp1Matters and np1 < num_params:
                 #First try to decrease mem consumption by increasing np1
                 for n in range(np1, num_params + 1, nprocs):
-                    if cache_mem_estimate(nc, n, np2, Ng) < cache_mem_limit:
+                    if mem_estimate(nc, n, np2) < mem_limit:
                         np1 = n; ok = True; break
                 else: np1 = num_params
 
             if (not ok) and bNp2Matters and np2 < num_params:
                 #Next try to decrease mem consumption by increasing np2
                 for n in range(np2, num_params + 1, nprocs):
-                    if cache_mem_estimate(nc, np1, n, Ng) < cache_mem_limit:
+                    if mem_estimate(nc, np1, n) < mem_limit:
                         np2 = n; ok = True; break
                 else: np2 = num_params
 
             #Finally, increase nc in amounts of Ng (so nc % Ng == 0).  Start
             # with fast cache_size computation then switch to slow
             if not ok:
-                while approx_cache_mem_estimate(nc, np1, np2, Ng) > cache_mem_limit: nc += Ng
-                cmem = cache_mem_estimate(nc, np1, np2, Ng)
-                #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {(final_mem + cmem) * C}GB")
+                mem = approx_mem_estimate(nc, np1, np2)
+                while mem > mem_limit:
+                    nc += Ng; _next = mem_estimate(nc, np1, np2)
+                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
+                    mem = _next
+
+                mem = mem_estimate(nc, np1, np2)
+                #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
                 printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) ~= %.2fGB" %
-                            (nc, np1, np2, Ng, (final_mem + cmem) * C))
+                            (nc, np1, np2, Ng, mem * C))
 
-                while cmem > cache_mem_limit:
-                    nc += Ng; _next = cache_mem_estimate(nc, np1, np2, Ng)
+                while mem > mem_limit:
+                    nc += Ng; _next = mem_estimate(nc, np1, np2)
                     #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
-                    #             f" {(final_mem + _next) * C}GB"))
+                    #             f" {_next * C}GB"))
                     printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                                (nc, np1, np2, Ng, (final_mem + _next) * C))
+                                (nc, np1, np2, Ng, _next * C))
 
-                    if _next >= cmem:  # special failsafe
-                        raise MemoryError("Not enough memory: splitting unproductive")
-                    cmem = _next
+                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
+                    mem = _next
         else:
             gather_mem_limit = None
 
@@ -1557,6 +1556,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.dim)  # prod cache
 
         #Fill cache info
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
@@ -1577,6 +1577,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        dim = self.model.dim
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * self.model.num_params)
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                                   resource_alloc.comm, param_slice)
@@ -1595,6 +1597,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
+        dim = self.model.dim
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2 * self.model.num_params**2)
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
         dProdCache1 = self._compute_dproduct_cache(
             layout_atom.tree, prodCache, scaleCache, resource_alloc.comm, param_slice1)

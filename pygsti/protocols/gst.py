@@ -925,7 +925,7 @@ class LinearGateSetTomography(_proto.Protocol):
                                  op_labels, svd_truncate_to=target_model.dim,
                                  op_label_aliases=aliases, verbosity=printer)
         final_store = _objs.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
-                                                      array_types=('p', 'dp'), verbosity=printer)
+                                                      array_types=('E',), verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results

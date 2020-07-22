@@ -200,6 +200,8 @@ class CustomLMOptimizer(Optimizer):
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
+        self.array_types = 3 * ('P',) + ('E', 'PP', 'EP')  # see custom_leastsq fn "-type"s
+        self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
 
     def run(self, objective, comm, profiler, printer):
 
@@ -223,6 +225,10 @@ class CustomLMOptimizer(Optimizer):
         objective_func = objective.lsvec
         jacobian = objective.dlsvec
         x0 = objective.model.to_vector()
+
+        # Check memory limit can handle what custom_leastsq will "allocate"
+        nEls = objective.layout.num_elements; nP = len(x0)
+        objective.resource_alloc.check_can_allocate_memory(3 * nP + nEls + nEls * nP + nP * nP)  # see array_types above
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,
@@ -397,7 +403,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     msg = ""
     converged = False
     x = x0
-    f = obj_fn(x)
+    f = obj_fn(x)  # 'E'-type array
     norm_f = _np.dot(f, f)  # _np.linalg.norm(f)**2
     half_max_nu = 2**62  # what should this be??
     tau = 1e-3
@@ -423,7 +429,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     dx = None; last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
-    best_x = x.copy()  # the x-value corresponding to min_norm_f
+    best_x = x.copy()  # the x-value corresponding to min_norm_f ('P'-type)
 
     spow = 0.0  # for damping_mode == 'adaptive'
     if damping_clip is not None:
@@ -465,10 +471,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT1: %.3fs" % (_time.time()-t0)) # REMOVE
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter")
             if k >= num_fd_iters:
-                Jac = jac_fn(x)
+                Jac = jac_fn(x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
             else:
                 eps = 1e-7
-                Jac = _np.empty((len(f), len(x)), 'd')
+                Jac = _np.empty((len(f), len(x)), 'd')  # 'EP'-type
                 for i in range(len(x)):
                     x_plus_dx = x.copy()
                     x_plus_dx[i] += eps
@@ -498,9 +504,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             if my_cols_slice is None:
                 my_cols_slice = _mpit.distribute_for_dot(Jac.shape[0], comm)
             #printer.log("PT3: %.3fs" % (_time.time()-t0)) # REMOVE
-            JTJ = _mpit.mpidot(Jac.T, Jac, my_cols_slice, comm)  # _np.dot(Jac.T,Jac)
+            JTJ = _mpit.mpidot(Jac.T, Jac, my_cols_slice, comm)  # _np.dot(Jac.T,Jac)  'PP'-type
             #printer.log("PT4: %.3fs" % (_time.time()-t0)) # REMOVE
-            JTf = _np.dot(Jac.T, f)
+            JTf = _np.dot(Jac.T, f)  # 'P'-type
             #printer.log("PT5: %.3fs" % (_time.time()-t0)) # REMOVE
             if profiler: profiler.add_time("custom_leastsq: dotprods", tm)
             #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
@@ -511,9 +517,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             idiag = _np.diag_indices_from(JTJ)
             norm_JTf = _np.linalg.norm(JTf, ord=_np.inf)
             norm_x = _np.dot(x, x)  # _np.linalg.norm(x)**2
-            undamped_JTJ_diag = JTJ.diagonal().copy()
+            undamped_JTJ_diag = JTJ.diagonal().copy()  # 'P'-type
             #max_JTJ_diag = JTJ.diagonal().copy()
             #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
+
+            # FUTURE TODO: keep tallying allocated memory, i.e. array_types (stopped here)
 
             if damping_basis == "singular_values":
                 Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac, full_matrices=False)

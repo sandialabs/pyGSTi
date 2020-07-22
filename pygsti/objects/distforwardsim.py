@@ -23,6 +23,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
     Assumes layout is a :class:`DistributableCOPALayout`
     """
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # give array types for this method because it's currently used publically in objective function's hessian
+        if method_name == '_bulk_hprobs_by_block_singleatom': return ('epp', 'epp')
+        return super()._array_types_for_method(method_name)
+
     def __init__(self, model=None):
         super().__init__(model)
         self._default_distribute_method = "circuits"
@@ -239,6 +245,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
     def _bulk_hprobs_by_block_singleatom(self, atom, wrt_slices_list, return_dprobs_12, resource_alloc,
                                          gather_mem_limit):
 
+        #FUTURE could make a resource_alloc.check_can_allocate_memory call here for ('epp', 'epp')?
         nElements = atom.num_elements
         for wrtSlice1, wrtSlice2 in wrt_slices_list:
 

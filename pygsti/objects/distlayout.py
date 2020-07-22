@@ -35,6 +35,10 @@ class _DistributableAtom(object):
         self.element_slice = element_slice
         self.num_elements = _slct.length(element_slice) if (num_elements is None) else num_elements
 
+    @property
+    def cache_size(self):
+        return 0
+
 
 class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
@@ -77,16 +81,27 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         ## passed to initialize(...) is, it's at index original_index_lookup[i]
         #self.original_index_lookup = None
 
-    def allocate_local_array(self, array_type, zero_out=False, dtype='d'):
-        raise NotImplementedError(("This function should only allocate the space needed "
-                                   "for this processor when fwdsim's gather=False (?)"))
+    #UNUSED - REMOVE?
+    #def allocate_local_array(self, array_type, zero_out=False, dtype='d'):
+    #    raise NotImplementedError(("This function should only allocate the space needed "
+    #                               "for this processor when fwdsim's gather=False (?)"))
+    #
+    #def local_memory_estimate(self, nprocs, array_type, dtype='d'):
+    #    """
+    #    Per-processor memory required to allocate a local array (an estimate in bytes).
+    #    """
+    #    #bytes_per_element = _np.dtype(dtype).itemsize
+    #    raise NotImplementedError()
 
-    def local_memory_estimate(self, nprocs, array_type, dtype='d'):
-        """
-        Per-processor memory required to allocate a local array (an estimate in bytes).
-        """
-        #bytes_per_element = _np.dtype(dtype).itemsize
-        raise NotImplementedError()
+    @property
+    def max_atom_elements(self):
+        if len(self.atoms) == 0: return 0
+        return max([atom.num_elements for atom in self.atoms])
+
+    @property
+    def max_atom_cachesize(self):
+        if len(self.atoms) == 0: return 0
+        return max([atom.cache_size for atom in self.atoms])
 
     def set_distribution_params(self, num_atom_processing_subcomms, additional_dimension_blk_sizes,
                                 gather_mem_limit):

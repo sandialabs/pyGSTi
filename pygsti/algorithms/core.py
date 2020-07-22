@@ -16,6 +16,7 @@ import scipy.optimize as _spo
 import scipy.stats as _stats
 import warnings as _warnings
 import time as _time
+import collections as _collections
 
 from .. import optimize as _opt
 from .. import tools as _tools
@@ -589,8 +590,13 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
     model : Model
         the best-fit model.
     """
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+    array_types = optimizer.array_types + \
+        objective_function_builder.compute_array_types(optimizer.called_objective_methods, start_model.sim)
+
     mdc_store = _objs.ModelDatasetCircuitsStore(start_model, dataset, circuits, resource_alloc,
-                                                array_types=('p', 'dp'), verbosity=verbosity)
+                                                array_types=array_types, verbosity=verbosity)
     result, mdc_store = run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity)
     return result, mdc_store.model
 
@@ -737,6 +743,17 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
     final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
 
+    def _max_array_types(artypes_list):  # get the maximum number of each array type and return as an array-types tuple
+        max_cnts = {}
+        for artypes in artypes_list:
+            cnts = _collections.defaultdict(lambda: 0)
+            for artype in artypes:
+                cnts[artype] += 1
+            for artype, cnt in cnts.items(): max_cnts[artype] = max(max_cnts.get(artype, 0), cnt)
+        ret = ()
+        for artype, cnt in max_cnts.items(): ret += (artype,) * cnt
+        return ret
+
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
@@ -749,8 +766,12 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
+            method_names = optimizer.called_objective_methods
+            array_types = optimizer.array_types + \
+                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
+                                  for builder in iteration_objfn_builders + final_objfn_builders])
             mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                        array_types=('p', 'dp'), verbosity=printer - 1)
+                                                        array_types=array_types, verbosity=printer - 1)
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()

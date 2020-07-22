@@ -141,6 +141,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         the dictionary to be filled with values.
     """
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # no caches used, so fill methods don't add additional arrays
+        return super()._array_types_for_method(method_name)
+
     def __init__(self, model=None,  # below here are simtype-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
@@ -297,7 +302,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                     self.perr_heuristic, self. max_term_stages, self.path_fraction_threshold,
                                     self.oob_check_interval, self.cache)
 
-    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('p',),
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
 
         #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the
