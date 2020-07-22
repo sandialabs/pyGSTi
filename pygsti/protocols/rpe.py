@@ -323,3 +323,9 @@ class RobustPhaseEstimationResults(_proto.ProtocolResults):
 RPEDesign = RobustPhaseEstimationDesign
 RPE = RobustPhaseEstimation
 RPEResults = RobustPhaseEstimationResults
+
+__all__ = [
+    'RobustPhaseEstimation', 'RPE',
+    'RobustPhaseEstimationDesign', 'RPEDesign',
+    'RobustPhaseEstimationResults', 'RPEResults',
+]
