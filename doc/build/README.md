@@ -1,8 +1,8 @@
 To rebuild GST docs, just do (from within docs/build directory):
-./cleanup.sh
-make html
-./install.sh
-
+```console
+$ make html
+$ ./install.sh
+```
 
 Here's a snipped from the sphinx install log that might be relevant:
 
@@ -10,5 +10,3 @@ Here's a snipped from the sphinx install log that might be relevant:
   source files. Use the Makefile to build the docs, like so:
      make builder
   where "builder" is one of the supported builders, e.g. html, latex or linkcheck.
-
-

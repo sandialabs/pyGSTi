@@ -86,8 +86,8 @@ HighImpactPaper1/texFiles/.DS_Store
 # Generated documentation #
 ###########################
 doc/html/*
-doc/build/*.rst
-doc/build/_build/*
+doc/build/_auto
+doc/build/_build
 
 # Customer Data #
 #################

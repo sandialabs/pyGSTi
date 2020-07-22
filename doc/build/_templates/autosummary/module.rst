@@ -1,5 +1,4 @@
-{{ fullname }}
-{{ underline }}
+{{ fullname | escape | underline }}
 
 .. automodule:: {{ fullname }}
 
@@ -10,9 +9,10 @@
    .. autosummary::
       :toctree:
 
-   {% for item in functions %}
+      {% for item in functions %}
       {{ item }}
-   {%- endfor %}
+      {%- endfor %}
+
    {% endif %}
    {% endblock %}
 
@@ -21,12 +21,11 @@
    .. rubric:: Classes
 
    .. autosummary::
-      :template: my_autosummary_class.rst
       :toctree:
 
-   {% for item in classes %}
+      {% for item in classes %}
       {{ item }}
-   {%- endfor %}
+      {%- endfor %}
    {% endif %}
    {% endblock %}
 
@@ -37,8 +36,8 @@
    .. autosummary::
       :toctree:
 
-   {% for item in exceptions %}
+      {% for item in exceptions %}
       {{ item }}
-   {%- endfor %}
+      {%- endfor %}
    {% endif %}
    {% endblock %}
