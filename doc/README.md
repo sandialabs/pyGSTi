@@ -1,7 +1,6 @@
 To rebuild GST docs, just do (from within docs/build directory):
 ```console
 $ make html
-$ ./install.sh
 ```
 
 Here's a snipped from the sphinx install log that might be relevant:
