@@ -14,7 +14,8 @@ import time as _time
 from ...tools import symplectic as _symp
 from ...objects.label import Label as _Lbl
 from ... import objects as _obj
-from . import sample as _samp
+#from . import sample as _samp
+_samp = None  # MOVED - and this module is deprecated & broken now, so just set to None
 
 
 def random_paulierror_in_chp(q):
