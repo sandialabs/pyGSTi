@@ -88,6 +88,8 @@ class LayerRules(object):
             finalOp = _op.ExponentiatedOp(subCircuitOp, circuitlbl.reps, evotype=model.evotype)
         else:
             finalOp = subCircuitOp
+
+        model._init_virtual_obj(finalOp)  # so ret's gpindices get set, essential for being in cache
         return finalOp
 
     def prep_layer_operator(self, model, layerlbl, cache):
