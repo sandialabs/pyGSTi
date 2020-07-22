@@ -142,7 +142,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             def approx_mem_estimate(nc, np1, np2):
                 approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
                 return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-                                              num_circuits, num_circuits / nc
+                                              num_circuits, num_circuits / nc,
                                               (num_params, num_params), (num_params / np1, num_params / np2),
                                               approx_cachesize, self.model.dim)
 
