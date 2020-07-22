@@ -10,6 +10,7 @@ Resource allocation manager
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import numpy as _np
+from contextlib import contextmanager as _contextmanager
 from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -26,7 +27,7 @@ class ResourceAllocation(object):
     Parameters
     ----------
     comm : mpi4py.MPI.Comm, optional
-        MPI communicator holding the number of available processors.
+v        MPI communicator holding the number of available processors.
 
     mem_limit : int, optional
         A rough per-processor memory limit in bytes.
@@ -111,7 +112,7 @@ class ResourceAllocation(object):
         num_elements : int
             The number of elements to track allocation of.
 
-        dtype : numpy.dtype
+        dtype : numpy.dtype, optional
             The type of elements, needed to compute the number of bytes per element.
 
         Returns
@@ -136,7 +137,7 @@ class ResourceAllocation(object):
         num_elements : int
             The number of elements to track allocation of.
 
-        dtype : numpy.dtype
+        dtype : numpy.dtype, optional
             The type of elements, needed to compute the number of bytes per element.
 
         Returns
@@ -147,6 +148,33 @@ class ResourceAllocation(object):
         if self.mem_limit is not None and self.allocated_memory + nbytes > self.mem_limit:
             raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
                               % (self.mem_limit / (1024.0**3)))
+
+    @_contextmanager
+    def temporarily_track_memory(self, num_elements, dtype='d'):
+        """
+        Temporarily adds `nelements` to tracked memory (a context manager).
+
+        A :class:`MemoryError` exception is raised if the tracked memory exceeds `self.mem_limit`.
+
+        Parameters
+        ----------
+        num_elements : int
+            The number of elements to track allocation of.
+
+        dtype : numpy.dtype, optional
+            The type of elements, needed to compute the number of bytes per element.
+
+        Returns
+        -------
+        contextmanager
+        """
+        nbytes = num_elements * _np.dtype(dtype).itemsize
+        self.allocated_memory += nbytes
+        if self.mem_limit is not None and self.allocated_memory > self.mem_limit:
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
+                              % (self.mem_limit / (1024.0**3)))
+        yield
+        self.allocated_memory -= nbytes
 
     def __getstate__(self):
         # Can't pickle comm objects

@@ -1164,7 +1164,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
-        mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
+        mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
+            if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
@@ -1221,7 +1222,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if mem_limit is not None:  # the hard case when there's a memory limit
             gather_mem_limit = mem_limit * 0.01  # better?
-            
+
             def mem_estimate(nc, np1, np2):
                 if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
                 layout = layout_cache[nc]
@@ -1229,11 +1230,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                               layout.num_circuits, num_circuits / nc,
                                               layout._additional_dimensions, (num_params / np1, num_params / np2),
                                               layout.max_atom_cachesize, self.model.dim)
-            
+
             def approx_mem_estimate(nc, np1, np2):
                 approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
                 return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-                                              num_circuits, num_circuits / nc
+                                              num_circuits, num_circuits / nc,
                                               (num_params, num_params), (num_params / np1, num_params / np2),
                                               approx_cachesize, self.model.dim)
 
@@ -1261,7 +1262,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Finally, increase nc in amounts of Ng (so nc % Ng == 0).  Start
             # with fast cache_size computation then switch to slow
             if not ok:
-                while approx_mem_estimate(nc, np1, np2) > mem_limit: nc += Ng
+                mem = approx_mem_estimate(nc, np1, np2)
+                while mem > mem_limit:
+                    nc += Ng; _next = mem_estimate(nc, np1, np2)
+                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
+                    mem = _next
+
                 mem = mem_estimate(nc, np1, np2)
                 #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
                 printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) ~= %.2fGB" %
@@ -1274,8 +1280,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
                                 (nc, np1, np2, Ng, _next * C))
 
-                    if _next >= mem:  # special failsafe
-                        raise MemoryError("Not enough memory: splitting unproductive")
+                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
                     mem = _next
         else:
             gather_mem_limit = None
@@ -1551,6 +1556,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.dim)  # prod cache
 
         #Fill cache info
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
@@ -1571,6 +1577,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        dim = self.model.dim
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * self.model.num_params)
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                                   resource_alloc.comm, param_slice)
@@ -1589,6 +1597,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
+        dim = self.model.dim
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2 * self.model.num_params**2)
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
         dProdCache1 = self._compute_dproduct_cache(
             layout_atom.tree, prodCache, scaleCache, resource_alloc.comm, param_slice1)

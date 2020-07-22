@@ -141,6 +141,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         the dictionary to be filled with values.
     """
 
+    @classmethod
+    def _array_types_for_method(cls, method_name):
+        # no caches used, so fill methods don't add additional arrays
+        return super()._array_types_for_method(method_name)
+
     def __init__(self, model=None,  # below here are simtype-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",

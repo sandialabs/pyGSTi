@@ -356,7 +356,7 @@ class Chi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.Chi2Function.create_from(self.model, self.dataset, self.circuits, None, penalties)
+        return [_objfns.Chi2Function.create_from(self.model, self.dataset, self.circuits, None, penalties, method_names=('terms', 'dterms'))
                 for penalties in self.penalty_dicts]
 
 
@@ -365,7 +365,7 @@ class ChiAlphaFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.ChiAlphaFunction.create_from(self.model, self.dataset, self.circuits, {'fmin': 1e-4}, None)]
+        return [_objfns.ChiAlphaFunction.create_from(self.model, self.dataset, self.circuits, {'fmin': 1e-4}, None, method_names=('terms', 'dterms'))]
 
 
 class FreqWeightedChi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
@@ -373,7 +373,7 @@ class FreqWeightedChi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, 
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.FreqWeightedChi2Function.create_from(self.model, self.dataset, self.circuits, None, None)]
+        return [_objfns.FreqWeightedChi2Function.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
 class PoissonPicDeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
@@ -382,7 +382,7 @@ class PoissonPicDeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTeste
 
     def build_objfns(self):
         return [_objfns.PoissonPicDeltaLogLFunction.create_from(self.model, self.dataset, self.circuits,
-                                                    None, penalties, enable_hessian=True)
+                                                    None, penalties, method_names=('terms', 'dterms', 'hessian'))
                 for penalties in self.penalty_dicts]
 
 
@@ -391,7 +391,7 @@ class DeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCas
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.DeltaLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None)]
+        return [_objfns.DeltaLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
 class MaxLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
@@ -399,7 +399,7 @@ class MaxLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase)
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.MaxLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None)]
+        return [_objfns.MaxLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
 class TVDFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
@@ -407,7 +407,7 @@ class TVDFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
     enable_hessian_tests = False
 
     def build_objfns(self):
-        return [_objfns.TVDFunction.create_from(self.model, self.dataset, self.circuits, None, None)]
+        return [_objfns.TVDFunction.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
     def test_derivative(self):
         self.skipTest("Derivatives for TVDFunction aren't implemented yet.")
@@ -440,7 +440,7 @@ class TimeDependentChi2FunctionTester(TimeDependentMDSObjectiveFunctionTester, B
     """
 
     def build_objfns(self):
-        return [_objfns.TimeDependentChi2Function.create_from(self.model, self.dataset, self.circuits)]
+        return [_objfns.TimeDependentChi2Function.create_from(self.model, self.dataset, self.circuits, method_names=('lsvec', 'dlsvec'))]
 
 
 class TimeDependentPoissonPicLogLFunctionTester(TimeDependentMDSObjectiveFunctionTester, BaseCase):
@@ -449,7 +449,7 @@ class TimeDependentPoissonPicLogLFunctionTester(TimeDependentMDSObjectiveFunctio
     """
 
     def build_objfns(self):
-        return [_objfns.TimeDependentPoissonPicLogLFunction.create_from(self.model, self.dataset, self.circuits)]
+        return [_objfns.TimeDependentPoissonPicLogLFunction.create_from(self.model, self.dataset, self.circuits, method_names=('lsvec', 'dlsvec'))]
 
 
 class LogLWildcardFunctionTester(ObjectiveFunctionData, BaseCase):
@@ -459,7 +459,7 @@ class LogLWildcardFunctionTester(ObjectiveFunctionData, BaseCase):
 
     def setUp(self):
         super().setUp()
-        logl_fn = _objfns.PoissonPicDeltaLogLFunction.create_from(self.model, self.dataset, self.circuits)
+        logl_fn = _objfns.PoissonPicDeltaLogLFunction.create_from(self.model, self.dataset, self.circuits, method_names=('fn', 'terms', 'lsvec'))
         logl_fn.fn()  # evaluate so internals are initialized
 
         wcbudget = _PrimitiveOpsWildcardBudget(self.model.primitive_op_labels)
