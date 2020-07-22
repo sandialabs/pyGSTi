@@ -30,6 +30,14 @@ Packages
    pygsti.extras.rpe
    pygsti.extras.drift
 
+License & Copyright
+-------------------
+.. toctree::
+   :maxdepth: 1
+
+   LICENSE
+   NOTICE
+
 Indices and tables
 ==================
 
