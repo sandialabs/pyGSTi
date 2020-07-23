@@ -696,7 +696,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         #Set other members
         self.nQubits = num_qubits
-        self.availability = availability
+        self.availability = availability.copy()  # create a local copy because we may update it below
         self.qubit_labels = qubit_labels
         self.geometry = geometry
         #TODO REMOVE unneeded members

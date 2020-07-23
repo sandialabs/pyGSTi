@@ -671,7 +671,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype)  # static gates by default
 
         self.nQubits = num_qubits
-        self.availability = availability
+        self.availability = availability.copy()  # create a local copy because we may update it below
         self.qubit_labels = qubit_labels
         self.geometry = geometry
         #self.parameterization = parameterization
