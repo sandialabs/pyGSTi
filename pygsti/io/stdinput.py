@@ -968,6 +968,10 @@ def parse_model(filename):
     cur_property = ""; cur_rows = []
     top_level_objs = []
 
+    def to_int(x):  # tries to convert state space labels to integers, but if fails OK
+        try: return int(x)
+        except Exception: return x
+
     with open(filename) as inputfile:
         for line in inputfile:
             line = line.strip()
@@ -999,9 +1003,10 @@ def parse_model(filename):
                 if any([line.startswith(pre) for pre in ("BASIS", "GAUGEGROUP", "STATESPACE")]):
                     pass  # handled above
 
-                elif len(parts) == 2:  # then this is a '<type>: <label>' line => new cur_obj
+                elif len(parts) >= 2:  # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
-                    label = parts[1].strip()
+                    label = _objs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
+                                        state_space_labels=tuple(map(to_int, parts[2:])) if len(parts) > 2 else None)
 
                     # place any existing cur_obj
                     if cur_obj is not None:
