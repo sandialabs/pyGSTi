@@ -242,7 +242,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
         """
         if isinstance(value, _gm.ModelMember): return value
         if self.flags['cast_to_type'] is None:
-            raise ValueError("Can only assign `ModelMember` objects as values (not %s)."
+            raise ValueError("Can only assign `ModelMember` objects as *new* values (not %s)."
                              % str(type(value)))
 
         basis = self.parent.basis if self.parent else None
