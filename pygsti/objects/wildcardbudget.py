@@ -168,6 +168,10 @@ class WildcardBudget(object):
                     circuit_budget_matrix[i, self.primOpLookup[layer]] += 1.0
                 for component in layer.components:
                     circuit_budget_matrix[i, self.primOpLookup[component]] += 1.0
+
+        if self.spam_index is not None:
+            circuit_budget_matrix[:, self.spam_index] = 1.0
+
         return circuit_budget_matrix
 
     def slow_update_probs(self, probs_in, probs_out, freqs, layout, precomp=None):
@@ -655,8 +659,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             circuit_budgets = _np.array([self.circuit_budget(circ) for circ in circuits])
         else:
             Wvec = _np.abs(self.wildcard_vector)
-            off = 0 if (self.spam_index is None) else Wvec[self.spam_index]
-            circuit_budgets = _np.dot(precomp, Wvec) + off
+            circuit_budgets = _np.dot(precomp, Wvec)
         return circuit_budgets
 
     @property
