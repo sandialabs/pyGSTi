@@ -1838,6 +1838,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     else:
         def L1term(wv): return _np.linalg.norm(wv, ord=1)
 
+    def L1term_grad(wv): return L1weights
+
     if two_dlogl <= two_dlogl_threshold \
        and sum(_np.clip(two_dlogl_terms - redbox_threshold, 0, None)) < 1e-6:
         printer.log("No need to add budget!")
@@ -1882,21 +1884,43 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     delta_probs[layout.indices_for_index(i)] = add_to - take_from
                 return delta_probs
 
-            def _criteria_deriv(current_probs, dlogl_percircuit, dlogl_delements, global_criteria_met):
+            def _criteria_deriv(current_probs, dlogl_percircuit, dlogl_delements, mode, global_criteria_met):
                 # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently reduce firstterms
                 # in doing so, this computes how the per-circuit budget should be allocated to probabilities (i.e. how probs should be updated) to achieve this decrease in firstterms
                 ret = _np.zeros(num_circuits)
+                max_delta = _np.zeros(num_circuits)  # maximum amount of change in per-circuit budget before hitting a discontinuity in 2nd deriv
                 for i in range(num_circuits):
-                    prefactor = 2.0  # contributes twice: once for per-circuit and once for aggregate
-                    if 2 * dlogl_percircuit[i] <= redbox_threshold:
-                        if global_criteria_met: continue  # no contribution at all_circuits_needing_data
-                        else: prefactor = 1.0
+                    if mode == "percircuit" and 2 * dlogl_percircuit[i] <= redbox_threshold:
+                        continue  # don't include this circuit's contribution
+                    elif mode == "aggregate":  # all circuits contribute
+                        prefactor = 1.0
+                    else:  # mode == "both"
+                        prefactor = 2.0  # contributes twice: once for per-circuit and once for aggregate
+                        if 2 * dlogl_percircuit[i] <= redbox_threshold:
+                            if global_criteria_met: continue  # no contribution at all_circuits_needing_data
+                            else: prefactor = 1.0
 
-                    chis = dlogl_delements[layout.indices_for_index(i)]
+                    chis = dlogl_delements[layout.indices_for_index(i)]  # ~ f/p
+                    highest_chi, lowest_chi = _np.max(chis), _np.min(chis)
+                    bmaxes = _np.array(_np.abs(chis - highest_chi) < 1.e-4, dtype=bool)
+                    bmins = _np.array(_np.abs(chis - lowest_chi) < 1.e-4, dtype=bool)
                     maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
                     mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
+
+                    next_chis = chis.copy(); next_chis[bmaxes] = 1.0; next_chis[bmins] = 1.0
+                    #p = current_probs[layout.indices_for_index(i)]
+                    f = objfn.freqs[layout.indices_for_index(i)]
+                    next_highest_chi = _np.max(next_chis)  # 2nd highest chi value (may be duplicated)
+                    next_lowest_chi = _np.min(next_chis)  # 2nd lowest chi value (may be duplicated)
+
+                    # 1/chi = p/f, (1/chi'-1/chi) = dp/f => dp = f(chi - chi')/(chi chi')
+                    delta_p = _np.zeros(chis.shape, 'd')
+                    delta_p[bmaxes] = f[bmaxes] * (1. / chis[bmaxes] - 1 / next_highest_chi)
+                    delta_p[bmins] = f[bmins] * (1. / chis[bmins] - 1 / next_lowest_chi)
+                    max_delta[i] = _np.max(_np.abs(delta_p))
+
                     ret[i] = prefactor * _np.sum(chis * (mins / sum(mins) - maxes / sum(maxes)))
-                return ret
+                return ret, max_delta
 
             # deriv of L1 wrt wildcard vector => deriv of wildcard?
 
@@ -1905,7 +1929,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
             #Stage1: per-circuit conditions:
 
-            do_stage1 = False  # CVXPY fails??
+            do_stage1 = True  # CVXPY fails??
             if do_stage1:
                 # get set of "critical" wildcard budgets per circuit:
                 critical_percircuit_budgets = _np.zeros(num_circuits, 'd')
@@ -1943,82 +1967,326 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
                 #import bpdb; bpdb.set_trace()
 
-                # convex program to solve:
-                # Minimize |wv|_1 (perhaps weighted) subject to the constraint:
-                #  dot(percircuit_budget_deriv, wv) >= critical_percircuit_budgets
-                import cvxpy as _cvxpy
-                wv = budget.to_vector().copy()
-                var_wv = _cvxpy.Variable(wv.shape, value=wv.copy())
-                constraints = [percircuit_budget_deriv @ var_wv >= critical_percircuit_budgets,
-                               var_wv >= 0]
-                obj = _cvxpy.Minimize(L1weights @ _cvxpy.abs(var_wv))
-                # obj = _cvxpy.Minimize(_cvxpy.norm(var_wv,1))  # for special equal-weight 1-norm case
-                problem = _cvxpy.Problem(obj, constraints)
-                problem.solve()  # solver="ECOS")
+                use_cvxpy = False
+                if use_cvxpy:
+                    # convex program to solve:
+                    # Minimize |wv|_1 (perhaps weighted) subject to the constraint:
+                    #  dot(percircuit_budget_deriv, wv) >= critical_percircuit_budgets
+                    import cvxpy as _cvxpy
+                    wv = budget.to_vector().copy()
+                    var_wv = _cvxpy.Variable(wv.shape, value=wv.copy())
+                    constraints = [percircuit_budget_deriv @ var_wv >= critical_percircuit_budgets,
+                                   var_wv >= 0]
+                    obj = _cvxpy.Minimize(L1weights @ _cvxpy.abs(var_wv))
+                    # obj = _cvxpy.Minimize(_cvxpy.norm(var_wv,1))  # for special equal-weight 1-norm case
+                    problem = _cvxpy.Problem(obj, constraints)
+                    problem.solve()  # solver="ECOS")
+    
+                    # assuming there is a step 2, walk probabilities to wv found by cvxpy
+                    wv_dest = var_wv.value
+                    print("CVXPY solution gives wv = ", wv_dest, " advancing probs to this point...")
+                    nSteps = 10
+                    delta_wv = (wv_dest - wv) / nSteps
+                    for i in range(nSteps):
+                        wv += delta_wv
+                        dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        for i in range(num_circuits):
+                            dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+                        dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+    
+                        two_dlogl = sum(2 * dlogl_percircuit)
+                        perbox_residual = sum(_np.clip(2 * dlogl_percircuit - redbox_threshold, 0, None))
+                        print("Advance: global=", two_dlogl - two_dlogl_threshold, " percircuit=", perbox_residual)
+                        print("  wv=", wv)
+    
+                        delta_percircuit_budgets = _np.dot(percircuit_budget_deriv, delta_wv)
+                        delta_probs = _advance_probs(current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  # , global_criteria_met)  # updates current_probs
+                        print("|delta probs| = ", _np.linalg.norm(delta_probs))
+                        current_probs += delta_probs
+                else:
+                    #Use cvxopt
+                    import cvxopt as _cvxopt
+                    # Minimize f_0(wv) = |wv|_1 (perhaps weighted) subject to the constraints:
+                    #  dot(percircuit_budget_deriv, wv) >= critical_percircuit_budgets
+                    #  2 * aggregate_dlogl <= two_dlogl_threshold  => f_1(wv) = 2 * aggregate_dlogl(wv) - threshold <= 0
 
-                # assuming there is a step 2, walk probabilities to wv found by cvxpy
-                wv_dest = var_wv.value
-                print("CVXPY solution gives wv = ", wv_dest, " advancing probs to this point...")
-                nSteps = 10
-                delta_wv = (wv_dest - wv) / nSteps
-                for i in range(nSteps):
-                    wv += delta_wv
-                    dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-                    for i in range(num_circuits):
-                        dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
-                    dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                    # want 
 
-                    two_dlogl = sum(2 * dlogl_percircuit)
-                    perbox_residual = sum(_np.clip(2 * dlogl_percircuit - redbox_threshold, 0, None))
-                    print("Advance: global=", two_dlogl - two_dlogl_threshold, " percircuit=", perbox_residual)
-                    print("  wv=", wv)
+                    wv = budget.to_vector().copy()
+                    n = len(wv)
 
-                    delta_percircuit_budgets = _np.dot(percircuit_budget_deriv, delta_wv)
-                    delta_probs = _advance_probs(current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  # , global_criteria_met)  # updates current_probs
-                    print("|delta probs| = ", _np.linalg.norm(delta_probs))
-                    current_probs += delta_probs
+                    def _agg_dlogl(current_probs, dlogl_elements):
+                        return 2 * _np.sum(dlogl_elements) - two_dlogl_threshold
+
+                    def _agg_dlogl_deriv(current_probs, dlogl_elements):
+                        #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        p, f, N = current_probs, objfn.freqs, objfn.total_counts
+                        #dlogl_delements = -N*f/p
+                        chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
+
+                        # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently reduce firstterms
+                        # in doing so, this computes how the per-circuit budget should be allocated to probabilities (i.e. how probs should be updated) to achieve this decrease in firstterms
+                        agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits)
+                        for i in range(num_circuits):
+                            chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
+                            Nloc = N[layout.indices_for_index(i)]
+                            agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_np.max(chis) - _np.min(chis))
+                            #wts = _np.abs(dlogl_helements[layout.indices_for_index(i)])
+                            #maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
+                            #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
+                            #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -_np.sum(chis * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
+                        assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), "Derivative of aggregate LLR wrt any circuit budget should be negitive"
+                        return _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
+
+                    def _agg_dlogl_hessian(current_probs, dlogl_elements):
+                        #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        #dlogl_helements = objfn.raw_objfn.hterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        p, f, N = current_probs, objfn.freqs, objfn.total_counts
+                        #dlogl_delements = -N*f/p
+                        #dlogl_helements = N*f/p**2
+                        chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
+                        one_over_dchi_elements = p**2 / f  # N / dlogl_helements # i.e. p**2/f
+
+                        # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently reduce firstterms
+                        # in doing so, this computes how the per-circuit budget should be allocated to probabilities (i.e. how probs should be updated) to achieve this decrease in firstterms
+                        TOL = 1e-6
+                        agg_dlogl_hessian_wrt_percircuit_budgets = _np.zeros(num_circuits)
+                        for i in range(num_circuits):
+                            chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
+                            Nloc = N[layout.indices_for_index(i)]
+                            maxes = _np.array(_np.abs(chis - _np.max(chis)) < TOL, dtype=int)
+                            mins = _np.array(_np.abs(chis - _np.min(chis)) < TOL, dtype=int)
+                            one_over_dchi = one_over_dchi_elements[layout.indices_for_index(i)]  # ~ p**2/f
+                            agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * Nloc[0] * (1 / _np.sum(one_over_dchi * maxes) + 1 / _np.sum(one_over_dchi * mins))
+                            
+                            #wts = 1.0 / _np.abs(dlogl_helements[layout.indices_for_index(i)])
+                            #hterms = dlogl_helements[layout.indices_for_index(i)]  # ~ f/p
+                            #maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
+                            #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
+                            ##Deriv of -N*f/p * (N*f/p**2) / 
+                            #agg_dlogl_hessian_wrt_percircuit_budgets[i] = _np.sum(hterms * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
+                        assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= 0)), "Hessian of aggregate LLR wrt any circuit budget should be positive"
+                        return _np.dot(percircuit_budget_deriv.T,
+                                       _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
+                                               percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
+                    
+
+                    #def F(x=None, z=None):
+                    #    if z is None and x is None:
+                    #        # (m, x0) where m is number of nonlinear constraints and x0 is in domain of f
+                    #        return (1, _cvxopt.matrix(0.00001, (n, 1)))
+                    #
+                    #    if min(x) < 0.0:
+                    #        return None  # don't allow negative wildcard vector components
+                    #    
+                    #    budget.from_vector(wv)
+                    #    budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+                    #    dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                    #
+                    #    #Evaluate F(x) => return (f, Df)
+                    #    f = _cvxopt.matrix(_np.array([L1term(wv), _agg_dlogl(wv, current_probs, dlogl_elements)]).reshape((2,1)))  # shape (m+1,1)
+                    #    Df = _cvxopt.matrix(_np.empty((2, n), 'd'))  # shape (m+1, n)
+                    #    Df[0, :] = L1term_grad(wv)
+                    #    Df[1, :] = _agg_dlogl_deriv(wv, current_probs, dlogl_elements)
+                    #    print("rank Df=", _np.linalg.matrix_rank(Df))
+                    #    if z is None:
+                    #        return f, Df
+                    #
+                    #    # additionally, compute H = z_0 * Hessian(f_0)(wv) + z_1 * Hessian(f_1)(wv)
+                    #    #  - but f_0 is linear, so H = z_1 * Hessian(f_1)(wv)
+                    #    H = _cvxopt.matrix(z[1] * _agg_dlogl_hessian(wv, current_probs, dlogl_elements))
+                    #    print("rank Hf=", _np.linalg.matrix_rank(H), " z[1]=",z[1])
+                    #    return f, Df, H
+                    #
+                    #print("Beginning cvxopt solve...")
+                    #print("Rank G = ",_np.linalg.matrix_rank(percircuit_budget_deriv))
+                    #result = _cvxopt.solvers.cp(F, -_cvxopt.matrix(percircuit_budget_deriv),
+                    #                            -_cvxopt.matrix(critical_percircuit_budgets.reshape((len(critical_percircuit_budgets), 1))))
+
+                    _cvxopt.solvers.options['abstol'] = 1e-5
+                    _cvxopt.solvers.options['reltol'] = 1e-5
+                    _cvxopt.solvers.options['maxiters'] = 10
+
+                    def F(x=None, z=None, debug=True):
+                        if z is None and x is None:
+                            # (m, x0) where m is number of nonlinear constraints and x0 is in domain of f
+                            return (1, _cvxopt.matrix(0.0001, (n, 1)))
+
+                        if min(x) < 0.0:
+                            return None  # don't allow negative wildcard vector components
+
+                        budget.from_vector(_np.array(x))
+                        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+                        #dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        p, f, N = current_probs, objfn.freqs, objfn.total_counts
+                        dlogl_elements = N*f*_np.log(f/p)
+
+                        #Evaluate F(x) => return (f, Df)
+                        f = _cvxopt.matrix(_np.array([_agg_dlogl(current_probs, dlogl_elements)]).reshape((1,1)))  # shape (m,1)
+                        Df = _cvxopt.matrix(_np.empty((1, n), 'd'))  # shape (m, n)
+                        Df[0, :] = _agg_dlogl_deriv(current_probs, dlogl_elements)
+                        #print("DB: rank Df=", _np.linalg.matrix_rank(Df))  # REMOVE
+                        
+                        if z is None:
+                            #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> %g" % f[0], ["%g" % vv for vv in Df])
+                            if debug: check_fd(x, False)
+                            return f, Df
+
+                        # additionally, compute H = z_0 * Hessian(f_0)(wv)
+                        H = _cvxopt.matrix(z[0] * _agg_dlogl_hessian(current_probs, dlogl_elements))
+                        #DEBUG REMOVE
+                        #print("rank Hf=", _np.linalg.matrix_rank(H), " z[0]=",z[0])
+                        #print(H)
+                        #print(_np.linalg.eigvals(H))
+                        evals = _np.linalg.eigvals(H)
+                        assert(_np.all(evals >= 0))
+                        print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
+                        print("  Df = ",["%g" % vv for vv in Df])
+                        print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
+                        if debug: check_fd(x, True)
+                        return f, Df, H
+
+                    #DEBUG: check with finite diff derivatives:
+                    def check_fd(wv_base, chk_hessian=False):
+                        wv_base = _np.array(wv_base, 'd') # [0.0001]*3
+                        grad = _np.zeros(3, 'd')
+                        f0, grad_chk = F(wv_base, debug=False)
+                        eps = 1e-7
+                        for k in range(3):
+                            wv_eps = wv_base.copy(); wv_eps[k] += eps
+                            f_eps, _ = F(wv_eps, debug=False)
+                            grad[k] = (f_eps[0] - f0[0]) / eps
+                        rel_diff_norm = _np.linalg.norm(grad-grad_chk)/_np.linalg.norm(grad)
+                        #print("GRAD CHECK:")
+                        #print(grad)
+                        #print(grad_chk)
+                        #print("  diff = ",grad - grad_chk, " rel_diff_norm=", rel_diff_norm)
+                        #print("GRAD CHK ",rel_diff_norm)
+                        assert(rel_diff_norm < 1e-3)
+                        if chk_hessian is False: return
+    
+                        hess = _np.zeros((3,3), 'd')
+                        f0, _, H_chk = F(wv_base, [1.0], debug=False)
+                        eps = 1e-7
+                        for k in range(3):
+                            wv_eps_k = wv_base.copy(); wv_eps_k[k] += eps
+                            f_eps_k, _ = F(wv_eps_k, debug=False)
+                            for l in range(3):
+                                wv_eps_l = wv_base.copy(); wv_eps_l[l] += eps
+                                f_eps_l, _ = F(wv_eps_l, debug=False)
+                                wv_eps_kl = wv_eps_k.copy(); wv_eps_kl[l] += eps
+                                f_eps_kl, _ = F(wv_eps_kl, debug=False)
+                                hess[k, l] = (f_eps_kl[0] - f_eps_k[0] - f_eps_l[0] + f0[0]) / eps**2
+                        rel_diff_norm = _np.linalg.norm(hess-H_chk)/_np.linalg.norm(hess)
+                        #print("HESSIAN CHECK:")
+                        #print(hess)
+                        #print(H_chk)
+                        #print("  diff = ",hess - H_chk, " rel_diff_norm=", rel_diff_norm)
+                        #print("HESS CHK ",rel_diff_norm)
+                        assert(rel_diff_norm < 5e-2)
+                        
+                    check_fd([0.0001]*3, True)
+
+                    print("Beginning cvxopt solve...")
+                    c = _cvxopt.matrix(L1weights.reshape((n, 1)))
+                    result = _cvxopt.solvers.cpl(c, F)
+                                                 #-_cvxopt.matrix(percircuit_budget_deriv),
+                                                 #-_cvxopt.matrix(critical_percircuit_budgets.reshape((len(critical_percircuit_budgets), 1))))
+
+                    
+                    print("CVXOPT result = ", result)
+                    print("x = ",list(result['x']))
+                    print("y = ",list(result['y']))
+                    print("znl = ",list(result['znl']))
+                    print("snl = ",list(result['snl']))
+                    wv = result['x']
             else:
                 wv = budget.to_vector().copy()
 
             # Step2: Walk down in steps until constrains ("firstterms") are satisfied
             #wv = budget.to_vector().copy()
-            print("Now work in aggregate criteria:")
-            step = 0.01
-            itr = 0
-            L1grad = L1weights
-            imax = None
-            while True:
 
-                #Compute current log-likelihood values and derivates wrt probabilities
-                dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-                for i in range(num_circuits):
-                    dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
-                dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-                two_dlogl_percircuit = 2 * dlogl_percircuit
-                two_dlogl = sum(two_dlogl_percircuit)
-                global_criteria_met = two_dlogl < two_dlogl_threshold
+            #mode = "percircuit" # "aggregate"
+            for mode in (): #("both",): #("percircuit", "aggregate"):
+                print("Stage w/mode = ",mode)
+                step = 0.01
+                itr = 0
+                L1grad = L1weights
+                imax = None
+                last_objfn_value = None; last_probs = None  # DEBUG
+                last_dlogl_percircuit = last_dlogl_elements = None # DEBUG
+                while True:
+    
+                    #Compute current log-likelihood values and derivates wrt probabilities
+                    dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                    for i in range(num_circuits):
+                        dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+                    dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                    two_dlogl_percircuit = 2 * dlogl_percircuit
+                    two_dlogl = sum(two_dlogl_percircuit)
+                    global_criteria_met = two_dlogl < two_dlogl_threshold
+    
+                    # check aggregate and per-circuit criteria - exit if met
+                    if mode == "aggregate":
+                        objfn_value = max(two_dlogl - two_dlogl_threshold, 0)
+                    elif mode == "percircuit":
+                        perbox_residual = sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
+                        objfn_value = perbox_residual
+                    elif mode == "both":
+                        objfn_value = max(two_dlogl - two_dlogl_threshold, 0) + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
+                        
+                    print("Iter ", itr, ": mode=", mode, " objfn=", objfn_value, " moved in", imax)
+                    print("  wv=", wv); itr += 1
+                    if objfn_value < 1e-10: # if global_criteria_met and perbox_residual < 1e-10:
+                        break  # DONE!
+                    if last_objfn_value is not None and last_objfn_value < objfn_value:
+                        iproblem = _np.argmax(dlogl_percircuit - last_dlogl_percircuit)
+                        print("Circuit  ",iproblem," dlogl=", last_dlogl_percircuit[iproblem], " => ", dlogl_percircuit[iproblem])
+                        print("  probs: ",last_probs[layout.indices_for_index(iproblem)], " => ", current_probs[layout.indices_for_index(iproblem)])
+                        print("  freqs: ",objfn.freqs[layout.indices_for_index(iproblem)])
+                        import bpdb; bpdb.set_trace()
+                        assert(False), "Objective function should be monotonic!!!"
+                    last_objfn_value = objfn_value
+                    last_probs = current_probs.copy()
+                    last_dlogl_percircuit = dlogl_percircuit.copy()
+                    last_dlogl_elements = dlogl_elements.copy()
+    
+                    #import bpdb; bpdb.set_trace()
+                    criteria_deriv_wrt_percircuit_budgets, maximum_percircuit_budget_delta = \
+                        _criteria_deriv(current_probs, dlogl_percircuit, dlogl_delements, mode, global_criteria_met)
+                    wv_grad = _np.dot(criteria_deriv_wrt_percircuit_budgets, percircuit_budget_deriv) #+ L1grad
+                    grad_norm = _np.linalg.norm(wv_grad)
+                    assert(grad_norm > 1e-6), \
+                        "Gradient norm == 0! - cannot reduce constraint residuals with more wildcard!"
 
-                # check aggregate and per-circuit criteria - exit if met
-                perbox_residual = sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
-                print("Iter ",itr,": global=",two_dlogl - two_dlogl_threshold, " percircuit=",perbox_residual, " moved in",imax)
-                print("  wv=", wv); itr += 1
-                if global_criteria_met and perbox_residual < 1e-10:
-                    break  # DONE!
+                    imax = _np.argmax(_np.abs(wv_grad / L1grad)); sgn = _np.sign(wv_grad[imax])
+                    wv_grad[:] = 0; wv_grad[imax] = sgn
+                    downhill_direction = (-wv_grad / _np.linalg.norm(wv_grad))
+                    
+                    #Constant step:
+                    #step = 1e-5 
 
-                #import bpdb; bpdb.set_trace()
-                criteria_deriv_wrt_percircuit_budgets = _criteria_deriv(current_probs, dlogl_percircuit, dlogl_delements, global_criteria_met)
-                wv_grad = _np.dot(criteria_deriv_wrt_percircuit_budgets, percircuit_budget_deriv) + L1grad
-                #imax = _np.argmax(_np.abs(wv_grad / L1grad));
-                #wv_grad[:] = 0; wv_grad[imax] = -1e-3
-                step = 1e-5 / _np.linalg.norm(wv_grad)
-                delta_wv = -wv_grad * step
-                wv += delta_wv
+                    # Variable step: expected reduction = df/dw * dw, so set |dw| = 0.01 * current_f / |df/dw|
+                    #step = (0.01 * objfn_value / grad_norm)
 
-                delta_percircuit_budgets = _np.dot(percircuit_budget_deriv, delta_wv)
-                assert(_np.all(delta_percircuit_budgets >= 0))
-                delta_probs = _advance_probs(current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  #, global_criteria_met)  # updates current_probs
-                print("|delta probs| = ", _np.linalg.norm(delta_probs))
-                current_probs += delta_probs
+                    #Step based on next discontinuity ("breakpoint")
+                    # require _np.dot(percircuit_budget_deriv, step * downhill_direction) < maximum_percircuit_budget_delta
+                    step = _np.min(maximum_percircuit_budget_delta / _np.dot(percircuit_budget_deriv, downhill_direction))
+                    assert(step > 0)
+                    step = min(step, 1e-5)  # don't allow too large of a step...
+
+                    delta_wv = downhill_direction * step
+                    wv += delta_wv
+                    
+                    delta_percircuit_budgets = _np.dot(percircuit_budget_deriv, delta_wv)
+                    #assert(_np.all(delta_percircuit_budgets >= 0))
+                    if not _np.all(delta_percircuit_budgets >= 0):
+                        import bpdb; bpdb.set_trace()
+                        pass
+                    
+                    delta_probs = _advance_probs(current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  #, global_criteria_met)  # updates current_probs
+                    print("|delta probs| = ", _np.linalg.norm(delta_probs))
+                    current_probs += delta_probs
 
             #assert(False), "STOP"
             wv_new = wv
