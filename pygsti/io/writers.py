@@ -178,7 +178,8 @@ def write_dataset(filename, dataset, circuits=None,
                              + "times: " + "  ".join(["%g" % tm for tm in dataRow.time]) + "\n"
                              + "outcomes: " + "  ".join([_outcome_to_str(ol) for ol in dataRow.outcomes]) + "\n")
                 if dataRow.reps is not None:
-                    output.write("repetitions: " + "  ".join(["%d" % rep for rep in dataRow.reps]) + "\n")
+                    fmt = "%d" if _np.all(_np.mod(dataRow.reps, 1) == 0) else "%g"
+                    output.write("repetitions: " + "  ".join([fmt % rep for rep in dataRow.reps]) + "\n")
                 if dataRow.aux:
                     output.write("aux: " + str(repr(dataRow.aux)) + "\n")
                 output.write('\n')  # blank line between circuits
