@@ -145,6 +145,8 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
             trans_circuit_list = circuit_list
         all_probs = gsGen.bulk_probabilities(trans_circuit_list, comm=comm, mem_limit=mem_limit)
         #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
+    else:
+        trans_circuit_list = circuit_list
 
     if comm is None or comm.Get_rank() == 0:  # only root rank computes
 
@@ -154,20 +156,24 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
             else:
                 rndm = rand_state
 
-        for k, s in enumerate(circuit_list):
+        circuit_times = times if times is not None else ["N/A dummy"]
+        count_lists = _collections.OrderedDict()
 
-            #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
-            trans_s = _gstrc.translate_circuit(s, alias_dict)
-            circuit_times = times if times is not None else ["N/A dummy"]
+        for tm in circuit_times:
+            #print("Time ", tm)
 
-            counts_list = []
-            for tm in circuit_times:
+            #It would be nice to be able to do something like this (time dependent calc for all probs at ptic time)
+            #if gsGen and times is not None:
+            #    all_probs = gsGen.bulk_probabilities(trans_circuit_list, comm=comm, mem_limit=mem_limit, time=tm)
+
+            for k, (s, trans_s) in enumerate(zip(circuit_list, trans_circuit_list)):
+
                 if gsGen:
                     if times is None:
                         ps = all_probs[trans_s]
                     else:
                         ps = gsGen.probabilities(trans_s, time=tm)
-
+            
                     if sample_error in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
                         for ol in ps:
@@ -210,7 +216,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
                         N = num_samples[k]  # try to treat num_samples as a list
                     except:
                         N = num_samples  # if not indexable, num_samples should be a single number
-
+            
                 nWeightedSamples = N
 
                 counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
@@ -245,12 +251,15 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
                                 "Invalid sample error parameter: '%s'  "
                                 "Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sample_error
                             )
-                counts_list.append(counts)
+                if s not in count_lists: count_lists[s] = []
+                count_lists[s].append(counts)
 
-            if times is None:
+        if times is None:
+            for s, counts_list in count_lists.items():
                 assert(len(counts_list) == 1)
                 dataset.add_count_dict(s, counts_list[0], record_zero_counts=record_zero_counts)
-            else:
+        else:
+            for s, counts_list in count_lists.items():
                 dataset.add_series_data(s, counts_list, times, record_zero_counts=record_zero_counts)
 
         dataset.done_adding_data()
