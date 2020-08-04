@@ -343,7 +343,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             replib.DM_mapfill_TDchi2_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
                                            layout_atom, dataset_rows, min_prob_clip_for_weighting,
-                                           prob_clip_interval, sub_resource_alloc)
+                                           prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
 
         atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
@@ -415,16 +415,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         None
         """
+        outcomes_cache = {}  # for performance
+
         def dchi2(dest_mx, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                   dataset_rows, wrt_slice, fill_comm):
             replib.DM_mapfill_TDdchi2_terms(self, dest_mx, dest_indices, dest_param_indices, num_tot_outcomes,
                                             layout_atom, dataset_rows, min_prob_clip_for_weighting,
-                                            prob_clip_interval, wrt_slice, fill_comm)
+                                            prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
 
         def chi2(dest_mx, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
             return replib.DM_mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, layout_atom,
                                                   dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
-                                                  fill_comm)
+                                                  fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dchi2, chi2_array_to_fill, chi2,
@@ -492,7 +494,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
                                              layout_atom, dataset_rows, min_prob_clip,
-                                             radius, prob_clip_interval, sub_resource_alloc)
+                                             radius, prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
 
         atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
@@ -565,15 +567,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         None
         """
+        outcomes_cache = {}  # for performance
+
         def dloglpp(array_to_fill, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                     dataset_rows, wrt_slice, fill_comm):
             return replib.DM_mapfill_TDdloglpp_terms(self, array_to_fill, dest_indices, dest_param_indices,
                                                      num_tot_outcomes, layout_atom, dataset_rows, min_prob_clip,
-                                                     radius, prob_clip_interval, wrt_slice, fill_comm)
+                                                     radius, prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
 
         def loglpp(array_to_fill, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
             return replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, dest_indices, num_tot_outcomes, layout_atom,
-                                                    dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
+                                                    dataset_rows, min_prob_clip, radius, prob_clip_interval,
+                                                    fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp,
