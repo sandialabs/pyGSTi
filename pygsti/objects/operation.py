@@ -479,6 +479,28 @@ class LinearOperator(_modelmember.ModelMember):
         """
         pass
 
+    #def rep_at_time(self, t):
+    #    """
+    #    Retrieves a representation of this operator at time `t`.
+    #
+    #    This is operationally equivalent to calling `self.set_time(t)` and
+    #    then retrieving `self._rep`.  However, what is returned from this function
+    #    need not be the same rep object for different times, allowing the
+    #    operator object to cache many reps for different times to increase performance
+    #    (this avoids having to initialize the same rep at a given time).
+    #
+    #    Parameters
+    #    ----------
+    #    t : float
+    #        The time.
+    #
+    #    Returns
+    #    -------
+    #    object
+    #    """
+    #    self.set_time(t)
+    #    return self._rep
+
     def to_dense(self):
         """
         Return this operation as a dense matrix.
@@ -4853,6 +4875,26 @@ class ComposedOp(LinearOperator):
         """
         return self.factorops
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        memo = set()
+        for factor in self.factorops:
+            if id(factor) in memo: continue
+            factor.set_time(t); memo.add(id(factor))
+
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -5465,6 +5507,23 @@ class ExponentiatedOp(LinearOperator):
         """
         return [self.exponentiated_op]
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.exponentiated_op.set_time(t)
+
     def copy(self, parent=None):
         """
         Copy this object.
@@ -5768,6 +5827,23 @@ class EmbeddedOp(LinearOperator):
         list
         """
         return [self.embedded_op]
+
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.embedded_op.set_time(t)
 
     def copy(self, parent=None):
         """
