@@ -611,9 +611,9 @@ class RawObjectiveFunction(ObjectiveFunction):
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
         lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
-        lsvec = _np.maximum(lsvec, 1e-100)  # avoids 0/0 elements that should be 0 below
+        pt5_over_lsvec = _np.where(lsvec < 1e-100, 0.0, 0.5 / _np.maximum(lsvec, 1e-100))  # lsvec=0 is *min* w/0 deriv
         dterms = self.dterms(probs, counts, total_counts, freqs, intermediates)
-        return (0.5 / lsvec) * dterms
+        return pt5_over_lsvec * dterms
 
     def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -5765,10 +5765,11 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)
-        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
-        # below
-        v = _np.maximum(v, 1e-100)
-        dlogl_factor = (0.5 / v)
+        # derivative should not really diverge as v->0 as v=0 is a minimum with zero derivative
+        # so we artificially zero out the derivative whenever v < a small positive value to avoid incorrect
+        # limiting whereby v == 0 but the derivative is > 0 (but small, e.g. 1e-7).
+        pt5_over_v = _np.where(v < 1e-100, 0.0, 0.5 / _np.maximum(v, 1e-100))  # v=0 is *min* w/0 deriv
+        dlogl_factor = pt5_over_v
         dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
         self.raw_objfn.resource_alloc.profiler.add_time("do_mlgst: JACOBIAN", tm)
