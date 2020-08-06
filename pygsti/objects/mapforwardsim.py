@@ -288,7 +288,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     ## ---------------------------------------------------------------------------------------------
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None):
+                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
+                               ds_cache=None):
         """
         Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -354,7 +355,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                wrt_filter=None, resource_alloc=None):
+                                wrt_filter=None, resource_alloc=None, ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -433,7 +434,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                              wrt_filter, resource_alloc)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None):
+                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
+                                 ds_cache=None):
         """
         Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
 
@@ -505,7 +507,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                   min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  wrt_filter=None, resource_alloc=None):
+                                  wrt_filter=None, resource_alloc=None, ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
