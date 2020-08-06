@@ -858,3 +858,11 @@ def processor_group_size(nprocs, number_of_tasks):
             return int(_np.ceil(number_of_tasks))  # we got lucky
         while _np.product(fctrs[0:i]) < number_of_tasks: i += 1
         return _np.product(fctrs[0:i])
+
+def sum_arrays(local_array, comm):
+    if comm is None or comm.size == 1: return local_array
+    from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+    result = _np.empty(local_array.shape, local_array.dtype)
+    comm.Allreduce(local_array, result, op=MPI.SUM)
+    return result
+

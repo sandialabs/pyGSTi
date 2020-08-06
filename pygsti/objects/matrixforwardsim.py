@@ -23,12 +23,15 @@ from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
+from .matrixlayout import MatrixTimeDepCOPALayout as _MatrixTimeDepCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .evaltree import EvalTree as _EvalTree
+from .objectivefns import RawChi2Function as _RawChi2Function
+from .objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -1177,9 +1180,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
+        #Special case: time dependent dataset
+        if dataset is not None and not dataset.has_trivial_timedependence:
+            layout = _MatrixTimeDepCOPALayout(circuits, self.model, dataset,
+                                            (num_params, num_params), verbosity)
+            layout.set_distribution_params(nprocs, (num_params, num_params),
+                                           mem_limit * 0.01 if (mem_limit is not None) else None)
+            return layout
+
         def create_layout_candidate(num_atoms):
             return _MatrixCOPALayout(circuits, self.model, dataset, None, num_atoms,
-                                     (num_params, num_params), verbosity)
+                                       (num_params, num_params), verbosity)
 
         bNp1Matters = bool("EP" in array_types or "EPP" in array_types)
         bNp2Matters = bool("EPP" in array_types)
@@ -1767,3 +1778,410 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             return (dGs, Gs, scaleVals) if scale else (dGs, Gs)
         else:
             return (dGs, scaleVals) if scale else dGs
+
+    ## ---------------------------------------------------------------------------------------------
+    ## TIME DEPENDENT functionality ----------------------------------------------------------------
+    ## ---------------------------------------------------------------------------------------------
+
+    def _ds_quantities(self, timestamp, ds_cache, layout, dataset, TIMETOL=1e-6):
+        if timestamp not in ds_cache:
+            if 'truncated_ds' not in ds_cache:
+                ds_cache['truncated_ds'] = dataset.truncate(layout.circuits)            
+            trunc_dataset = ds_cache['truncated_ds']
+
+            if 'ds_for_time' not in ds_cache:
+                tStart = _time.time()
+                ds_cache['ds_for_time'] = trunc_dataset.split_by_time()
+                #print("DB: Split dataset by time in %.1fs (%d timestamps)" % (_time.time() - tStart, len(ds_cache['ds_for_time'])))
+
+            if timestamp not in ds_cache['ds_for_time']:
+                return (None, None, None, None, None)
+
+            #Similar to MDC store's add_count_vectors function -- maybe consolidate in FUTURE?
+            counts = _np.empty(layout.num_elements, 'd')
+            totals = _np.empty(layout.num_elements, 'd')
+            dataset_at_t = ds_cache['ds_for_time'][timestamp] #trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
+
+            #DEBUG CHECK REMOVE
+            #tStart = _time.time()
+            #dataset_at_t_check = trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
+            #print("DB: Took time slice at t=%g in %.1fs" % (timestamp, _time.time() - tStart))
+            #for c in dataset_at_t:
+            #    if(dataset_at_t[c].counts != dataset_at_t_check[c].counts):
+            #        import bpdb; bpdb.set_trace()
+
+            firsts = []; indicesOfCircuitsWithOmittedData = []
+            for (i, circuit) in enumerate(layout.circuits):  # should be 'ds_circuits' really
+                inds = layout.indices_for_index(i)
+                if circuit in dataset_at_t:
+                    cnts = dataset_at_t[circuit].counts
+                else:
+                    cnts = {}  # Note: this will cause 0 totals, which will need to be handled downstream
+                totals[inds] = sum(cnts.values())  # dataset[opStr].total
+                counts[inds] = [cnts.get(x, 0) for x in layout.outcomes_for_index(i)]
+                lklen = _slct.length(inds)  # consolidate w/ `add_omitted_freqs`?
+                if 0 < lklen < self.model.compute_num_outcomes(circuit):
+                    firsts.append(_slct.to_array(inds)[0])
+                    indicesOfCircuitsWithOmittedData.append(i)
+
+            if len(firsts) > 0:
+                firsts = _np.array(firsts, 'i')
+                indicesOfCircuitsWithOmittedData = _np.array(indicesOfCircuitsWithOmittedData, 'i')
+                #print("DB: SPARSE DATA: %d of %d rows have sparse data" % (len(firsts), len(layout.circuits)))
+            else:
+                firsts = indicesOfCircuitsWithOmittedData = None
+
+            #if self.circuits.circuit_weights is not None:
+            #  SEE add_count_vectors
+            
+            nonzero_totals = _np.where(_np.abs(totals) < 1e-10, 1e-10, totals)  # to avoid divide-by-zero error on next line
+            freqs = counts / nonzero_totals
+            ds_cache[timestamp] = (counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData)
+
+        return ds_cache[timestamp]
+
+
+    def _bulk_fill_timedep_objfn(self, raw_objective, array_to_fill, layout, ds_circuits,
+                                 num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+
+        probs_array = _np.empty(layout.num_elements, 'd')
+        array_to_fill[:] = 0.0
+
+        def compute_timedep(layout_atom, sub_resource_alloc):
+            # compute objective at time layout_atom.time
+            for _, obj in self.model._iter_parameterized_objs():
+                obj.set_time(layout_atom.timestamp)
+            for opcache in self.model._opcaches.values():
+                for obj in opcache.values():
+                    obj.set_time(layout_atom.timestamp)
+
+            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
+            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
+                    self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+            if counts is None: return  # no data at this time => no contribution
+                
+            terms = raw_objective.terms(probs_array, counts, totals, freqs)
+            if firsts is not None:  # consolidate with `_update_terms_for_omitted_probs`
+                omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
+                                                 for i in indicesOfCircuitsWithOmittedData])
+                terms[firsts] += raw_objective.zero_freq_terms(totals[firsts], omitted_probs)
+
+            array_to_fill[layout_atom.element_slice] += terms
+
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+
+        #collect/gather results (SUM local arrays together)
+        summed = _mpit.sum_arrays(array_to_fill, resource_alloc.comm)
+        array_to_fill[:] = summed  # this could probably be done more efficiently
+
+
+    def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
+                                 num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+
+        probs_array = _np.empty(layout.num_elements, 'd')
+        dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
+        all_param_slice = slice(0,self.model.num_params)  # All params computed at once for now
+        array_to_fill[:] = 0.0
+
+        def compute_timedep(layout_atom, sub_resource_alloc):
+            # compute objective at time layout_atom.time
+            #print("DB: Rank %d : layout atom for t=" % resource_alloc.comm.rank, layout_atom.timestamp)
+            for _, obj in self.model._iter_parameterized_objs():
+                obj.set_time(layout_atom.timestamp)
+            for opcache in self.model._opcaches.values():
+                for obj in opcache.values():
+                    obj.set_time(layout_atom.timestamp)
+
+            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
+            self._bulk_fill_dprobs_block(dprobs_array, all_param_slice, layout_atom,
+                                         all_param_slice, sub_resource_alloc)
+
+            #import bpdb; bpdb.set_trace()
+            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
+                    self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+                
+            #Note: computing jacobian of objective here doesn't support sparse data yet!!! TODO
+            if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
+                dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
+                for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+                    dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
+
+            #print("Layout atom t=",layout_atom.timestamp)
+            #print("p = ",probs_array)
+            #print("dp[29] = ",dprobs_array[:,29])
+            #print("cnts = ",counts)
+            dprobs_array[:,:] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
+            #print("raw dterms = ",raw_objective.dterms(probs_array, counts, totals, freqs))
+            #print("jac_contrib[:,29] = ",dprobs_array[:,29])
+
+            if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
+                omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
+                                                 for i in indicesOfCircuitsWithOmittedData])
+                dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
+                                        * dprobs_omitted_rowsum
+            #print("jac_contrib[:,29] post = ",dprobs_array[:,29])
+
+            array_to_fill[layout_atom.element_slice] += dprobs_array
+            #print("array_to_fill[:,29] = ",array_to_fill[:,29], " sum = ",_np.sum(array_to_fill[:,29]))
+            #print()
+
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+
+        #collect/gather results (SUM local arrays together)
+        summed = _mpit.sum_arrays(array_to_fill, resource_alloc.comm)
+        array_to_fill[:] = summed  # this could probably be done more efficiently
+
+
+    def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
+                               ds_cache=None):
+        """
+        Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
+
+        Computation is performed by summing together the contributions for each time the circuit is
+        run, as given by the timestamps in `dataset`.
+
+        Parameters
+        ----------
+        array_to_fill : numpy ndarray
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. layout.num_elements)
+
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+
+        ds_circuits : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `layout` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(ds_circuits_to_use)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the chi2 contributions.
+
+        min_prob_clip_for_weighting : float, optional
+            Sets the minimum and maximum probability p allowed in the chi^2
+            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
+
+        prob_clip_interval : 2-tuple or None, optional
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
+
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+
+        Returns
+        -------
+        None
+        """
+        raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                                   resource_alloc)
+        return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
+                                             dataset, resource_alloc, ds_cache)
+
+    def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
+                                wrt_filter=None, resource_alloc=None, ds_cache=None):
+        """
+        Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
+
+        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        of the summed chi2 contributions for each circuit with respect to the
+        model's parameters.
+
+        Parameters
+        ----------
+        array_to_fill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. layout.num_elements) and M is the
+            number of model parameters.
+
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+
+        ds_circuits : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `layout` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(ds_circuits_to_use)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the chi2 contributions.
+
+        min_prob_clip_for_weighting : float, optional
+            Sets the minimum and maximum probability p allowed in the chi^2
+            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
+
+        prob_clip_interval : 2-tuple or None, optional
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
+
+        chi2_array_to_fill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit chi2 contributions, just like in
+            bulk_fill_timedep_chi2(...).
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.
+
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+
+        Returns
+        -------
+        None
+        """
+        raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                                   resource_alloc)
+        return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
+                                             dataset, resource_alloc, ds_cache)
+
+    def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
+                                 ds_cache=None):
+        """
+        Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
+
+        Computation is performed by summing together the contributions for each time the circuit is run,
+        as given by the timestamps in `dataset`.
+
+        Parameters
+        ----------
+        array_to_fill : numpy ndarray
+            an already-allocated 1D numpy array of length equal to the
+            total number of computed elements (i.e. layout.num_elements)
+
+       layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+
+        ds_circuits : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `layout` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(ds_circuits_to_use)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the logl contributions.
+
+        min_prob_clip : float, optional
+            The minimum probability treated normally in the evaluation of the
+            log-likelihood.  A penalty function replaces the true log-likelihood
+            for probabilities that lie below this threshold so that the
+            log-likelihood never becomes undefined (which improves optimizer
+            performance).
+
+        radius : float, optional
+            Specifies the severity of rounding used to "patch" the
+            zero-frequency terms of the log-likelihood.
+
+        prob_clip_interval : 2-tuple or None, optional
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
+
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+
+        Returns
+        -------
+        None
+        """
+        raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
+                                                  resource_alloc)
+        return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
+                                             dataset, resource_alloc, ds_cache)
+
+    def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
+                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
+                                  wrt_filter=None, resource_alloc=None, ds_cache=None):
+        """
+        Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
+
+        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        of the summed logl (in posison picture) contributions for each circuit
+        with respect to the model's parameters.
+
+        Parameters
+        ----------
+        array_to_fill : numpy ndarray
+            an already-allocated ExM numpy array where E is the total number of
+            computed elements (i.e. layout.num_elements) and M is the
+            number of model parameters.
+
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+
+        ds_circuits : list of Circuits
+            the circuits to use as they should be queried from `dataset` (see
+            below).  This is typically the same list of circuits used to
+            construct `layout` potentially with some aliases applied.
+
+        num_total_outcomes : list or array
+            a list of the total number of *possible* outcomes for each circuit
+            (so `len(num_total_outcomes) == len(ds_circuits_to_use)`).  This is
+            needed for handling sparse data, where `dataset` may not contain
+            counts for all the possible outcomes of each circuit.
+
+        dataset : DataSet
+            the data set used to compute the logl contributions.
+
+        min_prob_clip : float
+            a regularization parameter for the log-likelihood objective function.
+
+        radius : float
+            a regularization parameter for the log-likelihood objective function.
+
+        prob_clip_interval : 2-tuple or None, optional
+            (min,max) values used to clip the predicted probabilities to.
+            If None, no clipping is performed.
+
+        logl_array_to_fill : numpy array, optional
+            when not None, an already-allocated length-E numpy array that is filled
+            with the per-circuit logl contributions, just like in
+            bulk_fill_timedep_loglpp(...).
+
+        wrt_filter : list of ints, optional
+            If not None, a list of integers specifying which parameters
+            to include in the derivative dimension. This argument is used
+            internally for distributing calculations across multiple
+            processors and to control memory usage.
+
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+
+        Returns
+        -------
+        None
+        """
+        raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
+                                                  resource_alloc)
+        return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
+                                              dataset, resource_alloc, ds_cache)
+
