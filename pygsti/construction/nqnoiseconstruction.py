@@ -1882,8 +1882,8 @@ def _tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weig
                 prep_gatenames, meas_gatenames = gatename_fidpair
                 #prep_gates.extend( [_Lbl(gatename,iQubit) for gatename in prep_gatenames ]) #OLD: SERIAL strs
                 #meas_gates.extend( [_Lbl(gatename,iQubit) for gatename in meas_gatenames ]) #OLD: SERIAL strs
-                merge_into_1q(prep_gates, prep_gatenames, iQubit)
-                merge_into_1q(meas_gates, meas_gatenames, iQubit)
+                merge_into_1q(prep_gates, prep_gatenames, qubit_labels[iQubit])
+                merge_into_1q(meas_gates, meas_gatenames, qubit_labels[iQubit])
 
             final_fidpairs.append((_objs.Circuit(prep_gates, line_labels=qubit_labels),
                                    _objs.Circuit(meas_gates, line_labels=qubit_labels)))
@@ -2064,13 +2064,10 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
             assert(len(g.state_space_labels.labels[0]) == nqubits)  # expected qubit count
             qubit_labels = g.state_space_labels.labels[0]
 
-            # for now - assume we know the form of qubit_labels
-            assert(list(qubit_labels) == [('Q%d' % i) for i in range(nqubits)]
-                   or list(qubit_labels) == [i for i in range(nqubits)])
             new_qubit_labels = []
             for core_ql in core_qubits:
                 if core_ql in qubit_labels: new_qubit_labels.append(core_ql)  # same convention!
-                elif ("Q%d" % core_ql) in qubit_labels: new_qubit_labels.append("Q%d" % core_ql)  # HACK!
+                #elif ("Q%d" % core_ql) in qubit_labels: new_qubit_labels.append("Q%d" % core_ql)  # HACK!
             ssl = _StateSpaceLabels(new_qubit_labels)
             assert(all([(tgt in new_qubit_labels) for tgt in g.targetLabels]))  # all target qubits should be kept!
             if len(new_qubit_labels) == len(g.targetLabels):
