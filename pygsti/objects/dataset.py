@@ -2249,7 +2249,56 @@ class DataSet(object):
             ds.done_adding_data()
         return _OrderedDict([(t, dsDict[t]) for t in sorted(dsDict.keys())])
 
-    def process_circuits(self, processor_fn, aggregate=False):
+    def drop_zero_counts(self):
+        """
+        Creates a copy of this data set that doesn't include any zero counts.
+
+        Returns
+        -------
+        DataSet
+        """
+        self_sparse = DataSet(outcome_label_indices = self.olIndex)
+        for circuit, datarow in self.items():
+            self_sparse.add_raw_series_data(circuit, datarow.outcomes, datarow.time, datarow.reps,
+                                            record_zero_counts = False)
+        self_sparse.done_adding_data()
+        return self_sparse
+
+    def process_times(self, process_times_array_fn):
+        """
+        Manipulate this DataSet's timestamps according to `processor_fn`.
+
+        For example, using, the folloing `process_times_array_fn` would change
+        the timestamps for each circuit to sequential integers.
+
+        ```
+        def process_times_array_fn(times):
+            return list(range(len(times)))
+        ```
+
+        Parameters
+        ----------
+        process_times_array_fn : function
+            A function which takes a single array-of-timestamps argument
+            and returns another similarly-sized array.  This function is
+            called, once per circuit, with the circuit's array of timestamps.
+
+        Returns
+        -------
+        DataSet
+            A new data set with altered timestamps.
+        """
+        processed_ds = DataSet(outcome_label_indices = self.olIndex)
+
+        for circuit, datarow in self.items():
+            processed_time = _np.array(process_times_array_fn(datarow.time))
+            assert(processed_time.shape == datarow.time.shape), "process_times_array_fn returned the wrong shape!"
+            processed_ds.add_raw_series_data(circuit, datarow.outcomes, processed_time, datarow.reps,
+                                             record_zero_counts = True)
+        processed_ds.done_adding_data()
+        return processed_ds
+
+    def process_circuits(self, processor_fn, aggregate=False):  # INPLACE
         """
         Manipulate this DataSet's circuits (keys) according to `processor_fn`.
 
