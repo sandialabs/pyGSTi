@@ -1705,12 +1705,14 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     # final index within mx_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
     nEls = layout_atom.num_elements
     probs = _np.empty(nEls, 'd')
     probs2 = _np.empty(nEls, 'd')
     DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, comm)
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
@@ -1726,7 +1728,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
 
 
 def DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
-                            min_prob_clip_for_weighting, prob_clip_interval, comm):
+                            min_prob_clip_for_weighting, prob_clip_interval, comm, outcomes_cache):
 
     def obj_fn(p, f, n_i, n, omitted_p):
         cp = _np.clip(p, min_prob_clip_for_weighting, 1 - min_prob_clip_for_weighting)
@@ -1739,16 +1741,17 @@ def DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, l
         return v  # sqrt(the objective function term)  (the qty stored in cache)
 
     return DM_mapfill_TDterms(fwdsim, obj_fn, array_to_fill, dest_indices, num_outcomes, layout_atom,
-                              dataset_rows, comm)
+                              dataset_rows, comm, outcomes_cache)
 
 
 def DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
-                              min_prob_clip, radius, prob_clip_interval, comm):
+                              min_prob_clip, radius, prob_clip_interval, comm, outcomes_cache):
 
     min_p = min_prob_clip; a = radius
 
     def obj_fn(p, f, n_i, n, omitted_p):
         pos_p = max(p, min_p)
+
         if n_i != 0:
             freq_term = n_i * (_np.log(f) - 1.0)
         else:
@@ -1775,15 +1778,16 @@ def DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes,
         if omitted_p != 0.0:
             # if this is the *last* outcome at this time then account for any omitted probability
             v += n * omitted_p if omitted_p >= a else \
-                n * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+                 n * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
 
         return v  # objective function term (the qty stored in cache)
 
     return DM_mapfill_TDterms(fwdsim, obj_fn, array_to_fill, dest_indices, num_outcomes, layout_atom,
-                              dataset_rows, comm)
+                              dataset_rows, comm, outcomes_cache)
 
 
-def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm):
+def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows, comm,
+                       outcomes_cache):
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = layout_atom.cache_size
@@ -1837,15 +1841,18 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
             rhoVec.set_time(t)
             rho = rhoVec._rep
             t += rholabel.time
+            #if t0 < 10: print("BEGIN rho = ",rho.to_dense())  # REMOVE
 
             for gl in remainder:
                 op = fwdsim.model.circuit_layer_operator(gl, 'op')
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
+                #if t0 < 10: print("  ",gl," ==> rho = ",rho.to_dense()) # REMOVE
 
             j = outcome_to_elbl_index[outcome]
             E = EVecs[j]; E.set_time(t)
             p = E._rep.probability(rho)  # outcome probability
+            #if t0 < 10: print("  E=",E.to_dense(), "=> p=",p) # REMOVE
             N = totalCnts[t0]
             f = Nreps / N
 
@@ -1858,26 +1865,35 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
+            #DEBUG REMOVE
+            #if t0 <= 10:
+            #print("t=", t0, " rem=",remainder, " p,f,n,N,o = ",p,f,Nreps,N,omitted_p, " ==> ", objfn(p, f, Nreps, N, omitted_p))
+
             array_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
+        #print("DB: ar[", final_indices, "] = ", [array_to_fill[kk] for kk in final_indices]) # REMOVE
 
 
 def DM_mapfill_TDdchi2_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
-                             dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
+                             dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, wrt_slice,
+                             comm, outcomes_cache):
 
     def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
         DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, n_outcomes,
-                                layout_atom, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
+                                layout_atom, dataset_rows, min_prob_clip_for_weighting,
+                                prob_clip_interval, fill_comm, outcomes_cache)
 
     return DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices,
                                      num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
 
 
 def DM_mapfill_TDdloglpp_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                               layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
+                               layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval,
+                               wrt_slice, comm, outcomes_cache):
 
     def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
         DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, n_outcomes,
-                                  layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, fill_comm)
+                                  layout_atom, dataset_rows, min_prob_clip, radius,
+                                  prob_clip_interval, fill_comm, outcomes_cache)
 
     return DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices,
                                      num_outcomes, layout_atom, dataset_rows, fillfn, wrt_slice, comm)
@@ -1896,6 +1912,9 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     vals2 = _np.empty(nEls, 'd')
     assert(layout_atom.cache_size == 0)  # so all elements have None as start and remainder[0] is a prep label
 
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
     fillfn(vals, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, comm)
 
     all_slices, my_slice, owners, subComm = \
@@ -1909,15 +1928,25 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
+        # print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
+            #print("\n EPS ",i)  # DEBUG REMOVE
             fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
             _fas(array_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
+
+            #DEBUG REMOVE
+            #dbval = _np.linalg.norm((vals2 - vals) / eps)
+            #if iFinal == 29:
+            #print("DB: ",iFinal, dbval, " val=",vals2)
+            #print("  deriv = ",(vals2 - vals) / eps)
+            ##if dbval > 1e7:
+            # import bpdb; bpdb.set_trace()
+            #pass
+
     fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each processor has filled the relavant parts of dpr_cache,
