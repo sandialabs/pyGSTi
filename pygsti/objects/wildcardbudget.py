@@ -587,11 +587,16 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
         Parameters
         ----------
-        primitive_op_labels : iterable
+        primitive_op_labels : iterable or dict
             A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
             which give all the possible primitive ops (components of circuit
             layers) that will appear in circuits.  Each one of these operations
             will be assigned it's own independent element in the wilcard-vector.
+            A dictionary can be given whose keys are Labels and whose values are
+            0-based parameter indices.  In the non-dictionary case, each label gets
+            it's own parameter.  Dictionaries allow multiple labels to be associated
+            with the *same* wildcard budget parameter,
+            e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
 
         add_spam : bool, optional
             Whether an additional "SPAM" budget should be included, which is
@@ -600,16 +605,24 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         start_budget : float, optional
             An initial value to set all the parameters to.
         """
-        self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
-        nPrimOps = len(self.primOpLookup)
-        if add_spam:
-            nPrimOps += 1
-            self.spam_index = nPrimOps - 1  # last element is SPAM
-            self.primOpLookup['SPAM'] = self.spam_index
+        if isinstance(primitive_op_labels, dict):
+            assert(set(primitive_op_labels.values()) == set(range(len(set(primitive_op_labels.values())))))
+            self.primOpLookup = primitive_op_labels
+        else:
+            self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+
+        if 'SPAM' in self.primOpLookup:
+            self.spam_index = self.primOpLookup['SPAM']
         else:
             self.spam_index = None
 
-        Wvec = _np.array([start_budget] * nPrimOps)
+        nParams = len(set(self.primOpLookup.values()))
+        if add_spam and self.spam_index is None:
+            nParams += 1
+            self.spam_index = nParams - 1  # last element is SPAM
+            self.primOpLookup['SPAM'] = self.spam_index
+
+        Wvec = _np.array([start_budget] * nParams)
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
 
     def circuit_budget(self, circuit):
