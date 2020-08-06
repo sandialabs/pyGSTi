@@ -2247,13 +2247,15 @@ def DM_mapfill_dprobs_block(fwdsim,
     # final index within array_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
     nEls = layout_atom.num_elements
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
@@ -2490,6 +2492,9 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     cdef np.ndarray vals2 = np.empty(nEls, 'd')
     #assert(cacheSize == 0)
 
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
     fillfn(vals, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, comm, outcomes_cache)
 
     all_slices, my_slice, owners, subComm = \
@@ -2503,7 +2508,6 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
         if i in iParamToFinal:
