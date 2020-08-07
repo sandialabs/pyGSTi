@@ -1479,7 +1479,7 @@ class ColorBoxPlot(WorkspacePlot):
                  prec='compact', linlg_pcntle=.05, direct_gst_models=None,
                  dscomparator=None, stabilityanalyzer=None, mdc_store=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
-                 wildcard=None, colorbar=False, bgcolor="white"):
+                 wildcard=None, colorbar=False, bgcolor="white", genericdict=None):
         """
         Create a plot displaying the value of per-circuit quantities.
         TODO: docstring
@@ -1588,11 +1588,12 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot, self).__init__(ws, self._create, plottype, circuits, dataset, model,
                                            prec, sum_up, box_labels, hover_info, invert, linlg_pcntle,
                                            direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
-                                           submatrices, typ, scale, comm, wildcard, colorbar, bgcolor)
+                                           submatrices, typ, scale, comm, wildcard, colorbar, bgcolor,
+                                           genericdict)
 
     def _create(self, plottypes, circuits, dataset, model, prec, sum_up, box_labels, hover_info,
                 invert, linlg_pcntle, direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
-                submatrices, typ, scale, comm, wildcard, colorbar, bgcolor):
+                submatrices, typ, scale, comm, wildcard, colorbar, bgcolor, genericdict):
 
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
@@ -1712,6 +1713,14 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle = "2 log(L ratio)"
                 mx_fn = _mx_fn_dscmp  # use a *global* function so cache can tell it's the same
                 extra_arg = dscomparator
+
+            elif ptyp == "dict":
+                assert(genericdict is not None), \
+                    "Must specify `dscomparator` argument to create `dscmp` plot!"
+                colormapType = "blueseq"
+                ytitle = "."
+                mx_fn = _mx_fn_dict  # use a *global* function so cache can tell it's the same
+                extra_arg = genericdict
 
                 # if dataset is None: # then set dataset to be first compared dataset (for
                 #                     # extracting # degrees of freedom below)
@@ -1964,6 +1973,8 @@ def _mx_fn_directlogl(plaq, x, y, extra):
 def _mx_fn_dscmp(plaq, x, y, dscomparator):
     return _ph.dscompare_llr_matrices(plaq, dscomparator)
 
+def _mx_fn_dict(plaq, x, y, genericdict):
+    return _ph.genericdict_matrices(plaq, genericdict)
 
 def _mx_fn_driftpv(plaq, x, y, instabilityanalyzertuple):
     return _ph.drift_neglog10pvalue_matrices(plaq, instabilityanalyzertuple)
