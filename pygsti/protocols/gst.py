@@ -489,7 +489,8 @@ class GSTBadFitOptions(object):
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
                  wildcard_budget_includes_spam=True, wildcard_smart_init=True,
-                 wildcard_L1_weights=None, wildcard_budget_keyname='unmodeled_error'):
+                 wildcard_L1_weights=None, wildcard_budget_keyname='unmodeled_error',
+                 wildcard_primitive_op_labels=None):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -499,6 +500,7 @@ class GSTBadFitOptions(object):
         self.wildcard_smart_init = bool(wildcard_smart_init)
         self.wildcard_L1_weights = wildcard_L1_weights
         self.wildcard_budget_keyname = wildcard_budget_keyname
+        self.wildcard_primitive_op_labels = wildcard_primitive_op_labels
 
 
 class GSTObjFnBuilders(object):
@@ -1824,7 +1826,9 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
+    primitive_op_labels = badfit_options.wildcard_primitive_op_labels
+    if primitive_op_labels is None: primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
+    budget = _wild.PrimitiveOpsWildcardBudget(primitive_op_labels,
                                               add_spam=badfit_options.wildcard_budget_includes_spam,
                                               start_budget=0.0)
 

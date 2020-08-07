@@ -4,4 +4,4 @@ scipy
 plotly
 ply
 numpydoc
-
+sphinx>=2.1

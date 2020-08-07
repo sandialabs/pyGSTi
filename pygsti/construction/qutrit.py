@@ -14,7 +14,7 @@ import numpy as _np
 from scipy import linalg as _linalg
 
 from .. import objects as _objs
-from ..tools import unitary_to_process_mx, change_basis, Basis
+from ..tools import unitary_to_process_mx, change_basis
 
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
@@ -279,7 +279,7 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
     sslbls = _objs.StateSpaceLabels(['QT'], [9])
-    qutritMDL = _objs.ExplicitOpModel(sslbls, Basis.cast(basis, 9))
+    qutritMDL = _objs.ExplicitOpModel(sslbls, _objs.Basis.cast(basis, 9))
     qutritMDL.preps['rho0'] = rho0final
     qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright', E0final),
                                                            ('1bright', E1final),

@@ -12,23 +12,31 @@ Packages
 --------
 
 .. autosummary::
-   :template: pygsti_autosummary.rst
-   :toctree:
+   :toctree: _auto
 
-   pygsti
+   .. This list must be manually updated with all
+   .. the pygsti subpackages we want documented
 
+   pygsti.algorithms
+   pygsti.construction
+   pygsti.drivers
+   pygsti.io
+   pygsti.modelpacks
+   pygsti.objects
+   pygsti.optimize
+   pygsti.protocols
+   pygsti.report
+   pygsti.tools
+   pygsti.extras.rpe
+   pygsti.extras.drift
 
-.. 
-   NOT NEEDED b/c theme has sidebar with expandable contents
-   Contents
-   --------
-   XX.. toctree::
-   XX   :maxdepth: 2
+License & Copyright
+-------------------
+.. toctree::
+   :maxdepth: 1
 
-       GST
-       Commons
-
-
+   LICENSE
+   NOTICE
 
 Indices and tables
 ==================
@@ -36,4 +44,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-

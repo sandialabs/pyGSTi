@@ -1682,7 +1682,7 @@ class Circuit(object):
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
-    def expand_subcircuits(self):
+    def expand_subcircuits(self):  # INPLACE
         """
         Expands all :class:`CircuitLabel` labels within this circuit.
 

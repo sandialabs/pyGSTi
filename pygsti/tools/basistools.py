@@ -18,7 +18,8 @@ import collections as _collections
 
 import numpy as _np
 
-from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
+# from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
+from ..objects import basis as _basis
 from .basisconstructors import _basis_constructor_dict
 
 
@@ -50,7 +51,7 @@ def basis_matrices(name_or_basis, dim, sparse=False):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    return Basis.cast(name_or_basis, dim, sparse).elements
+    return _basis.Basis.cast(name_or_basis, dim, sparse).elements
 
 
 def basis_longname(basis):
@@ -66,7 +67,7 @@ def basis_longname(basis):
     -------
     string
     """
-    if isinstance(basis, Basis):
+    if isinstance(basis, _basis.Basis):
         return basis.longname
     return _basis_constructor_dict[basis].longname
 
@@ -98,7 +99,7 @@ def basis_element_labels(basis, dim):
         A list of length dim, whose elements label the basis
         elements.
     """
-    return Basis.cast(basis, dim).labels
+    return _basis.Basis.cast(basis, dim).labels
 
 
 def is_sparse_basis(name_or_basis):
@@ -114,7 +115,7 @@ def is_sparse_basis(name_or_basis):
     -------
     bool
     """
-    if isinstance(name_or_basis, Basis):
+    if isinstance(name_or_basis, _basis.Basis):
         return name_or_basis.sparse
     else:  # assume everything else is not sparse
         # (could test for a sparse matrix list in the FUTURE)
@@ -148,14 +149,14 @@ def change_basis(mx, from_basis, to_basis):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
     #Build Basis objects from to_basis and from_basis as needed.
-    from_is_basis = isinstance(from_basis, Basis)
-    to_is_basis = isinstance(to_basis, Basis)
+    from_is_basis = isinstance(from_basis, _basis.Basis)
+    to_is_basis = isinstance(to_basis, _basis.Basis)
     dim = mx.shape[0]
     if not from_is_basis and not to_is_basis:
         #Case1: no Basis objects, so just construct builtin bases based on `mx` dim
         if from_basis == to_basis: return mx.copy()  # (shortcut)
-        from_basis = BuiltinBasis(from_basis, dim, sparse=False)
-        to_basis = BuiltinBasis(to_basis, dim, sparse=False)
+        from_basis = _basis.BuiltinBasis(from_basis, dim, sparse=False)
+        to_basis = _basis.BuiltinBasis(to_basis, dim, sparse=False)
 
     elif from_is_basis and to_is_basis:
         #Case2: both Basis objects.  Just make sure they agree :)
@@ -171,11 +172,11 @@ def change_basis(mx, from_basis, to_basis):
             assert(from_basis.dim == dim), "src-basis dimension mismatch: %d != %d" % (from_basis.dim, dim)
             #to_basis = from_basis.create_equivalent(to_basis)
             # ^Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
-            to_basis = BuiltinBasis(to_basis, dim, sparse=from_basis.sparse)
+            to_basis = _basis.BuiltinBasis(to_basis, dim, sparse=from_basis.sparse)
         else:
             assert(to_basis.dim == dim), "dest-basis dimension mismatch: %d != %d" % (to_basis.dim, dim)
             #from_basis = to_basis.create_equivalent(from_basis)
-            from_basis = BuiltinBasis(from_basis, dim, sparse=to_basis.sparse)
+            from_basis = _basis.BuiltinBasis(from_basis, dim, sparse=to_basis.sparse)
 
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
@@ -269,8 +270,8 @@ def create_basis_pair(mx, from_basis, to_basis):
     from_basis, to_basis : Basis
     """
     dim = mx.shape[0]
-    a = isinstance(from_basis, Basis)
-    b = isinstance(to_basis, Basis)
+    a = isinstance(from_basis, _basis.Basis)
+    b = isinstance(to_basis, _basis.Basis)
     if a and b:
         pass  # no Basis creation needed
     elif a and not b:  # only from_basis is a Basis
@@ -278,8 +279,8 @@ def create_basis_pair(mx, from_basis, to_basis):
     elif b and not a:  # only to_basis is a Basis
         from_basis = to_basis.create_equivalent(from_basis)
     else:  # neither ar Basis objects (assume they're strings)
-        to_basis = BuiltinBasis(to_basis, dim)
-        from_basis = BuiltinBasis(from_basis, dim)
+        to_basis = _basis.BuiltinBasis(to_basis, dim)
+        from_basis = _basis.BuiltinBasis(from_basis, dim)
     assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch!"
     return from_basis, to_basis
 
@@ -307,11 +308,11 @@ def create_basis_for_matrix(mx, basis):
     Basis
     """
     dim = mx.shape[0]
-    if isinstance(basis, Basis):
+    if isinstance(basis, _basis.Basis):
         assert(basis.dim == dim), "Supplied Basis has wrong dimension!"
         return basis
     else:  # assume basis is a string name of a builtin basis
-        return BuiltinBasis(basis, dim)
+        return _basis.BuiltinBasis(basis, dim)
 
 
 def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
@@ -432,8 +433,8 @@ def resize_mx(mx, dim_or_block_dims=None, resize=None):
     #FUTURE: add a sparse flag?
     if dim_or_block_dims is None:
         return mx
-    blkBasis = DirectSumBasis([BuiltinBasis('std', d**2) for d in dim_or_block_dims])
-    simpleBasis = BuiltinBasis('std', sum(dim_or_block_dims)**2)
+    blkBasis = _basis.DirectSumBasis([_basis.BuiltinBasis('std', d**2) for d in dim_or_block_dims])
+    simpleBasis = _basis.BuiltinBasis('std', sum(dim_or_block_dims)**2)
 
     if resize == 'expand':
         a = blkBasis
@@ -508,8 +509,8 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    if not isinstance(basis, Basis):
-        basis = BuiltinBasis(basis, len(v))
+    if not isinstance(basis, _basis.Basis):
+        basis = _basis.BuiltinBasis(basis, len(v))
     ret = _np.zeros(basis.elshape, 'complex')
     for i, mx in enumerate(basis.elements):
         if keep_complex:
@@ -548,7 +549,7 @@ def stdmx_to_vec(m, basis):
     """
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
-    basis = Basis.cast(basis, m.shape[0]**2)
+    basis = _basis.Basis.cast(basis, m.shape[0]**2)
     v = _np.empty((basis.size, 1))
     for i, mx in enumerate(basis.elements):
         if basis.real:
