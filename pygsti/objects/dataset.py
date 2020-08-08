@@ -1400,9 +1400,10 @@ class DataSet(object):
         elif isinstance(count_dict, _OrderedDict):  # then don't sort keys
             outcomeCounts = _ld.OutcomeLabelDict(list(count_dict.items()))
         else:
-            # sort key for deterministic ordering of *new* outcome labels)
+            # sort key for deterministic ordering of *new* outcome labels). If keys are
+            # not strings, they will be converted to strings.
             outcomeCounts = _ld.OutcomeLabelDict([
-                (lbl, count_dict[lbl]) for lbl in sorted(list(count_dict.keys()))])
+                (str(lbl), count_dict[lbl]) for lbl in sorted(list(count_dict.keys()), key=str)])
 
         outcomeLabelList = list(outcomeCounts.keys())
         countList = list(outcomeCounts.values())
