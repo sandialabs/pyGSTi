@@ -27,7 +27,7 @@ ZERO_RTVD_THRESHOLD = 1e-5  # threshold for considering a residualTVD == 0 (and 
 
 # Make numpy raise exceptions on wrong input, rather than just warnings
 # Useful for correctly handling logs of negative numbers
-_np.seterr(invalid='raise', divide='raise')
+#_np.seterr(invalid='raise', divide='raise')  # don't do this globally in pyGSTi - use only for debugging!
 
 # The "zero" used in positive-probability constraints.  Cannot be exactly 0
 # because this causes problems when evaluating the log inside convex solver
