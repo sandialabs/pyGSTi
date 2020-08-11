@@ -185,14 +185,15 @@ class EvalTree(list):
             #    print("Index %d added %d scratch entries" % (k, db_added_scratch))
             #    import bpdb; bpdb.set_trace()
 
-        test_ratios = (100, 10, 3); ratio = len(eval_tree) / len(circuits_to_evaluate)
-        for test_ratio in test_ratios:
-            if ratio >= test_ratio:
-                _warnings.warn(("Created an evaluation tree that is inefficient: tree-size > %d * #circuits !\n"
-                                "This is likely due to the fact that the circuits being simulated do not have a\n"
-                                "periodic structure. Consider using a different simulator (e.g. MapForwardSimulator).")
-                               % test_ratio)
-                break  # don't print multiple warnings about the same inefficient tree
+        if len(circuits_to_evaluate) > 0:
+            test_ratios = (100, 10, 3); ratio = len(eval_tree) / len(circuits_to_evaluate)
+            for test_ratio in test_ratios:
+                if ratio >= test_ratio:
+                    _warnings.warn(("Created an evaluation tree that is inefficient: tree-size > %d * #circuits !\n"
+                                    "This is likely due to the fact that the circuits being simulated do not have a\n"
+                                    "periodic structure. Consider using a different forward simulator "
+                                    "(e.g. MapForwardSimulator).") % test_ratio)
+                    break  # don't print multiple warnings about the same inefficient tree
 
         return eval_tree
 
