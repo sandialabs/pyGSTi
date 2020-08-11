@@ -448,8 +448,8 @@ class SimMethodBase(object):
 
     def test_bulk_hprobs(self):
         # call normally
-        with self.assertNoWarns():
-            bulk_hprobs = self.model.sim.bulk_hprobs([self.gatestring1, self.gatestring2])
+        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
+        bulk_hprobs = self.model.sim.bulk_hprobs([self.gatestring1, self.gatestring2])
         # TODO assert correctness
 
         #hprobs no longer has return_pr and return_deriv args - just call respective functions.
@@ -470,21 +470,21 @@ class SimMethodBase(object):
 
         # call normally
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
-        with self.assertNoWarns():
-            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
+        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
+        self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
         # TODO assert correctness
 
         # also fill probabilities
         probs_to_fill = np.empty(nElements, 'd')
-        with self.assertNoWarns():
-            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, pr_array_to_fill=probs_to_fill)
+        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
+        self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, pr_array_to_fill=probs_to_fill)
         # TODO assert correctness
 
         #also fill derivative probabilities
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
-        with self.assertNoWarns():
-            self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, deriv1_array_to_fill=dprobs_to_fill)
+        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
+        self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout, deriv1_array_to_fill=dprobs_to_fill)
         # TODO assert correctness
 
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
@@ -505,8 +505,8 @@ class SimMethodBase(object):
         nParams = self.model.num_params
         hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
         lookup_split = evt.split(lookup, num_sub_trees=2)
-        with self.assertNoWarns():
-            self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
+        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
+        self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
         # TODO assert correctness
 
     def test_bulk_hprobs_by_block(self):
