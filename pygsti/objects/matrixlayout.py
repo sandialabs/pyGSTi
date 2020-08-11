@@ -27,46 +27,59 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, model, dataset, offset, elindex_outcome_tuples):
+                 ds_circuits, group, helpful_scratch, model, dataset, offset, elindex_outcome_tuples):
+
+        def add_expanded_circuits(indices, add_to_this_dict):
+            _expanded_nospam_circuit_outcomes = add_to_this_dict
+            for i in indices:
+                nospam_c = unique_nospam_circuits[i]
+                for unique_i in circuits_by_unique_nospam_circuits[nospam_c]:  # "unique" circuits: add SPAM to nospam_c
+                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].outcomes
+                    expc_outcomes = unique_complete_circuits[unique_i].expand_instruments_and_separate_povm(
+                        model, observed_outcomes)
+                    #Note: unique_complete_circuits may have duplicates (they're only unique *pre*-completion)
+
+                    for sep_povm_c, outcomes in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
+                        prep_lbl = sep_povm_c.circuit_without_povm[0]
+                        exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
+                        spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.full_effect_labels]
+                        outcome_by_spamtuple = _collections.OrderedDict([(st, outcome)
+                                                                         for st, outcome in zip(spam_tuples, outcomes)])
+
+                        #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
+                        # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
+                        # keep track of a list if unique_i indices for each circut and spam tuple below.
+                        if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
+                            _expanded_nospam_circuit_outcomes[exp_nospam_c] = _collections.OrderedDict(
+                                [(st, (outcome, [unique_i])) for st, outcome in zip(spam_tuples, outcomes)])
+                        else:
+                            for st, outcome in outcome_by_spamtuple.items():
+                                if st in _expanded_nospam_circuit_outcomes[exp_nospam_c]:
+                                    existing_outcome, existing_unique_is = \
+                                        _expanded_nospam_circuit_outcomes[exp_nospam_c][st]
+                                    assert(existing_outcome == outcome), "Outcome should be same when spam tuples are!"
+                                    assert(unique_i not in existing_unique_is)  # SLOW - remove?
+                                    existing_unique_is.append(unique_i)
+                                else:
+                                    _expanded_nospam_circuit_outcomes[exp_nospam_c][st] = (outcome, [unique_i])
 
         # keys = expanded circuits w/out SPAM layers; values = spamtuple => (outcome, unique_is) dictionary that
         # keeps track of which "unique" circuit indices having each spamtuple / outcome.
         expanded_nospam_circuit_outcomes = _collections.OrderedDict()
-        for i in group:
-            nospam_c = unique_nospam_circuits[i]
-            for unique_i in circuits_by_unique_nospam_circuits[nospam_c]:  # "unique" circuits that add SPAM to nospam_c
-                observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].outcomes
-                expc_outcomes = unique_complete_circuits[unique_i].expand_instruments_and_separate_povm(
-                    model, observed_outcomes)
-                #Note: unique_complete_circuits may have duplicates (they're only unique *pre*-completion)
-
-                for sep_povm_c, outcomes in expc_outcomes.items():  # for each expanded circuit from unique_i-th circuit
-                    prep_lbl = sep_povm_c.circuit_without_povm[0]
-                    exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
-                    spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.full_effect_labels]
-                    outcome_by_spamtuple = _collections.OrderedDict([(st, outcome)
-                                                                     for st, outcome in zip(spam_tuples, outcomes)])
-
-                    #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
-                    # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
-                    # keep track of a list if unique_i indices for each circut and spam tuple below.
-                    if exp_nospam_c not in expanded_nospam_circuit_outcomes:
-                        expanded_nospam_circuit_outcomes[exp_nospam_c] = _collections.OrderedDict(
-                            [(st, (outcome, [unique_i])) for st, outcome in zip(spam_tuples, outcomes)])
-                    else:
-                        for st, outcome in outcome_by_spamtuple.items():
-                            if st in expanded_nospam_circuit_outcomes[exp_nospam_c]:
-                                existing_outcome, existing_unique_is = \
-                                    expanded_nospam_circuit_outcomes[exp_nospam_c][st]
-                                assert(existing_outcome == outcome), "Outcome should be the same when spam tuples are!"
-                                assert(unique_i not in existing_unique_is)  # SLOW - remove?
-                                existing_unique_is.append(unique_i)
-                            else:
-                                expanded_nospam_circuit_outcomes[exp_nospam_c][st] = (outcome, [unique_i])
-
+        add_expanded_circuits(group, expanded_nospam_circuit_outcomes)
         expanded_nospam_circuits = _collections.OrderedDict(
             [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())])
-        self.tree = _EvalTree.create(expanded_nospam_circuits)
+
+        # add suggested scratch to the "final" elements as far as the tree creation is concerned
+        # - this allows these scratch element to help balance the tree.
+        expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
+        add_expanded_circuits(helpful_scratch, expanded_nospam_circuit_outcomes_plus_scratch)
+        expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
+            [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
+
+        self.tree = _EvalTree.create(expanded_nospam_circuits_plus_scratch)
+        #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
+
         self._num_nonscratch_tree_items = len(expanded_nospam_circuits)  # put this in EvalTree?
 
         # self.tree's elements give instructions for evaluating ("caching") no-spam quantities (e.g. products).
@@ -200,12 +213,15 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
+        #REMOVE: print("DEBUG: SETTING NUM_SUB_TREES = 2 to trigger behavior"); num_sub_trees = 2
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
-            groups = circuit_tree.find_splitting(len(unique_nospam_circuits),
-                                                 max_sub_tree_size, num_sub_trees, verbosity)  # a list of tuples/sets?
+            groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
+                                                                  max_sub_tree_size, num_sub_trees, verbosity)
+            #print("%d circuits => tree of size %d" % (len(unique_nospam_circuits), len(circuit_tree)))
         else:
             groups = [set(range(len(unique_nospam_circuits)))]
+            helpful_scratch = [set()]
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
         atoms = []
@@ -213,10 +229,11 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             (orig_i, list()) for orig_i in range(len(unique_circuits))])
 
         offset = 0
-        for group in groups:
+        for group, helpful_scratch_group in zip(groups, helpful_scratch):
             atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
-                                               circuits_by_unique_nospam_circuits, ds_circuits, group,
-                                               model, dataset, offset, elindex_outcome_tuples))
+                                               circuits_by_unique_nospam_circuits, ds_circuits,
+                                               group, helpful_scratch_group, model, dataset, offset,
+                                               elindex_outcome_tuples))
             offset += atoms[-1].num_elements
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
