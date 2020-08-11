@@ -639,6 +639,14 @@ def genericdict_matrices(gsplaq, genericdict):
 
 
 @smart_cached
+def genericdict_matrices(gsplaq, genericdict):
+    ret = _np.nan * _np.ones((gsplaq.num_rows, gsplaq.num_cols), 'd')
+    for i, j, opstr in gsplaq:
+        ret[i, j] = genericdict[opstr]
+    return ret
+
+
+@smart_cached
 def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     """
     Computes matrix of -log10(pvalues) for testing the stable-circuit ("no drift") null hypothesis in each circuit.

@@ -1976,6 +1976,10 @@ def _mx_fn_dscmp(plaq, x, y, dscomparator):
 def _mx_fn_dict(plaq, x, y, genericdict):
     return _ph.genericdict_matrices(plaq, genericdict)
 
+def _mx_fn_dict(plaq, x, y, genericdict):
+    return _ph.genericdict_matrices(plaq, genericdict)
+
+
 def _mx_fn_driftpv(plaq, x, y, instabilityanalyzertuple):
     return _ph.drift_neglog10pvalue_matrices(plaq, instabilityanalyzertuple)
 

@@ -1830,8 +1830,10 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     two_dlogl = sum(two_dlogl_terms)
 
     primitive_op_labels = badfit_options.wildcard_primitive_op_labels
-    if primitive_op_labels is None: primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
-    if badfit_options.wildcard_budget_includes_spam: primitive_op_labels += ('SPAM',)  # special op name
+    if primitive_op_labels is None:
+        primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
+        if badfit_options.wildcard_budget_includes_spam:
+            primitive_op_labels += ('SPAM',)  # special op name
 
     budget = _wild.PrimitiveOpsWildcardBudget(primitive_op_labels, start_budget=0.0) \
         if badfit_options.initial_budget is None else badfit_options.initial_budget
