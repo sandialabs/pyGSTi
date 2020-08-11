@@ -9,6 +9,11 @@ from functools import reduce as _reduce
 from functools import lru_cache as _lru_cache
 
 try:
+    from ...tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
+
+try:
     import cvxpy as _cp
 except ImportError:
     _cp = None
@@ -93,7 +98,7 @@ def interior_tensor_product(mx, dim_a, dim_b, e=None):
                 for unit_a in basis_a for unit_b in basis_b))
 
 
-def swell(mx, which_bits, n_bits=4):
+def swell_slow(mx, which_bits, n_bits=4):
     # M a transition matrix on bits b1..bn
     # Return a transition matrix on all bits
     assert all([bit < n_bits for bit in which_bits]), "You've specified bits not in the register"
@@ -111,7 +116,64 @@ def swell(mx, which_bits, n_bits=4):
             dim_after = 2**(sum(which_bits > ind))
             mx = interior_tensor_product(mx, dim_before, dim_after, _np.eye(2))
             which_bits = _np.sort(_np.append(which_bits, ind))
-            return swell(mx, which_bits, n_bits)
+            return swell_slow(mx, which_bits, n_bits)
+
+
+def swell(mx, which_bits, n_bits=4):
+    # M a transition matrix on bits b1..bn
+    # Return a transition matrix on all bits
+    assert all([bit < n_bits for bit in which_bits]), "You've specified bits not in the register"
+
+    which_bits = _np.array(which_bits)
+
+    if set(which_bits) == set(_np.arange(n_bits)):
+        return mx
+
+    # *** Below is a special case of construction found in DMOpRep_Embedded.__cinit__ ***
+    #  (where each sector/component has dimension 2 - a classical bit)
+    action_inds = which_bits  # the indices that correspond to mx indices
+    numBasisEls = _np.array([2] * n_bits, _np.int64)
+
+    # numBasisEls_noop_blankaction is just numBasisEls with actionInds == 1
+    numBasisEls_noop_blankaction = numBasisEls.copy()
+    numBasisEls_noop_blankaction[action_inds] = 1
+
+    # multipliers to go from per-label indices to tensor-product-block index
+    # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+    multipliers = _np.array(_np.flipud(_np.cumprod([1] + [2] * (n_bits - 1))), _np.int64)
+
+    # noop_incrementers[i] specifies how much the overall vector index
+    #  is incremented when the i-th "component" digit is advanced
+    dec = 0
+    noop_incrementers = _np.empty(n_bits, _np.int64)
+    for i in range(n_bits - 1, -1, -1):
+        noop_incrementers[i] = multipliers[i] - dec
+        dec += (numBasisEls_noop_blankaction[i] - 1) * multipliers[i]
+
+    # self.baseinds specifies the contribution from the "active
+    #  component" digits to the overall vector index.
+    baseinds = _np.empty(2**len(action_inds), _np.int64)
+    basisInds_action = [[0, 1]] * len(action_inds)
+
+    for ii, op_b in enumerate(_itertools.product(*basisInds_action)):
+        vec_index = 0
+        for j, bInd in zip(action_inds, op_b):
+            vec_index += multipliers[j] * bInd
+        baseinds[ii] = vec_index
+
+    ret = _np.zeros((2**n_bits, 2**n_bits), 'd')  # final "swelled" matrix
+    mx = _np.ascontiguousarray(mx)
+    ret = _np.ascontiguousarray(ret)
+    _fastcalc.fast_add_embeded(mx, ret, noop_incrementers, numBasisEls_noop_blankaction, baseinds)
+
+    #CHECK DEBUG
+    check = swell_slow(mx, which_bits, n_bits)
+    try:
+        assert(_np.allclose(check, ret))
+    except:
+        import bpdb; bpdb.set_trace()
+
+    return ret
 
 
 # ------------------------------------------------------------------------------
@@ -183,13 +245,15 @@ def max_log_likelihood(data):
 
 
 @_lru_cache(maxsize=100)
-def build_basis(weight, n_bits):
+def _build_basis_slow(weight, n_bits):
     """
     Build a basis of matrices for constructing the transition matrix
     T = I + sum_i a_i G_i
     also builds the constraint matrix, C:
     C . a <= 1
     """
+    _warnings.warn(("You're using a slow version of the basis-building code used by the disturbance calculations"
+                    " - compile pyGSTi's C extensions to make this go faster."))
     n_w = n_parameters_per_matrix(weight, n_bits)
     n_a = n_matrices_per_weight(weight, n_bits)
     dim = 2**n_bits
@@ -202,12 +266,47 @@ def build_basis(weight, n_bits):
     for ind in range(n_w * n_a):
         v = unit_vector(ind, n_w * n_a)
         vs = _np.reshape(v, (n_a, n_w))
-        ctm = sum((swell(transition_matrix(v, 2**weight), pair, n_bits)
+        ctm = sum((swell_slow(transition_matrix(v, 2**weight), pair, n_bits)
                    for v, pair in zip(vs, pairs))) - n_a * _np.eye(dim)
         my_basis += [ctm]
         my_constraints += [-_np.diag(ctm)]
 
     return my_basis, _np.array(my_constraints, dtype='int').T
+
+
+@_lru_cache(maxsize=100)
+def _build_basis_fast(weight, n_bits):
+    """
+    Build a basis of matrices for constructing the transition matrix
+    T = I + sum_i a_i G_i
+    also builds the constraint matrix, C:
+    C . a <= 1
+    """
+    n_w = n_parameters_per_matrix(weight, n_bits)
+    n_a = n_matrices_per_weight(weight, n_bits)
+    dim = 2**n_bits
+    print("Building basis: nparams_per_mx=", n_w, " nmatrices=", n_a, " dim=", dim)
+
+    my_basis = []
+    my_constraints = []
+    # All sets of qubits of given weight on n_bits
+    pairs = list(_itertools.combinations(_np.arange(n_bits), weight))
+
+    for ind in range(n_w * n_a):
+        print("DB: Index %d of %d..." % (ind, n_w * n_a))
+        v = unit_vector(ind, n_w * n_a)
+        vs = _np.reshape(v, (n_a, n_w))
+        ctm = sum((swell(transition_matrix(v, 2**weight), pair, n_bits)
+                   for v, pair in zip(vs, pairs)))
+        ctm -= n_a * _np.eye(dim)
+        my_basis += [ctm]
+        my_constraints += [-_np.diag(ctm)]
+
+    return my_basis, _np.array(my_constraints, dtype='int').T
+
+
+#Select fast version if it's available
+build_basis = _build_basis_fast if (_fastcalc is not None) else _build_basis_slow
 
 
 class ResidualTVD:
@@ -269,7 +368,9 @@ class ResidualTVD:
         self.Treg_factor = _cp.Parameter(nonneg=True, value=self.initial_treg_factor)
 
         # Build the basis and the constrain matrix - the basis used to construct the T vector
+        print("DB: building basis: weight = ",self.weight, " nbits=",self.n_bits); t0 = _time.time()
         self.t_basis, self.cons = build_basis(self.weight, self.n_bits)
+        print("DB: DONE building basis in %.1fs" % (_time.time() - t0))
 
         self._build_problem()
 
@@ -1252,6 +1353,7 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
         `(residual_tvd, errorbar_length)` tuple for the weight (i+1) residual TVD.
         That is, the weight (i+1) residual TVD = `residual_tvd +/- errorbar_length`.
     """
+    verbosity = 1 # DEBUG!!!
     residualtvd_by_weight = []
     last_rtvd = None; last_errorbar = None
     for weight in range(0, max_weight + 1):
@@ -1266,6 +1368,7 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
 
         if verbosity > 0:
             print("Computing weight-%d residual TVD..." % weight, end='')
+        print("DB: confidence_percent=",confidence_percent)
         if confidence_percent is not None:
             residual_tvd_fn = ResidualTVDWithConfidence(weight, n_bits, data_ref, data_test,
                                                         solver, initial_treg_factor)
@@ -1275,8 +1378,11 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
             p_ml = _np.array(data_ref) / _np.sum(data_ref)
             q_ml = _np.array(data_test) / _np.sum(data_test)
             residual_tvd_fn = ResidualTVD(weight, n_bits, solver=solver)
+            print("Running calc:")
             resid_tvd = residual_tvd_fn(p_ml, q_ml, verbosity=verbosity - 2)
+            print("DONE Running calc")
             errorbar = None
+        print("DONE w/residual TVD calc")
 
         # added a tolerance to the line below so this doesn't trigger with resid_tvd is barely above the last rtvd
         if last_rtvd is not None and resid_tvd > last_rtvd + 1e-6:

@@ -473,6 +473,48 @@ def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, 
     return output_state
 
 
+# Embed densemx and add result to outputmx
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_add_embeded(np.ndarray[double, ndim=2, mode="c"] densemx not None,
+                     np.ndarray[double, ndim=2, mode="c"] outputmx not None,
+                     np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                     np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                     np.ndarray[np.int64_t, ndim=1] baseinds):
+
+    cdef long i
+    cdef long j
+    cdef double cum
+    cdef INT k
+    cdef INT vec_index_noop = 0
+    cdef long nParts = numBasisEls_noop_blankaction.shape[0]
+    cdef long nActionIndices = baseinds.shape[0]
+
+    cdef INT b[100]
+    if nParts > 100:
+        raise ValueError("Need to increase size of static arrays!")
+
+    for i in range(nParts): b[i] = 0
+
+    #vec_index_noop = 0 assigned above
+    while(True):
+        #Act with embedded gate on appropriate sub-space of state
+        for i in range(nActionIndices):
+            for j in range(nActionIndices):
+                outputmx[vec_index_noop + baseinds[i], vec_index_noop + baseinds[j]] += densemx[i, j]
+
+        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        for i in range(nParts - 1, -1, -1):
+            if b[i] + 1 < numBasisEls_noop_blankaction[i]:
+                b[i] += 1; vec_index_noop += noop_incrementers[i]
+                break
+            else:
+                b[i] = 0
+        else:
+            break  # can't increment anything - break while(True) loop
+
+    return
+
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
