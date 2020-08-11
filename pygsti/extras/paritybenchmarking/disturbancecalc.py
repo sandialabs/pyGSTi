@@ -1,3 +1,4 @@
+import sys as _sys
 import numpy as _np
 import scipy as _sp
 from scipy.stats import chi2 as _chi2
@@ -167,11 +168,8 @@ def swell(mx, which_bits, n_bits=4):
     _fastcalc.fast_add_embeded(mx, ret, noop_incrementers, numBasisEls_noop_blankaction, baseinds)
 
     #CHECK DEBUG
-    check = swell_slow(mx, which_bits, n_bits)
-    try:
-        assert(_np.allclose(check, ret))
-    except:
-        import bpdb; bpdb.set_trace()
+    #check = swell_slow(mx, which_bits, n_bits)
+    #assert(_np.allclose(check, ret))
 
     return ret
 
@@ -285,7 +283,6 @@ def _build_basis_fast(weight, n_bits):
     n_w = n_parameters_per_matrix(weight, n_bits)
     n_a = n_matrices_per_weight(weight, n_bits)
     dim = 2**n_bits
-    print("Building basis: nparams_per_mx=", n_w, " nmatrices=", n_a, " dim=", dim)
 
     my_basis = []
     my_constraints = []
@@ -293,7 +290,6 @@ def _build_basis_fast(weight, n_bits):
     pairs = list(_itertools.combinations(_np.arange(n_bits), weight))
 
     for ind in range(n_w * n_a):
-        print("DB: Index %d of %d..." % (ind, n_w * n_a))
         v = unit_vector(ind, n_w * n_a)
         vs = _np.reshape(v, (n_a, n_w))
         ctm = sum((swell(transition_matrix(v, 2**weight), pair, n_bits)
@@ -368,9 +364,7 @@ class ResidualTVD:
         self.Treg_factor = _cp.Parameter(nonneg=True, value=self.initial_treg_factor)
 
         # Build the basis and the constrain matrix - the basis used to construct the T vector
-        print("DB: building basis: weight = ",self.weight, " nbits=",self.n_bits); t0 = _time.time()
         self.t_basis, self.cons = build_basis(self.weight, self.n_bits)
-        print("DB: DONE building basis in %.1fs" % (_time.time() - t0))
 
         self._build_problem()
 
@@ -1353,7 +1347,6 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
         `(residual_tvd, errorbar_length)` tuple for the weight (i+1) residual TVD.
         That is, the weight (i+1) residual TVD = `residual_tvd +/- errorbar_length`.
     """
-    verbosity = 1 # DEBUG!!!
     residualtvd_by_weight = []
     last_rtvd = None; last_errorbar = None
     for weight in range(0, max_weight + 1):
@@ -1368,7 +1361,6 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
 
         if verbosity > 0:
             print("Computing weight-%d residual TVD..." % weight, end='')
-        print("DB: confidence_percent=",confidence_percent)
         if confidence_percent is not None:
             residual_tvd_fn = ResidualTVDWithConfidence(weight, n_bits, data_ref, data_test,
                                                         solver, initial_treg_factor)
@@ -1378,11 +1370,8 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
             p_ml = _np.array(data_ref) / _np.sum(data_ref)
             q_ml = _np.array(data_test) / _np.sum(data_test)
             residual_tvd_fn = ResidualTVD(weight, n_bits, solver=solver)
-            print("Running calc:")
             resid_tvd = residual_tvd_fn(p_ml, q_ml, verbosity=verbosity - 2)
-            print("DONE Running calc")
             errorbar = None
-        print("DONE w/residual TVD calc")
 
         # added a tolerance to the line below so this doesn't trigger with resid_tvd is barely above the last rtvd
         if last_rtvd is not None and resid_tvd > last_rtvd + 1e-6:
@@ -1496,7 +1485,8 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
 
     for i in range(num_bootstrap_samples):
         if verbosity > 0:
-            print("Analyzing bootstrap sample %d of %d" % (i + 1, num_bootstrap_samples))
+            print("Analyzing bootstrap sample %d of %d..." % (i + 1, num_bootstrap_samples), end='')
+            _sys.stdout.flush(); tStart = _time.time()
         redata_ref = resample_data(bootstrap_data_ref, seed=seed + i)
         redata_test = resample_data(bootstrap_data_test, seed=seed + num_bootstrap_samples + i)
         if return_resampled_data:
@@ -1507,16 +1497,19 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
                 n_bits, redata_ref, redata_test, None, max_weight, solver=solver, verbosity=verbosity - 2)
         except Exception:
             try:
-                if verbosity > 0: print("Falling back on ECOS")
+                if verbosity > 0: print("\nFalling back on ECOS")
                 disturbances = compute_disturbances_with_confidence(
                     n_bits, redata_ref, redata_test, None, max_weight, solver="ECOS", verbosity=verbosity - 2)
             except Exception:
-                if verbosity > 0: print("Failed using %s and ECOS - reporting nans" % solver)
+                if verbosity > 0: print("\nFailed using %s and ECOS - reporting nans" % solver)
                 for w in range(max_weight):
                     dist_by_weight[w, i] = _np.nan
 
         for w in range(max_weight):
             dist_by_weight[w, i] = disturbances[w][0]
+
+        if verbosity > 0:
+            print(" (%.1fs)" % (_time.time() - tStart))
 
     dist_ml = _np.array([dist_by_weight_ml[w][0] for w in range(max_weight)], 'd')
 
