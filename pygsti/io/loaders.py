@@ -375,7 +375,12 @@ def load_data_from_dir(dirname, quick_load=False, comm=None):
     ProtocolData
     """
     dirname = _pathlib.Path(dirname)
-    return _metadir._cls_from_meta_json(dirname / 'data').from_dir(dirname, quick_load=quick_load)
+    try:
+        protocol_data = _metadir._cls_from_meta_json(dirname / 'data')
+    except FileNotFoundError:
+        from ..protocols import ProtocolData as _ProtocolData
+        protocol_data = _ProtocolData  # use ProtocolData as default class
+    return protocol_data.from_dir(dirname, quick_load=quick_load)
 
 
 def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=False, comm=None):
