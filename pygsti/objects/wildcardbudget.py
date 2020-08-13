@@ -447,7 +447,7 @@ class WildcardBudget(object):
         B_precomp = (probs_in < freqs)
         C_precomp = (probs_in == freqs)
 
-        tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
+        tol = 1e-8  # for instance, when W==0 and TVD_at_breakpt is 1e-17
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
             elInds = layout.indices_for_index(i)
