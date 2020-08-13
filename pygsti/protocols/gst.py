@@ -1852,7 +1852,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         # Note: evaluate objfn before passing to wildcard fn init so internal probs are init
         dlogl_percircuit = objfn.percircuit(model.to_vector())
 
-        bNew = True
+        bNew = True  # Enable the experimental new code to test better (hopefully) methods of computing the wildcard budget
         if bNew:
             #Begin with a zero budget
             initial_probs = objfn.probs.copy()
@@ -1928,8 +1928,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             assert(len(dlogl_percircuit) == num_circuits)
 
             #Stage1: per-circuit conditions:
-
-            do_stage1 = True  # CVXPY fails??
+            #  (get the critical wildcard budget required to satisfy the local criteria for each circuit)
+            do_stage1 = True
             if do_stage1:
                 # get set of "critical" wildcard budgets per circuit:
                 critical_percircuit_budgets = _np.zeros(num_circuits, 'd')
@@ -1965,9 +1965,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
                     critical_percircuit_budgets[i] = percircuit_budget
 
-                #import bpdb; bpdb.set_trace()
-
-                use_cvxpy = False
+                use_cvxpy = False  # Try using cvxpy to solve the problem with only per-circuit constraints
                 if use_cvxpy:
                     # convex program to solve:
                     # Minimize |wv|_1 (perhaps weighted) subject to the constraint:
@@ -1982,7 +1980,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     problem = _cvxpy.Problem(obj, constraints)
                     problem.solve()  # solver="ECOS")
     
-                    # assuming there is a step 2, walk probabilities to wv found by cvxpy
+                    # assuming there is a step 2, walk probabilities to wv found by cvxpy to continue with more stages
                     wv_dest = var_wv.value
                     print("CVXPY solution gives wv = ", wv_dest, " advancing probs to this point...")
                     nSteps = 10
@@ -2003,20 +2001,31 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         delta_probs = _advance_probs(current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  # , global_criteria_met)  # updates current_probs
                         print("|delta probs| = ", _np.linalg.norm(delta_probs))
                         current_probs += delta_probs
-                else:
+
+                use_cvxopt = True  # Try to solve the entire problem using cvxopt
+                if use_cvxopt:
                     #Use cvxopt
                     import cvxopt as _cvxopt
                     # Minimize f_0(wv) = |wv|_1 (perhaps weighted) subject to the constraints:
                     #  dot(percircuit_budget_deriv, wv) >= critical_percircuit_budgets
                     #  2 * aggregate_dlogl <= two_dlogl_threshold  => f_1(wv) = 2 * aggregate_dlogl(wv) - threshold <= 0
 
-                    # want 
-
                     wv = budget.to_vector().copy()
                     n = len(wv)
+                    SCALE = 1.0 #100.0 #0.001
+                    x0 = _np.array([0.0001] * n).reshape((n, 1))  # TODO - better guess?
+
+                    #Experiment with "soft" min and max functions to see if that fixes cvxopt getting stuck
+                    # so far, this hasn't helped.
+                    
+                    def _softmax(ar):
+                        return _np.log(_np.sum([_np.exp(x) for x in ar]))
+
+                    def _softmin(ar):
+                        return -_np.log(_np.sum([_np.exp(-x) for x in ar]))
 
                     def _agg_dlogl(current_probs, dlogl_elements):
-                        return 2 * _np.sum(dlogl_elements) - two_dlogl_threshold
+                        return SCALE * (2 * _np.sum(dlogl_elements) - two_dlogl_threshold)
 
                     def _agg_dlogl_deriv(current_probs, dlogl_elements):
                         #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
@@ -2031,12 +2040,14 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
                             Nloc = N[layout.indices_for_index(i)]
                             agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_np.max(chis) - _np.min(chis))
+                            #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_softmax(chis) - _softmin(chis)) # SOFT MAX/MIN
+                            
                             #wts = _np.abs(dlogl_helements[layout.indices_for_index(i)])
                             #maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
                             #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
                             #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -_np.sum(chis * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
                         assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), "Derivative of aggregate LLR wrt any circuit budget should be negitive"
-                        return _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
+                        return SCALE * _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
 
                     def _agg_dlogl_hessian(current_probs, dlogl_elements):
                         #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
@@ -2056,6 +2067,9 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             Nloc = N[layout.indices_for_index(i)]
                             maxes = _np.array(_np.abs(chis - _np.max(chis)) < TOL, dtype=int)
                             mins = _np.array(_np.abs(chis - _np.min(chis)) < TOL, dtype=int)
+
+                            #maxes = _np.exp(chis) / _np.sum(_np.exp(chis))  # SOFT MAX
+                            #mins = _np.exp(-chis) / _np.sum(_np.exp(-chis))  # SOFT MIN
                             one_over_dchi = one_over_dchi_elements[layout.indices_for_index(i)]  # ~ p**2/f
                             agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * Nloc[0] * (1 / _np.sum(one_over_dchi * maxes) + 1 / _np.sum(one_over_dchi * mins))
                             
@@ -2066,11 +2080,11 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             ##Deriv of -N*f/p * (N*f/p**2) / 
                             #agg_dlogl_hessian_wrt_percircuit_budgets[i] = _np.sum(hterms * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
                         assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= 0)), "Hessian of aggregate LLR wrt any circuit budget should be positive"
-                        return _np.dot(percircuit_budget_deriv.T,
+                        return SCALE * _np.dot(percircuit_budget_deriv.T,
                                        _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
                                                percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
                     
-
+                    # OLD cvxopt "F" function when using cvxopt.cp
                     #def F(x=None, z=None):
                     #    if z is None and x is None:
                     #        # (m, x0) where m is number of nonlinear constraints and x0 is in domain of f
@@ -2107,10 +2121,10 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     _cvxopt.solvers.options['reltol'] = 1e-5
                     _cvxopt.solvers.options['maxiters'] = 10
 
-                    def F(x=None, z=None, debug=True):
+                    def F(x=None, z=None, debug=True):  # new & current "F" function for use with cvxopt.cpl
                         if z is None and x is None:
                             # (m, x0) where m is number of nonlinear constraints and x0 is in domain of f
-                            return (1, _cvxopt.matrix(0.0001, (n, 1)))
+                            return (1, _cvxopt.matrix(x0))
 
                         if min(x) < 0.0:
                             return None  # don't allow negative wildcard vector components
@@ -2141,8 +2155,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         evals = _np.linalg.eigvals(H)
                         assert(_np.all(evals >= 0))
                         print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
-                        print("  Df = ",["%g" % vv for vv in Df])
-                        print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
+                        #print("  Df = ",["%g" % vv for vv in Df])
+                        #print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
                         if debug: check_fd(x, True)
                         return f, Df, H
 
@@ -2162,7 +2176,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         #print(grad_chk)
                         #print("  diff = ",grad - grad_chk, " rel_diff_norm=", rel_diff_norm)
                         #print("GRAD CHK ",rel_diff_norm)
-                        assert(rel_diff_norm < 1e-3)
+                        #assert(rel_diff_norm < 1e-3)
                         if chk_hessian is False: return
     
                         hess = _np.zeros((3,3), 'd')
@@ -2182,18 +2196,21 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         #print(hess)
                         #print(H_chk)
                         #print("  diff = ",hess - H_chk, " rel_diff_norm=", rel_diff_norm)
-                        #print("HESS CHK ",rel_diff_norm)
-                        assert(rel_diff_norm < 5e-2)
-                        
+                        print("HESS CHK ",rel_diff_norm)
+                        #assert(rel_diff_norm < 5e-2)
+
                     check_fd([0.0001]*3, True)
+                    #import bpdb; bpdb.set_trace()
 
                     print("Beginning cvxopt solve...")
                     c = _cvxopt.matrix(L1weights.reshape((n, 1)))
-                    result = _cvxopt.solvers.cpl(c, F)
-                                                 #-_cvxopt.matrix(percircuit_budget_deriv),
-                                                 #-_cvxopt.matrix(critical_percircuit_budgets.reshape((len(critical_percircuit_budgets), 1))))
+                    result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
 
-                    
+                    #This didn't seem to help much:
+                    #print("Attempting restart...")
+                    #x0[:,0] = list(result['x'])
+                    #result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
+
                     print("CVXOPT result = ", result)
                     print("x = ",list(result['x']))
                     print("y = ",list(result['y']))
@@ -2203,11 +2220,10 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             else:
                 wv = budget.to_vector().copy()
 
-            # Step2: Walk down in steps until constrains ("firstterms") are satisfied
+            # Time-evolution approach:  Walk downhill in steps until constraints ("firstterms") are satisfied
             #wv = budget.to_vector().copy()
 
-            #mode = "percircuit" # "aggregate"
-            for mode in (): #("both",): #("percircuit", "aggregate"):
+            for mode in (): #("both",): #("percircuit", "aggregate"):  # choose how many and which criteria to enforce on each pass.
                 print("Stage w/mode = ",mode)
                 step = 0.01
                 itr = 0
@@ -2292,7 +2308,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             wv_new = wv
             print("NEW TEST - final wildcard is ", wv_new)
             print(" ------------------- continuing using old method --------------------------- ")
-        # -----------------------------------
+            
+        # -----------------------------------  END OF NEW EXPERIMENTAL STUFF -- below here is the Nelder-Mead method ---
 
         logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
         num_circuits = len(circuits_to_use)
