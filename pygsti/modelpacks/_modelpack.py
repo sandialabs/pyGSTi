@@ -310,11 +310,12 @@ class GSTModelPack(ModelPack):
 
         Parameters
         ----------
-        max_max_length : number
+        max_max_length : number or list
             The greatest maximum-length to use. Equivalent to
             constructing a :class:`StandardGSTDesign` with a
             `max_lengths` list of powers of two less than or equal to
-            the given value.
+            the given value.  If a list is given, that this is treated
+            as the raw list of maximum lengths, rather than just the maximum.
 
         qubit_labels : tuple, optional
             A tuple of qubit labels.  None means the integers starting at 0.
@@ -349,12 +350,17 @@ class GSTModelPack(ModelPack):
         else:
             fidpairs = None
 
+        if isinstance(max_max_length, (list, tuple)):
+            max_lengths_list = max_max_length
+        else:
+            max_lengths_list = list(_gen_max_length(max_max_length))
+
         return _gst.StandardGSTDesign(
             self._target_model(qubit_labels),
             self.prep_fiducials(qubit_labels),
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),
-            list(_gen_max_length(max_max_length)),
+            max_lengths_list,
             kwargs.get('germ_length_limits', None),
             fidpairs,
             kwargs.get('keep_fraction', 1),

@@ -505,7 +505,7 @@ class WildcardBudget(object):
 
                 if ratio > 1.0:  # j in A
                     alpha_break = ratio
-                    beta_break = _np.nan if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
+                    beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
 
                     TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
                     #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
@@ -515,7 +515,7 @@ class WildcardBudget(object):
                     sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
                 elif ratio < 1.0:  # j in B
                     beta_break = ratio
-                    alpha_break = _np.nan if sum_fA == 0.0 else (
+                    alpha_break = 0 if sum_fA == 0.0 else (
                         1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
 
                     TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
@@ -531,7 +531,6 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                import bpdb; bpdb.set_trace()
                 assert(False), "TVD should eventually reach zero (I think)!"
 
             #Now A,B,C are fixed to what they need to be for our given W
@@ -571,49 +570,65 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
     Parameters
     ----------
-    primitive_op_labels : iterable
+    primitive_op_labels : iterable or dict
         A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
         which give all the possible primitive ops (components of circuit
         layers) that will appear in circuits.  Each one of these operations
         will be assigned it's own independent element in the wilcard-vector.
+        A dictionary can be given whose keys are Labels and whose values are
+        0-based parameter indices.  In the non-dictionary case, each label gets
+        it's own parameter.  Dictionaries allow multiple labels to be associated
+        with the *same* wildcard budget parameter,
+        e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
+        If `'SPAM'` is included as a primitive op, this value correspond to a
+        uniform "SPAM budget" added to each circuit.
 
-    add_spam : bool, optional
-        Whether an additional "SPAM" budget should be included, which is
-        simply a uniform budget added to each circuit.
-
-    start_budget : float, optional
-        An initial value to set all the parameters to.
+    start_budget : float or dict, optional
+        An initial value to set all the parameters to (if a float), or a
+        dictionary mapping primitive operation labels to initial values.
     """
 
-    def __init__(self, primitive_op_labels, add_spam=True, start_budget=0.0):
+    def __init__(self, primitive_op_labels, start_budget=0.0):
         """
         Create a new PrimitiveOpsWildcardBudget.
 
         Parameters
         ----------
-        primitive_op_labels : iterable
+        primitive_op_labels : iterable or dict
             A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
             which give all the possible primitive ops (components of circuit
             layers) that will appear in circuits.  Each one of these operations
             will be assigned it's own independent element in the wilcard-vector.
+            A dictionary can be given whose keys are Labels and whose values are
+            0-based parameter indices.  In the non-dictionary case, each label gets
+            it's own parameter.  Dictionaries allow multiple labels to be associated
+            with the *same* wildcard budget parameter,
+            e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
+            If `'SPAM'` is included as a primitive op, this value correspond to a
+            uniform "SPAM budget" added to each circuit.
 
-        add_spam : bool, optional
-            Whether an additional "SPAM" budget should be included, which is
-            simply a uniform budget added to each circuit.
-
-        start_budget : float, optional
-            An initial value to set all the parameters to.
+        start_budget : float or dict, optional
+            An initial value to set all the parameters to (if a float), or a
+            dictionary mapping primitive operation labels to initial values.
         """
-        self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
-        nPrimOps = len(self.primOpLookup)
-        if add_spam:
-            nPrimOps += 1
-            self.spam_index = nPrimOps - 1  # last element is SPAM
-            self.primOpLookup['SPAM'] = self.spam_index
+        if isinstance(primitive_op_labels, dict):
+            assert(set(primitive_op_labels.values()) == set(range(len(set(primitive_op_labels.values())))))
+            self.primOpLookup = primitive_op_labels
+        else:
+            self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+
+        if 'SPAM' in self.primOpLookup:
+            self.spam_index = self.primOpLookup['SPAM']
         else:
             self.spam_index = None
 
-        Wvec = _np.array([start_budget] * nPrimOps)
+        nParams = len(set(self.primOpLookup.values()))
+        if isinstance(start_budget, dict):
+            Wvec = _np.zeros(nParams, 'd')
+            for op, val in start_budget.items:
+                Wvec[self.primOpLookup[op]] = val
+        else:
+            Wvec = _np.array([start_budget] * nParams)
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
 
     def circuit_budget(self, circuit):

@@ -14,6 +14,7 @@ import numpy as _np
 import time as _time  # DEBUG TIMERS
 import collections as _collections
 import bisect as _bisect
+import warnings as _warnings
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .circuit import Circuit as _Circuit
@@ -66,6 +67,7 @@ class EvalTree(list):
 
         next_scratch_index = len(circuits_to_evaluate)
         for k in indices_sorted_by_circuit_len:
+
             circuit = circuits_to_evaluate[k]
             layertup = circuit.layertup if isinstance(circuit, _Circuit) else circuit
             L = len(circuit)
@@ -89,6 +91,13 @@ class EvalTree(list):
                 evalDict[L][layertup] = k
                 continue
 
+            def best_bite_length(tup, possible_bitelens):
+                for b in possible_bitelens:
+                    if tup[0:b] in evalDict[b]:
+                        return b
+                return 0
+
+            #db_added_scratch = 0
             start = 0; bite = 1
             possible_bs = list(reversed(evalDict_keys))  # copy list
             while start < L:
@@ -96,9 +105,20 @@ class EvalTree(list):
                 #Take a bite out of circuit, starting at `start` that is in evalDict
                 maxb = L - start
                 possible_bs = [b for b in possible_bs if b <= maxb]
+                best_bite_and_score = (None, 0)
                 for b in possible_bs:  # range(L - start, 0, -1):
                     if layertup[start:start + b] in evalDict[b]:
-                        bite = b; break
+                        # score of taking this bite = this bite's length + length of next bite
+                        #if start + b == L: break  # maximal score, so stop looking (this finishes circuit)
+                        score = b + best_bite_length(layertup[start + b:],
+                                                     [bb for bb in possible_bs if bb <= L - (start + b)])
+                        #REMOVE: print("b=%d is possible: score = %d" % (b, score))
+                        if score > best_bite_and_score[1]: best_bite_and_score = (b, score)
+                        if score == L: break  # this is a maximal score, so stop looking
+                        #OLD REMOVE: bite = b; break
+
+                if best_bite_and_score[0] is not None:
+                    bite = best_bite_and_score[0]
                 else:
                     # Can't even take a bite of length 1, so add the next op-label to the tree and take b=1 bite.
                     eval_tree.append((next_scratch_index, None, layertup[start]))
@@ -107,15 +127,16 @@ class EvalTree(list):
                         _bisect.insort(evalDict_keys, 1)
                     evalDict[1][layertup[start:start + 1]] = next_scratch_index; next_scratch_index += 1
                     bite = 1
+                #REMOVE: print("best bite = ",bite)
 
                 bFinal = bool(start + bite == L)
                 evalDict_bite = evalDict[bite]
-                #print("DB: start=",start,": found ",circuit[start:start+bite],
+                #print("DB: start=", start, ": found ", layertup[start:start + bite],
                 #      " (len=%d) in evalDict" % bite, "(final=%s)" % bFinal)
 
                 if start == 0:  # first in-evalDict bite - no need to add anything to self yet
                     iCur = evalDict_bite[layertup[0:bite]]
-                    #print("DB: taking bite: ", circuit[0:bite], "indx = ",iCur)
+                    #print("DB: taking initial bite:", layertup[0:bite], "indx =", iCur)
                     if bFinal:
                         if iCur != k:  # then we have a duplicate final operation sequence
                             if 0 not in evalDict:
@@ -145,20 +166,35 @@ class EvalTree(list):
                         #assert(self[iNew] is None)  # make sure we haven't put anything here yet
                         #self[k] = (iCur, iBite)
                         eval_tree.append((k, iCur, iBite))
+                        #print("DB: add final %s (index %d)" % (str(layertup[0:start + bite]), iNew))
                     else:
                         iNew = next_scratch_index
                         evalDict[start + bite][layertup[0:start + bite]] = iNew
                         eval_tree.append((iNew, iCur, iBite))
                         next_scratch_index += 1
-                        #self.append((iCur, iBite))
+                        #print("DB: add scratch %s (index %d)" % (str(layertup[0:start + bite]), iNew))
+                        #db_added_scratch += 1
 
-                    #print("DB: add %s (index %d)" % (str(circuit[0:start+bite]),iNew))
-                    #self.eval_order.append(iNew)
                     iCur = iNew
                 start += bite
                 #nBites += 1
 
-            #assert(k in self.eval_order or k in self.init_indices)
+            #DEBUG REMOVE
+            #if db_added_scratch > 100:
+            #    print("DB: Processing circuit: ", circuit.str)
+            #    print("Index %d added %d scratch entries" % (k, db_added_scratch))
+            #    import bpdb; bpdb.set_trace()
+
+        if len(circuits_to_evaluate) > 0:
+            test_ratios = (100, 10, 3); ratio = len(eval_tree) / len(circuits_to_evaluate)
+            for test_ratio in test_ratios:
+                if ratio >= test_ratio:
+                    _warnings.warn(("Created an evaluation tree that is inefficient: tree-size > %d * #circuits !\n"
+                                    "This is likely due to the fact that the circuits being simulated do not have a\n"
+                                    "periodic structure. Consider using a different forward simulator "
+                                    "(e.g. MapForwardSimulator).") % test_ratio)
+                    break  # don't print multiple warnings about the same inefficient tree
+
         return eval_tree
 
     def _create_single_item_trees(self, num_elements):
@@ -177,6 +213,7 @@ class EvalTree(list):
 
             subTreeIndices = set()  # create subtree for uncomputed item
             _walk_subtree(treedict, i, subTreeIndices)
+
             for k in subTreeIndices:
                 need_to_compute[k] = False  # mark all the elements of
                 #the new tree as computed
@@ -236,6 +273,7 @@ class EvalTree(list):
         #First pass - identify which indices go in which subtree
         #   Part 1: create disjoint set of subtrees generated by single items
         singleItemTreeSetList = self._create_single_item_trees(num_elements)
+
         #each element represents a subtree, and
         # is a set of the indices owned by that subtree
         nSingleItemTrees = len(singleItemTreeSetList)
@@ -405,13 +443,16 @@ class EvalTree(list):
 
         #Remove duplicated "final" items, as only a single tree (the first one to claim it)
         # should be assigned each final item, even if other trees need to compute that item as scratch.
-        claimed_final_indices = set(); disjointLists = []
+        # BUT: keep these removed final items as helpful scratch items, as these items, though
+        #      not needed, can help in the creating of a balanced evaluation tree.
+        claimed_final_indices = set(); disjointLists = []; helpfulScratchLists = []
         for subTreeSet in subTreeSetList:
             disjointLists.append(subTreeSet - claimed_final_indices)
+            helpfulScratchLists.append(subTreeSet - disjointLists[-1])  # the final items that were duplicated
             claimed_final_indices.update(subTreeSet)
 
         assert(sum(map(len, disjointLists)) == num_elements), "sub-tree sets are not disjoint!"
-        return disjointLists
+        return disjointLists, helpfulScratchLists
 
 
 #TODO: update this or REMOVE it -- maybe move to unit tests?

@@ -303,6 +303,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         N is the number of operation parameters.
     """
     dim = operation.dim
+    #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params), operation.dtype)
@@ -478,6 +479,28 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         pass
+
+    #def rep_at_time(self, t):
+    #    """
+    #    Retrieves a representation of this operator at time `t`.
+    #
+    #    This is operationally equivalent to calling `self.set_time(t)` and
+    #    then retrieving `self._rep`.  However, what is returned from this function
+    #    need not be the same rep object for different times, allowing the
+    #    operator object to cache many reps for different times to increase performance
+    #    (this avoids having to initialize the same rep at a given time).
+    #
+    #    Parameters
+    #    ----------
+    #    t : float
+    #        The time.
+    #
+    #    Returns
+    #    -------
+    #    object
+    #    """
+    #    self.set_time(t)
+    #    return self._rep
 
     def to_dense(self):
         """
@@ -4853,6 +4876,26 @@ class ComposedOp(LinearOperator):
         """
         return self.factorops
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        memo = set()
+        for factor in self.factorops:
+            if id(factor) in memo: continue
+            factor.set_time(t); memo.add(id(factor))
+
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -5465,6 +5508,23 @@ class ExponentiatedOp(LinearOperator):
         """
         return [self.exponentiated_op]
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.exponentiated_op.set_time(t)
+
     def copy(self, parent=None):
         """
         Copy this object.
@@ -5586,6 +5646,46 @@ class ExponentiatedOp(LinearOperator):
         assert(len(v) == self.num_params)
         self.exponentiated_op.from_vector(v, close, dirty_value)
         self.dirty = dirty_value
+
+    def deriv_wrt_params(self, wrt_filter=None):
+        """
+        The element-wise derivative this operation.
+
+        Constructs a matrix whose columns are the vectorized
+        derivatives of the flattened operation matrix with respect to a
+        single operation parameter.  Thus, each column is of length
+        op_dim^2 and there is one column per operation parameter. An
+        empty 2D array in the StaticDenseOp case (num_params == 0).
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        mx = self.exponentiated_op.to_dense()
+
+        mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
+        for i in range(2, self.power):
+            mx_powers[i] = _np.dot(mx_powers[i - 1], mx)
+
+        dmx = _np.transpose(self.exponentiated_op.deriv_wrt_params(wrt_filter))  # (num_params, dim^2)
+        dmx.shape = (dmx.shape[0], self.dim, self.dim)  # set shape for multiplication below
+
+        deriv = _np.zeros((self.dim, dmx.shape[0], self.dim), 'd')
+        for k in range(1, self.power + 1):
+            #deriv += mx_powers[k-1] * dmx * mx_powers[self.power-k]
+            deriv += _np.dot(mx_powers[k - 1], _np.dot(dmx, mx_powers[self.power - k]))
+            #        (D,D) * ((P,D,D) * (D,D)) => (D,D) * (P,D,D) => (D,P,D)
+
+        deriv = _np.moveaxis(deriv, 1, 2)
+        deriv = deriv.reshape((self.dim**2, deriv.shape[2]))
+        return deriv
 
     def __str__(self):
         """ Return string representation """
@@ -5768,6 +5868,23 @@ class EmbeddedOp(LinearOperator):
         list
         """
         return [self.embedded_op]
+
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.embedded_op.set_time(t)
 
     def copy(self, parent=None):
         """

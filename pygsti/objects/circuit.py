@@ -802,7 +802,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines  # add line labels
-        if ntimes > 1 and expand is False:
+        if ntimes >= 1 and expand is False:
             reppedCircuitLbl = self.to_label(nreps=ntimes)
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
@@ -1682,7 +1682,7 @@ class Circuit(object):
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
-    def expand_subcircuits(self):
+    def expand_subcircuits(self):  # INPLACE
         """
         Expands all :class:`CircuitLabel` labels within this circuit.
 
@@ -2809,6 +2809,14 @@ class Circuit(object):
                     return sum([size(sub) for sub in obj])
 
         return sum([size(layer_lbl) for layer_lbl in self._labels])
+
+    @property
+    def duration(self):
+        # similar to depth()
+        if self._static:
+            return sum([lbl.time for lbl in self._labels])
+        else:
+            return sum([_Label(layer_lbl).time for layer_lbl in self._labels])
 
     def two_q_gate_count(self):
         """

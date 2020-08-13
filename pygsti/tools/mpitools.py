@@ -858,3 +858,35 @@ def processor_group_size(nprocs, number_of_tasks):
             return int(_np.ceil(number_of_tasks))  # we got lucky
         while _np.product(fctrs[0:i]) < number_of_tasks: i += 1
         return _np.product(fctrs[0:i])
+
+
+def sum_arrays(local_array, owners, comm):
+    """
+    Sums arrays across all "owner" processors.
+
+    Parameters
+    ----------
+    local_array : numpy.ndarray
+        The array contributed by this processor.  This array will be *zeroed out*
+        on processors whose ranks are not in `owners`.
+
+    owners : list or set
+        The ranks whose contributions should be summed.  These
+        are the ranks of the processors that "own" the responsibility to
+        communicate their local array to the rest of the processors.
+
+    comm : mpi4py.MPI.Comm
+        MPI communicator
+
+    Returns
+    -------
+    numpy.ndarray
+        The summed local arrays.
+    """
+    if comm is None or comm.size == 1: return local_array
+    from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+    if comm.rank not in owners:
+        local_array.fill(0)  # zero-out array so it doesn't contribute to the sum (better way?)
+    result = _np.empty(local_array.shape, local_array.dtype)
+    comm.Allreduce(local_array, result, op=MPI.SUM)
+    return result

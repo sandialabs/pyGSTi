@@ -151,6 +151,10 @@ class Label(object):
         """
         return 1  # most labels have only reps==1
 
+    @property
+    def has_nontrivial_components(self):
+        return len(self.components) > 0 and self.components != (self,)
+
     def expand_subcircuits(self):
         """
         Expand any sub-circuits within this label.
@@ -1053,7 +1057,7 @@ class CircuitLabel(Label, tuple):
             s = "".join([str(lbl) for lbl in self.components])
             if self.time != 0.0:
                 s += ("!%f" % self.time).rstrip('0').rstrip('.')
-            if len(self.components) > 1:
+            if len(self.components) > 0:
                 s = "(" + s + ")"  # add parenthesis
         if self[2] != 1: s += "^%d" % self[2]
         return s

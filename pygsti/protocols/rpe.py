@@ -13,9 +13,9 @@ RPE Protocol objects
 from . import protocol as _proto
 from ..algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
 
-from collections import OrderedDict, namedtuple
-from argparse import Namespace
-import numpy
+import collections as _collections
+import argparse as _argparse
+import numpy as _np
 
 
 class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
@@ -188,9 +188,9 @@ class RobustPhaseEstimation(_proto.Protocol):
         dataset : <TODO typ>
             <TODO description>
         """
-        measured = OrderedDict()
+        measured = _collections.OrderedDict()
         for n, sin_circ, cos_circ in zip(design.req_lengths, *design.circuit_lists):
-            m = measured[n] = numpy.zeros(4, dtype=int)
+            m = measured[n] = _np.zeros(4, dtype=int)
             m[:2] = self._parse_row(
                 dataset[sin_circ], design.sin_outcomes_pos, design.sin_outcomes_neg
             )
@@ -215,7 +215,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         <TODO typ>
         """
 
-        angles = OrderedDict()
+        angles = _collections.OrderedDict()
 
         # The ordering here is chosen to maintain compatibility.
         for n, (Cp_Ns, Cm_Ns, Cp_Nc, Cm_Nc) in measured.items():                                                        # noqa
@@ -225,7 +225,7 @@ class RobustPhaseEstimation(_proto.Protocol):
             Pp_Ns = Cp_Ns / (Cp_Ns + Cm_Ns)                                                                             # noqa
             Pp_Nc = Cp_Nc / (Cp_Nc + Cm_Nc)                                                                             # noqa
 
-            angles[n] = numpy.arctan2(2 * Pp_Ns - 1, 2 * Pp_Nc - 1) % (2 * numpy.pi)
+            angles[n] = _np.arctan2(2 * Pp_Ns - 1, 2 * Pp_Nc - 1) % (2 * _np.pi)
 
         return angles
 
@@ -252,7 +252,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         meas = self.parse_dataset(data.edesign, data.dataset)
         angles = self.compute_raw_angles(meas)
 
-        _res = _RobustPhaseEstimation(Namespace(raw_angles=angles, _measured=meas))
+        _res = _RobustPhaseEstimation(_argparse.Namespace(raw_angles=angles, _measured=meas))
 
         ret = RobustPhaseEstimationResults(data, self, _res.angle_estimates)
         return ret

@@ -608,6 +608,9 @@ cdef class DMOpRepDense(DMOpRep):
             s += "\n"
         return s
 
+    def copy(self):
+        return DMOpRepDense(self.base.copy())
+
 
 cdef class DMOpRepEmbedded(DMOpRep):
     cdef np.ndarray data_ref1
@@ -685,6 +688,15 @@ cdef class DMOpRepEmbedded(DMOpRep):
                                    (<DMOpCRep_Embedded*>self.c_op)._nBlocks,
                                    self.c_op._dim))
 
+    def copy(self):
+        return DMOpRepEmbedded(self.embedded.copy(),
+                               self.data_ref5.copy(), self.data_ref6.copy(), self.data_ref4.copy(),
+                               (<DMOpCRep_Embedded*>self.c_op)._embeddedDim,
+                               (<DMOpCRep_Embedded*>self.c_op)._nComponents,
+                               (<DMOpCRep_Embedded*>self.c_op)._iActiveBlock,
+                               (<DMOpCRep_Embedded*>self.c_op)._nBlocks,
+                               self.c_op._dim)
+
 
 cdef class DMOpRepComposed(DMOpRep):
     cdef public object factor_reps # list of DMOpRep objs?
@@ -709,6 +721,9 @@ cdef class DMOpRepComposed(DMOpRep):
             creps[i] = (<DMOpRep?>new_factor_op_reps[i]).c_op
         (<DMOpCRep_Composed*>self.c_op).reinit_factor_op_creps(creps)
 
+    def copy(self):
+        return DMOpRepComposed([f.copy() for f in self.factor_reps], self.c_op._dim)
+
 
 cdef class DMOpRepSum(DMOpRep):
     cdef public object factor_reps # list of DMOpRep objs?
@@ -725,6 +740,9 @@ cdef class DMOpRepSum(DMOpRep):
     def __reduce__(self):
         return (DMOpRepSum, (self.factor_reps, self.c_op._dim))
 
+    def copy(self):
+        return DMOpRepSum([f.copy() for f in self.factor_reps], self.c_op._dim)
+
 
 cdef class DMOpRepExponentiated(DMOpRep):
     cdef public DMOpRep exponentiated_op
@@ -737,6 +755,9 @@ cdef class DMOpRepExponentiated(DMOpRep):
 
     def __reduce__(self):
         return (DMOpRepExponentiated, (self.exponentiated_op, self.power, self.c_op._dim))
+
+    def copy(self):
+        return DMOpRepExponentiated(self.exponentiated_op.copy(), self.power, self.c_op._dim)
 
 
 cdef class DMOpRepLindblad(DMOpRep):
@@ -782,6 +803,14 @@ cdef class DMOpRepLindblad(DMOpRep):
                                    (<DMOpCRep_Lindblad*>self.c_op)._s,
                                    self.data_ref2, self.data_ref3, self.data_ref4))
 
+    def copy(self):
+        return DMOpRepLindblad(self.errgen_rep.copy(),
+                               (<DMOpCRep_Lindblad*>self.c_op)._mu,
+                               (<DMOpCRep_Lindblad*>self.c_op)._eta,
+                               (<DMOpCRep_Lindblad*>self.c_op)._m_star,
+                               (<DMOpCRep_Lindblad*>self.c_op)._s,
+                               self.data_ref2.copy(), self.data_ref3.copy(), self.data_ref4.copy())
+
 
 cdef class DMOpRepSparse(DMOpRep):
     cdef public np.ndarray data
@@ -801,6 +830,9 @@ cdef class DMOpRepSparse(DMOpRep):
 
     def __reduce__(self):
         return (DMOpRepSparse, (self.data, self.indices, self.indptr))
+
+    def copy(self):
+        return DMOpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy())
 
 
 # State vector (SV) propagation wrapper classes
@@ -2215,13 +2247,15 @@ def DM_mapfill_dprobs_block(fwdsim,
     # final index within array_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
     nEls = layout_atom.num_elements
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
@@ -2254,9 +2288,9 @@ cdef double TDchi2_obj_fn(double p, double f, double n_i, double n, double omitt
     return v  # sqrt(the objective function term)  (the qty stored in cache)
 
 def DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
-                            min_prob_clip_for_weighting, prob_clip_interval, comm):
+                            min_prob_clip_for_weighting, prob_clip_interval, comm, outcomes_cache):
     DM_mapfill_TDterms(fwdsim, "chi2", array_to_fill, dest_indices, num_outcomes, layout_atom,
-                       dataset_rows, comm, min_prob_clip_for_weighting, 0.0)
+                       dataset_rows, comm, outcomes_cache, min_prob_clip_for_weighting, 0.0)
 
 
 cdef double TDloglpp_obj_fn(double p, double f, double n_i, double n, double omitted_p, double min_p, double a):
@@ -2297,16 +2331,18 @@ cdef double TDloglpp_obj_fn(double p, double f, double n_i, double n, double omi
 
 
 def DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
-                              min_prob_clip, radius, prob_clip_interval, comm):
+                              min_prob_clip, radius, prob_clip_interval, comm, outcomes_cache):
     DM_mapfill_TDterms(fwdsim, "logl", array_to_fill, dest_indices, num_outcomes, layout_atom,
-                       dataset_rows, comm, min_prob_clip, radius)
+                       dataset_rows, comm, outcomes_cache, min_prob_clip, radius)
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outcomes,
-                       layout_atom, dataset_rows, comm, double fnarg1, double fnarg2):
+                       layout_atom, dataset_rows, comm, outcomes_cache, double fnarg1, double fnarg2):
 
-    cdef INT i, j, k, l, n, kinit, nTotOutcomes, N, n_i
-    cdef double cur_probtotal, t, t0
+    cdef INT i, j, k, l, kinit, nTotOutcomes
+    cdef double cur_probtotal, t, t0, n_i, n, N  # note: n, N can be a floats!
     cdef TD_obj_fn objfn
     if objective == "chi2":
         objfn = TDchi2_obj_fn
@@ -2324,6 +2360,8 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
     #elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
     #outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
+    local_repcache = {}
+
     #comm is currently ignored
     #TODO: if layout_atom is split, distribute among processors
     for iDest, iStart, remainder, iCache in layout_atom.table.contents:
@@ -2331,13 +2369,23 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         rholabel = remainder[0]; remainder = remainder[1:]
         rhoVec = fwdsim.model.circuit_layer_operator(rholabel, 'prep')
 
+        #print("DB: ",iDest,iStart,remainder)
         datarow = dataset_rows[iDest]
         nTotOutcomes = num_outcomes[iDest]
         N = 0; nOutcomes = 0
 
+        if outcomes_cache is not None:  # calling dataset.outcomes can be a bottleneck
+            if iDest in outcomes_cache:
+                outcomes = outcomes_cache[iDest]
+            else:
+                outcomes = datarow.outcomes
+                outcomes_cache[iDest] = outcomes
+        else:
+            outcomes = datarow.outcomes
+
         datarow_time = {i: tm for i, tm in enumerate(datarow.time)}  # dict for speed
         datarow_reps = {i: repcnt for i, repcnt in enumerate(datarow.reps)}  # dict for speed
-        datarow_outcomes = {i: outcome for i, outcome in enumerate(datarow.outcomes)}  # dict for speed
+        datarow_outcomes = {i: outcome for i, outcome in enumerate(outcomes)}  # dict for speed
 
         elbl_indices = layout_atom.elbl_indices_by_expcircuit[iDest]
         outcomes = layout_atom.outcomes_by_expcircuit[iDest]
@@ -2374,47 +2422,58 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
                 outcome = datarow_outcomes[l]
 
                 for gl in remainder:
-                    op = model.circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
-                    op.set_time(t); t += gl.time  # time in gate label == gate duration?
-                    rho = op._rep.acton(rho)
+                    if (gl,t) in local_repcache:  # Note: this could cache a *lot* of reps - add flag to disable?
+                        op_rep = local_repcache[(gl,t)]
+                    else:
+                        op = model.circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
+                        op.set_time(t); op_rep = op._rep
+                        local_repcache[(gl,t)] = op_rep.copy()  # need to *copy* here
+                    t += gl.time  # time in gate label == gate duration?
+                    rho = op_rep.acton(rho)
 
                 j = outcome_to_elbl_index[outcome]
                 E = EVecs[j]; E.set_time(t)
                 p = E._rep.probability(rho)  # outcome probability
-                f = float(n_i) / float(N)
+                f = n_i / N
                 cur_probtotal += p
 
                 omitted_p = 1.0 - cur_probtotal if (l == k-1 and nOutcomes < nTotOutcomes) else 0.0
                 # and cur_probtotal < 1.0?
 
-                array_to_fill[elbl_to_final_index[j]] += objfn(p, f, n_i, N, omitted_p, fnarg1, fnarg2)
+                val = objfn(p, f, n_i, N, omitted_p, fnarg1, fnarg2)
+                array_to_fill[elbl_to_final_index[j]] += val
+                #if t0 < 20:
+                #    print("DB: t0=",t0," p,f,n,N,o = ",p, f, n_i, N, omitted_p, " =>", val)
+
             kinit = k
 
 
 def DM_mapfill_TDdchi2_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                             layout_atom, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval, wrt_slice, comm):
+                             layout_atom, dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
+                             wrt_slice, comm, outcomes_cache):
 
-    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm, ocache):
         DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows,
-                                min_prob_clip_for_weighting, prob_clip_interval, fill_comm)
+                                min_prob_clip_for_weighting, prob_clip_interval, fill_comm, ocache)
 
     DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                              layout_atom, dataset_rows, fillfn, wrt_slice, comm)
+                              layout_atom, dataset_rows, fillfn, wrt_slice, comm, outcomes_cache)
 
 
 def DM_mapfill_TDdloglpp_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                               layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval, wrt_slice, comm):
+                               layout_atom, dataset_rows, min_prob_clip, radius, prob_clip_interval,
+                               wrt_slice, comm, outcomes_cache):
 
-    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm):
+    def fillfn(array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows, fill_comm, ocache):
         DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, n_outcomes, layout_atom, dataset_rows,
-                                  min_prob_clip, radius, prob_clip_interval, fill_comm)
+                                  min_prob_clip, radius, prob_clip_interval, fill_comm, ocache)
 
     DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                              layout_atom, dataset_rows, fillfn, wrt_slice, comm)
+                              layout_atom, dataset_rows, fillfn, wrt_slice, comm, outcomes_cache)
 
 
 def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes,
-                              layout_atom, dataset_rows, fillfn, wrt_slice, comm):
+                              layout_atom, dataset_rows, fillfn, wrt_slice, comm, outcomes_cache):
 
     cdef INT i, ii, iFinal
     cdef double eps = 1e-7  # hardcoded?
@@ -2433,7 +2492,10 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     cdef np.ndarray vals2 = np.empty(nEls, 'd')
     #assert(cacheSize == 0)
 
-    fillfn(vals, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, comm)
+    orig_vec = fwdsim.model.to_vector().copy()
+    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+
+    fillfn(vals, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, comm, outcomes_cache)
 
     all_slices, my_slice, owners, subComm = \
         _mpit.distribute_slice(slice(0, len(param_indices)), comm)
@@ -2446,14 +2508,13 @@ def DM_mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_in
     # final index within dpr_cache
     iParamToFinal = {i: st + ii for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.model.to_vector().copy()
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,fwdsim.model.num_params))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
-            fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
+            fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm, outcomes_cache)
             _fas(array_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
     fwdsim.model.from_vector(orig_vec, close=True)
 
