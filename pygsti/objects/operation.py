@@ -5670,18 +5670,19 @@ class ExponentiatedOp(LinearOperator):
         """
         mx = self.exponentiated_op.to_dense()
 
-        mx_powers = {0: _np.identity(self.dim,'d'), 1: mx}
-        for i in range(2,self.power):
+        mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
+        for i in range(2, self.power):
             mx_powers[i] = _np.dot(mx_powers[i - 1], mx)
 
         dmx = _np.transpose(self.exponentiated_op.deriv_wrt_params(wrt_filter))  # (num_params, dim^2)
         dmx.shape = (dmx.shape[0], self.dim, self.dim)  # set shape for multiplication below
 
         deriv = _np.zeros((self.dim, dmx.shape[0], self.dim), 'd')
-        for k in range(1,self.power+1):
+        for k in range(1, self.power + 1):
             #deriv += mx_powers[k-1] * dmx * mx_powers[self.power-k]
-            deriv += _np.dot(mx_powers[k-1], _np.dot(dmx, mx_powers[self.power-k])) # (D,D) * ((P,D,D) * (D,D)) => (D,D) * (P,D,D) => (D,P,D)
-            
+            deriv += _np.dot(mx_powers[k - 1], _np.dot(dmx, mx_powers[self.power - k]))
+            #        (D,D) * ((P,D,D) * (D,D)) => (D,D) * (P,D,D) => (D,P,D)
+
         deriv = _np.moveaxis(deriv, 1, 2)
         deriv = deriv.reshape((self.dim**2, deriv.shape[2]))
         return deriv
