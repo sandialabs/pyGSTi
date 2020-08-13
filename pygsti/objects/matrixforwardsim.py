@@ -822,6 +822,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         if method_name == 'bulk_fill_hprobs': return ('zddpp',)  # cache x dim x dim x dist_nparams1 x dist_nparams2
         return super()._array_types_for_method(method_name)
 
+    def __init__(self, model=None, distribute_by_timestamp=False):
+        super().__init__(model)
+        self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
+
     def copy(self):
         """
         Return a shallow copy of this MatrixForwardSimulator
@@ -1180,17 +1184,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
-        #Special case: time dependent dataset
-        if dataset is not None and not dataset.has_trivial_timedependence:
+        if self._mode == "distribute_by_timestamp":
+            #Special case: time dependent data that gets grouped & distributed by unique timestamp
             layout = _MatrixTimeDepCOPALayout(circuits, self.model, dataset,
-                                            (num_params, num_params), verbosity)
+                                              (num_params, num_params), verbosity)
             layout.set_distribution_params(nprocs, (num_params, num_params),
                                            mem_limit * 0.01 if (mem_limit is not None) else None)
             return layout
 
         def create_layout_candidate(num_atoms):
             return _MatrixCOPALayout(circuits, self.model, dataset, None, num_atoms,
-                                       (num_params, num_params), verbosity)
+                                     (num_params, num_params), verbosity)
 
         bNp1Matters = bool("EP" in array_types or "EPP" in array_types)
         bNp2Matters = bool("EPP" in array_types)
@@ -1840,9 +1844,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return ds_cache[timestamp]
 
-
     def _bulk_fill_timedep_objfn(self, raw_objective, array_to_fill, layout, ds_circuits,
                                  num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+
+        assert(self._mode == "distribute_by_timestamp"), \
+            ("Must set `distribute_by_timestamp=True` to use a "
+             "time-dependent objective function with MatrixForwardSimulator!")
 
         probs_array = _np.empty(layout.num_elements, 'd')
         array_to_fill[:] = 0.0
@@ -1871,12 +1878,15 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, resource_alloc.comm)
+        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
         array_to_fill[:] = summed  # this could probably be done more efficiently
 
-
     def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
-                                 num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+                                  num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+
+        assert(self._mode == "distribute_by_timestamp"), \
+            ("Must set `distribute_by_timestamp=True` to use a "
+             "time-dependent objective function with MatrixForwardSimulator!")
 
         probs_array = _np.empty(layout.num_elements, 'd')
         dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
@@ -1898,8 +1908,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             #import bpdb; bpdb.set_trace()
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                    self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
-                
+                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+
             #Note: computing jacobian of objective here doesn't support sparse data yet!!! TODO
             if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
                 dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
@@ -1928,9 +1938,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, resource_alloc.comm)
+        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
         array_to_fill[:] = summed  # this could probably be done more efficiently
-
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
