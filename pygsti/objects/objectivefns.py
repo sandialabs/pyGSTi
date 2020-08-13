@@ -611,9 +611,9 @@ class RawObjectiveFunction(ObjectiveFunction):
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
         lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
-        lsvec = _np.maximum(lsvec, 1e-100)  # avoids 0/0 elements that should be 0 below
+        pt5_over_lsvec = _np.where(lsvec < 1e-100, 0.0, 0.5 / _np.maximum(lsvec, 1e-100))  # lsvec=0 is *min* w/0 deriv
         dterms = self.dterms(probs, counts, total_counts, freqs, intermediates)
-        return (0.5 / lsvec) * dterms
+        return pt5_over_lsvec * dterms
 
     def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -1286,7 +1286,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         with self.resource_alloc.temporarily_track_memory(self.nelements * self.nparams):  # 'EP'
             lsvec = self.lsvec(paramvec)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
             dlsvec = self.dlsvec(paramvec)  # jacobian of dim N x M where N = len(v) and M = len(pv)
-            assert(dlsvec.shape == (len(lsvec), len(paramvec))), "dlsvec returned a Jacobian with the wrong shape!"
+            assert(dlsvec.shape == (len(lsvec), self.nparams)), "dlsvec returned a Jacobian with the wrong shape!"
             return 2.0 * lsvec[:, None] * dlsvec  # terms = lsvec**2, so dterms = 2*lsvec*dlsvec
 
     def percircuit(self, paramvec=None):
@@ -5371,6 +5371,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         super().__init__(dummy, mdc_store, verbosity)
 
         self.time_dependent = True
+        self._ds_cache = {}  # cache for dataset-derived quantities that can improve performance.
 
         if regularization is None: regularization = {}
         self.set_regularization(**regularization)
@@ -5530,6 +5531,21 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval
         return 0
 
+    def chi2k_distributed_qty(self, objective_function_value):
+        """
+        Convert a value of this objective function to one that is expected to be chi2_k distributed.
+
+        Parameters
+        ----------
+        objective_function_value : float
+            A value of this objective function, i.e. one returned from `self.fn(...)`.
+
+        Returns
+        -------
+        float
+        """
+        return objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
+
     def lsvec(self, paramvec=None):
         """
         Compute the least-squares vector of the objective function.
@@ -5558,7 +5574,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         v = self.v
         fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
-                                    self.resource_alloc)
+                                    self.resource_alloc, self._ds_cache)
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
@@ -5589,7 +5605,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dchi2(dprobs, self.layout, self.ds_circuits, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     None, self.resource_alloc)
+                                     None, self.resource_alloc, self._ds_cache)
 
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -5721,7 +5737,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         v = self.v
         fsim.bulk_fill_timedep_loglpp(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
-                                      self.resource_alloc)
+                                      self.resource_alloc, self._ds_cache)
         v = _np.sqrt(v)
         v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
@@ -5763,14 +5779,15 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits, self.num_total_outcomes,
                                        self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
-                                       None, self.resource_alloc)
+                                       None, self.resource_alloc, self._ds_cache)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)
-        # derivative diverges as v->0, but v always >= 0 so clip v to a small positive value to avoid divide by zero
-        # below
-        v = _np.maximum(v, 1e-100)
-        dlogl_factor = (0.5 / v)
+        # derivative should not really diverge as v->0 as v=0 is a minimum with zero derivative
+        # so we artificially zero out the derivative whenever v < a small positive value to avoid incorrect
+        # limiting whereby v == 0 but the derivative is > 0 (but small, e.g. 1e-7).
+        pt5_over_v = _np.where(v < 1e-100, 0.0, 0.5 / _np.maximum(v, 1e-100))  # v=0 is *min* w/0 deriv
+        dlogl_factor = pt5_over_v
         dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
         self.raw_objfn.resource_alloc.profiler.add_time("do_mlgst: JACOBIAN", tm)

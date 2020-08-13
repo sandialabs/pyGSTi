@@ -469,7 +469,10 @@ class StdInputParser(object):
                         elif parts[0] == 'outcomes:':
                             current_item['outcomes'] = parts[1:]  # no conversion needed
                         elif parts[0] == 'repetitions:':
-                            current_item['repetitions'] = [int(x) for x in parts[1:]]
+                            try:
+                                current_item['repetitions'] = [int(x) for x in parts[1:]]
+                            except ValueError:  # raised if int(x) fails b/c reps are floats
+                                current_item['repetitions'] = [float(x) for x in parts[1:]]
                         elif parts[0] == 'aux:':
                             current_item['aux'] = parse_comment(" ".join(parts[1:]), filename, iLine)
                         else:

@@ -1053,7 +1053,7 @@ class CircuitLabel(Label, tuple):
             s = "".join([str(lbl) for lbl in self.components])
             if self.time != 0.0:
                 s += ("!%f" % self.time).rstrip('0').rstrip('.')
-            if len(self.components) > 1:
+            if len(self.components) > 0:
                 s = "(" + s + ")"  # add parenthesis
         if self[2] != 1: s += "^%d" % self[2]
         return s

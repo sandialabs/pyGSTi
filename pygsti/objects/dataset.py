@@ -192,6 +192,13 @@ class _DataSetRow(object):
         raise ValueError("outcomes property is read-only")
 
     @property
+    def unique_outcomes(self):
+        """
+        This row's unique set of outcome labels, as a list
+        """
+        return _lt.remove_duplicates(self.outcomes)  # More efficient/cached in future?
+
+    @property
     def expanded_ol(self):
         """
         This row's sequence of outcome labels, with repetition counts expanded.
@@ -1247,6 +1254,21 @@ class DataSet(object):
         """
         return list(self.olIndex.keys())
 
+    @property
+    def timestamps(self):
+        """
+        Get a list of *all* the (unique) timestamps contained in this DataSet.
+
+        Returns
+        -------
+        list of floats
+            A list where each element is a timestamp.
+        """
+        ret = set()
+        for row in self.values():
+            ret.update(row.time)
+        return sorted(list(ret))
+
     def gate_labels(self, prefix='G'):
         """
         Get a list of all the distinct operation labels used in the circuits of this dataset.
@@ -2157,7 +2179,126 @@ class DataSet(object):
         ds.done_adding_data()
         return ds
 
-    def process_circuits(self, processor_fn, aggregate=False):
+    def split_by_time(self, aggregate_to_time=None):
+        """
+        Creates a dictionary of DataSets, each of which is a equal-time slice of this DataSet.
+
+        The keys of the returned dictionary are the distinct timestamps in this dataset.
+
+        Parameters
+        ----------
+        aggregate_to_time : float, optional
+            If not None, a single timestamp to give all the data in
+            each returned data set, resulting in time-independent
+            `DataSet`s.  If None, then the original timestamps are
+            preserved.
+
+        Returns
+        -------
+        OrderedDict
+            A dictionary of :class:`DataSet` objects whose keys are the
+            timestamp values of the original (this) data set in sorted order.
+        """
+        dsDict = _defaultdict(lambda: DataSet(outcome_label_indices=self.olIndex))
+        for opStr, dsRow in self.items():
+
+            if dsRow.reps is None:
+                reps = _np.ones(dsRow.oli.shape, self.repType)
+            else: reps = dsRow.reps
+
+            last_t = dsRow.time[0] if len(dsRow.time) > 0 else None
+            assert(_np.all(_np.diff(dsRow.time) >= 0)), "This function assumes timestamps are sorted!"
+
+            if aggregate_to_time is None:
+                times = []; ols = []; repCnts = []
+
+                for oli, t, rep in zip(dsRow.oli, dsRow.time, reps):
+                    ol = self.ol[oli]  # index -> outcome label
+                    if t == last_t:
+                        times.append(t)
+                        ols.append(ol)
+                        repCnts.append(rep)
+                    else:
+                        dsDict[last_t].add_raw_series_data(opStr, ols, times, repCnts)
+                        times = [t]; ols = [ol]; repCnts = [rep]
+                        last_t = t
+                if len(times) > 0:
+                    dsDict[last_t].add_raw_series_data(opStr, ols, times, repCnts)
+
+            else:
+                count_dict = {ol: 0 for ol in self.olIndex.keys()}
+
+                for oli, t, rep in zip(dsRow.oli, dsRow.time, reps):
+                    ol = self.ol[oli]  # index -> outcome label
+                    if t == last_t:
+                        count_dict[ol] += rep
+                    else:
+                        ols = [k for k in count_dict.keys() if count_dict[k] > 0]
+                        repCnts = [count_dict[k] for k in ols]
+                        times = [aggregate_to_time] * len(repCnts)
+                        dsDict[last_t].add_raw_series_data(opStr, ols, times, repCnts)
+                        times = [t]; ols = [ol]; repCnts = [rep]
+                        last_t = t
+                if len(times) > 0:
+                    ols = [k for k in count_dict.keys() if count_dict[k] > 0]
+                    repCnts = [count_dict[k] for k in ols]
+                    times = [aggregate_to_time] * len(repCnts)
+                    dsDict[last_t].add_raw_series_data(opStr, ols, times, repCnts)
+
+        for ds in dsDict.values():
+            ds.done_adding_data()
+        return _OrderedDict([(t, dsDict[t]) for t in sorted(dsDict.keys())])
+
+    def drop_zero_counts(self):
+        """
+        Creates a copy of this data set that doesn't include any zero counts.
+
+        Returns
+        -------
+        DataSet
+        """
+        self_sparse = DataSet(outcome_label_indices=self.olIndex)
+        for circuit, datarow in self.items():
+            self_sparse.add_raw_series_data(circuit, datarow.outcomes, datarow.time, datarow.reps,
+                                            record_zero_counts=False)
+        self_sparse.done_adding_data()
+        return self_sparse
+
+    def process_times(self, process_times_array_fn):
+        """
+        Manipulate this DataSet's timestamps according to `processor_fn`.
+
+        For example, using, the folloing `process_times_array_fn` would change
+        the timestamps for each circuit to sequential integers.
+
+        ```
+        def process_times_array_fn(times):
+            return list(range(len(times)))
+        ```
+
+        Parameters
+        ----------
+        process_times_array_fn : function
+            A function which takes a single array-of-timestamps argument
+            and returns another similarly-sized array.  This function is
+            called, once per circuit, with the circuit's array of timestamps.
+
+        Returns
+        -------
+        DataSet
+            A new data set with altered timestamps.
+        """
+        processed_ds = DataSet(outcome_label_indices=self.olIndex)
+
+        for circuit, datarow in self.items():
+            processed_time = _np.array(process_times_array_fn(datarow.time))
+            assert(processed_time.shape == datarow.time.shape), "process_times_array_fn returned the wrong shape!"
+            processed_ds.add_raw_series_data(circuit, datarow.outcomes, processed_time, datarow.reps,
+                                             record_zero_counts=True)
+        processed_ds.done_adding_data()
+        return processed_ds
+
+    def process_circuits(self, processor_fn, aggregate=False):  # INPLACE
         """
         Manipulate this DataSet's circuits (keys) according to `processor_fn`.
 

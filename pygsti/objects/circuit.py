@@ -802,7 +802,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines  # add line labels
-        if ntimes > 1 and expand is False:
+        if ntimes >= 1 and expand is False:
             reppedCircuitLbl = self.to_label(nreps=ntimes)
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
@@ -2809,6 +2809,14 @@ class Circuit(object):
                     return sum([size(sub) for sub in obj])
 
         return sum([size(layer_lbl) for layer_lbl in self._labels])
+
+    @property
+    def duration(self):
+        # similar to depth()
+        if self._static:
+            return sum([lbl.time for lbl in self._labels])
+        else:
+            return sum([_Label(layer_lbl).time for layer_lbl in self._labels])
 
     def two_q_gate_count(self):
         """
