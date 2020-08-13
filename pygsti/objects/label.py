@@ -151,6 +151,10 @@ class Label(object):
         """
         return 1  # most labels have only reps==1
 
+    @property
+    def has_nontrivial_components(self):
+        return len(self.components) > 0 and self.components != (self,)
+
     def expand_subcircuits(self):
         """
         Expand any sub-circuits within this label.
