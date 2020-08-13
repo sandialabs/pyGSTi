@@ -85,7 +85,7 @@ class CircuitTester(BaseCase):
         self.assertTrue(isinstance(Gi.tup[1], CircuitLabel))
 
         cl = Gi.tup[1]
-        self.assertEqual(str(cl), "Gx^256000")
+        self.assertEqual(str(cl), "(Gx)^256000")
         self.assertEqual(cl.components, ('Gx',))
         self.assertEqual(cl.reps, 256000)
         self.assertEqual(Gi.tup, ('Gi', CircuitLabel(name='', tup_of_layers=('Gx',),
