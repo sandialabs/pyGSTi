@@ -2257,10 +2257,10 @@ class DataSet(object):
         -------
         DataSet
         """
-        self_sparse = DataSet(outcome_label_indices = self.olIndex)
+        self_sparse = DataSet(outcome_label_indices=self.olIndex)
         for circuit, datarow in self.items():
             self_sparse.add_raw_series_data(circuit, datarow.outcomes, datarow.time, datarow.reps,
-                                            record_zero_counts = False)
+                                            record_zero_counts=False)
         self_sparse.done_adding_data()
         return self_sparse
 
@@ -2288,13 +2288,13 @@ class DataSet(object):
         DataSet
             A new data set with altered timestamps.
         """
-        processed_ds = DataSet(outcome_label_indices = self.olIndex)
+        processed_ds = DataSet(outcome_label_indices=self.olIndex)
 
         for circuit, datarow in self.items():
             processed_time = _np.array(process_times_array_fn(datarow.time))
             assert(processed_time.shape == datarow.time.shape), "process_times_array_fn returned the wrong shape!"
             processed_ds.add_raw_series_data(circuit, datarow.outcomes, processed_time, datarow.reps,
-                                             record_zero_counts = True)
+                                             record_zero_counts=True)
         processed_ds.done_adding_data()
         return processed_ds
 

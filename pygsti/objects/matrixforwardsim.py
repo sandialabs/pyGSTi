@@ -1790,13 +1790,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _ds_quantities(self, timestamp, ds_cache, layout, dataset, TIMETOL=1e-6):
         if timestamp not in ds_cache:
             if 'truncated_ds' not in ds_cache:
-                ds_cache['truncated_ds'] = dataset.truncate(layout.circuits)            
+                ds_cache['truncated_ds'] = dataset.truncate(layout.circuits)
             trunc_dataset = ds_cache['truncated_ds']
 
             if 'ds_for_time' not in ds_cache:
-                tStart = _time.time()
+                #tStart = _time.time()
                 ds_cache['ds_for_time'] = trunc_dataset.split_by_time()
-                #print("DB: Split dataset by time in %.1fs (%d timestamps)" % (_time.time() - tStart, len(ds_cache['ds_for_time'])))
+                #print("DB: Split dataset by time in %.1fs (%d timestamps)" % (_time.time() - tStart,
+                #                                                              len(ds_cache['ds_for_time'])))
 
             if timestamp not in ds_cache['ds_for_time']:
                 return (None, None, None, None, None)
@@ -1804,7 +1805,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Similar to MDC store's add_count_vectors function -- maybe consolidate in FUTURE?
             counts = _np.empty(layout.num_elements, 'd')
             totals = _np.empty(layout.num_elements, 'd')
-            dataset_at_t = ds_cache['ds_for_time'][timestamp] #trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
+            dataset_at_t = ds_cache['ds_for_time'][timestamp]  # trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
 
             #DEBUG CHECK REMOVE
             #tStart = _time.time()
@@ -1837,8 +1838,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             #if self.circuits.circuit_weights is not None:
             #  SEE add_count_vectors
-            
-            nonzero_totals = _np.where(_np.abs(totals) < 1e-10, 1e-10, totals)  # to avoid divide-by-zero error on next line
+
+            nonzero_totals = _np.where(_np.abs(totals) < 1e-10, 1e-10, totals)  # avoid divide-by-zero error on nxt line
             freqs = counts / nonzero_totals
             ds_cache[timestamp] = (counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData)
 
@@ -1864,9 +1865,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                    self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
             if counts is None: return  # no data at this time => no contribution
-                
+
             terms = raw_objective.terms(probs_array, counts, totals, freqs)
             if firsts is not None:  # consolidate with `_update_terms_for_omitted_probs`
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
@@ -1890,7 +1891,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         probs_array = _np.empty(layout.num_elements, 'd')
         dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
-        all_param_slice = slice(0,self.model.num_params)  # All params computed at once for now
+        all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
         array_to_fill[:] = 0.0
 
         def compute_timedep(layout_atom, sub_resource_alloc):
@@ -1920,7 +1921,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #print("p = ",probs_array)
             #print("dp[29] = ",dprobs_array[:,29])
             #print("cnts = ",counts)
-            dprobs_array[:,:] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
+            dprobs_array[:, :] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
             #print("raw dterms = ",raw_objective.dterms(probs_array, counts, totals, freqs))
             #print("jac_contrib[:,29] = ",dprobs_array[:,29])
 
@@ -1928,7 +1929,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
-                                        * dprobs_omitted_rowsum
+                    * dprobs_omitted_rowsum
             #print("jac_contrib[:,29] post = ",dprobs_array[:,29])
 
             array_to_fill[layout_atom.element_slice] += dprobs_array
@@ -2062,7 +2063,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                    resource_alloc)
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                             dataset, resource_alloc, ds_cache)
+                                              dataset, resource_alloc, ds_cache)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                  min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
@@ -2193,4 +2194,3 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                                   resource_alloc)
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
                                               dataset, resource_alloc, ds_cache)
-

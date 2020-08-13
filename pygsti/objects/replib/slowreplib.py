@@ -1778,7 +1778,7 @@ def DM_mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes,
         if omitted_p != 0.0:
             # if this is the *last* outcome at this time then account for any omitted probability
             v += n * omitted_p if omitted_p >= a else \
-                 n * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
+                n * ((-1.0 / (3 * a**2)) * omitted_p**3 + omitted_p**2 / a + a / 3.0)
 
         return v  # objective function term (the qty stored in cache)
 
@@ -1867,7 +1867,8 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
 
             #DEBUG REMOVE
             #if t0 <= 10:
-            #print("t=", t0, " rem=",remainder, " p,f,n,N,o = ",p,f,Nreps,N,omitted_p, " ==> ", objfn(p, f, Nreps, N, omitted_p))
+            #print("t=", t0, " rem=",remainder, " p,f,n,N,o = ",p,f,Nreps,N,omitted_p, " ==> ",
+            #      objfn(p, f, Nreps, N, omitted_p))
 
             array_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
         #print("DB: ar[", final_indices, "] = ", [array_to_fill[kk] for kk in final_indices]) # REMOVE

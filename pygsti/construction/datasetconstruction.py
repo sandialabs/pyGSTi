@@ -173,7 +173,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
                         ps = all_probs[trans_s]
                     else:
                         ps = gsGen.probabilities(trans_s, time=tm)
-            
+
                     if sample_error in ("binomial", "multinomial"):
                         #Adjust to probabilities if needed (and warn if not close to in-bounds)
                         for ol in ps:
@@ -216,7 +216,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
                         N = num_samples[k]  # try to treat num_samples as a list
                     except:
                         N = num_samples  # if not indexable, num_samples should be a single number
-            
+
                 nWeightedSamples = N
 
                 counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
