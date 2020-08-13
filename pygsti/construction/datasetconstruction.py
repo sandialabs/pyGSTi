@@ -256,8 +256,8 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
 
         if times is None:
             for s, counts_list in count_lists.items():
-                assert(len(counts_list) == 1)
-                dataset.add_count_dict(s, counts_list[0], record_zero_counts=record_zero_counts)
+                for counts_dict in counts_list:
+                    dataset.add_count_dict(s, counts_dict, record_zero_counts=record_zero_counts)
         else:
             for s, counts_list in count_lists.items():
                 dataset.add_series_data(s, counts_list, times, record_zero_counts=record_zero_counts)
