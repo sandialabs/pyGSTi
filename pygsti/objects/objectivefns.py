@@ -4081,8 +4081,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # (not-intermediate). These are filled in other routines and *not* included in
         # the output of _array_types_for_method since these are *not* allocated in methods.
         array_types = ('E',) * 4  # self.probs + 3x add_count_vectors
-        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian') for x in method_names]): array_types += ('EP',)
-        if any([x in ('hessian', 'approximate_hessian') for x in method_names]): array_types += ('EPP',)
+        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian') for x in method_names]):
+            array_types += ('EP',)
+        if any([x in ('hessian',) for x in method_names]):
+            array_types += ('EPP',)
 
         # array types for methods
         for method_name in method_names:
@@ -4110,7 +4112,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
 
         if 'EPP' in self.array_types:
-            self.resource_alloc.add_tracked_memory(self.nelements * self.nelements * self.nparams)
+            self.resource_alloc.add_tracked_memory(self.nelements * self.nparams * self.nparams)
             self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
 
         self.maxCircuitLength = max([len(x) for x in self.circuits])

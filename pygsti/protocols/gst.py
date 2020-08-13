@@ -489,7 +489,9 @@ class GSTBadFitOptions(object):
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
                  wildcard_budget_includes_spam=True, wildcard_smart_init=True,
-                 wildcard_L1_weights=None, wildcard_budget_keyname='unmodeled_error'):
+                 wildcard_L1_weights=None, wildcard_budget_keyname='unmodeled_error',
+                 wildcard_primitive_op_labels=None, wildcard_initial_budget=None,
+                 wildcard_optimize_initial_budget=True):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -499,6 +501,9 @@ class GSTBadFitOptions(object):
         self.wildcard_smart_init = bool(wildcard_smart_init)
         self.wildcard_L1_weights = wildcard_L1_weights
         self.wildcard_budget_keyname = wildcard_budget_keyname
+        self.wildcard_primitive_op_labels = wildcard_primitive_op_labels
+        self.initial_budget = wildcard_initial_budget
+        self.optimize_initial_budget = wildcard_optimize_initial_budget
 
 
 class GSTObjFnBuilders(object):
@@ -671,8 +676,6 @@ class GateSetTomography(_proto.Protocol):
         self.auxfile_types['final_builders'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['iteration_builders'] = 'pickle'
-        self.auxfile_types['final_builders'] = 'pickle'
 
         #Advanced options that could be changed by users who know what they're doing
         #self.estimate_label = estimate_label -- just use name?
@@ -1046,6 +1049,9 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['models_to_test'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'
         self.auxfile_types['gaugeopt_target'] = 'pickle'
+        self.auxfile_types['objfn_builders'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['optimizer'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['badfit_options'] = 'pickle'  # TODO - better later? - json?
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
@@ -1824,9 +1830,14 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    budget = _wild.PrimitiveOpsWildcardBudget(model.primitive_op_labels + model.primitive_instrument_labels,
-                                              add_spam=badfit_options.wildcard_budget_includes_spam,
-                                              start_budget=0.0)
+    primitive_op_labels = badfit_options.wildcard_primitive_op_labels
+    if primitive_op_labels is None:
+        primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
+        if badfit_options.wildcard_budget_includes_spam:
+            primitive_op_labels += ('SPAM',)  # special op name
+
+    budget = _wild.PrimitiveOpsWildcardBudget(primitive_op_labels, start_budget=0.0) \
+        if badfit_options.initial_budget is None else badfit_options.initial_budget
 
     if badfit_options.wildcard_L1_weights:
         L1weights = _np.ones(budget.num_params)
@@ -1880,81 +1891,88 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         wvec_init = budget.to_vector()
 
         # Optional: set initial wildcard budget by pushing on each Wvec component individually
-        if badfit_options.wildcard_smart_init:
-            MULT = 2                                                                                                    # noqa
-            probe = wvec_init.copy()
-            for i in range(len(wvec_init)):
-                #print("-------- Index ----------", i)
-                wv = wvec_init.copy()
-                #See how big Wv[i] needs to get before penalty stops decreasing
-                last_penalty = 1e100; penalty = 0.9e100
-                delta = 1e-6
-                while penalty < last_penalty:
-                    wv[i] = delta
-                    last_penalty = penalty
-                    penalty = _wildcard_objective_firstterms(wv)
-                    #print("  delta=%g  => penalty = %g" % (delta, penalty))
-                    delta *= MULT
-                probe[i] = delta / MULT**2
-                #print(" ==> Probe[%d] = %g" % (i, probe[i]))
+        if badfit_options.optimize_initial_budget:
+            if badfit_options.wildcard_smart_init:
+                MULT = 2                                                                                                    # noqa
+                probe = wvec_init.copy()
+                for i in range(len(wvec_init)):
+                    #print("-------- Index ----------", i)
+                    wv = wvec_init.copy()
+                    #See how big Wv[i] needs to get before penalty stops decreasing
+                    last_penalty = 1e100; penalty = 0.9e100
+                    delta = 1e-6
+                    while penalty < last_penalty:
+                        wv[i] = delta
+                        last_penalty = penalty
+                        penalty = _wildcard_objective_firstterms(wv)
+                        #print("  delta=%g  => penalty = %g" % (delta, penalty))
+                        delta *= MULT
+                    probe[i] = delta / MULT**2
+                    #print(" ==> Probe[%d] = %g" % (i, probe[i]))
 
-            probe /= len(wvec_init)  # heuristic: set as new init point
-            budget.from_vector(probe)
-            wvec_init = budget.to_vector()
+                probe /= len(wvec_init)  # heuristic: set as new init point
+                budget.from_vector(probe)
+                wvec_init = budget.to_vector()
 
-        printer.log("INITIAL Wildcard budget = %s" % str(budget))
+            printer.log("INITIAL Wildcard budget = %s" % str(budget))
 
-        # Find a value of eta that is small enough that the "first terms" are 0.
-        while num_iters < 10:
-            printer.log("  Iter %d: trying eta = %g" % (num_iters, eta))
+            # Find a value of eta that is small enough that the "first terms" are 0.
+            while num_iters < 10:
+                printer.log("  Iter %d: trying eta = %g" % (num_iters, eta))
 
-            def _wildcard_objective(wv):
-                return _wildcard_objective_firstterms(wv) + eta * L1term(wv)
+                def _wildcard_objective(wv):
+                    return _wildcard_objective_firstterms(wv) + eta * L1term(wv)
 
-            #TODO REMOVE
-            #import bpdb; bpdb.set_trace()
-            #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
-            #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
-            #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
-            #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
+                #TODO REMOVE
+                #import bpdb; bpdb.set_trace()
+                #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
+                #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
+                #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
+                #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
 
-            if printer.verbosity > 1:
-                printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
-                             " - this *increases* the runtime significantly."), 2)
+                if printer.verbosity > 1:
+                    printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
+                                 " - this *increases* the runtime significantly."), 2)
 
-                def callbackf(wv):
-                    a, b = _wildcard_objective_firstterms(wv), eta * L1term(wv)
-                    printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' % (a, b, a + b, str(wv)), 2)
-            else:
-                callbackf = None
+                    def callbackf(wv):
+                        a, b = _wildcard_objective_firstterms(wv), eta * L1term(wv)
+                        printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' %
+                                    (a, b, a + b, str(wv)), 2)
+                else:
+                    callbackf = None
 
-            #DEBUG: If you need to debug a wildcard budget, uncommend the function above and try this:
-            # import bpdb; bpdb.set_trace()
-            # wv_test = _np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2])  # trial budget
-            # _wildcard_objective_firstterms_debug(wv_test)  # try this
-            # callbackf(_np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2]))  # or this
+                #DEBUG: If you need to debug a wildcard budget, uncommend the function above and try this:
+                # import bpdb; bpdb.set_trace()
+                # wv_test = _np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2])  # trial budget
+                # _wildcard_objective_firstterms_debug(wv_test)  # try this
+                # callbackf(_np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2]))  # or this
 
-            #OLD: scipy optimize - proved unreliable
-            #soln = _spo.minimize(_wildcard_objective, wvec_init,
-            #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
-            #if not soln.success:
-            #    _warnings.warn("Nelder-Mead optimization failed to converge!")
-            soln = _opt.minimize(_wildcard_objective, wvec_init, 'supersimplex',
-                                 callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
-                                 min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
-                                 verbosity=printer)
-            wvec = soln.x
-            firstterms = _wildcard_objective_firstterms(wvec)
-            #printer.log("  Firstterms value = %g" % firstTerms)
-            meets_conditions = bool(firstterms < 1e-4)  # some zero-tolerance here
-            if meets_conditions:  # try larger eta
-                break
-            else:  # nonzero objective => take Wvec as new starting point; try smaller eta
-                wvec_init = wvec
-                eta /= 10
+                #OLD: scipy optimize - proved unreliable
+                #soln = _spo.minimize(_wildcard_objective, wvec_init,
+                #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
+                #if not soln.success:
+                #    _warnings.warn("Nelder-Mead optimization failed to converge!")
+                soln = _opt.minimize(_wildcard_objective, wvec_init, 'supersimplex',
+                                     callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
+                                     min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
+                                     verbosity=printer)
+                wvec = soln.x
+                firstterms = _wildcard_objective_firstterms(wvec)
+                #printer.log("  Firstterms value = %g" % firstTerms)
+                meets_conditions = bool(firstterms < 1e-4)  # some zero-tolerance here
+                if meets_conditions:  # try larger eta
+                    break
+                else:  # nonzero objective => take Wvec as new starting point; try smaller eta
+                    wvec_init = wvec
+                    eta /= 10
 
-            printer.log("  Trying eta = %g" % eta)
-            num_iters += 1
+                printer.log("  Trying eta = %g" % eta)
+                num_iters += 1
+        else:
+            wvec = wvec_init
+            a, b = _wildcard_objective_firstterms(wvec), L1term(wvec)
+            printer.log('Fixed wildcard budget gives: misfit + L1_reg = %.3g + %.3g = %.3g' % (a, b, a + b))
+
     #print("Wildcard budget found for wvec = ",wvec)
     #print("FINAL Wildcard budget = ", str(budget))
     budget.from_vector(wvec)

@@ -411,15 +411,16 @@ class CloudNoiseModel(_ImplicitOpModel):
         for lbl, gate in custom_gates.items():
             if lbl not in gate_names: gatedict[lbl] = gate
 
-        if qubit_labels is None:
-            qubit_labels = tuple(range(num_qubits))
-
         if not independent_clouds:
             raise NotImplementedError("Non-independent noise clounds are not supported yet!")
 
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
+            if qubit_labels is None:
+                qubit_labels = qubitGraph.node_names
         else:
+            if qubit_labels is None:
+                qubit_labels = tuple(range(num_qubits))
             qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
                                                          qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
@@ -510,7 +511,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                  % (str(lbl.name), gate_nQubits))
             weight_maxhops_tuples = weight_maxhops_tuples_1Q if len(lbl.sslbls) == 1 else weight_maxhops_tuples_2Q
             return _build_nqn_cloud_noise(
-                lbl.sslbls, qubitGraph, weight_maxhops_tuples,
+                [qubitGraph.node_names.index(nn) for nn in lbl.sslbls], qubitGraph, weight_maxhops_tuples,
                 errcomp_type=errcomp_type, sparse_lindblad_basis=sparse_lindblad_basis,
                 sparse_lindblad_reps=sparse_lindblad_reps, simulator=simulator, parameterization=parameterization,
                 verbosity=printer - 1)
@@ -696,7 +697,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         #Set other members
         self.nQubits = num_qubits
-        self.availability = availability
+        self.availability = availability.copy()  # create a local copy because we may update it below
         self.qubit_labels = qubit_labels
         self.geometry = geometry
         #TODO REMOVE unneeded members
@@ -1054,7 +1055,8 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         wtBasis = _BuiltinBasis('pp', 4**wt, sparse=sparse_lindblad_basis)
 
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
-            if len(err_qubit_inds) == 2 and not qubit_graph.is_directly_connected(err_qubit_inds[0], err_qubit_inds[1]):
+            if len(err_qubit_inds) == 2 and not qubit_graph.is_directly_connected(qubit_labels[err_qubit_inds[0]],
+                                                                                  qubit_labels[err_qubit_inds[1]]):
                 continue  # TO UPDATE - check whether all wt indices are a connected subgraph
 
             errbasis = [basisEl_Id]
@@ -1182,8 +1184,8 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     for wt, maxHops in weight_maxhops_tuples:
 
         ## loc_noise_errinds = [] # list of basis indices for all local-error terms
-        possible_err_qubit_inds = _np.array(qubit_graph.radius(target_qubit_inds, maxHops),
-                                            _np.int64)  # we know node labels are integers
+        radius_nodes = qubit_graph.radius([qubit_labels[i] for i in target_qubit_inds], maxHops)
+        possible_err_qubit_inds = _np.array([qubit_labels.index(nn) for nn in radius_nodes], _np.int64)
         nPossible = len(possible_err_qubit_inds)  # also == "nLocal" in this case
         basisEl_Id = basis_product_matrix(_np.zeros(wt, _np.int64), sparse_lindblad_basis)  # identity basis el
 
