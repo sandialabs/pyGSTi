@@ -69,7 +69,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         add_expanded_circuits(group, expanded_nospam_circuit_outcomes)
         expanded_nospam_circuits = _collections.OrderedDict(
             [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())])
-    
+
         # add suggested scratch to the "final" elements as far as the tree creation is concerned
         # - this allows these scratch element to help balance the tree.
         expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
@@ -83,7 +83,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             cir.expand_subcircuits()  # expand sub-circuits for a more efficient tree
             cir.done_editing()
             double_expanded_nospam_circuits_plus_scratch[i] = cir
-        
+
         self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
