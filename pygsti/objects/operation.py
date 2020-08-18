@@ -587,7 +587,7 @@ class LinearOperator(_modelmember.ModelMember):
         st['_cachedrep'] = None  # can't pickle this!
         return st
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this LinearOperator.
 
@@ -597,7 +597,7 @@ class LinearOperator(_modelmember.ModelMember):
             The parent model to set for the copy.
         """
         self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
-        return _modelmember.ModelMember.copy(self, parent)
+        return _modelmember.ModelMember.copy(self, parent, memo)
 
     def to_sparse(self):
         """
@@ -2679,7 +2679,7 @@ class StochasticNoiseOp(LinearOperator):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -2693,8 +2693,9 @@ class StochasticNoiseOp(LinearOperator):
         StochasticNoiseOp
             A copy of this object.
         """
+        if memo is not None and id(self) in memo: return memo[id(self)]
         copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
     def to_dense(self):
@@ -2960,7 +2961,7 @@ class DepolarizeOp(StochasticNoiseOp):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -2974,8 +2975,9 @@ class DepolarizeOp(StochasticNoiseOp):
         DepolarizeOp
             A copy of this object.
         """
+        if memo is not None and id(self) in memo: return memo[id(self)]
         copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
 
 class LindbladOp(LinearOperator):
@@ -3433,7 +3435,7 @@ class LindbladOp(LinearOperator):
         """
         return [self.errorgen]
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -3449,6 +3451,8 @@ class LindbladOp(LinearOperator):
         """
         # We need to override this method so that error map has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
+
         if self.unitary_postfactor is None:
             upost = None
         elif self._evotype == "densitymx":
@@ -3466,8 +3470,8 @@ class LindbladOp(LinearOperator):
             upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(upost, self.errorgen.copy(parent), self.dense_rep)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls(upost, self.errorgen.copy(parent, memo), self.dense_rep)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
@@ -4963,7 +4967,7 @@ class ComposedOp(LinearOperator):
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -4979,9 +4983,10 @@ class ComposedOp(LinearOperator):
         """
         # We need to override this method so that factor operations have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent) for g in self.factorops], self.dim, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """
@@ -5525,7 +5530,7 @@ class ExponentiatedOp(LinearOperator):
         """
         self.exponentiated_op.set_time(t)
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -5541,9 +5546,10 @@ class ExponentiatedOp(LinearOperator):
         """
         # We need to override this method so that factor operations have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.exponentiated_op.copy(parent), self.power, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls(self.exponentiated_op.copy(parent, memo), self.power, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """
@@ -5886,7 +5892,7 @@ class EmbeddedOp(LinearOperator):
         """
         self.embedded_op.set_time(t)
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -5902,10 +5908,11 @@ class EmbeddedOp(LinearOperator):
         """
         # We need to override this method so that embedded operation has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.state_space_labels, self.targetLabels,
-                       self.embedded_op.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent)
+                       self.embedded_op.copy(parent, memo))
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _iter_matrix_elements_precalc(self):
         divisor = 1; divisors = []
@@ -7033,7 +7040,7 @@ class ComposedErrorgen(LinearOperator):
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -7049,9 +7056,10 @@ class ComposedErrorgen(LinearOperator):
         """
         # We need to override this method so that factors have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent) for f in self.factors], self.dim, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """

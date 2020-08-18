@@ -902,20 +902,20 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return s
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
 
         # Copy special base class members first
-        super(ExplicitOpModel, self)._init_copy(copy_into)
+        super(ExplicitOpModel, self)._init_copy(copy_into, memo)
 
         # Copy our "tricky" members
-        copy_into.preps = self.preps.copy(copy_into)
-        copy_into.povms = self.povms.copy(copy_into)
-        copy_into.operations = self.operations.copy(copy_into)
-        copy_into.instruments = self.instruments.copy(copy_into)
+        copy_into.preps = self.preps.copy(copy_into, memo)
+        copy_into.povms = self.povms.copy(copy_into, memo)
+        copy_into.operations = self.operations.copy(copy_into, memo)
+        copy_into.instruments = self.instruments.copy(copy_into, memo)
         copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):

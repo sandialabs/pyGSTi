@@ -324,7 +324,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
             #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))
             self.parent._rebuild_paramvec()
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Returns a copy of this OrderedMemberDict.
 
@@ -340,7 +340,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
         """
         return OrderedMemberDict(parent, self.default_param,
                                  self._prefix, self.flags,
-                                 [(lbl, val.copy(parent)) for lbl, val in self.items()])
+                                 [(lbl, val.copy(parent, memo)) for lbl, val in self.items()])
 
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid

@@ -35,7 +35,7 @@ class ModelChild(object):
         self._parent = parent  # parent Model used to determine how to process
         # a LinearOperator's gpindices when inserted into a Model
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object. Resets parent to None or `parent`.
 
@@ -50,7 +50,11 @@ class ModelChild(object):
             A copy of this object.
         """
         #Copying resets or updates the parent of a ModelChild
-        memo = {id(self.parent): None}  # so deepcopy uses None instead of copying parent
+        if memo is None:
+            memo = {id(self.parent): None}  # so deepcopy uses None instead of copying parent
+        else:
+            memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
+
         copyOfMe = _copy.deepcopy(self, memo)  # parent == None now
         copyOfMe.parent = parent
         return copyOfMe
@@ -464,7 +468,7 @@ class ModelMember(ModelChild):
         """
         assert(len(v) == 0)  # should be no parameters, and nothing to do
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -480,10 +484,14 @@ class ModelMember(ModelChild):
         """
         # A default for derived classes - deep copy everything except the parent,
         #  which will get reset by _copy_gpindices anyway.
-        memo = {id(self.parent): None}  # so deepcopy uses None instead of copying parent
-        return self._copy_gpindices(_copy.deepcopy(self, memo), parent)
+        if memo is None:
+            memo = {id(self.parent): None}  # so deepcopy uses None instead of copying parent
+        else:
+            if id(self) in memo: return memo[id(self)]
+            memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
+        return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
 
-    def _copy_gpindices(self, op_obj, parent):
+    def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """
         gpindices_copy = None
         if isinstance(self.gpindices, slice):
@@ -503,6 +511,10 @@ class ModelMember(ModelChild):
         #op_obj.set_gpindices(gpindices_copy, parent) #don't do this, as
         # this routines doesn't copy sub-member indices yet -- copy(...) methods
         # of derived classes do this.
+
+        #For convenience, also perform the memo update here, so derived classes don't need to repeat logic
+        if memo is not None:
+            memo[id(self)] = op_obj
 
         return op_obj
 

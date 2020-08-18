@@ -217,14 +217,14 @@ v
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
         copy_into.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
 
-    def _post_copy(self, copy_into):
+    def _post_copy(self, copy_into, memo):
         """
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
@@ -246,16 +246,18 @@ v
         # of letting deepcopy do it.
         newModel = type(self).__new__(self.__class__)  # empty object
 
+        memo = {}  # so that copying preserves linked object references
+
         #first call _init_copy to initialize any tricky members
         # (like those that contain references to self or other members)
-        self._init_copy(newModel)
+        self._init_copy(newModel, memo)
 
         for attr, val in self.__dict__.items():
             if not hasattr(newModel, attr):
                 assert(attr != "uuid"), "Should not be copying UUID!"
-                setattr(newModel, attr, _copy.deepcopy(val))
+                setattr(newModel, attr, _copy.deepcopy(val, memo))
 
-        self._post_copy(newModel)
+        self._post_copy(newModel, memo)
         return newModel
 
     def __str__(self):
@@ -1212,7 +1214,7 @@ class OpModel(Model):
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         return self.sim.bulk_probs(circuits, clip_to, resource_alloc, smartc)
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
@@ -1220,14 +1222,15 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
         copy_into._opcaches = {}  # don't copy opcaches
-        super(OpModel, self)._init_copy(copy_into)
+        super(OpModel, self)._init_copy(copy_into, memo)
 
-    def _post_copy(self, copy_into):
+    def _post_copy(self, copy_into, memo):
         """
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
         """
         copy_into._sim.model = copy_into  # set copy's `.model` link
+        super(OpModel, self)._post_copy(copy_into, memo)
 
     def copy(self):
         """

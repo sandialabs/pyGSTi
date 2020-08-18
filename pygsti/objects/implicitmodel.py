@@ -157,24 +157,24 @@ class ImplicitOpModel(_mdl.OpModel):
             for lbl, obj in objdict.items():
                 yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
         # Copy special base class members first
-        super(ImplicitOpModel, self)._init_copy(copy_into)
+        super(ImplicitOpModel, self)._init_copy(copy_into, memo)
 
         # Copy our "tricky" members
-        copy_into.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copy_into))
+        copy_into.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copy_into, memo))
                                                        for lbl, prepdict in self.prep_blks.items()])
-        copy_into.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copy_into))
+        copy_into.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copy_into, memo))
                                                        for lbl, povmdict in self.povm_blks.items()])
-        copy_into.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copy_into))
+        copy_into.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copy_into, memo))
                                                             for lbl, opdict in self.operation_blks.items()])
-        copy_into.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copy_into))
+        copy_into.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copy_into, memo))
                                                              for lbl, idict in self.instrument_blks.items()])
-        copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into))
+        copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into, memo))
                                                        for lbl, fdict in self.factories.items()])
 
         copy_into._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
