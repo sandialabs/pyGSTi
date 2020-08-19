@@ -501,7 +501,7 @@ class WildcardBudget(object):
 
                 if ratio > 1.0:  # j in A
                     alpha_break = ratio
-                    beta_break = _np.nan if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
+                    beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
 
                     TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
                     #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
@@ -511,7 +511,7 @@ class WildcardBudget(object):
                     sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
                 elif ratio < 1.0:  # j in B
                     beta_break = ratio
-                    alpha_break = _np.nan if sum_fA == 0.0 else (
+                    alpha_break = 0 if sum_fA == 0.0 else (
                         1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
 
                     TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
@@ -527,7 +527,6 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                import bpdb; bpdb.set_trace()
                 assert(False), "TVD should eventually reach zero (I think)!"
 
             #Now A,B,C are fixed to what they need to be for our given W

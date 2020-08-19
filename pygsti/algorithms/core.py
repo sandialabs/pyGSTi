@@ -395,7 +395,7 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
             assert(len(outcomes) == povmLen)
 
             dsRow_fractions = dataset[dsStr].fractions
-            AB[eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
+            AB[eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0.0) for ol in outcomes]
         eoff += povmLen
 
     return AB
@@ -423,7 +423,7 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
 
             for k, (sep_povm_c, outcomes) in enumerate(expd_circuit_outcomes.items()):
                 assert(len(outcomes) == povmLen)
-                X[k, eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
+                X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
     return X

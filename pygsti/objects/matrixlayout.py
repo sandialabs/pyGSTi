@@ -34,7 +34,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             for i in indices:
                 nospam_c = unique_nospam_circuits[i]
                 for unique_i in circuits_by_unique_nospam_circuits[nospam_c]:  # "unique" circuits: add SPAM to nospam_c
-                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].outcomes
+                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].unique_outcomes
                     expc_outcomes = unique_complete_circuits[unique_i].expand_instruments_and_separate_povm(
                         model, observed_outcomes)
                     #Note: unique_complete_circuits may have duplicates (they're only unique *pre*-completion)
@@ -77,7 +77,14 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
             [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
 
-        self.tree = _EvalTree.create(expanded_nospam_circuits_plus_scratch)
+        double_expanded_nospam_circuits_plus_scratch = _collections.OrderedDict()
+        for i, cir in expanded_nospam_circuits_plus_scratch.items():
+            cir = cir.copy(editable=True)
+            cir.expand_subcircuits()  # expand sub-circuits for a more efficient tree
+            cir.done_editing()
+            double_expanded_nospam_circuits_plus_scratch[i] = cir
+
+        self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
         self._num_nonscratch_tree_items = len(expanded_nospam_circuits)  # put this in EvalTree?
@@ -235,6 +242,90 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                                                group, helpful_scratch_group, model, dataset, offset,
                                                elindex_outcome_tuples))
             offset += atoms[-1].num_elements
+
+        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
+                         atoms, additional_dimensions)
+
+
+class _MatrixTimeDepCOPALayoutAtom(_MatrixCOPALayoutAtom):
+    """
+    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    """
+
+    def __init__(self, master_atom, timestamp):
+        self.timestamp = timestamp
+
+        #Shallow-copy all of master_atom's attributes
+        self.tree = master_atom.tree
+        self._num_nonscratch_tree_items = master_atom._num_nonscratch_tree_items
+        self.indices_by_spamtuple = master_atom.indices_by_spamtuple
+        _DistributableAtom.__init__(self, master_atom.element_slice, master_atom.num_elements)
+
+
+class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
+    """
+    TODO: update docstring
+
+    An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
+
+    MatrixEvalTree instances create and store the decomposition of a list of circuits into
+    a sequence of 2-term products of smaller strings.  Ideally, this sequence would
+    prescribe the way to obtain the entire list of circuits, starting with just the single
+    gates, using the fewest number of multiplications, but this optimality is not
+    guaranteed.
+
+    Parameters
+    ----------
+    items : list, optional
+        Initial items.  This argument should only be used internally
+        in the course of serialization.
+
+    num_strategy_subcomms : int, optional
+        The number of processor groups (communicators) to divide the "atomic" portions
+        of this strategy (a circuit probability array layout) among when calling `distribute`.
+        By default, the communicator is not divided.  This default behavior is fine for cases
+        when derivatives are being taken, as multiple processors are used to process differentiations
+        with respect to different variables.  If no derivaties are needed, however, this should be
+        set to (at least) the number of processors.
+    """
+
+    def __init__(self, circuits, model, dataset,
+                 additional_dimensions=(), verbosity=0):
+
+        assert(all([c.duration == 0 for c in circuits])), \
+            "Matrix layouts can only be used with time-free circuits"
+
+        unique_circuits, to_unique = self._compute_unique_circuits(circuits)
+        aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
+        ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
+        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
+        #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
+        # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
+
+        circuits_by_unique_nospam_circuits = _collections.OrderedDict()
+        for i, c in enumerate(unique_complete_circuits):
+            _, nospam_c, _ = model.split_circuit(c)
+            if nospam_c in circuits_by_unique_nospam_circuits:
+                circuits_by_unique_nospam_circuits[nospam_c].append(i)
+            else:
+                circuits_by_unique_nospam_circuits[nospam_c] = [i]
+        unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
+
+        #Difference from normal matrix layout: don't split based on circuits, just by time.
+        # All atoms have the *same* set of circuits
+        group = set(range(len(unique_nospam_circuits)))
+
+        #Do the work that would be done in to setup an atom with all the circuits (common to all atoms)
+        # then create atoms that are equivalent except for their times
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (orig_i, list()) for orig_i in range(len(unique_circuits))])
+        master_atom = _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+                                            circuits_by_unique_nospam_circuits, ds_circuits,
+                                            group, model, dataset, 0, elindex_outcome_tuples)
+        #print("Master atom with tree size = ",len(master_atom.tree))
+
+        timestamps = dataset.timestamps if dataset is not None else [0.0]
+        atoms = [_MatrixTimeDepCOPALayoutAtom(master_atom, t) for t in timestamps]
 
         super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
                          atoms, additional_dimensions)

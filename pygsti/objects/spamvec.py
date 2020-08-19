@@ -3260,7 +3260,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return [self.error_map]
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -3276,9 +3276,10 @@ class LindbladSPAMVec(SPAMVec):
         """
         # We need to override this method so that embedded gate has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.state_vec, self.error_map.copy(parent), self._prep_or_effect)
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """

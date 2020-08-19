@@ -66,7 +66,7 @@ def get_edgelist(device):
 def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=[],
                           construct_clifford_compilations={'paulieq': ('1Qcliffords',),
                                                            'absolute': ('paulis', '1Qcliffords')},
-                            construct_models=('clifford', 'target'),
+                          construct_models=('clifford', 'target'),
                           verbosity=0):
     """
     todo

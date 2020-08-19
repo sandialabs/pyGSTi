@@ -802,7 +802,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines  # add line labels
-        if ntimes > 1 and expand is False:
+        if ntimes >= 1 and expand is False:
             reppedCircuitLbl = self.to_label(nreps=ntimes)
             return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
         else:
@@ -1993,6 +1993,58 @@ class Circuit(object):
             return Circuit([lbl.replace_name(old_gatename, new_gatename)
                             for lbl in self._labels], self.line_labels, occurrence=self.occurrence)
 
+    def replace_gatename_with_idle_inplace(self, gatename):
+        """
+        Treats a given gatename as an idle gate throughout this Circuit.
+
+        This effectively removes this gate name from the circuit, and replaces
+        a layer containing only this gate name with an idle layer.
+
+        Parameters
+        ----------
+        gatename : str
+            The gate name to replace.
+
+        Returns
+        -------
+        None
+        """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+
+        def replace(obj):  # obj is either a simple label or a list
+            ret = []
+            for sub in obj:
+                if isinstance(sub, _Label):
+                    if sub.name == gatename: continue
+                    ret.append(sub)
+                else:
+                    ret.append(replace(sub))
+            return ret
+
+        self._labels = replace(self._labels)
+
+    def replace_gatename_with_idle(self, gatename):
+        """
+        Returns a copy of this Circuit with a given gatename treated as an idle gate.
+
+        This effectively removes this gate name from the circuit, and replaces
+        a layer containing only this gate name with an idle layer.
+
+        Parameters
+        ----------
+        gatename : str
+            The gate name to replace.
+
+        Returns
+        -------
+        Circuit
+        """
+        # Slow for large static circuits - maybe make a faster case?
+        cpy = self.copy(editable=True)
+        cpy.replace_gatename_with_idle_inplace(gatename)
+        cpy.done_editing()
+        return cpy
+
     def replace_layer(self, old_layer, new_layer):
         """
         Returns a copy of this Circuit except that `old_layer` is changed to `new_layer`.
@@ -2809,6 +2861,14 @@ class Circuit(object):
                     return sum([size(sub) for sub in obj])
 
         return sum([size(layer_lbl) for layer_lbl in self._labels])
+
+    @property
+    def duration(self):
+        # similar to depth()
+        if self._static:
+            return sum([lbl.time for lbl in self._labels])
+        else:
+            return sum([_Label(layer_lbl).time for layer_lbl in self._labels])
 
     def two_q_gate_count(self):
         """

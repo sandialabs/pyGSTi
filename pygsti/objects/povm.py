@@ -255,6 +255,23 @@ class POVM(_gm.ModelMember, _collections.OrderedDict):
         """
         assert(len(v) == 0)  # should be no parameters
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does absolutely nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        pass
+
     def transform_inplace(self, s):
         """
         Update each POVM effect E as s^T * E.

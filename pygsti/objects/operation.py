@@ -303,6 +303,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         N is the number of operation parameters.
     """
     dim = operation.dim
+    #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params), operation.dtype)
@@ -479,6 +480,28 @@ class LinearOperator(_modelmember.ModelMember):
         """
         pass
 
+    #def rep_at_time(self, t):
+    #    """
+    #    Retrieves a representation of this operator at time `t`.
+    #
+    #    This is operationally equivalent to calling `self.set_time(t)` and
+    #    then retrieving `self._rep`.  However, what is returned from this function
+    #    need not be the same rep object for different times, allowing the
+    #    operator object to cache many reps for different times to increase performance
+    #    (this avoids having to initialize the same rep at a given time).
+    #
+    #    Parameters
+    #    ----------
+    #    t : float
+    #        The time.
+    #
+    #    Returns
+    #    -------
+    #    object
+    #    """
+    #    self.set_time(t)
+    #    return self._rep
+
     def to_dense(self):
         """
         Return this operation as a dense matrix.
@@ -564,7 +587,7 @@ class LinearOperator(_modelmember.ModelMember):
         st['_cachedrep'] = None  # can't pickle this!
         return st
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this LinearOperator.
 
@@ -574,7 +597,7 @@ class LinearOperator(_modelmember.ModelMember):
             The parent model to set for the copy.
         """
         self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
-        return _modelmember.ModelMember.copy(self, parent)
+        return _modelmember.ModelMember.copy(self, parent, memo)
 
     def to_sparse(self):
         """
@@ -2656,7 +2679,7 @@ class StochasticNoiseOp(LinearOperator):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -2670,8 +2693,9 @@ class StochasticNoiseOp(LinearOperator):
         StochasticNoiseOp
             A copy of this object.
         """
+        if memo is not None and id(self) in memo: return memo[id(self)]
         copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
     def to_dense(self):
@@ -2937,7 +2961,7 @@ class DepolarizeOp(StochasticNoiseOp):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -2951,8 +2975,9 @@ class DepolarizeOp(StochasticNoiseOp):
         DepolarizeOp
             A copy of this object.
         """
+        if memo is not None and id(self) in memo: return memo[id(self)]
         copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
 
 class LindbladOp(LinearOperator):
@@ -3410,7 +3435,7 @@ class LindbladOp(LinearOperator):
         """
         return [self.errorgen]
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -3426,6 +3451,8 @@ class LindbladOp(LinearOperator):
         """
         # We need to override this method so that error map has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
+
         if self.unitary_postfactor is None:
             upost = None
         elif self._evotype == "densitymx":
@@ -3443,8 +3470,8 @@ class LindbladOp(LinearOperator):
             upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(upost, self.errorgen.copy(parent), self.dense_rep)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls(upost, self.errorgen.copy(parent, memo), self.dense_rep)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
@@ -4853,6 +4880,26 @@ class ComposedOp(LinearOperator):
         """
         return self.factorops
 
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        memo = set()
+        for factor in self.factorops:
+            if id(factor) in memo: continue
+            factor.set_time(t); memo.add(id(factor))
+
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -4920,7 +4967,7 @@ class ComposedOp(LinearOperator):
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -4936,9 +4983,10 @@ class ComposedOp(LinearOperator):
         """
         # We need to override this method so that factor operations have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent) for g in self.factorops], self.dim, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """
@@ -5465,7 +5513,24 @@ class ExponentiatedOp(LinearOperator):
         """
         return [self.exponentiated_op]
 
-    def copy(self, parent=None):
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.exponentiated_op.set_time(t)
+
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -5481,9 +5546,10 @@ class ExponentiatedOp(LinearOperator):
         """
         # We need to override this method so that factor operations have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.exponentiated_op.copy(parent), self.power, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls(self.exponentiated_op.copy(parent, memo), self.power, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """
@@ -5586,6 +5652,46 @@ class ExponentiatedOp(LinearOperator):
         assert(len(v) == self.num_params)
         self.exponentiated_op.from_vector(v, close, dirty_value)
         self.dirty = dirty_value
+
+    def deriv_wrt_params(self, wrt_filter=None):
+        """
+        The element-wise derivative this operation.
+
+        Constructs a matrix whose columns are the vectorized
+        derivatives of the flattened operation matrix with respect to a
+        single operation parameter.  Thus, each column is of length
+        op_dim^2 and there is one column per operation parameter. An
+        empty 2D array in the StaticDenseOp case (num_params == 0).
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        mx = self.exponentiated_op.to_dense()
+
+        mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
+        for i in range(2, self.power):
+            mx_powers[i] = _np.dot(mx_powers[i - 1], mx)
+
+        dmx = _np.transpose(self.exponentiated_op.deriv_wrt_params(wrt_filter))  # (num_params, dim^2)
+        dmx.shape = (dmx.shape[0], self.dim, self.dim)  # set shape for multiplication below
+
+        deriv = _np.zeros((self.dim, dmx.shape[0], self.dim), 'd')
+        for k in range(1, self.power + 1):
+            #deriv += mx_powers[k-1] * dmx * mx_powers[self.power-k]
+            deriv += _np.dot(mx_powers[k - 1], _np.dot(dmx, mx_powers[self.power - k]))
+            #        (D,D) * ((P,D,D) * (D,D)) => (D,D) * (P,D,D) => (D,P,D)
+
+        deriv = _np.moveaxis(deriv, 1, 2)
+        deriv = deriv.reshape((self.dim**2, deriv.shape[2]))
+        return deriv
 
     def __str__(self):
         """ Return string representation """
@@ -5769,7 +5875,24 @@ class EmbeddedOp(LinearOperator):
         """
         return [self.embedded_op]
 
-    def copy(self, parent=None):
+    def set_time(self, t):
+        """
+        Sets the current time for a time-dependent operator.
+
+        For time-independent operators (the default), this function does nothing.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+
+        Returns
+        -------
+        None
+        """
+        self.embedded_op.set_time(t)
+
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -5785,10 +5908,11 @@ class EmbeddedOp(LinearOperator):
         """
         # We need to override this method so that embedded operation has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.state_space_labels, self.targetLabels,
-                       self.embedded_op.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent)
+                       self.embedded_op.copy(parent, memo))
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _iter_matrix_elements_precalc(self):
         divisor = 1; divisors = []
@@ -6916,7 +7040,7 @@ class ComposedErrorgen(LinearOperator):
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -6932,9 +7056,10 @@ class ComposedErrorgen(LinearOperator):
         """
         # We need to override this method so that factors have their
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent) for f in self.factors], self.dim, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent)
+        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
         """
