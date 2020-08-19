@@ -509,7 +509,7 @@ class _BasePOVM(POVM):
             lbl = self.complement_label
             simplified[prefix + lbl] = _sv.ComplementSPAMVec(
                 self[lbl].identity, [v for k, v in simplified.items()])
-            self._copy_gpindices(simplified[prefix + lbl], self.parent)  # set gpindices
+            self._copy_gpindices(simplified[prefix + lbl], self.parent, memo=None)  # set gpindices
             # of complement vector to the same as POVM (it uses *all* params)
         return simplified
 
