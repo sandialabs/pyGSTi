@@ -866,8 +866,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
-                          'radius': radius}, None,
-                         {'prob_clip_interval': prob_clip_interval},
+                          'radius': radius}, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, None, ('percircuit',), (), mdc_store)
 
     if wildcard:

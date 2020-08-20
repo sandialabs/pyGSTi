@@ -1344,7 +1344,7 @@ def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
 
 def std_scale_factor(dim, projection_type):
     """
-    Gets the scaling factors required to turn :func"`std_error_generators` output into projectors.
+    Gets the scaling factors required to turn :func:`std_error_generators` output into projectors.
 
     Returns the multiplicative scaling that should be applied to the output of
     :func"`std_error_generators`, before using them as projectors, in order to
@@ -1368,14 +1368,34 @@ def std_scale_factor(dim, projection_type):
     d2 = dim
     d = int(_np.sqrt(d2))
 
+    # We assume that `std_error_generators` is given *normalized* matrices, in which
+    # case the `norm` computed in `std_error_generators` is:
+    # norm == d / sqrt(2) in hamiltonian case
+    #      == d in stochastic case
+    #      == sqrt(d) in affine case
+
+    # If we assume the basis matrices are normalized such that non_normalized = normalized * sqrt(d),
+    # then to change the output of XXX_to_linbladian (used in std_error_generators prior to normalization),
+    # to be in terms of non-normalized mxs without any prefactors requires multiplication by:
+    #  2.0 in hamiltonian case (there is a sqrt(d)/2 factor (WHY??) in numerator in hamiltonian_to_lindbladian)
+    #  d in stochastic case (no factors in stochastic_lindbladian)
+    #  sqrt(d) in the affine case (not factors in affine_lindbladian)
+
+    # So, the total factor needed to change the output of `std_error_generator` to generators using non-normalized
+    # mxs without any prefactors requires multiplication by `norm` (since it was divided by in std_error_generators)
+    # and multiplication by the factor mentioned above, giving:
+    # d * sqrt(2) for hamiltonian case
+    # d**2 in stochastic case
+    # d in affine case
+
     if projection_type == "hamiltonian":
-        scaleFctr = 1.0 / (d * _np.sqrt(2))
+        scaleFctr = d * _np.sqrt(2)
         # so projection is coefficient of Hamiltonian term (w/un-normalized Paulis)
     elif projection_type == "stochastic":
-        scaleFctr = 1.0 / d
+        scaleFctr = d2
         # so projection is coefficient of P*rho*P stochastic term in generator (w/un-normalized Paulis)
     elif projection_type == "affine":
-        scaleFctr = 1.0  # so projection is coefficient of P affine term in generator (w/un-normalized Paulis)
+        scaleFctr = d  # so projection is coefficient of P affine term in generator (w/un-normalized Paulis)
     else:
         raise ValueError("Invalid projection_type argument: %s"
                          % projection_type)
@@ -1439,6 +1459,10 @@ def std_error_generators(dim, projection_type, projection_basis):
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
         norm = _np.linalg.norm(lindbladMxs[i].flat)
+        # norm == d / sqrt(2) in hamiltonian case  (at least using normalized Paulis)
+        #      == d in stochastic case
+        #      == sqrt(d) in affine case
+
         if not _np.isclose(norm, 0):
             lindbladMxs[i] /= norm  # normalize projector
             assert(_np.isclose(_np.linalg.norm(lindbladMxs[i].flat), 1.0))
@@ -1545,9 +1569,9 @@ def std_errorgen_projections(errgen, projection_type, projection_basis,
             proj = abs(proj)
         projections[i] = proj
 
-    scaleFctr = std_scale_factor(d2, projection_type)
-    projections *= scaleFctr
-    lindbladMxs /= scaleFctr  # so projections * generators give original
+    scaleFctr = std_scale_factor(d2, projection_type)  # multiplies generators
+    projections /= scaleFctr
+    lindbladMxs *= scaleFctr  # so projections * generators give original
 
     ret = [projections]
     if return_generators: ret.append(lindbladMxs)
