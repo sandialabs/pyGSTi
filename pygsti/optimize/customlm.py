@@ -708,7 +708,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             for i, norm_dx in enumerate(norm_dx_lst):
                                 if norm_dx > max_norm_dx:
                                     dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
-                                    new_x_lst[i] = x + dx
+                                    new_x_lst[i] = x + dx_lst[i]
                                     norm_dx_lst[i] = _np.dot(dx_lst[i], dx_lst[i])
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
