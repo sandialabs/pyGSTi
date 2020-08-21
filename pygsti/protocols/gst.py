@@ -289,7 +289,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         if germ_length_limits is None:
             gll = self.germ_length_limits
         else:
-            gll = self.germ_length_limits.copy()
+            gll = self.germ_length_limits.copy() if (self.germ_length_limits is not None) else {}
             gll.update(germ_length_limits)
 
         return StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
