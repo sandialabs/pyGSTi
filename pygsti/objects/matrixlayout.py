@@ -321,7 +321,7 @@ class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
             (orig_i, list()) for orig_i in range(len(unique_circuits))])
         master_atom = _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                             circuits_by_unique_nospam_circuits, ds_circuits,
-                                            group, model, dataset, 0, elindex_outcome_tuples)
+                                            group, set(), model, dataset, 0, elindex_outcome_tuples)
         #print("Master atom with tree size = ",len(master_atom.tree))
 
         timestamps = dataset.timestamps if dataset is not None else [0.0]

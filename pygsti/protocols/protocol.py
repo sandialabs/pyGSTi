@@ -1352,6 +1352,23 @@ class ProtocolData(_TreeNode):
         """ Create the value for `key` on demand. """
         return self.edesign._create_subdata(key, self.dataset)
 
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        if list(self._passdatas.keys()) == [None]:
+            # Don't copy ourself recursively
+            self._passdatas = {}
+            cpy = _copy.deepcopy(self)
+            self._passdatas = {None: self}
+        else:
+            cpy = _copy.deepcopy(self)
+        return cpy
+
     @property
     def passes(self):
         """
@@ -1756,7 +1773,7 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = {}  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
+        self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
     def to_nameddict(self):
@@ -1778,6 +1795,19 @@ class MultiPassResults(ProtocolResults):
             ret[pname][pass_name] = sub[pname]
 
         return ret
+
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        MultiPassResults
+        """
+        cpy = MultiPassResults(self.data.copy(), _copy.deepcopy(self.protocol))
+        for k, v in self.passes.items():
+            cpy.passes[k] = v.copy()
+        return cpy
 
 
 class ProtocolResultsDir(_TreeNode):

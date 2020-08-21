@@ -1917,7 +1917,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
     nOperations = len(opLabels)
 
-    error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}
+    error_superops = []; ptype_counts = {}  # ; ptype_scaleFctrs = {}
     error_labels = []
     for ptype in ("hamiltonian", "stochastic", "affine"):
         lindbladMxs = _tools.std_error_generators(model_a.dim, ptype,
@@ -1927,11 +1927,9 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         lindbladMxs = lindbladMxs[1:]  # skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
 
-        scaleFctr = _tools.std_scale_factor(model_a.dim, ptype)
-        #if ptype == "hamiltonian": scaleFctr *= 2.0 #HACK (DEAL LATER)
-        #if ptype == "affine": scaleFctr *= 0.5 #HACK
+        #scaleFctr = _tools.std_scale_factor(model_a.dim, ptype)  # REMOVE
         ptype_counts[ptype] = len(lindbladMxs)
-        ptype_scaleFctrs[ptype] = scaleFctr  # UNUSED?
+        #ptype_scaleFctrs[ptype] = scaleFctr  # REMOVE?
         error_superops.extend([_tools.change_basis(eg, "std", mxBasis) for eg in lindbladMxs])
         error_labels.extend(["%s(%s)" % (ptype[0], lbl) for lbl in lbls])
     nSuperOps = len(error_superops)

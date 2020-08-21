@@ -22,7 +22,7 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
 
     Mathematically, for a d-dimensional Hamiltonian matrix H, this
     routine constructs the d^2-dimension Lindbladian matrix L whose
-    action is given by L(rho) = -1j*2/sqrt(d)*[ H, rho ], where square brackets
+    action is given by L(rho) = -1j*sqrt(d)/2*[ H, rho ], where square brackets
     denote the commutator and rho is a density matrix.  L is returned
     as a superoperator matrix that acts on a vectorized density matrices.
 
