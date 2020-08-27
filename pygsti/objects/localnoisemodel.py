@@ -942,6 +942,11 @@ class _SimpleCompLayerRules(_LayerRules):
         components = layerlbl.components
         bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
+        if isinstance(layerlbl, _CircuitLabel):
+            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            caches['complete-layers'][layerlbl] = op
+            return op
+
         # OLD: special case: 'Gi' acts as global idle!
         #if hasGlobalIdle and layerlbl == 'Gi' and \
         #   'Gi' not in self.simpleop_blks['layers'])):
