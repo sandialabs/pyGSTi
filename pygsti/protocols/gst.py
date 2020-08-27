@@ -403,7 +403,8 @@ class GSTInitialModel(object):
 
             try:  # see if LGST can be run on this data
                 if isinstance(edesign, StandardGSTDesign) and len(edesign.maxlengths) > 0:
-                    lgst_design = edesign.copy_with_maxlengths([edesign.maxlengths[0]], dataset, 'drop')
+                    lgst_design = edesign.copy_with_maxlengths([edesign.maxlengths[0]], dscheck=dataset,
+                                                               action_if_missing='drop')
                 else:
                     lgst_design = edesign  # just use the whole edesign
                 lgst_data = _proto.ProtocolData(lgst_design, dataset)
