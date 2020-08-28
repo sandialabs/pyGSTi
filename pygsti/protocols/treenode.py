@@ -108,7 +108,7 @@ class TreeNode(object):
 
     def __getitem__(self, key):
         if key not in self._dirs:
-            raise KeyError("Invalid key: %s" % key)
+            raise KeyError("Invalid key: %s" % str(key))
         if key not in self._vals:
             self._vals[key] = self._create_childval(key)
         return self._vals[key]
