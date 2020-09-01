@@ -77,6 +77,9 @@ class PhysicalProcess(object):
             self.kwargs = {}
             self.continuous_gates = continuous_gates
 
+            self.has_metadata = False
+            self.has_auxdata = False
+
             if basis is None:
                 raise ValueError("'basis' keyword arguement must be specified.")
             else:
@@ -207,8 +210,30 @@ class PhysicalProcess(object):
 
         return self
 
-    def set_process_function(self, fn, mpi_enabled=False):
+    def set_metadata(self, metadata):
+        self.has_metadata = True
+        self.metadata = metadata
+
+    def get_aux_data(self, v):
+        if not self.aux_interpolated:
+            raise NotImplementedError("No auxiliary data interpolator is available.")
+
+        if len(self.parameter_range) == len(v) - 1:
+            self.parameter_range = [[min(self.times), max(self.times)]] + self.parameter_range
+
+        if not all([(a >= b) and (a <= c) for a, (b, c) in zip(v, self.parameter_range)]):
+            raise ValueError("Parameter out of range.")
+
+        if self.aux_interpolated:
+            aux_data = _np.zeros([self.auxdim], dtype='float')
+            for indi in range(self.auxdim):
+                aux_data[indi] = _np.float(self.interpolator[indi](*v))
+
+        return aux_data
+
+    def set_process_function(self, fn, mpi_enabled=False, has_auxdata=False):
         self._process_function = fn
+        self.has_auxdata = has_auxdata
         if mpi_enabled:
             # If the function is MPI enabled, it should gather its results to the communicator's 0 node
             # when it's finished.
@@ -252,13 +277,16 @@ class PhysicalProcess(object):
         k, m = divmod(len(a), n)
         return _np.array(list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)))
 
-    def _flatten(self, x):
+    def _flatten(self, x)
         try:
             return [b for a in x for b in a]
         except TypeError:
             return None
 
     def interpolate(self):
+        # TODO: Interpolate the AUX function as well ** HAVEN'T STARTED THIS HERE
+        # TODO: Decide if the aux function should be returned along side the process matrices?
+        #       This is easier, so I'll probably stick to it unless people complain.
 
         # build the interpolation grid
         axial_points = _np.array(
@@ -278,33 +306,54 @@ class PhysicalProcess(object):
 
         # compute the process matrices at each data point
         data = _np.empty(len(my_points), dtype=_np.ndarray)
+        if self.has_auxdata:
+            auxdata = _np.empty(len(my_points), dtype=_np.ndarray)
+
         # print(_rank, len(data))
         for ind, point in enumerate(my_points):
             if self.verbose:
                 print("Evaluating index {ind}, data = {point}")
             if self.grouped_by_time:
-                data_by_time = self.from_vector_physical(point)
+                if self.has_auxdata:
+                    data_by_time, auxdata_by_time = self.from_vector_physical(point)
+                else:
+                    data_by_time = self.from_vector_physical(point)
                 # generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]
                 generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time]
                 data[ind] = generators_by_times
+                if self.has_auxdata:
+                    auxdata[ind] = auxdata_by_time
             else:
                 if self.verbose:
                     print('Computing error generator')
-                data[ind] = self._error_generator_from_gate(self.from_vector_physical(point), v=point)
+                if self.has_auxdata:
+                    data[ind], auxdata[ind] = self._error_generator_from_gate(self.from_vector_physical(point), v=point)
+                else:
+                    data[ind] = self._error_generator_from_gate(self.from_vector_physical(point), v=point)
+
                 if self.verbose:
                     print('Computed error generator')
 
         # Gather data from groups
         if self._x_rank in self._x_roots:
             gathered_data = _np.array(self._flatten(self._x_rootcomm.gather(data, root=0)))
+            if self.has_auxdata:
+                gathered_auxdata = _np.array(self._flatten(self._x_rootcomm.gather(auxdata, root=0)))
 
             if self.grouped_by_time:
                 self.dimension = data[0][0].shape[0]
+                if self.has_auxdata:
+                    self.auxdim = len(auxdata[0][0])
+
             else:
                 self.dimension = data[0].shape[0]
+                if self.has_auxdata:
+                    self.auxdim = len(auxdata[0])
         else:
             gathered_data = None
+            gathered_auxdata = None
             self.dimension = None
+            self.auxdim = None
 
         # construct the interpolators
         if self._x_rank == 0:
@@ -312,23 +361,47 @@ class PhysicalProcess(object):
                 gathered_data = _np.transpose(gathered_data, [1, 0, 2, 3])  # Make time index come first
                 gathered_data = self._flatten(gathered_data)  # Flatten along time axis
                 all_points = _np.array(list(_itertools.product(self.times, *axial_points)))  # Add time to all_points
-            self.interpolator = _np.empty([self.dimension, self.dimension], dtype=object)
+
+                if self.has_auxdata:
+                    gathered_auxdata = _np.transpose(gathered_auxdata, [1,0,2])
+                    gathered_auxdata = self._flatten(gathered_auxdata)
+
+            self.interpolator = _np.empty([self.dimension, self.dimension], dtype=object)                            
             self.data = gathered_data
+            if self.has_auxdata:
+                self.aux_interpolator = _np.empty(self.auxdim, dtype=object)
+                self.auxdata = gathered_auxdata
             self.points = all_points
 
         all_points = self._x_comm.bcast(all_points, root=0)
         gathered_data = self._x_comm.bcast(gathered_data, root=0)
         self.dimension = self._x_comm.bcast(self.dimension, root=0)
 
+        if self.has_auxdata:
+            gathered_auxdata = self._x_comm.bcast(gathered_auxdata, root=0)
+            self.auxdim = self._x_comm.bcast(self.auxdim, root=0)
+
+
         all_pairs = self._split(self._x_size,
                               [[indi, indj] for indi in range(self.dimension) for indj in range(self.dimension)])
         my_pairs = all_pairs[self._x_rank]
         my_interpolators = _np.empty(len(my_pairs), dtype='object')
 
+        if self.has_auxdata:
+            all_aux_inds = self._split(self._x_size, [indx for indx in range(self.auxdim)])
+            my_aux_inds = all_aux_inds[self._x_rank]
+            my_aux_interpolators = _np.empty(len(my_pairs), dtype='object')
+
         # Build the interpolators
         for int_ind, (indi, indj) in enumerate(my_pairs):
                 values = [datum[indi, indj] for datum in gathered_data]
                 my_interpolators[int_ind] = _linND(all_points, values, rescale=True)
+        
+        if self.has_auxdata:
+            for int_ind, aux_ind in enumerate(my_aux_inds):
+                aux_values = [datum[aux_ind] for datum in gathered_aux_data]
+                my_aux_interpolators[int_ind] = _linND(all_points, aux_values, rescale=True)
+
 
         all_interpolators = self._x_comm.gather(my_interpolators, root=0)
         if self._x_rank == 0:
@@ -336,6 +409,15 @@ class PhysicalProcess(object):
             self.interpolator = _np.empty([self.dimension, self.dimension], dtype='object')
             for interp, (indi, indj) in zip(all_interpolators, self._flatten(all_pairs)):
                 self.interpolator[indi, indj] = interp
+        
+        if self.has_auxdata:
+            all_aux_interpolators = self._x_comm.gather(my_aux_interpolators, root=0)
+            if self._x_rank == 0:
+                all_aux_interpolators = self._flatten(all_aux_interpolators)
+                self.aux_interpolator = _np.empty(self.auxdim, dtype='object')
+                for interp, (ind) in zip(all_aux_interpolators, self._flatten(all_aux_inds)):
+                    self.aux_interpolator[ind] = interp
+            self.aux_interpolated = True
 
         self.interpolated = True
 
@@ -352,7 +434,7 @@ class PhysicalProcess(object):
 
             # # make a copy of the object dictionary and delete the MPI components
             safe_dict = self.__dict__.copy()
-            del_keys = ['_process_function', 'kwargs']
+            del_keys = ['_process_function', '_aux_function', 'kwargs']
             for key in safe_dict.keys():
                 if '_x_' in key:
                     del_keys += [key]
