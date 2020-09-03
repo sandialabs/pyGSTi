@@ -1267,7 +1267,7 @@ class Circuit(object):
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), lines)
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
 
-    def insert_idling_lines(self, insert_before, line_labels):
+    def insert_idling_lines(self, insert_before, line_labels):  # INPLACE
         """
         Insert one or more idling (blank) lines into this circuit.
 
@@ -3723,7 +3723,7 @@ class Circuit(object):
                         else:
                             new_ootree = None
 
-                        add_expanded_circuit_outcomes(cir[0:k] + Circuit((expanded_layer_lbl,)) + cir[k + 1:],
+                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
                                                       running_outcomes + selected_instrmt_members, new_ootree, k + 1)
                     break
 
@@ -3740,7 +3740,14 @@ class Circuit(object):
         if model._has_instruments():
             add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
         else:
-            elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) else tuple(ootree.keys())
+            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
+            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
+            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
+            if observed_outcomes is None:
+                elabels = model._effect_labels_for_povm(povm_lbl)
+            else:
+                possible_lbls = set(model._effect_labels_for_povm(povm_lbl))
+                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
             outcomes = tuple(((elabel,) for elabel in elabels))
             expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
 
