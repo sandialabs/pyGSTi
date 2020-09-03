@@ -16,7 +16,7 @@ except ImportError:
     _rank = 0
     _size = 1
 
-from ...tools.basistools import change_basis
+from pygsti.tools.basistools import change_basis
 
 
 #Helper functions
