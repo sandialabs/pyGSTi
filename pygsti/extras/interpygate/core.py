@@ -320,8 +320,8 @@ class PhysicalProcess(object):
                     data_by_time, auxdata_by_time = self.from_vector_physical(point)
                 else:
                     data_by_time = self.from_vector_physical(point)
-                # generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]                
-                generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time]
+
+                generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]
                 data[ind] = generators_by_times
                 if self.has_auxdata:
                     auxdata[ind] = auxdata_by_time
