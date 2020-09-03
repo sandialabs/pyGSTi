@@ -78,14 +78,20 @@ class TreeNode(object):
 
         for nm, subdir in child_dirs.items():
             subobj_dir = dirname / subdir
+            if not subobj_dir.exists():  # if there's no subdirectory, generate the child value
+                continue  # don't load anything - create child value on demand
+
             if meta_subdir:
                 submeta_dir = subobj_dir / meta_subdir
-                instance = _io.metadir._cls_from_meta_json(submeta_dir) \
-                    if submeta_dir.exists() and (submeta_dir / 'meta.json').exists() \
-                    else self.__class__  # can't find a meta.json - default to same class as self
+                if submeta_dir.exists():  # then load an object from this directory (even if it's meta.json is missing)
+                    # if we can't find a meta.json - default to same class as self
+                    classobj = _io.metadir._cls_from_meta_json(submeta_dir) \
+                        if (submeta_dir / 'meta.json').exists() else self.__class__
+                    self._vals[nm] = classobj.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
+                # **If there's no subdirectory, don't load a value here - generate a child value if needed**
             else:
                 instance = self.__class__  # no meta.json - default to same class as self
-            self._vals[nm] = instance.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
+                self._vals[nm] = instance.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
 
     def keys(self):
         """
@@ -108,7 +114,7 @@ class TreeNode(object):
 
     def __getitem__(self, key):
         if key not in self._dirs:
-            raise KeyError("Invalid key: %s" % key)
+            raise KeyError("Invalid key: %s" % str(key))
         if key not in self._vals:
             self._vals[key] = self._create_childval(key)
         return self._vals[key]

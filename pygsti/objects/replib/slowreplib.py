@@ -1654,9 +1654,9 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
     rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
 
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
-    rhoreps = {rholbl: fwdsim.model.circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
-    operationreps = {gl: fwdsim.model.circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
-    effectreps = {i: fwdsim.model.circuit_layer_operator(Elbl, 'povm')._rep
+    rhoreps = {rholbl: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
+    operationreps = {gl: fwdsim.model._circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
+    effectreps = {i: fwdsim.model._circuit_layer_operator(Elbl, 'povm')._rep
                   for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
 
     #comm is currently ignored
@@ -1792,7 +1792,7 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = layout_atom.cache_size
 
-    EVecs = [fwdsim.model.circuit_layer_operator(elbl, 'povm') for elbl in layout_atom.full_effect_labels]
+    EVecs = [fwdsim.model._circuit_layer_operator(elbl, 'povm') for elbl in layout_atom.full_effect_labels]
     #OLD REMOVE: elabels_as_outcomes = [(_gt.effect_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
     #OLD REMOVE: outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
@@ -1808,7 +1808,7 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
         remainder = remainder.circuit_without_povm.layertup
         assert(iStart is None), "Cannot use trees with max-cache-size > 0 when performing time-dependent calcs!"
         rholabel = remainder[0]; remainder = remainder[1:]
-        rhoVec = fwdsim.model.circuit_layer_operator(rholabel, 'prep')
+        rhoVec = fwdsim.model._circuit_layer_operator(rholabel, 'prep')
         datarow = dataset_rows[iDest]
         nTotOutcomes = num_outcomes[iDest]
 
@@ -1844,7 +1844,7 @@ def DM_mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes,
             #if t0 < 10: print("BEGIN rho = ",rho.to_dense())  # REMOVE
 
             for gl in remainder:
-                op = fwdsim.model.circuit_layer_operator(gl, 'op')
+                op = fwdsim.model._circuit_layer_operator(gl, 'op')
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
                 #if t0 < 10: print("  ",gl," ==> rho = ",rho.to_dense()) # REMOVE
@@ -2032,13 +2032,13 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
     op_term_reps = {glbl:
                     [
                         [t.torep()
-                         for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
+                         for t in fwdsim.model._circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                         for order in range(fwdsim.max_order + 1)
                     ] for glbl in distinct_gateLabels}
 
     #Similar with rho_terms and E_terms, but lists
     rho_term_reps = [[t.torep()
-                      for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
+                      for t in fwdsim.model._circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                      for order in range(fwdsim.max_order + 1)]
 
     E_term_reps = []
@@ -2048,7 +2048,7 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
         cur_indices = []  # the Evec-index corresponding to each term rep
         for i, elbl in enumerate(elabels):
             term_reps = [t.torep()
-                         for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
+                         for t in fwdsim.model._circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv)]
             cur_term_reps.extend(term_reps)
             cur_indices.extend([i] * len(term_reps))
         E_term_reps.append(cur_term_reps)
@@ -2246,13 +2246,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(glbl, 'op').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
+        hmterms, foat_indices = fwdsim.model._circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
             min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
         repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
@@ -2261,7 +2261,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
@@ -2281,11 +2281,11 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
-        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
+        [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
@@ -2394,11 +2394,11 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
         [E_term_reps]
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
-        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
+        [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap
@@ -2636,13 +2636,13 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, mi
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(glbl, 'op').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
+        hmterms, foat_indices = fwdsim.model._circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
             min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
         repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
@@ -2651,7 +2651,7 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, mi
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
@@ -2755,13 +2755,13 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
     op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(glbl, 'op').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(glbl, 'op').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             repcache[glbl] = ([t.torep() for t in hmterms], foat_indices)
         op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
 
     if rholabel not in repcache:
-        hmterms, foat_indices = fwdsim.model.circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
+        hmterms, foat_indices = fwdsim.model._circuit_layer_operator(rholabel, 'prep').highmagnitude_terms(
             min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
         repcache[rholabel] = ([t.torep() for t in hmterms], foat_indices)
     rho_term_reps, rho_foat_indices = repcache[rholabel]
@@ -2770,7 +2770,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
     if elabels not in repcache:
         E_term_indices_and_reps = []
         for i, elbl in enumerate(elabels):
-            hmterms, foat_indices = fwdsim.model.circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
+            hmterms, foat_indices = fwdsim.model._circuit_layer_operator(elbl, 'povm').highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
                 [(i, t.torep(), t.magnitude, bool(j in foat_indices)) for j, t in enumerate(hmterms)])
@@ -2793,11 +2793,11 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     foat_indices_per_op = [rho_foat_indices] + [op_foat_indices[glbl] for glbl in circuit] + [E_foat_indices]
 
-    ops = [fwdsim.model.circuit_layer_operator(rholabel, 'prep')] + \
-        [fwdsim.model.circuit_layer_operator(glbl, 'op') for glbl in circuit]
+    ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
+        [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
     max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
-        [max_sum_of_pathmags * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
+        [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap  # absolute gap
     #target_sum_of_pathmags = max_sum_of_pathmags * (1.0 - pathmagnitude_gap)  # relative gap

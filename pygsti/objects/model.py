@@ -1130,6 +1130,11 @@ class OpModel(Model):
         -------
         LinearOperator or SPAMVec
         """
+        self._clean_paramvec()
+        return self._circuit_layer_operator(layerlbl, typ)
+
+    def _circuit_layer_operator(self, layerlbl, typ):
+        # doesn't call _clean_paramvec for performance
         fns = {'op': self._layer_rules.operation_layer_operator,
                'prep': self._layer_rules.prep_layer_operator,
                'povm': self._layer_rules.povm_layer_operator}
@@ -1142,6 +1147,22 @@ class OpModel(Model):
             raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
+
+    def circuit_operator(self, circuit):
+        """
+        Construct or retrieve the operation associated with a circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to construct an operation for.  This circuit should *not*
+            contain any state preparation or measurement layers.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        return self.circuit_layer_operator(circuit.to_label(), typ='op')
 
     def _reinit_opcaches(self):
         """Called when parameter vector structure changes and self._opcaches should be cleared & re-initialized"""

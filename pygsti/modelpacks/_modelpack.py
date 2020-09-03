@@ -19,6 +19,7 @@ import pickle as _pickle
 from ..objects.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..objects.label import Label as _Label
 from ..construction.circuitconstruction import to_circuits as _circuit_list
 from ..construction.modelconstruction import create_explicit_model as _build_explicit_model
 from ..construction.stdlists import create_lsgst_circuit_lists as _make_lsgst_lists
@@ -56,10 +57,9 @@ class ModelPack(_ABC):
         A helper function for derived classes which create explicit models.
         Updates gate names and expressions with a given set of state-space labels.
         """
-        def update_gatename(gn):
-            return gn[0:1] + tuple([sslbls[i] for i in gn[1:]])
         full_sslbls = [sslbls]  # put all sslbls in single tensor product block
-        updated_gatenames = [update_gatename(gn) for gn in gate_names]
+        sslbl_map = {i: sslbl for i, sslbl in enumerate(sslbls)}
+        updated_gatenames = [_Label(gn).map_state_space_labels(sslbl_map) for gn in gate_names]
         updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
         return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
 
@@ -492,12 +492,16 @@ def _load_calccache(key_path, val_path):
 
 def _transform_layer_tup(layer_tup, index_tup):
     if len(layer_tup) > 1:
-        # This assumes simple layer labels that == a gate label
-        # We could use the Label object here in future to support more complex labels
-        lbl, *idx = layer_tup
-        return (lbl, *[index_tup[i] for i in idx])
+        if isinstance(layer_tup[0], str):
+            # layer_tup  == a gate label
+            # Note: perhaps use the Label object here in future to support more complex labels
+            lbl, *idx = layer_tup
+            return (lbl, *[index_tup[i] for i in idx])
+        else:
+            # layer_tup = tuple of gate labels
+            return tuple([_transform_layer_tup(comp, index_tup) for comp in layer_tup])
     else:
-        return layer_tup
+        return layer_tup  # e.g. ()
 
 
 def _transform_circuit_tup(circuit_tup, index_tup):
