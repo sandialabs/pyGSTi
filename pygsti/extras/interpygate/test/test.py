@@ -54,17 +54,21 @@ class ProcessFunction(object):
 
         return states
 
-    def __call__(self, v, times=None, comm=_comm):
+    def __call__(self, v, times=None, comm=_comm, return_auxdata=True):
         print(f'Calling process tomography as {comm.Get_rank()+1} of {comm.Get_size()} on {comm.Get_name()}.')
         processes = do_process_tomography(self.advance, opt_args={'v':v, 'times':times},
                                           n_qubits = 1, time_dependent=True, comm=comm)
 
-        if times is not None:
-            auxdata = _np.array([times] + [list(_np.arange(len(times)))] + list(_np.array([v]*len(times)).T))
+        if return_auxdata:
+            if times is not None:
+                auxdata = _np.array([times] + [list(_np.arange(len(times)))] + list(_np.array([v]*len(times)).T))
+            else:
+                auxdata = _np.array([time] + [0] + [list(v)])
+
+        if return_auxdata:
+            return processes, auxdata
         else:
-            auxdata = _np.array([time] + [0] + [list(v)])
-            
-        return processes, auxdata
+            return processes
 
 gy = PhysicalProcess(mpi_workers_per_process=1, basis='col')
 gy.set_process_function(ProcessFunction(), mpi_enabled=True, has_auxdata=True)
