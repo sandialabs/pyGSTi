@@ -3723,7 +3723,7 @@ class Circuit(object):
                         else:
                             new_ootree = None
 
-                        add_expanded_circuit_outcomes(cir[0:k] + Circuit((expanded_layer_lbl,)) + cir[k + 1:],
+                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
                                                       running_outcomes + selected_instrmt_members, new_ootree, k + 1)
                     break
 
