@@ -400,6 +400,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
+    # MEM from ..objects.profiler import Profiler
+    # MEM debug_prof = Profiler(comm, True)
+    # MEM profiler = debug_prof
+
     msg = ""
     converged = False
     x = x0
@@ -411,6 +415,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     nu = 2
     mu = 1  # just a guess - initialized on 1st iter and only used if rejected
     my_cols_slice = None
+    oob_check_mode = 1
 
     # don't let any component change by more than ~max_dx_scale
     if max_dx_scale:
@@ -439,7 +444,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     if init_munu != "auto":
         mu, nu = init_munu
-    best_x_state = (mu, nu, norm_f, f, None)
+    best_x_state = (mu, nu, norm_f, f, spow, None)
     rawJTJ_scratch = None
 
     try:
@@ -460,7 +465,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
                     continue
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
@@ -550,7 +555,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
                     continue
 
             if k == 0:
@@ -566,14 +571,14 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 else:
                     mu, nu = init_munu
                 rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
-                best_x_state = mu, nu, norm_f, f, rawJTJ_scratch  # update mu,nu,JTJ of initial "best state"
+                best_x_state = mu, nu, norm_f, f, spow, rawJTJ_scratch  # update mu,nu,JTJ of initial "best state"
             else:
-                #on all other iterations, upate JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
+                #on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
                 # a previously accepted step that was deemed the best we've seen so far
                 if _np.allclose(x, best_x):
                     rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
                     rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
-                    best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
+                    best_x_state = best_x_state[0:5] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -712,6 +717,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                     norm_dx_lst[i] = _np.dot(dx_lst[i], dx_lst[i])
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
+                    #MEM if profiler: profiler.memory_check("custom_leastsq: mid inner loop")
                     #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
@@ -723,18 +729,19 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                          "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                             oob_check_interval = 1
                             x[:] = best_x[:]
-                            mu, nu, norm_f, f, _ = best_x_state
+                            mu, nu, norm_f, f, spow, _ = best_x_state
                             break
 
                     if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
                         msg = "(near-)singular linear system"; break
 
-                    if oob_check_interval > 0:
-                        assert(damping_mode != 'adaptive'), "Cannot use adaptive mode with OOB support yet"
+                    if oob_check_interval > 0 and oob_check_mode == 0:
+                        assert(damping_mode != 'adaptive'), "Cannot use adaptive mode 0 with OOB support yet"
                         if k % oob_check_interval == 0:
                             #Check to see if objective function is out of bounds
                             try:
                                 #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                                # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn")
                                 new_f = obj_fn(new_x, oob_check=True)
                                 new_x_is_allowed = True
                                 new_x_is_known_inbounds = True
@@ -752,7 +759,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                              "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                         oob_check_interval = 1
                                         x[:] = best_x[:]
-                                        mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet
+                                        mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet
                                         break  # restart next outer loop
                                 else:
                                     raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -768,11 +775,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             new_f = obj_fn(new_x)
 
                         new_x_is_allowed = True
-                        new_x_is_known_inbounds = True  # always considered "in bounds" when not checking
+                        new_x_is_known_inbounds = bool(oob_check_interval == 0) # considered "in bounds" if not checking
 
                     if new_x_is_allowed:
 
-                        if profiler: profiler.memory_check("custom_leastsq: after obj_fn")
+                        # MEM if profiler: profiler.memory_check("custom_leastsq: after obj_fn")
                         if damping_mode == 'adaptive':
                             norm_new_f_lst = [_np.dot(new_f, new_f) for new_f in new_f_lst]
                             if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
@@ -842,40 +849,73 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                              "interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
-                                mu, nu, norm_f, f, _ = best_x_state  # can't make use of saved JTJ yet
+                                mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
-                        if profiler: profiler.memory_check("custom_leastsq: before success")
+                        # MEM if profiler: profiler.memory_check("custom_leastsq: before success")
 
                         if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
-                            # reduction in error: increment accepted!
-                            t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
-                            # always reduce mu for accepted step when |dx| is small
-                            mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
-                            mu *= mu_factor
-                            nu = 2
-                            x, f, norm_f = new_x, new_f, norm_new_f
-                            printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
-                                        % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
-                            last_accepted_dx = dx.copy()
-                            if new_x_is_known_inbounds and norm_f < min_norm_f:
-                                min_norm_f = norm_f
-                                best_x[:] = x[:]
-                                best_x_state = (mu, nu, norm_f, f, None)
-                                #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                                # at the *last* x-value -- we need to wait for the next outer loop
-                                # to compute the JTJ for this best_x_state
+                            #Check whether an otherwise acceptable solution is in-bounds
+                            if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
+                                #Check to see if objective function is out of bounds
+                                try:
+                                    #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                                    # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
+                                    obj_fn(new_x, oob_check=True)  # don't actually need return value (same as new_f above)
+                                    new_f_is_allowed = True
+                                    new_x_is_known_inbounds = True
+                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                                    if oob_action == "reject" or k < MIN_STOP_ITER:
+                                        new_f_is_allowed = False  # (and also not in bounds)
+                                    elif oob_action == "stop":
+                                        if oob_check_interval == 1:
+                                            msg = "Objective function out-of-bounds! STOP"
+                                            converged = True; break
+                                        else:  # reset to last know in-bounds point and not do oob check every step
+                                            printer.log(
+                                                ("** Hit out-of-bounds with check interval=%d, reverting to last "
+                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                            oob_check_interval = 1
+                                            x[:] = best_x[:]
+                                            mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet
+                                            break  # restart next outer loop
+                                    else:
+                                        raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                            else:
+                                new_f_is_allowed = True
 
-                            #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                            #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
+                            if new_f_is_allowed:
+                                # reduction in error: increment accepted!
+                                t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
+                                # always reduce mu for accepted step when |dx| is small
+                                mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
+                                mu *= mu_factor
+                                nu = 2
+                                x, f, norm_f = new_x, new_f, norm_new_f
+                                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
+                                            % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
+                                last_accepted_dx = dx.copy()
+                                if new_x_is_known_inbounds and norm_f < min_norm_f:
+                                    min_norm_f = norm_f
+                                    best_x[:] = x[:]
+                                    best_x_state = (mu, nu, norm_f, f, spow, None)
+                                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                                    # at the *last* x-value -- we need to wait for the next outer loop
+                                    # to compute the JTJ for this best_x_state
 
-                            ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
-                            #new_Jac = jac_fn(new_x)
-                            #new_JTf = _np.dot(new_Jac.T,new_f)
-                            #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
-                            #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
+                                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
+                                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
 
-                            break  # exit inner loop normally
+                                ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
+                                #new_Jac = jac_fn(new_x)
+                                #new_JTf = _np.dot(new_Jac.T,new_f)
+                                #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
+                                #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
+
+                                break  # exit inner loop normally
+                            else:
+                                reject_msg = " (out-of-bounds)"
 
                         #TEST TODO REMOVE - update Jac w/rank1 term given info from failed evaluation
                         #else:
@@ -932,7 +972,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         converged = True
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    mu, nu, norm_f, f, rawJTJ = best_x_state
+    mu, nu, norm_f, f, spow, rawJTJ = best_x_state
     return best_x, converged, msg, mu, nu, norm_f, f, rawJTJ
     #solution = _optResult()
     #solution.x = x; solution.fun = f
