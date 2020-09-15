@@ -1267,7 +1267,7 @@ class Circuit(object):
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), lines)
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
 
-    def insert_idling_lines(self, insert_before, line_labels):
+    def insert_idling_lines(self, insert_before, line_labels):  # INPLACE
         """
         Insert one or more idling (blank) lines into this circuit.
 
@@ -1682,7 +1682,7 @@ class Circuit(object):
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
-    def expand_subcircuits(self):  # INPLACE
+    def expand_subcircuits_inplace(self):
         """
         Expands all :class:`CircuitLabel` labels within this circuit.
 
@@ -1712,6 +1712,19 @@ class Circuit(object):
                 self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
                                 subc.sslbls)  # dump in the contents
+
+    def expand_subcircuits(self):
+        """
+        Returns a new circuit with :class:`CircuitLabel` labels expanded.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.expand_subcircuits_inplace()
+        cpy.done_editing()
+        return cpy
 
     def factorize_repetitions_inplace(self):
         """
@@ -3723,7 +3736,7 @@ class Circuit(object):
                         else:
                             new_ootree = None
 
-                        add_expanded_circuit_outcomes(cir[0:k] + Circuit((expanded_layer_lbl,)) + cir[k + 1:],
+                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
                                                       running_outcomes + selected_instrmt_members, new_ootree, k + 1)
                     break
 
@@ -3740,7 +3753,14 @@ class Circuit(object):
         if model._has_instruments():
             add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
         else:
-            elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) else tuple(ootree.keys())
+            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
+            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
+            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
+            if observed_outcomes is None:
+                elabels = model._effect_labels_for_povm(povm_lbl)
+            else:
+                possible_lbls = set(model._effect_labels_for_povm(povm_lbl))
+                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
             outcomes = tuple(((elabel,) for elabel in elabels))
             expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
 

@@ -791,3 +791,4 @@ def _get_optimizer(advanced_options, exp_design):
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
+    return optimizer
