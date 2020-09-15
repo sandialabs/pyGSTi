@@ -1583,8 +1583,7 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
 
     for qubit_labels in structure:
         subgraph = pspec.qubitgraph.subgraph(list(qubit_labels))
-        assert(subgraph.are_glob_connected(list(qubit_labels))
-               ), "Each subset of qubits in `structure` must be connected!"
+        assert(subgraph.is_connected_graph()), "Each subset of qubits in `structure` must be connected!"
 
     # Creates a empty circuit over no wires
     circuit = _cir.Circuit(num_lines=0, editable=True)
@@ -1898,8 +1897,7 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
 
     for qubit_labels in structure:
         subgraph = pspec.qubitgraph.subgraph(list(qubit_labels))
-        assert(subgraph.are_glob_connected(list(qubit_labels))
-               ), "Each subset of qubits in `structure` must be connected!"
+        assert(subgraph.is_connected_graph()), "Each subset of qubits in `structure` must be connected!"
 
     for lnum, l in enumerate(depths):
         if verbosity > 0:
