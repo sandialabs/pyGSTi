@@ -104,6 +104,9 @@ namespace CReps {
     DMEffectCRep(INT dim);
     virtual ~DMEffectCRep();
     virtual double probability(DMStateCRep* state) = 0;
+    virtual double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id) {
+      return this->probability(state);
+    }
   };
 
 
@@ -149,6 +152,7 @@ namespace CReps {
     DMEffectCRep_Errgen(DMOpCRep* errgen_oprep, DMEffectCRep* effect_rep, INT errgen_id, INT dim);
     virtual ~DMEffectCRep_Errgen();
     virtual double probability(DMStateCRep* state);
+    virtual double probability_using_cache(DMStateCRep* state, DMStateCRep* errgen_on_state, INT& errgen_id);
   };
 
 
