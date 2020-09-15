@@ -96,7 +96,9 @@ class CircuitTester(BaseCase):
         c[1, 0] = "Gx"
         self.assertEqual(c.tup, ('Gi', (CircuitLabel('', [('Gx', 1)], (1,), 2), ('Gx', 0))) + ('@', 0, 1, 2))
 
-        c.expand_subcircuits()
+        c_expanded = c.expand_subcircuits()
+        c.expand_subcircuits_inplace()
+        self.assertEqual(c, c_expanded)
         self.assertEqual(c.tup, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)) + ('@', 0, 1, 2))
         self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)))   # `c` compares vs. labels when RHS is not a Circuit
 
