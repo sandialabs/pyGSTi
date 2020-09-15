@@ -21,7 +21,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
-from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .termlayout import TermCOPALayout as _TermCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
@@ -37,10 +36,10 @@ from . import replib
 
 from .opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
+    bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
-_dummy_profiler = _DummyProfiler()
-
+# MEM from .profiler import Profiler
 
 class TermForwardSimulator(_DistributableForwardSimulator):
     """
@@ -312,6 +311,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
+
+        #MEM debug_prof = Profiler(comm)
+        #MEM debug_prof.print_memory("CreateLayout1", True)
+
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
@@ -322,9 +325,17 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
+            gather_mem_limit = mem_limit * 0.01  # better?
+        else:
+            gather_mem_limit = None
 
         layout = _TermCOPALayout(circuits, self.model, dataset, None, nprocs, (num_params, num_params), printer)
+        layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
+
+        #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
         self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)
+        #MEM debug_prof.print_memory("CreateLayout3 - nEls = %d, nprocs=%d" % (layout.num_elements, nprocs), True)
+
         return layout
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
@@ -348,8 +359,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             nEls = layout_atom.num_elements
             polys = layout_atom.merged_compact_polys
             wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
-            dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
-            dprobs = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], self.model.to_vector(), (nEls, len(wrtInds)))
+            #OLD dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
+            #OLD dprobs = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], self.model.to_vector(), (nEls, len(wrtInds)))
+            dprobs = _bulk_eval_compact_polynomials_derivs(polys[0], polys[1], wrtInds, self.model.to_vector(), (nEls, len(wrtInds)))
+            #assert(_np.allclose(dprobs, dprobs_chk))
+
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
@@ -606,14 +620,17 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         #if comm is None or comm.Get_rank() == 0:
         comm = resource_alloc.comm
-        rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+        rank = comm.Get_rank() if comm is not None else 0
         nC = len(layout_atom.expanded_circuits)
         max_npaths = self.max_paths_per_outcome * layout_atom.num_elements
-        print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
-               "(target=%.4g, #circuits=%d, #failed=%d)") %
-              (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
-        print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
-              (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
+
+        if rank == 0:
+            rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+            print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
+                   "(target=%.4g, #circuits=%d, #failed=%d)") %
+                  (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
+            print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
+                  (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
         return _AtomicTermPathSet(thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
 
@@ -753,10 +770,15 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         max_sopm = _np.empty(layout.num_elements, 'd')
         achieved_sopm = _np.empty(layout.num_elements, 'd')
 
+        #MEM debug_prof = Profiler(resource_alloc.comm)
+
         def compute_sopm(layout_atom, sub_resource_alloc):
             elInds = layout_atom.element_slice
+            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop1", True)
             replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop2", True)  # HERE - memory used before this...
             achieved, maxx = self._achieved_and_max_sopm_block(layout_atom)
+            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop3", True)
             _fas(max_sopm, [elInds], maxx)
             _fas(achieved_sopm, [elInds], achieved)
 
@@ -888,9 +910,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         nEls = layout_atom.num_elements
         polys = layout_atom.merged_achievedsopm_compact_polys
-        dpolys = _compact_deriv(polys[0], polys[1], _np.arange(Np))
-        d_achieved_mags = _bulk_eval_compact_polynomials_complex(
-            dpolys[0], dpolys[1], _np.abs(paramvec), (nEls, Np))
+        #OLD dpolys = _compact_deriv(polys[0], polys[1], _np.arange(Np))
+        #OLD d_achieved_mags = _bulk_eval_compact_polynomials_complex(
+        #OLD    dpolys[0], dpolys[1], _np.abs(paramvec), (nEls, Np))
+        d_achieved_mags = _bulk_eval_compact_polynomials_derivs(polys[0], polys[1], _np.arange(Np),
+                                                                _np.abs(paramvec), (nEls, Np))
+        #assert(_np.allclose(d_achieved_mags, d_achieved_mags_chk))
+
         assert(_np.linalg.norm(_np.imag(d_achieved_mags)) < 1e-8)
         d_achieved_mags = d_achieved_mags.real
         d_achieved_mags[:, (paramvec < 0)] *= -1
@@ -1282,7 +1308,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
         ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
-
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
@@ -1344,10 +1369,18 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         -------
         None
         """
+        # MEM debug_prof = Profiler(resource_alloc.comm)
+        # MEM if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+        # MEM     print("Finding & selecting path set using %d atoms" % len(layout.atoms))
+
         def find_and_select_pathset(layout_atom, sub_resource_alloc):
             if self.mode == "pruned":
+                # MEM debug_prof.print_memory("find_and_select_pathset1 - nEls = %d, nExpanded=%d, rank=%d" % 
+                # MEM                         (layout_atom.num_elements, len(layout_atom.expanded_circuits), resource_alloc.comm.rank), True)
                 pathset = self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
                                                              exit_after_this_many_failures=0)
+                # MEM debug_prof.print_memory("find_and_select_pathset2", True)
+                # MEM DEBUG import sys; sys.exit(0)
                 self._select_paths_set_block(layout_atom, pathset, sub_resource_alloc)  # "locks in" path set
                 return pathset.num_failures
             else:
