@@ -699,6 +699,7 @@ class LinearOperator(_modelmember.ModelMember):
         v = self.to_vector()
         taylor_order = 0
         terms = []; last_len = -1; first_order_magmax = 1.0
+
         while len(terms) > last_len:  # while we keep adding something
             if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
                 break  # there's no way any terms at this order reach min_term_mag - exit now!
@@ -727,9 +728,10 @@ class LinearOperator(_modelmember.ModelMember):
                     if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
                         terms.append((taylor_order, t))
             else:
+                eff_min_term_mag = 0.0 if (taylor_order == 1 and force_firstorder) else min_term_mag
                 terms.extend(
                     [(taylor_order, t)
-                     for t in self.taylor_order_terms_above_mag(taylor_order, max_polynomial_vars, min_term_mag)]
+                     for t in self.taylor_order_terms_above_mag(taylor_order, max_polynomial_vars, eff_min_term_mag)]
                 )
 
             #print("order ", taylor_order, " : ", len(terms_at_order), " maxmag=",

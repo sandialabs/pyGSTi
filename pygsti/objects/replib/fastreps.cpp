@@ -232,6 +232,14 @@ namespace CReps {
     return _effect_ptr->probability(&outState);
   }
 
+  double DMEffectCRep_Errgen::probability_using_cache(DMStateCRep* state, DMStateCRep* errgen_on_state, INT& errgen_id) {
+    if(errgen_id != _errgen_id) {
+      _errgen_ptr->acton(state, errgen_on_state);
+      errgen_id = _errgen_id;
+    }
+    return _effect_ptr->probability(errgen_on_state);
+  }
+
 
   /****************************************************************************\
   |* DMOpCRep                                                               *|

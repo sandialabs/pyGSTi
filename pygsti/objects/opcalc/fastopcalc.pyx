@@ -140,6 +140,162 @@ def bulk_eval_compact_polynomials_complex(np.ndarray[np.int64_t, ndim=1, mode="c
     # = dest_shape # reshape w/out possibility of copying
     return res.reshape(dest_shape)
 
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def bulk_eval_compact_polynomials_derivs_real(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                              np.ndarray[double, ndim=1, mode="c"] ctape,
+                                              np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams,
+                                              np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                              dest_shape):
+    #Note: assumes wrtParams is SORTED but doesn't assert it like Python version does
+
+    cdef INT c, i, iPoly
+    cdef INT j,k, m, nTerms, nVars, cur_iWrt, j0, j1, cur_wrt, cnt, off
+    cdef INT vtape_sz = vtape.size
+    cdef INT wrt_sz = wrtParams.size
+    cdef double coeff
+    cdef double a
+
+    assert(len(dest_shape) == 2)
+    assert(len(wrtParams) == dest_shape[1])
+    cdef np.ndarray[np.float64_t, ndim=2, mode="c"] res = np.zeros(dest_shape, np.float64)  # indices [iPoly, iParam]
+
+    c = 0; i = 0; iPoly = 0
+    while i < vtape_sz:
+        j = i # increment j instead of i for this poly
+        nTerms = vtape[j]; j+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+
+        for m in range(nTerms):
+            coeff = ctape[c]; c += 1
+            nVars = vtape[j]; j += 1 # number of variable indices in this term
+
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
+            cur_iWrt = 0
+            j0 = j # the vtape index where the current term starts
+            j1 = j+nVars # the ending index
+
+            #Loop to get counts of each variable index that is also in `wrt`.
+            # Once we've passed an element of `wrt` process it, since there can't
+            # see it any more (the var indices are sorted).
+            while j < j1: #loop over variable indices for this term
+                # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
+
+                #find an iVar that is also in wrt.
+                # - increment the cur_iWrt or j as needed
+                while cur_iWrt < wrt_sz and vtape[j] > wrtParams[cur_iWrt]: #condition to increment cur_iWrt
+                    cur_iWrt += 1 # so wrtParams[cur_iWrt] >= vtape[j]
+                if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
+                                                # we're done with all wrt elements
+                # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
+                cur_wrt = wrtParams[cur_iWrt]
+                while j < j1 and vtape[j] < cur_wrt:
+                    j += 1 # so vtape[j] >= wrt[cur_iWrt]
+                if j == j1: break  # no more iVars - we're done
+
+                #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
+                if vtape[j] == cur_wrt:
+                    #Yay! a value we're looking for is present in the vtape.
+                    # Figure out how many there are (easy since vtape is sorted
+                    # and we'll always stop on the first one)
+                    cnt = 0
+                    while j < j1 and vtape[j] == cur_wrt:
+                        cnt += 1; j += 1
+                    #Process cur_iWrt: add a term to evaluated poly for derivative w.r.t. wrtParams[cur_iWrt]
+                    a = coeff*cnt
+                    for k in range(j0,j1):
+                        if k == j-1: continue # remove this index
+                        a *= paramvec[ vtape[k] ]
+                    res[iPoly, cur_iWrt] += a
+                    cur_iWrt += 1 # processed this wrt param - move to next one
+
+            j = j1 # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+
+        i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
+        iPoly += 1
+
+    return res
+
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def bulk_eval_compact_polynomials_derivs_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                                np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                                np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams,
+                                                np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                                dest_shape):
+    #Note: assumes wrtParams is SORTED but doesn't assert it like Python version does
+
+    cdef INT c, i, iPoly
+    cdef INT j,k, m, nTerms, nVars, cur_iWrt, j0, j1, cur_wrt, cnt, off
+    cdef INT vtape_sz = vtape.size
+    cdef INT wrt_sz = wrtParams.size
+    cdef double complex coeff
+    cdef double complex a
+
+    assert(len(dest_shape) == 2)
+    assert(len(wrtParams) == dest_shape[1])
+    cdef np.ndarray[np.complex128_t, ndim=2, mode="c"] res = np.zeros(dest_shape, np.complex128)  # indices [iPoly, iParam]
+
+    c = 0; i = 0; iPoly = 0
+    while i < vtape_sz:
+        j = i # increment j instead of i for this poly
+        nTerms = vtape[j]; j+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+
+        for m in range(nTerms):
+            coeff = ctape[c]; c += 1
+            nVars = vtape[j]; j += 1 # number of variable indices in this term
+
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
+            cur_iWrt = 0
+            j0 = j # the vtape index where the current term starts
+            j1 = j+nVars # the ending index
+
+            #Loop to get counts of each variable index that is also in `wrt`.
+            # Once we've passed an element of `wrt` process it, since there can't
+            # see it any more (the var indices are sorted).
+            while j < j1: #loop over variable indices for this term
+                # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
+
+                #find an iVar that is also in wrt.
+                # - increment the cur_iWrt or j as needed
+                while cur_iWrt < wrt_sz and vtape[j] > wrtParams[cur_iWrt]: #condition to increment cur_iWrt
+                    cur_iWrt += 1 # so wrtParams[cur_iWrt] >= vtape[j]
+                if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
+                                                # we're done with all wrt elements
+                # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
+                cur_wrt = wrtParams[cur_iWrt]
+                while j < j1 and vtape[j] < cur_wrt:
+                    j += 1 # so vtape[j] >= wrt[cur_iWrt]
+                if j == j1: break  # no more iVars - we're done
+
+                #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
+                if vtape[j] == cur_wrt:
+                    #Yay! a value we're looking for is present in the vtape.
+                    # Figure out how many there are (easy since vtape is sorted
+                    # and we'll always stop on the first one)
+                    cnt = 0
+                    while j < j1 and vtape[j] == cur_wrt:
+                        cnt += 1; j += 1
+                    #Process cur_iWrt: add a term to evaluated poly for derivative w.r.t. wrtParams[cur_iWrt]
+                    a = coeff*cnt
+                    for k in range(j0,j1):
+                        if k == j-1: continue # remove this index
+                        a *= paramvec[ vtape[k] ]
+                    res[iPoly, cur_iWrt] += a
+                    cur_iWrt += 1 # processed this wrt param - move to next one
+
+            j = j1 # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+
+        i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
+        iPoly += 1
+
+    return res
+
+
+
 # sum(abs(bulk_eval_compact_polynomials_complex(.))), made into its own function because numpy sum(abs())
 #  is slow and this is done often in get_total_term_magnitude calls.
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -190,7 +346,7 @@ def compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
     cdef INT wrt_sz = wrtParams.size
     cdef double complex coeff
 
-    #Figure out buffer sizes fro dctapes & dvtapes
+    #Figure out buffer sizes for dctapes & dvtapes
     cdef INT max_nTerms = 0
     cdef INT max_vsz = 0
     cdef INT nPolys = 0
@@ -532,12 +688,12 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             if incd == 0: # need to re-evaluate rho vector
                 factor = factor_lists[0][b[0]]
-                rhoVecL = factor.pre_ops[0].todense()
+                rhoVecL = factor.pre_ops[0].to_dense()
                 for j in range(1,len(factor.pre_ops)):
                     rhoVecL = factor.pre_ops[j].acton(rhoVecL)
                 leftSaved[0] = rhoVecL
 
-                rhoVecR = factor.post_ops[0].todense()
+                rhoVecR = factor.post_ops[0].to_dense()
                 for j in range(1,len(factor.post_ops)):
                     rhoVecR = factor.post_ops[j].acton(rhoVecR)
                 rightSaved[0] = rhoVecR
@@ -569,12 +725,12 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             # and apply effect vector
             if stabilizer_evo == 0:
                 factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-                EVec = factor.post_ops[0].todense() # TODO USE scratch here
+                EVec = factor.post_ops[0].to_dense() # TODO USE scratch here
                 for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.post_ops[j].acton(EVec)
                 pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
 
-                EVec = factor.pre_ops[0].todense() # TODO USE scratch here
+                EVec = factor.pre_ops[0].to_dense() # TODO USE scratch here
                 for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.pre_ops[j].acton(EVec)
                 pRight = np.conjugate(np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
@@ -651,7 +807,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             #pLeft / "pre" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
-            rhoVec = factor.pre_ops[0].todense()
+            rhoVec = factor.pre_ops[0].to_dense()
             for j in range(1,len(factor.pre_ops)):
                 rhoVec = factor.pre_ops[j].acton(rhoVec)
             for i in range(1,last_index):
@@ -661,7 +817,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
 
             if stabilizer_evo == 0:
-                EVec = factor.post_ops[0].todense() # TODO USE scratch here
+                EVec = factor.post_ops[0].to_dense() # TODO USE scratch here
                 for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.post_ops[j].acton(EVec)
                 pLeft = np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
@@ -676,7 +832,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             #pRight / "post" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
-            rhoVec = factor.post_ops[0].todense()
+            rhoVec = factor.post_ops[0].to_dense()
             for j in range(1,len(factor.post_ops)):
                 rhoVec = factor.post_ops[j].acton(rhoVec)
             for i in range(1,last_index):
@@ -686,7 +842,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
 
             if stabilizer_evo == 0:
-                EVec = factor.pre_ops[0].todense() # TODO USE scratch here
+                EVec = factor.pre_ops[0].to_dense() # TODO USE scratch here
                 for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.pre_ops[j].acton(EVec)
                 pRight = np.conjugate(np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities

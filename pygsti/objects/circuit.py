@@ -1682,7 +1682,7 @@ class Circuit(object):
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
-    def expand_subcircuits(self):  # INPLACE
+    def expand_subcircuits_inplace(self):
         """
         Expands all :class:`CircuitLabel` labels within this circuit.
 
@@ -1712,6 +1712,19 @@ class Circuit(object):
                 self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
                                 subc.sslbls)  # dump in the contents
+
+    def expand_subcircuits(self):
+        """
+        Returns a new circuit with :class:`CircuitLabel` labels expanded.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.expand_subcircuits_inplace()
+        cpy.done_editing()
+        return cpy
 
     def factorize_repetitions_inplace(self):
         """
