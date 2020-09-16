@@ -1234,7 +1234,7 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
         pcircuit = _cir.Circuit(num_lines=0, editable=True)
         for ssQs_ind, qubit_labels in enumerate(structure):
             pcircuit.tensor_circuit(circuits[qubit_labels][setting_comb[ssQs_ind]])
-            pcircuit.done_editing()
+            pcircuit.done_editing()  # TIM: is this indented properly?
             parallel_circuits[setting_comb] = pcircuit
 
     experiment_dict['circuits'] = parallel_circuits
