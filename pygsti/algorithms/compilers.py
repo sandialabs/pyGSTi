@@ -211,8 +211,8 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
         pauli_circuit.change_gate_library(
             pspec.compilations['absolute'], one_q_gate_relations=pspec.oneQgate_relations)  # identity=pspec.identity,
     # Prefix or post-fix the Pauli circuit to the main symplectic-generating circuit.
-    if prefixpaulis: circuit.prefix_circuit(pauli_circuit)
-    else: circuit.append_circuit(pauli_circuit)
+    if prefixpaulis: circuit.prefix_circuit_inplace(pauli_circuit)
+    else: circuit.append_circuit_inplace(pauli_circuit)
 
     # If we aren't Pauli-randomizing, do a final bit of depth compression
     if pspec is not None: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
@@ -445,7 +445,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
                 # identity=pspec.identity,
                 pcircuit.change_gate_library(pspec.compilations['absolute'],
                                              one_q_gate_relations=pspec.oneQgate_relations)
-            circuit.insert_circuit(pcircuit, d - i)
+            circuit.insert_circuit_inplace(pcircuit, d - i)
 
     if check:
         implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
@@ -640,17 +640,17 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qu
         assert(len(eliminationorder) == len(qubit_labels)), \
             "`qubit_labels` must be the same length as `elimintionorder`! The mapping to qubit labels is ambigiuous!"
         circuit.map_state_space_labels_inplace({i: qubit_labels[eliminationorder[i]] for i in range(n)})
-        circuit.reorder_lines(qubit_labels)
+        circuit.reorder_lines_inplace(qubit_labels)
     # If the qubit_labels is None, but there is a pspec, we relabel the circuit in terms of the full set
     # of pspec labels.
     elif pspec is not None:
         assert(len(eliminationorder) == len(pspec.qubit_labels)
                ), "If `qubit_labels` is not specified `s` should be over all the qubits in `pspec`!"
         circuit.map_state_space_labels_inplace({i: pspec.qubit_labels[eliminationorder[i]] for i in range(n)})
-        circuit.reorder_lines(pspec.qubit_labels)
+        circuit.reorder_lines_inplace(pspec.qubit_labels)
     else:
         circuit.map_state_space_labels_inplace({i: eliminationorder[i] for i in range(n)})
-        circuit.reorder_lines(list(range(n)))
+        circuit.reorder_lines_inplace(list(range(n)))
 
     # If we have a pspec, we change the gate library. We use a pauli-equivalent compilation, as it is
     # only necessary to implement each gate in this circuit up to Pauli matrices.
@@ -1186,11 +1186,11 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
                                            algorithm=cnotalg, clname=None, check=False, aargs=cargs)
 
     circuit = circuit_1_cnots.copy(editable=True)
-    circuit.append_circuit(circuit_1_local)
-    circuit.append_circuit(circuit_2_cnots)
-    circuit.append_circuit(circuit_2_local)
-    circuit.append_circuit(circuit_3_cnots)
-    circuit.append_circuit(circuit_3_local)
+    circuit.append_circuit_inplace(circuit_1_local)
+    circuit.append_circuit_inplace(circuit_2_cnots)
+    circuit.append_circuit_inplace(circuit_2_local)
+    circuit.append_circuit_inplace(circuit_3_cnots)
+    circuit.append_circuit_inplace(circuit_3_local)
     circuit.done_editing()
 
     if check:
@@ -2081,11 +2081,11 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
             pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
-            circuit.insert_circuit(pcircuit, d - i)
+            circuit.insert_circuit_inplace(pcircuit, d - i)
 
     implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
 
-    check_circuit.append_circuit(circuit)
+    check_circuit.append_circuit_inplace(circuit)
     # Add CNOT into the dictionary, because the gates in check_circuit are 'CNOT'.
     sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
@@ -2101,7 +2101,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     pauli_layer = _symp.find_postmultipled_pauli(implemented_scheck, implemented_pcheck, p, qubit_labels=qubit_labels)
     paulicircuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
-    circuit.append_circuit(paulicircuit)
+    circuit.append_circuit_inplace(paulicircuit)
 
     if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
 
@@ -2252,13 +2252,13 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
             pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
-            circuit.insert_circuit(pcircuit, d - i)
+            circuit.insert_circuit_inplace(pcircuit, d - i)
 
     # We didn't reverse tcc, so reverse check_circuit now. This circuit contains CNOTs, and is the circuit we'd need
     # to do after `circuit` in order to correctly generate the top half of s inverse (which we don't actually need to
     # do), rather than only correctly do this up to a CNOT circuit.
     check_circuit.reverse_inplace()
-    check_circuit.prefix_circuit(circuit)
+    check_circuit.prefix_circuit_inplace(circuit)
 
     sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
@@ -2281,7 +2281,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     # Get the Pauli layer as a circuit, find in pspec gate library, and prefix to current circuit.
     paulicircuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
-    circuit.prefix_circuit(paulicircuit)
+    circuit.prefix_circuit_inplace(paulicircuit)
     # We can only do depth compression again if we haven't Pauli-randomized. Otherwise we'd potentially undo this
     # randomization.
     if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
@@ -2952,11 +2952,11 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
         circuit = _Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
 
     # Circuit starts with the all Hs layer followed by the all Ps layer.
-    circuit.insert_layer(Pall_layer, 0)
-    circuit.insert_layer(Hall_layer, 0)
+    circuit.insert_layer_inplace(Pall_layer, 0)
+    circuit.insert_layer_inplace(Hall_layer, 0)
     # circuit ends the the some Ps layer followed by the some Hs layer.
-    if len(Psome_layer) > 0: circuit.insert_layer(Psome_layer, circuit.depth)
-    if len(Hsome_layer) > 0: circuit.insert_layer(Hsome_layer, circuit.depth)
+    if len(Psome_layer) > 0: circuit.insert_layer_inplace(Psome_layer, circuit.depth)
+    if len(Hsome_layer) > 0: circuit.insert_layer_inplace(Hsome_layer, circuit.depth)
 
     # This pre-circuit is necessary for working out what Pauli's need to be pre/post fixed to `circuit` to generate
     # the requested stabilizer state.
@@ -2967,7 +2967,7 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
         # Only the circuit with the precircuit prefixed as format that can be easily checked as corrected. That
         # circuit should have an s-matrix with the RHS equal to the RHS of `s`.
         checkcircuit = precircuit.copy()
-        checkcircuit.append_circuit(circuit)
+        checkcircuit.append_circuit_inplace(circuit)
         scheck, pcheck = _symp.symplectic_rep_of_clifford_circuit(checkcircuit)
         assert(_np.array_equal(scheck[:, n:2 * n], s[:, n:2 * n])), "Compiler has failed!"
 

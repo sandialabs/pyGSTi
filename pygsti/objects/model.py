@@ -902,8 +902,8 @@ class OpModel(Model):
         if prep_lbl_to_prepend or povm_lbl_to_append:
             #SLOW way:
             #circuit = circuit.copy(editable=True)
-            #if prep_lbl_to_prepend: circuit.insert_layer(prep_lbl_to_prepend, 0)
-            #if povm_lbl_to_append: circuit.insert_layer(povm_lbl_to_append, len(circuit))
+            #if prep_lbl_to_prepend: circuit.insert_layer_inplace(prep_lbl_to_prepend, 0)
+            #if povm_lbl_to_append: circuit.insert_layer_inplace(povm_lbl_to_append, len(circuit))
             #circuit.done_editing()
             if prep_lbl_to_prepend: circuit = (prep_lbl_to_prepend,) + circuit
             if povm_lbl_to_append: circuit = circuit + (povm_lbl_to_append,)

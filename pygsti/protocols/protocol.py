@@ -1116,10 +1116,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 padded = []
                 for c in subcs:
                     if c is not None and len(c) < maxLen:
-                        cpy = c.copy(editable=True)
-                        cpy.insert_idling_layers(None, maxLen - len(cpy))
-                        cpy.done_editing()
-                        padded.append(cpy)
+                        padded.append(c.insert_idling_layers(None, maxLen - len(c)))
                     else:
                         padded.append(c)
                 assert(all([len(c) == maxLen for c in padded if c is not None]))
@@ -1131,7 +1128,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 padded_subcircuits = pad(subcircuits)
                 for subc in padded_subcircuits:
                     if subc is not None:
-                        c.tensor_circuit(subc)
+                        c.tensor_circuit_inplace(subc)
                 c.line_labels = qubit_labels
                 c.done_editing()
                 tensored_circuits.append(c)
