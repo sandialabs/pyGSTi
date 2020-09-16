@@ -234,7 +234,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("H+S terms")
         target_model.sim = pygsti.objects.TermForwardSimulator(mode='pruned', max_order=3, desired_perr=0.01,
                                                                allowed_perr=0.1, max_paths_per_outcome=1000,
-                                                               perr_heuristic='scaled', max_term_stages=5)
+                                                               perr_heuristic='meanscaled', max_term_stages=5)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=3)
 
@@ -244,7 +244,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                 open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
-        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 4, delta=1.0)
+        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=1.0)
         #mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_prunedpath.model"))
 
         # Note: can't easily gauge opt b/c term-based models can't be converted to "full"
