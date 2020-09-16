@@ -479,7 +479,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
                     continue
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
@@ -569,7 +569,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
                     continue
 
             if k == 0:
@@ -789,7 +789,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             new_f = obj_fn(new_x)
 
                         new_x_is_allowed = True
-                        new_x_is_known_inbounds = bool(oob_check_interval == 0) # considered "in bounds" if not checking
+                        new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
 
                     if new_x_is_allowed:
 
@@ -874,12 +874,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 #Check to see if objective function is out of bounds
                                 try:
                                     #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
-                                    # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
-                                    obj_fn(new_x, oob_check=True)  # don't actually need return value (same as new_f above)
+                                    # MEM if profiler:
+                                    # MEM    profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
+                                    obj_fn(new_x, oob_check=True)  # don't actually need retrn val (same as new_f above)
                                     new_f_is_allowed = True
                                     new_x_is_known_inbounds = True
                                 except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
                                     if oob_action == "reject" or k < MIN_STOP_ITER:
                                         new_f_is_allowed = False  # (and also not in bounds)
                                     elif oob_action == "stop":
@@ -889,7 +890,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         else:  # reset to last know in-bounds point and not do oob check every step
                                             printer.log(
                                                 ("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval,
+                                                2)
                                             oob_check_interval = 1
                                             x[:] = best_x[:]
                                             mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet

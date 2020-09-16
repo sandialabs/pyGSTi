@@ -1336,14 +1336,14 @@ class DataSet(object):
         def compute_tuned_expected_llr(cur_outcomes):
             contribs = []  # LLR_expectation = 0.0
             for cnt in cur_outcomes.values():
-                if cnt >= 3: contribs.append(1) #LLR_expectation += 1
-                elif cnt == 2: contribs.append(0.6) #LLR_expectation += 0.6 #1.05
-                elif cnt == 1: contribs.append(2.4) #LLR_expectation += 2.4 #1.1
-                elif cnt == 0: contribs.append(0) #LLR_expectation += 0.0 #0.18
+                if cnt >= 3: contribs.append(1)  # LLR_expectation += 1
+                elif cnt == 2: contribs.append(0.6)  # LLR_expectation += 0.6 #1.05
+                elif cnt == 1: contribs.append(2.4)  # LLR_expectation += 2.4 #1.1
+                elif cnt == 0: contribs.append(0)  # LLR_expectation += 0.0 #0.18
             LLR_expectation = sum(contribs)
             nZeros = Nout - len(cur_outcomes)  # number of (implied) zero-counts
             if nZeros == 0:
-                LLR_expectation -= min(contribs)  
+                LLR_expectation -= min(contribs)
                 # subtract contribution from one (we choose lowest-contributing) outcome b/c sum constrained to == 1
             return LLR_expectation
 
@@ -1360,18 +1360,18 @@ class DataSet(object):
                     #assume final outcome at each time is constrained
                     if method == 'all_outcomes-1': nOutcomes = Nout
                     elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
-                    else: #"tuned"
+                    else:  # "tuned"
                         nOutcomes = compute_tuned_expected_llr(cur_outcomes)
-                        nOutcomes += 1 # +1 to counteract -1 below, as this is already <LLR>
+                        nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
                     nDOF += nOutcomes - 1
                     #cur_outcomes = set([ol])
                     cur_outcomes = _defaultdict(lambda: 0); cur_outcomes[ol] += rep
                     cur_t = t
             if method == 'all_outcomes-1': nOutcomes = Nout
             elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
-            elif method == 'tuned': 
+            elif method == 'tuned':
                 nOutcomes = compute_tuned_expected_llr(cur_outcomes)
-                nOutcomes += 1 # +1 to counteract -1 below, as this is already <LLR>
+                nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
             else: raise ValueError("Invalid `method` argument: %s" % method)
             nDOF += nOutcomes - 1  # last time stamp
         return nDOF

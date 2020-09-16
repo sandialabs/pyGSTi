@@ -41,6 +41,7 @@ from .opcalc import compact_deriv as _compact_deriv, \
 
 # MEM from .profiler import Profiler
 
+
 class TermForwardSimulator(_DistributableForwardSimulator):
     """
     A forward-simulation calculator that uses term-path-integration to compute probabilities.
@@ -360,8 +361,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             polys = layout_atom.merged_compact_polys
             wrtInds = _np.ascontiguousarray(_slct.indices(param_slice), _np.int64)  # for Cython arg mapping
             #OLD dpolys = _compact_deriv(polys[0], polys[1], wrtInds)
-            #OLD dprobs = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], self.model.to_vector(), (nEls, len(wrtInds)))
-            dprobs = _bulk_eval_compact_polynomials_derivs(polys[0], polys[1], wrtInds, self.model.to_vector(), (nEls, len(wrtInds)))
+            #OLD dprobs = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1],
+            #OLD                                         self.model.to_vector(), (nEls, len(wrtInds)))
+            dprobs = _bulk_eval_compact_polynomials_derivs(polys[0], polys[1], wrtInds, self.model.to_vector(),
+                                                           (nEls, len(wrtInds)))
             #assert(_np.allclose(dprobs, dprobs_chk))
 
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
@@ -628,7 +631,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
             print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
                    "(target=%.4g, #circuits=%d, #failed=%d)") %
-                  (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm, nC, num_failed))
+                  (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm,
+                   nC, num_failed))
             print("%s  (avg per circuit paths=%d, magnitude=%.4g, target=%.4g)" %
                   (rankStr, tot_npaths // nC, tot_achieved_sopm / nC, tot_target_sopm / nC))
 
@@ -1375,8 +1379,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         def find_and_select_pathset(layout_atom, sub_resource_alloc):
             if self.mode == "pruned":
-                # MEM debug_prof.print_memory("find_and_select_pathset1 - nEls = %d, nExpanded=%d, rank=%d" % 
-                # MEM                         (layout_atom.num_elements, len(layout_atom.expanded_circuits), resource_alloc.comm.rank), True)
+                # MEM debug_prof.print_memory("find_and_select_pathset1 - nEls = %d, nExpanded=%d, rank=%d" %
+                # MEM                         (layout_atom.num_elements, len(layout_atom.expanded_circuits),
+                # MEM                         resource_alloc.comm.rank), True)
                 pathset = self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
                                                              exit_after_this_many_failures=0)
                 # MEM debug_prof.print_memory("find_and_select_pathset2", True)

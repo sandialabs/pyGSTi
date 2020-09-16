@@ -98,35 +98,35 @@ def _typed_bulk_eval_compact_polynomials_derivs(vtape, ctape, wrt_params, paramv
 
     c = 0; i = 0; iPoly = 0
     while i < vtape_sz:
-        j = i # increment j instead of i for this poly
-        nTerms = vtape[j]; j+=1
+        j = i  # increment j instead of i for this poly
+        nTerms = vtape[j]; j += 1
         #print "POLY w/%d terms (i=%d)" % (nTerms,i)
 
         for m in range(nTerms):
             coeff = ctape[c]; c += 1
-            nVars = vtape[j]; j += 1 # number of variable indices in this term
+            nVars = vtape[j]; j += 1  # number of variable indices in this term
 
             #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
             cur_iWrt = 0
-            j0 = j # the vtape index where the current term starts
-            j1 = j+nVars # the ending index
+            j0 = j  # the vtape index where the current term starts
+            j1 = j + nVars  # the ending index
 
             #Loop to get counts of each variable index that is also in `wrt`.
             # Once we've passed an element of `wrt` process it, since there can't
             # see it any more (the var indices are sorted).
-            while j < j1: #loop over variable indices for this term
+            while j < j1:  # loop over variable indices for this term
                 # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
 
                 #find an iVar that is also in wrt.
                 # - increment the cur_iWrt or j as needed
-                while cur_iWrt < wrt_sz and vtape[j] > wrt_params[cur_iWrt]: #condition to increment cur_iWrt
-                    cur_iWrt += 1 # so wrt_params[cur_iWrt] >= vtape[j]
+                while cur_iWrt < wrt_sz and vtape[j] > wrt_params[cur_iWrt]:  # condition to increment cur_iWrt
+                    cur_iWrt += 1  # so wrt_params[cur_iWrt] >= vtape[j]
                 if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
-                                                # we're done with all wrt elements
+                #                               we're done with all wrt elements
                 # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
                 cur_wrt = wrt_params[cur_iWrt]
                 while j < j1 and vtape[j] < cur_wrt:
-                    j += 1 # so vtape[j] >= wrt[cur_iWrt]
+                    j += 1  # so vtape[j] >= wrt[cur_iWrt]
                 if j == j1: break  # no more iVars - we're done
 
                 #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
@@ -138,16 +138,16 @@ def _typed_bulk_eval_compact_polynomials_derivs(vtape, ctape, wrt_params, paramv
                     while j < j1 and vtape[j] == cur_wrt:
                         cnt += 1; j += 1
                     #Process cur_iWrt: add a term to evaluated poly for derivative w.r.t. wrt_params[cur_iWrt]
-                    a = coeff*cnt
-                    for k in range(j0,j1):
-                        if k == j-1: continue # remove this index
-                        a *= paramvec[ vtape[k] ]
+                    a = coeff * cnt
+                    for k in range(j0, j1):
+                        if k == j - 1: continue  # remove this index
+                        a *= paramvec[vtape[k]]
                     result[iPoly, cur_iWrt] += a
-                    cur_iWrt += 1 # processed this wrt param - move to next one
+                    cur_iWrt += 1  # processed this wrt param - move to next one
 
-            j = j1 # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+            j = j1  # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
 
-        i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
+        i = j  # update location in vtape after processing poly - actually could just use i instead of j it seems??
         iPoly += 1
 
     return result
