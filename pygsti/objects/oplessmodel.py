@@ -459,12 +459,12 @@ class SuccessFailModel(OplessModel):
         self.use_cache = use_cache
         self.sim = _SuccessFailForwardSimulator(self)
 
-    def _post_copy(self, copy_into):
+    def _post_copy(self, copy_into, memo):
         """
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
         """
-        copy_into.sim.model = copy_into  # set copy's `.model` link
+        copy_into.sim.model = copy_into  # set copy's `.model` link (just linking so no need to use memo)
 
     def circuit_outcomes(self, circuit):  # needed for sparse data detection
         """
