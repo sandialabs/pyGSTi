@@ -181,10 +181,17 @@ class CustomLMOptimizer(Optimizer):
         as described above).  `"reject"` means the step is rejected but the
         optimization proceeds; `"stop"` means the optimization stops and returns
         as converged at the last known-in-bounds point.
+
+    oob_check_mode : int, optional
+        An advanced option, expert use only.  If 0 then the optimization is
+        halted as soon as an *attempt* is made to evaluate the function out of bounds.
+        If 1 then the optimization is halted only when a would-be *accepted* step
+        is out of bounds.
     """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
                  damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
-                 uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0, oob_action="reject"):
+                 uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
+                 oob_action="reject", oob_check_mode=0):
 
         if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         self.maxiter = maxiter
@@ -200,6 +207,7 @@ class CustomLMOptimizer(Optimizer):
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
+        self.oob_check_mode = oob_check_mode
         self.array_types = 3 * ('P',) + ('E', 'PP', 'EP')  # see custom_leastsq fn "-type"s
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
 
@@ -247,6 +255,7 @@ class CustomLMOptimizer(Optimizer):
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
             oob_action=self.oob_action,
+            oob_check_mode=self.oob_check_mode,
             comm=comm, verbosity=printer - 1, profiler=profiler)
 
         printer.log("Least squares message = %s" % msg, 2)
@@ -271,8 +280,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
                    damping_clip=None, use_acceleration=False, uphill_step_threshold=0.0,
-                   init_munu="auto", oob_check_interval=0, oob_action="reject", comm=None,
-                   verbosity=0, profiler=None):
+                   init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
+                   comm=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
 
@@ -378,6 +387,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         optimization proceeds; `"stop"` means the optimization stops and returns
         as converged at the last known-in-bounds point.
 
+    oob_check_mode : int, optional
+        An advanced option, expert use only.  If 0 then the optimization is
+        halted as soon as an *attempt* is made to evaluate the function out of bounds.
+        If 1 then the optimization is halted only when a would-be *accepted* step
+        is out of bounds.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -415,7 +430,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     nu = 2
     mu = 1  # just a guess - initialized on 1st iter and only used if rejected
     my_cols_slice = None
-    oob_check_mode = 1
 
     # don't let any component change by more than ~max_dx_scale
     if max_dx_scale:
@@ -465,7 +479,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
                     continue
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
@@ -555,7 +569,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - just recompute on next iter
+                    mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
                     continue
 
             if k == 0:
@@ -775,7 +789,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             new_f = obj_fn(new_x)
 
                         new_x_is_allowed = True
-                        new_x_is_known_inbounds = bool(oob_check_interval == 0) # considered "in bounds" if not checking
+                        new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
 
                     if new_x_is_allowed:
 
@@ -860,12 +874,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 #Check to see if objective function is out of bounds
                                 try:
                                     #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
-                                    # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
-                                    obj_fn(new_x, oob_check=True)  # don't actually need return value (same as new_f above)
+                                    # MEM if profiler:
+                                    # MEM    profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
+                                    obj_fn(new_x, oob_check=True)  # don't actually need retrn val (same as new_f above)
                                     new_f_is_allowed = True
                                     new_x_is_known_inbounds = True
                                 except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
                                     if oob_action == "reject" or k < MIN_STOP_ITER:
                                         new_f_is_allowed = False  # (and also not in bounds)
                                     elif oob_action == "stop":
@@ -875,7 +890,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         else:  # reset to last know in-bounds point and not do oob check every step
                                             printer.log(
                                                 ("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval,
+                                                2)
                                             oob_check_interval = 1
                                             x[:] = best_x[:]
                                             mu, nu, norm_f, f, spow, _ = best_x_state  # can't make use of saved JTJ yet

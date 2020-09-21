@@ -929,8 +929,9 @@ def _do_term_runopt(objective, optimizer, printer):
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.allowed_path_fraction
 
-        objective.lsvec()  #ensure objective.probs initialized
-        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, objective.resource_alloc, verbosity=0)
+        objective.lsvec()  # ensure objective.probs initialized
+        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
+                                                               objective.resource_alloc, verbosity=0)
 
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths (ok=%s)." %
                     (pathSet.num_failures, 100 * pathFraction, str(bSufficient)))
@@ -947,8 +948,9 @@ def _do_term_runopt(objective, optimizer, printer):
             #printer.log("  After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
             #            (pathSet.num_failures, 100 * pathFraction))
 
-            obj_val = objective.fn()  #ensure objective.probs initialized
-            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, objective.resource_alloc, verbosity=0)
+            obj_val = objective.fn()  # ensure objective.probs initialized
+            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
+                                                                   objective.resource_alloc, verbosity=0)
             printer.log("Looking for initial model where paths are sufficient: |paramvec| = %g, obj=%g (ok=%s)"
                         % (_np.linalg.norm(mdl.to_vector()), obj_val, str(bSufficient)))
     else:
