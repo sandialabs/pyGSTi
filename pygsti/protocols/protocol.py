@@ -1186,14 +1186,9 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                                           sub_design.all_circuits_needing_data)})
             if isinstance(dataset, dict):  # then do circuit processing "element-wise"
                 for k in filtered_ds:
-                    fds = filtered_ds[k].copy_nonstatic()
-                    fds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-                    fds.done_adding_data()
-                    filtered_ds[k] = fds
+                    filtered_ds[k] = filtered_ds[k].process_circuits(lambda c: actual_to_desired[c], aggregate=False)
             else:
-                filtered_ds = filtered_ds.copy_nonstatic()
-                filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-                filtered_ds.done_adding_data()
+                filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
 

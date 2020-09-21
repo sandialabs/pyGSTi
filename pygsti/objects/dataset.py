@@ -2328,11 +2328,40 @@ class DataSet(object):
         processed_ds.done_adding_data()
         return processed_ds
 
-    def process_circuits(self, processor_fn, aggregate=False):  # INPLACE
+    def process_circuits(self, processor_fn, aggregate=False):
         """
-        Manipulate this DataSet's circuits (keys) according to `processor_fn`.
+        Create a new data set by manipulating this DataSet's circuits (keys) according to `processor_fn`.
 
-        All of the DataSet's gate sequence labels are updated by running each
+        The new DataSet's circuits result from by running each of this DataSet's
+        circuits through `processor_fn`.  This can be useful when "tracing out" qubits
+        in a dataset containing multi-qubit data.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.  This function may also return
+            `None`, in which case the data for that string is deleted.
+
+        aggregate : bool, optional
+            When `True`, aggregate the data for ciruits that `processor_fn`
+            assigns to the same "new" circuit.  When `False`, use the data
+            from the *last* original circuit that maps to a given "new" circuit.
+
+        Returns
+        -------
+        DataSet
+        """
+        ds_copy = self.copy_nonstatic()
+        ds_copy.process_circuits_inplace(processor_fn, aggregate)
+        if self.bStatic: ds_copy.done_adding_data()
+        return ds_copy()
+
+    def process_circuits_inplace(self, processor_fn, aggregate=False):
+        """
+        Manipulate this DataSet's circuits (keys) in-place according to `processor_fn`.
+
+        All of this DataSet's circuits are updated by running each one
         through `processor_fn`.  This can be useful when "tracing out" qubits
         in a dataset containing multi-qubit data.
 
@@ -2352,7 +2381,7 @@ class DataSet(object):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot process_circuits on a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot process_circuits_inplace on a static DataSet object")
 
         to_delete = []
         new_cirIndex = _OrderedDict()
