@@ -2355,7 +2355,7 @@ class DataSet(object):
         ds_copy = self.copy_nonstatic()
         ds_copy.process_circuits_inplace(processor_fn, aggregate)
         if self.bStatic: ds_copy.done_adding_data()
-        return ds_copy()
+        return ds_copy
 
     def process_circuits_inplace(self, processor_fn, aggregate=False):
         """
