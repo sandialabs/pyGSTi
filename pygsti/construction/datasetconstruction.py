@@ -500,11 +500,10 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     #                                   record_zero_counts=record_zero_counts)
     ds_merged = dataset.aggregate_std_nqubit_outcomes(sindices_to_keep, record_zero_counts)
 
-    ds_merged = ds_merged.copy_nonstatic()
     if filtercircuits:
-        ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
+        ds_merged = ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
             s, sectors_to_keep, new_sectors, idle), aggregate=True)
-    ds_merged.done_adding_data()
+
     return ds_merged
 
 
