@@ -1116,10 +1116,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 padded = []
                 for c in subcs:
                     if c is not None and len(c) < maxLen:
-                        cpy = c.copy(editable=True)
-                        cpy.insert_idling_layers(None, maxLen - len(cpy))
-                        cpy.done_editing()
-                        padded.append(cpy)
+                        padded.append(c.insert_idling_layers(None, maxLen - len(c)))
                     else:
                         padded.append(c)
                 assert(all([len(c) == maxLen for c in padded if c is not None]))
@@ -1131,7 +1128,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 padded_subcircuits = pad(subcircuits)
                 for subc in padded_subcircuits:
                     if subc is not None:
-                        c.tensor_circuit(subc)
+                        c.tensor_circuit_inplace(subc)
                 c.line_labels = qubit_labels
                 c.done_editing()
                 tensored_circuits.append(c)
@@ -1189,14 +1186,9 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                                           sub_design.all_circuits_needing_data)})
             if isinstance(dataset, dict):  # then do circuit processing "element-wise"
                 for k in filtered_ds:
-                    fds = filtered_ds[k].copy_nonstatic()
-                    fds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-                    fds.done_adding_data()
-                    filtered_ds[k] = fds
+                    filtered_ds[k] = filtered_ds[k].process_circuits(lambda c: actual_to_desired[c], aggregate=False)
             else:
-                filtered_ds = filtered_ds.copy_nonstatic()
-                filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-                filtered_ds.done_adding_data()
+                filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
 
@@ -1280,7 +1272,7 @@ class ProtocolData(_TreeNode):
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
                 dataset = _io.load_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
             else:
-                dataset = {pth.stem: _io.load_dataset(pth, with_times=False, ignore_zero_count_lines=False, verbosity=0)
+                dataset = {pth.stem: _io.load_dataset(pth, ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
@@ -1351,6 +1343,23 @@ class ProtocolData(_TreeNode):
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
         return self.edesign._create_subdata(key, self.dataset)
+
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        if list(self._passdatas.keys()) == [None]:
+            # Don't copy ourself recursively
+            self._passdatas = {}
+            cpy = _copy.deepcopy(self)
+            self._passdatas = {None: self}
+        else:
+            cpy = _copy.deepcopy(self)
+        return cpy
 
     @property
     def passes(self):
@@ -1756,7 +1765,7 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = {}  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
+        self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict-of-resultsobjs'
 
     def to_nameddict(self):
@@ -1778,6 +1787,19 @@ class MultiPassResults(ProtocolResults):
             ret[pname][pass_name] = sub[pname]
 
         return ret
+
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        MultiPassResults
+        """
+        cpy = MultiPassResults(self.data.copy(), _copy.deepcopy(self.protocol))
+        for k, v in self.passes.items():
+            cpy.passes[k] = v.copy()
+        return cpy
 
 
 class ProtocolResultsDir(_TreeNode):

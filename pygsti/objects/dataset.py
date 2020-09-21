@@ -1302,13 +1302,15 @@ class DataSet(object):
             The list of circuits to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
 
-        method : {'all_outcomes-1', 'present_outcomes-1'}
+        method : {'all_outcomes-1', 'present_outcomes-1', 'tuned'}
             How the degrees of freedom should be computed. 'all_outcomes-1' takes
             the number of circuits and multiplies this by the *total* number of outcomes
             (the length of what is returned by `outcome_labels()`) minus one.
             'present_outcomes-1' counts on a per-circuit basis the number of
-            present (usually = non-zero) outcomes recorded minus one.  For timestamped
-            data, see `aggreate_times` below.
+            present (usually = non-zero) outcomes recorded minus one. 'tuned' should
+            be the most accurate, as it accounts for low-N "Poisson bump" behavior,
+            but it is not the default because it is still under development. For
+            timestamped data, see `aggreate_times` below.
 
         aggregate_times : bool, optional
             Whether counts that occur at different times should be tallied separately.
@@ -1330,19 +1332,47 @@ class DataSet(object):
 
         nDOF = 0
         Nout = len(self.olIndex)
+
+        def compute_tuned_expected_llr(cur_outcomes):
+            contribs = []  # LLR_expectation = 0.0
+            for cnt in cur_outcomes.values():
+                if cnt >= 3: contribs.append(1)  # LLR_expectation += 1
+                elif cnt == 2: contribs.append(0.6)  # LLR_expectation += 0.6 #1.05
+                elif cnt == 1: contribs.append(2.4)  # LLR_expectation += 2.4 #1.1
+                elif cnt == 0: contribs.append(0)  # LLR_expectation += 0.0 #0.18
+            LLR_expectation = sum(contribs)
+            nZeros = Nout - len(cur_outcomes)  # number of (implied) zero-counts
+            if nZeros == 0:
+                LLR_expectation -= min(contribs)
+                # subtract contribution from one (we choose lowest-contributing) outcome b/c sum constrained to == 1
+            return LLR_expectation
+
         for opstr in circuits:
             dsRow = self[opstr]
             cur_t = dsRow.time[0]
-            cur_outcomes = set()  # holds *distinct* outcomes at current time
+            #cur_outcomes = set()  # holds *distinct* outcomes at current time
+            cur_outcomes = _defaultdict(lambda: 0)  # holds *distinct* outcomes at current time
             for ol, t, rep in dsRow:
                 if aggregate_times or t == cur_t:
-                    cur_outcomes.add(ol)
+                    #cur_outcomes.add(ol)
+                    cur_outcomes[ol] += rep
                 else:
                     #assume final outcome at each time is constrained
-                    nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
-                    nDOF += nOutcomes - 1; cur_outcomes = set([ol])
+                    if method == 'all_outcomes-1': nOutcomes = Nout
+                    elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
+                    else:  # "tuned"
+                        nOutcomes = compute_tuned_expected_llr(cur_outcomes)
+                        nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
+                    nDOF += nOutcomes - 1
+                    #cur_outcomes = set([ol])
+                    cur_outcomes = _defaultdict(lambda: 0); cur_outcomes[ol] += rep
                     cur_t = t
-            nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
+            if method == 'all_outcomes-1': nOutcomes = Nout
+            elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
+            elif method == 'tuned':
+                nOutcomes = compute_tuned_expected_llr(cur_outcomes)
+                nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
+            else: raise ValueError("Invalid `method` argument: %s" % method)
             nDOF += nOutcomes - 1  # last time stamp
         return nDOF
 
@@ -2298,11 +2328,40 @@ class DataSet(object):
         processed_ds.done_adding_data()
         return processed_ds
 
-    def process_circuits(self, processor_fn, aggregate=False):  # INPLACE
+    def process_circuits(self, processor_fn, aggregate=False):
         """
-        Manipulate this DataSet's circuits (keys) according to `processor_fn`.
+        Create a new data set by manipulating this DataSet's circuits (keys) according to `processor_fn`.
 
-        All of the DataSet's gate sequence labels are updated by running each
+        The new DataSet's circuits result from by running each of this DataSet's
+        circuits through `processor_fn`.  This can be useful when "tracing out" qubits
+        in a dataset containing multi-qubit data.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.  This function may also return
+            `None`, in which case the data for that string is deleted.
+
+        aggregate : bool, optional
+            When `True`, aggregate the data for ciruits that `processor_fn`
+            assigns to the same "new" circuit.  When `False`, use the data
+            from the *last* original circuit that maps to a given "new" circuit.
+
+        Returns
+        -------
+        DataSet
+        """
+        ds_copy = self.copy_nonstatic()
+        ds_copy.process_circuits_inplace(processor_fn, aggregate)
+        if self.bStatic: ds_copy.done_adding_data()
+        return ds_copy
+
+    def process_circuits_inplace(self, processor_fn, aggregate=False):
+        """
+        Manipulate this DataSet's circuits (keys) in-place according to `processor_fn`.
+
+        All of this DataSet's circuits are updated by running each one
         through `processor_fn`.  This can be useful when "tracing out" qubits
         in a dataset containing multi-qubit data.
 
@@ -2322,7 +2381,7 @@ class DataSet(object):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot process_circuits on a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot process_circuits_inplace on a static DataSet object")
 
         to_delete = []
         new_cirIndex = _OrderedDict()

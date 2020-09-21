@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=False
+# cython: profile=True
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -65,12 +65,14 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMEffectCRep() except +
         DMEffectCRep(INT) except +
         double probability(DMStateCRep* state)
+        double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id)
         INT _dim
 
     cdef cppclass DMEffectCRep_Dense(DMEffectCRep):
         DMEffectCRep_Dense() except +
         DMEffectCRep_Dense(double*,INT) except +
         double probability(DMStateCRep* state)
+        double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id)
         INT _dim
         double* _dataptr
 
@@ -78,6 +80,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMEffectCRep_TensorProd() except +
         DMEffectCRep_TensorProd(double*, INT*, INT, INT, INT) except +
         double probability(DMStateCRep* state)
+        double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id)
         INT _dim
         INT _nfactors
         INT _max_factor_dim
@@ -86,12 +89,14 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMEffectCRep_Computational() except +
         DMEffectCRep_Computational(INT, INT, double, INT) except +
         double probability(DMStateCRep* state)
+        double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id)
         INT _dim
 
     cdef cppclass DMEffectCRep_Errgen(DMEffectCRep):
         DMEffectCRep_Errgen() except +
         DMEffectCRep_Errgen(DMOpCRep*, DMEffectCRep*, INT, INT) except +
         double probability(DMStateCRep* state)
+        double probability_using_cache(DMStateCRep* state, DMStateCRep* precomp_state, INT& precomp_id)
         INT _dim
         INT _errgen_id
 
@@ -572,9 +577,9 @@ cdef class DMOpRep:
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = DMStateRep(np.ascontiguousarray(v,'d'))
-            return self.adjoint_acton(in_state).todense()
+            return self.adjoint_acton(in_state).to_dense()
         dim = self.c_op._dim
-        return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
+        return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
 
 
 cdef class DMOpRepDense(DMOpRep):
@@ -2088,10 +2093,10 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
 
     #Get (extension-type) representation objects
     rho_lookup = { lbl:i for i,lbl in enumerate(layout_atom.rho_labels) } # rho labels -> ints for faster lookup
-    rhoreps = { i: fwdsim.model.circuit_layer_operator(rholbl, 'prep')._rep for rholbl,i in rho_lookup.items() }
+    rhoreps = { i: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(layout_atom.op_labels) } # operation labels -> ints for faster lookup
-    operationreps = { i:fwdsim.model.circuit_layer_operator(lbl, 'op')._rep for lbl,i in operation_lookup.items() }
-    ereps = [fwdsim.model.circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
+    operationreps = { i:fwdsim.model._circuit_layer_operator(lbl, 'op')._rep for lbl,i in operation_lookup.items() }
+    ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
@@ -2126,7 +2131,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     # elements point to (instead of copying the states) - we just guarantee that in the end
     # all of the cache entries are filled with allocated (by 'new') states that the caller
     # can deallocate at will.
-    cdef INT k,l,i,istart, icache, iFirstOp
+    cdef INT k,l,i,istart, icache, iFirstOp, precomp_id
     cdef double p
     cdef DMStateCRep *init_state
     cdef DMStateCRep *prop1
@@ -2134,6 +2139,8 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     cdef DMStateCRep *final_state
     cdef DMStateCRep *prop2 = new DMStateCRep(dim)
     cdef DMStateCRep *shelved = new DMStateCRep(dim)
+    cdef DMStateCRep *precomp_state
+
     cdef vector[INT] final_indices
     cdef vector[INT] elabel_indices
 
@@ -2141,11 +2148,13 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
     # - all rho_cache entries have been allocated via "new"
     for k in range(<INT>c_layout_atom.size()):
-        #t0 = pytime.time() # DEBUG
+        t0 = pytime.time() # DEBUG
         intarray = c_layout_atom[k]
         i = intarray[0]
         istart = intarray[1]
         icache = intarray[2]
+
+        #print("DM_mapfill_probs_block: BEGIN %d of %d: sz=%d" % (k, c_layout_atom.size(), intarray.size()))
 
         if istart == -1:
             init_state = c_rhoreps[intarray[3]]
@@ -2169,6 +2178,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
             #t1 = pytime.time() #DEBUG
             c_opreps[intarray[l]].acton(prop1,prop2)
             #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
+            #print("Acton %d (oprep index %d): %.3fs" % (l, intarray[l], pytime.time() - t1))
             tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
         final_state = prop1 # output = prop1 (after swap from loop above)
         # Note: prop2 is the other alloc'd state and this maintains invariant
@@ -2177,8 +2187,14 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
         #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (pytime.time()-t1, pytime.time()-t0) # DEBUG
         final_indices = final_indices_per_circuit[i]
         elabel_indices = elabel_indices_per_circuit[i]
+        #print("Op actons done - computing %d probs" % elabel_indices.size());t1 = pytime.time() # DEBUG
+
+        precomp_state = prop2  # used as cache/scratch space
+        precomp_id = 0  # this should be a number that is *never* a Python id()
         for j in range(<INT>elabel_indices.size()):
-            array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability(final_state) #outcome probability
+            #print("Erep prob %d of %d: elapsed = %.2fs" % (j, elabel_indices.size(), pytime.time() - t1))
+            #OLD: array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability(final_state) #outcome probability
+            array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability_using_cache(final_state, precomp_state, precomp_id) #outcome probability
 
         if icache != -1:
             deref(prho_cache)[icache] = final_state # store this state in the cache
@@ -2187,6 +2203,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
             final_state = NULL
         #print "%d of %d (i=%d,istart=%d,remlen=%d): %.1fs" % (k, c_layout_atom.size(), i, istart,
         #                                                      intarray.size()-3, pytime.time()-t0)
+        #print("DM_mapfill_probs_block: %d of %d: %.1fs" % (k, c_layout_atom.size(), pytime.time()-t0))
 
     #delete our temp states
     del prop2
@@ -2218,10 +2235,10 @@ def DM_mapfill_dprobs_block(fwdsim,
     # more importantly causes fwdsim.model.from_vector to be aware of these operations and to
     # re-initialize them with updated parameter vectors as is necessary for the finite difference loop.
     rho_lookup = { lbl:i for i,lbl in enumerate(layout_atom.rho_labels) } # rho labels -> ints for faster lookup
-    rhoreps = { i: fwdsim.model.circuit_layer_operator(rholbl, 'prep')._rep for rholbl,i in rho_lookup.items() }
+    rhoreps = { i: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl,i in rho_lookup.items() }
     operation_lookup = { lbl:i for i,lbl in enumerate(layout_atom.op_labels) } # operation labels -> ints for faster lookup
-    operationreps = { i:fwdsim.model.circuit_layer_operator(lbl, 'op')._rep for lbl,i in operation_lookup.items() }
-    ereps = [fwdsim.model.circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
+    operationreps = { i:fwdsim.model._circuit_layer_operator(lbl, 'op')._rep for lbl,i in operation_lookup.items() }
+    ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
@@ -2355,7 +2372,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
     cdef INT cacheSize = layout_atom.cache_size
     #cdef np.ndarray ret = np.zeros((len(layout_atom), len(elabels)), 'd')  # zeros so we can just add contributions below
     #rhoVec, EVecs = fwdsim._rho_es_from_labels(rholabel, elabels)
-    EVecs = {i: fwdsim.model.circuit_layer_operator(elbl, 'povm') for i, elbl in enumerate(layout_atom.full_effect_labels)}
+    EVecs = {i: fwdsim.model._circuit_layer_operator(elbl, 'povm') for i, elbl in enumerate(layout_atom.full_effect_labels)}
 
     #elabels_as_outcomes = [(_gt.e_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
     #outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
@@ -2367,7 +2384,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
     for iDest, iStart, remainder, iCache in layout_atom.table.contents:
         remainder = remainder.circuit_without_povm.layertup
         rholabel = remainder[0]; remainder = remainder[1:]
-        rhoVec = fwdsim.model.circuit_layer_operator(rholabel, 'prep')
+        rhoVec = fwdsim.model._circuit_layer_operator(rholabel, 'prep')
 
         #print("DB: ",iDest,iStart,remainder)
         datarow = dataset_rows[iDest]
@@ -2425,7 +2442,7 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
                     if (gl,t) in local_repcache:  # Note: this could cache a *lot* of reps - add flag to disable?
                         op_rep = local_repcache[(gl,t)]
                     else:
-                        op = model.circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
+                        op = model._circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
                         op.set_time(t); op_rep = op._rep
                         local_repcache[(gl,t)] = op_rep.copy()  # need to *copy* here
                     t += gl.time  # time in gate label == gate duration?
@@ -2568,12 +2585,12 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model._circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                                       for order in range(fwdsim.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in fwdsim.model._circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                       for order in range(fwdsim.max_order+1) ]
 
     E_term_reps = []
@@ -2582,7 +2599,7 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in fwdsim.model._circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -3043,7 +3060,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
             repcel = <RepCacheEl>repcache[glbl]
         else:
             repcel = RepCacheEl()
-            op = fwdsim.model.circuit_layer_operator(glbl, 'op')
+            op = fwdsim.model._circuit_layer_operator(glbl, 'op')
             hmterms, foat_indices = op.highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
 
@@ -3081,7 +3098,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
         repcel = repcache[rholabel]
     else:
         repcel = RepCacheEl()
-        rhoOp = fwdsim.model.circuit_layer_operator(rholabel, 'prep')
+        rhoOp = fwdsim.model._circuit_layer_operator(rholabel, 'prep')
         hmterms, foat_indices = rhoOp.highmagnitude_terms(
             min_term_mag, max_taylor_order=fwdsim.max_order,
             max_polynomial_vars=mpv)
@@ -3105,7 +3122,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
         repcel = RepCacheEl()
         E_term_indices_and_reps = []
         for i,elbl in enumerate(elabels):
-            Evec = fwdsim.model.circuit_layer_operator(elbl, 'povm')
+            Evec = fwdsim.model._circuit_layer_operator(elbl, 'povm')
             hmterms, foat_indices = Evec.highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
             E_term_indices_and_reps.extend(
@@ -3165,17 +3182,20 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
         cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
+    #MEM REMOVE above circuitsetup cache seems to use memory!
+    #MEM REMOVE return 100, 1.0, 1.0, 1.0 #total_npaths, threshold, total_target_sopm, total_achieved_sopm
+
     cdef vector[double] target_sum_of_pathmags = vector[double](numEs)
     cdef vector[double] achieved_sum_of_pathmags = vector[double](numEs)
     cdef vector[INT] npaths = vector[INT](numEs)
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude
+    cdef double max_partial_sopm = fwdsim.model._circuit_layer_operator(rholabel, 'prep').total_term_magnitude
     for glbl in circuit:
-        op = fwdsim.model.circuit_layer_operator(glbl, 'op')
+        op = fwdsim.model._circuit_layer_operator(glbl, 'op')
         max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude - pathmagnitude_gap  # absolute gap
+        target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude - pathmagnitude_gap  # absolute gap
         #target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.sos.get_effect(elbl).total_term_magnitude * (1.0 - pathmagnitude_gap)  # relative gap
 
     cdef double threshold = sv_find_best_pathmagnitude_threshold(
@@ -3243,6 +3263,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
     for i in range(numEs):
         assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
         assert(npaths[i] == check_npaths[i])
+
     #print("Threshold = ",threshold)
     #print("Mags = ",achieved_sum_of_pathmags)
     ##print("Check Mags = ",check_mags)
@@ -3894,13 +3915,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
-    cdef double max_partial_sopm = fwdsim.model.circuit_layer_operator(rholabel, 'prep').total_term_magnitude
+    cdef double max_partial_sopm = fwdsim.model._circuit_layer_operator(rholabel, 'prep').total_term_magnitude
     cdef vector[double] max_sum_of_pathmags = vector[double](numEs)
     for glbl in circuit:
-        op = fwdsim.model.circuit_layer_operator(glbl, 'op')
+        op = fwdsim.model._circuit_layer_operator(glbl, 'op')
         max_partial_sopm *= op.total_term_magnitude
     for i,elbl in enumerate(elabels):
-        max_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model.circuit_layer_operator(elbl, 'povm').total_term_magnitude
+        max_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(fwdsim.model.dim)))
@@ -4632,12 +4653,12 @@ def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model.circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
+    op_term_reps = { glmap[glbl]: [ [t.torep() for t in fwdsim.model._circuit_layer_operator(glbl, 'op').taylor_order_terms(order, mpv)]
                                       for order in range(fwdsim.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep() for t in fwdsim.model.circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
+    rho_term_reps = [ [t.torep() for t in fwdsim.model._circuit_layer_operator(rholabel, 'prep').taylor_order_terms(order, mpv)]
                       for order in range(fwdsim.max_order+1) ]
 
     E_term_reps = []
@@ -4646,7 +4667,7 @@ def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep() for t in fwdsim.model.circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
+            term_reps = [t.torep() for t in fwdsim.model._circuit_layer_operator(elbl, 'povm').taylor_order_terms(order, mpv) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )

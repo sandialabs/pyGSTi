@@ -117,7 +117,7 @@ class CircuitPlaquette(object):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Create a new plaquette with circuits manipulated according to `processor_fn`.
 
         Parameters
         ----------
@@ -250,7 +250,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Create a new plaquette with circuits manipulated according to `processor_fn`.
 
         Parameters
         ----------
@@ -387,7 +387,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Create a new plaquette with circuits manipulated according to `processor_fn`.
 
         Parameters
         ----------
@@ -686,7 +686,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
-        Manipulate this object's circuits according to `processor_fn`.
+        Create a new plaquette with circuits manipulated according to `processor_fn`.
 
         Parameters
         ----------

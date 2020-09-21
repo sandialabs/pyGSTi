@@ -256,7 +256,8 @@ class StandardGSTDesign(GateSetTomographyDesign):
         if add_default_protocol:
             self.add_default_protocol(StandardGST(name='StdGST'))
 
-    def copy_with_maxlengths(self, max_lengths, dscheck=None, action_if_missing='raise', verbosity=0):
+    def copy_with_maxlengths(self, max_lengths, germ_length_limits=None,
+                             dscheck=None, action_if_missing='raise', verbosity=0):
         """
         Copies this GST experiment design to one with the same data except a different set of maximum lengths.
 
@@ -265,6 +266,11 @@ class StandardGSTDesign(GateSetTomographyDesign):
         max_lengths_to_keep : list
             A list of the maximum lengths that should be present in the
             returned experiment design.
+
+        germ_length_limits : dict, optional
+            A dictionary limiting the max-length values to keep for specific germs.
+            Keys are germ sequences and values are integers.  If `None`, then the
+            current length limits are used.
 
         dscheck : DataSet, optional
             A data set which filters the circuits used for GST. When a standard-GST
@@ -280,8 +286,14 @@ class StandardGSTDesign(GateSetTomographyDesign):
         -------
         StandardGSTDesign
         """
+        if germ_length_limits is None:
+            gll = self.germ_length_limits
+        else:
+            gll = self.germ_length_limits.copy() if (self.germ_length_limits is not None) else {}
+            gll.update(germ_length_limits)
+
         return StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
-                                 self.germs, max_lengths, self.germ_length_limits, self.fiducial_pairs,
+                                 self.germs, max_lengths, gll, self.fiducial_pairs,
                                  self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
                                  self.circuit_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
                                  verbosity, add_default_protocol=False)
@@ -391,7 +403,8 @@ class GSTInitialModel(object):
 
             try:  # see if LGST can be run on this data
                 if isinstance(edesign, StandardGSTDesign) and len(edesign.maxlengths) > 0:
-                    lgst_design = edesign.copy_with_maxlengths([edesign.maxlengths[0]], dataset, 'drop')
+                    lgst_design = edesign.copy_with_maxlengths([edesign.maxlengths[0]], dscheck=dataset,
+                                                               action_if_missing='drop')
                 else:
                     lgst_design = edesign  # just use the whole edesign
                 lgst_data = _proto.ProtocolData(lgst_design, dataset)

@@ -598,9 +598,10 @@ class SPAMVec(_modelmember.ModelMember):
                             terms.append((taylor_order, t.copy_with_magnitude(mag)))
 
             else:
+                eff_min_term_mag = 0.0 if (taylor_order == 1 and force_firstorder) else min_term_mag
                 terms.extend([(taylor_order, t) for t in
                               self.taylor_order_terms_above_mag(taylor_order,
-                                                                max_polynomial_vars, min_term_mag)])
+                                                                max_polynomial_vars, eff_min_term_mag)])
 
             taylor_order += 1
             if taylor_order > max_taylor_order: break
@@ -3260,7 +3261,7 @@ class LindbladSPAMVec(SPAMVec):
         """
         return [self.error_map]
 
-    def copy(self, parent=None):
+    def copy(self, parent=None, memo=None):
         """
         Copy this object.
 
@@ -3276,9 +3277,10 @@ class LindbladSPAMVec(SPAMVec):
         """
         # We need to override this method so that embedded gate has its
         # parent reset correctly.
+        if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.state_vec, self.error_map.copy(parent), self._prep_or_effect)
-        return self._copy_gpindices(copyOfMe, parent)
+        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """

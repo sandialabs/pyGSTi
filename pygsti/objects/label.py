@@ -362,7 +362,7 @@ class LabelTup(Label, tuple):
 
     def __add__(self, s):
         if isinstance(s, str):
-            return LabelTup(self.name + s, self.sslbls)
+            return LabelTup.init(self.name + s, self.sslbls)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -1363,7 +1363,7 @@ class LabelTupWithArgs(Label, tuple):
 
     def __add__(self, s):
         if isinstance(s, str):
-            return LabelTupWithArgs(self.name + s, self.sslbls, self.time, self.args)
+            return LabelTupWithArgs.init(self.name + s, self.sslbls, self.time, self.args)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 

@@ -264,8 +264,8 @@ class DataSetMethodBase(object):
 
 class DataSetNonstaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):
     def test_process_circuits(self):
-        self.ds.process_circuits(lambda s: pc.manipulate_circuit(s, [(('Gx',), ('Gy',))]))
-        test_cntDict = self.ds[('Gy',)].to_dict()
+        ds = self.ds.process_circuits(lambda s: pc.manipulate_circuit(s, [(('Gx',), ('Gy',))]))
+        test_cntDict = ds[('Gy',)].to_dict()
         # TODO assert correctness
 
     def test_scale(self):

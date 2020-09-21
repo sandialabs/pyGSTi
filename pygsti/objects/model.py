@@ -217,14 +217,14 @@ v
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
         """
         copy_into.uuid = _uuid.uuid4()  # new uuid for a copy (don't duplicate!)
 
-    def _post_copy(self, copy_into):
+    def _post_copy(self, copy_into, memo):
         """
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
@@ -246,16 +246,18 @@ v
         # of letting deepcopy do it.
         newModel = type(self).__new__(self.__class__)  # empty object
 
+        memo = {}  # so that copying preserves linked object references
+
         #first call _init_copy to initialize any tricky members
         # (like those that contain references to self or other members)
-        self._init_copy(newModel)
+        self._init_copy(newModel, memo)
 
         for attr, val in self.__dict__.items():
             if not hasattr(newModel, attr):
                 assert(attr != "uuid"), "Should not be copying UUID!"
-                setattr(newModel, attr, _copy.deepcopy(val))
+                setattr(newModel, attr, _copy.deepcopy(val, memo))
 
-        self._post_copy(newModel)
+        self._post_copy(newModel, memo)
         return newModel
 
     def __str__(self):
@@ -900,8 +902,8 @@ class OpModel(Model):
         if prep_lbl_to_prepend or povm_lbl_to_append:
             #SLOW way:
             #circuit = circuit.copy(editable=True)
-            #if prep_lbl_to_prepend: circuit.insert_layer(prep_lbl_to_prepend, 0)
-            #if povm_lbl_to_append: circuit.insert_layer(povm_lbl_to_append, len(circuit))
+            #if prep_lbl_to_prepend: circuit.insert_layer_inplace(prep_lbl_to_prepend, 0)
+            #if povm_lbl_to_append: circuit.insert_layer_inplace(povm_lbl_to_append, len(circuit))
             #circuit.done_editing()
             if prep_lbl_to_prepend: circuit = (prep_lbl_to_prepend,) + circuit
             if povm_lbl_to_append: circuit = circuit + (povm_lbl_to_append,)
@@ -1128,6 +1130,11 @@ class OpModel(Model):
         -------
         LinearOperator or SPAMVec
         """
+        self._clean_paramvec()
+        return self._circuit_layer_operator(layerlbl, typ)
+
+    def _circuit_layer_operator(self, layerlbl, typ):
+        # doesn't call _clean_paramvec for performance
         fns = {'op': self._layer_rules.operation_layer_operator,
                'prep': self._layer_rules.prep_layer_operator,
                'povm': self._layer_rules.povm_layer_operator}
@@ -1140,6 +1147,22 @@ class OpModel(Model):
             raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
+
+    def circuit_operator(self, circuit):
+        """
+        Construct or retrieve the operation associated with a circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to construct an operation for.  This circuit should *not*
+            contain any state preparation or measurement layers.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        return self.circuit_layer_operator(circuit.to_label(), typ='op')
 
     def _reinit_opcaches(self):
         """Called when parameter vector structure changes and self._opcaches should be cleared & re-initialized"""
@@ -1212,7 +1235,7 @@ class OpModel(Model):
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         return self.sim.bulk_probs(circuits, clip_to, resource_alloc, smartc)
 
-    def _init_copy(self, copy_into):
+    def _init_copy(self, copy_into, memo):
         """
         Copies any "tricky" member of this model into `copy_into`, before
         deep copying everything else within a .copy() operation.
@@ -1220,14 +1243,15 @@ class OpModel(Model):
         self._clean_paramvec()  # make sure _paramvec is valid before copying (necessary?)
         copy_into._need_to_rebuild = True  # copy will have all gpindices = None, etc.
         copy_into._opcaches = {}  # don't copy opcaches
-        super(OpModel, self)._init_copy(copy_into)
+        super(OpModel, self)._init_copy(copy_into, memo)
 
-    def _post_copy(self, copy_into):
+    def _post_copy(self, copy_into, memo):
         """
         Called after all other copying is done, to perform "linking" between
         the new model (`copy_into`) and its members.
         """
         copy_into._sim.model = copy_into  # set copy's `.model` link
+        super(OpModel, self)._post_copy(copy_into, memo)
 
     def copy(self):
         """

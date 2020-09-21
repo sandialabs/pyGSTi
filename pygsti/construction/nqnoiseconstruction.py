@@ -56,7 +56,7 @@ RANK_TOL = 1e-9
 @_deprecated_fn("This function is overly specific and will be removed soon.")
 def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weight=1, maxhops=0,
                                      extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
-                                     independent_1q_gates=True, zz_only=False, verbosity=0):
+                                     independent_1q_gates=True, zz_only=False, bidirectional_cnots=True, verbosity=0):
     """
     Compute the number of parameters in a particular :class:`CloudNoiseModel`.
 
@@ -109,6 +109,10 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
     zz_only : bool, optional
         If True, the only high-weight errors allowed are of "Z^n" type.
 
+    bidirectional_cnots : bool
+        Whether CNOT gates can be performed in either direction (and each direction should
+        be treated as an indepedent gate)
+
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.
 
@@ -121,7 +125,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
     printer = _VerbosityPrinter.create_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s model" % (num_qubits, geometry))
 
-    qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry)
+    qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry, directed=True, all_directions=True)
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     def idle_count_nparams(max_weight):
@@ -179,7 +183,13 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
     #2Q gates: CNOT gates along each graph edge
     weight_maxhops_tuples_2Q = [(1, maxhops + extra_weight_1_hops), (2, maxhops)] + \
                                [(2 + x, maxhops) for x in range(1, extra_gate_weight + 1)]
+    seen_pairs = set()
     for i, j in qubitGraph.edges():  # note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
+        if bidirectional_cnots is False:
+            ordered_tup = (i, j) if i <= j else (j, i)
+            if ordered_tup in seen_pairs: continue
+            else: seen_pairs.add(ordered_tup)
+
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i, j))
         nParams[_Lbl("Gcnot", (i, j))] = op_count_nparams((i, j), weight_maxhops_tuples_2Q)
 
@@ -3857,7 +3867,7 @@ def stdmodule_to_smqmodule(std_module):
         """
         Update DataSet `ds` in-place to use  multi-qubit style labels.
         """
-        ds.process_circuits(lambda s: _gsc.manipulate_circuit(
+        ds.process_circuits_inplace(lambda s: _gsc.manipulate_circuit(
             s, find_replace_strs, sslbls))
 
     out_module['find_replace_gatelabels'] = find_replace_labels

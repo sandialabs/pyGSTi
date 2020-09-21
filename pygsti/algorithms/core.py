@@ -395,7 +395,7 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
             assert(len(outcomes) == povmLen)
 
             dsRow_fractions = dataset[dsStr].fractions
-            AB[eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
+            AB[eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0.0) for ol in outcomes]
         eoff += povmLen
 
     return AB
@@ -423,7 +423,7 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
 
             for k, (sep_povm_c, outcomes) in enumerate(expd_circuit_outcomes.items()):
                 assert(len(outcomes) == povmLen)
-                X[k, eoff:eoff + povmLen, j] = [dsRow_fractions[ol] for ol in outcomes]
+                X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
     return X
@@ -650,8 +650,14 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
+    #MEM from ..objects.profiler import Profiler
+    #MEM debug_prof = Profiler(comm)
+    #MEM debug_prof.print_memory("run_gst_fit1", True)
+
     objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+    #MEM debug_prof.print_memory("run_gst_fit2", True)
     objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
+    #MEM debug_prof.print_memory("run_gst_fit3", True)
     profiler.add_time("run_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
@@ -906,6 +912,10 @@ def _do_term_runopt(objective, optimizer, printer):
     mdl = objective.model
     fwdsim = mdl.sim
 
+    #MEM from ..objects.profiler import Profiler
+    #MEM debug_prof = Profiler(objective.resource_alloc.comm)
+    #MEM debug_prof.print_memory("do_term_runopt1", True)
+
     #Pipe these parameters in from fwdsim, even though they're used to control the term-stage loop
     maxTermStages = fwdsim.max_term_stages
     pathFractionThreshold = fwdsim.path_fraction_threshold  # 0 when not using path-sets
@@ -918,12 +928,36 @@ def _do_term_runopt(objective, optimizer, printer):
     pathSet = layout.pathset(resource_alloc.comm)
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.allowed_path_fraction
-        printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths." %
-                    (pathSet.num_failures, 100 * pathFraction))
+
+        objective.lsvec()  # ensure objective.probs initialized
+        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
+                                                               objective.resource_alloc, verbosity=0)
+
+        printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths (ok=%s)." %
+                    (pathSet.num_failures, 100 * pathFraction, str(bSufficient)))
+
+        while not bSufficient:
+            # Backtrack toward all zeros param vector (maybe backtrack along path optimizer took in future?)
+            #  in hopes of finding a place to begin where paths are sufficient.
+            mdl.from_vector(0.9 * mdl.to_vector())  # contract paramvector toward zero
+
+            #Adapting the path set doesn't seem necessary (and takes time), but we could do this:
+            #new_pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            #mdl.sim.select_paths_set(layout, new_pathSet, resource_alloc)  # ensure paramvec is updated
+            #pathFraction = pathSet.allowed_path_fraction
+            #printer.log("  After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
+            #            (pathSet.num_failures, 100 * pathFraction))
+
+            obj_val = objective.fn()  # ensure objective.probs initialized
+            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
+                                                                   objective.resource_alloc, verbosity=0)
+            printer.log("Looking for initial model where paths are sufficient: |paramvec| = %g, obj=%g (ok=%s)"
+                        % (_np.linalg.norm(mdl.to_vector()), obj_val, str(bSufficient)))
     else:
         pathFraction = 1.0  # b/c "all" paths are used, and > pathFractionThreshold, which should be 0
 
     opt_result = None
+    #MEM debug_prof.print_memory("do_term_runopt2", True)
     for sub_iter in range(maxTermStages):
 
         bFinalIter = (sub_iter == maxTermStages - 1) or (pathFraction > pathFractionThreshold)
@@ -944,8 +978,11 @@ def _do_term_runopt(objective, optimizer, printer):
 
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
+            #MEM debug_prof.print_memory("do_term_runopt3", True)
             pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            #MEM debug_prof.print_memory("do_term_runopt4", True)
             mdl.sim.select_paths_set(layout, pathSet, resource_alloc)  # ensure paramvec is updated
+            #MEM debug_prof.print_memory("do_term_runopt5", True)
             pathFraction = pathSet.allowed_path_fraction
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
